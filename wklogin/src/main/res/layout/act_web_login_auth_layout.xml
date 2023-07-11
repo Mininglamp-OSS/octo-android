@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/closeIv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="40dp"
+        android:src="@mipmap/ic_close_white"
+        android:tint="@color/popupTextColor" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:layout_width="130dp"
+        android:layout_height="110dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="100dp"
+        android:src="@mipmap/icon_web" />
+
+    <TextView
+        android:id="@+id/webLoginDescTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="30dp"
+        android:text="@string/web_login_desc"
+        android:textColor="@color/colorDark"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/loginBtn"
+        style="@style/buttonNormal"
+        android:layout_marginStart="100dp"
+        android:layout_marginEnd="100dp"
+        android:text="@string/login_sure" />
+
+    <TextView
+        android:id="@+id/closeTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="50dp"
+        android:text="@string/cancel_login"
+        android:textColor="@color/color999"
+        android:textSize="16sp" />
+
+</LinearLayout>

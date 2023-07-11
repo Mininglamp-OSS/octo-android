@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="SmoothInputLayout">
+        <attr name="silDefaultKeyboardHeight" format="dimension" />
+        <attr name="silMinKeyboardHeight" format="dimension" />
+        <attr name="silInputView" format="reference" />
+        <attr name="silInputPane" format="reference" />
+        <attr name="silAutoSaveKeyboardHeight" format="boolean" />
+    </declare-styleable>
+
+    <!--仿微信字体大小调整 FontSizeView-->
+    <declare-styleable name="FontSizeView">
+        <attr name="lineWidth" format="dimension|reference" />
+        <attr name="lineColor" format="color|reference" />
+        <attr name="totalCount" format="integer" />
+        <attr name="circleColor" format="color|reference" />
+        <attr name="circleRadius" format="dimension|reference" />
+
+        <attr name="textFontColor" format="color|reference" />
+        <attr name="smallSize" format="integer" />
+        <attr name="standerSize" format="integer" />
+        <attr name="bigSize" format="integer" />
+        <attr name="defaultPosition" format="integer" />
+    </declare-styleable>
+    <declare-styleable name="MessageLayout">
+        <attr name="max_width" format="dimension" />
+        <attr name="content_padding" format="dimension" />
+    </declare-styleable>
+    <declare-styleable name="CircleProgress">
+        <attr name="size" format="dimension" />
+        <attr name="progressWidth" format="dimension" />
+        <attr name="playColor" format="color"/>
+        <attr name="shadowColor" format="color" />
+        <attr name="progressColor" format="color" />
+        <attr name="mProgress" format="integer" />
+        <attr name="maxProgress" format="integer" />
+        <attr name="stringSize" format="dimension"/>
+        <attr name="border" format="boolean"/>
+    </declare-styleable>
+</resources>

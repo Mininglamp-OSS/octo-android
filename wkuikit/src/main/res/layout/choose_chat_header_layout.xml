@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/createTv"
+        style="@style/layoutBg"
+        android:text="@string/create_new_chat"
+        android:textColor="@color/colorDark"
+        android:textSize="16sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/homeColor"
+        android:paddingStart="15dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="0dp"
+        android:paddingBottom="5dp"
+        android:text="@string/lately_chat" />
+</LinearLayout>

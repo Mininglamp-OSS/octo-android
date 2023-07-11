@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/screen_bg"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_marginTop="10dp"
+        android:id="@+id/pyTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="15dp"
+        android:layout_marginEnd="10dp"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:minWidth="20dp"
+        android:textColor="@color/colorAccent"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="invisible"
+        tools:visibility="visible" />
+
+
+    <LinearLayout
+        android:id="@+id/contentLayout"
+        style="@style/layoutBg"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+
+                <TextView
+                    android:id="@+id/nameTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:lines="1"
+                    android:text="111"
+                    android:textColor="@color/colorDark"
+                    android:textSize="16sp" />
+
+                <LinearLayout
+                    android:id="@+id/categoryLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/offlineTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="dsdsds"
+                android:textColor="@color/color999"
+                android:textSize="@dimen/font_size_14" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

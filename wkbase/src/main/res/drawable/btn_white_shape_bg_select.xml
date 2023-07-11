@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 填充的颜色 -->
+    <solid android:color="@color/screen_bg_selected" />
+    <!-- 设置矩形的四个角为弧形 -->
+    <!-- android:radius 弧形的半径 -->
+    <corners android:radius="8dp" />
+    <stroke
+        android:width="0.0px"
+        android:color="@color/screen_bg_selected" />
+
+</shape>

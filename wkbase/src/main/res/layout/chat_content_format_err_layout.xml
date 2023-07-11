@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/contentLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal">
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/bubbleLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center|start"
+        android:minHeight="40dp"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="5dp"
+        android:visibility="visible"
+        app:shadowRadius="0dp">
+
+        <TextView
+            android:id="@+id/contentTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center|start"
+            android:lineSpacingExtra="2dp"
+            android:text="@string/str_content_format_err"
+            android:textColor="#313131"
+            android:textSize="16sp"
+            android:visibility="visible" />
+    </com.chat.base.views.BubbleLayout>
+</LinearLayout>

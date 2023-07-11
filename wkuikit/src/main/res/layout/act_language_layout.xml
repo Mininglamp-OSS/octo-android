@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="20dp"
+        android:background="@color/homeColor"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/autoLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/setting_language_auto" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/autoIv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:src="@mipmap/msg_check"
+                android:tint="@color/colorAccent" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/simplifiedChineseLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/setting_simplified_chinese" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/simplifiedChineseIv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:src="@mipmap/msg_check"
+                android:tint="@color/colorAccent"
+                android:visibility="invisible" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/englishLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/setting_language_english" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/englishIv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:src="@mipmap/msg_check"
+                android:tint="@color/colorAccent"
+                android:visibility="invisible" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

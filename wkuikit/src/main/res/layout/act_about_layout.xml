@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical"
+    tools:ignore="MissingDefaultResource">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <com.chat.base.ui.components.AvatarView
+        android:id="@+id/avatarView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="50dp" />
+
+    <TextView
+        android:id="@+id/appNameTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="30dp"
+        android:text="@string/app_name"
+        android:textColor="@color/colorDark"
+        android:textSize="@dimen/font_size_22"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/versionTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:text="@string/app_name"
+        android:textColor="@color/colorDark"
+        android:textSize="@dimen/font_size_18" />
+
+    <LinearLayout
+        android:id="@+id/userAgreementLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:background="@color/layoutColor"
+        android:orientation="vertical">
+
+        <LinearLayout style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/kit_user_agreement" />
+
+            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/privacyPolicyLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/kit_privacy_policy" />
+
+            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="15dp"
+            android:background="@color/homeColor" />
+
+        <LinearLayout
+            android:id="@+id/checkNewVersionLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/check_new_version" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/newVersionIv"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_gravity="center_vertical"
+                android:src="@mipmap/icon_new_version"
+                android:visibility="invisible" />
+
+            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center|bottom"
+        android:layout_marginBottom="50dp"
+        android:gravity="center"
+        android:text=" Copyright © 2022 \n上海信必达网络科技有限公司 版权所有"
+        android:textColor="@color/color999"
+        android:textSize="12sp" />
+</LinearLayout>

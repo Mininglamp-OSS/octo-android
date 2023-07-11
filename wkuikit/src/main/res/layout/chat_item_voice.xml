@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/contentLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="end"
+    android:orientation="horizontal">
+
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/voiceLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:shadowRadius="0dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <com.chat.uikit.view.CircleProgress
+                android:id="@+id/playBtn"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                app:shadowColor="@color/homeColor" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="vertical">
+
+                <com.chat.uikit.view.WaveformView
+                    android:id="@+id/voiceWaveform"
+                    android:layout_width="150dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="5dp"
+                    android:textColor="?attr/text_primary"
+                    android:textSize="16sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp">
+
+                    <TextView
+                        android:id="@+id/voiceTimeTv"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_weight="1"
+                        android:text="00:22"
+                        android:textColor="@color/color999"
+                        android:textSize="12sp" />
+
+                    <include layout="@layout/wk_msg_status_layout" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.chat.base.views.BubbleLayout>
+
+</LinearLayout>

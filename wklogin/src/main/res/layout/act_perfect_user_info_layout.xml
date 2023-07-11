@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/homeColor"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="50dp">
+
+                <com.chat.base.ui.components.AvatarView
+                    android:id="@+id/avatarView"
+                    android:layout_width="120dp"
+                    android:layout_height="120dp" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/coverIv"
+                    android:layout_width="25dp"
+                    android:layout_height="25dp"
+                    android:layout_gravity="end|bottom"
+                    android:layout_marginEnd="20dp"
+                    android:layout_marginBottom="15dp"
+                    android:src="@mipmap/ico_xiangji" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="50dp"
+                android:text="@string/wklogin_upload_header"
+                android:textColor="#ff999999"
+                android:textSize="12sp" />
+
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@color/layoutColor"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginTop="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="*"
+                        android:textColor="#ffff6b4c"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:text="@string/wklogin_nickname"
+                        android:textColor="@color/color999" />
+
+                </LinearLayout>
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/nameEt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginEnd="20dp"
+                    android:background="@color/transparent"
+                    android:gravity="center_vertical"
+                    android:hint="@string/must_input_name"
+                    android:maxLength="20"
+                    android:minHeight="40dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:textColor="@color/colorDark"
+                    android:textColorHint="@color/color999" />
+
+                <View
+                    style="@style/view_line"
+                    android:layout_marginLeft="20dp"
+                    android:layout_marginRight="20dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sureBtn"
+                    style="@style/buttonNormal"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginTop="60dp"
+                    android:layout_marginEnd="20dp"
+                    android:text="@string/wklogin_sure"
+                    app:cornerRadius="@dimen/button_radian" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

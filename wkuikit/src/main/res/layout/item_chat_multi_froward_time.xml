@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="15dp"
+    android:layout_marginEnd="15dp"
+    android:layout_marginTop="10dp"
+    android:layout_marginBottom="10dp"
+    android:orientation="horizontal">
+
+    <View
+        style="@style/view_line"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/timeTv"
+        android:layout_width="wrap_content"
+        android:textColor="#cccccc"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:textSize="12sp" />
+
+    <View
+        style="@style/view_line"
+        android:layout_gravity="center_vertical"
+        android:layout_weight="1" />
+</LinearLayout>

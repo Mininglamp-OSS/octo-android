@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/allUnreadView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:animateLayoutChanges="true"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:id="@+id/groupApproveLayout"
+        android:layout_width="50dp"
+        android:layout_height="55dp"
+        android:layout_marginBottom="20dp"
+        android:tag="1"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="45dp"
+            android:layout_height="45dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@mipmap/knob_shadow">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:background="@drawable/msg_go_down">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@mipmap/icon_reminder_member_invite" />
+            </FrameLayout>
+        </FrameLayout>
+
+
+        <com.chat.base.ui.components.CounterView
+            android:id="@+id/approveCountTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginBottom="30dp"
+            android:visibility="visible" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/remindLayout"
+        android:layout_width="50dp"
+        android:layout_height="55dp"
+        android:layout_below="@id/groupApproveLayout"
+        android:layout_marginBottom="20dp"
+        android:tag="1"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="45dp"
+            android:layout_height="45dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@mipmap/knob_shadow">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:background="@drawable/msg_go_down">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@mipmap/icon_remind" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <com.chat.base.ui.components.CounterView
+            android:id="@+id/remindCountTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginBottom="30dp"
+            android:visibility="visible" />
+
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/newMsgLayout"
+        android:layout_width="50dp"
+        android:layout_height="55dp"
+        android:layout_below="@id/remindLayout"
+        android:tag="1"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="45dp"
+            android:layout_height="45dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@mipmap/knob_shadow">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:background="@drawable/msg_go_down">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@mipmap/icon_msg_down" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <com.chat.base.ui.components.CounterView
+            android:id="@+id/msgCountTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginBottom="30dp"
+            android:visibility="visible" />
+    </FrameLayout>
+</RelativeLayout>

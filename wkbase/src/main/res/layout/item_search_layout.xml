@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:paddingStart="15dp"
+    android:paddingEnd="5dp"
+    android:layout_gravity="center_vertical"
+    android:orientation="vertical">
+
+
+    <androidx.appcompat.widget.AppCompatEditText
+        android:id="@+id/searchEt"
+        android:layout_width="100dp"
+        android:layout_height="36dp"
+        android:layout_gravity="center_vertical"
+        android:background="@color/transparent"
+        android:gravity="center|start"
+        android:hint="@string/str_search"
+        android:imeOptions="actionSearch"
+        android:maxLines="1"
+        android:paddingTop="5dp"
+        android:minHeight="45dp"
+        android:paddingBottom="5dp"
+        android:singleLine="true"
+        android:textColor="@color/colorDark"
+        android:textColorHint="@color/color999"
+        android:textSize="14sp" />
+
+</LinearLayout>

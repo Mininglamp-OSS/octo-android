@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="KPSwitchPanelLayout">
+        <attr name="ignore_recommend_height" format="boolean" />
+    </declare-styleable>
+
+    <declare-styleable name="SwitchView">
+        <attr name="hasShadow" format="boolean" />
+        <attr name="primaryColor" format="color" />
+        <attr name="primaryColorDark" format="color" />
+        <attr name="offColor" format="color" />
+        <attr name="offColorDark" format="color" />
+        <attr name="shadowColor" format="color" />
+        <attr name="ratioAspect" format="float" />
+        <attr name="isOpened" format="boolean" />
+    </declare-styleable>
+
+    <declare-styleable name="ShadowLayout">
+        <!--阴影的圆角大小-->
+        <attr name="hl_cornerRadius" format="dimension" />
+        <!--阴影的扩散范围(也可以理解为扩散程度)-->
+        <attr name="hl_shadowLimit" format="dimension" />
+        <attr name="hl_shadowColor" format="color" />
+        <attr name="hl_shadowBackColor" format="color" />
+        <!--x轴的偏移量-->
+        <attr name="hl_dx" format="dimension" />
+        <!--y轴的偏移量-->
+        <attr name="hl_dy" format="dimension" />
+        <!--左边是否显示阴影-->
+        <attr name="hl_leftShow" format="boolean" />
+        <!--右边是否显示阴影-->
+        <attr name="hl_rightShow" format="boolean" />
+        <!--上边是否显示阴影-->
+        <attr name="hl_topShow" format="boolean" />
+        <!--下面是否显示阴影-->
+        <attr name="hl_bottomShow" format="boolean" />
+
+    </declare-styleable>
+
+    <declare-styleable name="SwipeBackLayout">
+        <attr name="edge_size" format="dimension" />
+        <attr name="edge_flag">
+            <enum name="left" value="0" />
+            <enum name="right" value="1" />
+            <enum name="bottom" value="2" />
+            <enum name="all" value="3" />
+        </attr>
+        <attr name="shadow_left" format="reference" />
+        <attr name="shadow_right" format="reference" />
+        <attr name="shadow_bottom" format="reference" />
+    </declare-styleable>
+
+    <attr name="SwipeBackLayoutStyle" format="reference" />
+
+    <declare-styleable name="LineWaveVoiceView">
+        <attr name="voiceLineColor" format="color" />
+        <attr name="voiceLineWidth" format="dimension" />
+        <attr name="voiceTextColor" format="color" />
+        <attr name="voiceTextSize" format="dimension" />
+    </declare-styleable>
+    <!--语音布局-->
+    <declare-styleable name="VoiceLayoutStyle">
+        <attr name="isSend" format="boolean" />
+    </declare-styleable>
+    <declare-styleable name="CircularProgressView">
+        <attr name="backWidth" format="dimension" />    <!--背景圆环宽度-->
+        <attr name="progWidth" format="dimension" />    <!--进度圆环宽度-->
+        <attr name="backColor" format="color" />        <!--背景圆环颜色-->
+        <attr name="progColor" format="color" />        <!--进度圆环颜色-->
+        <attr name="progStartColor" format="color" />   <!--进度圆环开始颜色-->
+        <attr name="progFirstColor" format="color" />   <!--进度圆环结束颜色-->
+        <attr name="progress" format="integer" />       <!--圆环进度-->
+    </declare-styleable>
+
+    <declare-styleable name="CircleProgressBar">
+        <attr name="line_count" format="integer|reference" />
+        <attr name="line_width" format="dimension|reference" />
+        <attr name="progress_start_color" format="color|reference" />
+        <attr name="progress_end_color" format="color|reference" />
+        <attr name="progress_text_color" format="color|reference" />
+        <attr name="progress_text_size" format="dimension|reference" />
+        <attr name="progress_stroke_width" format="dimension|reference" />
+        <attr name="progress_background_color" format="color|reference" />
+        <attr name="progress_start_degree" format="integer|reference" />
+        <attr name="drawBackgroundOutsideProgress" format="boolean|reference" />
+
+        <attr name="progress_blur_radius" format="dimension|reference" />
+        <attr name="progress_blur_style">
+            <enum name="normal" value="0" />
+            <enum name="solid" value="1" />
+            <enum name="outer" value="2" />
+            <enum name="inner" value="3" />
+        </attr>
+
+        <attr name="progress_style">
+            <enum name="line" value="0" />
+            <enum name="solid" value="1" />
+            <enum name="solid_line" value="2" />
+        </attr>
+
+        <attr name="progress_shader">
+            <enum name="linear" value="0" />
+            <enum name="radial" value="1" />
+            <enum name="sweep" value="2" />
+        </attr>
+
+        <attr name="progress_stroke_cap">
+            <enum name="butt" value="0" />
+            <enum name="round" value="1" />
+            <enum name="square" value="2" />
+        </attr>
+
+    </declare-styleable>
+    <declare-styleable name="AnimatedSvgView">
+        <attr name="animatedSvgImageSizeX" format="integer" />
+        <attr name="animatedSvgImageSizeY" format="integer" />
+        <attr name="animatedSvgTraceTime" format="string" />
+        <attr name="animatedSvgTraceTimePerGlyph" format="string" />
+        <attr name="animatedSvgFillStart" format="string" />
+        <attr name="animatedSvgFillTime" format="string" />
+        <attr name="animatedSvgGlyphStrings" format="reference" />
+        <attr name="animatedSvgTraceColors" format="reference" />
+        <attr name="animatedSvgTraceResidueColors" format="reference" />
+        <attr name="animatedSvgTraceMarkerLength" format="integer" />
+        <attr name="animatedSvgFillColors" format="reference" />
+    </declare-styleable>
+    <declare-styleable name="SelectableRoundedImageView">
+        <attr name="sriv_left_top_corner_radius" format="dimension" />
+        <attr name="sriv_right_top_corner_radius" format="dimension" />
+        <attr name="sriv_left_bottom_corner_radius" format="dimension" />
+        <attr name="sriv_right_bottom_corner_radius" format="dimension" />
+        <attr name="sriv_border_width" format="dimension" />
+        <attr name="sriv_border_color" format="color" />
+        <attr name="sriv_oval" format="boolean" />
+        <attr name="android:scaleType" />
+    </declare-styleable>
+    <declare-styleable name="BubbleLayout">
+        <attr name="lookAt">
+            <enum name="left" value="1" />
+            <enum name="top" value="2" />
+            <enum name="right" value="3" />
+            <enum name="bottom" value="4" />
+        </attr>
+
+        <attr name="lookPosition" format="dimension" />
+        <attr name="lookWidth" format="dimension" />
+        <attr name="lookLength" format="dimension" />
+        <attr name="bubbleColor" format="color" />
+        <attr name="bubbleRadius" format="dimension" />
+        <attr name="bubbleLeftTopRadius" format="dimension" />
+        <attr name="bubbleRightTopRadius" format="dimension" />
+        <attr name="bubbleRightDownRadius" format="dimension" />
+        <attr name="bubbleLeftDownRadius" format="dimension" />
+        <attr name="bubblePadding" format="dimension" />
+        <attr name="shadowRadius" format="dimension" />
+        <attr name="shadowX" format="dimension" />
+        <attr name="shadowY" format="dimension" />
+        <attr name="bubbleShadowColor" format="color" />
+
+        <attr name="bubbleArrowTopLeftRadius" format="dimension" />
+        <attr name="bubbleArrowTopRightRadius" format="dimension" />
+        <attr name="bubbleArrowDownLeftRadius" format="dimension" />
+        <attr name="bubbleArrowDownRightRadius" format="dimension" />
+
+        <attr name="bubbleBgRes" format="reference" />
+
+        <attr name="bubbleBorderColor" format="color" />
+        <attr name="bubbleBorderSize" format="dimension" />
+    </declare-styleable>
+
+    <declare-styleable name="ShadowViewGroup">
+        <attr name="containerShadowColor" format="color" />
+        <attr name="containerShadowRadius" format="dimension" />
+        <attr name="containerDeltaLength" format="dimension" />
+        <attr name="containerCornerRadius" format="dimension" />
+        <attr name="deltaX" format="dimension" />
+        <attr name="deltaY" format="dimension" />
+        <attr name="enable" format="boolean" />
+    </declare-styleable>
+
+    <declare-styleable name="QuickSideBarView">
+        <attr name="sidebarTextColor" format="color|reference" />
+        <attr name="sidebarBackgroundColor" format="color|reference" />
+        <attr name="sidebarTextColorChoose" format="color|reference" />
+        <attr name="sidebarTextSize" format="dimension" />
+        <attr name="sidebarTextSizeChoose" format="dimension" />
+        <attr name="sidebarItemHeight" format="dimension" />
+    </declare-styleable>
+    <declare-styleable name="ExpandableLayout">
+        <attr name="el_duration" format="integer" />
+        <attr name="el_expanded" format="boolean" />
+        <attr name="el_parallax" format="float" />
+        <attr name="android:orientation" />
+    </declare-styleable>
+    <declare-styleable name="CircleImageView">
+        <attr name="civ_border_width" format="dimension" />
+        <attr name="civ_border_color" format="color" />
+        <attr name="civ_border_overlay" format="boolean" />
+        <attr name="civ_circle_background_color" format="color" />
+    </declare-styleable>
+    <declare-styleable name="RoundTextView">
+        <attr name="tvBackgroundColor" format="color" />
+        <attr name="tvBorderWidth" format="dimension" />
+        <attr name="tvBorderColor" format="color" />
+        <attr name="tvCornerRadius" format="dimension" />
+        <attr name="tvTopLeftRadius" format="dimension" />
+        <attr name="tvTopRightRadius" format="dimension" />
+        <attr name="tvBottomLeftRadius" format="dimension" />
+        <attr name="tvBottomRightRadius" format="dimension" />
+    </declare-styleable>
+
+    <declare-styleable name="TextViewCorner">
+        <attr name="bgColor" format="color"/>
+        <attr name="topLeftCorner" format="dimension"/>
+        <attr name="topRightCorner" format="dimension"/>
+        <attr name="bottomRightCorner" format="dimension"/>
+        <attr name="bottomLeftCorner" format="dimension"/>
+        <attr name="allCorner" format="dimension"/>
+    </declare-styleable>
+    <declare-styleable name="ShapeBlurView">
+        <attr name="blur_radius" format="dimension" />
+        <attr name="blur_down_sample" format="float" />
+        <attr name="blur_overlay_color" format="color" />
+        <attr name="blur_corner_radius" format="dimension" />
+        <attr name="blur_corner_radius_top_left" format="dimension" />
+        <attr name="blur_corner_radius_top_right" format="dimension" />
+        <attr name="blur_corner_radius_bottom_left" format="dimension" />
+        <attr name="blur_corner_radius_bottom_right" format="dimension" />
+        <attr name="blur_border_width" format="dimension" />
+        <attr name="blur_border_color" format="color" />
+        <attr name="blur_mode">
+            <enum name="rectangle" value="0" />
+            <enum name="circle" value="1" />
+            <enum name="oval" value="2" />
+        </attr>
+    </declare-styleable>
+
+    <declare-styleable name="ConsecutiveScrollerLayout_Layout">
+        <attr name="layout_isConsecutive" format="boolean"/>
+        <attr name="layout_isNestedScroll" format="boolean"/>
+        <attr name="layout_isSticky" format="boolean"/>
+        <attr name="layout_isTriggerScroll" format="boolean"/>
+        <attr name="layout_isSink" format="boolean"/>
+        <attr name="layout_align" format="enum">
+            <enum name="LEFT" value="1" />
+            <enum name="RIGHT" value="2" />
+            <enum name="CENTER" value="3" />
+        </attr>
+        <attr name="layout_scrollChild" format="reference"/>
+    </declare-styleable>
+    <declare-styleable name="ConsecutiveScrollerLayout">
+        <attr name="isPermanent" format="boolean"/>
+        <attr name="stickyOffset" format="dimension"/>
+        <attr name="autoAdjustHeightAtBottomView" format="boolean"/>
+        <attr name="adjustHeightOffset" format="dimension"/>
+        <attr name="disableChildHorizontalScroll" format="boolean"/>
+    </declare-styleable>
+</resources>

@@ -1,0 +1,15 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+<!--        <item name="android:windowIsTranslucent">false</item>-->
+<!--        <item name="android:windowContentOverlay">@null</item>-->
+<!--        <item name="android:windowBackground">@color/homeColor</item>-->
+        <item name="android:textColorPrimary">@color/colorDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorPrimaryDark">@color/welcome_bg</item>
+<!--        <item name="android:forceDarkAllowed">false</item>-->
+        <item name="colorPrimary">@color/color999</item>
+    </style>
+
+</resources>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical"
+    tools:ignore="MissingDefaultResource">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:layout_width="200dp"
+        android:layout_height="150dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="50dp"
+        android:src="@mipmap/icon_web" />
+
+    <TextView
+        android:id="@+id/nameTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="20dp"
+        android:text="99kdsdkdk"
+        android:textColor="@color/color999"
+        android:textSize="@dimen/font_size_16" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:padding="15dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="center_vertical"
+            android:src="@mipmap/icon_web_url" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:text="@string/web_url"
+            android:textColor="@color/colorDark"
+            android:textSize="@dimen/font_size_16" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/copyIv"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center_vertical"
+            android:padding="10dp"
+            android:tint="@color/color999"
+            android:src="@mipmap/msg_copy" />
+
+        <TextView
+            android:id="@+id/urlTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:textColorLink="@color/blue"
+            android:autoLink="web"
+            android:text="http://www.biadu.com"
+            android:textColor="@color/color999"
+            android:textSize="@dimen/font_size_14" />
+    </LinearLayout>
+
+    <View style="@style/view_line" />
+
+    <TextView
+        android:id="@+id/webLoginDescTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="15dp"
+        android:text="@string/web_scan_login_desc"
+        android:textColor="@color/color999"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:id="@+id/scanLayout"
+        style="@style/layoutBg"
+        android:layout_marginTop="20dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:src="@mipmap/icon_web_scan" />
+
+        <TextView
+            style="@style/leftTextView"
+            android:layout_marginStart="10dp"
+            android:text="@string/qr_scan_login" />
+
+        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+    </LinearLayout>
+</LinearLayout>

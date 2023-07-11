@@ -1,0 +1,8 @@
+<resources>
+    <string name="wk_scan_module_other_result">Scan result</string>
+    <string name="wk_scan_module_scan">Scan</string>
+    <string name="wk_scan_module_scan_no_result">Content not found</string>
+    <string name="album">Album</string>
+    <string name="tips_scan_code">Scan QR code / barcode</string>
+    <string name="scan_remove_group">You have been removed from this group</string>
+</resources>

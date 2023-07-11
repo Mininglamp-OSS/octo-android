@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/refreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/homeColor"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/white"
+                    android:orientation="vertical">
+
+                    <View style="@style/view_line_15" />
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/new_msg_notice" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/newMsgNoticeSwitch"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:paddingStart="15dp"
+                        android:paddingTop="5dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="20dp"
+                        android:text="@string/close_new_msg_notice_tips" />
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/show_notice_detail" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/newMsgNoticeDetailSwitch"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <View style="@style/view_line_15" />
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/voice" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/voiceSwitch"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/shock" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/shockSwitch"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp"
+                            android:checked="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/voiceShockDescTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:paddingStart="15dp"
+                        android:paddingTop="5dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="20dp"
+                        android:text="@string/voice_shock_desc" />
+
+                    <LinearLayout
+                        android:id="@+id/openNoticeLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/open_notice" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+</LinearLayout>

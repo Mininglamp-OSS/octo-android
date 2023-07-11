@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/screen_bg_selected"> <!--波纹颜色-->
+    <item>
+        <shape android:shape="rectangle">
+            <!-- 填充背景色-->
+            <solid android:color="@color/screen_bg" />
+        </shape>
+    </item>
+</ripple>

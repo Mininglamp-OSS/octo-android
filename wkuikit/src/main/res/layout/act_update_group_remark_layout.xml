@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="30dp"
+        android:text="@string/remark"
+        android:textColor="@color/colorDark"
+        android:textSize="30sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="15dp"
+        android:gravity="center"
+        android:text="@string/remark_desc"
+        android:textColor="@color/colorDark"
+        android:textSize="16sp" />
+
+    <View
+        style="@style/view_line"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="20dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="20dp">
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/remarkEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:background="@color/transparent"
+            android:gravity="center_vertical"
+            android:hint="@string/remark"
+            android:lines="2"
+            android:minHeight="40dp"
+            android:textColor="@color/colorDark" />
+    </LinearLayout>
+
+    <View
+        style="@style/view_line"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="20dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="20dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/group_name"
+            android:textColor="@color/color999" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="："
+            android:textColor="@color/color999" />
+
+        <TextView
+            android:id="@+id/groupNameTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:lines="1"
+            android:maxWidth="100dp"
+            android:textColor="@color/color999" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/enter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="@string/enter_group_name" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/saveBtn"
+        style="@style/buttonNormal"
+        android:layout_marginStart="30dp"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="30dp"
+        android:text="@string/save" />
+</LinearLayout>

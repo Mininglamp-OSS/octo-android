@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/title_bg"
+    android:orientation="vertical"
+    android:paddingTop="40dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical">
+
+        <TextSwitcher
+            android:id="@+id/textSwitcher"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:inAnimation="@anim/ts_in_anim"
+            android:outAnimation="@anim/ts_out_anim"
+            android:tag="-1"
+            android:text="@string/not_connected" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/deviceIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginEnd="30dp"
+            android:src="@mipmap/menu_devices"
+            android:tint="@color/popupTextColor"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/searchIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginEnd="30dp"
+            android:src="@mipmap/ic_ab_search"
+            android:tint="@color/popupTextColor" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/rightIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginEnd="10dp"
+            android:src="@mipmap/msg_add"
+            android:tint="@color/popupTextColor" />
+    </LinearLayout>
+
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/refreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/homeColor">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            tools:listitem="@layout/item_chat_conv_layout" />
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+
+</LinearLayout>

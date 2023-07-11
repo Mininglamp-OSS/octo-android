@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="center"
+                android:text="@string/message_tips"
+                android:textColor="@color/colorDark"
+                android:textSize="@dimen/font_size_18" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="15dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginEnd="15dp"
+                android:lineSpacingExtra="5dp"
+                android:text="@string/backup_message_desc"
+                android:textColor="@color/colorDark"
+                android:textSize="@dimen/font_size_16" />
+
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/startBtn"
+                style="@style/buttonNormal"
+                android:layout_marginLeft="30dp"
+                android:layout_marginTop="50dp"
+                android:layout_marginRight="30dp"
+                android:text="@string/sure"
+                app:cornerRadius="@dimen/button_radian" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/loading"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/colorSystemBg"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_gravity="center"
+                android:background="@drawable/shape_corner_rectangle">
+
+                <com.chat.base.ui.components.RadialProgressView
+                    android:id="@+id/progress"
+                    android:layout_width="50dp"
+                    android:layout_height="50dp"
+                    android:layout_gravity="center" />
+            </FrameLayout>
+
+        </FrameLayout>
+    </FrameLayout>
+</LinearLayout>

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/searchLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/radian_normal_layout"
+            android:fitsSystemWindows="true">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/searchIv"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="15dp"
+                android:layout_marginEnd="5dp"
+                android:src="@mipmap/ic_ab_search" />
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/searchEt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="10dp"
+                android:background="@color/transparent"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:hint="@string/str_search"
+                android:imeOptions="actionSearch"
+                android:maxLines="1"
+                android:minHeight="40dp"
+                android:singleLine="true"
+                android:textColor="@color/colorDark"
+                android:textColorHint="@color/color999"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/cancelTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:padding="10dp"
+            android:text="@string/cancel"
+            android:textColor="@color/color999"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="15dp"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/resultView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/layoutColor"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/userLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View style="@style/view_line" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:text="@string/contacts"
+                    android:textSize="12sp" />
+
+                <View
+                    style="@style/view_line"
+                    android:layout_marginStart="15dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/userRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/groupLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View style="@style/view_line_padding" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:text="@string/group_chat"
+                    android:textSize="12sp" />
+
+                <View
+                    style="@style/view_line"
+                    android:layout_marginStart="15dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/groupRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/msgLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View style="@style/view_line_padding" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:text="@string/msg_record"
+                    android:textSize="12sp" />
+
+                <View
+                    style="@style/view_line"
+                    android:layout_marginStart="15dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/msgRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/findUserLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <View style="@style/view_line_padding" />
+
+                <LinearLayout style="@style/layoutBg">
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@mipmap/icon_new_friend" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="10dp"
+                        android:text="@string/find_user"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/searchKeyTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:ellipsize="end"
+                        android:lines="1"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

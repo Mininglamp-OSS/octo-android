@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/selectUserRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_gravity="center_vertical"
+        android:paddingStart="0dp"
+        android:paddingEnd="15dp"
+        android:visibility="visible" />
+
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1px"
+        android:background="@color/line_view_bg" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.chat.base.views.sidebar.QuickSideBarTipsView
+            android:id="@+id/quickSideBarTipsView"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:layout_marginEnd="30dp"
+            app:sidebarBackgroundColor="@color/black"
+            app:sidebarTextColor="@android:color/white"
+            app:sidebarTextSize="@dimen/font_size_20" />
+
+        <com.chat.base.views.sidebar.QuickSideBarView
+            android:id="@+id/quickSideBarView"
+            android:layout_width="20dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            app:sidebarItemHeight="20dp"
+            app:sidebarTextColor="@color/colorAccentDisabled"
+            app:sidebarTextColorChoose="@color/black"
+            app:sidebarTextSize="@dimen/font_size_10"
+            app:sidebarTextSizeChoose="@dimen/font_size_16" />
+    </FrameLayout>
+</LinearLayout>

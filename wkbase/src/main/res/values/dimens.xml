@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="button_radian">30dp</dimen>
+    <dimen name="dimen_5">5dp</dimen>
+    <dimen name="dimen_0">05dp</dimen>
+    <dimen name="chat_border_width">1px</dimen>
+    <dimen name="chat_radius">10dp</dimen>
+    <dimen name="msg_item_margin">2dp</dimen>
+    <!--字体大小 及倍数-->
+
+    <dimen name="font_size_10">10sp</dimen>
+    <dimen name="font_size_12">12sp</dimen>
+    <dimen name="font_size_13">13sp</dimen>
+    <!--0.875=14/16 -->
+    <dimen name="font_size_14">14sp</dimen>
+    <!--1  标准-->
+    <dimen name="font_size_16">16sp</dimen>
+    <!--1.125=18/16-->
+    <dimen name="font_size_18">18sp</dimen>
+    <!--1.25=20/16-->
+    <dimen name="font_size_20">20sp</dimen>
+    <!--1.375=22/16-->
+    <dimen name="font_size_22">22sp</dimen>
+    <!--1.5=24/16-->
+    <dimen name="font_size_24">24sp</dimen>
+    <!--1.625=26/16-->
+    <dimen name="font_size_26">26sp</dimen>
+    <!--1.75=28/16-->
+    <dimen name="font_size_28">28sp</dimen>
+</resources>

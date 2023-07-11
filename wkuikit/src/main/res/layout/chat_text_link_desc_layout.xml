@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/chat_text_link_desc_bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="10dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/linkLogoIv"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:scaleType="centerCrop"
+            android:src="@drawable/default_view_bg"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/linkNameTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/colorDark"
+            android:textSize="@dimen/font_size_14"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/linkTitleTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="5dp"
+        android:textColor="@color/colorDark"
+        android:textSize="@dimen/font_size_16"
+        android:textStyle="bold" />
+
+
+    <TextView
+        android:id="@+id/linkContentTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="10dp"
+        android:lineSpacingExtra="2dp"
+        android:textColor="@color/colorDark"
+        android:textSize="@dimen/font_size_14" />
+
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/linkCoverIv"
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:layout_gravity="center"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginBottom="5dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/default_view_bg"
+        android:visibility="gone" />
+
+    <include
+        android:id="@+id/msgTimeView"
+        layout="@layout/wk_msg_status_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end" />
+</LinearLayout>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/titleView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:animateLayoutChanges="true"
+    android:background="@drawable/title_bg"
+    android:orientation="vertical"
+    tools:ignore="MissingDefaultResource">
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="30dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal">
+
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/backIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="5dp"
+            android:src="@mipmap/ic_ab_back" />
+
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="10dp" />
+
+        <LinearLayout
+            android:requiresFadingEdge="horizontal"
+            android:fadingEdgeLength="26dp"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:gravity="center|start"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/titleCenterTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:singleLine="true"
+                    android:text="@string/chat"
+                    android:textColor="@color/colorDark"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/categoryLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/subtitleView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/subtitleTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp"
+                    android:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/subtitleCountTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp"
+                    android:visibility="visible" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/rightView"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:visibility="visible" />
+
+    </LinearLayout>
+</LinearLayout>

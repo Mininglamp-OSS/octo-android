@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/easy_alert_dialog_layout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@null"
+    android:orientation="vertical">
+
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="@mipmap/popup_fixed_alert"
+        android:overScrollMode="never"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="12dp"
+        android:scrollbars="none" />
+
+</LinearLayout>

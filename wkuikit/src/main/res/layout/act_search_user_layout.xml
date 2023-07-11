@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical"
+    android:paddingTop="30dp">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:elevation="0dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_gravity="top"
+            android:background="@color/homeColor">
+
+            <LinearLayout
+                android:id="@+id/backLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_alignParentStart="true"
+                android:layout_centerInParent="true"
+                android:background="@color/homeColor"
+                android:paddingStart="10dp"
+                android:paddingEnd="0dp"
+                android:visibility="visible">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/backIv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:src="@mipmap/ic_ab_back" />
+            </LinearLayout>
+
+
+            <Button
+                android:id="@+id/searchBtn"
+                style="@style/buttonNormal"
+                android:layout_width="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:layout_centerInParent="true"
+                android:layout_marginEnd="10dp"
+                android:alpha="0.2"
+                android:enabled="false"
+                android:insetLeft="5dp"
+                android:insetTop="8dp"
+                android:insetRight="5dp"
+                android:insetBottom="8dp"
+                android:text="@string/str_search" />
+
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/searchEt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:layout_marginLeft="10dp"
+                android:layout_marginRight="10dp"
+                android:layout_toStartOf="@id/searchBtn"
+                android:layout_toEndOf="@id/backLayout"
+                android:background="@drawable/chat_edit_bg"
+                android:hint="@string/hint_search"
+                android:lines="1"
+                android:padding="10dp"
+                android:textColor="@color/colorDark"
+                android:textColorHint="@color/color999"
+                android:textSize="14sp" />
+
+        </RelativeLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <View style="@style/view_line" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</LinearLayout>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/contentEt"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="10dp"
+                android:layout_marginBottom="10dp"
+                android:layout_weight="1"
+                android:background="@color/transparent"
+                android:gravity="top"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/colorDark"
+                android:textSize="@dimen/font_size_16" />
+
+
+            <LinearLayout
+                android:id="@+id/bottomView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="50dp"
+                android:layout_marginBottom="30dp">
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@color/line_view_bg" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:text="@string/edit_group_notice" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="10dp"
+                    android:layout_weight="1"
+                    android:background="@color/line_view_bg" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:id="@+id/contentLayout"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <LinearLayout style="@style/layoutBg">
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/nameTv"
+                style="@style/leftTextView"
+                android:layout_width="match_parent"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/remarkTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:lines="1"
+                android:textColor="@color/color999"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/statusTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="@string/agreed_apply"
+            android:textColor="@color/color999"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/agreeBtn"
+            style="@style/buttonNormal"
+            android:layout_width="wrap_content"
+            android:layout_marginStart="10dp"
+            android:insetLeft="5dp"
+            android:insetTop="8dp"
+            android:insetRight="5dp"
+            android:insetBottom="8dp"
+            android:text="@string/agree_apply" />
+    </LinearLayout>
+</LinearLayout>

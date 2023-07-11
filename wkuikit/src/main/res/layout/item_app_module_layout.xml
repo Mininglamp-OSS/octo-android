@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/layoutBg"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/nameTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="dksdksldk"
+            android:textColor="@color/colorDark"
+            android:textSize="@dimen/font_size_16" />
+
+        <TextView
+            android:id="@+id/descTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="dksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldkdksdksldk"
+            android:textColor="@color/color999"
+            android:textSize="@dimen/font_size_14" />
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/errorIV"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="10dp"
+        android:src="@mipmap/icon_send_fail"
+        android:visibility="gone" />
+
+    <com.chat.base.ui.components.CheckBox
+        android:id="@+id/checkBox"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="10dp" />
+</LinearLayout>

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:descendantFocusability="blocksDescendants"
+    android:orientation="vertical">
+
+
+    <LinearLayout
+        android:id="@+id/contentLayout"
+        style="@style/layoutBg"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical" />
+
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1">
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/groupIV"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginEnd="3dp"
+                        android:src="@mipmap/list_group"
+                        android:tint="@color/colorDark" />
+                    <TextView
+                        android:id="@+id/nameTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:fontFamily="sans-serif-medium"
+                        android:lines="1"
+                        android:ellipsize="end"
+                        android:text="多少快乐"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+
+                    <LinearLayout
+                        android:id="@+id/categoryLayout"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="5dp">
+
+                    <org.telegram.ui.Components.RLottieImageView
+                        android:id="@+id/statusIV"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="5dp"
+                        android:layout_marginEnd="5dp" />
+
+
+                    <TextView
+                        android:id="@+id/timeTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="3dp"
+                        android:text="上午12：09"
+                        android:textColor="@color/color999"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:minHeight="20dp">
+
+                <LinearLayout
+                    android:id="@+id/remindLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1">
+
+                    <com.github.ybq.android.spinkit.SpinKitView
+                        android:id="@+id/spinKit"
+                        style="@style/SpinKitView.Large.ThreeBounce"
+                        android:layout_width="25dp"
+                        android:layout_height="15dp"
+                        android:layout_gravity="center"
+                        android:visibility="gone"
+                        app:SpinKit_Color="@color/color999" />
+
+                    <TextView
+                        android:id="@+id/contentTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:ellipsize="end"
+                        android:lines="1"
+                        android:text="你傻乐视电视打开电视看了"
+                        android:textColor="@color/color999"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/unremindIv"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:src="@mipmap/msg_mute"
+                    android:visibility="gone" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/forbiddenIv"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:src="@mipmap/icon_forbidden"
+                    android:visibility="gone" />
+
+                <com.chat.base.ui.components.CounterView
+                    android:id="@+id/msgCountTv"
+                    android:layout_width="35dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="end"
+                    android:layout_marginStart="5dp"
+                    android:visibility="visible" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

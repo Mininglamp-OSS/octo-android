@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/contentLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/white_bg"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/closeIv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_margin="10dp"
+        android:src="@mipmap/ic_close_white" />
+
+    <LinearLayout
+        android:id="@+id/bottomView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="15dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="15dp">
+
+        <TextView
+            android:id="@+id/titleCenterTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="@color/colorDark"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/subtitleTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="15dp"
+            android:gravity="center"
+            android:textColor="@color/colorDark"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/remarkTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="15dp"
+            android:gravity="center"
+            android:textColor="@color/color999"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:text=""
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/view1"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/view2"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/view3"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+
+                <View
+                    android:id="@+id/view4"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass5"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+
+                <View
+                    android:id="@+id/view5"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/tv_pass6"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/transparent"
+                    android:enabled="false"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:inputType="numberPassword"
+                    android:textColor="@color/colorDark"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:id="@+id/view6"
+                    android:layout_width="match_parent"
+                    android:layout_height="01dp"
+                    android:layout_marginLeft="5dp"
+                    android:layout_marginRight="5dp"
+                    android:background="@color/color999" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/bottomTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center"
+        android:layout_marginBottom="10dp"
+        android:textSize="@dimen/font_size_16"
+        android:visibility="gone" />
+</LinearLayout>

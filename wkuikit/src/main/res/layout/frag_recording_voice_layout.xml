@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/record_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/layout_record_audio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:background="@color/homeColor"
+        android:orientation="vertical">
+
+
+        <com.chat.uikit.view.voice.LineWaveVoiceView
+            android:id="@+id/waveVoiceView"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:visibility="invisible"
+            app:voiceLineColor="@color/color999"
+            app:voiceLineWidth="3dp"
+            app:voiceTextColor="@color/color999"
+            app:voiceTextSize="14dp" />
+
+        <com.chat.uikit.view.voice.RecordAudioView
+            android:id="@+id/ivRecording"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:layout_gravity="center"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/ar_record_audio_btn_selector" />
+
+        <TextView
+            android:id="@+id/record_tips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="10dp"
+            android:text="@string/press_talk"
+            android:textColor="@color/color999"
+            android:textSize="16sp" />
+
+
+        <LinearLayout
+            android:id="@+id/pp_layout_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:background="@drawable/ar_cancel_layout_background"
+            android:gravity="center"
+            android:visibility="invisible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="@string/ar_feed_sound_cancel"
+                android:textColor="#ffffff"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

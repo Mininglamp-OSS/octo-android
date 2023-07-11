@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <LinearLayout style="@style/layoutBg">
+
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <TextView
+            android:id="@+id/nameTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/colorDark"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/applyBtn"
+            style="@style/buttonNormal"
+            android:layout_width="wrap_content"
+            android:insetLeft="5dp"
+            android:insetTop="8dp"
+            android:insetRight="5dp"
+            android:insetBottom="8dp"
+            android:text="@string/apply" />
+    </LinearLayout>
+
+    <View
+        style="@style/view_line"
+        android:layout_marginStart="65dp" />
+</LinearLayout>

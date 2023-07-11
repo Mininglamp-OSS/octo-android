@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/refreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/homeColor"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="25dp"
+                    android:layout_marginEnd="15dp">
+
+                    <com.chat.base.ui.components.AvatarView
+                        android:id="@+id/avatarView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <TextView
+                                android:id="@+id/nameTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/send_chat_text_bg"
+                                android:textColor="@color/colorDark"
+                                android:textSize="16sp" />
+
+                            <androidx.appcompat.widget.AppCompatImageView
+                                android:id="@+id/sexIv"
+                                android:layout_width="25dp"
+                                android:layout_height="25dp"
+                                android:layout_gravity="center_vertical"
+                                android:src="@mipmap/icon_male" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/inGroupNameLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:text="@string/in_group_name"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/inGroupNameTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/nickNameLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:text="@string/nickname"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/nickNameTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/send_chat_text_bg"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/identityLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:visibility="visible">
+
+                            <TextView
+                                android:id="@+id/appIdNumLeftTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:text="@string/app_idnum"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/appIdNumTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:background="@drawable/send_chat_text_bg"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:background="@color/white"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/remarkLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/set_remark" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/fromLayout"
+                        style="@style/layoutBg"
+                        android:visibility="visible">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_gravity="center_vertical"
+                            android:text="@string/source_from" />
+
+                        <TextView
+                            android:id="@+id/sourceFromTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:text="@string/source_from_unknown"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/joinGroupWayLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_gravity="center_vertical"
+                            android:text="@string/join_group_source" />
+
+                        <TextView
+                            android:id="@+id/joinGroupWayTv"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_weight="3"
+                            android:gravity="end"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
+
+                    <View style="@style/view_line_15" />
+
+                    <LinearLayout
+                        android:id="@+id/otherLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <LinearLayout
+                        android:id="@+id/deleteLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/delete_friends" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+
+                    <LinearLayout
+                        android:id="@+id/complaintLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/report" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/pushBlackLayout"
+                    style="@style/layoutBg">
+
+                    <TextView
+                        android:id="@+id/blacklistTv"
+                        style="@style/leftTextView"
+                        android:layout_weight="1"
+                        android:text="@string/push_black_list" />
+
+                    <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sendMsgBtn"
+                    style="@style/buttonNormal"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="30dp"
+                    android:layout_marginEnd="15dp"
+                    android:text="@string/send_msg"
+                    android:visibility="visible"
+                    app:cornerRadius="@dimen/button_radian" />
+
+                <TextView
+                    android:id="@+id/blacklistDescTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/black_list_desc"
+                    android:textColor="@color/color999"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/applyBtn"
+                    style="@style/buttonNormal"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="30dp"
+                    android:layout_marginEnd="15dp"
+                    android:text="@string/apply"
+                    android:visibility="gone"
+                    app:cornerRadius="@dimen/button_radian" />
+
+                <Space
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+</LinearLayout>

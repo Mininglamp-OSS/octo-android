@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <LinearLayout
+        android:id="@+id/searchLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:background="@color/layoutColor"
+        android:gravity="center"
+        android:padding="10dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:tint="@color/color999"
+            android:src="@mipmap/ic_ab_search" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="5dp"
+            android:text="@string/str_search"
+            android:textColor="@color/color999"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/searchTitleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="@string/my_app_id" />
+
+        <TextView
+            android:id="@+id/identityTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/qrIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:src="@mipmap/msg_qrcode"
+            android:tint="@color/color999" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/scanLayout"
+        style="@style/layoutBg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="center_vertical"
+            android:src="@mipmap/icon_scan" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/scan"
+                android:textColor="@color/colorDark"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/scan_user_qr"
+                android:textColor="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mailListLayout"
+        style="@style/layoutBg"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="center_vertical"
+            android:src="@mipmap/icon_maillist" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/maillist"
+                android:textColor="@color/colorDark"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/maillist_desc"
+                android:textColor="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+    </LinearLayout>
+</LinearLayout>

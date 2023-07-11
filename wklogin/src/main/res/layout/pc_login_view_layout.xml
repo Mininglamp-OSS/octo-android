@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/closeIv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:src="@mipmap/ic_close_white" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/pcLoginIV"
+                android:layout_width="150dp"
+                android:layout_height="100dp"
+                android:layout_gravity="center"
+                android:scaleType="centerCrop"
+                android:src="@mipmap/device_status_pc_online_normal" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/topLockIv"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:layout_gravity="center"
+                android:layout_marginBottom="10dp"
+                android:src="@mipmap/icon_lock"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/pcLoginTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="30dp"
+            android:text="@string/pc_login"
+            android:textColor="@color/colorDark"
+            android:textSize="25sp" />
+
+        <TextView
+            android:id="@+id/noticeTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="10dp"
+            android:text="@string/phone_notice_open"
+            android:textColor="@color/color999"
+            android:textSize="@dimen/font_size_16" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="50dp"
+            android:baselineAligned="false">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/phoneMuteBtn"
+                    android:layout_width="55dp"
+                    android:layout_height="55dp"
+                    android:background="@drawable/pc_login_btn_bg"
+                    android:gravity="center">
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/muteIv"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@mipmap/icon_mute" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/phone_mute"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:visibility="gone"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/lockLayout"
+                    android:layout_width="55dp"
+                    android:layout_height="55dp"
+                    android:background="@drawable/pc_login_btn_bg"
+                    android:gravity="center">
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/lockIv"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@mipmap/icon_lock" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/pc_locking"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/fileLayout"
+                    android:layout_width="55dp"
+                    android:layout_height="55dp"
+                    android:background="@drawable/pc_login_btn_bg"
+                    android:gravity="center">
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@mipmap/icon_pc_login_file" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/pc_file"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+
+        <TextView
+            android:id="@+id/exitBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="100dp"
+            android:layout_marginTop="50dp"
+            android:layout_marginEnd="100dp"
+            android:background="@drawable/layout_round_bg_frame"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:text="@string/exit_pc_login"
+            android:textColor="@color/color999"
+            android:textSize="@dimen/font_size_16" />
+
+    </LinearLayout>
+</RelativeLayout>

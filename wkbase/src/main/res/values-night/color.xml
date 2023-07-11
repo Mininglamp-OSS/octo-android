@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--适配颜色-->
+    <color name="homeColor">#252D3A</color>
+    <color name="layoutColor">#191919</color>
+    <color name="layoutColorSelected">#1d1d1d</color>
+    <color name="colorDark">#FFFFFF</color>
+    <color name="colorLine">#3B3B3C</color>
+    <color name="screen_bg">#1D2733</color>
+    <color name="screen_bg_selected">#1B1C1D</color>
+    <color name="homeColorSelected">#050505</color>
+    <color name="borderColor">#0B0000</color>
+    <color name="chat_border_color">#0B0000</color>
+    <color name="chat_received_bg_normal">#222E3A</color>
+    <color name="chat_received_bg_selected">#212223</color>
+    <color name="chat_send_bg_normal">#8247BD</color>
+    <color name="chat_send_bg_select">#7B39BC</color>
+    <color name="colorSystemBg">#222E3A</color>
+    <color name="send_text_color">#ffffff</color>
+    <color name="receive_text_color">#ffffff</color>
+    <color name="popupTextColor">#FFFFFF</color>
+    <color name="titleBarIcon">#FFFFFF</color>
+</resources>

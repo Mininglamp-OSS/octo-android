@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/refreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/homeColor">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/homeColor"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/homeColor"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="30dp"
+                    android:background="@color/white"
+                    android:orientation="vertical">
+
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/userRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:paddingTop="20dp"
+                        android:paddingBottom="20dp" />
+
+                    <TextView
+                        android:id="@+id/showAllMembersTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:gravity="center"
+                        android:paddingBottom="15dp"
+                        android:text="@string/show_all_members" />
+
+                    <LinearLayout
+                        android:id="@+id/groupNameLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/group_name" />
+
+                        <TextView
+                            android:id="@+id/nameTv"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="10dp"
+                            android:layout_marginEnd="10dp"
+                            android:layout_weight="2"
+                            android:gravity="end"
+                            android:text=""
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/groupAvatarLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/group_avatar" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/groupQrLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/group_qr" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="5dp"
+                            android:tint="@color/color999"
+                            android:src="@mipmap/msg_qrcode" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/noticeLayout"
+                        style="@style/layoutBg"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <TextView
+                                style="@style/leftTextView"
+                                android:layout_weight="1"
+                                android:text="@string/group_announcement" />
+
+                            <LinearLayout
+                                android:id="@+id/unsetNoticeLayout"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="center_vertical"
+                                    android:layout_marginEnd="10dp"
+                                    android:text="@string/unsetting" />
+
+                                <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/groupNoticeTv"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginTop="5dp"
+                            android:ellipsize="end"
+                            android:lineSpacingExtra="4dp"
+                            android:maxLines="3"
+                            android:textSize="16sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/remarkLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/remark" />
+
+                        <TextView
+                            android:id="@+id/remarkTv"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="20dp"
+                            android:layout_marginEnd="10dp"
+                            android:layout_weight="4"
+                            android:ellipsize="end"
+                            android:gravity="end"
+                            android:lines="1" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/findContentView"
+                        style="@style/view_line_padding"
+                        android:visibility="gone" />
+
+
+                    <LinearLayout
+                        android:id="@+id/findContentLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+
+                    <LinearLayout
+                        android:id="@+id/groupManageLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_gravity="center_vertical"
+                            android:layout_weight="1"
+                            android:text="@string/group_manage" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/groupManageView"
+                        style="@style/view_line_padding"
+                        android:visibility="gone" />
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/msg_remind" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/muteSwitchView"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/msg_top" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/stickSwitchView"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/save_to_maillist" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/saveSwitchView"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/chat_pwd" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/chatPwdSwitchView"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/msgReceiptLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"/>
+
+                    <LinearLayout
+                        android:id="@+id/inGroupNameLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/my_remark_name_in_group" />
+
+                        <TextView
+                            android:id="@+id/inGroupNameTv"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="10dp"
+                            android:layout_marginEnd="10dp"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+
+                    <LinearLayout style="@style/layoutBgPaddingSmall">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/show_remark_name" />
+
+                        <com.chat.base.ui.components.SwitchView
+                            android:id="@+id/showNickSwitchView"
+                            android:layout_width="45dp"
+                            android:layout_height="40dp" />
+
+                    </LinearLayout>
+
+                    <View style="@style/view_line_padding" />
+
+                    <LinearLayout
+                        android:id="@+id/msgRemindLayout"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <LinearLayout
+                        android:id="@+id/reportLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_gravity="center_vertical"
+                            android:layout_weight="1"
+                            android:text="@string/report" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            style="@style/arrow_right_iv"
+                            android:layout_gravity="center_vertical" />
+                    </LinearLayout>
+
+                    <View style="@style/view_line_padding" />
+
+                    <LinearLayout
+                        android:id="@+id/clearChatMsgLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_gravity="center_vertical"
+                            android:layout_weight="1"
+                            android:text="@string/clear_chat_msg" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            style="@style/arrow_right_iv"
+                            android:layout_gravity="center_vertical" />
+                    </LinearLayout>
+
+                    <View style="@style/view_line_padding" />
+
+                    <TextView
+                        android:id="@+id/exitBtn"
+                        style="@style/layoutBg"
+                        android:gravity="center"
+                        android:text="@string/delete_group"
+                        android:textColor="@color/red"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <Space
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+</LinearLayout>

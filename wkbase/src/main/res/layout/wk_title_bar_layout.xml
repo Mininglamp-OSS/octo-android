@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/title_bg"
+    android:orientation="vertical">
+
+    <View
+        android:id="@+id/statusBarView"
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:background="@drawable/title_bg" />
+
+    <RelativeLayout
+        android:id="@+id/titleBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:animateLayoutChanges="true">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/backIv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="5dp"
+            android:src="@mipmap/ic_ab_back" />
+
+
+        <Button
+            android:id="@+id/titleRightBtn"
+            style="@style/buttonNormal"
+            android:layout_width="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerInParent="true"
+            android:layout_marginEnd="10dp"
+            android:insetLeft="3dp"
+            android:insetRight="3dp"
+            android:textSize="@dimen/font_size_14"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/titleEndView"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/titleRightIvLeft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginLeft="10dp"
+                android:layout_marginRight="10dp"
+                android:src="@mipmap/msg_seen"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/titleRightLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:background="@color/transparent">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/titleRightIv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginEnd="15dp"
+                    android:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/titleRightTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginLeft="10dp"
+                    android:layout_marginRight="10dp"
+                    android:padding="5dp"
+                    android:textSize="@dimen/font_size_16"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+
+            <com.chat.base.ui.components.RadialProgressView
+                android:id="@+id/titleRightLoadingIv"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginLeft="10dp"
+                android:layout_marginRight="10dp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="10dp"
+            android:layout_toStartOf="@id/titleEndView"
+            android:layout_toEndOf="@id/backIv"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center_vertical"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/titleCenterTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:singleLine="true"
+                    android:text="@string/app_name"
+                    android:textColor="@color/colorDark"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/subtitleTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/color999"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </RelativeLayout>
+
+    <View
+        android:id="@+id/titleBottomLinView"
+        android:layout_width="match_parent"
+        android:layout_height="1px"
+        android:background="@color/clrCCC"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</LinearLayout>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/msgStatusLayout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingStart="5dp"
+    android:paddingEnd="5dp">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/editedTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="2dp"
+        android:text="@string/edited"
+        android:textColor="@color/color999"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:ignore="SmallSp" />
+
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/msgTimeTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:text="10:10AM"
+        android:textColor="@color/color999"
+        android:textSize="12sp"
+        tools:ignore="SmallSp" />
+
+    <org.telegram.ui.Components.RLottieImageView
+        android:id="@+id/statusIV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:visibility="visible" />
+
+</LinearLayout>

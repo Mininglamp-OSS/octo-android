@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center|start"
+    android:orientation="vertical">
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/contentLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center|start"
+        android:minWidth="40dp"
+        android:minHeight="40dp"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="5dp"
+        android:visibility="visible"
+        app:shadowRadius="0dp">
+
+        <TextView
+            android:id="@+id/receivedTextNameTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="3dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:singleLine="true"
+            android:textColor="@color/colorDark"
+            android:textSize="12sp"
+            android:visibility="visible" />
+
+        <com.github.ybq.android.spinkit.SpinKitView
+            android:id="@+id/spin_kit"
+            style="@style/SpinKitView.Large.ThreeBounce"
+            android:layout_width="50dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            app:SpinKit_Color="@color/colorDark" />
+    </com.chat.base.views.BubbleLayout>
+</LinearLayout>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_alignParentBottom="true"
+    android:background="@android:color/transparent"
+    android:orientation="vertical">
+
+    <com.chat.base.views.pwdview.PwdView
+        android:id="@+id/pwdDialog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <GridView
+        android:id="@+id/gv_keybord"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:alwaysDrawnWithCache="false"
+        android:background="@color/homeColor"
+        android:listSelector="@android:color/transparent"
+        android:numColumns="3" />
+
+</LinearLayout>

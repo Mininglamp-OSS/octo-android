@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/layout_panel"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="bottom"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <FrameLayout
+        android:id="@+id/layout_null"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/transparent"
+        android:visibility="visible" />
+
+    <LinearLayout
+        android:id="@+id/layout_input_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/homeColor"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/homeColor"
+            android:gravity="bottom"
+            android:orientation="horizontal"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/edit_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@drawable/chat_edit_bg"
+                android:hint="@string/str_base_reply"
+                android:maxLines="3"
+                android:minHeight="35dp"
+                android:paddingStart="10dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="3dp"
+                android:textColor="@color/colorDark"
+                android:textCursorDrawable="@null"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:gravity="center">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/img_switch"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    app:srcCompat="@drawable/selector_emotion_btn" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sendBtn"
+                    style="@style/buttonNormal"
+                    android:layout_marginEnd="15dp"
+                    android:alpha="0.2"
+                    android:enabled="false"
+                    android:minWidth="0dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="3dp"
+                    android:text="@string/str_send"
+                    android:visibility="visible" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <View style="@style/view_line" />
+
+    <FrameLayout
+        android:id="@+id/emojiLayout"
+        android:layout_width="match_parent"
+        android:layout_height="300dp" />
+</LinearLayout>

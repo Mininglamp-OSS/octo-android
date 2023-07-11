@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/pyTv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:background="@color/homeColor"
+        android:paddingStart="15dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="0dp"
+        android:paddingBottom="5dp"
+        android:textColor="@color/colorDark"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:visibility="visible" />
+
+    <LinearLayout style="@style/layoutBg">
+
+        <TextView
+            android:id="@+id/nameTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorDark"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <View style="@style/view_line_margin" />
+
+</LinearLayout>

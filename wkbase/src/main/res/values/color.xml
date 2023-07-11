@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#ffffff</color>
+    <color name="black">#000000</color>
+    <color name="colorFFC107">#FFC107</color>
+    <color name="red">#F80303</color>
+    <color name="reminderColor">#FF5353</color>
+    <color name="redDisable">#F7A5A5</color>
+    <color name="transparent">#00000000</color>
+    <color name="colorF5F5F5">#f5f5f5</color>
+    <color name="colorAccent">#f65835</color>
+    <color name="colorAccentUn">#95F65835</color>
+    <color name="colorAccentDisabled">#7E7E7E</color>
+    <color name="color_text_select_cursor">#95F65835</color>
+    <color name="colorSystemBg">#26000000</color>
+    <color name="clrCCC">#ccc</color>
+    <color name="blue">#2196F3</color>
+    <color name="gary">#F3F3F3</color>
+    <color name="borderColor">#ccc</color>
+    <color name="chat_received_bg_normal">#ffffff</color>
+    <color name="chat_received_bg_selected">#cccccc</color>
+    <color name="chat_send_bg_normal">#FDDED6</color>
+    <color name="chat_send_bg_select">#F8937B</color>
+    <color name="default_shadow_color">#2a000000</color>
+    <color name="default_shadowback_color">#fff</color>
+    <color name="color999">#999999</color>
+    <color name="chat_border_color">#B6B5B5</color>
+    <color name="colorB6B5B5">#B6B5B5</color>
+    <color name="colord8d5d5">#d8d5d5</color>
+    <color name="colorE8E7E7">#E8E7E7</color>
+    <color name="send_text_color">#313131</color>
+    <color name="receive_text_color">#313131</color>
+    <!--适配颜色-->
+    <color name="screen_bg">#ffffff</color>
+    <color name="screen_bg_selected">#F3F3F3</color>
+    <color name="layoutColor">#ffffff</color>
+    <color name="layoutColorSelected">#DAD9D9</color>
+    <color name="homeColor">#f6f6f6</color>
+    <color name="homeColorSelected">#E7E7E7</color>
+    <color name="colorDark">#313131</color>
+    <color name="colorLine">#cccccc</color>
+    <color name="popupTextColor">#676a6f</color>
+    <color name="bottom_drawer_outside_background">#80000000</color>
+    <color name="bottom_drawer_background">#FFFFFF</color>
+    <color name="bottom_drawer_handle_view_color">#E0E0E0</color>
+    <color name="titleBarIcon">#313131</color>
+    <array name="name_colors">
+        <item>#8C8DFF</item>
+        <item>#7983C2</item>
+        <item>#6D8DDE</item>
+        <item>#5979F0</item>
+        <item>#6695DF</item>
+        <item>#8F7AC5</item>
+        <item>#9D77A5</item>
+        <item>#8A64D0</item>
+        <item>#AA66C3</item>
+        <item>#A75C96</item>
+        <item>#C8697D</item>
+        <item>#B74D62</item>
+        <item>#BD637C</item>
+        <item>#B3798E</item>
+        <item>#9B6D77</item>
+        <item>#B87F7F</item>
+        <item>#C5595A</item>
+        <item>#AA4848</item>
+        <item>#B0665E</item>
+        <item>#B76753</item>
+        <item>#BB5334</item>
+        <item>#C97B46</item>
+        <item>#BE6C2C</item>
+        <item>#CB7F40</item>
+        <item>#A47758</item>
+        <item>#B69370</item>
+        <item>#A49373</item>
+        <item>#AA8A46</item>
+        <item>#AA8220</item>
+        <item>#76A048</item>
+        <item>#9CAD23</item>
+        <item>#A19431</item>
+        <item>#AA9100</item>
+        <item>#A09555</item>
+        <item>#C49B4B</item>
+        <item>#5FB05F</item>
+        <item>#6AB48F</item>
+        <item>#71B15C</item>
+        <item>#B3B357</item>
+        <item>#A3B561</item>
+        <item>#909F45</item>
+        <item>#93B289</item>
+        <item>#3D98D0</item>
+        <item>#429AB6</item>
+        <item>#4EABAA</item>
+        <item>#6BC0CE</item>
+        <item>#64B5D9</item>
+        <item>#3E9CCB</item>
+        <item>#2887C4</item>
+        <item>#52A98B</item>
+    </array>
+</resources>

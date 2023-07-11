@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/layoutBg"
+    android:background="@color/layoutColor"
+    android:orientation="horizontal"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <FrameLayout
+        android:layout_width="45dp"
+        android:layout_height="45dp">
+
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+
+        <com.chat.base.ui.components.CheckBox
+            android:id="@+id/checkBox"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="end|bottom" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/nameTv"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:lines="1"
+        android:textColor="@color/colorDark"
+        android:textSize="14sp" />
+
+
+</LinearLayout>

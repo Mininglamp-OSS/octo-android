@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/refreshLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/homeColor">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/homeColor">
+
+                <LinearLayout
+                    android:id="@+id/shadowLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:background="@drawable/white_bg"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="20dp">
+
+                        <com.chat.base.ui.components.AvatarView
+                            android:id="@+id/avatarView"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+
+                        <TextView
+                            android:id="@+id/nameTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="10dp"
+                            android:text="@string/group_name"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+                    </LinearLayout>
+
+
+                    <FrameLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="20dp"
+                        android:layout_marginBottom="20dp">
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:id="@+id/qrIv"
+                            android:layout_width="250dp"
+                            android:layout_height="250dp"
+                            android:layout_gravity="center"
+                            android:src="@mipmap/icon_no_qr" />
+
+                        <TextView
+                            android:id="@+id/unusedTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:gravity="center"
+                            android:lineSpacingExtra="3dp"
+                            android:text="@string/group_qr_discontinue_use"
+                            android:textColor="@color/color999"
+                            android:textSize="22sp"
+                            android:visibility="invisible" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/qrTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="20dp"
+                        android:layout_marginBottom="20dp"
+                        android:gravity="center"
+                        android:lineSpacingExtra="3dp"
+                        android:text="@string/group_qr_desc"
+                        android:textColor="@color/color999"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+</LinearLayout>

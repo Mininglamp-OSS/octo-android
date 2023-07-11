@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:baselineAligned="false"
+    android:orientation="horizontal">
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/contentLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="10dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="5dp"
+        android:visibility="visible"
+        app:shadowRadius="0dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <com.chat.base.ui.components.AvatarView
+                android:id="@+id/userCardAvatarIv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:scaleType="centerCrop" />
+
+            <TextView
+                android:id="@+id/userNameTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="10dp"
+                android:textColor="@color/colorDark"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <View
+            style="@style/view_line"
+            android:layout_marginTop="10dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"
+                android:text="@string/user_card"
+                android:textColor="@color/color999"
+                android:textSize="12sp" />
+
+            <include layout="@layout/wk_msg_status_layout" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:visibility="gone" />
+    </com.chat.base.views.BubbleLayout>
+
+</LinearLayout>

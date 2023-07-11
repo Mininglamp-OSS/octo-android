@@ -1,0 +1,20 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorPrimaryDark">@color/welcome_bg</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="colorPrimary">@color/color999</item>
+    </style>
+
+    <style name="Theme.FullscreenTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@mipmap/ic_launch</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+</resources>

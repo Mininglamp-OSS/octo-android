@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/homeColor"
+        android:gravity="center"
+        android:orientation="vertical">
+
+
+        <LinearLayout
+            android:id="@+id/shadowLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/white_bg"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <com.chat.base.ui.components.AvatarView
+                android:id="@+id/avatarView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp" />
+
+            <TextView
+                android:id="@+id/nameTv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="20dp"
+                android:gravity="center"
+                android:textColor="@color/colorDark"
+                android:textSize="16sp" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/qrIv"
+                android:layout_width="250dp"
+                android:layout_height="250dp"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginEnd="20dp"
+                android:src="@drawable/default_view_bg" />
+
+            <TextView
+                android:id="@+id/qrDescTv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="20dp"
+                android:gravity="center"
+                android:text="@string/qr_desc"
+                android:textColor="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

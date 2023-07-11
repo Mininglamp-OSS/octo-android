@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/transparent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.king.zxing.ViewfinderView
+        android:id="@+id/viewfinderView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:cornerColor="@color/colorAccent"
+        app:frameColor="@color/colorAccent"
+        app:gridHeight="0dp"
+        app:labelText="@string/tips_scan_code"
+        app:labelTextLocation="bottom"
+        app:labelTextSize="@dimen/font_size_14"
+        app:labelTextWidth="180dp"
+        app:laserColor="@color/colorAccent"
+        app:laserStyle="grid" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/ivFlash"
+        android:layout_width="30dp"
+        android:layout_height="35dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="80dp"
+        android:src="@mipmap/icon_torch" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/backIv"
+        android:layout_width="25dp"
+        android:layout_height="25dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="30dp"
+        android:background="@drawable/shape_corner_rectangle"
+        android:src="@mipmap/ic_ab_back" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/rightIV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginTop="30dp"
+        android:layout_marginEnd="15dp"
+        android:background="@drawable/shape_corner_rectangle"
+        android:src="@mipmap/ic_ab_other" />
+</FrameLayout>

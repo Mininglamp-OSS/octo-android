@@ -1,0 +1,140 @@
+<resources>
+
+
+    <!-- 圆角图片 -->
+    <style name="roundedCornerImageStyle">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <style name="AlertDialog" parent="@style/Theme.AppCompat.Light.Dialog">
+        <!-- 这里设置背景为透明，为了隐藏边框 -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <!-- 这里是修改顶部标题背景颜色，具体颜色自己定，可以是图片 -->
+        <item name="android:topDark">@color/white</item>
+        <!-- 这里是修改内容区域背景颜色 -->
+        <item name="android:centerDark">@color/white</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@color/transparent</item>
+    </style>
+
+    <style name="view_line">
+        <item name="android:background">@color/colorLine</item>
+        <item name="android:layout_height">1px</item>
+        <item name="android:layout_width">match_parent</item>
+    </style>
+
+    <style name="view_line_margin">
+        <item name="android:background">@color/colorLine</item>
+        <item name="android:layout_height">1px</item>
+        <item name="android:layout_marginStart">15dp</item>
+        <item name="android:layout_marginEnd">15dp</item>
+        <item name="android:layout_width">match_parent</item>
+    </style>
+
+    <style name="view_line_15">
+        <item name="android:background">@color/homeColor</item>
+        <item name="android:layout_height">15dp</item>
+        <item name="android:layout_width">match_parent</item>
+    </style>
+
+    <style name="view_line_padding">
+        <item name="android:background">@color/homeColor</item>
+        <item name="android:layout_height">10dp</item>
+        <item name="android:layout_width">match_parent</item>
+    </style>
+
+    <style name="buttonNormal" parent="Widget.MaterialComponents.Button">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="backgroundTint">@color/colorAccent</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="textAllCaps">false</item>
+        <item name="android:buttonStyle">@style/Widget.MaterialComponents.Button.UnelevatedButton
+        </item>
+        <item name="cornerRadius">@dimen/button_radian</item>
+    </style>
+
+
+    <!--显示在左边的文字样式-->
+    <style name="leftTextView">
+        <item name="android:layout_alignParentLeft">true</item>
+        <item name="android:layout_centerVertical">true</item>
+        <item name="android:layout_gravity">center_vertical</item>
+        <item name="android:textColor">@color/colorDark</item>
+        <item name="android:textSize">@dimen/font_size_16</item>
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">wrap_content</item>
+    </style>
+
+    <style name="layoutBg">
+        <item name="android:orientation">horizontal</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:paddingStart">15dp</item>
+        <item name="android:paddingEnd">15dp</item>
+        <item name="android:paddingTop">15dp</item>
+        <item name="android:paddingBottom">15dp</item>
+        <item name="android:background">@drawable/layout_bg</item>
+    </style>
+
+    <style name="layoutBgPaddingSmall" parent="layoutBg">
+        <item name="android:paddingTop">5dp</item>
+        <item name="android:paddingBottom">5dp</item>
+    </style>
+
+    <style name="layoutBgDark" parent="layoutBg">
+        <item name="android:background">@drawable/layout_bg_dark</item>
+    </style>
+
+    <style name="arrow_right_iv">
+        <item name="android:layout_alignParentRight">true</item>
+        <item name="android:layout_centerInParent">true</item>
+        <item name="android:layout_width">14dp</item>
+        <item name="android:layout_height">14dp</item>
+        <item name="android:src">@mipmap/ic_arrow_right</item>
+        <item name="android:layout_gravity">center_vertical|right</item>
+    </style>
+
+    <style name="edit_bg">
+        <item name="android:paddingTop">15dp</item>
+        <item name="android:paddingLeft">5dp</item>
+        <item name="android:paddingRight">5dp</item>
+        <item name="android:paddingBottom">15dp</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/chat_edit_bg</item>
+    </style>
+
+    <!--以下是弹框样式-->
+    <!--弹出框 动画-->
+    <style name="dialog_share" parent="android:Animation">
+        <item name="android:windowEnterAnimation">@anim/bottom_in</item>
+        <item name="android:windowExitAnimation">@anim/bottom_out</item>
+    </style>
+    <!-- 底部弹出框 -->
+    <style name="pop_dialog" parent="@android:style/Theme.Dialog">
+        <item name="android:windowFrame">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="SwipeBackLayout">
+        <item name="edge_size">50dip</item>
+        <item name="shadow_left">@mipmap/shadow_left</item>
+        <item name="shadow_right">@mipmap/shadow_right</item>
+        <item name="shadow_bottom">@mipmap/shadow_bottom</item>
+    </style>
+
+    <style name="PopupContextAnimation" mce_bogus="1" parent="android:Animation">
+        <item name="android:windowEnterAnimation">@anim/popup_context_in</item>
+    </style>
+</resources>

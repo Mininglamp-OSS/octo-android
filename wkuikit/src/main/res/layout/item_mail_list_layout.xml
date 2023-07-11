@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+
+    <LinearLayout style="@style/layoutBg">
+
+        <TextView
+            android:id="@+id/pyTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="10dp"
+            android:gravity="center"
+            android:minWidth="20dp"
+            android:textColor="@color/colorDark"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="visible" />
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <com.chat.base.ui.components.AvatarView
+                android:id="@+id/avatarView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/nameIv"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/shape_rand"
+                android:gravity="center"
+                android:text="鞋"
+                android:textColor="@color/white"
+                android:textSize="@dimen/font_size_16"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/nameTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:ellipsize="end"
+                android:lines="1"
+                android:textColor="@color/colorDark"
+                android:textSize="16sp" />
+
+            <TextView
+
+                android:id="@+id/phoneTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:ellipsize="end"
+                android:lines="1"
+                android:textColor="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/addedTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="@string/added"
+            android:textColor="@color/color999"
+            android:textSize="@dimen/font_size_14" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/addBtn"
+            style="@style/buttonNormal"
+            android:layout_width="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:insetLeft="5dp"
+            android:insetTop="8dp"
+            android:insetRight="5dp"
+            android:insetBottom="8dp"
+            android:text="@string/add_friends"
+            android:textSize="@dimen/font_size_14" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,8 @@
+<resources>
+    <string name="wk_scan_module_other_result">扫描结果</string>
+    <string name="wk_scan_module_scan">扫一扫</string>
+    <string name="wk_scan_module_scan_no_result">未找到内容</string>
+    <string name="album">相册</string>
+    <string name="tips_scan_code">扫二维码 / 条形码</string>
+    <string name="scan_remove_group">您已被移除该群</string>
+</resources>

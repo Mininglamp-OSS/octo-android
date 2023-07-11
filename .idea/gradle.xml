@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
@@ -10,10 +11,19 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/MyLibs" />
+            <option value="$PROJECT_DIR$/MyLibs/oppopush" />
+            <option value="$PROJECT_DIR$/MyLibs/rlottie" />
+            <option value="$PROJECT_DIR$/MyLibs/vivopush" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/wkbase" />
+            <option value="$PROJECT_DIR$/wklogin" />
+            <option value="$PROJECT_DIR$/wkscan" />
+            <option value="$PROJECT_DIR$/wkuikit" />
           </set>
         </option>
       </GradleProjectSettings>
     </option>
+    <option name="offlineMode" value="true" />
   </component>
 </project>

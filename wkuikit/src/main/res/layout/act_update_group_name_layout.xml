@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="15dp"
+        android:layout_marginBottom="10dp"
+        android:text="@string/group_name"
+        android:textColor="@color/colorDark"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/layoutColor">
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/nameEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginEnd="15dp"
+            android:layout_marginTop="10dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:layout_marginBottom="10dp"
+            android:hint="@string/group_name"
+            android:maxLength="30"
+            android:textColor="@color/colorDark"
+            android:textColorHint="@color/color999" />
+    </LinearLayout>
+</LinearLayout>

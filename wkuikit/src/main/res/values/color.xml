@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="line_view_bg">#B0B0B0</color>
+    <color name="chat_face_tab_bg">#ffffff</color>
+    <color name="chat_function_text">#585858</color>
+    <color name="pc_login_bg">#FAFAFA</color>
+    <color name="chat_more_bg">#f6f6f6</color>
+</resources>

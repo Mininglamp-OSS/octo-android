@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:background="@color/homeColor"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.chat.base.views.ShadowLayout
+        android:id="@+id/shadowLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginEnd="5dp"
+        app:hl_cornerRadius="5dp"
+        app:hl_dx="0dp"
+        app:hl_dy="0dp"
+        app:hl_shadowBackColor="@color/colorDark"
+        app:hl_shadowColor="@color/colorDark"
+        app:hl_shadowLimit="5dp">
+
+        <RelativeLayout
+            android:id="@+id/deleteLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/white_bg"
+            android:paddingStart="10dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="10dp">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/deleteIv"
+                android:layout_width="25dp"
+                android:layout_height="20dp"
+                android:layout_margin="5dp"
+                android:src="@mipmap/passcode_delete" />
+        </RelativeLayout>
+    </com.chat.base.views.ShadowLayout>
+
+</RelativeLayout>

@@ -85,8 +85,6 @@ class TSApplication : MultiDexApplication() {
     private fun initApi() {
         var apiURL = WKSharedPreferencesUtil.getInstance().getSP("api_base_url")
         if (TextUtils.isEmpty(apiURL)) {
-//            apiURL = "https://chatapi.githubim.com"
-//            apiURL = "https://api.tgo.ai"
             apiURL = "https://api.botgate.cn"
             WKApiConfig.initBaseURL(apiURL)
         } else {

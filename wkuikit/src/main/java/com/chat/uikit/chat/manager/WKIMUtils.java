@@ -488,16 +488,6 @@ public class WKIMUtils {
         }
     }
 
-    public void exitApp(int from) {
-        //被踢清除
-        WKBaseApplication.getInstance().closeDbHelper();
-        WKConfig.getInstance().clearInfo();
-        WKIM.getInstance().getConnectionManager().disconnect(true);
-        ActManagerUtils.getInstance().clearAllActivity();
-        EndpointManager.getInstance().invoke("exit_rtc", null);
-        EndpointManager.getInstance().invoke("main_show_home_view", from);
-    }
-
     /**
      * 显示聊天
      *

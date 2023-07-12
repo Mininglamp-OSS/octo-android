@@ -18,6 +18,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/wkbase" />
             <option value="$PROJECT_DIR$/wklogin" />
+            <option value="$PROJECT_DIR$/wkpush" />
             <option value="$PROJECT_DIR$/wkscan" />
             <option value="$PROJECT_DIR$/wkuikit" />
           </set>

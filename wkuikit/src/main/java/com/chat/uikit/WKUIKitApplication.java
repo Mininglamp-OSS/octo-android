@@ -385,7 +385,7 @@ public class WKUIKitApplication {
             return null;
         });
         EndpointManager.getInstance().setMethod("exit_login", object -> {
-            exitLogin();
+            exitLogin(0);
             return null;
         });
         //查看用户详情
@@ -477,14 +477,15 @@ public class WKUIKitApplication {
     private ChooseContactsMenu contactsMenu;
     private List<WKMessageContent> messageContentList;
 
-    public void exitLogin() {
+    public void exitLogin(int from) {
+        MsgModel.getInstance().stopTimer();
         EndpointManager.getInstance().invoke("push_unregister_push", null);
         ShortcutBadger.removeCount(getContext());
         WKConfig.getInstance().clearInfo();
         WKIM.getInstance().getConnectionManager().disconnect(true);
         ActManagerUtils.getInstance().clearAllActivity();
         EndpointManager.getInstance().invoke("exit_rtc", null);
-        EndpointManager.getInstance().invoke("main_show_home_view", 0);
+        EndpointManager.getInstance().invoke("main_show_home_view", from);
         //关闭UI层数据库
         WKBaseApplication.getInstance().closeDbHelper();
 

@@ -1,0 +1,4 @@
+<resources>
+    <string name="open_notification_title">通知栏权限</string>
+    <string name="open_notification_content">检测到应用还未开启通知栏权限，为了使应用退出后能更好的接受消息，建议您开启通知栏权限。</string>
+</resources>

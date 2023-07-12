@@ -69,6 +69,13 @@ public class MsgModel extends WKBaseModel {
         return MsgModelBinder.msgModel;
     }
 
+    public void stopTimer() {
+        if (timer != null) {
+            timer.cancel();
+            timer.purge();
+            timer = null;
+        }
+    }
     private Timer timer;
 
     public synchronized void startCheckFlameMsgTimer() {

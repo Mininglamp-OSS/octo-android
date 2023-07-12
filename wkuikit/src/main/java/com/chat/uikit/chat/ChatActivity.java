@@ -228,7 +228,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 public void clickResult(boolean isCancel) {
                     finish();
                 }
-            }, this, desc, Manifest.permission.RECORD_AUDIO, Manifest.permission.CALL_PHONE,  Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO);
+            }, this, desc, Manifest.permission.RECORD_AUDIO, Manifest.permission.CALL_PHONE, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO);
 
         } else {
             WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {
@@ -1800,9 +1800,12 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (wkMsg.messageSeq > lastVisibleMsgSeq) {
             lastVisibleMsgSeq = wkMsg.messageSeq;
         }
-        if (lastVisibleMsgSeq < unreadStartMsgOrderSeq) {
-            lastVisibleMsgSeq = (int) WKIM.getInstance().getMsgManager().getReliableMessageSeq(unreadStartMsgOrderSeq);
-            lastVisibleMsgSeq = lastVisibleMsgSeq - 1;
+        if (lastVisibleMsgSeq != 0) {
+            long lastVisibleMsgOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(lastVisibleMsgSeq, channelId, channelType);
+            if (lastVisibleMsgOrderSeq < unreadStartMsgOrderSeq) {
+                lastVisibleMsgSeq = (int) WKIM.getInstance().getMsgManager().getReliableMessageSeq(unreadStartMsgOrderSeq);
+                lastVisibleMsgSeq = lastVisibleMsgSeq - 1;
+            }
         }
 
         if (redDot > 0) {

@@ -33,6 +33,7 @@ import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.TabActivity;
+import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.contacts.service.FriendModel;
@@ -393,7 +394,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (reason.equals(WKConnectReason.ReasonConnectKick)) {
                     from = 1;
                 }
-                WKIMUtils.getInstance().exitApp(from);
+                WKUIKitApplication.getInstance().exitLogin(from);
             }
             wkVBinding.textSwitcher.setTag(i);
             if (i != WKConnectStatus.success && i != WKConnectStatus.syncMsg) {

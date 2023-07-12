@@ -1,0 +1,4 @@
+<resources>
+    <string name="open_notification_title">Notification permissions</string>
+    <string name="open_notification_content">It is detected that the application has not opened the permission of the notification bar. In order to better accept messages after the application exits, it is recommended that you open the permission of the notification bar.</string>
+</resources>

@@ -66,7 +66,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         }
         wkVBinding.loginOutTv.setOnClickListener(v -> showDialog(getString(R.string.login_out_dialog), index -> {
             if (index == 1) {
-                WKUIKitApplication.getInstance().exitLogin();
+                WKUIKitApplication.getInstance().exitLogin(0);
             }
         }));
         SingleClickUtil.onSingleClick(wkVBinding.languageLayout, view1 -> startActivity(new Intent(this, WKLanguageActivity.class)));

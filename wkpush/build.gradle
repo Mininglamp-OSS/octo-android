@@ -1,0 +1,40 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    namespace 'com.chat.push'
+
+}
+
+dependencies {
+    api project(':wkbase')
+    implementation 'com.huawei.hms:push:6.1.0.300'
+    implementation files('libs/MiPush_SDK_Client_3_7_5.jar')
+
+    //oppo
+    implementation 'com.google.code.gson:gson:2.8.9'
+    implementation 'commons-codec:commons-codec:1.11'
+    implementation 'androidx.annotation:annotation:1.6.0'
+    implementation project(path: ':MyLibs:oppopush')
+    //vivo
+    implementation project(path: ':MyLibs:vivopush')
+}

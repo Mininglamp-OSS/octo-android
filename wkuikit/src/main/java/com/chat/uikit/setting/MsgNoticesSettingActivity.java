@@ -79,7 +79,7 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
         });
         wkVBinding.newMsgNoticeDetailSwitch.setOnCheckedChangeListener((compoundButton, b) -> {
             if (compoundButton.isPressed()) {
-                userInfoEntity.setting.msg_show_detail = b ? 0 : 1;
+                userInfoEntity.setting.msg_show_detail = b ? 1 : 0;
                 UserModel.getInstance().updateUserSetting("msg_show_detail", userInfoEntity.setting.search_by_phone, (code, msg) -> {
                     if (code == HttpResponseCode.success) {
                         WKConfig.getInstance().saveUserInfo(userInfoEntity);

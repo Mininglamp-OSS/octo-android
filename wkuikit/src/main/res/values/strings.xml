@@ -267,5 +267,6 @@
     <string name="call_blacklist_group">您已被拉入群黑名单，无法音视频聊天</string>
     <string name="save_label_tips">存为标签，下次可直接使用</string>
     <string name="save_label_sure">存为标签</string>
+    <string name="default_new_msg">你有一条新消息</string>
 </resources>
 

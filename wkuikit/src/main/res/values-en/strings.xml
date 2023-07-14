@@ -267,5 +267,6 @@
     <string name="call_blacklist_group">You have been pulled into the group blacklist and cannot chat with audio and video</string>
     <string name="save_label_tips">Save as tag and use later?</string>
     <string name="save_label_sure">Save as Tag</string>
+    <string name="default_new_msg">you have a new message</string>
 </resources>
 

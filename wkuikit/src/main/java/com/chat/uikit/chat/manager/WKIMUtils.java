@@ -223,9 +223,13 @@ public class WKIMUtils {
             }
             boolean isVibrate = true;
             boolean playNewMsgMedia = true;
+            boolean newMsgNotice = true;
+            int msgShowDetail = 1;
             UserInfoSetting setting = WKConfig.getInstance().getUserInfo().setting;
             if (setting != null) {
+                msgShowDetail = setting.msg_show_detail;
                 if (setting.new_msg_notice == 0) {
+                    newMsgNotice = false;
                     playNewMsgMedia = false;
                     isVibrate = false;
                 } else {
@@ -237,10 +241,10 @@ public class WKIMUtils {
                     }
                 }
             }
-            if (isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
+            if (newMsgNotice && isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.mute == 0) {
-                    showNotification(msgList.get(msgList.size() - 1), channel, playNewMsgMedia, isVibrate);
+                    showNotification(msgList.get(msgList.size() - 1),msgShowDetail, channel, playNewMsgMedia, isVibrate);
                 }
             }
 
@@ -632,7 +636,11 @@ public class WKIMUtils {
         void onSuccess(Bitmap logo);
     }
 
-    private void showNotification(WKMsg msg, WKChannel channel, boolean playNewMsgMedia, boolean isVibrate) {
+    private void showNotification(WKMsg msg,int msgShowDetail, WKChannel channel, boolean playNewMsgMedia, boolean isVibrate) {
+        int msgNotice = WKConfig.getInstance().getUserInfo().setting.new_msg_notice;
+        if (msgNotice == 0) {
+            return;
+        }
         Activity activity = ActManagerUtils.getInstance().getCurrentActivity();
         if (activity == null || activity.getComponentName().getClassName().equals(TabActivity.class.getName())) {
             if (playNewMsgMedia) {
@@ -644,8 +652,8 @@ public class WKIMUtils {
             return;
         }
         String showTitle = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
-        String showContent = "";
-        if (msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.getDisplayContent())) {
+        String showContent = WKBaseApplication.getInstance().getContext().getString(R.string.default_new_msg);
+        if (msgShowDetail == 1 && msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.getDisplayContent())) {
             showContent = msg.baseContentMsgModel.getDisplayContent();
         }
         String url;
@@ -655,6 +663,7 @@ public class WKIMUtils {
             url = WKApiConfig.getShowAvatar(channel.channelID, channel.channelType);
         }
         String finalShowContent = showContent;
+
         getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
     }
 

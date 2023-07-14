@@ -863,8 +863,11 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                         if (isResetData) {
                             chatAdapter.notifyData(i);
                         }
-                        if (isResetReaction) chatAdapter.notifyReaction(i, wkMsg.reactionList);
-                    }
+                        if (isResetReaction) {
+                            list.get(i).isRefreshReaction = true;
+                            chatAdapter.notifyItemChanged(i, list.get(i));
+                            //chatAdapter.notifyReaction(i, wkMsg.reactionList);
+                        }                    }
 
                     if (list.get(i).wkMsg.remoteExtra.revoke == 1) {
                         int previousIndex = i - 1;

@@ -61,6 +61,7 @@ public class WKUIChatMsgItemEntity {
     public WKMsg previousMsg; // 上一条消息
     public WKMsg nextMsg; // 下一条消息
     public boolean isUpdateStatus;
+    public boolean isRefreshReaction;
     //=========本地数据========
     public final ILinkClick iLinkClick;
     public SpannableStringBuilder displaySpans;

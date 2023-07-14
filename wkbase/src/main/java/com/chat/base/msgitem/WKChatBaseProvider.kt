@@ -54,6 +54,24 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     override val layoutId: Int
         get() = R.layout.chat_item_base_layout
 
+    override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity, payloads: List<Any>) {
+        super.convert(helper, item, payloads)
+        val msgItemEntity = payloads[0] as WKUIChatMsgItemEntity
+        if (msgItemEntity.isRefreshReaction) {
+            msgItemEntity.isRefreshReaction = false
+            val from = getMsgFromType(msgItemEntity.wkMsg)
+            val avatarView = helper.getView<AvatarView>(R.id.avatarView)
+            setAvatarLayoutParams(msgItemEntity, from, avatarView)
+            EndpointManager.getInstance().invoke(
+                "show_msg_reaction", ShowMsgReactionMenu(
+                    helper.getView(R.id.reactionsView),
+                    from,
+                    (Objects.requireNonNull(getAdapter()) as ChatAdapter),
+                    msgItemEntity.wkMsg.reactionList
+                )
+            )
+        }
+    }
     override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity) {
         showData(helper, item)
     }

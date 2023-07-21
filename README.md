@@ -1,6 +1,9 @@
 # 唐僧叨叨（[官网](http://githubim.com "文档")）
 ### **唐僧叨叨 悟空IM提供动力** （[悟空IM](https://github.com/WuKongIM/WuKongIM "文档")）
 
+![](https://img.shields.io/badge/platform-android-blue.svg)  ![](https://img.shields.io/badge/compileSdkVersion-33-blue.svg) ![](https://img.shields.io/badge/minSdkVersion-23-blue.svg) ![](https://img.shields.io/hexpm/l/plug.svg)
+![](screenshot/logo.png)
+
 唐僧叨叨基于底层通讯框架`悟空IM`实现聊天功能。Demo已实现`文本`，`图片`，`语音`，`名片`，`emoji`，群聊`@某人`，消息`链接`，`手机号`，`邮箱`识别等功能。聊天设置支持`名称修改`，`头像修改`，`公告编辑`，`消息免打扰`，`置顶`，`保存到通讯录`，`聊天内昵称`，`群内成员昵称显示`等丰富的设置功能。由于demo是模块化开发，开发者可完全按自己的开发习惯进行二次开发。
 
 ### 唐僧叨叨特点

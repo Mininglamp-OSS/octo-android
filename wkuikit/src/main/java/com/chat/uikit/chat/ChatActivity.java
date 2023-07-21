@@ -106,6 +106,7 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.entity.WKReminder;
+import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKReply;
@@ -1231,18 +1232,25 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             oldestOrderSeq = lastPreviewMsgOrderSeq;
         }
         if (unreadStartMsgOrderSeq != 0) contain = true;
-        WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit, aroundMsgSeq, list -> {
-            showData(list, pullMode, isSetNewData, isScrollToEnd);
-            if (pullMode == 0) {
-                if (WKReader.isEmpty(list) || list.size() < limit)
-                    wkVBinding.refreshLayout.setEnableRefresh(false);
-            } else {
-                if (WKReader.isEmpty(list) || list.size() < limit) {
-                    wkVBinding.refreshLayout.setEnableLoadMore(false);
-                    isEnableLoadMore = false;
-                }
+        WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit, aroundMsgSeq, new IGetOrSyncHistoryMsgBack() {
+            @Override
+            public void onSyncing() {
+
             }
 
+            @Override
+            public void onResult(List<WKMsg> list) {
+                showData(list, pullMode, isSetNewData, isScrollToEnd);
+                if (pullMode == 0) {
+                    if (WKReader.isEmpty(list) || list.size() < limit)
+                        wkVBinding.refreshLayout.setEnableRefresh(false);
+                } else {
+                    if (WKReader.isEmpty(list) || list.size() < limit) {
+                        wkVBinding.refreshLayout.setEnableLoadMore(false);
+                        isEnableLoadMore = false;
+                    }
+                }
+            }
         });
 
 

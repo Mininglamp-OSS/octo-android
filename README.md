@@ -1,7 +1,6 @@
 # 唐僧叨叨（[官网](http://githubim.com "文档")）
 
 ![](https://img.shields.io/badge/platform-android-blue.svg)  ![](https://img.shields.io/badge/compileSdkVersion-33-blue.svg) ![](https://img.shields.io/badge/minSdkVersion-23-blue.svg) ![](https://img.shields.io/hexpm/l/plug.svg)
-![](screenshot/logo.png)
 
 ### **唐僧叨叨 悟空IM提供动力** （[悟空IM](https://github.com/WuKongIM/WuKongIM "文档")）
 

@@ -108,6 +108,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.progressView, true)
                         holder.setGone(R.id.playIv, true)
                         holder.setGone(R.id.contentTv, true)
+                        holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.gifIv, true)
                         holder.setGone(R.id.imageView, false)
                         val imgMsgModel = item.msg.baseContentMsgModel as WKImageContent
@@ -151,6 +152,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentTv, true)
                         holder.setGone(R.id.imageView, false)
                         holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.progressView, false)
                         holder.setGone(R.id.playIv, false)
                         val videoModel = item.msg.baseContentMsgModel as WKVideoContent
@@ -203,6 +205,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentTv, true)
                         holder.setGone(R.id.imageView, true)
                         holder.setGone(R.id.gifIv, false)
+                        holder.setGone(R.id.contentLayout, true)
                         val wkGifContent =
                             item.msg.baseContentMsgModel as WKGifContent
                         GlideUtils.getInstance().showImg(
@@ -221,6 +224,7 @@ class ChatMultiForwardDetailAdapter(
                         (holder.getView<View>(R.id.contentTv) as TextView).movementMethod =
                             LinkMovementMethod.getInstance()
                         holder.setGone(R.id.contentTv, false)
+                        holder.setGone(R.id.contentLayout, true)
                         holder.setGone(R.id.gifIv, true)
                         holder.setGone(R.id.imageView, true)
                         holder.setGone(R.id.progressView, true)

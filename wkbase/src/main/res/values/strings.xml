@@ -87,6 +87,7 @@
     <string name="camera_permissions_desc">在设置-应用-%s-权限中开启相机权限。以正常使用拍摄、小视频、扫一扫等功能</string>
     <string name="location_permissions_desc">在设置-应用-%s-权限中开启位置信息权限。以正常使用位置共享、搜索等功能</string>
     <string name="album_permissions_desc">在设置-应用-%s-权限中开启存储空间权限。以正常使用在聊天、朋友圈、设置头像、设置聊天背景图片等功能中的图片查看和选择能力。</string>
+    <string name="notification_permissions_desc">在设置-应用-%s-权限中开启通知权限。以收到新消息时能及时提醒你。</string>
     <string name="scan_qr_code">识别图中二维码</string>
     <string name="favorite">收藏</string>
     <string name="show_in_chat">定位到聊天</string>

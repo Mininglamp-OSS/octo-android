@@ -1,9 +1,11 @@
 package com.chat.uikit;
 
+import android.Manifest;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.os.Build;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -30,6 +32,7 @@ import com.chat.base.ui.components.CounterView;
 import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKPermissions;
 import com.chat.base.utils.language.WKMultiLanguageUtil;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActTabMainBinding;
@@ -75,9 +78,24 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 
     @Override
     protected void initView() {
-        boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
-        if (!isEnabled) {
-            EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
+            WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {
+                @Override
+                public void onResult(boolean result) {
+
+                }
+
+                @Override
+                public void clickResult(boolean isCancel) {
+                    finish();
+                }
+            }, this, desc, Manifest.permission.POST_NOTIFICATIONS);
+        }else {
+            boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
+            if (!isEnabled) {
+                EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
+            }
         }
         chatIV = new RLottieImageView(this);
         contactsIV = new RLottieImageView(this);

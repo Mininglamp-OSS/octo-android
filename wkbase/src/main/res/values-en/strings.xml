@@ -88,6 +88,7 @@
     <string name="camera_permissions_desc">Allow camera access in Setting-Apps-%s to user camera and Scan QR Code</string>
     <string name="location_permissions_desc">Allow storage permission in Setting-Apps-%s-permissions to allow location services in order to user features such as location sharing,Search,Street scan,and more</string>
     <string name="album_permissions_desc">Allow storage permission in Setting-Apps-%s-permissions to view or select images in Chats,Moments,profile phone settings,or chat background settings</string>
+    <string name="notification_permissions_desc">Allow notification permission in Settings Application %s Permissions. To remind you promptly when receiving new messages</string>
     <string name="scan_qr_code">Scan QR Code</string>
     <string name="favorite">Favorites</string>
     <string name="show_in_chat">Show in chat</string>

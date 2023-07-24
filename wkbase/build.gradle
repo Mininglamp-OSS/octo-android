@@ -107,7 +107,7 @@ dependencies {
     // 本地仓库
 //    api 'com.xinbida.wukongim:WKIMLib_loca:1.0.1'
     // 远程仓库
-    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.0.4'
+    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.0.5'
     implementation "net.zetetic:android-database-sqlcipher:4.5.3"
     implementation "androidx.sqlite:sqlite-ktx:2.3.1"
     implementation 'org.whispersystems:curve25519-android:0.5.0'

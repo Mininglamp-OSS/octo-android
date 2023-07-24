@@ -59,7 +59,6 @@ class ThirdLoginActivity : WKBaseActivity<ActThirdLoginLayoutBinding>() {
         ) { code, _ ->
             if (code == HttpResponseCode.success.toInt()) {
                 countDownTimer.cancel()
-                countDownTimer
                 runOnUiThread {
                     Handler(Looper.myLooper()!!).postDelayed({
                         val list = EndpointManager.getInstance()

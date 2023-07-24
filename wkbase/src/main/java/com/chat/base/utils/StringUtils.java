@@ -52,7 +52,7 @@ public class StringUtils {
     /**
      * 正则表达式：验证邮箱
      */
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^([a-z0-9A-Z]+[-|.]?)+[a-z0-9A-Z]@([a-z0-9A-Z]+(-[a-z0-9A-Z]+)?\\.)+[a-zA-Z]{2,}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("\\w+(\\.\\w)*@\\w+(\\.\\w{2,3}){1,3}");
 
     /**
      * 18位身份证正则

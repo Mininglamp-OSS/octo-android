@@ -3,8 +3,10 @@ package com.chat.uikit;
 import android.Manifest;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.net.Uri;
 import android.os.Build;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -34,11 +36,13 @@ import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
 import com.chat.base.utils.language.WKMultiLanguageUtil;
+import com.chat.base.utils.systembar.WKOSUtils;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActTabMainBinding;
 import com.chat.uikit.fragment.ChatFragment;
 import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
+import com.tbruyelle.rxpermissions3.RxPermissions;
 
 import org.telegram.ui.Components.RLottieImageView;
 
@@ -80,17 +84,30 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     protected void initView() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
-            WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {
-                @Override
-                public void onResult(boolean result) {
+//            WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {
+//                @Override
+//                public void onResult(boolean result) {
+//
+//                }
+//
+//                @Override
+//                public void clickResult(boolean isCancel) {
+//                    // finish();
+//                }
+//            }, this, desc, Manifest.permission.POST_NOTIFICATIONS);
+//
 
+            RxPermissions rxPermissions = new RxPermissions(this);
+            rxPermissions.request(Manifest.permission.POST_NOTIFICATIONS).subscribe(aBoolean -> {
+                if (!aBoolean) {
+                    WKDialogUtils.getInstance().showDialog(this, false, getString(com.chat.base.R.string.authorization_request), desc, getString(com.chat.base.R.string.cancel), getString(R.string.to_set), index -> {
+                        if (index == 1) {
+                            WKOSUtils.openChannelSetting(TabActivity.this);
+                        }
+                    });
                 }
 
-                @Override
-                public void clickResult(boolean isCancel) {
-                    finish();
-                }
-            }, this, desc, Manifest.permission.POST_NOTIFICATIONS);
+            }).dispose();
         }else {
             boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
             if (!isEnabled) {

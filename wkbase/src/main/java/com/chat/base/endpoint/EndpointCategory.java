@@ -38,4 +38,6 @@ public class EndpointCategory {
     // 用户详细资料显示view
     public final static String wkUserDetailView = "wk_user_detail_view";
     public final static String wkChatPopupItem = "wk_chat_popup_item";
+    // 聊天显示气泡
+    public final static String chatShowBubble = "chat_show_bubble";
 }

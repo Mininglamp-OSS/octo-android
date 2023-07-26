@@ -21,6 +21,7 @@ import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
+import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatChooseContacts;
@@ -220,6 +221,13 @@ public class WKUIKitApplication {
                 });
             }
             return null;
+        });
+        EndpointManager.getInstance().setMethod("", EndpointCategory.chatShowBubble, new EndpointHandler() {
+            @Override
+            public Object invoke(Object object) {
+                int type = (int) object;
+                return type == WKContentType.WK_TEXT;
+            }
         });
         //添加个人中心
         EndpointManager.getInstance().setMethod("personal_center_currency", EndpointCategory.personalCenter, 2, object -> new PersonalInfoMenu(R.mipmap.icon_setting, mContext.get().getString(R.string.currency), () -> {

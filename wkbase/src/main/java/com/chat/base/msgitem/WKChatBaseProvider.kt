@@ -46,6 +46,7 @@ import com.xinbida.wukongim.msgmodel.WKVoiceContent
 import org.telegram.ui.Components.RLottieDrawable
 import org.telegram.ui.Components.RLottieImageView
 import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -72,6 +73,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             )
         }
     }
+
     override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity) {
         showData(helper, item)
     }
@@ -452,7 +454,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val layoutParams = avatarView.layoutParams as FrameLayout.LayoutParams
         if (uiChatMsgItemEntity.wkMsg.reactionList != null && uiChatMsgItemEntity.wkMsg.reactionList.size > 0) {
             // 向下的距离是回应数据的高度+阴影高度-回应向上的距离
-            layoutParams.bottomMargin = AndroidUtilities.dp(25f)
+            layoutParams.bottomMargin = AndroidUtilities.dp(24f)
         } else layoutParams.bottomMargin = 0
 
         layoutParams.gravity =
@@ -509,16 +511,23 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         val fullContentLayoutParams = fullContentLayout.layoutParams as FrameLayout.LayoutParams
         var isBubble = false
+        if (uiChatMsgItemEntity.wkMsg!=null) {
+            val list: List<Boolean> = EndpointManager.getInstance()
+                .invokes(EndpointCategory.chatShowBubble, uiChatMsgItemEntity.wkMsg.type)
+            for (b in list) {
+                if (b) {
+                    isBubble = true
+                    break
+                }
+            }
+        }
+
         if (uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_TEXT
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_CARD
-            || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_LOCATION
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_VOICE
-            || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_FILE
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_MULTIPLE_FORWARD
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.unknown_msg
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.typing
-            || uiChatMsgItemEntity.wkMsg.type == WKContentType.videoCall
-            || uiChatMsgItemEntity.wkMsg.type == WKContentType.richText
         ) {
             isBubble = true
         }
@@ -539,7 +548,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
                 fullContentLayoutParams.leftMargin = AndroidUtilities.dp(margin)
             } else {
-                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(45f)
+                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(45f+margin)
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
             }
         }

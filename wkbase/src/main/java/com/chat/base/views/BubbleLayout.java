@@ -815,8 +815,8 @@ public class BubbleLayout extends LinearLayout {
         setBackgroundColor(ContextCompat.getColor(getContext(), R.color.transparent));
         setBubbleBorderSize(1);
         setShadowRadius(1f);
-        setShadowX(1);
-        setShadowY(1);
+        setShadowX(0);
+        setShadowY(0);
         ViewGroup.LayoutParams layoutParams = getLayoutParams();
         if (layoutParams instanceof LayoutParams linearLayout) {
             if (bgType == WKMsgBgType.center || bgType == WKMsgBgType.top) {
@@ -833,7 +833,7 @@ public class BubbleLayout extends LinearLayout {
         int normalRadius = 20;
         int smallRadius = 10;
         if (msgFrom == WKChatIteMsgFromType.SEND) {
-            setBubbleBorderColor(ContextCompat.getColor(getContext(), R.color.colorB6B5B5));
+            setBubbleBorderColor(ContextCompat.getColor(getContext(), R.color.transparent));
             if (msgType == WKContentType.WK_FILE
                     || msgType == WKContentType.WK_MULTIPLE_FORWARD
                     || msgType == WKContentType.WK_LOCATION
@@ -889,7 +889,7 @@ public class BubbleLayout extends LinearLayout {
                 setLookLength(AndroidUtilities.dp(lookWidth));
             }
         } else {
-            setBubbleBorderColor(ContextCompat.getColor(getContext(), R.color.chat_border_color));
+            setBubbleBorderColor(ContextCompat.getColor(getContext(), R.color.transparent));
             setBubbleNormalColor(R.color.chat_received_bg_normal);
             setBubbleSelectedColor(R.color.chat_received_bg_selected);
             if (bgType == WKMsgBgType.bottom) {
@@ -933,6 +933,10 @@ public class BubbleLayout extends LinearLayout {
                 setRDR(normalRadius);
             }
         }
+        setShadowColor(Color.TRANSPARENT);
+        setShadowX(0);
+        setShadowY(0);
+        setBubbleBorderColor(Color.TRANSPARENT);
         invalidate();
     }
 

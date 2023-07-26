@@ -170,10 +170,10 @@ class WKImageProvider : WKChatBaseProvider() {
         }
         imageView.layoutParams = layoutParams
         blurView.layoutParams = blurViewLayoutParams
-        if (uiChatMsgItemEntity.wkMsg.channelType != WKChannelType.PERSONAL && from != WKChatIteMsgFromType.SEND) {
-            layoutParams1.leftMargin = AndroidUtilities.dp(10f)
-            layoutParams1.rightMargin = AndroidUtilities.dp(10f)
-        }
+//        if (uiChatMsgItemEntity.wkMsg.channelType != WKChannelType.PERSONAL && from != WKChatIteMsgFromType.SEND) {
+//            layoutParams1.leftMargin = AndroidUtilities.dp(10f)
+//            layoutParams1.rightMargin = AndroidUtilities.dp(10f)
+//        }
         imageLayout.layoutParams = layoutParams1
 
         //设置上传进度

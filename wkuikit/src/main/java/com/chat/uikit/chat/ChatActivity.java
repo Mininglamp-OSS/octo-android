@@ -722,6 +722,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             if (wkCmd == null || TextUtils.isEmpty(wkCmd.cmdKey)) return;
             // 监听正在输入
             if (wkCmd.cmdKey.equals(WKCMDKeys.wk_typing)) {
+                if (redDot > 0) return;
                 String channel_id = wkCmd.paramJsonObject.optString("channel_id");
                 byte channel_type = (byte) wkCmd.paramJsonObject.optInt("channel_type");
                 String from_uid = wkCmd.paramJsonObject.optString("from_uid");

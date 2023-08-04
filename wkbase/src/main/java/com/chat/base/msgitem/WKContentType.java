@@ -21,7 +21,7 @@ public class WKContentType extends WKMsgContentType {
     //撤回消息
     public final static int revoke = -5;
     //本地显示的音视频
-    public final static int videoCall = -6;
+    public final static int loading = -6;
     //本地显示的群会议音视频
     public final static int videoCallGroup = -7;
     // 非好友

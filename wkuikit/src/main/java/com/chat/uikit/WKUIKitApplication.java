@@ -62,6 +62,7 @@ import com.chat.uikit.chat.manager.FaceManger;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
+import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
 import com.chat.uikit.chat.provider.WKEmptyProvider;
 import com.chat.uikit.chat.provider.WKImageProvider;
@@ -188,6 +189,8 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
+
 
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VOICE, new WKVoiceProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());

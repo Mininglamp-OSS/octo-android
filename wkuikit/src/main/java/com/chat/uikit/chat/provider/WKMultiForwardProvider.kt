@@ -37,12 +37,7 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
         val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
         val titleTv = parentView.findViewById<TextView>(R.id.titleTv)
         val contentTv = parentView.findViewById<TextView>(R.id.contentTv)
-        val bgType = getMsgBgType(
-            uiChatMsgItemEntity.previousMsg,
-            uiChatMsgItemEntity.wkMsg,
-            uiChatMsgItemEntity.nextMsg
-        )
-        contentLayout.setAll(bgType, from, WKContentType.WK_MULTIPLE_FORWARD)
+        resetCellBackground(parentView, uiChatMsgItemEntity, from)
         val multiForwardContent =
             uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKMultiForwardContent
         val title: String = if (multiForwardContent.channelType.toInt() == 1) {
@@ -104,6 +99,21 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
     override val itemViewType: Int
         get() = WKContentType.WK_MULTIPLE_FORWARD
 
+
+    override fun resetCellBackground(
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        super.resetCellBackground(parentView, uiChatMsgItemEntity, from)
+        val bgType = getMsgBgType(
+            uiChatMsgItemEntity.previousMsg,
+            uiChatMsgItemEntity.wkMsg,
+            uiChatMsgItemEntity.nextMsg
+        )
+        val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
+        contentLayout.setAll(bgType, from, WKContentType.WK_MULTIPLE_FORWARD)
+    }
 
     override fun resetCellListener(
         position: Int,

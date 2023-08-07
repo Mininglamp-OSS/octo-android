@@ -35,6 +35,7 @@ class WKCardProvider : WKChatBaseProvider() {
         val cardContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKCardContent
         cardNameTv.text = cardContent.name
         cardAvatarIv.showAvatar(cardContent.uid, WKChannelType.PERSONAL)
+        resetCellBackground(parentView, uiChatMsgItemEntity, from)
         parentView.findViewById<View>(R.id.contentLayout).setOnClickListener {
             val intent = Intent(context, UserDetailActivity::class.java)
             intent.putExtra("uid", cardContent.uid)

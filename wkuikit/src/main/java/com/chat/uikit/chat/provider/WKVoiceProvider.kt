@@ -53,7 +53,7 @@ class WKVoiceProvider : WKChatBaseProvider() {
         val playBtn = parentView.findViewById<CircleProgress>(R.id.playBtn)
         playBtn.setProgressColor(Theme.colorAccount)
 
-
+        resetCellBackground(parentView, uiChatMsgItemEntity, from)
         if (from == WKChatIteMsgFromType.SEND) {
             contentLayout.gravity = Gravity.END
             voiceTimeTv.setTextColor(ContextCompat.getColor(context, R.color.color999))

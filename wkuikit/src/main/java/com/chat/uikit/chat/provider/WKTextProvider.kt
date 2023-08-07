@@ -97,7 +97,7 @@ open class WKTextProvider : WKChatBaseProvider() {
         val bgType = getMsgBgType(
             uiChatMsgItemEntity.previousMsg, uiChatMsgItemEntity.wkMsg, uiChatMsgItemEntity.nextMsg
         )
-//        contentTvLayout.setAll(bgType, from, WKContentType.WK_TEXT)
+        resetCellBackground(parentView, uiChatMsgItemEntity, from)
 //        if (textContentLayout.layoutParams.width < msgTimeView.layoutParams.width) {
 //            textContentLayout.layoutParams.width = msgTimeView.layoutParams.width
 //        }

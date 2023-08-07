@@ -581,7 +581,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val isShowNormalColor: Boolean
         val drawable: RLottieDrawable
         var autoRepeat = false
-        if (mMsg.type == WKContentType.WK_IMAGE || mMsg.type == WKContentType.WK_GIF || mMsg.type == WKContentType.WK_REDPACKET || mMsg.type == WKContentType.WK_TRANSFER || mMsg.type == WKContentType.WK_VIDEO || mMsg.type == WKContentType.WK_VECTOR_STICKER || mMsg.type == WKContentType.WK_EMOJI_STICKER || mMsg.type == WKContentType.WK_LOCATION) {
+        if (mMsg.type == WKContentType.WK_IMAGE || mMsg.type == WKContentType.WK_GIF || mMsg.type == WKContentType.WK_VIDEO || mMsg.type == WKContentType.WK_VECTOR_STICKER || mMsg.type == WKContentType.WK_EMOJI_STICKER || mMsg.type == WKContentType.WK_LOCATION) {
             isShowNormalColor = false
             msgTimeTv.setTextColor(ContextCompat.getColor(context, R.color.white))
         } else {

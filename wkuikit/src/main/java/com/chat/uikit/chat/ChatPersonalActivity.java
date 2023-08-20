@@ -133,7 +133,7 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             showDialog(content, index -> {
                 if (index == 1) {
                     MsgModel.getInstance().offsetMsg(channelId, WKChannelType.PERSONAL, null);
-                    WKIM.getInstance().getMsgManager().clear(channelId, WKChannelType.PERSONAL);
+                    WKIM.getInstance().getMsgManager().clearWithChannel(channelId, WKChannelType.PERSONAL);
                     showToast(R.string.cleared);
                 }
             });

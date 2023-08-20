@@ -303,9 +303,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                 if (position == 1) {
                     UserModel.getInstance().deleteUser(uid, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
-                            WKIM.getInstance().getConversationManager().deleteMsg(uid, WKChannelType.PERSONAL);
+                            WKIM.getInstance().getConversationManager().deleteWitchChannel(uid, WKChannelType.PERSONAL);
                             MsgModel.getInstance().offsetMsg(uid, WKChannelType.PERSONAL, null);
-                            WKIM.getInstance().getMsgManager().clear(uid, WKChannelType.PERSONAL);
+                            WKIM.getInstance().getMsgManager().clearWithChannel(uid, WKChannelType.PERSONAL);
                             WKContactsDB.getInstance().updateFriendStatus(uid, 0);
                             WKIM.getInstance().getChannelManager().updateFollow(uid, WKChannelType.PERSONAL, 0);
                             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);

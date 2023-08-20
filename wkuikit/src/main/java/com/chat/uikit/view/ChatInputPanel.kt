@@ -1189,7 +1189,7 @@ class ChatInputPanel : LinearLayout, IInputPanel {
                     iConversationContext.chatActivity.getString(R.string.delete_select_msg)
                 ) { index: Int ->
                     if (index == 1) {
-                        WKIM.getInstance().msgManager.deleteWithClientMsgNO(ids)
+                        WKIM.getInstance().msgManager.deleteWithClientMsgNos(ids)
                         MsgModel.getInstance().deleteMsg(list, null)
                         iInputPanelListener!!.onResetTitleView()
                         viewBinding.multipleChoiceView.visibility = GONE

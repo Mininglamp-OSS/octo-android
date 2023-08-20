@@ -173,7 +173,7 @@ public class WKCommonModel extends WKBaseModel {
 //                wkChannel.remoteExtraMap.put(key, entity.extra.get(key));
 //            }
 //        }
-        WKIM.getInstance().getChannelManager().addOrUpdateChannel(wkChannel);
+        WKIM.getInstance().getChannelManager().saveOrUpdateChannel(wkChannel);
         if (isRefreshContacts) {
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
         }

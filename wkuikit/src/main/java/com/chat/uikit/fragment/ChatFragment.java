@@ -186,12 +186,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
                         WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list);
                         MsgModel.getInstance().clearUnread(item.channelID, item.channelType, 0, null);
-                        boolean result = WKIM.getInstance().getConversationManager().deleteMsg(item.channelID, item.channelType);
+                        boolean result = WKIM.getInstance().getConversationManager().deleteWitchChannel(item.channelID, item.channelType);
                         if (result) {
                             if (item.getWkChannel() != null && item.getWkChannel().top == 1) {
                                 updateTop(item.channelID, item.channelType, 0);
                             }
-                            WKIM.getInstance().getMsgManager().clear(item.channelID, item.channelType);
+                            WKIM.getInstance().getMsgManager().clearWithChannel(item.channelID, item.channelType);
                         }
                     }
                 });

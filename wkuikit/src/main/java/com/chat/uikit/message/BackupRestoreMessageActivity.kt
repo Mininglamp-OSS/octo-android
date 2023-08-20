@@ -47,7 +47,7 @@ class BackupRestoreMessageActivity : WKBaseActivity<ActBackupMessageLayoutBindin
             wkVBinding.startBtn.isEnabled = false
             if (handleType == 1) {
                 Observable.create { e ->
-                    val list1 = WKIM.getInstance().msgManager.queryAll()
+                    val list1 = WKIM.getInstance().msgManager.all
                     e.onNext(list1)
                 }.observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io())
                     .subscribe(object : Observer<List<WKMsg>> {

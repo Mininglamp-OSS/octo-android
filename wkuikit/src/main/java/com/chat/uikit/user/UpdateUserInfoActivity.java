@@ -79,7 +79,7 @@ public class UpdateUserInfoActivity extends WKBaseActivity<ActUpdateUserInfoLayo
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
                 if (channel != null && updateType == 1) {
                     channel.channelName = userInfoEntity.name;
-                    WKIM.getInstance().getChannelManager().addOrUpdateChannel(channel);
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                 }
                 WKConfig.getInstance().saveUserInfo(userInfoEntity);
                 Intent intent = new Intent();

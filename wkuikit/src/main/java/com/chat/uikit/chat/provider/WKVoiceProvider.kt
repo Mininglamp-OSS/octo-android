@@ -131,7 +131,7 @@ class WKVoiceProvider : WKChatBaseProvider() {
                                     voiceContent.localPath = filePath
                                     uiChatMsgItemEntity.wkMsg.voiceStatus = 1
                                     uiChatMsgItemEntity.wkMsg.baseContentMsgModel = voiceContent
-                                    WKIM.getInstance().msgManager.updateContent(
+                                    WKIM.getInstance().msgManager.updateContentAndRefresh(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
                                         voiceContent,
                                         false

@@ -100,8 +100,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-import me.leolin.shortcutbadger.ShortcutBadger;
-
 /**
  * 2020-03-01 17:32
  * ui kit
@@ -147,7 +145,7 @@ public class WKUIKitApplication {
     public void initIM() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
             //设置开发模式
-            WKIM.getInstance().setDebug(WKBinder.isDebug);
+            WKIM.getInstance().setDebug(false);
             WKIM.getInstance().setFileCacheDir("wkIM");
 
             String imToken = WKConfig.getInstance().getImToken();
@@ -168,10 +166,6 @@ public class WKUIKitApplication {
     }
 
     public void stopConn() {
-        if (totalMsgCount == 0) {
-            ShortcutBadger.removeCount(getContext());
-        } else
-            ShortcutBadger.applyCount(getContext(), totalMsgCount);
         EndpointManager.getInstance().invoke("push_update_device_badge", totalMsgCount);
         WKIM.getInstance().getConnectionManager().disconnect(false);
     }
@@ -491,7 +485,6 @@ public class WKUIKitApplication {
     public void exitLogin(int from) {
         MsgModel.getInstance().stopTimer();
         EndpointManager.getInstance().invoke("push_unregister_push", null);
-        ShortcutBadger.removeCount(getContext());
         WKConfig.getInstance().clearInfo();
         WKIM.getInstance().getConnectionManager().disconnect(true);
         ActManagerUtils.getInstance().clearAllActivity();

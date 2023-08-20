@@ -134,7 +134,7 @@ public class FriendModel extends WKBaseModel {
                     }
                     WKSharedPreferencesUtil.getInstance().putLong(key, tempVersion);
                     //将好友信息设置到sdk
-                    WKIM.getInstance().getChannelManager().addOrUpdateChannels(channels);
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                 }
                 if (iCommonListener != null) {

@@ -205,9 +205,9 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 if (position == 1) {
                     GroupModel.getInstance().exitGroup(groupNo, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
-                            WKIM.getInstance().getMsgManager().clear(groupNo, WKChannelType.GROUP);
+                            WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
                             MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
-                            WKIM.getInstance().getConversationManager().deleteMsg(groupNo, WKChannelType.GROUP);
+                            WKIM.getInstance().getConversationManager().deleteWitchChannel(groupNo, WKChannelType.GROUP);
                             EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat, new WKChannel(groupNo, WKChannelType.GROUP));
                             finish();
                         } else showToast(msg);
@@ -233,7 +233,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, bottomEntity) -> {
                 if (position == 1) {
                     MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
-                    WKIM.getInstance().getMsgManager().clear(groupNo, WKChannelType.GROUP);
+                    WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
                     showToast(getString(R.string.cleared));
                 }
             });

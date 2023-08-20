@@ -44,7 +44,7 @@ public class SearchMsgResultActivity extends WKBaseActivity<ActCommonListLayoutB
         String searchKey = getIntent().getStringExtra("searchKey");
         adapter = new SearchMsgResultAdapter(searchKey, new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, adapter);
-        List<WKMsg> msgList = WKIM.getInstance().getMsgManager().searchWithChannel(result.wkChannel.channelID, result.wkChannel.channelType, searchKey);
+        List<WKMsg> msgList = WKIM.getInstance().getMsgManager().searchWithChannel(searchKey,result.wkChannel.channelID, result.wkChannel.channelType);
         adapter.setList(msgList);
     }
 

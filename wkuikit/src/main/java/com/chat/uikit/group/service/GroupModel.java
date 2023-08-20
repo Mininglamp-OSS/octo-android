@@ -76,7 +76,7 @@ public class GroupModel extends WKBaseModel {
                 channel.channelID = groupEntity.group_no;
                 channel.channelType = WKChannelType.GROUP;
                 channel.channelName = groupEntity.name;
-                WKIM.getInstance().getChannelManager().addOrUpdateChannel(channel);
+                WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                 iGroupInfo.onResult(HttpResponseCode.success, "", groupEntity);
             }
 

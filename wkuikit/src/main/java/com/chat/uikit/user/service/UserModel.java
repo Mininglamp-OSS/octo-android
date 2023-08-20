@@ -220,7 +220,7 @@ public class UserModel extends WKBaseModel {
                 }
                 WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_pc_online", online);
                 WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_mute_of_app", muteOfAPP);
-                List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getChannelsWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
+                List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
                 List<WKChannel> list = new ArrayList<>();
                 if (result.friends != null && result.friends.size() > 0) {
                     if (tempList != null && tempList.size() > 0) {
@@ -301,7 +301,7 @@ public class UserModel extends WKBaseModel {
                         }
                     }
                 }
-                WKIM.getInstance().getChannelManager().addOrUpdateChannels(list);
+                WKIM.getInstance().getChannelManager().saveOrUpdateChannels(list);
             }
 
             @Override

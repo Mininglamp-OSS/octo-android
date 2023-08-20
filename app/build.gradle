@@ -34,8 +34,18 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+//            jniDebuggable true
+//            zipAlignEnabled true   //Zipalign优化
+//            minifyEnabled true  // 是否混淆
+//            shrinkResources true  // 是否去除无效的资源文件
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+//            jniDebuggable true
+//            zipAlignEnabled true   //Zipalign优化
+//            minifyEnabled true  // 是否混淆
+//            shrinkResources true  // 是否去除无效的资源文件
+//            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {

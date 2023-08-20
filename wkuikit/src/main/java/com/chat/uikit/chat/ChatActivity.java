@@ -200,7 +200,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         //频道类型
         channelType = getIntent().getByteExtra("channelType", WKChannelType.PERSONAL);
 
-        maxMsgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeq(channelId, channelType);
+        maxMsgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(channelId, channelType);
         // 是否含有带转发的消息
         if (getIntent().hasExtra("msgContentList")) {
             List<WKMessageContent> msgContentList = getIntent().getParcelableArrayListExtra("msgContentList");
@@ -899,7 +899,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                         if (isToEnd) {
                             scrollToEnd();
                         }
-                        WKIM.getInstance().getMsgManager().insertMsg(noRelationMsg);
+                        WKIM.getInstance().getMsgManager().saveMsg(noRelationMsg);
                     }
 
                     break;
@@ -1355,7 +1355,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             else wkVBinding.recyclerView.setVisibility(View.VISIBLE);
         }
         if (isCanLoadMore && chatAdapter.getData().size() > 0 && chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg != null) {
-            int maxSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeq(channelId, channelType);
+            int maxSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(channelId, channelType);
             if (chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg.messageSeq == maxSeq) {
                 isCanLoadMore = false;
             }

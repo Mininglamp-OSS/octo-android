@@ -173,6 +173,7 @@ public class WKPushApplication {
         });
         //注销推送
         EndpointManager.getInstance().setMethod("push_unregister_push", object -> {
+            OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), 0);
             com.chat.push.service.PushModel.getInstance().unRegisterDeviceToken((code, msg) -> {
                 if (code != HttpResponseCode.success) {
                     WKToastUtils.getInstance().showToastNormal(msg);
@@ -184,7 +185,8 @@ public class WKPushApplication {
         //设置桌面红点数量
         EndpointManager.getInstance().setMethod("push_update_device_badge", object -> {
             int num = (int) object;
-            com.chat.push.service.PushModel.getInstance().registerBadge(num);
+            OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), num);
+            PushModel.getInstance().registerBadge(num);
             return null;
         });
     }

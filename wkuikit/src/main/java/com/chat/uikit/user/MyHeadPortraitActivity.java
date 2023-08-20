@@ -176,7 +176,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
                         channel = new WKChannel();
                         channel.channelType = WKChannelType.PERSONAL;
                         channel.channelID = WKConfig.getInstance().getUid();
-                        WKIM.getInstance().getChannelManager().addOrUpdateChannel(channel);
+                        WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                     }
                     channel.avatarCacheKey = UUID.randomUUID().toString().replace("-", "");
                     WKIM.getInstance().getChannelManager().updateAvatarCacheKey(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL, channel.avatarCacheKey);

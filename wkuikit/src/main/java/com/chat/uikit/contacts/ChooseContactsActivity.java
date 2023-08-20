@@ -355,7 +355,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     protected void initData() {
         super.initData();
 
-        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getChannelsWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
+        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = tempList.size(); i < size; i++) {
             if (!TextUtils.isEmpty(unVisibleUIDs) && unVisibleUIDs.contains(tempList.get(i).channelID))

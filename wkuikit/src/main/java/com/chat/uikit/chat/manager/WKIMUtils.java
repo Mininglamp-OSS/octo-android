@@ -252,7 +252,7 @@ public class WKIMUtils {
 
             if (sensitiveWordsMsg != null) {
                 WKMsg finalSensitiveWordsMsg = sensitiveWordsMsg;
-                new Handler(Looper.myLooper()).postDelayed(() -> WKIM.getInstance().getMsgManager().insertMsg(finalSensitiveWordsMsg), 1000 * 2);
+                new Handler(Looper.myLooper()).postDelayed(() -> WKIM.getInstance().getMsgManager().saveMsg(finalSensitiveWordsMsg), 1000 * 2);
             }
         });
         WKIM.getInstance().getMsgManager().addOnUploadMsgExtraListener(msgExtra -> {
@@ -476,10 +476,10 @@ public class WKIMUtils {
                         MsgModel.getInstance().deleteMsg(list, null);
                     }
 
-                    int rowNo = WKIM.getInstance().getMsgManager().getMsgRowNoWithMessageID(channelID, channelType, messageId);
+                    int rowNo = WKIM.getInstance().getMsgManager().getRowNoWithMessageID(channelID, channelType, messageId);
                     //要先删除
                     WKIM.getInstance().getMsgManager().deleteWithMessageID(messageId);
-                    WKConversationMsg msg = WKIM.getInstance().getConversationManager().getMsg(channelID, channelType);
+                    WKConversationMsg msg = WKIM.getInstance().getConversationManager().getWithChannel(channelID, channelType);
                     if (msg != null) {
                         if (rowNo < msg.unreadCount) {
                             msg.unreadCount--;
@@ -524,7 +524,7 @@ public class WKIMUtils {
         Intent intent = new Intent(chatViewMenu.activity, ChatActivity.class);
         intent.putExtra("channelId", chatViewMenu.channelID);
         intent.putExtra("channelType", chatViewMenu.channelType);
-        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager().getMsg(chatViewMenu.channelID, chatViewMenu.channelType);
+        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager().getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
         WKMsg msg = null;
         int redDot = 0;
         if (conversationMsg != null) {
@@ -545,7 +545,7 @@ public class WKIMUtils {
                     if (msg != null) {
                         messageSeq = msg.messageSeq - redDot + 1;
                         if (messageSeq <= 0) {
-                            messageSeq = WKIM.getInstance().getMsgManager().getMinMessageSeq(chatViewMenu.channelID, chatViewMenu.channelType);
+                            messageSeq = WKIM.getInstance().getMsgManager().getMinMessageSeqWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
                         }
                     }
                     orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(messageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
@@ -579,7 +579,7 @@ public class WKIMUtils {
                     if (chatPwdCount == 0) {
                         // 清空聊天记录
                         WKSharedPreferencesUtil.getInstance().putInt("wk_chat_pwd_count", 0);
-                        WKIM.getInstance().getMsgManager().clear(channel.channelID, channel.channelType);
+                        WKIM.getInstance().getMsgManager().clearWithChannel(channel.channelID, channel.channelType);
                         WKToastUtils.getInstance().showToastNormal(chatViewMenu.activity.getString(R.string.chat_msg_is_cleard));
                         return;
                     }

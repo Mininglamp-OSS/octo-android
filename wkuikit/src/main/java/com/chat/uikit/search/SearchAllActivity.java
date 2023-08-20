@@ -91,7 +91,7 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
                     intent.putExtra("searchKey", Objects.requireNonNull(wkVBinding.searchEt.getText()).toString());
                     startActivity(intent);
                 } else {
-                    List<WKMsg> msgList = WKIM.getInstance().getMsgManager().searchWithChannel(result.wkChannel.channelID, result.wkChannel.channelType, Objects.requireNonNull(wkVBinding.searchEt.getText()).toString());
+                    List<WKMsg> msgList = WKIM.getInstance().getMsgManager().searchWithChannel(Objects.requireNonNull(wkVBinding.searchEt.getText()).toString(),result.wkChannel.channelID, result.wkChannel.channelType);
                     if (msgList != null && msgList.size() > 0) {
                         WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, msgList.get(0).channelID, msgList.get(0).channelType, msgList.get(0).orderSeq, false));
                     }
@@ -153,8 +153,8 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
     }
 
     private void searchChannel(String key) {
-        List<WKChannelSearchResult> groupList = WKIM.getInstance().getChannelManager().searchChannel(key);
-        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().searchChannelsByChannelType(key, WKChannelType.PERSONAL, 1);
+        List<WKChannelSearchResult> groupList = WKIM.getInstance().getChannelManager().search(key);
+        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().searchWithChannelTypeAndFollow(key, WKChannelType.PERSONAL, 1);
         List<WKChannelSearchResult> userList = new ArrayList<>();
         if (tempList != null && tempList.size() > 0) {
             for (int i = 0, size = tempList.size(); i < size; i++) {

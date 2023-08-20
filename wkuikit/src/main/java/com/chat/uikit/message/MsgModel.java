@@ -113,7 +113,7 @@ public class MsgModel extends WKBaseModel {
             timer = null;
         }
         deleteMsg(deleteMsgList, null);
-        WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(deleteClientMsgNoList);
+        WKIM.getInstance().getMsgManager().deleteWithClientMsgNos(deleteClientMsgNoList);
     }
 
     private void ackMsg() {
@@ -163,7 +163,7 @@ public class MsgModel extends WKBaseModel {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("channel_id", channelID);
         jsonObject.put("channel_type", channelType);
-        int msgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeq(channelID, channelType);
+        int msgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(channelID, channelType);
         jsonObject.put("message_seq", msgSeq);
         request(createService(MsgService.class).offsetMsg(jsonObject), new IRequestResultListener<>() {
             @Override
@@ -493,7 +493,7 @@ public class MsgModel extends WKBaseModel {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("channel_id", channelID);
         jsonObject.put("channel_type", channelType);
-        long maxExtraVersion = WKIM.getInstance().getMsgManager().getMsgMaxExtraVersionWithChannel(channelID, channelType);
+        long maxExtraVersion = WKIM.getInstance().getMsgManager().getMsgExtraMaxVersionWithChannel(channelID, channelType);
         jsonObject.put("extra_version", maxExtraVersion);
         jsonObject.put("limit", 100);
         jsonObject.put("source", WKConstants.getDeviceUUID());
@@ -663,13 +663,13 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void syncCoverExtra() {
-        long version = WKIM.getInstance().getConversationManager().getMaxExtraVersion();
+        long version = WKIM.getInstance().getConversationManager().getMsgExtraMaxVersion();
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("version", version);
         request(createService(MsgService.class).syncCoverExtra(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncConvMsgExtra> result) {
-                WKIM.getInstance().getConversationManager().saveSyncMsgExtra(result);
+                WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
             }
 
             @Override

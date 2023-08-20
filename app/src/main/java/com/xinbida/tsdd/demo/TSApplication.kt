@@ -51,14 +51,16 @@ class TSApplication : MultiDexApplication() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        WKMultiLanguageUtil.getInstance().setConfiguration()
-        val themePref =
-            WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE)
-        Theme.applyTheme(themePref)
-        killAppProcess()
+        if (applicationContext != null && applicationContext.resources != null && applicationContext.resources.configuration != null && applicationContext.resources.configuration.uiMode != newConfig.uiMode) {
+            WKMultiLanguageUtil.getInstance().setConfiguration()
+            val themePref =
+                WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE)
+            Theme.applyTheme(themePref)
+            killAppProcess()
+        }
     }
 
-    private fun killAppProcess(){
+    private fun killAppProcess() {
         ActManagerUtils.getInstance().clearAllActivity()
         Process.killProcess(Process.myPid())
         exitProcess(0)
@@ -79,7 +81,7 @@ class TSApplication : MultiDexApplication() {
         WKLoginApplication.getInstance().init(this)
         WKScanApplication.getInstance().init(this)
         WKUIKitApplication.getInstance().init(this)
-        WKPushApplication.getInstance().init(getAppPackageName(),this)
+        WKPushApplication.getInstance().init(getAppPackageName(), this)
         addAppFrontBack()
         addListener()
     }

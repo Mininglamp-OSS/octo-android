@@ -232,7 +232,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     }
 
     private void getContacts() {
-        List<WKChannel> allList = WKIM.getInstance().getChannelManager().getChannelsWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
+        List<WKChannel> allList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = allList.size(); i < size; i++) {
             list.add(new FriendUIEntity(allList.get(i)));

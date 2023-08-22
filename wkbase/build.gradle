@@ -64,7 +64,7 @@ dependencies {
     //动态权限
     api 'com.github.tbruyelle:rxpermissions:0.12'
     //glide
-    api('com.github.bumptech.glide:glide:4.13.2') {
+    api('com.github.bumptech.glide:glide:4.15.1') {
         transitive = true
     }
     api('com.squareup.okhttp3:okhttp:5.0.0-alpha.2')
@@ -74,14 +74,12 @@ dependencies {
     //汉字转拼音 https://github.com/promeG/TinyPinyin
     api 'com.github.promeg:tinypinyin:2.0.3'
     //刷新
-    api 'io.github.scwang90:refresh-layout-kernel:2.0.5'      //核心必须依赖
-    api 'io.github.scwang90:refresh-header-classics:2.0.5'    //经典刷新头
+    api 'io.github.scwang90:refresh-layout-kernel:2.0.6'      //核心必须依赖
+    api 'io.github.scwang90:refresh-header-classics:2.0.6'    //经典刷新头
 //    api 'com.scwang.smart:refresh-layout-kernel:2.0.1'
 //    //没有使用特殊Header，可以不加这行
 //    api 'com.scwang.smart:refresh-header-classics:2.0.1'
     api 'com.github.ybq:Android-SpinKit:1.4.0'
-    //tablayout
-    api 'com.github.hackware1993:MagicIndicator:1.7.0'
 
     api 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation('com.squareup.retrofit2:converter-gson:2.9.0') {

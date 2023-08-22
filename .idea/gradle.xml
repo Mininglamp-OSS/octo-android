@@ -13,7 +13,6 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/MyLibs" />
-            <option value="$PROJECT_DIR$/MyLibs/group" />
             <option value="$PROJECT_DIR$/MyLibs/oppopush" />
             <option value="$PROJECT_DIR$/MyLibs/rlottie" />
             <option value="$PROJECT_DIR$/MyLibs/vivopush" />

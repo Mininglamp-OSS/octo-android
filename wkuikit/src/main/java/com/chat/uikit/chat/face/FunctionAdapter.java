@@ -1,4 +1,4 @@
-package com.chat.uikit.chat.fragment;
+package com.chat.uikit.chat.face;
 
 import android.widget.LinearLayout;
 

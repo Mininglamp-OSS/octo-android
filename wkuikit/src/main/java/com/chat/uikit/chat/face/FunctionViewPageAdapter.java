@@ -1,4 +1,4 @@
-package com.chat.uikit.chat.fragment;
+package com.chat.uikit.chat.face;
 
 import android.content.Context;
 import android.view.LayoutInflater;

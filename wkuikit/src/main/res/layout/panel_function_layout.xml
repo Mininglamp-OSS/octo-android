@@ -8,14 +8,13 @@
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPage"
         android:layout_width="match_parent"
-        android:overScrollMode="never"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:orientation="horizontal" />
+        android:orientation="horizontal"
+        android:overScrollMode="never" />
 
-
-    <net.lucode.hackware.magicindicator.MagicIndicator
-        android:id="@+id/magicIndicator"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/dropRecyclerView"
         android:layout_width="50dp"
         android:layout_height="3dp"
         android:layout_gravity="center"

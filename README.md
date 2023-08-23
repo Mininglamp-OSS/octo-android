@@ -98,10 +98,12 @@ WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_LOCA
 |:---:|:---:|:-------------------:|
 |![](imgs/reply.webp)|![](imgs/group.webp)| ![](imgs/other.webp) |
 
-
 由于GIF被压缩，演示效果很模糊。真机预览效果更佳
 
 ## app下载体验
 <img src='./imgs/ic_download_qr.png' width=35%/>
 
 如果扫描错误可通过 [安装地址](http://www.pgyer.com/tsdd "文档") 下载
+
+### 许可证
+悟空IM 使用 Apache 2.0 许可证。有关详情，请参阅 LICENSE 文件。

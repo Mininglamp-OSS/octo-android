@@ -7,7 +7,7 @@ import androidx.annotation.NonNull;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
 import com.xinbida.wukongim.message.type.WKMsgContentType;
-import com.xinbida.wukongim.protocol.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import org.json.JSONException;
 import org.json.JSONObject;

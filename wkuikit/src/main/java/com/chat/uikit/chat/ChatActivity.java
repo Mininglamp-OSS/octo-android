@@ -109,8 +109,8 @@ import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKReply;
-import com.xinbida.wukongim.protocol.WKMessageContent;
-import com.xinbida.wukongim.protocol.WKMsgEntity;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -1369,6 +1369,9 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
      * @param messageContent 消息model
      */
     private void sendMsg(WKMessageContent messageContent) {
+        if (redDot > 0) {
+            wkVBinding.chatUnreadLayout.newMsgLayout.performClick();
+        }
         WKChannel channel = getChatChannelInfo();
         if (channel.robot == 1) signal = 0;
         WKMsgSetting setting = new WKMsgSetting();

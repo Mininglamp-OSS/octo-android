@@ -7,7 +7,7 @@ import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
 import com.xinbida.wukongim.message.type.WKMsgContentType;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
-import com.xinbida.wukongim.protocol.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import org.json.JSONException;
 import org.json.JSONObject;

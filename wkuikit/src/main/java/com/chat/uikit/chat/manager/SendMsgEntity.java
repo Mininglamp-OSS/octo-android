@@ -2,7 +2,7 @@ package com.chat.uikit.chat.manager;
 
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsgSetting;
-import com.xinbida.wukongim.protocol.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 public class SendMsgEntity {
     public WKMessageContent messageContent;

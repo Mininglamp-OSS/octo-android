@@ -41,7 +41,7 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
-import com.xinbida.wukongim.protocol.WKMsgEntity;
+import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
 import java.util.ArrayList;
 import java.util.List;

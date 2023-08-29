@@ -17,7 +17,6 @@ import android.view.View;
 
 import com.alibaba.fastjson.JSON;
 import com.chat.base.WKBaseApplication;
-import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
@@ -51,7 +50,6 @@ import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.ActManagerUtils;
-import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKMediaFileUtils;
 import com.chat.base.utils.WKPermissions;
@@ -82,15 +80,14 @@ import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
-import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
-import com.xinbida.wukongim.protocol.WKMessageContent;
 
 import org.json.JSONObject;
 
@@ -145,17 +142,12 @@ public class WKUIKitApplication {
     public void initIM() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
             //设置开发模式
-            WKIM.getInstance().setDebug(false);
+            WKIM.getInstance().setDebug(true);
             WKIM.getInstance().setFileCacheDir("wkIM");
 
             String imToken = WKConfig.getInstance().getImToken();
             String uid = WKConfig.getInstance().getUid();
             WKIM.getInstance().init(mContext.get(), uid, imToken);
-
-            CrashReport.initCrashReport(getContext(), "4083bcaa8c", false);
-            CrashReport.setUserId(WKConfig.getInstance().getUid());
-            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
-
         }
     }
 

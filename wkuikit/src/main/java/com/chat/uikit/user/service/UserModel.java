@@ -29,7 +29,6 @@ import com.lzy.okserver.upload.UploadListener;
 import com.lzy.okserver.upload.UploadTask;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
-import com.xinbida.wukongim.entity.WKSignalProtocolData;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.io.File;
@@ -368,33 +367,5 @@ public class UserModel extends WKBaseModel {
 
     public interface IGetContacts {
         void onResult(int code, String msg, List<MailListEntity> list);
-    }
-
-    public void signalKeys(WKSignalProtocolData protocolData, final ICommonListener iCommonListener) {
-        JSONObject jsonObject = new JSONObject();
-        JSONArray jsonArray = new JSONArray();
-        for (int i = 0, size = protocolData.oneTimePreKeyList.size(); i < size; i++) {
-            JSONObject oneTimeJson = new JSONObject();
-            oneTimeJson.put("key_id", protocolData.oneTimePreKeyList.get(i).keyID);
-            oneTimeJson.put("pubkey", protocolData.oneTimePreKeyList.get(i).pubKey);
-            jsonArray.add(oneTimeJson);
-        }
-        jsonObject.put("identity_key", protocolData.identityKey);
-        jsonObject.put("signed_prekey_id", protocolData.signedPreKeyID);
-        jsonObject.put("signed_pubkey", protocolData.signedPubKey);
-        jsonObject.put("signed_signature", protocolData.signedSignature);
-        jsonObject.put("onetime_prekeys", jsonArray);
-        jsonObject.put("registration_id", protocolData.registrationID);
-        request(createService(UserService.class).signalKeys(jsonObject), new IRequestResultListener<CommonResponse>() {
-            @Override
-            public void onSuccess(CommonResponse result) {
-                iCommonListener.onResult(result.status, result.msg);
-            }
-
-            @Override
-            public void onFail(int code, String msg) {
-                iCommonListener.onResult(code, msg);
-            }
-        });
     }
 }

@@ -41,7 +41,7 @@ import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKVideoContent
-import com.xinbida.wukongim.protocol.WKMessageContent
+import com.xinbida.wukongim.msgmodel.WKMessageContent
 import java.io.File
 
 class ChatMultiForwardDetailAdapter(

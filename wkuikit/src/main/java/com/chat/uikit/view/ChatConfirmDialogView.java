@@ -24,7 +24,7 @@ import com.chat.uikit.chat.msgmodel.WKCardContent;
 import com.lxj.xpopup.core.CenterPopupView;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
-import com.xinbida.wukongim.protocol.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

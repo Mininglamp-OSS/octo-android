@@ -2,7 +2,7 @@ package com.chat.base.endpoint.entity;
 
 
 
-import com.xinbida.wukongim.protocol.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import java.util.ArrayList;
 import java.util.List;

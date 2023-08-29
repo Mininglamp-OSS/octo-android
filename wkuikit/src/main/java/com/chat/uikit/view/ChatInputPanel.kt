@@ -77,8 +77,8 @@ import com.lxj.xpopup.enums.PopupPosition
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.*
 import com.xinbida.wukongim.msgmodel.WKTextContent
-import com.xinbida.wukongim.protocol.WKMessageContent
-import com.xinbida.wukongim.protocol.WKMsgEntity
+import com.xinbida.wukongim.msgmodel.WKMessageContent
+import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import org.json.JSONObject
 import org.telegram.ui.Components.RLottieDrawable
 import java.util.*

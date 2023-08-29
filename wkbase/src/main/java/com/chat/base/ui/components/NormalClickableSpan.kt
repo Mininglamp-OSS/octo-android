@@ -4,7 +4,7 @@ import android.text.TextPaint
 import android.text.style.ClickableSpan
 import android.view.View
 import androidx.annotation.NonNull
-import com.xinbida.wukongim.protocol.WKMsgEntity
+import com.xinbida.wukongim.msgmodel.WKMsgEntity
 
 
 class NormalClickableSpan(

@@ -30,7 +30,7 @@ import com.chat.base.R;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.utils.StringUtils;
-import com.xinbida.wukongim.protocol.WKMsgEntity;
+import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
 import java.util.ArrayList;
 import java.util.Collections;

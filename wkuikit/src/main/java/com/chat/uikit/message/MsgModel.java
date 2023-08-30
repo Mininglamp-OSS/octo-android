@@ -2,6 +2,8 @@ package com.chat.uikit.message;
 
 import android.text.TextUtils;
 
+import androidx.annotation.Nullable;
+
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -16,14 +18,14 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
-import com.chat.base.okgo.IDownloadFile;
-import com.chat.base.okgo.OkGoDownload;
-import com.chat.base.okgo.OkGoUpload;
+import com.chat.base.net.ud.WKDownloader;
+import com.chat.base.net.ud.WKProgressManager;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.WKUIKitApplication;
-import com.chat.uikit.enity.WKSyncReminder;
 import com.chat.uikit.enity.SensitiveWords;
+import com.chat.uikit.enity.WKSyncReminder;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -48,7 +50,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.UUID;
 
 /**
  * 2019-11-24 14:18
@@ -69,6 +70,8 @@ public class MsgModel extends WKBaseModel {
         return MsgModelBinder.msgModel;
     }
 
+    private Timer timer;
+
     public void stopTimer() {
         if (timer != null) {
             timer.cancel();
@@ -76,7 +79,6 @@ public class MsgModel extends WKBaseModel {
             timer = null;
         }
     }
-    private Timer timer;
 
     public synchronized void startCheckFlameMsgTimer() {
         if (timer == null) {
@@ -376,7 +378,7 @@ public class MsgModel extends WKBaseModel {
      *
      * @param channelID           频道ID
      * @param channelType         频道类型
-     * @param startMessageSeq       最小messageSeq
+     * @param startMessageSeq     最小messageSeq
      * @param endMessageSeq       最大messageSeq
      * @param limit               获取条数
      * @param pullMode            拉取模式 0:向下拉取 1:向上拉取
@@ -699,27 +701,37 @@ public class MsgModel extends WKBaseModel {
 
     public void backupMsg(String filePath, ICommonListener iCommonListener) {
         String url = WKApiConfig.baseUrl + "message/backup";
-        OkGoUpload.getInstance().uploadCommonFile(url, filePath, UUID.randomUUID().toString().replaceAll("-", ""), iCommonListener);
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                iCommonListener.onResult(HttpResponseCode.success,"");
+            }
+
+            @Override
+            public void onError() {
+                iCommonListener.onResult(HttpResponseCode.error,"");
+            }
+        });
     }
 
     public void recovery(final IRecovery iRecovery) {
         String uid = WKConfig.getInstance().getUid();
         String url = WKApiConfig.baseUrl + "message/recovery";
         String path = WKConstants.messageBackupDir + uid + "_recovery.json";
-        OkGoDownload.getInstance().downloadFile(url, UUID.randomUUID().toString().replaceAll("-", ""), path, new IDownloadFile() {
+        WKDownloader.Companion.getInstance().download(url, path, new WKProgressManager.IProgress() {
             @Override
-            public void onSuccess(Object tag, String filePath) {
-                iRecovery.onSuccess(filePath);
+            public void onProgress(@Nullable Object tag, int progress) {
+
             }
 
             @Override
-            public void onFail(Object tag) {
+            public void onSuccess(@Nullable Object tag, @Nullable String path) {
+                iRecovery.onSuccess(path);
+            }
+
+            @Override
+            public void onFail(@Nullable Object tag, @Nullable String msg) {
                 iRecovery.onFail();
-            }
-
-            @Override
-            public void onProgress(Object tag, float progress) {
-
             }
         });
     }

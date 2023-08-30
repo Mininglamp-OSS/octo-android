@@ -57,9 +57,6 @@ dependencies {
     api 'com.github.CymChad:BaseRecyclerViewAdapterHelper:3.0.7'
     api 'com.github.li-xiaojun:XPopup:2.9.19'
     api 'androidx.multidex:multidex:2.0.1'
-    //网络
-    implementation 'com.lzy.net:okgo:3.0.4'
-    api 'com.lzy.net:okserver:2.0.5'
     api 'com.alibaba:fastjson:1.2.83'
     //动态权限
     api 'com.github.tbruyelle:rxpermissions:0.12'

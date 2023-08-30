@@ -15,11 +15,15 @@ import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
-import com.chat.base.okgo.IDownloadFile
-import com.chat.base.okgo.OkGoDownload
+import com.chat.base.net.ud.WKProgressManager
+import com.chat.base.net.ud.WKDownloader
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.SecretDeleteTimer
-import com.chat.base.utils.*
+import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.WKCommonUtils
+import com.chat.base.utils.WKFileUtils
+import com.chat.base.utils.WKTimeUtils
+import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
 import com.chat.uikit.message.MsgModel
@@ -121,12 +125,16 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         .playVoice(filePath, uiChatMsgItemEntity.wkMsg.clientMsgNO)
                     updateViewed(uiChatMsgItemEntity, parentView, from)
                 } else {
-                    OkGoDownload.getInstance().downloadFile(
-                        WKApiConfig.getShowUrl(voiceContent.url),
+                    playBtn.enableLoading(1)
+                    WKDownloader.instance.download(
                         WKApiConfig.getShowUrl(voiceContent.url),
                         filePath,
-                        object : IDownloadFile {
-                            override fun onSuccess(tag: Any, filePath1: String) {
+                        object : WKProgressManager.IProgress {
+                            override fun onProgress(tag: Any?, progress: Int) {
+                                playBtn.enableLoading(progress)
+                            }
+
+                            override fun onSuccess(tag: Any?, path: String?) {
                                 if (!TextUtils.isEmpty(filePath)) {
                                     voiceContent.localPath = filePath
                                     uiChatMsgItemEntity.wkMsg.voiceStatus = 1
@@ -158,16 +166,14 @@ class WKVoiceProvider : WKChatBaseProvider() {
                                             )
                                     }
                                 }
+
                             }
 
-                            override fun onFail(tag: Any) {
-                                WKToastUtils.getInstance().showToastNormal("语音下载失败")
+                            override fun onFail(tag: Any?, msg: String?) {
+                                WKToastUtils.getInstance()
+                                    .showToastNormal(context.getString(R.string.voice_download_fail))
                             }
 
-                            override fun onProgress(tag: Any, progress: Float) {
-                                // playBtn.setProgress((int) progress);
-                                playBtn.enableLoading(progress.toInt())
-                            }
                         })
                 }
             } else {
@@ -178,6 +184,7 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         WKPlayVoiceUtils.getInstance().onPause()
                         playBtn.setPlay()
                     } else {
+
                         stopPlay()
                         updateViewed(uiChatMsgItemEntity, parentView, from)
                         WKPlayVoiceUtils.getInstance()

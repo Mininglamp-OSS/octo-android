@@ -13,28 +13,18 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
-import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
-import com.lzy.okgo.OkGo;
-import com.lzy.okgo.cache.CacheMode;
-import com.lzy.okgo.convert.StringConvert;
-import com.lzy.okgo.model.Progress;
-import com.lzy.okgo.request.PostRequest;
-import com.lzy.okserver.OkUpload;
-import com.lzy.okserver.upload.UploadListener;
-import com.lzy.okserver.upload.UploadTask;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 2020-06-30 12:37
@@ -145,42 +135,20 @@ public class UserModel extends WKBaseModel {
         });
     }
 
-    public interface IGetUserInfo {
-        void onResult(int code, String msg, UserInfo userEntity);
-    }
 
     public void uploadAvatar(String filePath, final IUploadBack iUploadBack) {
-        File file = new File(filePath);
-        PostRequest<String> postRequest = OkGo.<String>post(WKApiConfig.baseUrl + "users/" + WKConfig.getInstance().getUid() + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills())
-                .headers("token", WKConfig.getInstance().getToken()).params("file", file).cacheMode(CacheMode.NO_CACHE)
-                .converter(new StringConvert());
-        UploadTask<String> task = OkUpload.request(UUID.randomUUID().toString().replaceAll("-", ""), postRequest)
-                .save().register(new UploadListener<String>(UUID.randomUUID().toString().replaceAll("-", "")) {
-                    @Override
-                    public void onStart(Progress progress) {
+        String url = WKApiConfig.baseUrl + "users/" + WKConfig.getInstance().getUid() + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                iUploadBack.onResult(HttpResponseCode.success);
+            }
 
-                    }
-
-                    @Override
-                    public void onProgress(Progress progress) {
-                    }
-
-                    @Override
-                    public void onError(Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.error);
-                    }
-
-                    @Override
-                    public void onFinish(String resultEntity, Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.success);
-                    }
-
-                    @Override
-                    public void onRemove(Progress progress) {
-
-                    }
-                });
-        task.start();
+            @Override
+            public void onError() {
+                iUploadBack.onResult(HttpResponseCode.error);
+            }
+        });
     }
 
     public interface IUploadBack {
@@ -277,15 +245,6 @@ public class UserModel extends WKBaseModel {
                     }
                 }
 
-
-//                if (tempList != null && tempList.size() > 0) {
-//                    for (int i = 0, size = tempList.size(); i < size; i++) {
-//                        tempList.get(i).online = 0;
-//                        tempList.get(i).lastOffline = 0;
-//                    }
-//                }
-
-
                 if (result.friends != null && result.friends.size() > 0) {
                     if (tempList != null && tempList.size() > 0) {
                         for (int i = 0, size = tempList.size(); i < size; i++) {
@@ -368,4 +327,5 @@ public class UserModel extends WKBaseModel {
     public interface IGetContacts {
         void onResult(int code, String msg, List<MailListEntity> list);
     }
+
 }

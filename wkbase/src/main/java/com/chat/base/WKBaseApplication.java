@@ -17,13 +17,11 @@ import com.chat.base.db.DBHelper;
 import com.chat.base.emoji.EmojiManager;
 import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
-import com.chat.base.net.SSLSocketClient;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.CrashHandler;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
-import com.lzy.okgo.OkGo;
 import com.tencent.smtt.export.external.TbsCoreSettings;
 import com.tencent.smtt.sdk.QbSdk;
 
@@ -31,12 +29,9 @@ import org.telegram.ui.Components.RLottieApplication;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
-import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
-
-import javax.net.ssl.X509TrustManager;
 
 /**
  * 2020-02-26 09:52
@@ -47,7 +42,6 @@ public class WKBaseApplication {
     private String fileDir = "wkIM";// 缓存目录
 
     public boolean disconnect = true;
-    private String okGoDownloadDir;
 
     public String versionName;
     public String appID = "wukong";
@@ -89,25 +83,8 @@ public class WKBaseApplication {
             EmojiManager.getInstance().init();
             RLottieApplication.getInstance().init(context);
             CrashHandler.getInstance().init(context);
-            //  WKFileUtils.delFileOrFolder(new File(okGoDownloadDir));
             //158638
 //            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
-            OkGo.getInstance().init(context).getOkHttpClient().newBuilder().sslSocketFactory(SSLSocketClient.getSSLSocketFactory(), new X509TrustManager() {
-                @Override
-                public void checkClientTrusted(X509Certificate[] chain, String authType) {
-
-                }
-
-                @Override
-                public void checkServerTrusted(X509Certificate[] chain, String authType) {
-
-                }
-
-                @Override
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
-                }
-            }).hostnameVerifier(SSLSocketClient.getHostnameVerifier());
             initX5WebView();
             float density = context.getResources().getDisplayMetrics().density;
             AndroidUtilities.setDensity(density);
@@ -150,11 +127,6 @@ public class WKBaseApplication {
         return fileDir;
     }
 
-    public String getOkGoDownloadDir() {
-        return okGoDownloadDir;
-    }
-
-
     private void initX5WebView() {
         boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
         if (isShowDialog) {
@@ -181,8 +153,6 @@ public class WKBaseApplication {
     }
 
     private void initCacheDir() {
-        okGoDownloadDir = Objects.requireNonNull(getContext().getExternalFilesDir("downloadCache")).getAbsolutePath() + "/";
-        WKFileUtils.getInstance().createFileDir(okGoDownloadDir);
         WKConstants.avatarCacheDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkAvatars")).getAbsolutePath() + "/";
         WKFileUtils.getInstance().createFileDir(WKConstants.avatarCacheDir);
         WKConstants.imageDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkImages")).getAbsolutePath() + "/";

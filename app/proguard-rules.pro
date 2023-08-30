@@ -79,7 +79,6 @@
 -dontwarn com.lxj.xpopup.widget.**
 -keep class com.lxj.xpopup.widget.**{*;}
 
-#okgo
 #okhttp
 -dontwarn okhttp3.**
 -keep class okhttp3.**{*;}
@@ -147,8 +146,6 @@
 -keep class com.chat.base.entity.** { *; }
 -keep class com.chat.base.base.** { *; }
 -keep class com.chat.base.net.entity.** { *; }
--keep class com.chat.base.okgo.UploadResultEntity { *; }
--keep class com.chat.base.okgo.UploadResultCovert { *; }
 #----------登录模块---------------
 -keep class com.chat.login.entity.** { *; }
 #----------uikit模块--------------

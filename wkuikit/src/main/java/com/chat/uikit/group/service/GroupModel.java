@@ -7,35 +7,25 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKConfig;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
-import com.lzy.okgo.OkGo;
-import com.lzy.okgo.cache.CacheMode;
-import com.lzy.okgo.convert.StringConvert;
-import com.lzy.okgo.model.Progress;
-import com.lzy.okgo.request.PostRequest;
-import com.lzy.okserver.OkUpload;
-import com.lzy.okserver.upload.UploadListener;
-import com.lzy.okserver.upload.UploadTask;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
-import com.xinbida.wukongim.interfaces.IChannelMemberListResult;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.interfaces.IChannelMemberListResult;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 2019-11-30 10:25
@@ -181,7 +171,6 @@ public class GroupModel extends WKBaseModel {
      * @param groupNo 群编号
      */
     public synchronized void groupMembersSync(String groupNo, final ICommonListener iCommonListener) {
-
         long version = WKIM.getInstance().getChannelMembersManager().getMaxVersion(groupNo, WKChannelType.GROUP);
         request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<List<GroupMember>>() {
             @Override
@@ -424,37 +413,18 @@ public class GroupModel extends WKBaseModel {
     }
 
     public void uploadAvatar(String groupNO, String filePath, IUploadBack iUploadBack) {
-        File file = new File(filePath);
-        PostRequest<String> postRequest = OkGo.<String>post(WKApiConfig.baseUrl + "groups/" + groupNO + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills())
-                .headers("token", WKConfig.getInstance().getToken()).params("file", file).cacheMode(CacheMode.NO_CACHE)
-                .converter(new StringConvert());
-        UploadTask<String> task = OkUpload.request(UUID.randomUUID().toString().replaceAll("-", ""), postRequest)
-                .save().register(new UploadListener<String>(UUID.randomUUID().toString().replaceAll("-", "")) {
-                    @Override
-                    public void onStart(Progress progress) {
+        String url = WKApiConfig.baseUrl + "groups/" + groupNO + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                iUploadBack.onResult(HttpResponseCode.success);
+            }
 
-                    }
-
-                    @Override
-                    public void onProgress(Progress progress) {
-                    }
-
-                    @Override
-                    public void onError(Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.error);
-                    }
-
-                    @Override
-                    public void onFinish(String resultEntity, Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.success);
-                    }
-
-                    @Override
-                    public void onRemove(Progress progress) {
-
-                    }
-                });
-        task.start();
+            @Override
+            public void onError() {
+                iUploadBack.onResult(HttpResponseCode.error);
+            }
+        });
     }
 
     public interface IUploadBack {

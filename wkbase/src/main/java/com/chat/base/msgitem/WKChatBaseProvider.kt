@@ -10,6 +10,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.text.TextUtils
+import android.util.Log
 import android.view.*
 import android.view.View.*
 import android.view.animation.DecelerateInterpolator
@@ -58,7 +59,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity, payloads: List<Any>) {
         super.convert(helper, item, payloads)
         val msgItemEntity = payloads[0] as WKUIChatMsgItemEntity
-        if (msgItemEntity.isRefreshReaction) {
+        if (msgItemEntity.isRefreshReaction && helper.getViewOrNull<AvatarView>(R.id.avatarView) != null) {
             msgItemEntity.isRefreshReaction = false
             val from = getMsgFromType(msgItemEntity.wkMsg)
             val avatarView = helper.getView<AvatarView>(R.id.avatarView)
@@ -377,7 +378,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     }
                 }
             }
-            receivedNameTv.text = showName
+            val os = getMsgFromOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
+            receivedNameTv.text = String.format("%s/%s", showName, os)
             if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
                 val colors =
                     WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
@@ -511,14 +513,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         val fullContentLayoutParams = fullContentLayout.layoutParams as FrameLayout.LayoutParams
         var isBubble = false
-        if (uiChatMsgItemEntity.wkMsg!=null) {
-            val list: List<Boolean> = EndpointManager.getInstance()
-                .invokes(EndpointCategory.chatShowBubble, uiChatMsgItemEntity.wkMsg.type)
-            for (b in list) {
-                if (b) {
-                    isBubble = true
-                    break
-                }
+        val list: List<Boolean> = EndpointManager.getInstance()
+            .invokes(EndpointCategory.chatShowBubble, uiChatMsgItemEntity.wkMsg.type)
+        for (b in list) {
+            if (b) {
+                isBubble = true
+                break
             }
         }
 
@@ -548,7 +548,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
                 fullContentLayoutParams.leftMargin = AndroidUtilities.dp(margin)
             } else {
-                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(45f+margin)
+                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(45f + margin)
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
             }
         }
@@ -705,13 +705,18 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         uiChatMsgItemEntity.isUpdateStatus = false
     }
-
+    interface ITouchClick{
+        fun onClick();
+    }
+    protected open fun addLongClick(clickView: View, mMsg: WKMsg) {
+        addLongClick(clickView, mMsg,null)
+    }
     /**
      * 添加view的长按事件
      *
      * @param clickView 需要长按的控件
      */
-    protected open fun addLongClick(clickView: View, mMsg: WKMsg) {
+    protected open fun addLongClick(clickView: View, mMsg: WKMsg,iTouchClick: ITouchClick?) {
         val mMsgConfig: MsgConfig = getMsgConfig(mMsg.type)
         var isShowReaction = false
         val `object` = EndpointManager.getInstance()
@@ -724,13 +729,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
 
         clickView.setOnTouchListener(CustomerTouchListener(object : ICustomerTouchListener {
-            override fun onClick(view: View, coordinate: FloatArray) {}
+            override fun onClick(view: View, coordinate: FloatArray) {
+                iTouchClick?.onClick()
+            }
             override fun onLongClick(view: View, coordinate: FloatArray) {
                 EndpointManager.getInstance().invoke("stop_reaction_animation", null)
                 showChatPopup(mMsg, view, coordinate, finalIsShowReaction, getPopupList(mMsg))
             }
 
-            override fun onDoubleClick(view: View, coordinate: FloatArray) {}
+            override fun onDoubleClick(view: View, coordinate: FloatArray) {
+            }
         }))
     }
 
@@ -1288,6 +1296,19 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             AndroidUtilities.dp(10f)
         ) else viewGroupLayout.setPadding(0, AndroidUtilities.dp(2f), 0, AndroidUtilities.dp(2f))
 
+    }
+
+
+    protected fun getMsgFromOS(clientMsgNo: String): String {
+        return if (clientMsgNo.endsWith("1")) {
+            "Android"
+        } else if (clientMsgNo.endsWith("2")) {
+            "IOS"
+        } else if (clientMsgNo.endsWith("0")) {
+            "Web"
+        } else {
+            "PC"
+        }
     }
 
     override fun onViewAttachedToWindow(holder: BaseViewHolder) {

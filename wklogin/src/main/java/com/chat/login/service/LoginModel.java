@@ -2,7 +2,6 @@ package com.chat.login.service;
 
 
 import android.text.TextUtils;
-import android.util.Log;
 
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
@@ -15,21 +14,15 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultErrorInfoListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKDeviceUtils;
+import com.chat.base.utils.WKTimeUtils;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.entity.ThirdAuthCode;
 import com.chat.login.entity.ThirdLoginResult;
-import com.lzy.okgo.OkGo;
-import com.lzy.okgo.convert.StringConvert;
-import com.lzy.okgo.model.Progress;
-import com.lzy.okgo.request.PostRequest;
-import com.lzy.okserver.OkUpload;
-import com.lzy.okserver.upload.UploadListener;
-import com.lzy.okserver.upload.UploadTask;
 
 import org.json.JSONException;
 
-import java.io.File;
 import java.util.List;
 
 /**
@@ -222,36 +215,18 @@ public class LoginModel extends WKBaseModel {
 
 
     public void uploadAvatar(String filePath, final IUploadBack iUploadBack) {
-        PostRequest<String> postRequest = OkGo.<String>post(WKApiConfig.baseUrl + "users/" + WKConfig.getInstance().getUid() + "/avatar")//
-                .headers("token", WKConfig.getInstance().getToken()).params("file", new File(filePath))
-                .converter(new StringConvert());
-        UploadTask<String> task = OkUpload.request(WKConfig.getInstance().getUid(), postRequest)
-                .save().register(new UploadListener<String>(WKConfig.getInstance().getUid()) {
-                    @Override
-                    public void onStart(Progress progress) {
+        String url = WKApiConfig.baseUrl + "users/" + WKConfig.getInstance().getUid() + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                iUploadBack.onResult(HttpResponseCode.success);
+            }
 
-                    }
-
-                    @Override
-                    public void onProgress(Progress progress) {
-                    }
-
-                    @Override
-                    public void onError(Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.error);
-                    }
-
-                    @Override
-                    public void onFinish(String resultEntity, Progress progress) {
-                        iUploadBack.onResult(HttpResponseCode.success);
-                    }
-
-                    @Override
-                    public void onRemove(Progress progress) {
-
-                    }
-                });
-        task.start();
+            @Override
+            public void onError() {
+                iUploadBack.onResult(HttpResponseCode.error);
+            }
+        });
     }
 
     public interface IUploadBack {

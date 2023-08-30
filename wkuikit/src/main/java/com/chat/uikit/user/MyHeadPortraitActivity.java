@@ -99,7 +99,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
             WKBaseApplication.getInstance().disconnect = false;
             chooseIMG();
         }));
-        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> ImageUtils.getInstance().downloadImg(WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid()), bitmap -> {
+        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> ImageUtils.getInstance().downloadImg(this,WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid()), bitmap -> {
             if (bitmap != null) {
                 ImageUtils.getInstance().saveBitmap(MyHeadPortraitActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
             }

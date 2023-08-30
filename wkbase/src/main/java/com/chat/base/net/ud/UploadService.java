@@ -1,6 +1,7 @@
-package com.chat.base.net.upload;
+package com.chat.base.net.ud;
 
-import com.chat.base.okgo.UploadResultEntity;
+
+import com.chat.base.net.entity.UploadResultEntity;
 
 import io.reactivex.rxjava3.core.Observable;
 import okhttp3.MultipartBody;

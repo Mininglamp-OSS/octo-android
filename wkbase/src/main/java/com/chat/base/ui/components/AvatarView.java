@@ -184,39 +184,6 @@ public class AvatarView extends FrameLayout {
             return filePath;
         } else {
             String url = WKApiConfig.getShowAvatar(channelID, channelType);
-//            Glide.with(WKBaseApplication.getInstance().getContext())
-//                    .downloadOnly()
-//                    .load(url)
-//                    .listener(new RequestListener<File>() {
-//                        @Override
-//                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<File> target, boolean isFirstResource) {
-//                            return false;
-//                        }
-//
-//                        @Override
-//                        public boolean onResourceReady(File resource, Object model, Target<File> target, DataSource dataSource, boolean isFirstResource) {
-//                            WKFileUtils.getInstance().fileCopy(resource.getAbsolutePath(), filePath);
-//                            return false;
-//                        }
-//                    })
-//                    .preload();
-
-//            OkGoDownload.getInstance().downloadFileOneByOne(url, url, filePath, new IDownloadFile() {
-//                @Override
-//                public void onSuccess(Object tag, String filePath) {
-//
-//                }
-//
-//                @Override
-//                public void onFail(Object tag) {
-//
-//                }
-//
-//                @Override
-//                public void onProgress(Object tag, float progress) {
-//
-//                }
-//            });
             return url;
         }
     }

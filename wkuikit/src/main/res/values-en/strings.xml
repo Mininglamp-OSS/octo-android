@@ -268,5 +268,6 @@
     <string name="save_label_tips">Save as tag and use later?</string>
     <string name="save_label_sure">Save as Tag</string>
     <string name="default_new_msg">you have a new message</string>
+    <string name="voice_download_fail">Voice download failed</string>
 </resources>
 

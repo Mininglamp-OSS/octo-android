@@ -1,20 +1,26 @@
 package com.chat.base.utils;
 
+import static com.bumptech.glide.request.target.Target.SIZE_ORIGINAL;
+
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.view.View;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKConstants;
-import com.lzy.okgo.OkGo;
-import com.lzy.okgo.callback.BitmapCallback;
-import com.lzy.okgo.model.Response;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -117,13 +123,17 @@ public class ImageUtils {
         return new int[]{w, h};
     }
 
-    public void downloadImg(String url, final IDownloadImgListener iDownloadImgListener) {
-        OkGo.<Bitmap>get(url).execute(new BitmapCallback() {
+    public void downloadImg(Context context, String url, final IDownloadImgListener iDownloadImgListener) {
+        Glide.with(context).asBitmap().load(url).into(new CustomTarget<Bitmap>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
+
             @Override
-            public void onSuccess(Response<Bitmap> response) {
-                if (iDownloadImgListener != null) {
-                    iDownloadImgListener.onResult(response.body());
-                }
+            public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
+                iDownloadImgListener.onResult(resource);
+            }
+
+            @Override
+            public void onLoadCleared(@Nullable Drawable placeholder) {
+
             }
         });
     }

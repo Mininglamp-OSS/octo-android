@@ -21,8 +21,7 @@ import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
-import com.chat.base.okgo.OkGoUploadOrDownloadProgress
-import com.chat.base.okgo.OkGoUploadOrDownloadProgress.IProgress
+import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.FilterImageView
 import com.chat.base.ui.components.SecretDeleteTimer
@@ -42,7 +41,6 @@ import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKCMD
 import com.xinbida.wukongim.entity.WKCMDKeys
 import com.xinbida.wukongim.entity.WKChannel
-import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.message.type.WKMsgContentType
 import com.xinbida.wukongim.msgmodel.WKImageContent
@@ -82,30 +80,6 @@ class WKImageProvider : WKChatBaseProvider() {
         val ints = ImageUtils.getInstance()
             .getImageWidthAndHeightToTalk(imgMsgModel.width, imgMsgModel.height)
 
-        var showUrl: String
-        if (uiChatMsgItemEntity.wkMsg.localExtraMap != null && uiChatMsgItemEntity.wkMsg.localExtraMap.containsKey(
-                "showURL"
-            )
-        ) {
-            showUrl = uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] as String
-        } else {
-            if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
-                showUrl = imgMsgModel.localPath
-                val file = File(showUrl)
-                if (!file.exists() || file.length() == 0L) {
-                    //如果本地文件被删除就显示网络图片
-                    showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
-                }
-            } else {
-                showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
-            }
-            if (uiChatMsgItemEntity.wkMsg.localExtraMap == null) {
-                uiChatMsgItemEntity.wkMsg.localExtraMap = HashMap<String, Objects>()
-            }
-            uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] = showUrl
-        }
-
-
         blurView.visibility = if (uiChatMsgItemEntity.wkMsg.flame == 1)
             View.VISIBLE
         else View.GONE
@@ -123,34 +97,8 @@ class WKImageProvider : WKChatBaseProvider() {
         } else {
             otherLayout.visibility = View.GONE
         }
-
+        val showUrl = getShowURL(uiChatMsgItemEntity)
         GlideUtils.getInstance().showImg(context, showUrl, ints[0], ints[1], imageView)
-        val tempShowImgUrl = showUrl
-        imageView.setOnClickListener {
-            if (uiChatMsgItemEntity.wkMsg.flame == 1 && uiChatMsgItemEntity.wkMsg.viewed == 0) {
-                for (i in 0 until getAdapter()!!.data.size) {
-                    if (getAdapter()!!.data[i].wkMsg.clientMsgNO.equals(uiChatMsgItemEntity.wkMsg.clientMsgNO)) {
-                        getAdapter()!!.data[i].wkMsg.viewed = 1
-                        getAdapter()!!.data[i].wkMsg.viewedAt =
-                            WKTimeUtils.getInstance().currentMills
-                        getAdapter()!!.notifyItemChanged(adapterPosition)
-                        uiChatMsgItemEntity.wkMsg.viewedAt = getAdapter()!!.data[i].wkMsg.viewedAt
-                        WKIM.getInstance().msgManager.updateViewedAt(
-                            1,
-                            getAdapter()!!.data[i].wkMsg.viewedAt,
-                            getAdapter()!!.data[i].wkMsg.clientMsgNO
-                        )
-                        break
-                    }
-                }
-
-            }
-            showImages(
-                uiChatMsgItemEntity.wkMsg,
-                tempShowImgUrl,
-                imageView
-            )
-        }
 
         val layoutParams1 = imageLayout.layoutParams as LinearLayout.LayoutParams
         if (uiChatMsgItemEntity.wkMsg.flame == 1) {
@@ -178,19 +126,16 @@ class WKImageProvider : WKChatBaseProvider() {
 
         //设置上传进度
         if (TextUtils.isEmpty(imgMsgModel.url)) {
-            OkGoUploadOrDownloadProgress.getInstance()
-                .addProgress(uiChatMsgItemEntity.wkMsg.clientSeq, object : IProgress {
-                    override fun onProgress(tag: Any, progress: Float) {
+            WKProgressManager.instance.registerProgress(uiChatMsgItemEntity.wkMsg.clientSeq,
+                object : WKProgressManager.IProgress {
+                    override fun onProgress(tag: Any?, progress: Int) {
+
                         if (tag is Long) {
                             if (tag == uiChatMsgItemEntity.wkMsg.clientSeq) {
-                                val df = DecimalFormat(".00")
-                                val pg = (progress * 100).toInt()
-                                progressView.progress = pg
+                                progressView.progress = progress
                                 progressTv.text =
-                                    String.format("%s%%", df.format((progress * 100).toDouble()))
-                                if (progress >= 1.0) {
-                                    OkGoUploadOrDownloadProgress.getInstance()
-                                        .removeProgress(uiChatMsgItemEntity.wkMsg.clientSeq)
+                                    String.format("%s%%", progress)
+                                if (progress >= 100) {
                                     progressTv.visibility = View.GONE
                                     progressView.visibility = View.GONE
                                     deleteTimer.visibility = View.VISIBLE
@@ -201,12 +146,33 @@ class WKImageProvider : WKChatBaseProvider() {
                                 }
                             }
                         }
+
                     }
 
-                    override fun onSuccess(tag: Any, path: String) {}
+                    override fun onSuccess(tag: Any?, path: String?) {
+                        progressTv.visibility = View.GONE
+                        progressView.visibility = View.GONE
+                        deleteTimer.visibility = View.VISIBLE
+                        if (tag != null) {
+                            WKProgressManager.instance.unregisterProgress(tag)
+                        }
+                    }
+
+                    override fun onFail(tag: Any?, msg: String?) {
+                    }
+
                 })
         }
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+        addLongClick(imageView, uiChatMsgItemEntity.wkMsg, object : ITouchClick {
+            override fun onClick() {
+                onImageClick(
+                    uiChatMsgItemEntity,
+                    adapterPosition,
+                    imageView,
+                    getShowURL(uiChatMsgItemEntity)
+                )
+            }
+        })
     }
 
     override val itemViewType: Int
@@ -378,6 +344,65 @@ class WKImageProvider : WKChatBaseProvider() {
         EndpointManager.getInstance().invoke("collection_add_collect", hashMap)
     }
 
+    private fun onImageClick(
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        adapterPosition: Int,
+        imageView: ImageView,
+        tempShowImgUrl: String
+    ) {
+
+        if (uiChatMsgItemEntity.wkMsg.flame == 1 && uiChatMsgItemEntity.wkMsg.viewed == 0) {
+            for (i in 0 until getAdapter()!!.data.size) {
+                if (getAdapter()!!.data[i].wkMsg.clientMsgNO.equals(uiChatMsgItemEntity.wkMsg.clientMsgNO)) {
+                    getAdapter()!!.data[i].wkMsg.viewed = 1
+                    getAdapter()!!.data[i].wkMsg.viewedAt =
+                        WKTimeUtils.getInstance().currentMills
+                    getAdapter()!!.notifyItemChanged(adapterPosition)
+                    uiChatMsgItemEntity.wkMsg.viewedAt = getAdapter()!!.data[i].wkMsg.viewedAt
+                    WKIM.getInstance().msgManager.updateViewedAt(
+                        1,
+                        getAdapter()!!.data[i].wkMsg.viewedAt,
+                        getAdapter()!!.data[i].wkMsg.clientMsgNO
+                    )
+                    break
+                }
+            }
+
+        }
+        showImages(
+            uiChatMsgItemEntity.wkMsg,
+            tempShowImgUrl,
+            imageView
+        )
+
+    }
+
+    private fun getShowURL(uiChatMsgItemEntity: WKUIChatMsgItemEntity): String {
+        val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
+        var showUrl: String
+        if (uiChatMsgItemEntity.wkMsg.localExtraMap != null && uiChatMsgItemEntity.wkMsg.localExtraMap.containsKey(
+                "showURL"
+            )
+        ) {
+            showUrl = uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] as String
+        } else {
+            if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
+                showUrl = imgMsgModel.localPath
+                val file = File(showUrl)
+                if (!file.exists() || file.length() == 0L) {
+                    //如果本地文件被删除就显示网络图片
+                    showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
+                }
+            } else {
+                showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
+            }
+            if (uiChatMsgItemEntity.wkMsg.localExtraMap == null) {
+                uiChatMsgItemEntity.wkMsg.localExtraMap = HashMap<String, Objects>()
+            }
+            uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] = showUrl
+        }
+        return showUrl
+    }
 
     override fun resetCellListener(
         position: Int,
@@ -387,6 +412,15 @@ class WKImageProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+        addLongClick(imageView, uiChatMsgItemEntity.wkMsg, object : ITouchClick {
+            override fun onClick() {
+                onImageClick(
+                    uiChatMsgItemEntity,
+                    position,
+                    imageView,
+                    getShowURL(uiChatMsgItemEntity)
+                )
+            }
+        })
     }
 }

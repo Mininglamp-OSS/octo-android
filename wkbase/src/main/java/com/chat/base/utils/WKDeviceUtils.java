@@ -372,9 +372,7 @@ public class WKDeviceUtils {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         File file = new File(downloadApk);
         String appPackageName = WKDeviceUtils.getInstance().getPackageName(context);
-        if (TextUtils.isEmpty(appPackageName)) {
-            appPackageName = "com.xinbida.wukongim";
-        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             Uri apkUri = FileProvider.getUriForFile(context, appPackageName + ".fileprovider", file);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

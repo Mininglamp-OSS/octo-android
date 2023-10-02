@@ -39,6 +39,7 @@ public class WKGifContent extends WKMediaMessageContent implements Parcelable {
             jsonObject.put("title", title);
             jsonObject.put("placeholder", placeholder);
             jsonObject.put("format", format);
+            jsonObject.put("localPath", localPath);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -52,6 +53,7 @@ public class WKGifContent extends WKMediaMessageContent implements Parcelable {
         this.url = jsonObject.optString("url");
         this.category = jsonObject.optString("category");
         this.title = jsonObject.optString("title");
+        this.localPath = jsonObject.optString("localPath");
         this.placeholder = jsonObject.optString("placeholder");
         this.format = jsonObject.optString("format");
         return this;

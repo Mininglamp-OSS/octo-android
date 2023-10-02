@@ -15,7 +15,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.chad.library.adapter.base.BaseMultiItemQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
-import com.google.android.material.snackbar.Snackbar
 import com.chat.base.config.WKApiConfig
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
@@ -27,21 +26,21 @@ import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.model.WKGifContent
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.ui.components.AvatarView
-import com.chat.base.ui.components.CustomerTouchListener
 import com.chat.base.utils.ImageUtils
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKTimeUtils
 import com.chat.base.utils.WKToastUtils
-import com.chat.base.views.CustomImageViewerPopup.IImgPopupMenu
 import com.chat.base.views.BottomEntity
+import com.chat.base.views.CustomImageViewerPopup.IImgPopupMenu
 import com.chat.uikit.R
 import com.chat.uikit.enity.ChatMultiForwardEntity
+import com.google.android.material.snackbar.Snackbar
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.msgmodel.WKImageContent
-import com.xinbida.wukongim.msgmodel.WKVideoContent
 import com.xinbida.wukongim.msgmodel.WKMessageContent
+import com.xinbida.wukongim.msgmodel.WKVideoContent
 import java.io.File
 
 class ChatMultiForwardDetailAdapter(
@@ -150,9 +149,9 @@ class ChatMultiForwardDetailAdapter(
                     }
                     WKContentType.WK_VIDEO -> {
                         holder.setGone(R.id.contentTv, true)
+                        holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.imageView, false)
                         holder.setGone(R.id.gifIv, true)
-                        holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.progressView, false)
                         holder.setGone(R.id.playIv, false)
                         val videoModel = item.msg.baseContentMsgModel as WKVideoContent
@@ -188,7 +187,7 @@ class ChatMultiForwardDetailAdapter(
                                     } else WKApiConfig.getShowUrl(videoModel.url)
 
                                 EndpointManager.getInstance().invoke(
-                                    "wk_play_video",
+                                    "play_video",
                                     PlayVideoMenu(
                                         context as AppCompatActivity,
                                         holder.getView(R.id.imageView),
@@ -229,37 +228,28 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.imageView, true)
                         holder.setGone(R.id.progressView, true)
                         holder.setGone(R.id.playIv, true)
-                        holder.getView<TextView>(R.id.contentTv)
-                            .setOnTouchListener(CustomerTouchListener(object :
-                                CustomerTouchListener.ICustomerTouchListener {
-                                override fun onClick(view: View, coordinate: FloatArray) {}
-                                override fun onLongClick(view: View, coordinate: FloatArray) {
-                                    val list: MutableList<PopupMenuItem> = java.util.ArrayList()
-                                    list.add(
-                                        PopupMenuItem(
-                                            context.getString(R.string.copy),
-                                            R.mipmap.msg_copy, object : PopupMenuItem.IClick {
-                                                override fun onClick() {
-                                                    val cm =
-                                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
-                                                    val mClipData =
-                                                        ClipData.newPlainText(
-                                                            "Label",
-                                                            holder.getView<TextView>(R.id.contentTv).text.toString()
-                                                        )
-                                                    assert(cm != null)
-                                                    cm!!.setPrimaryClip(mClipData)
-                                                    WKToastUtils.getInstance()
-                                                        .showToastNormal(context.getString(R.string.copyed))
-                                                }
-                                            })
-                                    )
-                                    WKDialogUtils.getInstance()
-                                        .showScreenPopup(view, coordinate, list)
-                                }
 
-                                override fun onDoubleClick(view: View, coordinate: FloatArray) {}
-                            }))
+                        val list: MutableList<PopupMenuItem> = java.util.ArrayList()
+                        list.add(
+                            PopupMenuItem(
+                                context.getString(R.string.copy),
+                                R.mipmap.msg_copy, object : PopupMenuItem.IClick {
+                                    override fun onClick() {
+                                        val cm =
+                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager?
+                                        val mClipData =
+                                            ClipData.newPlainText(
+                                                "Label",
+                                                holder.getView<TextView>(R.id.contentTv).text.toString()
+                                            )
+                                        assert(cm != null)
+                                        cm!!.setPrimaryClip(mClipData)
+                                        WKToastUtils.getInstance()
+                                            .showToastNormal(context.getString(R.string.copyed))
+                                    }
+                                })
+                        )
+                        WKDialogUtils.getInstance().setViewLongClickPopup(holder.getView<TextView>(R.id.contentTv),list)
 
                     }
                 }
@@ -300,7 +290,7 @@ class ChatMultiForwardDetailAdapter(
                         "chat_show_choose_chat",
                         ChooseChatMenu(
                             ChatChooseContacts { list1: List<WKChannel>? ->
-                                if (list1 != null && list1.isNotEmpty()) {
+                                if (!list1.isNullOrEmpty()) {
                                     for (channel in list1) {
                                         WKIM.getInstance().msgManager.sendMessage(
                                             messageContent,

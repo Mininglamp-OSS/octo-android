@@ -3,16 +3,13 @@ package com.chat.base.endpoint.entity
 import com.chat.base.msg.IConversationContext
 import com.xinbida.wukongim.entity.WKMsg
 
-class ChatItemPopupMenu(imageResource: Int, text: String, iPopupItemClick: IPopupItemClick) {
-    var imageResource = 0
-    var text = ""
+class ChatItemPopupMenu(
+    var imageResource: Int,
+    var text: String,
     var iPopupItemClick: IPopupItemClick
-
-    init {
-        this.imageResource = imageResource
-        this.text = text
-        this.iPopupItemClick = iPopupItemClick
-    }
+) {
+    var subText: String = ""
+    var tag: String = ""
 
     interface IPopupItemClick {
         fun onClick(mMsg: WKMsg, iConversationContext: IConversationContext)

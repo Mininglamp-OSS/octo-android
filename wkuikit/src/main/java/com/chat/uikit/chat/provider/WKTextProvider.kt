@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.provider.ContactsContract
 import android.text.Spannable
@@ -15,6 +16,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
+import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -35,11 +37,19 @@ import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
-import com.chat.base.endpoint.entity.*
+import com.chat.base.endpoint.entity.CanReactionMenu
+import com.chat.base.endpoint.entity.ChatChooseContacts
+import com.chat.base.endpoint.entity.ChatItemPopupMenu
+import com.chat.base.endpoint.entity.ChooseChatMenu
+import com.chat.base.endpoint.entity.MsgConfig
+import com.chat.base.entity.BottomSheetItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.ChatAdapter
 import com.chat.base.msg.model.WKGifContent
-import com.chat.base.msgitem.*
+import com.chat.base.msgitem.WKChatBaseProvider
+import com.chat.base.msgitem.WKChatIteMsgFromType
+import com.chat.base.msgitem.WKContentType
+import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.ui.components.AlignImageSpan
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.ui.components.NormalClickableContent
@@ -48,9 +58,7 @@ import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.base.utils.StringUtils
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKToastUtils
-import com.chat.base.views.BottomEntity
 import com.chat.base.views.BubbleLayout
-import com.chat.base.views.CommonBottomView
 import com.chat.uikit.R
 import com.chat.uikit.user.UserDetailActivity
 import com.google.android.material.snackbar.Snackbar
@@ -64,8 +72,9 @@ import com.xinbida.wukongim.msgmodel.WKTextContent
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
-import java.util.*
+import java.util.Objects
 import kotlin.math.abs
+
 
 open class WKTextProvider : WKChatBaseProvider() {
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
@@ -94,9 +103,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         val mTextContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
         // 这里要指定文本宽度 - padding的距离
 //        textContentLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
-        val bgType = getMsgBgType(
-            uiChatMsgItemEntity.previousMsg, uiChatMsgItemEntity.wkMsg, uiChatMsgItemEntity.nextMsg
-        )
+//        val bgType = getMsgBgType(
+//            uiChatMsgItemEntity.previousMsg, uiChatMsgItemEntity.wkMsg, uiChatMsgItemEntity.nextMsg
+//        )
         resetCellBackground(parentView, uiChatMsgItemEntity, from)
 //        if (textContentLayout.layoutParams.width < msgTimeView.layoutParams.width) {
 //            textContentLayout.layoutParams.width = msgTimeView.layoutParams.width
@@ -109,45 +118,48 @@ open class WKTextProvider : WKChatBaseProvider() {
             textColor = ContextCompat.getColor(context, R.color.colorDark)
         } else {
             contentTv.setBackgroundResource(R.drawable.received_chat_text_bg)
-            val isShowNickName: Boolean =
-                (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top) && uiChatMsgItemEntity.showNickName && uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP
-            if (isShowNickName) {
-                var showName = ""
-                var channelName = ""
-                if (uiChatMsgItemEntity.wkMsg.from != null) {
-                    if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.from.channelRemark))
-                        showName = uiChatMsgItemEntity.wkMsg.from.channelRemark
-                    channelName = uiChatMsgItemEntity.wkMsg.from.channelName
-                }
-                if (TextUtils.isEmpty(showName)) {
-                    if (uiChatMsgItemEntity.wkMsg.memberOfFrom != null) {
-                        showName =
-                            if (TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark)) uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName else uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark
-                    } else {
-                        if (TextUtils.isEmpty(showName)) {
-                            showName = channelName
-                        }
-                    }
-                }
+            setFromName(uiChatMsgItemEntity, from, receivedTextNameTv)
+//            val isShowNickName: Boolean =
+//                (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top) && uiChatMsgItemEntity.showNickName && uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP
+//            if (isShowNickName) {
 
-                if (TextUtils.isEmpty(showName)) {
-                    WKIM.getInstance().channelManager.fetchChannelInfo(
-                        uiChatMsgItemEntity.wkMsg.fromUID, WKChannelType.PERSONAL
-                    )
-                    receivedTextNameTv.visibility = View.GONE
-                } else {
-                    receivedTextNameTv.text = showName
-                    receivedTextNameTv.visibility = View.VISIBLE
-                    if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
-                        val colors =
-                            WKBaseApplication.getInstance().context.resources.getIntArray(com.chat.base.R.array.name_colors)
-                        val index = abs(uiChatMsgItemEntity.wkMsg.fromUID.hashCode()) % colors.size
-                        receivedTextNameTv.setTextColor(colors[index])
-                    }
-                }
-            } else {
-                receivedTextNameTv.visibility = View.GONE
-            }
+//                var showName = ""
+//                var channelName = ""
+//                if (uiChatMsgItemEntity.wkMsg.from != null) {
+//                    if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.from.channelRemark))
+//                        showName = uiChatMsgItemEntity.wkMsg.from.channelRemark
+//                    channelName = uiChatMsgItemEntity.wkMsg.from.channelName
+//                }
+//                if (TextUtils.isEmpty(showName)) {
+//                    if (uiChatMsgItemEntity.wkMsg.memberOfFrom != null) {
+//                        showName =
+//                            if (TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark)) uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName else uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark
+//                    } else {
+//                        if (TextUtils.isEmpty(showName)) {
+//                            showName = channelName
+//                        }
+//                    }
+//                }
+//
+//                if (TextUtils.isEmpty(showName)) {
+//                    WKIM.getInstance().channelManager.fetchChannelInfo(
+//                        uiChatMsgItemEntity.wkMsg.fromUID, WKChannelType.PERSONAL
+//                    )
+//                    receivedTextNameTv.visibility = View.GONE
+//                } else {
+//                    val os = getMsgFromOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
+//                    receivedTextNameTv.text = String.format("%s/%s", showName, os)
+//                    receivedTextNameTv.visibility = View.VISIBLE
+//                    if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
+//                        val colors =
+//                            WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
+//                        val index = abs(uiChatMsgItemEntity.wkMsg.fromUID.hashCode()) % colors.size
+//                        receivedTextNameTv.setTextColor(colors[index])
+//                    }
+//                }
+//            } else {
+//                receivedTextNameTv.visibility = View.GONE
+//            }
             contentLayout.gravity = Gravity.START
             textColor = ContextCompat.getColor(context, R.color.receive_text_color)
         }
@@ -159,6 +171,16 @@ open class WKTextProvider : WKChatBaseProvider() {
         replyLayout.visibility =
             if (mTextContent.reply == null || mTextContent.reply.payload == null) View.GONE else View.VISIBLE
         if (mTextContent.reply != null && mTextContent.reply.payload != null) {
+            if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
+                val colors =
+                    WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
+                val index = abs(mTextContent.reply.from_uid.hashCode()) % colors.size
+                val replyLine = parentView.findViewById<View>(R.id.replyLine)
+                val myShapeDrawable = replyLine.background as GradientDrawable
+                myShapeDrawable.setColor(colors[index])
+                replyNameTv.setTextColor(colors[index])
+            }
+            replyTv.setTextColor(textColor)
             if (mTextContent.reply.revoke == 1) {
                 replyTv.setText(R.string.reply_msg_is_revoked)
                 replyIv.visibility = View.GONE
@@ -483,165 +505,131 @@ open class WKTextProvider : WKChatBaseProvider() {
                     if (StringUtils.isMobile(content)) {
                         val chatAdapter = getAdapter() as ChatAdapter
                         chatAdapter.hideSoftKeyboard()
-                        val bottomEntityList: MutableList<BottomEntity> = ArrayList()
-                        val phoneTips = String.format(
-                            context.getString(R.string.phone_tips),
-                            context.getString(R.string.app_name)
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                content,
-                                phoneTips,
-                                R.color.colorDark,
-                                R.color.color999
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
+                        val list = ArrayList<BottomSheetItem>()
+                        list.add(
+                            BottomSheetItem(
                                 context.getString(R.string.copy),
-                                R.color.colorDark
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.call),
-                                R.color.colorDark
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.add_to_phone_book),
-                                R.color.colorDark
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.str_search),
-                                R.color.colorDark
-                            )
-                        )
-                        WKDialogUtils.getInstance()
-                            .showCommonBottomViewDialog(
-                                context,
-                                bottomEntityList,
-                                object : CommonBottomView.IBottomClick {
-                                    override fun onClick(
-                                        position: Int,
-                                        bottomEntity: BottomEntity?
-                                    ) {
-                                        if (position == 1) {
-                                            val cm =
-                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            val mClipData = ClipData.newPlainText("Label", content)
-                                            cm.setPrimaryClip(mClipData)
-                                            WKToastUtils.getInstance()
-                                                .showToastNormal(context.getString(R.string.copyed))
-                                        } else if (position == 2) {
-                                            val intent =
-                                                Intent(
-                                                    Intent.ACTION_CALL,
-                                                    Uri.parse("tel:$content")
-                                                )
-                                            context.startActivity(intent)
-                                        } else if (position == 3) {
-                                            val addIntent = Intent(
-                                                Intent.ACTION_INSERT,
-                                                Uri.withAppendedPath(
-                                                    Uri.parse("content://com.android.contacts"),
-                                                    "contacts"
-                                                )
-                                            )
-                                            addIntent.type = "vnd.android.cursor.dir/person"
-                                            addIntent.type = "vnd.android.cursor.dir/contact"
-                                            addIntent.type = "vnd.android.cursor.dir/raw_contact"
-                                            addIntent.putExtra(
-                                                ContactsContract.Intents.Insert.NAME,
-                                                ""
-                                            )
-                                            addIntent.putExtra(
-                                                ContactsContract.Intents.Insert.PHONE,
-                                                content
-                                            )
-                                            context.startActivity(addIntent)
-                                        } else if (position == 4) {
-                                            if (uiChatMsgItemEntity.iLinkClick != null)
-                                                uiChatMsgItemEntity.iLinkClick.onShowSearchUser(
-                                                    content
-                                                )
-                                            // if (iLinkClick != null) iLinkClick.onShowSearchUser(content)
-                                        }
+                                R.mipmap.msg_copy,
+                                object : BottomSheetItem.IBottomSheetClick {
+                                    override fun onClick() {
+                                        val cm =
+                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val mClipData = ClipData.newPlainText("Label", content)
+                                        cm.setPrimaryClip(mClipData)
+                                        WKToastUtils.getInstance()
+                                            .showToastNormal(context.getString(R.string.copyed))
                                     }
                                 })
+                        )
+                        list.add(
+                            BottomSheetItem(
+                                context.getString(R.string.call),
+                                R.mipmap.msg_calls,
+                                object : BottomSheetItem.IBottomSheetClick {
+                                    override fun onClick() {
+                                        val intent =
+                                            Intent(
+                                                Intent.ACTION_CALL,
+                                                Uri.parse("tel:$content")
+                                            )
+                                        context.startActivity(intent)
+                                    }
+                                })
+                        )
+                        list.add(BottomSheetItem( context.getString(R.string.add_to_phone_book),R.mipmap.msg_contacts,object :BottomSheetItem.IBottomSheetClick{
+                            override fun onClick() {
+
+                                val addIntent = Intent(
+                                    Intent.ACTION_INSERT,
+                                    Uri.withAppendedPath(
+                                        Uri.parse("content://com.android.contacts"),
+                                        "contacts"
+                                    )
+                                )
+                                addIntent.type = "vnd.android.cursor.dir/person"
+                                addIntent.type = "vnd.android.cursor.dir/contact"
+                                addIntent.type = "vnd.android.cursor.dir/raw_contact"
+                                addIntent.putExtra(
+                                    ContactsContract.Intents.Insert.NAME,
+                                    ""
+                                )
+                                addIntent.putExtra(
+                                    ContactsContract.Intents.Insert.PHONE,
+                                    content
+                                )
+                                context.startActivity(addIntent)
+
+                            }
+                        }))
+                        list.add(BottomSheetItem(  context.getString(R.string.str_search),R.mipmap.ic_ab_search,object :BottomSheetItem.IBottomSheetClick{
+                            override fun onClick() {
+                                if (uiChatMsgItemEntity.iLinkClick != null)
+                                    uiChatMsgItemEntity.iLinkClick.onShowSearchUser(
+                                        content
+                                    )
+                            }
+                        }))
+//                        val phoneTips = String.format(
+//                            context.getString(R.string.phone_tips),
+//                            context.getString(R.string.app_name)
+//                        )
+                        val displaySpans = SpannableStringBuilder()
+                        displaySpans.append(content)
+                        displaySpans.setSpan(
+                            StyleSpan(Typeface.BOLD), 0,
+                            content.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                        displaySpans.setSpan(
+                            ForegroundColorSpan(ContextCompat.getColor(context,R.color.blue)), 0,
+                            content.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+
+                        WKDialogUtils.getInstance().showBottomSheet(context,displaySpans,false,list)
                         return
                     }
                     if (StringUtils.isEmail(content)) {
-                        val chatAdapter = getAdapter() as ChatAdapter
-                        chatAdapter.hideSoftKeyboard()
-                        val bottomEntityList: MutableList<BottomEntity> = ArrayList()
-                        val emailTips = String.format(
-                            context.getString(R.string.email_tips),
-                            context.getString(R.string.app_name)
+                        val displaySpans = SpannableStringBuilder()
+                        displaySpans.append(content)
+                        displaySpans.setSpan(
+                            StyleSpan(Typeface.BOLD), 0,
+                            content.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                content,
-                                emailTips,
-                                R.color.colorDark,
-                                R.color.color999
-                            )
+                        displaySpans.setSpan(
+                            ForegroundColorSpan(ContextCompat.getColor(context,R.color.blue)), 0,
+                            content.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.copy),
-                                R.color.colorDark
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.str_search),
-                                R.color.colorDark
-                            )
-                        )
-                        bottomEntityList.add(
-                            BottomEntity(
-                                context.getString(R.string.send_email),
-                                R.color.colorDark
-                            )
-                        )
-                        WKDialogUtils.getInstance()
-                            .showCommonBottomViewDialog(
-                                context,
-                                bottomEntityList,
-                                object : CommonBottomView.IBottomClick {
-                                    override fun onClick(
-                                        position: Int,
-                                        bottomEntity: BottomEntity?
-                                    ) {
-                                        if (position == 1) {
-                                            val cm =
-                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            val mClipData = ClipData.newPlainText("Label", content)
-                                            cm.setPrimaryClip(mClipData)
-                                            WKToastUtils.getInstance()
-                                                .showToastNormal(context.getString(R.string.copyed))
-                                        } else if (position == 2) {
-                                            if (uiChatMsgItemEntity.iLinkClick != null)
-                                                uiChatMsgItemEntity.iLinkClick.onShowSearchUser(
-                                                    content
-                                                )
-                                            // if (iLinkClick != null) iLinkClick.onShowSearchUser(content)
-                                        } else {
-                                            val uri = Uri.parse("mailto:$content")
-                                            val email = arrayOf(content)
-                                            val intent = Intent(Intent.ACTION_SENDTO, uri)
-                                            intent.putExtra(Intent.EXTRA_CC, email) // 抄送人
-                                            intent.putExtra(Intent.EXTRA_SUBJECT, "") // 主题
-                                            intent.putExtra(Intent.EXTRA_TEXT, "") // 正文
-                                            context.startActivity(Intent.createChooser(intent, ""))
-                                        }
-                                    }
-
-                                })
+                        val list = ArrayList<BottomSheetItem>()
+                        list.add(BottomSheetItem(  context.getString(R.string.copy),R.mipmap.msg_copy,object :BottomSheetItem.IBottomSheetClick{
+                            override fun onClick() {
+                                val cm =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val mClipData = ClipData.newPlainText("Label", content)
+                                cm.setPrimaryClip(mClipData)
+                                WKToastUtils.getInstance()
+                                    .showToastNormal(context.getString(R.string.copyed))
+                            }
+                        }))
+                        list.add(BottomSheetItem(   context.getString(R.string.send_email),R.mipmap.msg2_email,object :BottomSheetItem.IBottomSheetClick{
+                            override fun onClick() {
+                                val uri = Uri.parse("mailto:$content")
+                                val email = arrayOf(content)
+                                val intent = Intent(Intent.ACTION_SENDTO, uri)
+                                intent.putExtra(Intent.EXTRA_CC, email) // 抄送人
+                                intent.putExtra(Intent.EXTRA_SUBJECT, "") // 主题
+                                intent.putExtra(Intent.EXTRA_TEXT, "") // 正文
+                                context.startActivity(Intent.createChooser(intent, ""))
+                            }
+                        }))
+                        list.add(BottomSheetItem(  context.getString(R.string.str_search),R.mipmap.ic_ab_search,object :BottomSheetItem.IBottomSheetClick{
+                            override fun onClick() {
+                                if (uiChatMsgItemEntity.iLinkClick != null)
+                                    uiChatMsgItemEntity.iLinkClick.onShowSearchUser(
+                                        content
+                                    )
+                                // if (iLinkClick != null) iLinkClick.onShowSearchUser(content)
+                            }
+                        }))
+                        WKDialogUtils.getInstance().showBottomSheet(context,displaySpans,false,list)
                         return
                     }
                 }
@@ -884,6 +872,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         val textContentLayout = parentView.findViewById<View>(R.id.textContentLayout)
         val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
         // 这里要指定文本宽度 - padding的距离
+        if (textContentLayout == null || msgTimeView == null) {
+            return
+        }
         textContentLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
         val bgType = getMsgBgType(
             uiChatMsgItemEntity.previousMsg,

@@ -7,6 +7,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
+import com.chat.base.config.WKConfig;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
@@ -59,7 +60,8 @@ public class GroupModel extends WKBaseModel {
         JSONArray jsonArray1 = new JSONArray();
         jsonArray1.addAll(names);
         jsonObject.put("member_names", jsonArray1);
-        request(createService(GroupService.class).createGroup(jsonObject), new IRequestResultListener<GroupEntity>() {
+        jsonObject.put("msg_auto_delete", WKConfig.getInstance().getUserInfo().msg_expire_second);
+        request(createService(GroupService.class).createGroup(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(GroupEntity groupEntity) {
                 WKChannel channel = new WKChannel();
@@ -95,7 +97,7 @@ public class GroupModel extends WKBaseModel {
         JSONArray nameArr = new JSONArray();
         nameArr.addAll(names);
         jsonObject.put("names", nameArr);
-        request(createService(GroupService.class).addGroupMembers(groupNo, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).addGroupMembers(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -121,7 +123,7 @@ public class GroupModel extends WKBaseModel {
         jsonArray.addAll(ids);
         jsonObject1.put("uids", jsonArray);
         jsonObject1.put("remark", "");
-        request(createService(GroupService.class).inviteGroupMembers(groupNo, jsonObject1), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).inviteGroupMembers(groupNo, jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -151,7 +153,7 @@ public class GroupModel extends WKBaseModel {
 
 
     public void getChannelMembers(String groupNO, String keyword, int page, int limit, IChannelMemberListResult iChannelMemberListResult) {
-        request(createService(GroupService.class).groupMembers(groupNO, keyword, page, limit), new IRequestResultListener<List<GroupMember>>() {
+        request(createService(GroupService.class).groupMembers(groupNO, keyword, page, limit), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> result) {
                 List<WKChannelMember> list = serialize(result);
@@ -172,7 +174,7 @@ public class GroupModel extends WKBaseModel {
      */
     public synchronized void groupMembersSync(String groupNo, final ICommonListener iCommonListener) {
         long version = WKIM.getInstance().getChannelMembersManager().getMaxVersion(groupNo, WKChannelType.GROUP);
-        request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<List<GroupMember>>() {
+        request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> list) {
                 if (list == null || list.size() == 0) return;
@@ -230,7 +232,7 @@ public class GroupModel extends WKBaseModel {
     public void updateGroupSetting(String groupNo, String key, int value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(GroupService.class).updateGroupSetting(groupNo, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).updateGroupSetting(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -246,7 +248,7 @@ public class GroupModel extends WKBaseModel {
     public void updateGroupSetting(String groupNo, String key, String value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(GroupService.class).updateGroupSetting(groupNo, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).updateGroupSetting(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -270,7 +272,7 @@ public class GroupModel extends WKBaseModel {
     public void updateGroupInfo(String groupNo, String key, String value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(GroupService.class).updateGroupInfo(groupNo, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).updateGroupInfo(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -298,7 +300,7 @@ public class GroupModel extends WKBaseModel {
         JSONArray nameArr = new JSONArray();
         nameArr.addAll(names);
         jsonObject.put("names", nameArr);
-        request(createService(GroupService.class).deleteGroupMembers(groupNo, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).deleteGroupMembers(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 List<WKChannelMember> list = new ArrayList<>();
@@ -333,7 +335,7 @@ public class GroupModel extends WKBaseModel {
     public void updateGroupMemberInfo(String groupNo, String uid, String key, String value, final ICommonListener iCommonListener) {
         JSONObject jsonObject1 = new JSONObject();
         jsonObject1.put(key, value);
-        request(createService(GroupService.class).updateGroupMemberInfo(groupNo, uid, jsonObject1), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).updateGroupMemberInfo(groupNo, uid, jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 if (key.equalsIgnoreCase("remark")) {
@@ -357,7 +359,7 @@ public class GroupModel extends WKBaseModel {
      * @param iGroupQr 返回
      */
     void getGroupQr(String groupID, final IGroupQr iGroupQr) {
-        request(createService(GroupService.class).getGroupQr(groupID), new IRequestResultListener<GroupQr>() {
+        request(createService(GroupService.class).getGroupQr(groupID), new IRequestResultListener<>() {
             @Override
             public void onSuccess(GroupQr result) {
                 iGroupQr.onResult(HttpResponseCode.success, "", result.day, result.qrcode, result.expire);
@@ -381,7 +383,7 @@ public class GroupModel extends WKBaseModel {
      * @param iGetMyGroups 返回
      */
     void getMyGroups(final IGetMyGroups iGetMyGroups) {
-        request(createService(GroupService.class).getMyGroups(), new IRequestResultListener<List<GroupEntity>>() {
+        request(createService(GroupService.class).getMyGroups(), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupEntity> result) {
                 iGetMyGroups.onResult(HttpResponseCode.success, "", result);
@@ -399,7 +401,7 @@ public class GroupModel extends WKBaseModel {
     }
 
     public void exitGroup(String groupNo, final ICommonListener iCommonListener) {
-        request(createService(GroupService.class).exitGroup(groupNo), new IRequestResultListener<CommonResponse>() {
+        request(createService(GroupService.class).exitGroup(groupNo), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(HttpResponseCode.success, result.msg);

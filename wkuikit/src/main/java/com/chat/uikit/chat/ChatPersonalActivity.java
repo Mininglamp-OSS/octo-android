@@ -17,7 +17,7 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.WKAdvancedItemViewMenu;
+import com.chat.base.endpoint.entity.ChatSettingCellMenu;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
@@ -59,21 +59,25 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
-        View view = (View) EndpointManager.getInstance().invoke("msg_remind_view", new WKAdvancedItemViewMenu(channelId, WKChannelType.PERSONAL, this));
+        View view = (View) EndpointManager.getInstance().invoke("msg_remind_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgRemindLayout));
         if (view != null) {
             wkVBinding.msgRemindLayout.removeAllViews();
             wkVBinding.msgRemindLayout.addView(view);
         }
-        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new WKAdvancedItemViewMenu(channelId, WKChannelType.PERSONAL, this));
+        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.findContentLayout));
         if (findMsgView != null) {
             wkVBinding.findContentLayout.removeAllViews();
             wkVBinding.findContentLayout.addView(findMsgView);
         }
 
-        View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new WKAdvancedItemViewMenu(channelId, WKChannelType.PERSONAL, this));
+        View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgSettingLayout));
         if (msgReceiptView != null) {
-            wkVBinding.msgReceiptLayout.removeAllViews();
-            wkVBinding.msgReceiptLayout.addView(msgReceiptView);
+            wkVBinding.msgSettingLayout.removeAllViews();
+            wkVBinding.msgSettingLayout.addView(msgReceiptView);
+        }
+        View msgPrivacyLayout = (View) EndpointManager.getInstance().invoke("chat_setting_msg_privacy", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgSettingLayout));
+        if (msgReceiptView != null) {
+            wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
         }
 
     }

@@ -123,7 +123,7 @@ public class ImageUtils {
         return new int[]{w, h};
     }
 
-    public void downloadImg(Context context, String url, final IDownloadImgListener iDownloadImgListener) {
+    public void downloadImg(Context context,String url, final IDownloadImgListener iDownloadImgListener) {
         Glide.with(context).asBitmap().load(url).into(new CustomTarget<Bitmap>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
 
             @Override

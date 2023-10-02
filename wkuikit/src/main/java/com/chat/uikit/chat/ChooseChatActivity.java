@@ -11,6 +11,8 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.msgitem.WKChannelMemberRole;
@@ -20,13 +22,12 @@ import com.chat.uikit.R;
 import com.chat.uikit.chat.adapter.ChooseChatAdapter;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActChooseChatLayoutBinding;
-import com.chat.uikit.view.ChatConfirmDialogView;
-import com.lxj.xpopup.XPopup;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelStatus;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,10 +75,13 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             }
             if (isChoose) {
                 if (WKUIKitApplication.getInstance().getMessageContentList() != null) {
-                    new XPopup.Builder(this).asCustom(new ChatConfirmDialogView(this, list, WKUIKitApplication.getInstance().getMessageContentList(), (list1, messageContent) -> {
-                        WKUIKitApplication.getInstance().sendChooseChatBack(list);
-                        finish();
-                    })).show();
+                    WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, WKUIKitApplication.getInstance().getMessageContentList(), new WKUIKitApplication.IShowChatConfirm() {
+                        @Override
+                        public void onBack(@NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList) {
+                            WKUIKitApplication.getInstance().sendChooseChatBack(list);
+                            finish();
+                        }
+                    });
                 } else {
                     WKUIKitApplication.getInstance().sendChooseChatBack(list);
                     finish();

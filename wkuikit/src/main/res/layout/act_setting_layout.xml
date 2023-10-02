@@ -168,6 +168,22 @@
 
 
                     <LinearLayout
+                        android:id="@+id/moduleLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/choose_module" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="10dp"
+                        android:background="@color/homeColor" />
+
+                    <LinearLayout
                         android:id="@+id/thirdShareLayout"
                         style="@style/layoutBg">
 

@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -25,7 +24,6 @@ import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
@@ -76,10 +74,11 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBinding> {
 
     private ChatConversationAdapter chatConversationAdapter;
-    private TabActivity tabActivity;
+
     private Disposable disposable;
     private final List<Integer> refreshIds = new ArrayList<>();
     private Timer connectTimer;
+    private TabActivity tabActivity;
 
     @Override
     protected boolean isShowBackLayout() {
@@ -125,24 +124,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void initListener() {
-
-        wkVBinding.rightIv.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-                List<PopupMenuItem> list = EndpointManager.getInstance().invokes(EndpointCategory.tabMenus, null);
-                WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list);
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
+        wkVBinding.rightIv.setOnClickListener(view -> {
+            List<PopupMenuItem> list = EndpointManager.getInstance().invokes(EndpointCategory.tabMenus, null);
+            WKDialogUtils.getInstance().showScreenPopup(view, list);
+        });
 
         wkVBinding.deviceIv.setOnClickListener(v -> {
             EndpointManager.getInstance().invoke("show_pc_login_view", getActivity());
@@ -169,7 +154,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }));
         chatConversationAdapter.addListener((menu, item) -> {
             if (menu == ChatConversationAdapter.ItemMenu.delete) {
-                WKDialogUtils.getInstance().showDialog(getActivity(), getString(R.string.delete_conver_msg_tips), index -> {
+                WKDialogUtils.getInstance().showDialog(getActivity(), getString(R.string.delete_chat), getString(R.string.delete_conver_msg_tips), true, "", getString(R.string.base_delete), 0, ContextCompat.getColor(requireActivity(), R.color.red), index -> {
                     if (index == 1) {
                         List<WKReminder> list = WKIM.getInstance().getReminderManager().getReminders(item.channelID, item.channelType);
                         if (WKReader.isNotEmpty(list)) {
@@ -263,7 +248,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (wkCmd == null || TextUtils.isEmpty(wkCmd.cmdKey)) return;
             //监听正在输入
             switch (wkCmd.cmdKey) {
-                case WKCMDKeys.wk_typing: {
+                case WKCMDKeys.wk_typing -> {
                     String channelID = wkCmd.paramJsonObject.optString("channel_id");
                     byte channelType = (byte) wkCmd.paramJsonObject.optInt("channel_type");
                     String from_uid = wkCmd.paramJsonObject.optString("from_uid");
@@ -289,9 +274,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             }
                         }
                     }
-                    break;
                 }
-                case WKCMDKeys.wk_onlineStatus:
+                case WKCMDKeys.wk_onlineStatus -> {
                     if (wkCmd.paramJsonObject != null) {
                         int device_flag = wkCmd.paramJsonObject.optInt("device_flag");
                         int online = wkCmd.paramJsonObject.optInt("online");
@@ -301,7 +285,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_pc_online", online);
                         }
                     }
-                    break;
+                }
             }
         });
         // 监听刷新消息
@@ -458,6 +442,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (tabActivity != null) {
             tabActivity.setMsgCount(allCount);
         }
+        // EndpointManager.getInstance().invoke("refresh_chat_unread_count",allCount);
     }
 
     @Override
@@ -532,7 +517,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                 if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
                     if (!isEnd) {
-                        Log.e("不是最后消息", "--->");
                         isAdd = false;
                         chatConversationAdapter.getData().get(i).uiConversationMsg = uiConversationMsg;
                         break;

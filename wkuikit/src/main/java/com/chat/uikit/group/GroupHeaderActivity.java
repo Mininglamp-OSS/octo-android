@@ -21,7 +21,6 @@ import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
-import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
@@ -104,17 +103,14 @@ public class GroupHeaderActivity extends WKBaseActivity<ActGroupHeaderLayoutBind
             }));
         list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> {
             String url = String.format("%s?key=%s", WKApiConfig.getGroupUrl(groupNO), UUID.randomUUID().toString().replaceAll("-", ""));
-            ImageUtils.getInstance().downloadImg(this,url, bitmap -> {
+            ImageUtils.getInstance().downloadImg(this, url, bitmap -> {
                 if (bitmap != null) {
                     ImageUtils.getInstance().saveBitmap(GroupHeaderActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
                 }
             });
         }));
         ImageView rightIV = findViewById(R.id.titleRightIv);
-        float x = AndroidUtilities.getScreenWidth();
-        float y = AndroidUtilities.dp(50);
-        WKDialogUtils.getInstance().showScreenPopup(rightIV, new float[]{x, y}, list);
-
+        WKDialogUtils.getInstance().showScreenPopup(rightIV, list);
     }
 
 

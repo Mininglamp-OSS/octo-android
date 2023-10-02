@@ -1,11 +1,14 @@
 package com.chat.base.utils;
 
 import android.annotation.SuppressLint;
+import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -13,6 +16,7 @@ import android.os.StrictMode;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
@@ -27,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.zip.GZIPInputStream;
@@ -305,6 +310,8 @@ public class WKFileUtils {
                 } else if ("audio".equals(type)) {
                     contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
 
+                } else {
+                    return uri.getPath();
                 }
 
                 final String selection = "_id=?";
@@ -322,7 +329,7 @@ public class WKFileUtils {
         }
         // File
         else if ("file".equalsIgnoreCase(uri.getScheme())) {
-            uri.getPath();
+            return uri.getPath();
 
         }
         return null;
@@ -522,6 +529,9 @@ public class WKFileUtils {
     public synchronized byte[] file2byte(File tradeFile) {
         byte[] buffer = null;
         try {
+            if (tradeFile == null || !tradeFile.exists()) {
+                return null;
+            }
             FileInputStream fis = new FileInputStream(tradeFile);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             byte[] b = new byte[1024];
@@ -638,4 +648,144 @@ public class WKFileUtils {
             return false;
         }
     }
+
+    public boolean saveVideoToAlbum(Context context, String videoFile) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return saveVideoToAlbumBeforeQ(context, videoFile);
+        } else {
+            return saveVideoToAlbumAfterQ(context, videoFile);
+        }
+
+
+    }
+
+
+    private boolean saveVideoToAlbumAfterQ(Context context, String videoFile) {
+        try {
+            ContentResolver contentResolver = context.getContentResolver();
+            File tempFile = new File(videoFile);
+            ContentValues contentValues = getVideoContentValues(context, tempFile, System.currentTimeMillis());
+            Uri uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues);
+            copyFileAfterQ(context, contentResolver, tempFile, uri);
+            contentValues.clear();
+            contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            context.getContentResolver().update(uri, contentValues, null, null);
+            context.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri));
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private boolean saveVideoToAlbumBeforeQ(Context context, String videoFile) {
+        File picDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
+        File tempFile = new File(videoFile);
+        File destFile = new File(picDir, context.getPackageName() + File.separator + tempFile.getName());
+        FileInputStream ins = null;
+        BufferedOutputStream ous = null;
+        try {
+            ins = new FileInputStream(tempFile);
+            ous = new BufferedOutputStream(new FileOutputStream(destFile));
+            long nread = 0L;
+            byte[] buf = new byte[1024];
+            int n;
+            while ((n = ins.read(buf)) > 0) {
+                ous.write(buf, 0, n);
+                nread += n;
+            }
+            MediaScannerConnection.scanFile(
+                    context,
+                    new String[]{destFile.getAbsolutePath()},
+                    new String[]{"video/*"},
+                    (path, uri) -> {
+                        // Scan Completed
+                    });
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            try {
+                if (ins != null) {
+                    ins.close();
+                }
+                if (ous != null) {
+                    ous.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void copyFileAfterQ(Context context, ContentResolver localContentResolver, File tempFile, Uri localUri) throws IOException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                context.getApplicationInfo().targetSdkVersion >= Build.VERSION_CODES.Q) {
+            //拷贝文件到相册的uri,android10及以上得这么干，否则不会显示。可以参考ScreenMediaRecorder的save方法
+            OutputStream os = localContentResolver.openOutputStream(localUri);
+            Files.copy(tempFile.toPath(), os);
+            os.close();
+            //  tempFile.delete();
+        }
+    }
+
+
+    /**
+     * 获取视频的contentValue
+     */
+    public ContentValues getVideoContentValues(Context context, File paramFile, long timestamp) {
+        ContentValues localContentValues = new ContentValues();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            localContentValues.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM
+                    + File.separator + context.getPackageName());
+        }
+        localContentValues.put(MediaStore.Video.Media.TITLE, paramFile.getName());
+        localContentValues.put(MediaStore.Video.Media.DISPLAY_NAME, paramFile.getName());
+        localContentValues.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+        localContentValues.put(MediaStore.Video.Media.DATE_TAKEN, timestamp);
+        localContentValues.put(MediaStore.Video.Media.DATE_MODIFIED, timestamp);
+        localContentValues.put(MediaStore.Video.Media.DATE_ADDED, timestamp);
+        localContentValues.put(MediaStore.Video.Media.SIZE, paramFile.length());
+        return localContentValues;
+    }
+
+    public boolean copyFileToExternalUri(Context context, String filePath, Uri externalUri) {
+        ContentResolver contentResolver = context.getContentResolver();
+        InputStream inputStream = null;
+        OutputStream outputStream = null;
+        boolean ret = false;
+        try {
+            outputStream = contentResolver.openOutputStream(externalUri);
+            File sandFile = new File(filePath);
+            if (sandFile.exists() && outputStream != null) {
+                inputStream = new FileInputStream(sandFile);
+
+                int readCount = 0;
+                byte[] buffer = new byte[1024];
+                while ((readCount = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, readCount);
+                    outputStream.flush();
+                }
+            }
+            ret = true;
+        } catch (Exception e) {
+            Log.e("fileUtils", "copy SandFile To ExternalUri. e = " + e.toString());
+        } finally {
+            try {
+                if (outputStream != null) {
+                    outputStream.close();
+                }
+                if (inputStream != null) {
+                    inputStream.close();
+                }
+                Log.d("fileUtils", " input stream and output stream close successful.");
+            } catch (Exception e) {
+                e.printStackTrace();
+                Log.e("fileUtils", " input stream and output stream close fail. e = " + e.toString());
+            }
+        }
+        return ret;
+    }
+
 }

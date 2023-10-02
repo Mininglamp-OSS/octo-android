@@ -16,6 +16,7 @@ import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.ui.Theme;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
@@ -89,9 +90,9 @@ public class WKPushApplication {
             if (!TextUtils.isEmpty(token)) {
                 Log.e("华为推送token", token);
                 String packageName = WKDeviceUtils.getInstance().getPackageName(context);
-                PushModel.getInstance().registerDeviceToken(token, packageName);
+                PushModel.getInstance().registerDeviceToken(token, packageName, "app-华为");
             }
-        } catch (ApiException ignored) {
+        } catch (ApiException e) {
         }
     }
 
@@ -108,7 +109,7 @@ public class WKPushApplication {
                     // 注册成功
                     Log.e("tu推送ID", HeytapPushManager.getRegisterID());
                     String packageName = WKDeviceUtils.getInstance().getPackageName(mContext.get());
-                    com.chat.push.service.PushModel.getInstance().registerDeviceToken(s, packageName);
+                    com.chat.push.service.PushModel.getInstance().registerDeviceToken(s, packageName, "app-oppo");
                 }
             }
 
@@ -144,12 +145,11 @@ public class WKPushApplication {
             PushClient.getInstance(mContext.get()).initialize();
             PushClient.getInstance(mContext.get()).turnOnPush(state -> {
                 // TODO: 开关状态处理， 0代表成功
-                Log.e("获取vivo推送信息", state + "");
                 String regId = PushClient.getInstance(mContext.get()).getRegId();
                 if (!TextUtils.isEmpty(regId)) {
                     Log.e("获取vivopush", regId);
                     String packageName = WKDeviceUtils.getInstance().getPackageName(mContext.get());
-                    com.chat.push.service.PushModel.getInstance().registerDeviceToken(regId, packageName);
+                    PushModel.getInstance().registerDeviceToken(regId, packageName, "app-vivo");
                 }
             });
 
@@ -161,20 +161,17 @@ public class WKPushApplication {
     private void addListener() {
         EndpointManager.getInstance().setMethod("show_open_notification_dialog", object -> {
             Context context = (Context) object;
-            WKDialogUtils.getInstance().showSystemDialog(context, context.getString(R.string.open_notification_title), context.getString(R.string.open_notification_content), new WKDialogUtils.IClickListener() {
-                @Override
-                public void onClick(int index) {
-                    if (index == 1) {
-                        WKOSUtils.openChannelSetting(context);
-                    }
+            WKDialogUtils.getInstance().showDialog(context, context.getString(R.string.open_notification_title), context.getString(R.string.open_notification_content), true, "", context.getString(R.string.open_setting), 0, Theme.colorAccount, index -> {
+                if (index == 1) {
+                    WKOSUtils.openChannelSetting(context);
                 }
             });
             return null;
         });
         //注销推送
-        EndpointManager.getInstance().setMethod("push_unregister_push", object -> {
+        EndpointManager.getInstance().setMethod("wk_logout", object -> {
             OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), 0);
-            com.chat.push.service.PushModel.getInstance().unRegisterDeviceToken((code, msg) -> {
+            PushModel.getInstance().unRegisterDeviceToken((code, msg) -> {
                 if (code != HttpResponseCode.success) {
                     WKToastUtils.getInstance().showToastNormal(msg);
                 }
@@ -185,8 +182,8 @@ public class WKPushApplication {
         //设置桌面红点数量
         EndpointManager.getInstance().setMethod("push_update_device_badge", object -> {
             int num = (int) object;
-            OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), num);
             PushModel.getInstance().registerBadge(num);
+            OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), num);
             return null;
         });
     }

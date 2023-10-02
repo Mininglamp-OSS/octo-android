@@ -17,7 +17,7 @@ public class WKConstants {
     public static String avatarCacheDir;
     public static String chatBgCacheDir;
     public static String messageBackupDir;
-
+    public static String chatDownloadFileDir;
     private static int keyboardHeight = 0;
 
     // 软键盘高度

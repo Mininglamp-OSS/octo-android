@@ -64,49 +64,8 @@ class WKTypingProvider : WKChatBaseProvider() {
         )
         contentTvLayout.setAll(bgType, from, WKContentType.typing)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
-        val isShowNickName: Boolean =
-            (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top) && uiChatMsgItemEntity.showNickName && uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP
-        if (isShowNickName) {
-            if (from == WKChatIteMsgFromType.RECEIVED) {
+        setFromName(uiChatMsgItemEntity,from,receivedTextNameTv)
 
-                var showName: String? = null
-                var channelName = ""
-                if (uiChatMsgItemEntity.wkMsg.from != null) {
-                    showName = uiChatMsgItemEntity.wkMsg.from.channelRemark
-                    channelName = uiChatMsgItemEntity.wkMsg.from.channelName
-                }
-                if (TextUtils.isEmpty(showName)) {
-                    if (uiChatMsgItemEntity.wkMsg.memberOfFrom != null) {
-                        showName =
-                            if (TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark)) uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName else uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark
-                    } else {
-                        if (TextUtils.isEmpty(showName)) {
-                            showName = channelName
-                        }
-                    }
-                }
-
-                if (TextUtils.isEmpty(showName)) {
-                    WKIM.getInstance().channelManager.fetchChannelInfo(
-                        uiChatMsgItemEntity.wkMsg.fromUID, WKChannelType.PERSONAL
-                    )
-                    receivedTextNameTv.visibility = View.GONE
-                } else {
-                    receivedTextNameTv.text = showName
-                    receivedTextNameTv.visibility = View.VISIBLE
-                    if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
-                        val colors =
-                            WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
-                        val index = abs(uiChatMsgItemEntity.wkMsg.fromUID.hashCode()) % colors.size
-                        receivedTextNameTv.setTextColor(colors[index])
-                    }
-                }
-            } else {
-                receivedTextNameTv.visibility = View.GONE
-            }
-        } else {
-            receivedTextNameTv.visibility = View.GONE
-        }
     }
 
     override val itemViewType: Int

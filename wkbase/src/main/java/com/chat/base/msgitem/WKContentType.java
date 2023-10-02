@@ -20,7 +20,7 @@ public class WKContentType extends WKMsgContentType {
     public final static int typing = -4;
     //撤回消息
     public final static int revoke = -5;
-    //本地显示的音视频
+    //加载中
     public final static int loading = -6;
     //本地显示的群会议音视频
     public final static int videoCallGroup = -7;
@@ -62,5 +62,9 @@ public class WKContentType extends WKMsgContentType {
 
     public static boolean isLocalMsg(int type) {
         return type <= 0;
+    }
+
+    public static boolean isSupportNotification(int type){
+        return type >= WK_TEXT && type <= richText;
     }
 }

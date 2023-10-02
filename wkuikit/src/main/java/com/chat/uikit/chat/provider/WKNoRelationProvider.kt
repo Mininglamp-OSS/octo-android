@@ -64,22 +64,26 @@ class WKNoRelationProvider : WKChatBaseProvider() {
                 (Objects.requireNonNull(
                     getAdapter()
                 ) as ChatAdapter).conversationContext.hideSoftKeyboard()
-                WKDialogUtils.getInstance()
-                    .showInputDialog(
-                        context, "", context.getString(R.string.input_remark), 20
-                    ) { content1: String? ->
-                        FriendModel.getInstance()
-                            .applyAddFriend(
-                                item.wkMsg.channelID, "", content1
-                            ) { code: Int, msg: String? ->
-                                if (code == HttpResponseCode.success.toInt()) {
-                                    WKToastUtils.getInstance()
-                                        .showToastNormal(context.getString(R.string.applyed))
-                                } else {
-                                    WKToastUtils.getInstance().showToastNormal(msg)
-                                }
+                WKDialogUtils.getInstance().showInputDialog(
+                    context,
+                    context.getString(R.string.apply),
+                    context.getString(R.string.input_remark),
+                    "",
+                    "",
+                    20
+                ) { text ->
+                    FriendModel.getInstance()
+                        .applyAddFriend(
+                            item.wkMsg.channelID, "", text
+                        ) { code: Int, msg: String? ->
+                            if (code == HttpResponseCode.success.toInt()) {
+                                WKToastUtils.getInstance()
+                                    .showToastNormal(context.getString(R.string.applyed))
+                            } else {
+                                WKToastUtils.getInstance().showToastNormal(msg)
                             }
-                    }
+                        }
+                }
             }
     }
 

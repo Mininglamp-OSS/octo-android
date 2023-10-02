@@ -19,7 +19,7 @@ public class HuaweiHmsMessageService extends HmsMessageService {
         super.onNewToken(s, bundle);
         if (!TextUtils.isEmpty(s)) {
             String packageName = WKDeviceUtils.getInstance().getPackageName(WKBaseApplication.getInstance().getContext());
-            PushModel.getInstance().registerDeviceToken(s, packageName);
+            PushModel.getInstance().registerDeviceToken(s, packageName,"service-华为");
         }
     }
 }

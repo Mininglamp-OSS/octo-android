@@ -1,5 +1,7 @@
 package com.chat.base.msg;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -328,6 +330,10 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                                 this,
                                 reactionList)
                 );
+                AvatarView avatarView = view.findViewById(R.id.avatarView);
+                if (avatarView != null) {
+                    baseItemProvider.setAvatarLayoutParams(entity, from, avatarView);
+                }
             }
             if (refreshType == RefreshType.background) {
                 AvatarView avatarView = view.findViewById(R.id.avatarView);

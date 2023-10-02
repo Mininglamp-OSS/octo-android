@@ -10,7 +10,7 @@ import com.chat.base.config.WKBinder;
  * 日志打印
  */
 public class WKLogUtils {
-    public final static String DEFAULT_TAG = "log";
+    public final static String DEFAULT_TAG = "tsddLog";
     public static boolean LOGGABLE = WKBinder.isDebug;
 
     public static void d(String tag, String str) {

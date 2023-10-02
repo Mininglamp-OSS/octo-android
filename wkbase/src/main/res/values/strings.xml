@@ -78,7 +78,7 @@
     <string name="saterday">周六</string>
     <string name="sunday">周日</string>
     <string name="max_file_size"> 最大支持500M</string>
-    <string name="min_file_size"> 不支持的文件</string>
+    <string name="min_file_size">不支持的文件</string>
     <string name="authorization_request">权限申请</string>
     <string name="to_set">去设置</string>
     <string name="contact_permissions_des">在设置-应用-%s-权限中开读取手机联系人权限。以正常使用联系人查找功能</string>
@@ -105,4 +105,9 @@
     <string name="unknow_msg_type">[未知消息]</string>
     <string name="str_create">创建</string>
     <string name="restart_app_desc">需重启应用后配置才可生效，是否立即重启应用？</string>
+    <string name="str_request">申请</string>
+    <string name="str_request_desc">%s的昵称头像</string>
+    <string name="str_get_name_avatar">获取你的昵称、头像</string>
+    <string name="msg_send_fail">消息发送失败</string>
+    <string name="msg_send_fail_resend">重新发送</string>
 </resources>

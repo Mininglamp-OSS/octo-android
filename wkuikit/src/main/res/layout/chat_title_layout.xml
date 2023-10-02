@@ -15,9 +15,9 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:orientation="horizontal">
-
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="5dp">
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/backIv"
@@ -31,22 +31,35 @@
             android:src="@mipmap/ic_ab_back" />
 
 
-        <com.chat.base.ui.components.AvatarView
-            android:id="@+id/avatarView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <FrameLayout
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:layout_gravity="center"
-            android:layout_marginStart="10dp" />
+            android:layout_marginStart="10dp">
+
+            <com.chat.base.ui.components.AvatarView
+                android:id="@+id/avatarView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center" />
+
+            <FrameLayout
+                android:id="@+id/otherLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end" />
+        </FrameLayout>
+
 
         <LinearLayout
-            android:requiresFadingEdge="horizontal"
-            android:fadingEdgeLength="26dp"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="10dp"
             android:layout_weight="1"
+            android:fadingEdgeLength="26dp"
             android:gravity="center|start"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:requiresFadingEdge="horizontal">
 
             <LinearLayout
                 android:layout_width="wrap_content"

@@ -1,12 +1,19 @@
 package com.chat.base.utils;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.net.Uri;
 
 import androidx.fragment.app.FragmentActivity;
 
 import com.chat.base.R;
+import com.chat.base.ui.Theme;
 import com.tbruyelle.rxpermissions3.RxPermissions;
+
+import io.reactivex.rxjava3.annotations.NonNull;
+import io.reactivex.rxjava3.core.Observer;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.functions.Consumer;
 
 public class WKPermissions {
     private WKPermissions() {
@@ -24,7 +31,7 @@ public class WKPermissions {
         RxPermissions rxPermissions = new RxPermissions(activity);
         rxPermissions.request(permissions).subscribe(aBoolean -> {
             if (!aBoolean) {
-                WKDialogUtils.getInstance().showDialog(activity, false, activity.getString(R.string.authorization_request), authDesc, activity.getString(R.string.cancel), activity.getString(R.string.to_set), index -> {
+                WKDialogUtils.getInstance().showDialog(activity, activity.getString(R.string.authorization_request), authDesc ,false,activity.getString(R.string.cancel), activity.getString(R.string.to_set),0, Theme.colorAccount, index -> {
                     if (index == 1) {
                         Intent intent = new Intent();
                         intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);

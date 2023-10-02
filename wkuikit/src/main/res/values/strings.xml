@@ -32,7 +32,7 @@
     <string name="edit_group_notice">只有群主及管理员可以编辑</string>
     <string name="delete_group_members">删除群成员</string>
     <string name="add_group_members">添加群成员</string>
-    <string name="in_gorup_name">我在本群的昵称</string>
+    <string name="my_in_group_name">我在本群的昵称</string>
     <string name="update_in_gorup_name">设置你在群里的昵称，这个昵称只会在这个群内显示</string>
     <string name="group_name">群聊名称</string>
     <string name="group_avatar">群头像</string>
@@ -261,7 +261,7 @@
     <string name="message_tips">友情提示</string>
     <string name="backup_message_desc">1．迁移本地聊天记录，需要将您的聊天记录上传至服务器以支持新设备下载；\n2．聊天记录会以不记名加密的方式存储在服务器；\n3．为了防止信息泄露，服务器将于每天0:00删除当天用户上传的聊天记录；\n4．每一次备份，都将覆盖前一次备份的聊天记录，请谨慎操作；\n5．建议用户确认聊天记录迁移完毕后再删除原设备上的聊天记录；\n6．由此功能造成任何的不良后果由用户自行承担；</string>
     <string name="recovery_msg_fail">恢复聊天记录失败</string>
-    <string name="choose_module">选择模块</string>
+    <string name="choose_module">企业版模块</string>
     <string name="third_party_sharing_list">第三方信息共享清单</string>
     <string name="error_data">开发日志</string>
     <string name="call_blacklist_group">您已被拉入群黑名单，无法音视频聊天</string>
@@ -269,5 +269,8 @@
     <string name="save_label_sure">存为标签</string>
     <string name="default_new_msg">你有一条新消息</string>
     <string name="voice_download_fail">语音下载失败</string>
+    <string name="delete_messages">删除消息</string>
+    <string name="delete_chat">删除聊天</string>
+    <string name="clear_history">清除历史记录</string>
 </resources>
 

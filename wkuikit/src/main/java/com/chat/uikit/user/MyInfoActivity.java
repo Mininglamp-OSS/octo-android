@@ -11,12 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKConfig;
-import com.chat.base.entity.WKAPPConfig;
+import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
-import com.chat.base.views.BottomEntity;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActMyInfoLayoutBinding;
 import com.chat.uikit.user.service.UserModel;
@@ -107,23 +107,19 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
         });
         SingleClickUtil.onSingleClick(wkVBinding.qrLayout, view1 -> startActivity(new Intent(this, UserQrActivity.class)));
         wkVBinding.sexLayout.setOnClickListener(v -> {
-            List<BottomEntity> list = new ArrayList<>();
-            list.add(new BottomEntity(getString(R.string.male)));
-            list.add(new BottomEntity(getString(R.string.female)));
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, text) -> {
-                if (position != -1) {
-                    int sex = position == 0 ? 1 : 0;
-                    UserModel.getInstance().updateUserInfo("sex", String.valueOf(sex), (code, msg) -> {
-                        if (code == HttpResponseCode.success)
-                            wkVBinding.sexTv.setText(position == 0 ? R.string.male : R.string.female);
-                        else showToast(msg);
-                    });
-                }
-            });
-
+            List<BottomSheetItem> list = new ArrayList<>();
+            list.add(new BottomSheetItem(getString(R.string.male), 0, () -> updateSex(1)));
+            list.add(new BottomSheetItem(getString(R.string.female), 0, () -> updateSex(0)));
+            WKDialogUtils.getInstance().showBottomSheet(this,getString(R.string.sex),false,list);
         });
     }
-
+    private void updateSex(int value){
+        UserModel.getInstance().updateUserInfo("sex", String.valueOf(value), (code, msg) -> {
+            if (code == HttpResponseCode.success)
+                wkVBinding.sexTv.setText(value == 1 ? R.string.male : R.string.female);
+            else showToast(msg);
+        });
+    }
     ActivityResultLauncher<Intent> chooseResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() == RESULT_OK && result.getData() != null) {
             String resultStr = result.getData().getStringExtra("result");

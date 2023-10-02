@@ -7,7 +7,6 @@ import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.base.WKBaseActivity;
-import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.ui.Theme;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActDarkSettingLayoutBinding;
@@ -51,7 +50,7 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
 
     @Override
     protected void initView() {
-        String sp = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+        String sp = Theme.getTheme();
         if (sp.equals(Theme.DARK_MODE)) {
             wkVBinding.followSystemSwitch.setChecked(false);
             wkVBinding.nightIv.setVisibility(View.VISIBLE);
@@ -99,9 +98,7 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
         } else {
             s = Theme.DARK_MODE;
         }
-        WKSharedPreferencesUtil.getInstance().putSP(Theme.wk_theme_pref, s);
-        Theme.applyTheme(s);
-       // resetTheme(Theme.isDark());
+        Theme.setTheme(s);
     }
 
     @Override

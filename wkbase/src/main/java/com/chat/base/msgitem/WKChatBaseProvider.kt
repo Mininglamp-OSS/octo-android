@@ -32,7 +32,6 @@ import com.chat.base.msg.ChatAdapter
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.*
 import com.chat.base.ui.components.ActionBarPopupWindow.ActionBarPopupWindowLayout
-import com.chat.base.ui.components.CustomerTouchListener.ICustomerTouchListener
 import com.chat.base.ui.components.ReactionsContainerLayout.ReactionsContainerDelegate
 import com.chat.base.utils.*
 import com.chat.base.views.ChatItemView
@@ -47,7 +46,6 @@ import com.xinbida.wukongim.msgmodel.WKVoiceContent
 import org.telegram.ui.Components.RLottieDrawable
 import org.telegram.ui.Components.RLottieImageView
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -169,23 +167,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             val baseView = baseViewHolder.getView<LinearLayout>(R.id.wkBaseContentLayout)
             val avatarView = baseViewHolder.getView<AvatarView>(R.id.avatarView)
             val from = getMsgFromType(msgItemEntity.wkMsg)
-            val deleteTimer = SecretDeleteTimer(context)
-            deleteTimer.setSize(25)
-            val flameSecond: Int =
-                if (msgItemEntity.wkMsg.type == WKContentType.WK_VOICE) {
-                    val voiceContent =
-                        msgItemEntity.wkMsg.baseContentMsgModel as WKVoiceContent
-                    max(voiceContent.timeTrad, msgItemEntity.wkMsg.flameSecond)
-                } else {
-                    msgItemEntity.wkMsg.flameSecond
-                }
 
-            deleteTimer.setDestroyTime(
-                msgItemEntity.wkMsg.clientMsgNO,
-                flameSecond,
-                msgItemEntity.wkMsg.viewedAt,
-                false
-            )
             // deleteTimer.invalidate()
 //            val deleteTimerLP = deleteTimer.layoutParams as RelativeLayout.LayoutParams
             baseView.removeAllViews()
@@ -200,9 +182,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 msgItemEntity,
                 from
             )
-            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null) {
-                setFromName(msgItemEntity, from, baseViewHolder.getView(R.id.receivedNameTv))
-            }
+
             if (baseViewHolder.getViewOrNull<CheckBox>(R.id.checkBox) != null) {
                 setCheckBox(
                     msgItemEntity,
@@ -213,6 +193,23 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             }
 
             if (isAddFlameView(msgItemEntity)) {
+                val deleteTimer = SecretDeleteTimer(context)
+                deleteTimer.setSize(25)
+                val flameSecond: Int =
+                    if (msgItemEntity.wkMsg.type == WKContentType.WK_VOICE) {
+                        val voiceContent =
+                            msgItemEntity.wkMsg.baseContentMsgModel as WKVoiceContent
+                        max(voiceContent.timeTrad, msgItemEntity.wkMsg.flameSecond)
+                    } else {
+                        msgItemEntity.wkMsg.flameSecond
+                    }
+
+                deleteTimer.setDestroyTime(
+                    msgItemEntity.wkMsg.clientMsgNO,
+                    flameSecond,
+                    msgItemEntity.wkMsg.viewedAt,
+                    false
+                )
                 if (from == WKChatIteMsgFromType.RECEIVED) {
                     baseView.addView(
                         deleteTimer,
@@ -246,6 +243,9 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 } else deleteTimer.visibility = VISIBLE
             }
             setData(baseViewHolder.bindingAdapterPosition, baseView, msgItemEntity, from)
+            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing) {
+                setFromName(msgItemEntity, from, baseViewHolder.getView(R.id.receivedNameTv))
+            }
             setMsgTimeAndStatus(
                 msgItemEntity,
                 baseView,
@@ -352,7 +352,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
     }
 
-    private fun setFromName(
+    protected fun setFromName(
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         from: WKChatIteMsgFromType, receivedNameTv: TextView
     ) {
@@ -363,6 +363,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         )
         if (uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP) {
             var showName: String? = ""
+            receivedNameTv.tag = uiChatMsgItemEntity.wkMsg.fromUID
             if (uiChatMsgItemEntity.wkMsg.from != null && !TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.from.channelRemark)) {
                 showName = uiChatMsgItemEntity.wkMsg.from.channelRemark
             }
@@ -379,7 +380,11 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 }
             }
             val os = getMsgFromOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
-            receivedNameTv.text = String.format("%s/%s", showName, os)
+            if (receivedNameTv.tag is String && receivedNameTv.tag == uiChatMsgItemEntity.wkMsg.fromUID) {
+                receivedNameTv.text = String.format("%s/%s", showName, os)
+            }
+
+
             if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
                 val colors =
                     WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
@@ -389,7 +394,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             }
             if (from == WKChatIteMsgFromType.RECEIVED) {
                 val showNickName = uiChatMsgItemEntity.showNickName
-                if (showNickName && uiChatMsgItemEntity.wkMsg.type != WKContentType.WK_TEXT && uiChatMsgItemEntity.wkMsg.type != WKContentType.typing && (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top)) {
+                if (showNickName && (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top)) {
                     receivedNameTv.visibility = VISIBLE
                 } else receivedNameTv.visibility = GONE
             } else {
@@ -513,15 +518,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         val fullContentLayoutParams = fullContentLayout.layoutParams as FrameLayout.LayoutParams
         var isBubble = false
-        val list: List<Boolean> = EndpointManager.getInstance()
+        val list: List<Boolean>? = EndpointManager.getInstance()
             .invokes(EndpointCategory.chatShowBubble, uiChatMsgItemEntity.wkMsg.type)
-        for (b in list) {
-            if (b) {
-                isBubble = true
-                break
+        if (!list.isNullOrEmpty()) {
+            for (b in list) {
+                if (b) {
+                    isBubble = true
+                    break
+                }
             }
         }
-
         if (uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_TEXT
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_CARD
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_VOICE
@@ -657,7 +663,14 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                 }
                             }
                             WKDialogUtils.getInstance().showDialog(
-                                context, content
+                                context,
+                                context.getString(R.string.msg_send_fail),
+                                content,
+                                true,
+                                "",
+                                context.getString(R.string.msg_send_fail_resend),
+                                0,
+                                Theme.colorAccount,
                             ) { index: Int ->
                                 if (index == 1) {
                                     val mMsg1 =
@@ -705,18 +718,14 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         uiChatMsgItemEntity.isUpdateStatus = false
     }
-    interface ITouchClick{
-        fun onClick();
-    }
-    protected open fun addLongClick(clickView: View, mMsg: WKMsg) {
-        addLongClick(clickView, mMsg,null)
-    }
+
     /**
      * 添加view的长按事件
      *
      * @param clickView 需要长按的控件
      */
-    protected open fun addLongClick(clickView: View, mMsg: WKMsg,iTouchClick: ITouchClick?) {
+    @SuppressLint("ClickableViewAccessibility")
+    protected open fun addLongClick(clickView: View, mMsg: WKMsg) {
         val mMsgConfig: MsgConfig = getMsgConfig(mMsg.type)
         var isShowReaction = false
         val `object` = EndpointManager.getInstance()
@@ -726,20 +735,19 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         if (mMsg.flame == 1) isShowReaction = false
         val finalIsShowReaction = isShowReaction
-
-
-        clickView.setOnTouchListener(CustomerTouchListener(object : ICustomerTouchListener {
-            override fun onClick(view: View, coordinate: FloatArray) {
-                iTouchClick?.onClick()
+        val location = arrayOf(FloatArray(2))
+        clickView.setOnTouchListener { _: View?, event: MotionEvent ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                location[0] = floatArrayOf(event.rawX, event.rawY)
             }
-            override fun onLongClick(view: View, coordinate: FloatArray) {
-                EndpointManager.getInstance().invoke("stop_reaction_animation", null)
-                showChatPopup(mMsg, view, coordinate, finalIsShowReaction, getPopupList(mMsg))
-            }
+            false
+        }
+        clickView.setOnLongClickListener {
+            EndpointManager.getInstance().invoke("stop_reaction_animation", null)
+            showChatPopup(mMsg, clickView, location[0], finalIsShowReaction, getPopupList(mMsg))
+            true
+        }
 
-            override fun onDoubleClick(view: View, coordinate: FloatArray) {
-            }
-        }))
     }
 
     /**
@@ -886,9 +894,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         val menus = EndpointManager.getInstance()
             .invokes<ChatItemPopupMenu>(EndpointCategory.wkChatPopupItem, mMsg)
+
         if (menus.size > 0 && mMsg.flame == 0) {
             for (menu in menus) {
-                if (menu != null) list.add(
+                val popupMenu =
                     PopupMenuItem(menu.text, menu.imageResource,
                         object : PopupMenuItem.IClick {
                             override fun onClick() {
@@ -900,11 +909,21 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                 )
                             }
                         })
+                popupMenu.subText = menu.subText
+                popupMenu.tag = menu.tag
+                if (menu != null) list.add(
+                    popupMenu
                 )
             }
         }
+        var addIndex = list.size
+        val result = EndpointManager.getInstance().invoke("auto_delete", mMsg)
+        if (result != null) {
+            addIndex = list.size - 1
+        }
         if (mMsgConfig.isCanMultipleChoice && mMsg.flame == 0) {
             list.add(
+                addIndex,
                 PopupMenuItem(
                     context.getString(R.string.multiple_choice),
                     R.mipmap.msg_select,
@@ -928,10 +947,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                         }
                     })
             )
+            addIndex++
         }
         //发送成功的消息才能回复
         if (mMsgConfig.isCanReply && mMsg.status == WKSendMsgResult.send_success && mMsg.flame == 0) {
             list.add(
+                addIndex,
                 PopupMenuItem(context.getString(R.string.msg_reply), R.mipmap.msg_reply,
                     object : PopupMenuItem.IClick {
                         override fun onClick() {
@@ -941,10 +962,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                         }
                     })
             )
+            addIndex++
         }
         //撤回和删除不能同时存在
-        if (isAddDelete && mMsg.flame == 0) {
+        if (isAddDelete && mMsg.flame == 0 && result == null) {
             list.add(
+                addIndex,
                 PopupMenuItem(
                     context.getString(R.string.base_delete),
                     R.mipmap.msg_delete, object : PopupMenuItem.IClick {
@@ -1063,6 +1086,13 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             subItem.setTextAndIcon(item.text, item.iconResourceID)
             subItem.setTag(R.id.width_tag, 240)
             subItem.setMultiline()
+            if (!TextUtils.isEmpty(item.subText)) {
+                subItem.setSubtext(item.subText)
+            }
+            if (!TextUtils.isEmpty(item.tag) && item.tag == "auto_delete") {
+                Log.e("发布了","-->")
+                EndpointManager.getInstance().invoke("chat_popup_item", subItem)
+            }
             subItem.setOnClickListener {
                 scrimPopupWindow!!.dismiss()
                 item.iClick.onClick()
@@ -1298,13 +1328,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
     }
 
-
-    protected fun getMsgFromOS(clientMsgNo: String): String {
+    private fun getMsgFromOS(clientMsgNo: String): String {
         return if (clientMsgNo.endsWith("1")) {
             "Android"
         } else if (clientMsgNo.endsWith("2")) {
             "IOS"
-        } else if (clientMsgNo.endsWith("0")) {
+        } else if (clientMsgNo.endsWith("3")) {
             "Web"
         } else {
             "PC"

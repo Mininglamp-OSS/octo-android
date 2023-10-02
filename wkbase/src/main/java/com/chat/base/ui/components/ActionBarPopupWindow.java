@@ -118,7 +118,7 @@ public class ActionBarPopupWindow extends PopupWindow {
         public ActionBarPopupWindowLayout(Context context, int resId, int flags) {
             super(context);
             if (resId != 0) {
-                backgroundDrawable = getResources().getDrawable(resId).mutate();
+                backgroundDrawable =ContextCompat.getDrawable(context,resId).mutate();
                 setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
             }
             if (backgroundDrawable != null) {
@@ -318,7 +318,7 @@ public class ActionBarPopupWindow extends PopupWindow {
             }
         }
 
-        public void setBackgroundDrawable(Drawable drawable) {
+        public void setBackground(Drawable drawable) {
             backgroundColor = Color.WHITE;
             backgroundDrawable = drawable;
             if (backgroundDrawable != null) {

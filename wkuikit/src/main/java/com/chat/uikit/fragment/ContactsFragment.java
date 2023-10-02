@@ -16,7 +16,6 @@ import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
@@ -27,7 +26,6 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ContactsMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.ui.Theme;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
@@ -41,6 +39,7 @@ import com.chat.uikit.search.SearchAllActivity;
 import com.chat.uikit.user.UserDetailActivity;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
+import com.github.promeg.pinyinhelper.Pinyin;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -129,23 +128,10 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 }
             });
         });
-        wkVBinding.rightIv.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-                List<PopupMenuItem> list = EndpointManager.getInstance().invokes(EndpointCategory.tabMenus, null);
-                WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list);
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
+        wkVBinding.rightIv.setOnClickListener(view -> {
+            List<PopupMenuItem> list = EndpointManager.getInstance().invokes(EndpointCategory.tabMenus, null);
+            WKDialogUtils.getInstance().showScreenPopup(view, list);
+        });
         //成员刷新监听
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("contacts_fragment_refresh_channel", (channel, isEnd) -> {
             if (channel != null) {

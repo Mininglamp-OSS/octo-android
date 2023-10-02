@@ -13,12 +13,11 @@ import android.text.TextWatcher;
 import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
 
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
-import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActMailListLayoutBinding;
@@ -26,6 +25,7 @@ import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.user.service.UserModel;
 import com.chat.uikit.utils.PyingUtils;
+import com.github.promeg.pinyinhelper.Pinyin;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.impl.LoadingPopupView;
 
@@ -89,11 +89,12 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
             MailListEntity entity = (MailListEntity) adapter1.getData().get(position);
             if (entity != null) {
                 if (!TextUtils.isEmpty(entity.uid)) {
-                    WKDialogUtils.getInstance().showInputDialog(this, "", getString(R.string.input_remark), 20, content -> FriendModel.getInstance().applyAddFriend(entity.uid, entity.vercode, content, (code, msg) -> {
+                    WKDialogUtils.getInstance().showInputDialog(MailListActivity.this, getString(R.string.apply),  getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(entity.uid, entity.vercode, text, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
                             showToast(R.string.applyed);
                         } else showToast(msg);
                     }));
+
                 } else {
                     Intent intent = new Intent();
                     intent.setAction(Intent.ACTION_SENDTO);

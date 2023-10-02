@@ -47,51 +47,66 @@
             android:layout_marginTop="5dp"
             android:layout_marginEnd="10dp"
             android:layout_marginBottom="10dp"
-            android:orientation="vertical"
-            android:visibility="visible">
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/replyLine"
+                android:layout_marginEnd="10dp"
+                android:layout_width="2dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/reply_line" />
 
             <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
 
-                <com.chat.base.ui.components.AvatarView
-                    android:id="@+id/replyAvatarIv"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-
-
-                <TextView
-                    android:id="@+id/replyNameTv"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
-                    android:textColor="@color/color999"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/replyTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:ellipsize="end"
-                android:gravity="center|start"
-                android:lineSpacingExtra="2dp"
-                android:singleLine="true"
-                android:textColor="@color/color999"
-                android:textSize="14sp"
-                android:visibility="visible" />
+                android:orientation="vertical"
+                android:visibility="visible">
 
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/replyIv"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:layout_marginTop="10dp"
-                android:scaleType="centerCrop"
-                android:src="@drawable/default_view_bg" />
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content">
 
+                    <com.chat.base.ui.components.AvatarView
+                        android:id="@+id/replyAvatarIv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+
+                    <TextView
+                        android:id="@+id/replyNameTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:textColor="@color/color999"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/replyTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:ellipsize="end"
+                    android:gravity="center|start"
+                    android:lineSpacingExtra="2dp"
+                    android:singleLine="true"
+                    android:textColor="@color/color999"
+                    android:textSize="14sp"
+                    android:visibility="visible" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/replyIv"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:layout_marginTop="10dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/default_view_bg" />
+
+            </LinearLayout>
         </LinearLayout>
+
 
         <com.chat.uikit.view.ChatTextTimeLayout
             android:id="@+id/textContentLayout"
@@ -103,9 +118,9 @@
                 android:id="@+id/contentTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="@drawable/send_chat_text_bg"
                 android:gravity="center|start"
                 android:lineSpacingExtra="2dp"
-                android:background="@drawable/send_chat_text_bg"
                 android:textColor="@color/receive_text_color"
                 android:textSize="@dimen/font_size_16"
                 android:visibility="visible" />

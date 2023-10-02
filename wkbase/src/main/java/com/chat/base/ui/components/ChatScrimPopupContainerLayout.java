@@ -1,6 +1,7 @@
 package com.chat.base.ui.components;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -33,7 +34,12 @@ public class ChatScrimPopupContainerLayout extends LinearLayout {
                 if (newWidth > reactionsLayoutTotalWidth || maxFullCount == reactionsLayout.getItemsCount()) {
                     newWidth = reactionsLayoutTotalWidth;
                 }
-                reactionsLayout.getLayoutParams().width = AndroidUtilities.dp(250);
+                if (newWidth < AndroidUtilities.dp(250)) {
+                    newWidth = AndroidUtilities.dp(250);
+                }
+
+
+                reactionsLayout.getLayoutParams().width = newWidth;
             } else {
                 reactionsLayout.getLayoutParams().width = AndroidUtilities.dp(250);
             }
@@ -44,6 +50,7 @@ public class ChatScrimPopupContainerLayout extends LinearLayout {
             if (reactionsLayout.getLayoutParams().width != LayoutHelper.WRAP_CONTENT && reactionsLayout.getLayoutParams().width + widthDiff > getMeasuredWidth()) {
                 widthDiff = getMeasuredWidth() - reactionsLayout.getLayoutParams().width + AndroidUtilities.dp(8);
             }
+            Log.e("重新写高宽","-->"+widthDiff);
             ((LayoutParams) reactionsLayout.getLayoutParams()).rightMargin = widthDiff;
             if (bottomView != null) {
                 if (popupWindowLayout.getSwipeBack() != null) {

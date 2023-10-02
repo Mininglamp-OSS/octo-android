@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -64,14 +65,14 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         //禁止横屏
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        // setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         //这个特性是安卓5.0以后才支持的所以需要对系统版本号做判断
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            );
-            getWindow().setStatusBarColor(Color.TRANSPARENT);
-        }
+//        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
+//            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+//                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+//            );
+//            getWindow().setStatusBarColor(Color.TRANSPARENT);
+//        }
         boolean na = WKStatusBarUtils.isNavigationBarExist(this);
 //        if (na) {
 //            getWindow().getDecorView().findViewById(android.R.id.content).setPadding(0, 0, 0, WKStatusBarUtils.getNavigationBarHeight(this));
@@ -241,11 +242,11 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
 
     //显示一个弹框
     protected void showDialog(String content, WKDialogUtils.IClickListener iClickListener) {
-        WKDialogUtils.getInstance().showDialog(this, content, iClickListener);
+        WKDialogUtils.getInstance().showDialog(this, "", content, true, "", "", 0, 0, iClickListener);
     }
 
     protected void showSingleBtnDialog(String content) {
-        WKDialogUtils.getInstance().showSingleBtnDialog(this, content, null);
+        WKDialogUtils.getInstance().showSingleBtnDialog(this, "", content, "", null);
     }
 
     protected void showToast(String content) {

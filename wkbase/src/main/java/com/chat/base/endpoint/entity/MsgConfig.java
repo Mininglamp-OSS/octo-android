@@ -10,6 +10,7 @@ public class MsgConfig {
     public boolean isCanMultipleChoice;//是否能多选
     public boolean isCanReply;//是否能回复
     public boolean isCanShowReaction;// 是否能显示消息回应点赞
+    public boolean isCanDelete; // 是否能删除
 
     public MsgConfig(
             boolean isCanForward,
@@ -22,6 +23,7 @@ public class MsgConfig {
         this.isCanMultipleChoice = isCanMultipleChoice;
         this.isCanReply = isCanReply;
         this.isCanShowReaction = isCanShowReaction;
+        this.isCanDelete = true;
     }
 
     public MsgConfig() {
@@ -30,5 +32,6 @@ public class MsgConfig {
         this.isCanMultipleChoice = true;
         this.isCanReply = true;
         this.isCanShowReaction = true;
+        this.isCanDelete = true;
     }
 }

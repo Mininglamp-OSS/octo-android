@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
+
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
@@ -124,6 +125,7 @@
         android:background="@color/layoutColorSelected" />
 
     <FrameLayout
+        android:id="@+id/panelView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/chat_face_tab_bg"
@@ -132,9 +134,9 @@
 
         <LinearLayout
             android:id="@+id/chatView"
-            android:animateLayoutChanges="true"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:animateLayoutChanges="true"
             android:gravity="bottom"
             android:orientation="horizontal"
             android:padding="10dp">
@@ -165,6 +167,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:animateLayoutChanges="true"
                 android:background="@drawable/chat_edit_bg"
                 android:orientation="horizontal">
 
@@ -183,7 +186,7 @@
                     android:paddingEnd="5dp"
                     android:paddingBottom="3dp"
                     android:textColor="@color/colorDark"
-                    android:textColorHint="@color/colorDark"
+                    android:textColorHint="@color/color999"
                     android:textSize="14sp" />
 
 
@@ -209,8 +212,8 @@
                         android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:layout_marginTop="3dp"
-                        android:layout_marginBottom="3dp"
                         android:layout_marginEnd="10dp"
+                        android:layout_marginBottom="3dp"
                         android:src="@mipmap/flame_small"
                         android:tint="#ff2d51"
                         android:visibility="gone" />
@@ -342,14 +345,14 @@
                     android:id="@+id/forwardIv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:src="@mipmap/msg_panel_reply" />
+                    android:src="@mipmap/msg_forward" />
 
                 <TextView
                     android:id="@+id/forwardTv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="3dp"
-                    android:text="@string/merge_forward"
+                    android:text="@string/base_forward"
                     android:textColor="@color/popupTextColor"
                     android:textSize="12sp" />
 

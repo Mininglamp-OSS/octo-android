@@ -8,6 +8,7 @@ import android.graphics.drawable.ColorDrawable
 import android.view.*
 import android.widget.PopupWindow
 import com.chat.base.config.WKConstants
+import com.chat.base.utils.AndroidUtilities
 
 class KeyboardStatePopupWindow(var context: Context, anchorView: View) : PopupWindow(),
     ViewTreeObserver.OnGlobalLayoutListener {
@@ -42,7 +43,7 @@ class KeyboardStatePopupWindow(var context: Context, anchorView: View) : PopupWi
         if (rect.bottom > maxHeight) {
             maxHeight = rect.bottom
         }
-        val screenHeight: Int = DensityUtil.getScreenHeight(context)
+        val screenHeight: Int = AndroidUtilities.getScreenHeight()
         //键盘的高度
         var keyboardHeight = maxHeight - rect.bottom
         if (WKConstants.getKeyboardHeight() != 0 && keyboardHeight >= WKConstants.getKeyboardHeight() * 2) {

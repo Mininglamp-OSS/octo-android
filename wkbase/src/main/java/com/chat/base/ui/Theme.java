@@ -43,6 +43,7 @@ import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.ui.components.RoundTextView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.SvgHelper;
+
 import org.telegram.ui.Components.RLottieDrawable;
 
 import java.lang.reflect.Method;
@@ -74,21 +75,22 @@ public class Theme {
 //            new int[]{0xa6EAA36E, 0xa6F0E486, 0xa6F29EBF, 0xa6E8C06E},
 //            new int[]{0xa67EC289, 0xa6E4D573, 0xa6AFD677, 0xa6F0C07A},
 //    };
-//    public static final int[][] defaultColorsDark = new int[][]{
-//            new int[]{0xa6A4DBFF, 0xa6009FDD, 0xa6527BDD, 0xa673B6DD},
-//            new int[]{0xa6FEC496, 0xa6DD6CB9, 0xa6962FBF, 0xa64F5BD5},
-//            new int[]{0xa6E4B2EA, 0xa68376C2, 0xa6EAB9D9, 0xa6B493E6},
-//            new int[]{0xa6EAA36E, 0xa6F0E486, 0xa6F29EBF, 0xa6E8C06E},
-//            new int[]{0xa68ADBF2, 0xa6888DEC, 0xa6E39FEA, 0xa6679CED},
-//            new int[]{0xa6E4B2EA, 0xa68376C2, 0xa6EAB9D9, 0xa6B493E6},
-//            new int[]{0xa627FF03, 0xa6FC31FF, 0xa600FEFF, 0xa6FFFC00},
-//            new int[]{0xa6FEC496, 0xa6DD6CB9, 0xa6962FBF, 0xa64F5BD5},
-//            new int[]{0xa6EAA36E, 0xa6F0E486, 0xa6F29EBF, 0xa6E8C06E},
-//            new int[]{0xa6FAF4D2, 0xa6CEA668, 0xa6DDB56D, 0xa6BAA161},
-//            new int[]{0xa6A4DBFF, 0xa6009FDD, 0xa6527BDD, 0xa673B6DD},
-//            new int[]{0xa6E4B2EA, 0xa68376C2, 0xa6EAB9D9, 0xa6B493E6},
-//            new int[]{0xa6EAA36E, 0xa6F0E486, 0xa6F29EBF, 0xa6E8C06E},
-//    };
+    public static final int[][] defaultColorsDark = new int[][]{
+            new int[]{0xa65f4167, 0xa6171c2f, 0xa6363d4d, 0xa628293b},
+            new int[]{0xa66c3407, 0xa6411f05, 0xa61b0d02, 0xa6080401},
+            new int[]{0xa63c0b42, 0xa6210324, 0xa6120314, 0xa62f243f},
+            new int[]{0xa6645b12, 0xa6463f09, 0xa6353003, 0xa6E8C06E},
+            new int[]{0xa6135360, 0xa607333d, 0xa6021a1f, 0xa6000000},
+            new int[]{0xa628072c, 0xa61b1346, 0xa64e0b36, 0xa66e0a6e},
+            new int[]{0xa60e4805, 0xa64b044c, 0xa6094c4c, 0xa6555404},
+            new int[]{0xa6512908, 0xa6590d41, 0xa66e1606, 0xa6060f6e},
+            new int[]{0xa6644141, 0xa6595326, 0xa6590526, 0xa61b1d2c},
+            new int[]{0xa67d2f58, 0xa6503f27, 0xa6052037, 0xa6201144},
+            new int[]{0xa6144260, 0xa6421b13, 0xa611234e, 0xa6213b4a},
+            new int[]{0xa64e1455, 0xa61a1242, 0xa63d0a2b, 0xa628242e},
+            new int[]{0xa6482002, 0xa6393303, 0xa63d031a, 0xa62e2002},
+    };
+
     public static GradientDrawable getBackground(int color, float radius, int width, int height) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
@@ -131,25 +133,37 @@ public class Theme {
         return color;
     }
 
-    public static void applyTheme(@NonNull String themePref) {
+    private static void applyTheme(@NonNull String themePref) {
         switch (themePref) {
-            case LIGHT_MODE: {
+            case LIGHT_MODE -> {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-                break;
             }
-            case DARK_MODE: {
+            case DARK_MODE -> {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-                break;
             }
-            default: {
+            default -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
                 } else {
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY);
                 }
-                break;
             }
         }
+    }
+
+    public static void applyTheme() {
+        String themePref =
+                WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+        Theme.applyTheme(themePref);
+    }
+
+    public static String getTheme() {
+        return WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+    }
+
+    public static void setTheme(String s) {
+        WKSharedPreferencesUtil.getInstance().putSP(Theme.wk_theme_pref, s);
+        Theme.applyTheme(s);
     }
 
     public static boolean isSystemDarkMode(Context context) {
@@ -483,6 +497,12 @@ public class Theme {
         }
     }
 
+    public static Drawable createRoundRectDrawable(int topRad, int bottomRad, int defaultColor) {
+        ShapeDrawable defaultDrawable = new ShapeDrawable(new RoundRectShape(new float[]{topRad, topRad, topRad, topRad, bottomRad, bottomRad, bottomRad, bottomRad}, null, null));
+        defaultDrawable.getPaint().setColor(defaultColor);
+        return defaultDrawable;
+    }
+
 
     public static Drawable createRoundRectDrawable(int rad, int defaultColor) {
         ShapeDrawable defaultDrawable = new ShapeDrawable(new RoundRectShape(new float[]{rad, rad, rad, rad, rad, rad, rad, rad}, null, null));
@@ -551,6 +571,53 @@ public class Theme {
         canvas.drawBitmap(orginBitmap, 0, 0, paint);
         return bitmap;
 
+    }
+
+
+    public static Drawable createSimpleSelectorRoundRectDrawable(int rad, int defaultColor, int pressedColor) {
+        return createSimpleSelectorRoundRectDrawable(rad, defaultColor, pressedColor, pressedColor);
+    }
+
+    public static Drawable createSimpleSelectorRoundRectDrawable(int rad, int defaultColor, int pressedColor, int maskColor) {
+        ShapeDrawable defaultDrawable = new ShapeDrawable(new RoundRectShape(new float[]{rad, rad, rad, rad, rad, rad, rad, rad}, null, null));
+        defaultDrawable.getPaint().setColor(defaultColor);
+        ShapeDrawable pressedDrawable = new ShapeDrawable(new RoundRectShape(new float[]{rad, rad, rad, rad, rad, rad, rad, rad}, null, null));
+        pressedDrawable.getPaint().setColor(maskColor);
+        if (Build.VERSION.SDK_INT >= 21) {
+            ColorStateList colorStateList = new ColorStateList(
+                    new int[][]{StateSet.WILD_CARD},
+                    new int[]{pressedColor}
+            );
+            return new RippleDrawable(colorStateList, defaultDrawable, pressedDrawable);
+        } else {
+            StateListDrawable stateListDrawable = new StateListDrawable();
+            stateListDrawable.addState(new int[]{android.R.attr.state_pressed}, pressedDrawable);
+            stateListDrawable.addState(new int[]{android.R.attr.state_selected}, pressedDrawable);
+            stateListDrawable.addState(StateSet.WILD_CARD, defaultDrawable);
+            return stateListDrawable;
+        }
+    }
+
+
+    public static Drawable getRoundRectSelectorDrawable(int color) {
+        return getRoundRectSelectorDrawable(AndroidUtilities.dp(3), color);
+    }
+
+    public static Drawable getRoundRectSelectorDrawable(int corners, int color) {
+        if (Build.VERSION.SDK_INT >= 21) {
+            Drawable maskDrawable = createRoundRectDrawable(corners, 0xffffffff);
+            ColorStateList colorStateList = new ColorStateList(
+                    new int[][]{StateSet.WILD_CARD},
+                    new int[]{(color & 0x00ffffff) | 0x19000000}
+            );
+            return new RippleDrawable(colorStateList, null, maskDrawable);
+        } else {
+            StateListDrawable stateListDrawable = new StateListDrawable();
+            stateListDrawable.addState(new int[]{android.R.attr.state_pressed}, createRoundRectDrawable(corners, (color & 0x00ffffff) | 0x19000000));
+            stateListDrawable.addState(new int[]{android.R.attr.state_selected}, createRoundRectDrawable(corners, (color & 0x00ffffff) | 0x19000000));
+            stateListDrawable.addState(StateSet.WILD_CARD, new ColorDrawable(0x00000000));
+            return stateListDrawable;
+        }
     }
 
 }

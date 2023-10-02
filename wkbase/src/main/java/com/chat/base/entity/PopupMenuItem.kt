@@ -1,15 +1,9 @@
 package com.chat.base.entity
 
-class PopupMenuItem(text: String, iconResourceID: Int, iClick: IClick) {
-    val text: String
-    val iconResourceID: Int
-    val iClick: IClick
-
-    init {
-        this.iClick = iClick
-        this.text = text
-        this.iconResourceID = iconResourceID
-    }
+class PopupMenuItem(var text: String, var iconResourceID: Int, var iClick: IClick) {
+    var color: Int = 0
+    var subText: String = ""
+    var tag: String = ""
 
     interface IClick {
         fun onClick()

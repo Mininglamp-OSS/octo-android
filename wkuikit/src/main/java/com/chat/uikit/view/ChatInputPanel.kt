@@ -40,6 +40,7 @@ import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.entity.*
+import com.chat.base.entity.BottomSheetItem
 import com.chat.base.msg.IConversationContext
 import com.chat.base.msg.model.WKGifContent
 import com.chat.base.msgitem.WKChannelMemberRole
@@ -82,6 +83,7 @@ import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import org.json.JSONObject
 import org.telegram.ui.Components.RLottieDrawable
 import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.math.min
 
 
@@ -132,7 +134,7 @@ class ChatInputPanel : LinearLayout, IInputPanel {
         init()
     }
 
-    private val viewBinding: ChatInputLayoutBinding;
+    private val viewBinding: ChatInputLayoutBinding
     private var isActive = false
 
     @SuppressLint("ClickableViewAccessibility")
@@ -142,8 +144,8 @@ class ChatInputPanel : LinearLayout, IInputPanel {
 //        val layoutTransition = LayoutTransition()
 //        viewBinding.chatView.layoutTransition = layoutTransition
 //        layoutTransition.enableTransitionType(LayoutTransition.CHANGE_APPEARING)
-
         viewBinding.editText.post { defEditTextHeight = viewBinding.editText.height }
+        viewBinding.panelView.post { Log.e("当前坐标", "${viewBinding.panelView.y}") }
         viewBinding.topTitleTv.setTextColor(Theme.colorAccount)
         viewBinding.menuView.background = Theme.getBackground(Theme.colorAccount, 30f)
         setBackgroundColor(ContextCompat.getColor(context, R.color.clrCCC))
@@ -783,192 +785,200 @@ class ChatInputPanel : LinearLayout, IInputPanel {
         }
         viewBinding.forwardView.setOnClickListener {
             val chatAdapter = iConversationContext.chatAdapter
-            val bottomEntityList: MutableList<BottomEntity> = ArrayList()
-            bottomEntityList.add(
-                BottomEntity(
-                    iConversationContext.chatActivity.getString(R.string.merge_forward)
-                )
-            )
-            bottomEntityList.add(
-                BottomEntity(
-                    iConversationContext.chatActivity.getString(R.string.item_forward)
-                )
-            )
-            WKDialogUtils.getInstance()
-                .showCommonBottomViewDialog(
-                    iConversationContext.chatActivity,
-                    bottomEntityList,
-                    object : CommonBottomView.IBottomClick {
-                        override fun onClick(position: Int, bottomEntity: BottomEntity?) {
-                            if (position == 0) {
-                                //合并转发
-                                val forwardContent =
-                                    WKMultiForwardContent()
-                                forwardContent.channelType = channelType
-                                val list: MutableList<WKMsg> =
-                                    ArrayList()
-                                forwardContent.userList = ArrayList()
-                                var i = 0
-                                val size: Int = chatAdapter.itemCount
-                                while (i < size) {
-                                    if (chatAdapter.getItem(i).isChecked) {
-                                        list.add(chatAdapter.getItem(i).wkMsg)
-                                        if (channelType == WKChannelType.PERSONAL) {
-                                            var isAdd: Boolean
-                                            if (forwardContent.userList.size == 0) {
-                                                isAdd = true
-                                            } else {
-                                                isAdd = true
-                                                for (j in forwardContent.userList.indices) {
-                                                    if ((!TextUtils.isEmpty(forwardContent.userList[j].channelID) && (forwardContent.userList[j].channelID == chatAdapter.getItem(
-                                                            i
-                                                        ).wkMsg.fromUID))
-                                                    ) {
-                                                        isAdd = false
-                                                        break
-                                                    }
+            val bottomSheetItemList = ArrayList<BottomSheetItem>()
+            bottomSheetItemList.add(
+                BottomSheetItem(
+                    iConversationContext.chatActivity.getString(R.string.merge_forward),
+                    R.mipmap.msg_share,
+                    object : BottomSheetItem.IBottomSheetClick {
+                        override fun onClick() {
+
+                            //合并转发
+                            val forwardContent =
+                                WKMultiForwardContent()
+                            forwardContent.channelType = channelType
+                            val list: MutableList<WKMsg> =
+                                ArrayList()
+                            forwardContent.userList = ArrayList()
+                            var i = 0
+                            val size: Int = chatAdapter.itemCount
+                            while (i < size) {
+                                if (chatAdapter.getItem(i).isChecked) {
+                                    list.add(chatAdapter.getItem(i).wkMsg)
+                                    if (channelType == WKChannelType.PERSONAL) {
+                                        var isAdd: Boolean
+                                        if (forwardContent.userList.size == 0) {
+                                            isAdd = true
+                                        } else {
+                                            isAdd = true
+                                            for (j in forwardContent.userList.indices) {
+                                                if ((!TextUtils.isEmpty(forwardContent.userList[j].channelID) && (forwardContent.userList[j].channelID == chatAdapter.getItem(
+                                                        i
+                                                    ).wkMsg.fromUID))
+                                                ) {
+                                                    isAdd = false
+                                                    break
                                                 }
-                                            }
-                                            if (isAdd) {
-                                                if (chatAdapter.getItem(i).wkMsg.from == null) {
-                                                    val mChannel = WKChannel()
-                                                    mChannel.channelID =
-                                                        chatAdapter.getItem(i).wkMsg.fromUID
-                                                    chatAdapter.getItem(i).wkMsg.from = mChannel
-                                                }
-                                                forwardContent.userList.add(chatAdapter.getItem(i).wkMsg.from)
                                             }
                                         }
+                                        if (isAdd) {
+                                            if (chatAdapter.getItem(i).wkMsg.from == null) {
+                                                val mChannel = WKChannel()
+                                                mChannel.channelID =
+                                                    chatAdapter.getItem(i).wkMsg.fromUID
+                                                chatAdapter.getItem(i).wkMsg.from = mChannel
+                                            }
+                                            forwardContent.userList.add(chatAdapter.getItem(i).wkMsg.from)
+                                        }
                                     }
-                                    i++
                                 }
-                                forwardContent.msgList = list
+                                i++
+                            }
+                            forwardContent.msgList = list
+                            EndpointManager.getInstance()
+                                .invoke(
+                                    "chat_show_choose_chat",
+                                    ChooseChatMenu(
+                                        ChatChooseContacts { channelList: List<WKChannel>? ->
+                                            if (!channelList.isNullOrEmpty()) {
+                                                for (index in chatAdapter.data.indices) {
+                                                    chatAdapter.getItem(index).isChoose = false
+                                                    chatAdapter.getItem(index).isChecked = false
+                                                }
+                                                chatAdapter.notifyItemRangeChanged(
+                                                    0,
+                                                    chatAdapter.itemCount
+                                                )
+
+
+                                                for (mChannel: WKChannel in channelList) {
+                                                    val setting = WKMsgSetting()
+                                                    setting.receipt = mChannel.receipt
+//                                                        setting.signal = 0
+                                                    WKIM.getInstance()
+                                                        .msgManager
+                                                        .sendMessage(
+                                                            forwardContent,
+                                                            setting,
+                                                            mChannel.channelID,
+                                                            mChannel.channelType
+                                                        )
+                                                }
+                                                WKToastUtils.getInstance()
+                                                    .showToastNormal(context.getString(R.string.is_forward))
+
+                                                for (index in toolBarAdapter!!.data.indices) {
+                                                    toolBarAdapter!!.getItem(index).isDisable =
+                                                        false
+                                                }
+                                                toolBarAdapter!!.notifyItemRangeChanged(
+                                                    0,
+                                                    toolBarAdapter!!.itemCount
+                                                )
+                                                viewBinding.multipleChoiceView.visibility = GONE
+                                                viewBinding.toolbarRecyclerView.visibility =
+                                                    VISIBLE
+                                                if (iInputPanelListener != null) iInputPanelListener!!.onResetTitleView()
+                                            }
+                                        },
+                                        forwardContent
+                                    )
+                                )
+
+                        }
+                    })
+            )
+            bottomSheetItemList.add(
+                BottomSheetItem(
+                    iConversationContext.chatActivity.getString(R.string.item_forward),
+                    R.mipmap.msg_forward,
+                    object : BottomSheetItem.IBottomSheetClick {
+                        override fun onClick() {
+
+                            //逐条转发
+                            val list: MutableList<WKMessageContent> =
+                                ArrayList()
+                            var i = 0
+                            val size: Int = chatAdapter.itemCount
+                            while (i < size) {
+                                if (chatAdapter.getItem(i).isChecked) {
+                                    if ((chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_TEXT
+                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_IMAGE
+                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_GIF)
+                                    ) list.add(chatAdapter.getItem(i).wkMsg.baseContentMsgModel) else {
+                                        val textContent =
+                                            WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.getDisplayContent())
+                                        list.add(textContent)
+                                    }
+                                }
+                                i++
+                            }
+                            if (list.size > 0) {
                                 EndpointManager.getInstance()
                                     .invoke(
                                         "chat_show_choose_chat",
                                         ChooseChatMenu(
                                             ChatChooseContacts { channelList: List<WKChannel>? ->
+                                                val sendMsgEntityList: MutableList<SendMsgEntity> =
+                                                    ArrayList()
                                                 if (!channelList.isNullOrEmpty()) {
+                                                    for (mChannel: WKChannel in channelList) {
+                                                        for (index in list.indices) {
+                                                            val setting = WKMsgSetting()
+                                                            setting.receipt =
+                                                                iConversationContext.chatChannelInfo.receipt
+//                                                                setting.signal = signal
+                                                            sendMsgEntityList.add(
+                                                                SendMsgEntity(
+                                                                    list[index],
+                                                                    WKChannel(
+                                                                        mChannel.channelID,
+                                                                        mChannel.channelType
+                                                                    ),
+                                                                    setting
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+
+                                                    WKSendMsgUtils.getInstance()
+                                                        .sendMessages(sendMsgEntityList)
+                                                    WKToastUtils.getInstance()
+                                                        .showToastNormal(context.getString(R.string.is_forward))
                                                     for (index in chatAdapter.data.indices) {
-                                                        chatAdapter.getItem(index).isChoose = false
-                                                        chatAdapter.getItem(index).isChecked = false
+                                                        chatAdapter.getItem(index).isChoose =
+                                                            false
+                                                        chatAdapter.getItem(index).isChecked =
+                                                            false
                                                     }
                                                     chatAdapter.notifyItemRangeChanged(
                                                         0,
                                                         chatAdapter.itemCount
                                                     )
-
-
-                                                    for (mChannel: WKChannel in channelList) {
-                                                        val setting = WKMsgSetting()
-                                                        setting.receipt = mChannel.receipt
-//                                                        setting.signal = 0
-                                                        WKIM.getInstance()
-                                                            .msgManager
-                                                            .sendMessage(
-                                                                forwardContent,
-                                                                setting,
-                                                                mChannel.channelID,
-                                                                mChannel.channelType
-                                                            )
-                                                    }
-                                                    WKToastUtils.getInstance()
-                                                        .showToastNormal(context.getString(R.string.is_forward))
-
-                                                    for (index in toolBarAdapter!!.data.indices) {
-                                                        toolBarAdapter!!.getItem(index).isDisable =
-                                                            false
-                                                    }
-                                                    toolBarAdapter!!.notifyItemRangeChanged(
-                                                        0,
-                                                        toolBarAdapter!!.itemCount
-                                                    )
-                                                    viewBinding.multipleChoiceView.visibility = GONE
-                                                    viewBinding.toolbarRecyclerView.visibility =
-                                                        VISIBLE
+                                                    viewBinding.multipleChoiceView.visibility =
+                                                        GONE
                                                     if (iInputPanelListener != null) iInputPanelListener!!.onResetTitleView()
                                                 }
                                             },
-                                            forwardContent
+                                            list
                                         )
                                     )
-                            } else if (position == 1) {
-                                //逐条转发
-                                val list: MutableList<WKMessageContent> =
-                                    ArrayList()
-                                var i = 0
-                                val size: Int = chatAdapter.itemCount
-                                while (i < size) {
-                                    if (chatAdapter.getItem(i).isChecked) {
-                                        if ((chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_TEXT
-                                                    ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_IMAGE
-                                                    ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_GIF)
-                                        ) list.add(chatAdapter.getItem(i).wkMsg.baseContentMsgModel) else {
-                                            val textContent =
-                                                WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.getDisplayContent())
-                                            list.add(textContent)
-                                        }
-                                    }
-                                    i++
-                                }
-                                if (list.size > 0) {
-                                    EndpointManager.getInstance()
-                                        .invoke(
-                                            "chat_show_choose_chat",
-                                            ChooseChatMenu(
-                                                ChatChooseContacts { channelList: List<WKChannel>? ->
-                                                    val sendMsgEntityList: MutableList<SendMsgEntity> =
-                                                        ArrayList()
-                                                    if (!channelList.isNullOrEmpty()) {
-                                                        for (mChannel: WKChannel in channelList) {
-                                                            for (index in list.indices) {
-                                                                val setting = WKMsgSetting()
-                                                                setting.receipt =
-                                                                    iConversationContext.chatChannelInfo.receipt
-//                                                                setting.signal = signal
-                                                                sendMsgEntityList.add(
-                                                                    SendMsgEntity(
-                                                                        list[index],
-                                                                        WKChannel(
-                                                                            mChannel.channelID,
-                                                                            mChannel.channelType
-                                                                        ),
-                                                                        setting
-                                                                    )
-                                                                )
-                                                            }
-                                                        }
-
-                                                        WKSendMsgUtils.getInstance()
-                                                            .sendMessages(sendMsgEntityList)
-                                                        WKToastUtils.getInstance()
-                                                            .showToastNormal(context.getString(R.string.is_forward))
-                                                        for (index in chatAdapter.data.indices) {
-                                                            chatAdapter.getItem(index).isChoose =
-                                                                false
-                                                            chatAdapter.getItem(index).isChecked =
-                                                                false
-                                                        }
-                                                        chatAdapter.notifyItemRangeChanged(
-                                                            0,
-                                                            chatAdapter.itemCount
-                                                        )
-                                                        viewBinding.multipleChoiceView.visibility =
-                                                            GONE
-                                                        if (iInputPanelListener != null) iInputPanelListener!!.onResetTitleView()
-                                                    }
-                                                },
-                                                list
-                                            )
-                                        )
-                                }
                             }
+
                         }
                     })
+            )
+            WKDialogUtils.getInstance().showBottomSheet(
+                context,
+                context.getString(R.string.base_forward),
+                false,
+                bottomSheetItemList
+            )
         }
 
         viewBinding.editText.addTextChangedListener(object : TextWatcher {
             var linesCount = 0
+            var lastHeight = AndroidUtilities.dp(35f)
             var start = 0
             var count = 0
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
@@ -1069,41 +1079,30 @@ class ChatInputPanel : LinearLayout, IInputPanel {
 
                 // 计算输入框高度
 //                if (s.toString().isEmpty()) {
-//                    viewBinding.editText.layoutParams.height = defEditTextHeight
+////                    viewBinding.editText.layoutParams.height = AndroidUtilities.dp(35f)
 //                    linesCount = viewBinding.editText.lineCount
 //                    return
 //                }
 //                if (viewBinding.editText.lineCount > 3) return
 //                if (linesCount == 0) {
 //                    linesCount = viewBinding.editText.lineCount
-//                    viewBinding.editText.layoutParams.height = defEditTextHeight
+////                    viewBinding.editText.layoutParams.height = AndroidUtilities.dp(35f)
 //                    return
 //                }
-//                if (linesCount < viewBinding.editText.lineCount) {
-//                    val anim = ValueAnimator.ofInt(
-//                        viewBinding.editText.layoutParams.height,
-//                        viewBinding.editText.layoutParams.height + (defEditTextHeight - AndroidUtilities.dp(10f))
-//                    ).setDuration(200)
-//                    anim.addUpdateListener { animation: ValueAnimator ->
-//                        viewBinding.editText.layoutParams.height = animation.animatedValue as Int
-//                        viewBinding.editText.requestLayout()
-//                    }
-//                    anim.start()
-//                } else if (linesCount > viewBinding.editText.lineCount) {
-//                    val anim = ValueAnimator.ofInt(
-//                        viewBinding.editText.layoutParams.height,
-//                        viewBinding.editText.layoutParams.height - (defEditTextHeight + AndroidUtilities.dp(10f))
-//                    ).setDuration(200)
-//                    anim.addUpdateListener { animation: ValueAnimator ->
-//                        viewBinding.editText.layoutParams.height = animation.animatedValue as Int
-//                        viewBinding.editText.requestLayout()
-//                    }
-//                    anim.start()
-//                }
-//                if (linesCount != viewBinding.editText.lineCount) {
-//                    linesCount = viewBinding.editText.lineCount
+//
+//                val anim = ValueAnimator.ofInt(
+//                            viewBinding.editText.layoutParams.height,
+//                            AndroidUtilities.dp(35f)
+//                        ).setDuration(150)
+//                        anim.addUpdateListener { animation: ValueAnimator ->
+//                            viewBinding.editText.layoutParams.height =
+//                                animation.animatedValue as Int
+//                            viewBinding.editText.requestLayout()
+//                        }
+                if (linesCount != viewBinding.editText.lineCount) {
+                    linesCount = viewBinding.editText.lineCount
                     iConversationContext.chatRecyclerViewScrollToEnd()
-//                }
+                }
             }
 
             override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
@@ -1184,9 +1183,16 @@ class ChatInputPanel : LinearLayout, IInputPanel {
                 }
             }
             if (list.size > 0) {
+
                 WKDialogUtils.getInstance().showDialog(
                     iConversationContext.chatActivity,
-                    iConversationContext.chatActivity.getString(R.string.delete_select_msg)
+                    iConversationContext.chatActivity.getString(R.string.delete_messages),
+                    iConversationContext.chatActivity.getString(R.string.delete_select_msg),
+                    true,
+                    "",
+                    iConversationContext.chatActivity.getString(R.string.delete),
+                    0,
+                    ContextCompat.getColor(iConversationContext.chatActivity, R.color.red)
                 ) { index: Int ->
                     if (index == 1) {
                         WKIM.getInstance().msgManager.deleteWithClientMsgNos(ids)

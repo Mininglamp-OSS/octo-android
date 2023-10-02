@@ -76,7 +76,7 @@ public class XiaoMiMessageReceiver extends PushMessageReceiver {
                 mRegId = cmdArg1;
                 //注册小米推送token
                 if (!TextUtils.isEmpty(mRegId) && !TextUtils.isEmpty(WKPushApplication.getInstance().pushBundleID)) {
-                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID);
+                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"小米1");
                 }
             }
         } else if (MiPushClient.COMMAND_SET_ALIAS.equals(command)) {
@@ -113,7 +113,7 @@ public class XiaoMiMessageReceiver extends PushMessageReceiver {
             if (message.getResultCode() == ErrorCode.SUCCESS) {
                 mRegId = cmdArg1;
                 if (!TextUtils.isEmpty(mRegId) && !TextUtils.isEmpty(WKPushApplication.getInstance().pushBundleID)) {
-                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID);
+                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"小米2");
                 }
             }
         }

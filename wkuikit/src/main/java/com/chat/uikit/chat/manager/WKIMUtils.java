@@ -17,6 +17,7 @@ import android.os.Looper;
 import android.os.Parcelable;
 import android.os.Vibrator;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,7 +28,6 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.common.WKCommonModel;
-import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
@@ -39,6 +39,7 @@ import com.chat.base.entity.UserInfoSetting;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
+import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.StringUtils;
@@ -77,6 +78,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -123,6 +125,7 @@ public class WKIMUtils {
 //                });
 //            }
 //        });
+
         //监听sdk获取IP和port
         WKIM.getInstance().getConnectionManager().addOnGetIpAndPortListener(andPortListener -> {
             MsgModel.getInstance().getChatIp((code, ip, port) -> andPortListener.onGetSocketIpAndPort(ip, Integer.parseInt(port)));
@@ -163,6 +166,7 @@ public class WKIMUtils {
             byte channelType = WKChannelType.PERSONAL;
             WKMsg sensitiveWordsMsg = null;
             if (msgList != null && msgList.size() > 0) {
+                String loginUID = WKConfig.getInstance().getUid();
                 channelID = msgList.get(msgList.size() - 1).channelID;
                 channelType = msgList.get(msgList.size() - 1).channelType;
                 for (int i = 0, size = msgList.size(); i < size; i++) {
@@ -179,7 +183,8 @@ public class WKIMUtils {
                             isAlertMsg = true;
                         }
                     }
-                    if (msgList.get(i).header.noPersist || !msgList.get(i).header.redDot) {
+
+                    if (msgList.get(i).header.noPersist || !msgList.get(i).header.redDot || !WKContentType.isSupportNotification(msgList.get(i).type)) {
                         isAlertMsg = false;
                     }
 
@@ -224,8 +229,8 @@ public class WKIMUtils {
             boolean isVibrate = true;
             boolean playNewMsgMedia = true;
             boolean newMsgNotice = true;
-            int msgShowDetail = 1;
             UserInfoSetting setting = WKConfig.getInstance().getUserInfo().setting;
+            int msgShowDetail = 1;
             if (setting != null) {
                 msgShowDetail = setting.msg_show_detail;
                 if (setting.new_msg_notice == 0) {
@@ -244,7 +249,7 @@ public class WKIMUtils {
             if (newMsgNotice && isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.mute == 0) {
-                    showNotification(msgList.get(msgList.size() - 1),msgShowDetail, channel, playNewMsgMedia, isVibrate);
+                    showNotification(msgList.get(msgList.size() - 1), msgShowDetail, channel, playNewMsgMedia, isVibrate);
                 }
             }
 
@@ -252,7 +257,7 @@ public class WKIMUtils {
 
             if (sensitiveWordsMsg != null) {
                 WKMsg finalSensitiveWordsMsg = sensitiveWordsMsg;
-                new Handler(Looper.myLooper()).postDelayed(() -> WKIM.getInstance().getMsgManager().saveMsg(finalSensitiveWordsMsg), 1000 * 2);
+                new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> WKIM.getInstance().getMsgManager().saveMsg(finalSensitiveWordsMsg), 1000 * 2);
             }
         });
         WKIM.getInstance().getMsgManager().addOnUploadMsgExtraListener(msgExtra -> {
@@ -307,14 +312,10 @@ public class WKIMUtils {
         WKIM.getInstance().getCMDManager().addCmdListener("system", cmd -> {
             if (!TextUtils.isEmpty(cmd.cmdKey)) {
                 switch (cmd.cmdKey) {
-                    case WKCMDKeys.wk_messageRevoke:
-                        revokeMsg(cmd.paramJsonObject);
-                        break;
-                    case WKCMDKeys.wk_friendRequest:
-                        FriendModel.getInstance().saveNewFriendsMsg(cmd.paramJsonObject.toString());
-                        break;
-                    case WKCMDKeys.wk_friendDeleted:
-                    case WKCMDKeys.wk_friendAccept:
+                    case WKCMDKeys.wk_messageRevoke -> revokeMsg(cmd.paramJsonObject);
+                    case WKCMDKeys.wk_friendRequest ->
+                            FriendModel.getInstance().saveNewFriendsMsg(cmd.paramJsonObject.toString());
+                    case WKCMDKeys.wk_friendDeleted, WKCMDKeys.wk_friendAccept -> {
                         FriendModel.getInstance().syncFriends(null);
                         if (cmd.cmdKey.equals(WKCMDKeys.wk_friendAccept)
                                 && cmd.paramJsonObject != null && cmd.paramJsonObject.has("to_uid")) {
@@ -326,8 +327,8 @@ public class WKIMUtils {
                                 ApplyDB.getInstance().update(entity);
                             }
                         }
-                        break;
-                    case WKCMDKeys.wk_sync_message_extra: {
+                    }
+                    case WKCMDKeys.wk_sync_message_extra -> {
                         if (cmd.paramJsonObject == null) {
                             return;
                         }
@@ -338,15 +339,12 @@ public class WKIMUtils {
                         }
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
                     }
-                    break;
-                    case WKCMDKeys.wk_sync_reminders: {
+                    case WKCMDKeys.wk_sync_reminders -> {
                         MsgModel.getInstance().syncReminder();
                     }
-                    break;
-                    case WKCMDKeys.wk_sync_conversation_extra: {
+                    case WKCMDKeys.wk_sync_conversation_extra -> {
                         MsgModel.getInstance().syncCoverExtra();
                     }
-                    break;
                 }
             }
         });
@@ -492,6 +490,7 @@ public class WKIMUtils {
         }
     }
 
+
     /**
      * 显示聊天
      *
@@ -527,9 +526,13 @@ public class WKIMUtils {
         WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager().getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
         WKMsg msg = null;
         int redDot = 0;
+        long aroundMsgSeq = 0;
         if (conversationMsg != null) {
             redDot = conversationMsg.unreadCount;
             msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(conversationMsg.lastClientMsgNO);
+            if (msg != null) {
+                aroundMsgSeq = msg.orderSeq;
+            }
         }
         if (chatViewMenu.tipMsgOrderSeq != 0) {
             // 强提醒某条消息
@@ -566,6 +569,7 @@ public class WKIMUtils {
         if (chatViewMenu.forwardMsgList != null && chatViewMenu.forwardMsgList.size() > 0) {
             intent.putParcelableArrayListExtra("msgContentList", (ArrayList<? extends Parcelable>) chatViewMenu.forwardMsgList);
         }
+        intent.putExtra("aroundMsgSeq", aroundMsgSeq);
         chatViewMenu.activity.startActivity(intent);
     }
 
@@ -585,7 +589,7 @@ public class WKIMUtils {
                     }
 
                     String content = String.format(chatViewMenu.activity.getString(R.string.forget_chat_pwd), chatPwdCount, chatPwdCount);
-                    WKDialogUtils.getInstance().showDialog(chatViewMenu.activity, false, chatViewMenu.activity.getString(R.string.chat_pwd_error), content, chatViewMenu.activity.getString(R.string.cancel), chatViewMenu.activity.getString(R.string.chat_pwd_reset_pwd), index -> {
+                    WKDialogUtils.getInstance().showDialog(chatViewMenu.activity, chatViewMenu.activity.getString(R.string.chat_pwd_error), content, false, chatViewMenu.activity.getString(R.string.cancel), chatViewMenu.activity.getString(R.string.chat_pwd_reset_pwd), 0, Theme.colorAccount, index -> {
                         if (index == 1) {
                             EndpointManager.getInstance().invoke("show_set_chat_pwd", null);
                         }
@@ -636,7 +640,7 @@ public class WKIMUtils {
         void onSuccess(Bitmap logo);
     }
 
-    private void showNotification(WKMsg msg,int msgShowDetail, WKChannel channel, boolean playNewMsgMedia, boolean isVibrate) {
+    private void showNotification(WKMsg msg, int msgShowDetail, WKChannel channel, boolean playNewMsgMedia, boolean isVibrate) {
         int msgNotice = WKConfig.getInstance().getUserInfo().setting.new_msg_notice;
         if (msgNotice == 0) {
             return;
@@ -649,26 +653,25 @@ public class WKIMUtils {
             if (isVibrate) {
                 vibrate();
             }
-            return;
+//            return;
         }
         String showTitle = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
         String showContent = WKBaseApplication.getInstance().getContext().getString(R.string.default_new_msg);
         if (msgShowDetail == 1 && msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.getDisplayContent())) {
             showContent = msg.baseContentMsgModel.getDisplayContent();
         }
-        String url;
-        if (!TextUtils.isEmpty(channel.avatar) && channel.avatar.contains("/")) {
-            url = WKApiConfig.getShowUrl(channel.avatar);
-        } else {
-            url = WKApiConfig.getShowAvatar(channel.channelID, channel.channelType);
-        }
+//        String url;
+//        if (!TextUtils.isEmpty(channel.avatar) && channel.avatar.contains("/")) {
+//            url = WKApiConfig.getShowUrl(channel.avatar);
+//        } else {
+//            url = WKApiConfig.getShowAvatar(channel.channelID, channel.channelType);
+//        }
         String finalShowContent = showContent;
-
-        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
+        showNotice(showTitle, finalShowContent, null, isVibrate);
+//        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
     }
 
     private void showNotice(String showTitle, String showContent, Bitmap logo, boolean isVibrate) {
-
         //1.获取消息服务
         NotificationManager manager = (NotificationManager) WKUIKitApplication.getInstance().getContext().getSystemService(Context.NOTIFICATION_SERVICE);
         //默认通道是default

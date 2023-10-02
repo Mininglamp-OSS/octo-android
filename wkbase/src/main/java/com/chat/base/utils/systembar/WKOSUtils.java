@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.chat.base.config.WKConstants;
 
@@ -54,6 +55,7 @@ public class WKOSUtils {
     public static boolean isOppo() {
         return check(ROM_OPPO);
     }
+
 
     public static boolean isFlyme() {
         return check(ROM_FLYME);
@@ -221,6 +223,7 @@ public class WKOSUtils {
                 localIntent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
                 localIntent.putExtra(Settings.EXTRA_CHANNEL_ID, WKConstants.newMsgChannelID);
                 context.startActivity(localIntent);
+                Log.e("跳转的类型", "-->1");
                 return;
             }
             if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -228,6 +231,7 @@ public class WKOSUtils {
                 localIntent.putExtra("app_package", context.getPackageName());
                 localIntent.putExtra("app_uid", context.getApplicationInfo().uid);
                 context.startActivity(localIntent);
+                Log.e("跳转的类型", "-->2");
                 return;
             }
             if (android.os.Build.VERSION.SDK_INT == Build.VERSION_CODES.KITKAT) {
@@ -235,6 +239,7 @@ public class WKOSUtils {
                 localIntent.addCategory(Intent.CATEGORY_DEFAULT);
                 localIntent.setData(Uri.parse("package:" + context.getPackageName()));
                 context.startActivity(localIntent);
+                Log.e("跳转的类型", "-->3");
                 return;
             }
 
@@ -243,6 +248,7 @@ public class WKOSUtils {
                 localIntent.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
                 localIntent.setData(Uri.fromParts("package", context.getPackageName(), null));
                 context.startActivity(localIntent);
+                Log.e("跳转的类型", "-->4");
                 return;
             }
 

@@ -17,6 +17,7 @@ import com.chat.base.db.DBHelper;
 import com.chat.base.emoji.EmojiManager;
 import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
+import com.chat.base.net.SSLSocketClient;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.CrashHandler;
 import com.chat.base.utils.WKDeviceUtils;
@@ -29,9 +30,12 @@ import org.telegram.ui.Components.RLottieApplication;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+
+import javax.net.ssl.X509TrustManager;
 
 /**
  * 2020-02-26 09:52
@@ -163,6 +167,7 @@ public class WKBaseApplication {
         WKFileUtils.getInstance().createFileDir(WKConstants.chatBgCacheDir);
         WKConstants.messageBackupDir = Objects.requireNonNull(getContext().getExternalFilesDir("messageBackup")).getAbsolutePath() + "/";
         WKFileUtils.getInstance().createFileDir(WKConstants.messageBackupDir);
+        WKConstants.chatDownloadFileDir = Objects.requireNonNull(getContext().getExternalFilesDir("chatDownloadFile")).getAbsolutePath() + "/";
     }
 
     public AppModule getAppModuleWithSid(String sid) {
@@ -179,6 +184,7 @@ public class WKBaseApplication {
     }
 
     public boolean appModuleIsInjection(AppModule appModule) {
-        return appModule != null && appModule.getStatus() != 0 && appModule.getChecked();
+//        return appModule != null && appModule.getStatus() != 0 && appModule.getChecked();
+        return true;
     }
 }

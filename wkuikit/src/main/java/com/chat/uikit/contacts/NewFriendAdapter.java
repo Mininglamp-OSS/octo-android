@@ -15,7 +15,6 @@ import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.WKDialogUtils;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.uikit.R;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -49,24 +48,9 @@ public class NewFriendAdapter extends BaseQuickAdapter<NewFriendEntity, BaseView
 
 
     private void showDialog(View view, NewFriendEntity item) {
-        view.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                List<PopupMenuItem> list = new ArrayList<>();
-                list.add(new PopupMenuItem(getContext().getString(R.string.base_delete), R.mipmap.msg_delete, () -> iDelete.onDelete(item)));
-                WKDialogUtils.getInstance().showPopup(coordinate, view, list);
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
+        List<PopupMenuItem> list = new ArrayList<>();
+        list.add(new PopupMenuItem(getContext().getString(R.string.base_delete), R.mipmap.msg_delete, () -> iDelete.onDelete(item)));
+        WKDialogUtils.getInstance().setViewLongClickPopup(view,list);
     }
 
     interface IDelete {

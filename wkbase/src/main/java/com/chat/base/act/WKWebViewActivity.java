@@ -12,12 +12,15 @@ import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.google.gson.JsonObject;
+import androidx.annotation.Nullable;
+
 import com.chat.base.R;
+import com.chat.base.app.WKAppModel;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKBinder;
@@ -29,15 +32,23 @@ import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatChooseContacts;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.ChooseChatMenu;
+import com.chat.base.entity.AppInfo;
+import com.chat.base.entity.AuthInfo;
 import com.chat.base.entity.PopupMenuItem;
+import com.chat.base.glide.GlideUtils;
+import com.chat.base.jsbrigde.CallBackFunction;
+import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.ui.components.AvatarView;
+import com.chat.base.ui.components.BottomSheet;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
+import com.google.gson.JsonObject;
 import com.tencent.smtt.sdk.ValueCallback;
 import com.tencent.smtt.sdk.WebChromeClient;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
 
@@ -124,9 +135,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             startActivity(intent);
         }));
         ImageView rightIV = findViewById(R.id.titleRightIv);
-        float x = AndroidUtilities.getScreenWidth();
-        float y = AndroidUtilities.dp(50);
-        WKDialogUtils.getInstance().showScreenPopup(rightIV, new float[]{x, y}, list);
+        WKDialogUtils.getInstance().showScreenPopup(rightIV, list);
     }
 
     @Override
@@ -138,7 +147,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             url = "http://" + url;
 //        wkVBinding.webView.loadUrl("file:///android_asset/web/report.html");
         if (url.equals(WKApiConfig.baseWebUrl + "report.html")) {
-            String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+            String wk_theme_pref = Theme.getTheme();
             url = String.format("%s?uid=%s&token=%s&mode=%s", url, WKConfig.getInstance().getUid(), WKConfig.getInstance().getToken(), wk_theme_pref);
         }
         Log.e("加载的URL", url);
@@ -208,6 +217,21 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
     protected void initListener() {
         wkVBinding.webView.registerHandler("quit", (var1, var2) -> {
             finish();
+        });
+        wkVBinding.webView.registerHandler("auth", (data, function) -> {
+            if (!TextUtils.isEmpty(data)) {
+                try {
+                    JSONObject jsonObject = new JSONObject(data);
+                    String appId = jsonObject.optString("app_id");
+                    if (!TextUtils.isEmpty(appId)) {
+                        getAppInfo(appId, function);
+                    }
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
+            Log.e("需要授权的信息", data);
         });
         wkVBinding.webView.registerHandler("getChannel", (data, function) -> {
             JsonObject jsonObject = new JsonObject();
@@ -332,7 +356,81 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
     @Override
     protected void onResume() {
         wkVBinding.webView.onResume();
-        wkVBinding.webView.callHandler("h5_game_resume_game", null, null);
         super.onResume();
+    }
+
+    private void getAppInfo(String appId, CallBackFunction function) {
+        WKAppModel.Companion.getInstance().getAppInfo(appId, (code, msg, appInfo) -> {
+            if (code == HttpResponseCode.success) {
+                authDialog(appInfo, function);
+            } else {
+                if (!TextUtils.isEmpty(msg)) {
+                    showToast(msg);
+                }
+            }
+        });
+    }
+
+    private void authDialog(AppInfo appInfo, CallBackFunction function) {
+        View authView = LayoutInflater.from(this).inflate(R.layout.auth_dialog_layout, getViewBinding().webView, false);
+        TextView appName = authView.findViewById(R.id.appNameTv);
+        AvatarView appIV = authView.findViewById(R.id.appIV);
+        TextView nameTv = authView.findViewById(R.id.nameTv);
+        TextView descTv = authView.findViewById(R.id.descTv);
+        AvatarView avatarView = authView.findViewById(R.id.avatarView);
+        descTv.setText(String.format(getString(R.string.str_request_desc), getString(R.string.app_name)));
+        appIV.setSize(30f);
+        appName.setText(appInfo.getApp_name());
+        GlideUtils.getInstance().showImg(this, WKApiConfig.getShowUrl(appInfo.getApp_logo()), appIV.imageView);
+        avatarView.setSize(40f);
+        WKChannel loginChannel = WKIM.getInstance().getChannelManager().getChannel(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
+        avatarView.showAvatar(loginChannel);
+        nameTv.setText(loginChannel.channelName);
+        BottomSheet bottomSheet = new BottomSheet(this, true);
+        bottomSheet.setCustomView(authView);
+        authView.findViewById(R.id.cancelBtn).setOnClickListener(v -> {
+            bottomSheet.setDelegate(null);
+            bottomSheet.dismiss();
+        });
+        authView.findViewById(R.id.sureBtn).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WKAppModel.Companion.getInstance().getAuthCode(appInfo.getApp_id(), new WKAppModel.IAuth() {
+                    @Override
+                    public void onResult(int code, @Nullable String msg, @Nullable AuthInfo authInfo) {
+                        if (authInfo != null) {
+                            JSONObject json = new JSONObject();
+                            try {
+                                json.put("code", authInfo.getAuthcode());
+                            } catch (JSONException e) {
+                                throw new RuntimeException(e);
+                            }
+                            function.onCallBack(json.toString());
+                            bottomSheet.setDelegate(null);
+                            bottomSheet.dismiss();
+                        }
+                    }
+                });
+            }
+        });
+        bottomSheet.setOpenNoDelay(false);
+        bottomSheet.setDelegate(new BottomSheet.BottomSheetDelegateInterface() {
+
+            @Override
+            public void onOpenAnimationStart() {
+
+            }
+
+            @Override
+            public void onOpenAnimationEnd() {
+
+            }
+
+            @Override
+            public boolean canDismiss() {
+                return false;
+            }
+        });
+        bottomSheet.show();
     }
 }

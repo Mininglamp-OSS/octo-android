@@ -15,6 +15,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.SpannableString;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -43,6 +44,7 @@ import com.chat.base.config.WKSystemAccount;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.entity.AvatarOtherViewMenu;
 import com.chat.base.endpoint.entity.RTCMenu;
 import com.chat.base.endpoint.entity.ReadMsgMenu;
 import com.chat.base.endpoint.entity.SetChatBgMenu;
@@ -58,7 +60,6 @@ import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.base.ui.components.NumberTextView;
 import com.chat.base.ui.components.SystemMsgBackgroundColorSpan;
 import com.chat.base.utils.AndroidUtilities;
@@ -88,10 +89,8 @@ import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.robot.service.WKRobotModel;
-import com.chat.uikit.view.ChatConfirmDialogView;
 import com.chat.uikit.view.ChatInputPanel;
 import com.chat.uikit.view.WKPlayVoiceUtils;
-import com.lxj.xpopup.XPopup;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -108,9 +107,9 @@ import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
-import com.xinbida.wukongim.msgmodel.WKReply;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
+import com.xinbida.wukongim.msgmodel.WKReply;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -140,7 +139,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
     private boolean isShowHistory;
     private boolean isToEnd = true;
     private boolean isViewingPicture = false;
-    private boolean showNickName;// 是否显示聊天昵称
+    private boolean showNickName = true;// 是否显示聊天昵称
     private long lastPreviewMsgOrderSeq = 0;//上次浏览消息
     private long unreadStartMsgOrderSeq = 0;//新消息开始位置
     private long tipsOrderSeq = 0;//需要强提示的msg
@@ -208,7 +207,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 List<WKChannel> list = new ArrayList<>();
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
                 list.add(channel);
-                new XPopup.Builder(this).asCustom(new ChatConfirmDialogView(this, list, msgContentList, (list1, msgContentList1) -> {
+                WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, msgContentList, (list1, messageContentList) -> {
                     List<SendMsgEntity> msgList = new ArrayList<>();
                     WKMsgSetting setting = new WKMsgSetting();
                     //setting.signal = signal;
@@ -217,7 +216,8 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                         msgList.add(new SendMsgEntity(msgContentList.get(i), new WKChannel(channelId, channelType), setting));
                     }
                     WKSendMsgUtils.getInstance().sendMessages(msgList);
-                })).show();
+                });
+
             }
         }
 
@@ -368,9 +368,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 @Override
                 public void onResult(boolean result) {
                     if (result) {
-                        float[] coordinate = new float[]{wkVBinding.topLayout.rightView.getX(), wkVBinding.topLayout.rightView.getY() + AndroidUtilities.dp(50)};
                         if (channelType == WKChannelType.PERSONAL) {
-
                             if (UserUtils.getInstance().checkMyFriendDelete(channelId) || UserUtils.getInstance().checkFriendRelation(channelId)) {
                                 showToast(R.string.non_friend_relationship);
                                 return;
@@ -386,7 +384,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                             List<PopupMenuItem> list = new ArrayList<>();
                             list.add(new PopupMenuItem(getString(R.string.video_call), R.mipmap.chat_calls_video, () -> p2pCall(1)));
                             list.add(new PopupMenuItem(getString(R.string.audio_call), R.mipmap.chat_calls_voice, () -> p2pCall(0)));
-                            WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list);
+                            WKDialogUtils.getInstance().showScreenPopup(view, list);
                         } else {
                             WKChannelMember channelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, WKConfig.getInstance().getUid());
                             if (channelMember != null && channelMember.status == WKChannelStatus.statusBlacklist) {
@@ -420,86 +418,32 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 startActivity(intent);
             }
         });
-        wkVBinding.chatUnreadLayout.groupApproveLayout.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-                if (groupApproveList.size() > 0) {
-                    WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(groupApproveList.get(0).messageID);
-                    if (msg != null && !TextUtils.isEmpty(msg.clientMsgNO)) {
-                        tipsMsg(msg.clientMsgNO);
-                    }
+        WKDialogUtils.getInstance().setViewLongClickPopup(wkVBinding.chatUnreadLayout.groupApproveLayout, getGroupApprovePopupItems());
+        wkVBinding.chatUnreadLayout.groupApproveLayout.setOnClickListener(view -> {
+            if (groupApproveList.size() > 0) {
+                WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(groupApproveList.get(0).messageID);
+                if (msg != null && !TextUtils.isEmpty(msg.clientMsgNO)) {
+                    tipsMsg(msg.clientMsgNO);
                 }
             }
+        });
+        WKDialogUtils.getInstance().setViewLongClickPopup(wkVBinding.chatUnreadLayout.remindLayout, getRemindPopupItems());
+        wkVBinding.chatUnreadLayout.remindLayout.setOnClickListener(view -> {
 
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                PopupMenuItem item = new PopupMenuItem(getString(R.string.clear_all_remind), R.mipmap.msg_seen, () -> {
-                    List<WKReminder> list = WKIM.getInstance().getReminderManager().getRemindersWithType(channelId, channelType, WKMentionType.WKApplyJoinGroupApprove);
-                    List<Long> ids = new ArrayList<>();
-                    for (WKReminder reminder : list) {
-                        if (reminder.done == 0) {
-                            ids.add(reminder.reminderID);
-                        }
-                    }
-                    groupApproveList.clear();
-                    resetGroupApproveView();
-                    MsgModel.getInstance().doneReminder(ids);
-                });
-
-                List<PopupMenuItem> list = new ArrayList<>();
-                list.add(item);
-                coordinate[1] -= AndroidUtilities.dp(100f);
-                WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list);
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
-        wkVBinding.chatUnreadLayout.remindLayout.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-                if (reminderList.size() > 0) {
-                    WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(reminderList.get(0).messageID);
-                    if (msg != null && !TextUtils.isEmpty(msg.clientMsgNO)) {
-                        tipsMsg(msg.clientMsgNO);
-                    } else {
-                        long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(reminderList.get(0).messageSeq, channelId, channelType);
-                        unreadStartMsgOrderSeq = 0;
-                        tipsOrderSeq = orderSeq;
-                        getData(1, true, orderSeq, false);
-                        isCanLoadMore = true;
-                    }
+            if (reminderList.size() > 0) {
+                WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(reminderList.get(0).messageID);
+                if (msg != null && !TextUtils.isEmpty(msg.clientMsgNO)) {
+                    tipsMsg(msg.clientMsgNO);
+                } else {
+                    long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(reminderList.get(0).messageSeq, channelId, channelType);
+                    unreadStartMsgOrderSeq = 0;
+                    tipsOrderSeq = orderSeq;
+                    getData(1, true, orderSeq, false);
+                    isCanLoadMore = true;
                 }
             }
+        });
 
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                PopupMenuItem item = new PopupMenuItem(getString(R.string.clear_all_remind), R.mipmap.msg_seen, () -> {
-                    List<WKReminder> list = WKIM.getInstance().getReminderManager().getRemindersWithType(channelId, channelType, WKMentionType.WKReminderTypeMentionMe);
-                    List<Long> ids = new ArrayList<>();
-                    for (WKReminder reminder : list) {
-                        if (reminder.done == 0) {
-                            ids.add(reminder.reminderID);
-                        }
-                    }
-                    reminderList.clear();
-                    resetRemindView();
-                    MsgModel.getInstance().doneReminder(ids);
-                });
-
-                List<PopupMenuItem> list = new ArrayList<>();
-                list.add(item);
-                coordinate[1] -= AndroidUtilities.dp(100f);
-                WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list);
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
         wkVBinding.chatInputPanel.addInputPanelListener(new ChatInputPanel.IInputPanelListener() {
             @Override
             public void onResetTitleView() {
@@ -594,6 +538,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
                 showChannelName(channel);
                 wkVBinding.topLayout.avatarView.showAvatar(channel);
+                EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
                 //用户在线状态
                 if (channel.channelType == WKChannelType.PERSONAL) {
                     setOnlineView(channel);
@@ -615,14 +560,14 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                     }
                 }
                 //判断是否显示聊天昵称
-                boolean showNick = channel.showNick == 1;
-                if (showNickName != showNick) {
-                    showNickName = showNick;
-                    for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                        chatAdapter.getData().get(i).showNickName = showNickName;
-                    }
-                    chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
-                }
+//                boolean showNick = channel.showNick == 1;
+//                if (showNickName != showNick) {
+//                    showNickName = showNick;
+//                    for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+//                        chatAdapter.getData().get(i).showNickName = showNickName;
+//                    }
+//                    chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
+//                }
                 EndpointManager.getInstance().invoke("set_chat_bg", new SetChatBgMenu(channelId, channelType, wkVBinding.imageView, wkVBinding.rootLayout, wkVBinding.blurView));
             } else {
                 for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
@@ -961,13 +906,14 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                     if (msg.remoteExtra.readedCount == 0) {
                         msg.remoteExtra.unreadCount = count - 1;
                     }
-                    //移除正在输入
-                    if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg != null && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
-                        chatAdapter.removeAt(chatAdapter.getItemCount() - 1);
-                    }
+
                     if (msg.channelID.equals(channelId) && msg.channelType == channelType) {
                         if (!chatAdapter.isExist(msg.clientMsgNO)) {
                             if (!isCanLoadMore) {
+                                //移除正在输入
+                                if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg != null && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
+                                    chatAdapter.removeAt(chatAdapter.getItemCount() - 1);
+                                }
                                 WKMsg timeMsg = addTimeMsg(msg.timestamp);
                                 WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
                                 if (timeMsg != null && chatAdapter.getData().size() > 1) {
@@ -1101,6 +1047,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             if (channel.robot == 1) {
                 wkVBinding.topLayout.categoryLayout.addView(Theme.getChannelCategoryTV(this, getString(R.string.bot), ContextCompat.getColor(this, R.color.colorFFC107), ContextCompat.getColor(this, R.color.white), ContextCompat.getColor(this, R.color.colorFFC107)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 1, 0));
             }
+            EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
         }
         wkVBinding.topLayout.avatarView.showAvatar(channelId, channelType, avatarKey);
 
@@ -1123,7 +1070,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             if (channel != null) {
                 count = WKIM.getInstance().getChannelMembersManager().getMemberCount(channelId, channelType);
                 showChannelName(channel);
-                showNickName = channel.showNick == 1;
+                // showNickName = channel.showNick == 1;
                 if (channel.forbidden == 1) {
                     wkVBinding.chatInputPanel.showOrHideForbiddenView();
                 }
@@ -1166,6 +1113,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (getIntent().hasExtra("unreadStartMsgOrderSeq")) {
             unreadStartMsgOrderSeq = getIntent().getLongExtra("unreadStartMsgOrderSeq", 0);
         }
+
         List<WKReminder> allReminder = WKIM.getInstance().getReminderManager().getReminders(channelId, channelType);
         if (allReminder != null && allReminder.size() > 0) {
             String loginUID = WKConfig.getInstance().getUid();
@@ -1192,6 +1140,9 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (tipsOrderSeq != 0) {
             aroundMsgSeq = tipsOrderSeq;
             isCanLoadMore = true;
+        }
+        if (aroundMsgSeq == 0 && getIntent().hasExtra("aroundMsgSeq")) {
+            aroundMsgSeq = getIntent().getLongExtra("aroundMsgSeq", 0);
         }
         getData(lastPreviewMsgOrderSeq == 0 ? 0 : 1, unreadStartMsgOrderSeq > 0, aroundMsgSeq, isScrollToEnd);
 
@@ -1280,7 +1231,6 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (WKReader.isNotEmpty(msgList)) {
             long pre_msg_time = chatAdapter.getLastTimeMsg();
             for (int i = 0, size = msgList.size(); i < size; i++) {
-
                 if (!WKTimeUtils.getInstance().isSameDay(msgList.get(i).timestamp, pre_msg_time) && msgList.get(i).type != WKContentType.emptyView) {
                     //显示聊天时间
                     WKUIChatMsgItemEntity uiChatMsgEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
@@ -1372,14 +1322,23 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (redDot > 0) {
             wkVBinding.chatUnreadLayout.newMsgLayout.performClick();
         }
+        WKMsg wkMsg = new WKMsg();
+        wkMsg.channelID = channelId;
+        wkMsg.channelType = channelType;
+        wkMsg.type = messageContent.type;
+        wkMsg.baseContentMsgModel = messageContent;
         WKChannel channel = getChatChannelInfo();
         if (channel.robot == 1) signal = 0;
         WKMsgSetting setting = new WKMsgSetting();
         setting.receipt = channel.receipt;
+        wkMsg.setting = setting;
+        wkMsg.setChannelInfo(channel);
+        wkMsg.fromUID = WKConfig.getInstance().getUid();
+        WKSendMsgUtils.getInstance().sendMessage(wkMsg);
         //setting.signal = signal;
-        messageContent.flame = channel.flame;
-        messageContent.flameSecond = channel.flameSecond;
-        WKSendMsgUtils.getInstance().sendMessage(messageContent, setting, channelId, channelType);
+//        messageContent.flame = channel.flame;
+//        messageContent.flameSecond = channel.flameSecond;
+//        WKSendMsgUtils.getInstance().sendMessage(messageContent, setting, channelId, channelType);
     }
 
     ActivityResultLauncher<Intent> previewNewImgResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -1407,7 +1366,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                     messageContentList.add(WKCardContent);
                     List<WKChannel> list = new ArrayList<>();
                     list.add(WKIM.getInstance().getChannelManager().getChannel(channelId, channelType));
-                    new XPopup.Builder(ChatActivity.this).asCustom(new ChatConfirmDialogView(ChatActivity.this, list, messageContentList, (list1, messageContent) -> sendMsg(WKCardContent))).show();
+                    WKUIKitApplication.getInstance().showChatConfirmDialog(ChatActivity.this, list, messageContentList, (list1, messageContentList1) -> sendMsg(WKCardContent));
                 }
             }
         }
@@ -2136,12 +2095,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, wkMsg, null));
         wkVBinding.recyclerView.scrollToPosition(0);
         lastPreviewMsgOrderSeq = 0;
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                getData(0, false, 0, false);
-            }
-        }, 500);
+        new Handler().postDelayed(() -> getData(0, false, 0, false), 500);
     }
 
     private void showMoreLoading() {
@@ -2153,11 +2107,44 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
         lastPreviewMsgOrderSeq = 0;
         unreadStartMsgOrderSeq = 0;
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                getData(1, false, 0, false);
+        new Handler().postDelayed(() -> getData(1, false, 0, false), 500);
+    }
+
+    private List<PopupMenuItem> getGroupApprovePopupItems() {
+        PopupMenuItem item = new PopupMenuItem(getString(R.string.clear_all_remind), R.mipmap.msg_seen, () -> {
+            List<WKReminder> list = WKIM.getInstance().getReminderManager().getRemindersWithType(channelId, channelType, WKMentionType.WKApplyJoinGroupApprove);
+            List<Long> ids = new ArrayList<>();
+            for (WKReminder reminder : list) {
+                if (reminder.done == 0) {
+                    ids.add(reminder.reminderID);
+                }
             }
-        }, 500);
+            groupApproveList.clear();
+            resetGroupApproveView();
+            MsgModel.getInstance().doneReminder(ids);
+        });
+
+        List<PopupMenuItem> list = new ArrayList<>();
+        list.add(item);
+        return list;
+    }
+
+    private List<PopupMenuItem> getRemindPopupItems() {
+        PopupMenuItem item = new PopupMenuItem(getString(R.string.clear_all_remind), R.mipmap.msg_seen, () -> {
+            List<WKReminder> list = WKIM.getInstance().getReminderManager().getRemindersWithType(channelId, channelType, WKMentionType.WKReminderTypeMentionMe);
+            List<Long> ids = new ArrayList<>();
+            for (WKReminder reminder : list) {
+                if (reminder.done == 0) {
+                    ids.add(reminder.reminderID);
+                }
+            }
+            reminderList.clear();
+            resetRemindView();
+            MsgModel.getInstance().doneReminder(ids);
+        });
+
+        List<PopupMenuItem> list = new ArrayList<>();
+        list.add(item);
+        return list;
     }
 }

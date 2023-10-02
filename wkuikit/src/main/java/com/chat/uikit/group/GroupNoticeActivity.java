@@ -14,11 +14,10 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
-import com.chat.base.utils.SoftKeyboardUtils;
-import com.chat.base.ui.components.CustomerTouchListener;
-import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActGroupNoticeLayoutBinding;
 import com.chat.uikit.group.service.GroupModel;
@@ -95,25 +94,7 @@ public class GroupNoticeActivity extends WKBaseActivity<ActGroupNoticeLayoutBind
             cm.setPrimaryClip(mClipData);
             WKToastUtils.getInstance().showToastNormal(getString(R.string.copyed));
         }));
-
-        wkVBinding.contentEt.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                if (!TextUtils.isEmpty(Objects.requireNonNull(wkVBinding.contentEt.getText()).toString())) {
-                    WKDialogUtils.getInstance().showPopup(coordinate, view, list);
-                }
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
+        WKDialogUtils.getInstance().setViewLongClickPopup(wkVBinding.contentEt,list);
     }
 
     @Override

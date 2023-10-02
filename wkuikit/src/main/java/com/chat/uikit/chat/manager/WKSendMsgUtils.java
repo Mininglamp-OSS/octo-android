@@ -2,6 +2,7 @@ package com.chat.uikit.chat.manager;
 
 import android.text.TextUtils;
 
+import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.net.ud.WKUploader;
 import com.xinbida.wukongim.WKIM;
@@ -9,8 +10,8 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.interfaces.IUploadAttacResultListener;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
-import com.xinbida.wukongim.msgmodel.WKVideoContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
 import java.util.List;
 import java.util.Timer;
@@ -32,6 +33,11 @@ public class WKSendMsgUtils {
 
     public static WKSendMsgUtils getInstance() {
         return SendMsgUtilsBinder.utils;
+    }
+
+    public void sendMessage(WKMsg wkMsg) {
+        EndpointManager.getInstance().invoke("send_message", wkMsg);
+        WKIM.getInstance().getMsgManager().sendMessage(wkMsg);
     }
 
     /**

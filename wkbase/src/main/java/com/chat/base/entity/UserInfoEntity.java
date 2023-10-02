@@ -21,6 +21,7 @@ public class UserInfoEntity {
     public String lock_screen_pwd;//锁屏密码
     public int lock_after_minute;
     public String rsa_public_key;
+    public int msg_expire_second;
     public UserInfoSetting setting;
 
 }

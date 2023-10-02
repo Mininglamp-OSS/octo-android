@@ -7,6 +7,7 @@ import com.chat.base.net.ApiService;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.UploadFileUrl;
 import com.chat.base.net.entity.UploadResultEntity;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKTimeUtils;
 
 import java.io.File;
@@ -35,7 +36,6 @@ public class WKUploader extends WKBaseModel {
         MediaType mediaType = MediaType.Companion.parse("multipart/form-data");
         File file = new File(filePath);
         RequestBody fileBody = RequestBody.Companion.create(file, mediaType);
-
         FileRequestBody fileRequestBody = new FileRequestBody(fileBody, tag);
         MultipartBody.Part part = MultipartBody.Part.createFormData("file", file.getName(), fileRequestBody);
         request(createService(UploadService.class).upload(uploadUrl, part), new IRequestResultListener<>() {
@@ -56,7 +56,7 @@ public class WKUploader extends WKBaseModel {
         String tempFileName = f.getName();
         String prefix = tempFileName.substring(tempFileName.lastIndexOf(".") + 1);
         String path = "/" + channelType + "/" + channelID + "/" + WKTimeUtils.getInstance().getCurrentMills() + "." + prefix;
-        request(createService(ApiService.class).getUploadFileUrl(WKApiConfig.baseUrl + "file/upload?type=chat&path=" + path), new IRequestResultListener<>() {
+        request(createService(ApiService.class).getUploadFileUrl(WKApiConfig.baseUrl + "file/upload?type=chat&path=" + path), new IRequestResultListener<UploadFileUrl>() {
             @Override
             public void onSuccess(UploadFileUrl result) {
                 iGetUploadFileUrl.onResult(result.url, path);

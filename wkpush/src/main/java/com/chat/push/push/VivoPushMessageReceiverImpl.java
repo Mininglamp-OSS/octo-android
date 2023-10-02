@@ -15,7 +15,7 @@ public class VivoPushMessageReceiverImpl extends OpenClientPushMessageReceiver {
         super.onReceiveRegId(context, regId);
         String packageName = WKDeviceUtils.getInstance().getPackageName(context);
         Log.e("注册vivo推送",regId);
-        PushModel.getInstance().registerDeviceToken(regId, packageName);
+        PushModel.getInstance().registerDeviceToken(regId, packageName,"service-vivo");
     }
 
     @Override

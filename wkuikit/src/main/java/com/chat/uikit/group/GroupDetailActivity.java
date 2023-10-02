@@ -7,6 +7,7 @@ import android.view.View;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
@@ -14,17 +15,16 @@ import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.WKAdvancedItemViewMenu;
+import com.chat.base.endpoint.entity.ChatSettingCellMenu;
 import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKDialogUtils;
-import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.FullyGridLayoutManager;
-import com.chat.base.views.BottomEntity;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActGroupDetailLayoutBinding;
@@ -34,7 +34,6 @@ import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.group.service.GroupPresenter;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.user.UserDetailActivity;
-import com.chat.uikit.utils.UIKitDialogUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
@@ -56,7 +55,6 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     private int memberRole;
     private WKChannel groupChannel;
     private int groupType = 0;
-    private WKChannelMember adminMember;
     private TextView titleTv;
 
     @Override
@@ -90,23 +88,30 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
-        View view = (View) EndpointManager.getInstance().invoke("msg_remind_view", new WKAdvancedItemViewMenu(groupNo, WKChannelType.GROUP, this));
+        View view = (View) EndpointManager.getInstance().invoke("msg_remind_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.msgRemindLayout));
         if (view != null) {
             wkVBinding.msgRemindLayout.removeAllViews();
             wkVBinding.msgRemindLayout.addView(view);
         }
 
-        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new WKAdvancedItemViewMenu(groupNo, WKChannelType.GROUP, this));
+        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.findContentLayout));
         if (findMsgView != null) {
             wkVBinding.findContentView.setVisibility(View.VISIBLE);
             wkVBinding.findContentLayout.removeAllViews();
             wkVBinding.findContentLayout.addView(findMsgView);
         }
-        View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new WKAdvancedItemViewMenu(groupNo, WKChannelType.GROUP, this));
+
+        View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.msgSettingLayout));
         if (msgReceiptView != null) {
-            wkVBinding.msgReceiptLayout.removeAllViews();
-            wkVBinding.msgReceiptLayout.addView(msgReceiptView);
+            wkVBinding.msgSettingLayout.removeAllViews();
+            wkVBinding.msgSettingLayout.addView(msgReceiptView);
         }
+
+        View msgPrivacyLayout = (View) EndpointManager.getInstance().invoke("chat_setting_msg_privacy", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.msgSettingLayout));
+        if (msgReceiptView != null) {
+            wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
+        }
+
     }
 
     @Override
@@ -197,12 +202,10 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             startActivity(intent);
         });
 
-        wkVBinding.exitBtn.setOnClickListener(v -> {
-            List<BottomEntity> list = new ArrayList<>();
-            list.add(new BottomEntity(getString(R.string.exit_group_tips), R.color.colorDark, false));
-            list.add(new BottomEntity(getString(R.string.sure), R.color.red));
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, bottomEntity) -> {
-                if (position == 1) {
+        wkVBinding.exitBtn.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.delete_group), getString(R.string.exit_group_tips), true, "", getString(R.string.delete_group), 0, ContextCompat.getColor(this, R.color.red), new WKDialogUtils.IClickListener() {
+            @Override
+            public void onClick(int index) {
+                if (index == 1) {
                     GroupModel.getInstance().exitGroup(groupNo, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
                             WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
@@ -213,8 +216,8 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                         } else showToast(msg);
                     });
                 }
-            });
-        });
+            }
+        }));
         SingleClickUtil.onSingleClick(wkVBinding.groupAvatarLayout, view1 -> {
             Intent intent = new Intent(this, GroupHeaderActivity.class);
             intent.putExtra("groupNo", groupNo);
@@ -226,23 +229,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             startActivity(intent);
         });
         SingleClickUtil.onSingleClick(wkVBinding.groupManageLayout, view1 -> EndpointManager.getInstance().invoke("chat_show_group_manage_view", groupNo));
-        wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
-            List<BottomEntity> list = new ArrayList<>();
-            list.add(new BottomEntity(getString(R.string.clear_chat_group_msg_dialog), R.color.color999, false));
-            list.add(new BottomEntity(getString(R.string.sure)));
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, bottomEntity) -> {
-                if (position == 1) {
-                    MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
-                    WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
-                    showToast(getString(R.string.cleared));
-                }
-            });
-
-        });
-        wkVBinding.inGroupNameLayout.setOnClickListener(v -> UIKitDialogUtils.getInstance().showUpdateNameInGroupDialog(this, groupNo, name -> {
-            wkVBinding.inGroupNameTv.setText(name);
-            SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
+        wkVBinding.clearChatMsgLayout.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.clear_history), getString(R.string.clear_chat_group_msg_dialog), true, "", getString(R.string.delete), 0, ContextCompat.getColor(this, R.color.red), index -> {
+            if (index == 1) {
+                MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
+                WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
+                showToast(getString(R.string.cleared));
+            }
         }));
+        wkVBinding.inGroupNameLayout.setOnClickListener(v -> updateNameInGroupDialog());
         SingleClickUtil.onSingleClick(wkVBinding.noticeLayout, view1 -> {
             if (groupChannel == null) return;
             String notice = "";
@@ -408,7 +402,6 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             for (int i = 0, size = Math.min(list.size(), maxCount); i < size; i++) {
                 if (list.get(i).role == WKChannelMemberRole.admin) {
                     //群主或管理员
-                    adminMember = list.get(i);
                     temp.add(0, list.get(i));
                 } else temp.add(list.get(i));
 
@@ -521,6 +514,28 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         }
     }
 
+    private void updateNameInGroupDialog() {
+        String showName = "";
+        WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        if (member != null) {
+            String name = member.memberRemark;
+            if (TextUtils.isEmpty(name))
+                name = member.memberName;
+            if (!TextUtils.isEmpty(name)) {
+                showName = name;
+            }
+        }
+        WKDialogUtils.getInstance().showInputDialog(this, getString(R.string.my_in_group_name), getString(R.string.update_in_gorup_name), showName, "", 10, text -> {
+            if (!TextUtils.isEmpty(text)) {
+                GroupModel.getInstance().updateGroupMemberInfo(groupNo, WKConfig.getInstance().getUid(), "remark", text, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        wkVBinding.inGroupNameTv.setText(text);
+                    } else WKToastUtils.getInstance().showToastNormal(msg);
+                });
+
+            }
+        });
+    }
 
     @Override
     protected void onDestroy() {

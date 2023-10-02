@@ -4,6 +4,7 @@ import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 
 import android.Manifest;
 import android.app.Application;
+import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -13,14 +14,28 @@ import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Parcelable;
 import android.text.TextUtils;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.alibaba.fastjson.JSON;
 import com.chat.base.WKBaseApplication;
+import com.chat.base.config.WKApiConfig;
+import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
+import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
-import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatChooseContacts;
@@ -49,7 +64,12 @@ import com.chat.base.msg.model.WKGifContent;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.ui.components.AlertDialog;
+import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
+import com.chat.base.utils.ImageUtils;
+import com.chat.base.utils.LayoutHelper;
+import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKMediaFileUtils;
 import com.chat.base.utils.WKPermissions;
@@ -80,6 +100,7 @@ import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -91,6 +112,7 @@ import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
 import org.json.JSONObject;
 
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
@@ -142,12 +164,17 @@ public class WKUIKitApplication {
     public void initIM() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
             //设置开发模式
-            WKIM.getInstance().setDebug(true);
+            WKIM.getInstance().setDebug(WKBinder.isDebug);
             WKIM.getInstance().setFileCacheDir("wkIM");
 
             String imToken = WKConfig.getInstance().getImToken();
             String uid = WKConfig.getInstance().getUid();
             WKIM.getInstance().init(mContext.get(), uid, imToken);
+
+            CrashReport.initCrashReport(getContext(), "4083bcaa8c", false);
+            CrashReport.setUserId(WKConfig.getInstance().getUid());
+            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
+
         }
     }
 
@@ -175,12 +202,11 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
-
 
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VOICE, new WKVoiceProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
 
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig());
@@ -193,7 +219,7 @@ public class WKUIKitApplication {
         //注册消息长按菜单配置
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.typing, object -> new MsgConfig(false, false, false, false, false));
-        EndpointManager.getInstance().setMethod("", EndpointCategory.wkChatPopupItem, 0, object -> {
+        EndpointManager.getInstance().setMethod("", EndpointCategory.wkChatPopupItem, 90, object -> {
             WKMsg wkMsg = (WKMsg) object;
             if (wkMsg.type == WKContentType.WK_TEXT) {
                 return new ChatItemPopupMenu(R.mipmap.msg_copy, getContext().getString(R.string.copy), (msg, iConversationContext) -> {
@@ -211,13 +237,7 @@ public class WKUIKitApplication {
             }
             return null;
         });
-        EndpointManager.getInstance().setMethod("", EndpointCategory.chatShowBubble, new EndpointHandler() {
-            @Override
-            public Object invoke(Object object) {
-                int type = (int) object;
-                return type == WKContentType.WK_TEXT;
-            }
-        });
+
         //添加个人中心
         EndpointManager.getInstance().setMethod("personal_center_currency", EndpointCategory.personalCenter, 2, object -> new PersonalInfoMenu(R.mipmap.icon_setting, mContext.get().getString(R.string.currency), () -> {
             Intent intent = new Intent(mContext.get(), SettingActivity.class);
@@ -410,6 +430,7 @@ public class WKUIKitApplication {
         });
         //监听登录状态
         EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(() -> {
+            Log.e("接受登录", "-->3");
             WKSharedPreferencesUtil.getInstance().putInt("wk_lock_screen_pwd_count", 5);
             WKSharedPreferencesUtil.getInstance().putBoolean("sync_friend", true);
             //初始化im
@@ -476,11 +497,10 @@ public class WKUIKitApplication {
 
     public void exitLogin(int from) {
         MsgModel.getInstance().stopTimer();
-        EndpointManager.getInstance().invoke("push_unregister_push", null);
+        EndpointManager.getInstance().invoke("wk_logout", null);
         WKConfig.getInstance().clearInfo();
         WKIM.getInstance().getConnectionManager().disconnect(true);
         ActManagerUtils.getInstance().clearAllActivity();
-        EndpointManager.getInstance().invoke("exit_rtc", null);
         EndpointManager.getInstance().invoke("main_show_home_view", from);
         //关闭UI层数据库
         WKBaseApplication.getInstance().closeDbHelper();
@@ -551,5 +571,122 @@ public class WKUIKitApplication {
             public void clickResult(boolean isCancel) {
             }
         }, iConversationContext.getChatActivity(), desc, permissionStr);
+    }
+
+    public interface IShowChatConfirm {
+        void onBack(@NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList);
+    }
+
+    public void showChatConfirmDialog(@NonNull Context context, @NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, final IShowChatConfirm iShowChatConfirm) {
+        View view = LayoutInflater.from(context).inflate(R.layout.chat_confirm_dialog_view, null, false);
+        RecyclerView recyclerView = view.findViewById(R.id.recyclerView);
+        AvatarView avatarView = view.findViewById(R.id.avatarView);
+        TextView nameTv = view.findViewById(R.id.nameTv);
+        ImageView imageView = view.findViewById(R.id.imageView);
+        TextView contentTv = view.findViewById(R.id.contentTv);
+        if (list.size() == 1) {
+            avatarView.showAvatar(list.get(0));
+            String showName = list.get(0).channelRemark;
+            if (TextUtils.isEmpty(showName)) showName = list.get(0).channelName;
+            if (list.get(0).channelID.equals(WKSystemAccount.system_file_helper)) {
+                showName = context.getString(R.string.wk_file_helper);
+            }
+            if (list.get(0).channelID.equals(WKSystemAccount.system_team)) {
+                showName = context.getString(R.string.wk_system_notice);
+            }
+            nameTv.setText(showName);
+            recyclerView.setVisibility(View.GONE);
+            avatarView.setVisibility(View.VISIBLE);
+            nameTv.setVisibility(View.VISIBLE);
+        } else {
+            class AvatarViewHolder extends RecyclerView.ViewHolder {
+                final AvatarView avatarView;
+
+                public AvatarViewHolder(@NonNull View itemView) {
+                    super(itemView);
+                    avatarView = itemView.findViewWithTag("avatar");
+                }
+            }
+            recyclerView.setLayoutManager(new GridLayoutManager(context, 5));
+            recyclerView.setAdapter(new RecyclerView.Adapter<AvatarViewHolder>() {
+                @NonNull
+                @Override
+                public AvatarViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+                    LinearLayout view1 = new LinearLayout(parent.getContext());
+                    AvatarView avatarView1 = new AvatarView(parent.getContext());
+                    avatarView1.setTag("avatar");
+                    view1.addView(avatarView1, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER,5,5,5,5));
+                    return new AvatarViewHolder(view1);
+                }
+
+                @Override
+                public void onBindViewHolder(@NonNull AvatarViewHolder holder, int position) {
+                    holder.avatarView.setSize(40);
+                    holder.avatarView.showAvatar(list.get(position));
+                }
+
+                @Override
+                public int getItemCount() {
+                    return list.size();
+                }
+            });
+            nameTv.setVisibility(View.GONE);
+            avatarView.setVisibility(View.GONE);
+            contentTv.setVisibility(View.GONE);
+        }
+
+        if (messageContentList.size() == 1) {
+            WKMessageContent messageContent = messageContentList.get(0);
+            if (messageContent.type == WKContentType.WK_IMAGE) {
+                WKImageContent imgMsgModel = (WKImageContent) messageContent;
+                ViewGroup.LayoutParams layoutParams = imageView.getLayoutParams();
+                int[] ints = ImageUtils.getInstance().getImageWidthAndHeightToTalk(imgMsgModel.width, imgMsgModel.height);
+                layoutParams.height = ints[1];
+                layoutParams.width = ints[0];
+                imageView.setLayoutParams(layoutParams);
+                String showUrl;
+                if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
+                    showUrl = imgMsgModel.localPath;
+                    File file = new File(showUrl);
+                    if (!file.exists()) {
+                        //如果本地文件被删除就显示网络图片
+                        showUrl = WKApiConfig.getShowUrl(imgMsgModel.url);
+                    }
+                } else {
+                    showUrl = WKApiConfig.getShowUrl(imgMsgModel.url);
+                }
+                GlideUtils.getInstance().showImg(context, showUrl, ints[0], ints[1], imageView);
+                imageView.setVisibility(View.VISIBLE);
+                contentTv.setVisibility(View.GONE);
+            } else {
+                String content = messageContent.getDisplayContent();
+                if (messageContent.type == WKContentType.WK_CARD) {
+                    WKCardContent WKCardContent = (WKCardContent) messageContent;
+                    content = content + WKCardContent.name;
+                }
+                contentTv.setText(content);
+                imageView.setVisibility(View.GONE);
+                contentTv.setVisibility(View.VISIBLE);
+            }
+        } else {
+            imageView.setVisibility(View.GONE);
+            contentTv.setVisibility(View.VISIBLE);
+            contentTv.setText(String.format(context.getString(R.string.item_forward_count), messageContentList.size()));
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(context.getString(R.string.send_to));
+
+        builder.setView(view);
+        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> iShowChatConfirm.onBack(list, messageContentList));
+        builder.setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> {
+
+        });
+
+        AlertDialog dialog = builder.create();
+        dialog.setBlurParams(1f, true, true);
+        dialog.show();
+        TextView sureTv = (TextView) dialog.getButton(Dialog.BUTTON_POSITIVE);
+        sureTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
+
     }
 }

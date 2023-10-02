@@ -21,7 +21,6 @@ import com.chat.base.glide.ChooseMimeType;
 import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
-import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
@@ -99,15 +98,13 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
             WKBaseApplication.getInstance().disconnect = false;
             chooseIMG();
         }));
-        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> ImageUtils.getInstance().downloadImg(this,WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid()), bitmap -> {
+        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> ImageUtils.getInstance().downloadImg(this, WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid()), bitmap -> {
             if (bitmap != null) {
                 ImageUtils.getInstance().saveBitmap(MyHeadPortraitActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
             }
         })));
         ImageView rightIV = findViewById(R.id.titleRightIv);
-        float x = AndroidUtilities.getScreenWidth();
-        float y = AndroidUtilities.dp(50);
-        WKDialogUtils.getInstance().showScreenPopup(rightIV, new float[]{x, y}, list);
+        WKDialogUtils.getInstance().showScreenPopup(rightIV, list);
     }
 
     private void chooseIMG() {

@@ -14,8 +14,6 @@ import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.AvatarView
-import com.chat.base.ui.components.CustomerTouchListener
-import com.chat.base.ui.components.CustomerTouchListener.ICustomerTouchListener
 import com.chat.base.utils.LayoutHelper
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKTimeUtils
@@ -33,7 +31,7 @@ class FriendAdapter :
         val index: Int = holder.bindingAdapterPosition - 1
         val index1: Int = getPositionForSection(item.pying.substring(0, 1))
         holder.setText(R.id.pyTv, item.pying.substring(0, 1))
-        holder.setVisible(R.id.pyTv, index == index1)
+        holder.setGone(R.id.pyTv, index != index1)
         val avatarView: AvatarView = holder.getView(R.id.avatarView)
         avatarView.setSize(50f)
         avatarView.showAvatar(item.channel, true)
@@ -194,18 +192,7 @@ class FriendAdapter :
                     }
                 })
         )
-        holder.getView<View>(R.id.contentLayout)
-            .setOnTouchListener(CustomerTouchListener(object : ICustomerTouchListener {
-                override fun onClick(view: View, coordinate: FloatArray) {}
-                override fun onLongClick(view: View, coordinate: FloatArray) {
-                    if (item.channel.robot == 0 && TextUtils.isEmpty(item.channel.category)) {
-                        WKDialogUtils.getInstance().showPopup(coordinate, view, list)
-                    }
-                }
-
-                override fun onDoubleClick(view: View, coordinate: FloatArray) {}
-            }))
-
+        WKDialogUtils.getInstance().setViewLongClickPopup(holder.getView(R.id.contentLayout),list)
     }
 
 

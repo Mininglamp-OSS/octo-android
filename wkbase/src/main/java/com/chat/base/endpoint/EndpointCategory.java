@@ -40,4 +40,9 @@ public class EndpointCategory {
     public final static String wkChatPopupItem = "wk_chat_popup_item";
     // 聊天显示气泡
     public final static String chatShowBubble = "chat_show_bubble";
+
+    public final static String homeTab = "home_tab";
+    public final static String homeUpdateSelect = "home_update_select";
+    public final static String chatSettingCell = "chat_setting_cell";
+
 }

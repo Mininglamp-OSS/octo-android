@@ -60,4 +60,8 @@ public interface UserService {
 
     @GET("user/maillist")
     Observable<List<MailListEntity>> getContacts();
+
+    @POST("user/signal/keys")
+    Observable<CommonResponse> signalKeys(@Body JSONObject jsonObject);
+
 }

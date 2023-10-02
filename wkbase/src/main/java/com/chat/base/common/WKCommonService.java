@@ -29,4 +29,6 @@ interface WKCommonService {
     @GET("channels/{channelID}/{channelType}")
     Observable<ChannelInfoEntity> getChannel(@Path("channelID") String channelID, @Path("channelType") byte channelType);
 
+    @GET("common/appmodule")
+    Observable<List<AppModule>> getAppModule();
 }

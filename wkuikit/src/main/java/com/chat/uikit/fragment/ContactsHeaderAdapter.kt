@@ -20,7 +20,7 @@ class ContactsHeaderAdapter :
         msgCountTv.setCount(item.badgeNum, true)
         msgCountTv.visibility = if (item.badgeNum > 0) View.VISIBLE else View.GONE
         val avatarView: AvatarView = holder.getView<AvatarView>(R.id.avatarView)
-        avatarView.setSize(50f)
+        avatarView.setSize(40f)
         if (!TextUtils.isEmpty(item.uid)) {
             holder.setVisible(R.id.userLayout, true)
             holder.setVisible(R.id.dotIv, true)

@@ -37,10 +37,13 @@ public class LogInterceptor implements Interceptor {
             //获取request内容
             RequestBody requestBody = request.body();
             String requestParams = "";
-            if (requestBody != null) {
+
+            if (requestBody != null && !requestBody.isOneShot()) {
+                boolean oneShort = requestBody.isOneShot();
+                WKLogUtils.e("判断执行次数"+oneShort);
                 MediaType type = requestBody.contentType();
                 Buffer source = new Buffer();
-                request.body().writeTo(source);
+                requestBody.writeTo(source);
                 try {
                     Charset charset = type == null ? Charset.defaultCharset() : type.charset(Charset.defaultCharset());
                     Util.readBomAsCharset(source, charset);
@@ -66,7 +69,7 @@ public class LogInterceptor implements Interceptor {
                         .append(formatJson(requestParams)).append("\n");
             }
             reqSb.append("**************Request***************").append("\n");
-            WKLogUtils.d("network-log: \n" + reqSb.toString());
+            WKLogUtils.d("wkHttpLog", reqSb.toString());
 
             // 响应日志
             long t1 = System.nanoTime();
@@ -91,7 +94,7 @@ public class LogInterceptor implements Interceptor {
                 sb.append("http请求失败，").append(response.networkResponse()).append("\n");
             }
             sb.append("*************Response**************");
-            WKLogUtils.d("   " + sb.toString());
+            WKLogUtils.d("wkHttpLog", "   " + sb);
             MediaType mediaType = response.body().contentType();
             return response.newBuilder()
                     .body(okhttp3.ResponseBody.create(content, mediaType))
@@ -119,9 +122,6 @@ public class LogInterceptor implements Interceptor {
             }
 
         }
-//        else if (json != null) {
-//            return formatPostFormData(json);
-//        }
         return "";
     }
 

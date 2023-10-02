@@ -31,7 +31,7 @@
     <string name="edit_group_notice">Only the owner and manager can edit</string>
     <string name="delete_group_members">Delete Members</string>
     <string name="add_group_members">Add Members</string>
-    <string name="in_gorup_name">My Alias in Group</string>
+    <string name="my_in_group_name">My Alias in Group</string>
     <string name="update_in_gorup_name">Editing your alias only changers your name displayed in this group. It is visible to all group members.</string>
     <string name="group_name">Group name</string>
     <string name="group_avatar">Group header</string>
@@ -102,7 +102,7 @@
     <string name="chat_pwd">Chat Password</string>
     <string name="app_idnum">%s ID：</string>
     <string name="set_remark">Remark</string>
-    <string name="delete_friends">Delete</string>
+    <string name="delete_friends">Delete contact</string>
     <string name="push_black_list">Add Block</string>
     <string name="pull_out_black_list">Remove Block</string>
     <string name="black_list_desc">Has been added to the blacklist, you will no longer receive messages from the other party</string>
@@ -269,5 +269,8 @@
     <string name="save_label_sure">Save as Tag</string>
     <string name="default_new_msg">you have a new message</string>
     <string name="voice_download_fail">Voice download failed</string>
+    <string name="delete_messages">Delete messages</string>
+    <string name="delete_chat">Delete chat</string>
+    <string name="clear_history">Clear history</string>
 </resources>
 

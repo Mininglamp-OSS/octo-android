@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -31,7 +32,6 @@ import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.base.ui.components.NormalClickableContent;
 import com.chat.base.ui.components.NormalClickableSpan;
 import com.chat.base.utils.LayoutHelper;
@@ -39,7 +39,6 @@ import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
-import com.chat.base.views.BottomEntity;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.contacts.service.FriendModel;
@@ -95,6 +94,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
 
     private void initParams(Intent mIntent) {
         uid = mIntent.getStringExtra("uid");
+        if (TextUtils.isEmpty(uid)) finish();
         if (uid.equals(WKSystemAccount.system_file_helper)) {
             Intent intent = new Intent(this, WKFileHelperActivity.class);
             startActivity(intent);
@@ -209,11 +209,11 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         wkVBinding.pushBlackLayout.setOnClickListener(v -> {
 
             if (userChannel == null) return;
-            List<BottomEntity> list = new ArrayList<>();
-            list.add(new BottomEntity(getString(userChannel.status == 2 ? R.string.pull_out_black_list_tips : R.string.join_black_list_tips), R.color.color999, false));
-            list.add(new BottomEntity(getString(R.string.sure), R.color.red));
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, text) -> {
-                if (position == 1) {
+            String title = getString(userChannel.status == 2 ? R.string.pull_out_black_list : R.string.push_black_list);
+            String content = getString(userChannel.status == 2 ? R.string.pull_out_black_list_tips : R.string.join_black_list_tips);
+
+            WKDialogUtils.getInstance().showDialog(this, title, content, true, "", "", 0, 0, index -> {
+                if (index == 1) {
                     if (userChannel.status != 2)
                         UserModel.getInstance().addBlackList(uid, (code, msg) -> {
                             if (code == HttpResponseCode.success) {
@@ -225,58 +225,15 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                             finish();
                         } else showToast(msg);
                     });
+
                 }
             });
 
         });
-        wkVBinding.nameTv.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
+        setonLongClick(wkVBinding.nameTv, wkVBinding.nameTv);
+        setonLongClick(wkVBinding.identityLayout, wkVBinding.appIdNumTv);
+        setonLongClick(wkVBinding.nickNameLayout, wkVBinding.nickNameTv);
 
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                showCopy(view, coordinate, wkVBinding.nameTv.getText().toString());
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
-        wkVBinding.identityLayout.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                showCopy(wkVBinding.appIdNumTv, coordinate, wkVBinding.appIdNumTv.getText().toString());
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
-        wkVBinding.nickNameLayout.setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                showCopy(wkVBinding.nickNameTv, coordinate, wkVBinding.nickNameTv.getText().toString());
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
         //频道资料刷新
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("user_detail_refresh_channel1", (channel, isEnd) -> {
             if (channel != null && channel.channelID.equals(uid) && channel.channelType == WKChannelType.PERSONAL) {
@@ -284,7 +241,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                 setData();
             }
         });
-        SingleClickUtil.onSingleClick(wkVBinding.applyBtn, v -> WKDialogUtils.getInstance().showInputDialog(this, "", getString(R.string.input_remark), 20, content -> FriendModel.getInstance().applyAddFriend(uid, vercode, content, (code, msg) -> {
+        SingleClickUtil.onSingleClick(wkVBinding.applyBtn, v -> WKDialogUtils.getInstance().showInputDialog(UserDetailActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(uid, vercode, text, (code, msg) -> {
             if (code == HttpResponseCode.success) {
                 wkVBinding.applyBtn.setText(R.string.applyed);
                 wkVBinding.applyBtn.setAlpha(0.2f);
@@ -296,11 +253,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             finish();
         });
         wkVBinding.deleteLayout.setOnClickListener(v -> {
-            List<BottomEntity> list = new ArrayList<>();
-            list.add(new BottomEntity(String.format(getString(R.string.delete_friends_tips), wkVBinding.nameTv.getText().toString()), R.color.color999, false));
-            list.add(new BottomEntity(getString(R.string.delete_friends), R.color.red));
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(this, list, (position, text) -> {
-                if (position == 1) {
+            String content = String.format(getString(R.string.delete_friends_tips), wkVBinding.nameTv.getText().toString());
+            WKDialogUtils.getInstance().showDialog(this, getString(R.string.delete_friends), content, true, "", getString(R.string.delete), 0, ContextCompat.getColor(this, R.color.red), index -> {
+                if (index == 1) {
                     UserModel.getInstance().deleteUser(uid, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
                             WKIM.getInstance().getConversationManager().deleteWitchChannel(uid, WKChannelType.PERSONAL);
@@ -315,7 +270,6 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     });
                 }
             });
-
         });
         SingleClickUtil.onSingleClick(wkVBinding.remarkLayout, v -> {
             Intent intent = new Intent(this, SetUserRemarkActivity.class);
@@ -476,4 +430,19 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             getUserInfo();
         }
     });
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void setonLongClick(View view, TextView textView) {
+        final float[][] location = {new float[2]};
+        view.setOnTouchListener((var view12, var motionEvent) -> {
+            if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
+                location[0] = new float[]{motionEvent.getRawX(), motionEvent.getRawY()};
+            }
+            return false;
+        });
+        view.setOnLongClickListener(view1 -> {
+            showCopy(textView, location[0], textView.getText().toString());
+            return true;
+        });
+    }
 }

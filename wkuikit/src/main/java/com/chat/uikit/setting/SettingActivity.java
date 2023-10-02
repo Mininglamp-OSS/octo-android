@@ -18,9 +18,10 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.DataCleanManager;
+import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
-import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
+import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.databinding.ActSettingLayoutBinding;
 import com.chat.uikit.message.BackupRestoreMessageActivity;
 import com.xinbida.wukongim.WKIM;
@@ -58,13 +59,13 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     @Override
     protected void initListener() {
-        String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+        String wk_theme_pref = Theme.getTheme();
         if (wk_theme_pref.equals(Theme.DARK_MODE)) {
             wkVBinding.darkStatusTv.setText(R.string.enabled);
         } else {
             wkVBinding.darkStatusTv.setText(R.string.disabled);
         }
-        wkVBinding.loginOutTv.setOnClickListener(v -> showDialog(getString(R.string.login_out_dialog), index -> {
+        wkVBinding.loginOutTv.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.login_out), getString(R.string.login_out_dialog), true, "", getString(R.string.login_out), 0, 0, index -> {
             if (index == 1) {
                 WKUIKitApplication.getInstance().exitLogin(0);
             }
@@ -82,6 +83,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
                 WKIM.getInstance().getMsgManager().clearAll();
             }
         }));
+        SingleClickUtil.onSingleClick(wkVBinding.moduleLayout, view1 -> startActivity(new Intent(this, AppModulesActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.aboutLayout, view1 -> startActivity(new Intent(this, WKAboutActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.fontSizeLayout, view1 -> startActivity(new Intent(this, WKSetFontSizeActivity.class)));
         WKCommonModel.getInstance().getAppNewVersion(false, version -> {
@@ -107,9 +109,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
             intent.putExtra("url", WKApiConfig.baseWebUrl + "sdkinfo.html");
             startActivity(intent);
         });
-        SingleClickUtil.onSingleClick(wkVBinding.errorLogLayout, view1 -> {
-            startActivity(new Intent(this, ErrorLogsActivity.class));
-        });
+        SingleClickUtil.onSingleClick(wkVBinding.errorLogLayout, view1 -> startActivity(new Intent(this, ErrorLogsActivity.class)));
 
     }
 
@@ -132,7 +132,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
 
     @SuppressLint("HandlerLeak")
-    private final Handler mHandler = new Handler(Looper.myLooper()) {
+    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
         public void handleMessage(Message msg) {
             if (msg.what == 1) {
                 wkVBinding.imageCacheTv.setText(str);

@@ -25,6 +25,7 @@ import com.chat.base.R;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.emoji.EmojiManager;
 import com.chat.base.emoji.MoonUtil;
+import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.ui.Theme;
@@ -35,7 +36,6 @@ import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
-import com.chat.base.views.BottomEntity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
@@ -53,7 +53,7 @@ import java.util.regex.Matcher;
  */
 public class WKUIChatMsgItemEntity {
     public WKMsg wkMsg; // 本条消息对象
-    public boolean showNickName; // 是否显示消息昵称
+    public boolean showNickName = true; // 是否显示消息昵称
     public boolean isPlaying; // 语音是否在播放
     public boolean isChoose; // 是否选择消息
     public boolean isChecked; // 是否选中消息
@@ -63,16 +63,16 @@ public class WKUIChatMsgItemEntity {
     public boolean isUpdateStatus;
     public boolean isRefreshReaction;
     //=========本地数据========
-    public final ILinkClick iLinkClick;
+    public ILinkClick iLinkClick;
     public SpannableStringBuilder displaySpans;
 
     public WKUIChatMsgItemEntity(IConversationContext conversationContext, WKMsg wkMsg, ILinkClick iLinkClick) {
         this.wkMsg = wkMsg;
         this.iLinkClick = iLinkClick;
-        if (wkMsg != null){
+        if (wkMsg != null) {
             try {
                 formatSpans(conversationContext, wkMsg);
-            }catch (Exception ignored){
+            } catch (Exception ignored) {
             }
         }
 
@@ -110,69 +110,88 @@ public class WKUIChatMsgItemEntity {
                     NormalClickableSpan clickableSpan = new NormalClickableSpan(true, ContextCompat.getColor(context, R.color.blue), new NormalClickableContent(types, content), view -> {
 
                         if (StringUtils.isMobile(content)) {
-
                             conversationContext.hideSoftKeyboard();
-                            List<BottomEntity> bottomEntityList = new ArrayList<>();
-                            String phoneTips = String.format(context.getString(R.string.phone_tips), context.getString(R.string.app_name));
-                            bottomEntityList.add(new BottomEntity(content, phoneTips, R.color.colorDark, R.color.color999));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.copy), R.color.colorDark));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.call), R.color.colorDark));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.add_to_phone_book), R.color.colorDark));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.str_search), R.color.colorDark));
-                            WKDialogUtils.getInstance().showCommonBottomViewDialog(context, bottomEntityList, (position, bottomEntity) -> {
-                                if (position == 1) {
-                                    ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                                    ClipData mClipData = ClipData.newPlainText("Label", content);
-                                    assert cm != null;
-                                    cm.setPrimaryClip(mClipData);
-                                    WKToastUtils.getInstance().showToastNormal(context.getString(R.string.copyed));
-                                } else if (position == 2) {
-                                    Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + content));
-                                    context.startActivity(intent);
-                                } else if (position == 3) {
-                                    Intent addIntent = new Intent(Intent.ACTION_INSERT, Uri.withAppendedPath(Uri.parse("content://com.android.contacts"), "contacts"));
-                                    addIntent.setType("vnd.android.cursor.dir/person");
-                                    addIntent.setType("vnd.android.cursor.dir/contact");
-                                    addIntent.setType("vnd.android.cursor.dir/raw_contact");
-                                    addIntent.putExtra(ContactsContract.Intents.Insert.NAME, "");
-                                    addIntent.putExtra(ContactsContract.Intents.Insert.PHONE, content);
-                                    context.startActivity(addIntent);
-                                } else if (position == 4) {
-                                    if (iLinkClick != null)
-                                        iLinkClick.onShowSearchUser(content);
-                                }
-                            });
+                            List<BottomSheetItem> list = new ArrayList<>();
+                            list.add(new
+                                            BottomSheetItem(
+                                            context.getString(R.string.copy),
+                                            R.mipmap.msg_copy, () -> {
+                                        ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+                                        ClipData mClipData = ClipData.newPlainText("Label", content);
+                                        assert cm != null;
+                                        cm.setPrimaryClip(mClipData);
+                                        WKToastUtils.getInstance().showToastNormal(context.getString(R.string.copyed));
+                                    })
+                            );
+                            list.add(new BottomSheetItem(context.getString(R.string.call), R.mipmap.msg_calls, () -> {
+                                Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + content));
+                                context.startActivity(intent);
+                            }));
+                            list.add(new BottomSheetItem(context.getString(R.string.add_to_phone_book), R.mipmap.msg_contacts, () -> {
+                                Intent addIntent = new Intent(Intent.ACTION_INSERT, Uri.withAppendedPath(Uri.parse("content://com.android.contacts"), "contacts"));
+                                addIntent.setType("vnd.android.cursor.dir/person");
+                                addIntent.setType("vnd.android.cursor.dir/contact");
+                                addIntent.setType("vnd.android.cursor.dir/raw_contact");
+                                addIntent.putExtra(ContactsContract.Intents.Insert.NAME, "");
+                                addIntent.putExtra(ContactsContract.Intents.Insert.PHONE, content);
+                                context.startActivity(addIntent);
+                            }));
+                            list.add(new BottomSheetItem(context.getString(R.string.str_search), R.mipmap.ic_ab_search, () -> {
+                                if (iLinkClick != null)
+                                    iLinkClick.onShowSearchUser(content);
+                            }));
+
+                            SpannableStringBuilder displaySpans = new SpannableStringBuilder();
+                            displaySpans.append(content);
+                            displaySpans.setSpan(new
+                                            StyleSpan(Typeface.BOLD), 0,
+                                    content.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            );
+                            displaySpans.setSpan(new
+                                            ForegroundColorSpan(ContextCompat.getColor(context, R.color.blue)), 0,
+                                    content.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            );
+                            WKDialogUtils.getInstance().showBottomSheet(context, displaySpans, false, list);
                             return;
                         }
                         if (StringUtils.isEmail(content)) {
-
                             conversationContext.hideSoftKeyboard();
-                            List<BottomEntity> bottomEntityList = new ArrayList<>();
-                            String emailTips = String.format(context.getString(R.string.email_tips), context.getString(R.string.app_name));
-                            bottomEntityList.add(new BottomEntity(content, emailTips, R.color.colorDark, R.color.color999));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.copy), R.color.colorDark));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.str_search), R.color.colorDark));
-                            bottomEntityList.add(new BottomEntity(context.getString(R.string.send_email), R.color.colorDark));
-                            WKDialogUtils.getInstance().showCommonBottomViewDialog(context, bottomEntityList, (position, bottomEntity) -> {
-                                if (position == 1) {
-                                    ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                                    ClipData mClipData = ClipData.newPlainText("Label", content);
-                                    assert cm != null;
-                                    cm.setPrimaryClip(mClipData);
-                                    WKToastUtils.getInstance().showToastNormal(context.getString(R.string.copyed));
-                                } else if (position == 2) {
-                                    if (iLinkClick != null)
-                                        iLinkClick.onShowSearchUser(content);
-                                } else {
-                                    Uri uri = Uri.parse("mailto:" + content);
-                                    String[] email = {content};
-                                    Intent intent = new Intent(Intent.ACTION_SENDTO, uri);
-                                    intent.putExtra(Intent.EXTRA_CC, email); // 抄送人
-                                    intent.putExtra(Intent.EXTRA_SUBJECT, ""); // 主题
-                                    intent.putExtra(Intent.EXTRA_TEXT, ""); // 正文
-                                    context.startActivity(Intent.createChooser(intent, ""));
-                                }
-                            });
+                            List<BottomSheetItem> list = new ArrayList<>();
+                            list.add(new BottomSheetItem(context.getString(R.string.copy), R.mipmap.msg_copy, () -> {
+
+                                ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+                                ClipData mClipData = ClipData.newPlainText("Label", content);
+                                assert cm != null;
+                                cm.setPrimaryClip(mClipData);
+                                WKToastUtils.getInstance().showToastNormal(context.getString(R.string.copyed));
+
+                            }));
+                            list.add(new BottomSheetItem(context.getString(R.string.send_email), R.mipmap.msg2_email, () -> {
+
+                                Uri uri = Uri.parse("mailto:" + content);
+                                String[] email = {content};
+                                Intent intent = new Intent(Intent.ACTION_SENDTO, uri);
+                                intent.putExtra(Intent.EXTRA_CC, email); // 抄送人
+                                intent.putExtra(Intent.EXTRA_SUBJECT, ""); // 主题
+                                intent.putExtra(Intent.EXTRA_TEXT, ""); // 正文
+                                context.startActivity(Intent.createChooser(intent, ""));
+
+                            }));
+                            list.add(new BottomSheetItem(context.getString(R.string.str_search), R.mipmap.ic_ab_search, () -> {
+                                if (iLinkClick != null)
+                                    iLinkClick.onShowSearchUser(content);
+                            }));
+                            SpannableStringBuilder displaySpans = new SpannableStringBuilder();
+                            displaySpans.append(content);
+                            displaySpans.setSpan(new
+                                            StyleSpan(Typeface.BOLD), 0,
+                                    content.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            );
+                            displaySpans.setSpan(new
+                                            ForegroundColorSpan(ContextCompat.getColor(context, R.color.blue)), 0,
+                                    content.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            );
+                            WKDialogUtils.getInstance().showBottomSheet(context, displaySpans, false, list);
                             return;
                         }
                         Intent intent = new Intent(conversationContext.getChatActivity(), WKWebViewActivity.class);
@@ -296,6 +315,8 @@ public class WKUIChatMsgItemEntity {
                     if (!TextUtils.isEmpty(showName)) {
                         if (!showName.startsWith("@"))
                             showName = "@" + showName;
+                    } else {
+                        showName = displaySpans.subSequence(start, end).toString();
                     }
                     showName = showName + " ";
                     SpannableStringBuilder nameSpan = new SpannableStringBuilder();

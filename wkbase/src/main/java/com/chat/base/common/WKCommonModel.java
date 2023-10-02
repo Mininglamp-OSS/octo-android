@@ -2,27 +2,35 @@ package com.chat.base.common;
 
 import android.text.TextUtils;
 
-import com.chat.base.R;
+import com.alibaba.fastjson.JSON;
 import com.chat.base.WKBaseApplication;
+import com.chat.base.R;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
+import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.entity.AppVersion;
+import com.chat.base.entity.AppModule;
 import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.WKAPPConfig;
+import com.chat.base.entity.AppVersion;
 import com.chat.base.entity.WKChannelState;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.DispatchQueuePool;
 import com.chat.base.utils.WKDeviceUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 
+import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * 4/21/21 6:23 PM
@@ -183,4 +191,55 @@ public class WKCommonModel extends WKBaseModel {
         void onResult(int code, String msg, ChannelInfoEntity entity);
     }
 
+    public void getAppModule(@NotNull final IAppModule iAppModule) {
+        request(createService(WKCommonService.class).getAppModule(), new IRequestResultListener<List<AppModule>>() {
+            @Override
+            public void onSuccess(List<AppModule> result) {
+                String text = WKSharedPreferencesUtil.getInstance().getSPWithUID("app_module");
+                List<AppModule> localSavedAppModule = new ArrayList<>();
+                if (!TextUtils.isEmpty(text)) {
+                    localSavedAppModule = JSON.parseArray(text, AppModule.class);
+                }
+                List<AppModule> tempList = new ArrayList<>();
+                if (WKReader.isNotEmpty(result)) {
+                    for (AppModule item : result) {
+                        AppModule m = new AppModule();
+                        m.setName(item.getName());
+                        m.setDesc(item.getDesc());
+                        m.setSid(item.getSid());
+                        m.setStatus(item.getStatus());
+                        if (item.getStatus() == 2) {
+                            m.setChecked(true);
+                        } else if (item.getStatus() == 0) {
+                            m.setChecked(false);
+                        } else {
+                            if (WKReader.isNotEmpty(localSavedAppModule)) {
+                                for (AppModule temp : localSavedAppModule) {
+                                    if (temp.getSid().equals(item.getSid())) {
+                                        m.setChecked(temp.getChecked());
+                                    }
+                                }
+                            } else {
+                                m.setChecked(false);
+                            }
+                        }
+                        tempList.add(m);
+                    }
+                }
+                String json = JSON.toJSONString(tempList);
+                WKSharedPreferencesUtil.getInstance().putSPWithUID("app_module", json);
+
+                iAppModule.onResult(HttpResponseCode.success, "", tempList);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iAppModule.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public interface IAppModule {
+        void onResult(int code, String msg, List<AppModule> list);
+    }
 }

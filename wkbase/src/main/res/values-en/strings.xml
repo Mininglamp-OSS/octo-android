@@ -106,4 +106,9 @@
     <string name="unknow_msg_type">[Unknown Msg]</string>
     <string name="str_create">Create</string>
     <string name="restart_app_desc">The configuration cannot take effect until the application is restarted. Do you want to restart the application?</string>
+    <string name="str_request">Request</string>
+    <string name="str_request_desc">%s\'s nickname avatar</string>
+    <string name="str_get_name_avatar">Get your nickname and avatar</string>
+    <string name="msg_send_fail">Message sending failed</string>
+    <string name="msg_send_fail_resend">Resend</string>
 </resources>

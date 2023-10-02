@@ -9,7 +9,6 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.net.HttpResponseCode;
-import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.uikit.R;
@@ -50,9 +49,7 @@ public class UserQrActivity extends WKBaseActivity<ActUserQrLayoutBinding> {
             ImageUtils.getInstance().saveBitmap(UserQrActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
         }));
         ImageView rightIV = findViewById(R.id.titleRightIv);
-        float x = AndroidUtilities.getScreenWidth();
-        float y = AndroidUtilities.dp(50);
-        WKDialogUtils.getInstance().showScreenPopup(rightIV, new float[]{x, y}, list);
+        WKDialogUtils.getInstance().showScreenPopup(rightIV,  list);
 
     }
 

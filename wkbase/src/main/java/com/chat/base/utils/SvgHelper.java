@@ -44,9 +44,10 @@ import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
-import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
+import com.chat.base.WKBaseApplication;
 
+import org.telegram.ui.Components.RLottieImageView;
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
@@ -97,6 +98,7 @@ public class SvgHelper {
     private static class RoundRect {
         RectF rect;
         float rx;
+
         public RoundRect(RectF rect, float rx) {
             this.rect = rect;
             this.rx = rx;
@@ -120,7 +122,7 @@ public class SvgHelper {
         private static long lastUpdateTime;
         private static Runnable shiftRunnable;
         private static WeakReference<Drawable> shiftDrawable;
-//        private ImageReceiver parentImageReceiver;
+        private RLottieImageView parentImageReceiver;
         private int currentColor;
         private String currentColorKey;
         private float colorAlpha;
@@ -221,9 +223,9 @@ public class SvgHelper {
                 placeholderMatrix.postTranslate(-parentPosition[0] + totalTranslation - bounds.left, 0);
                 placeholderMatrix.postScale(1.0f / scale, 1.0f / scale);
                 placeholderGradient.setLocalMatrix(placeholderMatrix);
-//                if (parentImageReceiver != null) {
-//                    parentImageReceiver.invalidate();
-//                }
+                if (parentImageReceiver != null) {
+                    parentImageReceiver.invalidate();
+                }
             }
         }
 
@@ -251,12 +253,12 @@ public class SvgHelper {
             commands.add(command);
         }
 
-//        public void setParent(ImageReceiver imageReceiver) {
-//            parentImageReceiver = imageReceiver;
-//        }
+        public void setParent(RLottieImageView imageReceiver) {
+            parentImageReceiver = imageReceiver;
+        }
 
         public void setupGradient(String colorKey, float alpha) {
-            int color = ContextCompat.getColor(WKBaseApplication.getInstance().getContext(), R.color.black); //Theme.getColor(colorKey);
+            int color = ContextCompat.getColor(WKBaseApplication.getInstance().getContext(), R.color.homeColor); //Theme.getColor(colorKey);
             if (currentColor != color) {
                 colorAlpha = alpha;
                 currentColorKey = colorKey;
@@ -265,7 +267,7 @@ public class SvgHelper {
                 float w = AndroidUtilities.dp(180) / gradientWidth;
                 color = Color.argb((int) (Color.alpha(color) / 2 * colorAlpha), Color.red(color), Color.green(color), Color.blue(color));
                 float centerX = (1.0f - w) / 2;
-                placeholderGradient = new LinearGradient(0, 0, gradientWidth, 0, new int[]{0x00000000, 0x00000000, color, 0x00000000, 0x00000000}, new float[]{0.0f, centerX - w / 2.0f, centerX, centerX + w / 2.0f, 1.0f}, Shader.TileMode.REPEAT);
+                placeholderGradient = new LinearGradient(0, 0, gradientWidth, 0, new int[]{0x00f6f6f6, 0x00f6f6f6, color, 0x00f6f6f6, 0x00f6f6f6}, new float[]{0.0f, centerX - w / 2.0f, centerX, centerX + w / 2.0f, 1.0f}, Shader.TileMode.REPEAT);
                 Shader backgroundGradient;
                 if (Build.VERSION.SDK_INT >= 28) {
                     backgroundGradient = new LinearGradient(0, 0, gradientWidth, 0, new int[]{color, color}, null, Shader.TileMode.REPEAT);
@@ -318,10 +320,11 @@ public class SvgHelper {
             xr.parse(new InputSource(stream));
             return handler.getBitmap();
         } catch (Exception e) {
-            Log.e("文件为找到","-->");
+            Log.e("文件为找到", "-->");
             return null;
         }
     }
+
     public static Bitmap getBitmap(File file, int width, int height, int color) {
 
         try (FileInputStream stream = new FileInputStream(file)) {
@@ -334,7 +337,7 @@ public class SvgHelper {
             return handler.getBitmap();
         } catch (Exception e) {
 
-            Log.e("文件为找到11","-->"+e.getMessage());
+            Log.e("文件为找到11", "-->" + e.getMessage());
             return null;
         }
     }
@@ -396,7 +399,7 @@ public class SvgHelper {
         }
     }
 
-    public static Bitmap getBitmapByPathOnly(String pathString, int color,int svgWidth, int svgHeight, int width, int height) {
+    public static Bitmap getBitmapByPathOnly(String pathString, int color, int svgWidth, int svgHeight, int width, int height) {
         try {
             Path path = doPath(pathString);
             Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -404,7 +407,7 @@ public class SvgHelper {
             canvas.scale(width / (float) svgWidth, height / (float) svgHeight);
             Paint paint = new Paint();
             paint.setColor(color);
-            canvas.drawPath(path,paint);
+            canvas.drawPath(path, paint);
             return bitmap;
         } catch (Exception e) {
             return null;
@@ -1054,6 +1057,8 @@ public class SvgHelper {
             return false;
         }
 
+        int last = 0;
+
         private void doColor(Properties atts, Integer color, boolean fillMode) {
             if (paintColor != null) {
                 paint.setColor(paintColor);
@@ -1065,11 +1070,12 @@ public class SvgHelper {
             if (opacity == null) {
                 opacity = atts.getFloat(fillMode ? "fill-opacity" : "stroke-opacity");
             }
-            if (opacity == null) {
-                paint.setAlpha(255);
-            } else {
-                paint.setAlpha((int) (255 * opacity));
-            }
+//            if (opacity == null) {
+//                paint.setAlpha(255);
+//            } else {
+//                paint.setAlpha((int) (255 * opacity));
+//            }
+            paint.setAlpha((int) (255 * 0.35));
         }
 
         private boolean boundsMode;

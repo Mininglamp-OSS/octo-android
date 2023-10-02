@@ -7,8 +7,10 @@ import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.text.InputFilter;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -18,12 +20,13 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -31,23 +34,23 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.request.transition.Transition;
-import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
+import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.EditMsgMenu;
 import com.chat.base.endpoint.entity.ParseQrCodeMenu;
 import com.chat.base.entity.AppVersion;
+import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.ui.components.ActionBarMenuSubItem;
 import com.chat.base.ui.components.ActionBarPopupWindow;
+import com.chat.base.ui.components.AlertDialog;
+import com.chat.base.ui.components.BottomSheet;
 import com.chat.base.utils.singleclick.SingleClickUtil;
+import com.chat.base.views.BottomEntity;
 import com.chat.base.views.CommonBottomView;
 import com.chat.base.views.CustomImageViewerPopup;
-import com.chat.base.views.InputDialogView;
-import com.chat.base.views.NormalDialogView;
-import com.chat.base.views.NormalSingleBtnDialogView;
-import com.chat.base.views.BottomEntity;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.core.BasePopupView;
 import com.lxj.xpopup.interfaces.XPopupCallback;
@@ -72,51 +75,58 @@ public class WKDialogUtils {
         return DialogUtilsBinder.utils;
     }
 
-    public void showSystemDialog(Context context, String title, String content, final IClickListener iClickListener) {
-        new AlertDialog.Builder(context).setTitle(title)
-                .setMessage(content)
-                .setPositiveButton(context.getString(R.string.sure), (dialog, which) -> iClickListener.onClick(1)).setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> iClickListener.onClick(0)).show();
-    }
-
-    public void showDialog(Context context, String msg, final IClickListener iClickListener) {
-        showDialog(context, msg, true, iClickListener);
-    }
-
-    public void showSingleBtnDialog(Context context, String content, IClickListener iClickListener) {
-        showSingleBtnDialog(context, "", content, "", iClickListener);
-    }
-
     public void showSingleBtnDialog(Context context, String title, String content, String btnStr, IClickListener iClickListener) {
-        new XPopup.Builder(context).dismissOnTouchOutside(true).asCustom(new NormalSingleBtnDialogView(context, title, content, btnStr, index -> {
-            if (iClickListener != null)
-                iClickListener.onClick(index);
-        })).show();
+        if (TextUtils.isEmpty(title)) {
+            title = context.getString(R.string.str_base_tips);
+        }
+        if (TextUtils.isEmpty(btnStr)) {
+            btnStr = context.getString(R.string.sure);
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle(title);
+        builder.setMessage(content);
+        builder.setPositiveButton(btnStr, (dialog, which) -> {
+            if (iClickListener != null) {
+                iClickListener.onClick(1);
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.setBlurParams(1f, true, true);
+        builder.show();
     }
 
-    public void showDialog(Context context, String msg, boolean isCancelable, final IClickListener iClickListener) {
-        new XPopup.Builder(context).dismissOnTouchOutside(isCancelable).asCustom(new NormalDialogView(context, "", msg, "", "", index -> {
-            if (iClickListener != null)
-                iClickListener.onClick(index);
-        })).show();
-
-    }
-
-    /**
-     * 显示弹框
-     *
-     * @param context        上下文
-     * @param title          标题
-     * @param content        内容
-     * @param cancelStr      取消按钮文字
-     * @param sureStr        确定按钮文字
-     * @param iClickListener 点击返回
-     */
-    public void showDialog(Context context, String title, String content, String cancelStr, String sureStr, final IClickListener iClickListener) {
-        new XPopup.Builder(context).asCustom(new NormalDialogView(context, title, content, sureStr, cancelStr, iClickListener::onClick)).show();
-    }
-
-    public void showDialog(Context context, boolean isCancelable, String title, String content, String cancelStr, String sureStr, final IClickListener iClickListener) {
-        new XPopup.Builder(context).dismissOnTouchOutside(isCancelable).asCustom(new NormalDialogView(context, title, content, sureStr, cancelStr, iClickListener::onClick)).show();
+    public void showDialog(Context context, String title, String msg, boolean isCancelable, String canStr, String sureStr, int canColor, int sureColor, final IClickListener iClickListener) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        if (TextUtils.isEmpty(title)) {
+            builder.setTitle(context.getString(R.string.str_base_tips));
+        } else {
+            builder.setTitle(title);
+        }
+        builder.setMessage(msg);
+        if (TextUtils.isEmpty(canStr)) {
+            canStr = context.getString(R.string.cancel);
+        }
+        if (TextUtils.isEmpty(sureStr)) {
+            sureStr = context.getString(R.string.sure);
+        }
+        builder.setNegativeButton(canStr, (dialog, which) -> iClickListener.onClick(0));
+        builder.setPositiveButton(sureStr, (dialog, which) -> iClickListener.onClick(1));
+        AlertDialog dialog = builder.create();
+        dialog.setBlurParams(1f, true, true);
+        dialog.setCanceledOnTouchOutside(isCancelable);
+        dialog.show();
+        TextView textView = (TextView) dialog.getButton(Dialog.BUTTON_NEGATIVE);
+        if (canColor == 0) {
+            textView.setTextColor(ContextCompat.getColor(context, R.color.colorAccentUn));
+        } else {
+            textView.setTextColor(canColor);
+        }
+        TextView positiveTv = (TextView) dialog.getButton(Dialog.BUTTON_POSITIVE);
+        if (sureColor == 0) {
+            positiveTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
+        } else {
+            positiveTv.setTextColor(sureColor);
+        }
     }
 
     public interface IClickListener {
@@ -202,14 +212,25 @@ public class WKDialogUtils {
         mDialog.show();
     }
 
+    public void showBottomSheet(Context context, CharSequence title, boolean bigTitle, List<BottomSheetItem> list) {
+        BottomSheet.Builder builder = new BottomSheet.Builder(context, false);
+        builder.setTitle(title, bigTitle);
+        CharSequence[] items = new CharSequence[list.size()];
+        int[] icons = new int[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            items[i] = list.get(i).getText();
+            icons[i] = list.get(i).getIcon();
+        }
+        builder.setItems(items, icons, (dialogInterface, i) -> list.get(i).getIClick().onClick());
+        BottomSheet bottomSheet = builder.create();
+        bottomSheet.show();
+        bottomSheet.setBackgroundColor(ContextCompat.getColor(context, R.color.screen_bg));
+    }
 
     /**
-     * 显示通用的底部弹框
-     *
-     * @param context      上下文
-     * @param list         显示内容
-     * @param iBottomClick 点击返回
+     * 下次更新将删除该方法，请使用 showBottomSheet() 替代
      */
+    @Deprecated
     public void showCommonBottomViewDialog(@NonNull Context context, @NonNull List<BottomEntity> list, @NonNull CommonBottomView.IBottomClick iBottomClick) {
         new XPopup.Builder(context)
                 .autoOpenSoftInput(false).hasShadowBg(true)
@@ -224,12 +245,41 @@ public class WKDialogUtils {
                 .show();
     }
 
-    public void showInputDialog(@NonNull Context context, String oldStr, String hideStr, int maxLength, InputDialogView.IClick iClick) {
-        new XPopup.Builder(context)
-                .autoOpenSoftInput(true).hasShadowBg(true)
-                .asCustom(new InputDialogView(context, oldStr, hideStr, maxLength, iClick))
-                .show();
+    public interface IInputDialog {
+        void onResult(String text);
     }
+
+    public void showInputDialog(@NonNull Context context, String title, String message, String oldStr, String hideStr, int maxLength, final IInputDialog listener) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        if (!TextUtils.isEmpty(title)) {
+            builder.setTitle(title);
+        }
+        if (!TextUtils.isEmpty(message)) {
+            builder.setMessage(message);
+        }
+        LinearLayout linearLayout = new LinearLayout(context);
+        EditText editText = new EditText(context);
+        editText.setFilters(new InputFilter[]{StringUtils.getInputFilter(maxLength)});
+        editText.setHint(hideStr);
+        editText.setText(oldStr);
+        if (!TextUtils.isEmpty(oldStr)) {
+            editText.setSelection(oldStr.length());
+        }
+        SoftKeyboardUtils.getInstance().showSoftKeyBoard(context, editText);
+        linearLayout.addView(editText, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.START, 24, 0, 24, 0));
+        builder.setView(linearLayout);
+        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> {
+            String text = editText.getText().toString();
+            listener.onResult(text);
+        });
+        AlertDialog dialog = builder.create();
+        builder.setOnPreDismissListener(dialog1 -> SoftKeyboardUtils.getInstance().hideInput(context, editText));
+        dialog.setBlurParams(1f, true, true);
+        dialog.show();
+        TextView sureTv = (TextView) dialog.getButton(Dialog.BUTTON_POSITIVE);
+        sureTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
+    }
+
 
     /**
      * 显示版本更新弹框
@@ -249,8 +299,9 @@ public class WKDialogUtils {
         //ProgressBar progressBar = view.findViewById(R.id.progressBar);
         AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.AlertDialog);
         view.setBackgroundColor(ContextCompat.getColor(context, R.color.transparent));
-        builder.setCancelable(versionEntity.is_force == 0);
+//        builder.setCancelable(versionEntity.is_force == 0);
         AlertDialog alertDialog = builder.create();
+        alertDialog.setCanceledOnTouchOutside(versionEntity.is_force == 0);
         alertDialog.show();
         alertDialog.setContentView(view);
         Window window = alertDialog.getWindow();
@@ -295,98 +346,33 @@ public class WKDialogUtils {
     ActionBarPopupWindow scrimPopupWindow = null;
 
     @SuppressLint("ClickableViewAccessibility")
-    public void showPopup(float[] coordinate, View view, List<PopupMenuItem> list) {
-        ActionBarPopupWindow.ActionBarPopupWindowLayout popupLayout = new ActionBarPopupWindow.ActionBarPopupWindowLayout(view.getContext(), R.mipmap.popup_fixed_alert, 0) {
-            @Override
-            public boolean dispatchKeyEvent(KeyEvent event) {
-                if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getRepeatCount() == 0) {
-                    scrimPopupWindow.dismiss(true);
-                }
-                return super.dispatchKeyEvent(event);
+    public void setViewLongClickPopup(View view, List<PopupMenuItem> list) {
+        final float[][] location = {new float[2]};
+        view.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                location[0] = new float[]{event.getRawX(), event.getRawY()};
             }
-
-            @Override
-            public boolean dispatchTouchEvent(MotionEvent ev) {
-                boolean b = super.dispatchTouchEvent(ev);
-                if (ev.getAction() == MotionEvent.ACTION_DOWN && !b) {
-                    scrimPopupWindow.dismiss(true);
-                }
-                return b;
-            }
-        };
-        final RectF rect = new RectF();
-        popupLayout.setOnTouchListener(new View.OnTouchListener() {
-            private final int[] pos = new int[2];
-
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                    if (scrimPopupWindow != null && scrimPopupWindow.isShowing()) {
-                        View contentView = scrimPopupWindow.getContentView();
-                        contentView.getLocationInWindow(pos);
-                        rect.set(pos[0], pos[1], pos[0] + contentView.getMeasuredWidth(), pos[1] + contentView.getMeasuredHeight());
-                        if (!rect.contains((int) event.getX(), (int) event.getY())) {
-                            scrimPopupWindow.dismiss(true);
-                        }
-                    }
-                } else if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE) {
-                    scrimPopupWindow.dismiss(true);
-                }
-                return false;
-            }
+            return false;
         });
-        scrimPopupWindow = new ActionBarPopupWindow(popupLayout, LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT) {
-            @Override
-            public void dismiss() {
-                super.dismiss();
-                if (scrimPopupWindow != this) {
-                    return;
-                }
-                scrimPopupWindow = null;
+        view.setOnLongClickListener(view1 -> {
+            if (location[0] != null) {
+                showScreenPopup(view, location[0], list, null);
             }
-        };
-        for (int i = 0; i < list.size(); i++) {
-            PopupMenuItem item = list.get(i);
-            ActionBarMenuSubItem subItem = new ActionBarMenuSubItem(view.getContext(), false, i == 0, i == list.size() - 1);
-            if (item.getIconResourceID() != 0) {
-                subItem.setTextAndIcon(item.getText(), item.getIconResourceID());
-            } else
-                subItem.setText(item.getText());
-            subItem.setTag(R.id.width_tag, 240);
-            subItem.setTag(R.id.min_width_tag, 150);
-            subItem.setMultiline();
-            subItem.setOnClickListener(view1 -> {
-                scrimPopupWindow.dismiss(true);
-                item.getIClick().onClick();
-            });
-            popupLayout.addView(subItem, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        }
-        popupLayout.setMinimumWidth(AndroidUtilities.dp(150));
-        popupLayout.setFitItems(false);
-
-        scrimPopupWindow.setPauseNotifications(true);
-        scrimPopupWindow.setDismissAnimationDuration(220);
-        scrimPopupWindow.setOutsideTouchable(true);
-        scrimPopupWindow.setClippingEnabled(true);
-        scrimPopupWindow.setAnimationStyle(R.style.PopupContextAnimation);
-        scrimPopupWindow.setFocusable(true);
-        popupLayout.measure(View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(1000), View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(1000), View.MeasureSpec.AT_MOST));
-        scrimPopupWindow.setInputMethodMode(ActionBarPopupWindow.INPUT_METHOD_NOT_NEEDED);
-        scrimPopupWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED);
-        scrimPopupWindow.getContentView().setFocusableInTouchMode(true);
-
-
-        Runnable showMenu = () -> {
-            if (scrimPopupWindow == null) {
-                return;
-            }
-            scrimPopupWindow.showAtLocation(view, Gravity.START | Gravity.TOP, Math.round(coordinate[0]), Math.round(coordinate[1]));
-        };
-        showMenu.run();
+            return true;
+        });
     }
 
-    public synchronized void showScreenPopup(View view, float[] coordinate, List<PopupMenuItem> list) {
-        showScreenPopup(view, coordinate, list, null);
+    private Rect getAtViewRect(View atView) {
+        int[] locations = new int[2];
+        atView.getLocationInWindow(locations);
+        return new Rect(locations[0], locations[1], locations[0] - atView.getMeasuredWidth(),
+                locations[1] + atView.getMeasuredHeight() / 4);
+    }
+
+    public synchronized void showScreenPopup(View view, List<PopupMenuItem> list) {
+        Rect rect = getAtViewRect(view);
+        float[] location = new float[]{rect.right, rect.bottom};
+        showScreenPopup(view, location, list, null);
     }
 
     public interface IScreenPopupDismiss {
@@ -394,7 +380,7 @@ public class WKDialogUtils {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    public synchronized void showScreenPopup(View view, float[] coordinate, List<PopupMenuItem> list, final IScreenPopupDismiss iScreenPopupDismiss) {
+    public synchronized void showScreenPopup(View view, float[] location, List<PopupMenuItem> list, final IScreenPopupDismiss iScreenPopupDismiss) {
         ActionBarPopupWindow.ActionBarPopupWindowLayout popupLayout = new ActionBarPopupWindow.ActionBarPopupWindowLayout(view.getContext(), R.mipmap.popup_fixed_alert, 0) {
             @Override
             public boolean dispatchKeyEvent(KeyEvent event) {
@@ -455,6 +441,10 @@ public class WKDialogUtils {
             subItem.setTextAndIcon(item.getText(), item.getIconResourceID());
             subItem.setTag(R.id.width_tag, 240);
             subItem.setTag(R.id.min_width_tag, 150);
+            if (item.getColor() != 0) {
+                subItem.setTextColor(item.getColor());
+                subItem.setIconColor(item.getColor());
+            }
             subItem.setMultiline();
             subItem.setOnClickListener(view1 -> {
                 if (scrimPopupWindow != null) {
@@ -471,7 +461,7 @@ public class WKDialogUtils {
         scrimPopupWindow.setDismissAnimationDuration(220);
         scrimPopupWindow.setOutsideTouchable(true);
         scrimPopupWindow.setClippingEnabled(true);
-        scrimPopupWindow.setAnimationStyle(R.style.PopupContextAnimation);
+        scrimPopupWindow.setAnimationStyle(R.style.PopupAnimation);
         scrimPopupWindow.setFocusable(true);
         popupLayout.measure(View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(1000), View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(1000), View.MeasureSpec.AT_MOST));
         scrimPopupWindow.setInputMethodMode(ActionBarPopupWindow.INPUT_METHOD_NOT_NEEDED);
@@ -483,10 +473,14 @@ public class WKDialogUtils {
             if (scrimPopupWindow == null) {
                 return;
             }
-            scrimPopupWindow.showAtLocation(view, Gravity.TOP | Gravity.START, Math.round(coordinate[0]), Math.round(coordinate[1]));
+            scrimPopupWindow.startAnimation();
+            scrimPopupWindow.showAtLocation(view, Gravity.TOP | Gravity.START, Math.round(location[0]), Math.round(location[1]));
+//            scrimPopupWindow.dimBehind();
         };
+
         showMenu.run();
     }
+
 
     public interface IImagePopupListener {
         void onShow();
@@ -506,7 +500,7 @@ public class WKDialogUtils {
         }
 
         int finalFlame = flame;
-        CustomImageViewerPopup viewerPopup = new CustomImageViewerPopup(context,flame, msg, true, list, iImgPopupMenu);
+        CustomImageViewerPopup viewerPopup = new CustomImageViewerPopup(context, flame, msg, true, list, iImgPopupMenu);
         //自定义的ImageViewer弹窗需要自己手动设置相应的属性，必须设置的有srcView，url和imageLoader。
         viewerPopup.setSrcView(imageView, index);
         viewerPopup.setImageUrls(tempImgList);

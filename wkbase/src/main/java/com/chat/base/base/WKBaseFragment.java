@@ -58,53 +58,35 @@ public abstract class WKBaseFragment<WKVBinding extends ViewBinding> extends Fra
 
     protected abstract WKVBinding getViewBinding();
 
-    //显示无操作的弹框
-    protected void showDialog(String content) {
-        WKDialogUtils.getInstance().showDialog(getActivity(), content, null);
-    }
-
-    //显示一个有操作返回的弹框
-    protected void showDialog(String content, WKDialogUtils.IClickListener iClickListener) {
-        WKDialogUtils.getInstance().showDialog(getActivity(), content, iClickListener);
-    }
-
-    /**
-     * 显示一个有操作返回的弹框
-     *
-     * @param title          标题
-     * @param content        内容
-     * @param sureStr        确定按钮文字
-     * @param cancelStr      取消文字提示
-     * @param iClickListener 返回
-     */
-    protected void showDialog(String title, String content, String sureStr, String cancelStr, WKDialogUtils.IClickListener iClickListener) {
-        WKDialogUtils.getInstance().showDialog(getActivity(), title, content, cancelStr, sureStr, iClickListener);
-    }
-
-    protected void showDialog(int titleID, int contentID, int sureStrID, int cancelStrID, WKDialogUtils.IClickListener iClickListener) {
-        showDialog(getString(titleID), getString(contentID), getString(sureStrID), getString(cancelStrID), iClickListener);
-    }
-
     /**
      * 初始化化View
      */
-    protected abstract void initView();
+    protected void initView() {
+    }
 
     //初始化present
-    protected abstract void initPresenter();
+    protected void initPresenter() {
+    }
+
 
     /**
      * 初始化事件
      */
-    protected abstract void initListener();
+    protected void initListener() {
+    }
+
 
     /**
      * 初始化数据
      */
-    protected abstract void initData();
+    protected void initData() {
+    }
+
 
     //设置标题
-    protected abstract void setTitle(TextView titleTv);
+    protected void setTitle(TextView titleTv) {
+    }
+
 
     //获取fragment传递的参数
     protected void getDataBundle(Bundle bundle) {

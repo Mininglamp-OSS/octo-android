@@ -8,7 +8,9 @@
     <item
         android:id="@+id/i_contacts"
         android:title="" />
-
+<!--    <item-->
+<!--        android:id="@+id/i_workplace"-->
+<!--        android:title="" />-->
     <item
         android:id="@+id/i_my"
         android:title="" />

@@ -99,7 +99,6 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
     override val itemViewType: Int
         get() = WKContentType.WK_MULTIPLE_FORWARD
 
-
     override fun resetCellBackground(
         parentView: View,
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,

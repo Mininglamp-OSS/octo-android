@@ -19,12 +19,14 @@ import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 
+import org.telegram.ui.Components.RLottieImageView;
+
 @SuppressLint("ViewConstructor")
 public class ActionBarMenuSubItem extends FrameLayout {
 
     private final TextView textView;
     private TextView subtextView;
-    private final ImageView imageView;
+    private final RLottieImageView imageView;
     private CheckBox checkView;
     private ImageView rightIcon;
 
@@ -49,9 +51,9 @@ public class ActionBarMenuSubItem extends FrameLayout {
         selectorColor = ContextCompat.getColor(context, R.color.layoutColorSelected);
 
         updateBackground();
-        setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
+        setPadding(AndroidUtilities.dp(15), 0, AndroidUtilities.dp(15), 0);
 
-        imageView = new ImageView(context);
+        imageView = new RLottieImageView(context);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
         imageView.setColorFilter(new PorterDuffColorFilter(iconColor, PorterDuff.Mode.MULTIPLY));
         addView(imageView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.CENTER_VERTICAL | (AndroidUtilities.isRTL ? Gravity.END : Gravity.START)));
@@ -62,7 +64,7 @@ public class ActionBarMenuSubItem extends FrameLayout {
         textView.setGravity(Gravity.START);
         textView.setEllipsize(TextUtils.TruncateAt.END);
         textView.setTextColor(textColor);
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (AndroidUtilities.isRTL ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL));
 
         if (needCheck) {
@@ -72,7 +74,7 @@ public class ActionBarMenuSubItem extends FrameLayout {
         }
     }
 
-    public void setHeight(int height){
+    public void setHeight(int height) {
         getLayoutParams().height = height;
     }
 
@@ -106,7 +108,7 @@ public class ActionBarMenuSubItem extends FrameLayout {
             }
             addView(rightIcon, LayoutHelper.createFrame(24, LayoutHelper.MATCH_PARENT, Gravity.CENTER_VERTICAL | (AndroidUtilities.isRTL ? Gravity.START : Gravity.END)));
         }
-        setPadding(AndroidUtilities.dp(AndroidUtilities.isRTL ? 8 : 18), 0, AndroidUtilities.dp(AndroidUtilities.isRTL ? 18 : 8), 0);
+        setPadding(AndroidUtilities.dp(AndroidUtilities.isRTL ? 8 : 15), 0, AndroidUtilities.dp(AndroidUtilities.isRTL ? 15 : 8), 0);
         rightIcon.setImageResource(icon);
     }
 
@@ -172,13 +174,13 @@ public class ActionBarMenuSubItem extends FrameLayout {
             subtextView = new TextView(getContext());
             subtextView.setLines(1);
             subtextView.setSingleLine(true);
-            subtextView.setGravity(Gravity.LEFT);
+            subtextView.setGravity(Gravity.START);
             subtextView.setEllipsize(TextUtils.TruncateAt.END);
             subtextView.setTextColor(0xff7C8286);
             subtextView.setVisibility(GONE);
             subtextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
             subtextView.setPadding(AndroidUtilities.isRTL ? 0 : AndroidUtilities.dp(43), 0, AndroidUtilities.isRTL ? AndroidUtilities.dp(43) : 0, 0);
-            addView(subtextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (AndroidUtilities.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL, 0, 10, 0, 0));
+            addView(subtextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (AndroidUtilities.isRTL ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL, 0, 10, 0, 0));
         }
         boolean visible = !TextUtils.isEmpty(text);
         boolean oldVisible = subtextView.getVisibility() == VISIBLE;
@@ -189,6 +191,12 @@ public class ActionBarMenuSubItem extends FrameLayout {
             textView.setLayoutParams(layoutParams);
         }
         subtextView.setText(text);
+    }
+
+    public void setSubOnlyText(String text) {
+        if (subtextView != null) {
+            subtextView.setText(text);
+        }
     }
 
     public TextView getTextView() {
@@ -228,6 +236,12 @@ public class ActionBarMenuSubItem extends FrameLayout {
     public void openSwipeBack() {
         if (openSwipeBackLayout != null) {
             openSwipeBackLayout.run();
+        }
+    }
+
+    public void onItemShown() {
+        if (imageView.getAnimatedDrawable() != null) {
+            imageView.getAnimatedDrawable().start();
         }
     }
 

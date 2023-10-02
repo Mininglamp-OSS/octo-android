@@ -45,7 +45,6 @@ import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.message.type.WKMsgContentType
 import com.xinbida.wukongim.msgmodel.WKImageContent
 import java.io.File
-import java.text.DecimalFormat
 import java.util.Objects
 
 class WKImageProvider : WKChatBaseProvider() {
@@ -60,10 +59,10 @@ class WKImageProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
-
         val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
         imageView.setAllCorners(10)
+
         val progressTv = parentView.findViewById<TextView>(R.id.progressTv)
         val progressView = parentView.findViewById<CircularProgressView>(R.id.progressView)
         progressView.setProgColor(Theme.colorAccount)
@@ -163,16 +162,15 @@ class WKImageProvider : WKChatBaseProvider() {
 
                 })
         }
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg, object : ITouchClick {
-            override fun onClick() {
-                onImageClick(
-                    uiChatMsgItemEntity,
-                    adapterPosition,
-                    imageView,
-                    getShowURL(uiChatMsgItemEntity)
-                )
-            }
-        })
+        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+        imageView.setOnClickListener {
+            onImageClick(
+                uiChatMsgItemEntity,
+                adapterPosition,
+                imageView,
+                getShowURL(uiChatMsgItemEntity)
+            )
+        }
     }
 
     override val itemViewType: Int
@@ -196,19 +194,7 @@ class WKImageProvider : WKChatBaseProvider() {
                 while (i < size) {
                     if (list[i].wkMsg != null && list[i].wkMsg.type == WKContentType.WK_IMAGE && list[i].wkMsg.remoteExtra.revoke == 0 && list[i].wkMsg.isDeleted == 0 && list[i].wkMsg.flame == 0
                     ) {
-                        val imgMsgModel =
-                            list[i].wkMsg.baseContentMsgModel as WKImageContent
-                        var showUrl: String
-                        if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
-                            showUrl = imgMsgModel.localPath
-                            val file = File(showUrl)
-                            if (!file.exists() || file.length() == 0L) {
-                                //如果本地文件被删除就显示网络图片
-                                showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
-                            }
-                        } else {
-                            showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
-                        }
+                        val showUrl: String = getShowURL(list[i])
                         showImgList.add(list[i].wkMsg)
                         val itemView =
                             getAdapter()!!.recyclerView.layoutManager!!.findViewByPosition(i)
@@ -350,7 +336,6 @@ class WKImageProvider : WKChatBaseProvider() {
         imageView: ImageView,
         tempShowImgUrl: String
     ) {
-
         if (uiChatMsgItemEntity.wkMsg.flame == 1 && uiChatMsgItemEntity.wkMsg.viewed == 0) {
             for (i in 0 until getAdapter()!!.data.size) {
                 if (getAdapter()!!.data[i].wkMsg.clientMsgNO.equals(uiChatMsgItemEntity.wkMsg.clientMsgNO)) {
@@ -412,15 +397,6 @@ class WKImageProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg, object : ITouchClick {
-            override fun onClick() {
-                onImageClick(
-                    uiChatMsgItemEntity,
-                    position,
-                    imageView,
-                    getShowURL(uiChatMsgItemEntity)
-                )
-            }
-        })
+        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
     }
 }

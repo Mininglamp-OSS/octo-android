@@ -19,6 +19,7 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.entity.AvatarOtherViewMenu;
 import com.chat.base.endpoint.entity.ShowCommunityAvatarMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.msgitem.WKContentType;
@@ -27,7 +28,6 @@ import com.chat.base.msgitem.WKRevokeProvider;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.CounterView;
-import com.chat.base.ui.components.CustomerTouchListener;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.StringUtils;
@@ -36,8 +36,6 @@ import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.enity.ChatConversationMsg;
-import org.telegram.ui.Components.RLottieDrawable;
-import org.telegram.ui.Components.RLottieImageView;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
@@ -49,6 +47,8 @@ import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 
 import org.jetbrains.annotations.NotNull;
+import org.telegram.ui.Components.RLottieDrawable;
+import org.telegram.ui.Components.RLottieImageView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -247,7 +247,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 } else if (finalStatus == WKSendMsgResult.not_on_white_list) {
                     content = getContext().getString(R.string.no_relation_user);
                 }
-                WKDialogUtils.getInstance().showDialog(getContext(), content, index -> {
+                WKDialogUtils.getInstance().showDialog(getContext(), getContext().getString(R.string.msg_send_fail), content, true, "", getContext().getString(R.string.msg_send_fail_resend), 0, Theme.colorAccount, index -> {
                     if (index == 1) {
                         WKMsg msg = new WKMsg();
                         msg.channelID = item.channelID;
@@ -390,6 +390,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 avatarView.imageView.setVisibility(View.VISIBLE);
                 avatarView.showAvatar(item.getWkChannel(), true);
             }
+            EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(helper.getView(R.id.otherLayout), item.getWkChannel(), avatarView, false));
             isTop = item.getWkChannel().top == 1;
             if (TextUtils.isEmpty(showName))
                 showName = TextUtils.isEmpty(item.getWkChannel().channelRemark) ? item.getWkChannel().channelName : item.getWkChannel().channelRemark;
@@ -450,7 +451,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 //            if (!isScrolling)
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
         }
-        helper.setText(R.id.nameTv,showName);
+        helper.setText(R.id.nameTv, showName);
     }
 
     private boolean isSetChatPwd(WKChannel channel) {
@@ -498,23 +499,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         //list.add(new ChatLongClickEntity(2, item.unreadCount > 0 ? getContext().getString(R.string.sign_read_msg) : getContext().getString(R.string.sign_unread_msg)));
         list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
         list.add(new PopupMenuItem(getContext().getString(R.string.delete_msg), R.mipmap.msg_delete, () -> iListener.onClick(ItemMenu.delete, item)));
-
-        helper.getView(R.id.contentLayout).setOnTouchListener(new CustomerTouchListener(new CustomerTouchListener.ICustomerTouchListener() {
-            @Override
-            public void onClick(View view, float[] coordinate) {
-
-            }
-
-            @Override
-            public void onLongClick(View view, float[] coordinate) {
-                WKDialogUtils.getInstance().showPopup(coordinate, view, list);
-            }
-
-            @Override
-            public void onDoubleClick(View view, float[] coordinate) {
-
-            }
-        }));
+        WKDialogUtils.getInstance().setViewLongClickPopup(helper.getView(R.id.contentLayout), list);
     }
 
     public enum ItemMenu {

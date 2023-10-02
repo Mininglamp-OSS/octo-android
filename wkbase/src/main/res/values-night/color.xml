@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--适配颜色-->
-    <color name="homeColor">#252D3A</color>
+    <color name="homeColor">#111315</color>
     <color name="layoutColor">#191919</color>
     <color name="layoutColorSelected">#1d1d1d</color>
     <color name="colorDark">#FFFFFF</color>
@@ -13,11 +13,12 @@
     <color name="chat_border_color">#0B0000</color>
     <color name="chat_received_bg_normal">#222E3A</color>
     <color name="chat_received_bg_selected">#212223</color>
-    <color name="chat_send_bg_normal">#8247BD</color>
-    <color name="chat_send_bg_select">#7B39BC</color>
+    <color name="chat_send_bg_normal">#575ba2</color>
+    <color name="chat_send_bg_select">#41469B</color>
     <color name="colorSystemBg">#222E3A</color>
     <color name="send_text_color">#ffffff</color>
     <color name="receive_text_color">#ffffff</color>
     <color name="popupTextColor">#FFFFFF</color>
     <color name="titleBarIcon">#FFFFFF</color>
+    <color name="dialogText">#fbf9fe</color>
 </resources>

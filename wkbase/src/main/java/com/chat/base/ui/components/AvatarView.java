@@ -77,7 +77,6 @@ public class AvatarView extends FrameLayout {
         addView(onlineTv, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END, 0, 0, 0, 0));
         addView(spotView, LayoutHelper.createFrame(15, 15, Gravity.BOTTOM | Gravity.END, 0, 0, 0, 0));
         addView(defaultAvatarTv, LayoutHelper.createFrame(40, 40, Gravity.CENTER));
-
         setSize(40);
     }
 
@@ -97,12 +96,11 @@ public class AvatarView extends FrameLayout {
                 .toBuilder()
                 .setAllCorners(CornerFamily.ROUNDED, AndroidUtilities.dp(cornerSize))
                 .build());
-
         defaultAvatarTv.getLayoutParams().height = AndroidUtilities.dp(size);
         defaultAvatarTv.getLayoutParams().width = AndroidUtilities.dp(size);
     }
 
-    public void setSize(float size,float cornerSize) {
+    public void setSize(float size, float cornerSize) {
         imageView.getLayoutParams().width = AndroidUtilities.dp(size);
         imageView.getLayoutParams().height = AndroidUtilities.dp(size);
         imageView.setShapeAppearanceModel(imageView.getShapeAppearanceModel()

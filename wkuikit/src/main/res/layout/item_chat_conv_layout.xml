@@ -10,14 +10,25 @@
     <LinearLayout
         android:id="@+id/contentLayout"
         style="@style/layoutBg"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
 
-        <com.chat.base.ui.components.AvatarView
-            android:id="@+id/avatarView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical" />
+        <FrameLayout
+            android:layout_width="60dp"
+            android:layout_height="60dp">
+
+            <com.chat.base.ui.components.AvatarView
+                android:id="@+id/avatarView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center" />
+
+            <FrameLayout
+                android:id="@+id/otherLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end" />
+        </FrameLayout>
 
 
         <LinearLayout
@@ -44,14 +55,15 @@
                         android:layout_marginEnd="3dp"
                         android:src="@mipmap/list_group"
                         android:tint="@color/colorDark" />
+
                     <TextView
                         android:id="@+id/nameTv"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
+                        android:ellipsize="end"
                         android:fontFamily="sans-serif-medium"
                         android:lines="1"
-                        android:ellipsize="end"
                         android:text="多少快乐"
                         android:textColor="@color/colorDark"
                         android:textSize="16sp" />

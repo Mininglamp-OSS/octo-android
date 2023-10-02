@@ -246,16 +246,13 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 }
             }
             if (WKReader.isNotEmpty(selectedList) && isShowSaveLabelDialog) {
-                WKDialogUtils.getInstance().showDialog(this, getString(R.string.message_tips), getString(R.string.save_label_tips), getString(R.string.cancel), getString(R.string.save_label_sure), new WKDialogUtils.IClickListener() {
-                    @Override
-                    public void onClick(int index) {
-                        if (index == 1) {
-                            EndpointManager.getInstance().invoke("save_label", new SaveLabelMenu(ChooseContactsActivity.this, selectedList));
-                            finish();
-                        } else {
-                            WKUIKitApplication.getInstance().setChooseContactsBack(selectedList);
-                            finish();
-                        }
+                WKDialogUtils.getInstance().showDialog(this, getString(R.string.message_tips), getString(R.string.save_label_tips),true, getString(R.string.cancel), getString(R.string.save_label_sure),0,Theme.colorAccount, index -> {
+                    if (index == 1) {
+                        EndpointManager.getInstance().invoke("save_label", new SaveLabelMenu(ChooseContactsActivity.this, selectedList));
+                        finish();
+                    } else {
+                        WKUIKitApplication.getInstance().setChooseContactsBack(selectedList);
+                        finish();
                     }
                 });
             } else {

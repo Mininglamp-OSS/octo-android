@@ -37,7 +37,8 @@ public class PushModel extends WKBaseModel {
      * @param token     token
      * @param bundle_id Android为包名称
      */
-    public void registerDeviceToken(String token, String bundle_id) {
+    public void registerDeviceToken(String token, String bundle_id,String from) {
+        Log.e("注册来源",from);
         String device_type = "";
         if (OsUtils.isEmui()) {
             device_type = "HMS";
@@ -48,7 +49,7 @@ public class PushModel extends WKBaseModel {
         } else if (OsUtils.isVivo()) {
             device_type = "VIVO";
         }
-        EndpointManager.getInstance().invoke("register_push_token", new RegisterPushToken(device_type, token));
+        //   EndpointManager.getInstance().invoke("register_push_token", new RegisterPushToken(device_type, token));
         JSONObject httpParams = new JSONObject();
         httpParams.put("device_token", token);
         httpParams.put("device_type", device_type);

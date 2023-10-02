@@ -2,7 +2,6 @@ package com.chat.uikit.setting
 
 import android.Manifest
 import android.os.Build
-import android.view.View
 import android.widget.TextView
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
@@ -10,8 +9,6 @@ import com.chat.base.base.WKBaseActivity
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.entity.SendFileMenu
 import com.chat.base.entity.PopupMenuItem
-import com.chat.base.ui.components.CustomerTouchListener
-import com.chat.base.ui.components.CustomerTouchListener.ICustomerTouchListener
 import com.chat.base.utils.DataCleanManager
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKFileUtils
@@ -146,16 +143,9 @@ class ErrorLogsActivity : WKBaseActivity<ActCommonListLayoutBinding>() {
                         }
                     })
             )
-
-            holder.getView<View>(R.id.contentLayout)
-                .setOnTouchListener(CustomerTouchListener(object : ICustomerTouchListener {
-                    override fun onClick(view: View, coordinate: FloatArray) {}
-                    override fun onLongClick(view: View, coordinate: FloatArray) {
-                        WKDialogUtils.getInstance().showPopup(coordinate, view, list)
-                    }
-
-                    override fun onDoubleClick(view: View, coordinate: FloatArray) {}
-                }))
+            WKDialogUtils.getInstance()
+                .setViewLongClickPopup(holder.getView(R.id.contentLayout), list)
+           
         }
     }
 }

@@ -9,8 +9,8 @@ import android.widget.TextView;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.service.FriendModel;
@@ -97,7 +97,7 @@ public class SearchUserActivity extends WKBaseActivity<ActSearchUserLayoutBindin
             SearchUserEntity searchUserEntity = (SearchUserEntity) adapter.getItem(position);
             if (searchUserEntity != null) {
                 if (view1.getId() == R.id.applyBtn) {
-                    WKDialogUtils.getInstance().showInputDialog(SearchUserActivity.this, "", getString(R.string.input_apply_remark), 20, content -> FriendModel.getInstance().applyAddFriend(searchUserEntity.data.uid, searchUserEntity.data.vercode, content, (code, msg) -> {
+                    WKDialogUtils.getInstance().showInputDialog(SearchUserActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(searchUserEntity.data.uid, searchUserEntity.data.vercode, text, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
                             searchUserEntity.status = 1;
                             adapter.notifyItemChanged(position);

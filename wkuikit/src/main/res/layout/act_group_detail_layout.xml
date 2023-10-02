@@ -98,8 +98,8 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="5dp"
-                            android:tint="@color/color999"
-                            android:src="@mipmap/msg_qrcode" />
+                            android:src="@mipmap/msg_qrcode"
+                            android:tint="@color/color999" />
 
                         <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>
@@ -261,10 +261,10 @@
                     </LinearLayout>
 
                     <LinearLayout
-                        android:id="@+id/msgReceiptLayout"
+                        android:id="@+id/msgSettingLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"/>
+                        android:orientation="vertical" />
 
                     <LinearLayout
                         android:id="@+id/inGroupNameLayout"
@@ -290,7 +290,9 @@
                     </LinearLayout>
 
 
-                    <LinearLayout style="@style/layoutBgPaddingSmall">
+                    <LinearLayout
+                        style="@style/layoutBgPaddingSmall"
+                        android:visibility="gone">
 
                         <TextView
                             style="@style/leftTextView"

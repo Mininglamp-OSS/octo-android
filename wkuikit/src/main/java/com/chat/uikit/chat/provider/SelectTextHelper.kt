@@ -29,7 +29,6 @@ import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.ui.components.AlignImageSpan
-import com.chat.base.ui.components.CustomerTouchListener
 import com.chat.base.ui.components.NormalClickableSpan
 import com.chat.base.utils.AndroidUtilities
 import com.chat.uikit.R
@@ -613,26 +612,31 @@ class SelectTextHelper(builder: Builder) {
         // 去除超链接点击背景色 https://github.com/ITxiaoguang/SelectTextHelper/issues/2
         //  mTextView.highlightColor = Color.TRANSPARENT
         //  mTextView.setText(spanStr, TextView.BufferType.SPANNABLE)
-        fullLayout.setOnTouchListener(CustomerTouchListener(object :
-            CustomerTouchListener.ICustomerTouchListener {
-            override fun onClick(view: View?, coordinate: FloatArray?) {
-                if (usedClickListener) {
-                    usedClickListener = false
-                    return
-                }
-                if (null != mSelectListener && (null == mOperateWindow || !mOperateWindow!!.isShowing)) {
-                    mSelectListener!!.onDismiss()
-                }
-                reset()
-                if (null != mSelectListener) {
-                    mSelectListener!!.onClick(mTextView, mOriginalContent)
-                }
+        val fullLayoutLocation = arrayOf(FloatArray(2))
+        fullLayout.setOnTouchListener { _, event ->
+            if (event!!.action == MotionEvent.ACTION_DOWN) {
+                fullLayoutLocation[0] = floatArrayOf(event.rawX, event.rawY)
             }
-
-            override fun onLongClick(view: View?, coordinate1: FloatArray?) {
-                coordinate = coordinate1
-                mTouchX = coordinate!![0].toInt()
-                mTouchY = coordinate!![1].toInt()
+            false
+        }
+        fullLayout.setOnClickListener {
+            if (usedClickListener) {
+                usedClickListener = false
+                return@setOnClickListener
+            }
+            if (null != mSelectListener && (null == mOperateWindow || !mOperateWindow!!.isShowing)) {
+                mSelectListener!!.onDismiss()
+            }
+            reset()
+            if (null != mSelectListener) {
+                mSelectListener!!.onClick(mTextView, mOriginalContent)
+            }
+        }
+        fullLayout.setOnLongClickListener(object :View.OnLongClickListener{
+            override fun onLongClick(p0: View?): Boolean {
+                coordinate = fullLayoutLocation[0]
+                mTouchX = fullLayoutLocation[0][0].toInt()
+                mTouchY = fullLayoutLocation[0][1].toInt()
                 mTextView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                     override fun onViewAttachedToWindow(v: View) {}
                     override fun onViewDetachedFromWindow(v: View) {
@@ -697,31 +701,36 @@ class SelectTextHelper(builder: Builder) {
                 if (null != mSelectListener) {
                     mSelectListener!!.onLongClick(mTextView, coordinate!!)
                 }
-            }
 
-            override fun onDoubleClick(view: View?, coordinate: FloatArray?) {
+                return true
             }
-        }))
-        mTextView.setOnTouchListener(CustomerTouchListener(object :
-            CustomerTouchListener.ICustomerTouchListener {
-            override fun onClick(view: View?, coordinate: FloatArray?) {
-                if (usedClickListener) {
-                    usedClickListener = false
-                    return
-                }
-                if (null != mSelectListener && (null == mOperateWindow || !mOperateWindow!!.isShowing)) {
-                    mSelectListener!!.onDismiss()
-                }
-                reset()
-                if (null != mSelectListener) {
-                    mSelectListener!!.onClick(mTextView, mOriginalContent)
-                }
-            }
+        })
 
-            override fun onLongClick(view: View?, coordinate1: FloatArray?) {
-                coordinate = coordinate1
-                mTouchX = coordinate!![0].toInt()
-                mTouchY = coordinate!![1].toInt()
+        val textViewLocation = arrayOf(FloatArray(2))
+        mTextView.setOnTouchListener { _, event ->
+            if (event!!.action == MotionEvent.ACTION_DOWN) {
+                textViewLocation[0] = floatArrayOf(event.rawX, event.rawY)
+            }
+            false
+        }
+        mTextView.setOnClickListener {
+            if (usedClickListener) {
+                usedClickListener = false
+                return@setOnClickListener
+            }
+            if (null != mSelectListener && (null == mOperateWindow || !mOperateWindow!!.isShowing)) {
+                mSelectListener!!.onDismiss()
+            }
+            reset()
+            if (null != mSelectListener) {
+                mSelectListener!!.onClick(mTextView, mOriginalContent)
+            }
+        }
+        mTextView.setOnLongClickListener(object :View.OnLongClickListener{
+            override fun onLongClick(p0: View?): Boolean {
+                coordinate = textViewLocation[0]
+                mTouchX = textViewLocation[0][0].toInt()
+                mTouchY = textViewLocation[0][1].toInt()
                 mTextView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                     override fun onViewAttachedToWindow(v: View) {}
                     override fun onViewDetachedFromWindow(v: View) {
@@ -786,12 +795,11 @@ class SelectTextHelper(builder: Builder) {
                 if (null != mSelectListener) {
                     mSelectListener!!.onLongClick(mTextView, coordinate!!)
                 }
-            }
 
-            override fun onDoubleClick(view: View?, coordinate: FloatArray?) {
+                return true
             }
+        })
 
-        }))
 //        mTextView.setOnTouchListener { _: View?, event: MotionEvent ->
 //            mTouchX = event.x.toInt()
 //            mTouchY = event.y.toInt()
@@ -1497,10 +1505,7 @@ class SelectTextHelper(builder: Builder) {
                         if (links[0] is NormalClickableSpan) {
                             val url = links[0] as NormalClickableSpan
                             if (!TextUtils.isEmpty(url.toString())) {
-                                Log.e(
-                                    "点击了网址",
-                                    "${url.clickableContent.content},${url.clickableContent.type}"
-                                )
+
                                 if (null != mSelectListener) {
                                     usedClickListener = true
                                     mSelectListener!!.onClickLink(url)
@@ -1510,7 +1515,7 @@ class SelectTextHelper(builder: Builder) {
                                 links[0].onClick(widget)
                             }
                         }
-                    } else if (action == MotionEvent.ACTION_DOWN) {
+                    } else {
                         downLinkTime = System.currentTimeMillis()
                         Selection.setSelection(
                             buffer, buffer.getSpanStart(links[0]), buffer.getSpanEnd(links[0])

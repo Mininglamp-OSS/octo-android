@@ -92,9 +92,9 @@ public class FontSizeView extends View {
     private void init(Context context, AttributeSet attrs) {
         textColor = ContextCompat.getColor(context, R.color.colorDark);
         // initDefault
-        defaultLineWidth = AndroidUtilities.dp( 2);
-        defaultCircleRadius = AndroidUtilities.dp( 35);
-        lineWidth = AndroidUtilities.dp( 1);
+        defaultLineWidth = AndroidUtilities.dp(2);
+        defaultCircleRadius = AndroidUtilities.dp(35);
+        lineWidth = AndroidUtilities.dp(1);
         TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.FontSizeView);
         final int N = typedArray.getIndexCount();
         for (int i = 0; i < N; i++) {
@@ -112,20 +112,20 @@ public class FontSizeView extends View {
         mTextPaint.setColor(textColor);
         mTextPaint.setStyle(Paint.Style.FILL_AND_STROKE);
 //        mTextPaint.setStrokeWidth(DensityUtils.dp2px(context, 1));
-        mTextPaint.setTextSize(AndroidUtilities.sp2px(context, smallSize));
+        mTextPaint.setTextSize(AndroidUtilities.sp2px(smallSize));
         textScaleX = mTextPaint.measureText("A");
         //文字画笔
         mText1Paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mText1Paint.setColor(textColor);
         mText1Paint.setStyle(Paint.Style.FILL_AND_STROKE);
-        mText1Paint.setTextSize(AndroidUtilities.sp2px(context, bigSize));
+        mText1Paint.setTextSize(AndroidUtilities.sp2px(bigSize));
         text1ScaleX = mText1Paint.measureText("A");
 
         //文字画笔
         mText2Paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mText2Paint.setColor(textColor);
         mText2Paint.setStyle(Paint.Style.FILL_AND_STROKE);
-        mText2Paint.setTextSize(AndroidUtilities.sp2px(context, standerSize));
+        mText2Paint.setTextSize(AndroidUtilities.sp2px(standerSize));
         text2ScaleX = mText2Paint.measureText(context.getString(R.string.font_size_default));
 
         mCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);

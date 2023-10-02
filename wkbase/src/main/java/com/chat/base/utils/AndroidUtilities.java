@@ -1,6 +1,5 @@
 package com.chat.base.utils;
 
-import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -48,6 +47,8 @@ public class AndroidUtilities {
 
     public static void setDensity(float density1) {
         density = density1;
+        Resources resources = WKBaseApplication.getInstance().getContext().getResources();
+        displayMetrics = resources.getDisplayMetrics();
         chat_actionBackgroundGradientDarkenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         chat_actionBackgroundGradientDarkenPaint.setColor(0x2a000000);
     }
@@ -67,28 +68,23 @@ public class AndroidUtilities {
     }
 
     public static float px2sp(float pxVal) {
-        return (pxVal / WKBaseApplication.getInstance().getContext().getResources().getDisplayMetrics().scaledDensity);
+        return (pxVal / displayMetrics.scaledDensity);
     }
 
     public static int getScreenWidth() {
-        Resources resources = WKBaseApplication.getInstance().getContext().getResources();
-        DisplayMetrics dm = resources.getDisplayMetrics();
-
-        return dm.widthPixels;
+        return displayMetrics.widthPixels;
     }
 
     public static int getScreenHeight() {
-        Resources resources = WKBaseApplication.getInstance().getContext().getResources();
-        DisplayMetrics dm = resources.getDisplayMetrics();
-        return dm.heightPixels;
+        return displayMetrics.heightPixels;
     }
 
     /**
      * sp转px
      */
-    public static int sp2px(Context context, float spVal) {
+    public static int sp2px(float spVal) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, spVal,
-                context.getResources().getDisplayMetrics());
+                displayMetrics);
     }
 
     public static void cancelRunOnUIThread(Runnable runnable) {

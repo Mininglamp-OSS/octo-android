@@ -108,7 +108,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         }
 
         View msgPrivacyLayout = (View) EndpointManager.getInstance().invoke("chat_setting_msg_privacy", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.msgSettingLayout));
-        if (msgReceiptView != null) {
+        if (msgPrivacyLayout != null) {
             wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
         }
 

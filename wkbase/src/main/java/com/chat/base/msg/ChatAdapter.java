@@ -1,9 +1,8 @@
 package com.chat.base.msg;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
@@ -322,7 +321,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 baseItemProvider.refreshData(position, baseView, entity, from);
             }
             if (refreshType == RefreshType.reaction) {
-                View reactionsView = view.findViewById(R.id.reactionsView);
+                FrameLayout reactionsView = view.findViewById(R.id.reactionsView);
                 EndpointManager.getInstance().invoke(
                         "refresh_msg_reaction", new ShowMsgReactionMenu(
                                 reactionsView,

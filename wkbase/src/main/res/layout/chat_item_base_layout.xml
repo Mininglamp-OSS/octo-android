@@ -52,19 +52,20 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
+
                 <LinearLayout
                     android:id="@+id/wkBaseContentLayout"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal" />
 
-                <include
+                <FrameLayout
                     android:id="@+id/reactionsView"
-                    layout="@layout/msg_reactions_layout"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|end"
                     android:visibility="gone" />
+
             </LinearLayout>
 
 

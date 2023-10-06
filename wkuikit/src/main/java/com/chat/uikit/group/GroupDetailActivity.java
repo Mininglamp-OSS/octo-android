@@ -391,8 +391,17 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
     private void resortData(List<WKChannelMember> list) {
         WKChannelMember channelMember = WKIM.getInstance().getChannelMembersManager().getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        if (channelMember != null) {
+            if (channelMember.memberUID.equals(WKConfig.getInstance().getUid())) {
+                String name = channelMember.memberRemark;
+                memberRole = channelMember.role;
+                if (TextUtils.isEmpty(name))
+                    name = channelMember.memberName;
+                wkVBinding.inGroupNameTv.setText(name);
+            }
+        }
         int maxCount;
-        if (channelMember != null && channelMember.role != WKChannelMemberRole.normal) {
+        if (memberRole != WKChannelMemberRole.normal) {
             maxCount = 18;
         } else {
             maxCount = 19;
@@ -404,14 +413,6 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                     //群主或管理员
                     temp.add(0, list.get(i));
                 } else temp.add(list.get(i));
-
-                if (list.get(i).memberUID.equalsIgnoreCase(WKConfig.getInstance().getUid())) {
-                    String name = list.get(i).memberRemark;
-                    memberRole = list.get(i).role;
-                    if (TextUtils.isEmpty(name))
-                        name = list.get(i).memberName;
-                    wkVBinding.inGroupNameTv.setText(name);
-                }
             }
             //添加按钮
             WKChannelMember addUser = new WKChannelMember();

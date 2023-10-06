@@ -214,6 +214,7 @@ public class WKDialogUtils {
 
     public void showBottomSheet(Context context, CharSequence title, boolean bigTitle, List<BottomSheetItem> list) {
         BottomSheet.Builder builder = new BottomSheet.Builder(context, false);
+        builder.setDimBehind(true);
         builder.setTitle(title, bigTitle);
         CharSequence[] items = new CharSequence[list.size()];
         int[] icons = new int[list.size()];
@@ -224,6 +225,7 @@ public class WKDialogUtils {
         builder.setItems(items, icons, (dialogInterface, i) -> list.get(i).getIClick().onClick());
         BottomSheet bottomSheet = builder.create();
         bottomSheet.show();
+        bottomSheet.setCanceledOnTouchOutside(true);
         bottomSheet.setBackgroundColor(ContextCompat.getColor(context, R.color.screen_bg));
     }
 
@@ -259,12 +261,12 @@ public class WKDialogUtils {
         }
         LinearLayout linearLayout = new LinearLayout(context);
         EditText editText = new EditText(context);
-        editText.setFilters(new InputFilter[]{StringUtils.getInputFilter(maxLength)});
         editText.setHint(hideStr);
-        editText.setText(oldStr);
         if (!TextUtils.isEmpty(oldStr)) {
+            editText.setText(oldStr);
             editText.setSelection(oldStr.length());
         }
+        editText.setFilters(new InputFilter[]{StringUtils.getInputFilter(maxLength)});
         SoftKeyboardUtils.getInstance().showSoftKeyBoard(context, editText);
         linearLayout.addView(editText, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.START, 24, 0, 24, 0));
         builder.setView(linearLayout);

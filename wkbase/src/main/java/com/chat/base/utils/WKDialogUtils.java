@@ -95,7 +95,7 @@ public class WKDialogUtils {
         builder.show();
     }
 
-    public void showDialog(Context context, String title, String msg, boolean isCancelable, String canStr, String sureStr, int canColor, int sureColor, final IClickListener iClickListener) {
+    public void showDialog(Context context, String title, CharSequence msg, boolean isCancelable, String canStr, String sureStr, int canColor, int sureColor, final IClickListener iClickListener) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         if (TextUtils.isEmpty(title)) {
             builder.setTitle(context.getString(R.string.str_base_tips));

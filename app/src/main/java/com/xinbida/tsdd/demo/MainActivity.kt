@@ -18,6 +18,7 @@ import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.ui.components.NormalClickableContent
 import com.chat.base.ui.components.NormalClickableSpan
 import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.singleclick.SingleClickUtil
 import com.chat.login.ui.PerfectUserInfoActivity
 import com.chat.login.ui.ThirdLoginActivity
@@ -71,20 +72,6 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
     }
 
     private fun showDialog() {
-        val view: View =
-            LayoutInflater.from(this).inflate(R.layout.privacy_agreement_dialog_view, null)
-        val builder = AlertDialog.Builder(this, R.style.AlertDialog)
-        builder.setCancelable(false)
-        val alertDialog = builder.create()
-        alertDialog.show()
-        alertDialog.setContentView(view)
-        val window = alertDialog.window
-        val param = window!!.attributes
-        param.width = AndroidUtilities.getScreenWidth() / 5 * 4
-        param.height = AndroidUtilities.getScreenHeight() / 3 * 2
-        window.attributes = param
-        val contentTv = view.findViewById<TextView>(R.id.contentTv)
-        contentTv.movementMethod = LinkMovementMethod.getInstance()
         val content = getString(R.string.dialog_content)
         val linkSpan = SpannableStringBuilder()
         linkSpan.append(content)
@@ -113,20 +100,28 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                     }
                 }), privacyPolicyIndex, privacyPolicyIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )
-        SingleClickUtil.onSingleClick(view.findViewById(R.id.disagreeBtn)) {
-            alertDialog.dismiss()
-            finish()
+
+        WKDialogUtils.getInstance().showDialog(
+            this,
+            getString(R.string.dialog_title),
+            linkSpan,
+            false,
+            getString(R.string.disagree),
+            getString(R.string.agree),
+            0,
+            0
+        ) { index ->
+            if (index == 1) {
+                WKSharedPreferencesUtil.getInstance()
+                    .putBoolean("show_agreement_dialog", false)
+                WKBaseApplication.getInstance().init(
+                    WKBaseApplication.getInstance().packageName,
+                    WKBaseApplication.getInstance().application
+                )
+                gotoApp()
+            } else {
+                finish()
+            }
         }
-        SingleClickUtil.onSingleClick(view.findViewById(R.id.agreeBtn)) {
-            alertDialog.dismiss()
-            //checkPermissions();
-            WKSharedPreferencesUtil.getInstance().putBoolean("show_agreement_dialog", false)
-            WKBaseApplication.getInstance().init(
-                WKBaseApplication.getInstance().packageName,
-                WKBaseApplication.getInstance().application
-            )
-            gotoApp()
-        }
-        contentTv.text = linkSpan
     }
 }

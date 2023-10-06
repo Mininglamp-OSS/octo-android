@@ -72,6 +72,8 @@ public class WKBaseApplication {
         this.packageName = packageName;
         this.application = context;
         this.context = new WeakReference<>(context);
+        float density = context.getResources().getDisplayMetrics().density;
+        AndroidUtilities.setDensity(density);
         boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
         if (isShowDialog) {
             return;
@@ -90,8 +92,7 @@ public class WKBaseApplication {
             //158638
 //            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
             initX5WebView();
-            float density = context.getResources().getDisplayMetrics().density;
-            AndroidUtilities.setDensity(density);
+
         }).start();
 
     }

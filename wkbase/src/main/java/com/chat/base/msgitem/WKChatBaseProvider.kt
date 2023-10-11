@@ -243,7 +243,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 } else deleteTimer.visibility = VISIBLE
             }
             setData(baseViewHolder.bindingAdapterPosition, baseView, msgItemEntity, from)
-            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing) {
+            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
                 setFromName(msgItemEntity, from, baseViewHolder.getView(R.id.receivedNameTv))
             }
             setMsgTimeAndStatus(
@@ -554,7 +554,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
                 fullContentLayoutParams.leftMargin = AndroidUtilities.dp(margin)
             } else {
-                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(45f + margin)
+                fullContentLayoutParams.leftMargin = AndroidUtilities.dp(50f + margin)
                 fullContentLayoutParams.rightMargin = AndroidUtilities.dp(55f)
             }
         }
@@ -1090,7 +1090,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 subItem.setSubtext(item.subText)
             }
             if (!TextUtils.isEmpty(item.tag) && item.tag == "auto_delete") {
-                Log.e("发布了","-->")
+                Log.e("发布了", "-->")
                 EndpointManager.getInstance().invoke("chat_popup_item", subItem)
             }
             subItem.setOnClickListener {
@@ -1319,13 +1319,39 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     fun setItemPadding(position: Int, viewGroupLayout: ChatItemView) {
-        if (position == getAdapter()!!.data.size - 1) viewGroupLayout.setPadding(
-            0,
-            AndroidUtilities.dp(2f),
-            0,
-            AndroidUtilities.dp(10f)
-        ) else viewGroupLayout.setPadding(0, AndroidUtilities.dp(2f), 0, AndroidUtilities.dp(2f))
-
+        var top: Int
+        var bottom: Int
+        val currentFromUID: String? = getAdapter()!!.data[position].wkMsg.fromUID
+        var nextFromUID: String? = ""
+        var previousFromUID: String? = ""
+        if (position + 1 <= getAdapter()!!.data.size - 1) {
+            nextFromUID = getAdapter()!!.data[position + 1].wkMsg.fromUID
+        }
+        if (position - 1 > 0) {
+            previousFromUID = getAdapter()!!.data[position - 1].wkMsg.fromUID
+        }
+        if (TextUtils.isEmpty(currentFromUID)) {
+            top = AndroidUtilities.dp(4f)
+            bottom = AndroidUtilities.dp(4f)
+        } else {
+            top = if (!TextUtils.isEmpty(previousFromUID) && previousFromUID == currentFromUID) {
+                AndroidUtilities.dp(1.5f)
+            } else {
+                AndroidUtilities.dp(4f)
+            }
+            bottom = if (!TextUtils.isEmpty(nextFromUID) && nextFromUID == currentFromUID) {
+                AndroidUtilities.dp(1.5f)
+            } else {
+                AndroidUtilities.dp(4f)
+            }
+        }
+        if (position == getAdapter()!!.data.size - 1) {
+            bottom = AndroidUtilities.dp(10f)
+        }
+        if (position == 0) {
+            top = AndroidUtilities.dp(10f)
+        }
+        viewGroupLayout.setPadding(0, top, 0, bottom)
     }
 
     private fun getMsgFromOS(clientMsgNo: String): String {

@@ -5,7 +5,9 @@
     <dimen name="dimen_0">05dp</dimen>
     <dimen name="chat_border_width">1px</dimen>
     <dimen name="chat_radius">10dp</dimen>
-    <dimen name="msg_item_margin">2dp</dimen>
+    <dimen name="msg_item_margin">4dp</dimen>
+    <dimen name="chat_bubble_padding_lr">15dp</dimen>
+    <dimen name="chat_bubble_padding_tb">5dp</dimen>
     <!--字体大小 及倍数-->
 
     <dimen name="font_size_10">10sp</dimen>

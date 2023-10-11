@@ -831,7 +831,7 @@ public class BubbleLayout extends LinearLayout {
 
         int lookWidth = 10;
         int normalRadius = 20;
-        int smallRadius = 10;
+        int smallRadius = 5;
         if (msgFrom == WKChatIteMsgFromType.SEND) {
             setBubbleBorderColor(ContextCompat.getColor(getContext(), R.color.transparent));
             if (msgType == WKContentType.WK_FILE

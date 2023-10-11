@@ -89,8 +89,6 @@ public class WKBaseApplication {
             EmojiManager.getInstance().init();
             RLottieApplication.getInstance().init(context);
             CrashHandler.getInstance().init(context);
-            //158638
-//            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
             initX5WebView();
 
         }).start();
@@ -185,7 +183,9 @@ public class WKBaseApplication {
     }
 
     public boolean appModuleIsInjection(AppModule appModule) {
-//        return appModule != null && appModule.getStatus() != 0 && appModule.getChecked();
-        return true;
+        if (appModule == null) {
+            return true;
+        }
+        return appModule.getStatus() != 0 && appModule.getChecked();
     }
 }

@@ -9,6 +9,11 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+/wkbase/build
+/wklogin/build
+/wkscan/build
+/wkpush/build
+/wkuikit/build
 /captures
 .externalNativeBuild
 .cxx

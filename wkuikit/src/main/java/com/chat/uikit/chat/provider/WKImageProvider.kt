@@ -364,29 +364,16 @@ class WKImageProvider : WKChatBaseProvider() {
 
     private fun getShowURL(uiChatMsgItemEntity: WKUIChatMsgItemEntity): String {
         val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
-        var showUrl: String
-        if (uiChatMsgItemEntity.wkMsg.localExtraMap != null && uiChatMsgItemEntity.wkMsg.localExtraMap.containsKey(
-                "showURL"
-            )
-        ) {
-            showUrl = uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] as String
-        } else {
-            if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
-                showUrl = imgMsgModel.localPath
-                val file = File(showUrl)
-                if (!file.exists() || file.length() == 0L) {
-                    //如果本地文件被删除就显示网络图片
-                    showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
-                }
-            } else {
-                showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
+        if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
+            val file = File(imgMsgModel.localPath)
+            if (file.exists() && file.length() > 0L) {
+                return file.absolutePath
             }
-            if (uiChatMsgItemEntity.wkMsg.localExtraMap == null) {
-                uiChatMsgItemEntity.wkMsg.localExtraMap = HashMap<String, Objects>()
-            }
-            uiChatMsgItemEntity.wkMsg.localExtraMap["showURL"] = showUrl
         }
-        return showUrl
+        if (!TextUtils.isEmpty(imgMsgModel.url)) {
+            return WKApiConfig.getShowUrl(imgMsgModel.url)
+        }
+        return ""
     }
 
     override fun resetCellListener(

@@ -20,6 +20,7 @@ import com.chat.base.msg.ChatAdapter
 import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
+import com.chat.base.msgitem.WKMsgBgType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.ui.Theme
@@ -61,15 +62,15 @@ class WKImageProvider : WKChatBaseProvider() {
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
         val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
-        imageView.setAllCorners(10)
-
+        val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
+        setCorners(from, uiChatMsgItemEntity, imageView, blurView)
         val progressTv = parentView.findViewById<TextView>(R.id.progressTv)
         val progressView = parentView.findViewById<CircularProgressView>(R.id.progressView)
         progressView.setProgColor(Theme.colorAccount)
         val imageLayout = parentView.findViewById<View>(R.id.imageLayout)
         val otherLayout = parentView.findViewById<FrameLayout>(R.id.otherLayout)
         val deleteTimer = SecretDeleteTimer(context)
-        val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
+
         otherLayout.removeAllViews()
         otherLayout.addView(deleteTimer, LayoutHelper.createFrame(35, 35, Gravity.CENTER))
         contentLayout.gravity =
@@ -282,6 +283,7 @@ class WKImageProvider : WKChatBaseProvider() {
                     val adapter = getAdapter() as ChatAdapter
                     adapter.conversationContext.onViewPicture(false)
                     WKIM.getInstance().msgManager.removeRefreshMsgListener("show_chat_img")
+                    WKIM.getInstance().cmdManager.removeCmdListener("show_chat_img")
                 }
             })
         WKIM.getInstance().cmdManager.addCmdListener(
@@ -295,7 +297,7 @@ class WKImageProvider : WKChatBaseProvider() {
                             WKIM.getInstance().msgManager.getWithMessageID(msgID)
                         if (mMsg1 != null) {
                             for (msg in showImgList) {
-                                if (msg.clientMsgNO == mMsg1.clientMsgNO) {
+                                if (msg.clientMsgNO == mMsg1.clientMsgNO && popupView != null && popupView.isShow) {
                                     WKToastUtils.getInstance()
                                         .showToast(context.getString(R.string.msg_revoked))
                                     popupView.dismiss()
@@ -385,5 +387,93 @@ class WKImageProvider : WKChatBaseProvider() {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
         addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+    }
+
+    override fun resetCellBackground(
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        super.resetCellBackground(parentView, uiChatMsgItemEntity, from)
+        val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
+        val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
+        setCorners(from, uiChatMsgItemEntity, imageView, blurView)
+    }
+
+    private fun setCorners(
+        from: WKChatIteMsgFromType,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        imageView: FilterImageView,
+        blurView: ShapeBlurView
+    ) {
+
+        val bgType = getMsgBgType(
+            uiChatMsgItemEntity.previousMsg,
+            uiChatMsgItemEntity.wkMsg,
+            uiChatMsgItemEntity.nextMsg
+        )
+        if (bgType == WKMsgBgType.center) {
+            if (from == WKChatIteMsgFromType.SEND) {
+                imageView.setCorners(10, 5, 10, 5)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat()
+                )
+            } else {
+                imageView.setCorners(5, 10, 5, 10)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat()
+                )
+            }
+        } else if (bgType == WKMsgBgType.top) {
+            if (from == WKChatIteMsgFromType.SEND) {
+                imageView.setCorners(10, 10, 10, 5)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat()
+                )
+            } else {
+                imageView.setCorners(10, 10, 5, 10)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat()
+                )
+            }
+        } else if (bgType == WKMsgBgType.bottom) {
+            if (from == WKChatIteMsgFromType.SEND) {
+                imageView.setCorners(10, 5, 10, 10)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat()
+                )
+            } else {
+                imageView.setCorners(5, 10, 10, 10)
+                blurView.setCornerRadius(
+                    AndroidUtilities.dp(5f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat(),
+                    AndroidUtilities.dp(10f).toFloat()
+                )
+            }
+        } else {
+            imageView.setAllCorners(10)
+            blurView.setCornerRadius(
+                AndroidUtilities.dp(10f).toFloat(),
+                AndroidUtilities.dp(10f).toFloat(),
+                AndroidUtilities.dp(10f).toFloat(),
+                AndroidUtilities.dp(10f).toFloat()
+            )
+        }
     }
 }

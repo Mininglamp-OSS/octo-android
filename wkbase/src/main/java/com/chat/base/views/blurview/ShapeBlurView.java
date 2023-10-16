@@ -314,20 +314,20 @@ public class ShapeBlurView extends View {
     /**
      * Set the corner radius of a specific corner in px.
      */
-//    public void setCornerRadius(float topLeft, float topRight, float bottomLeft, float bottomRight) {
-//        if (mCornerRadii[BlurCorner.TOP_LEFT] == topLeft
-//                && mCornerRadii[BlurCorner.TOP_RIGHT] == topRight
-//                && mCornerRadii[BlurCorner.BOTTOM_RIGHT] == bottomRight
-//                && mCornerRadii[BlurCorner.BOTTOM_LEFT] == bottomLeft) {
-//            return;
-//        }
-//        mCornerRadii[BlurCorner.TOP_LEFT] = topLeft;
-//        mCornerRadii[BlurCorner.TOP_RIGHT] = topRight;
-//        mCornerRadii[BlurCorner.BOTTOM_LEFT] = bottomLeft;
-//        mCornerRadii[BlurCorner.BOTTOM_RIGHT] = bottomRight;
-//        initCornerRids();
-//        invalidate();
-//    }
+    public void setCornerRadius(float topLeft, float topRight, float bottomLeft, float bottomRight) {
+        if (mCornerRadii[BlurCorner.TOP_LEFT] == topLeft
+                && mCornerRadii[BlurCorner.TOP_RIGHT] == topRight
+                && mCornerRadii[BlurCorner.BOTTOM_RIGHT] == bottomRight
+                && mCornerRadii[BlurCorner.BOTTOM_LEFT] == bottomLeft) {
+            return;
+        }
+        mCornerRadii[BlurCorner.TOP_LEFT] = topLeft;
+        mCornerRadii[BlurCorner.TOP_RIGHT] = topRight;
+        mCornerRadii[BlurCorner.BOTTOM_LEFT] = bottomLeft;
+        mCornerRadii[BlurCorner.BOTTOM_RIGHT] = bottomRight;
+        initCornerRids();
+        invalidate();
+    }
 
     /**
      * @return the largest corner radius.

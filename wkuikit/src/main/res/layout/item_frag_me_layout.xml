@@ -22,7 +22,6 @@
             android:layout_marginStart="15dp"
             android:layout_weight="1"
             android:fontFamily="sans-serif-medium"
-            android:text="@string/my_wallet"
             android:textColor="@color/colorDark" />
 
         <androidx.appcompat.widget.AppCompatImageView

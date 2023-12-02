@@ -25,7 +25,7 @@
         android:layout_marginEnd="15dp"
         android:background="@color/transparent"
         android:gravity="center|start"
-        android:hint="http://172.0.0.1"
+        android:hint="@string/update_api_ip"
         android:textColor="@color/colorDark"
         android:textSize="16sp" />
 
@@ -38,7 +38,7 @@
         android:layout_marginEnd="15dp"
         android:background="@color/transparent"
         android:gravity="center|start"
-        android:hint="8080"
+        android:hint="8090"
         android:maxLines="4"
         android:textColor="@color/colorDark"
         android:textSize="16sp" />

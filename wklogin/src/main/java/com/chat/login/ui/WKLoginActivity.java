@@ -217,7 +217,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             finish();
         } else {
             hideLoading();
-            new Handler(Looper.myLooper()).postDelayed(() -> {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
                 if (list != null && list.size() > 0) {
                     for (LoginMenu menu : list) {

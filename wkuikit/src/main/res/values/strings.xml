@@ -76,7 +76,6 @@
     <string name="total_search_msg_count">%d 条相关记录</string>
     <string name="apply_join_group">[进群申请]</string>
     <string name="ar_feed_sound_cancel">松手取消</string>
-    <string name="my_wallet">我的钱包</string>
     <string name="new_msg_notice">新消息通知</string>
     <string name="web_login">电脑端登录</string>
     <string name="currency">通用</string>

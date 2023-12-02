@@ -57,4 +57,5 @@
     <string name="phone_error">手机号不合法</string>
     <string name="agree_auth_tips">请先阅读并同意《隐私政策》和《用户协议》</string>
     <string name="choose_login_type">—  第三方登录  —</string>
+    <string name="update_api_ip">以http开头(如http://172.0.0.1)</string>
 </resources>

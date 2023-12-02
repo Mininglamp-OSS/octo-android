@@ -17,8 +17,6 @@ public class EndpointCategory {
     public final static String chatFunction = "chat_function";
     //tab菜单
     public final static String tabMenus = "tab_menus";
-    //钱包
-    public final static String walletMenus = "wallet_menus";
     //扫一扫
     public final static String wkScan = "wk_scan";
     //消息配置

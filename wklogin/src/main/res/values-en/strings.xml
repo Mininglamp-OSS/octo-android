@@ -57,5 +57,5 @@
     <string name="phone_error">Illegal mobile phone number</string>
     <string name="agree_auth_tips">Please read and agree to the privacy policy and user agreement first</string>
     <string name="choose_login_type">Log in</string>
-
+    <string name="update_api_ip">Start with http(for example http://172.0.0.1)</string>
 </resources>

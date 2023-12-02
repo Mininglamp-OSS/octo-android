@@ -75,7 +75,6 @@
     <string name="total_search_msg_count">%d related messages</string>
     <string name="apply_join_group">[Group entry application]</string>
     <string name="ar_feed_sound_cancel">Let go</string>
-    <string name="my_wallet">Wallet</string>
     <string name="new_msg_notice">Notifications</string>
     <string name="web_login">Computer login</string>
     <string name="currency">General</string>

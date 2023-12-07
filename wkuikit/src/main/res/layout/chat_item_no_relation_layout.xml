@@ -3,11 +3,11 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center"
+    android:paddingTop="@dimen/msg_item_margin"
+    android:paddingBottom="@dimen/msg_item_margin"
     android:orientation="vertical">
 
     <TextView
-        android:layout_marginTop="@dimen/msg_item_margin"
-        android:layout_marginBottom="@dimen/msg_item_margin"
         android:id="@+id/contentTv"
         android:textSize="@dimen/font_size_14"
         android:textColor="@color/color999"

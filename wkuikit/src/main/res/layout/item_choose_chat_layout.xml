@@ -39,7 +39,7 @@
             android:ellipsize="end"
             android:lines="1"
             android:textColor="@color/colorDark"
-            android:textSize="14sp" />
+            android:textSize="@dimen/font_size_16" />
 
         <TextView
             android:id="@+id/fullStaffingTv"

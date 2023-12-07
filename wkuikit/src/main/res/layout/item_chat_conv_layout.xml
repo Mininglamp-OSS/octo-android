@@ -64,14 +64,15 @@
                         android:ellipsize="end"
                         android:fontFamily="sans-serif-medium"
                         android:lines="1"
-                        android:text="多少快乐"
+                        android:text="多少快乐多少快乐多少快乐多少快乐"
                         android:textColor="@color/colorDark"
                         android:textSize="16sp" />
 
 
                     <LinearLayout
                         android:id="@+id/categoryLayout"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center_vertical"
                         android:gravity="center_vertical"

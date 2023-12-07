@@ -3,7 +3,6 @@ package com.chat.uikit.contacts
 import android.content.Intent
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.View
 import android.widget.LinearLayout
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
@@ -12,6 +11,7 @@ import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.config.WKSystemAccount
 import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.entity.PopupMenuItem
+import com.chat.base.entity.UserOnlineStatus
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.LayoutHelper
@@ -140,7 +140,13 @@ class FriendAdapter :
             )
         }
         if (item.channel.online == 1) {
-            holder.setGone(R.id.offlineTv, true)
+            holder.setGone(R.id.offlineTv, false)
+            var device: String? = context.getString(R.string.phone)
+            if (item.channel.deviceFlag == UserOnlineStatus.Web) device =
+                context.getString(R.string.web) else if (item.channel.deviceFlag == UserOnlineStatus.PC) device =
+                context.getString(R.string.pc)
+            val content = String.format("%s%s", device, context.getString(R.string.online))
+            holder.setText(R.id.offlineTv, content)
         } else {
             if (item.channel.lastOffline == 0L) {
                 holder.setGone(R.id.offlineTv, true)
@@ -192,7 +198,7 @@ class FriendAdapter :
                     }
                 })
         )
-        WKDialogUtils.getInstance().setViewLongClickPopup(holder.getView(R.id.contentLayout),list)
+        WKDialogUtils.getInstance().setViewLongClickPopup(holder.getView(R.id.contentLayout), list)
     }
 
 

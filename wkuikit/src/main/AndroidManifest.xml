@@ -1,10 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <uses-permission android:name="android.permission.VIBRATE" />
+
     <application>
         <activity
             android:name=".chat.ChatActivity"
-            android:configChanges="locale|orientation|screenSize|keyboardHidden|navigation"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustNothing" />
         <activity android:name=".group.DeleteGroupMemberActivity" />
@@ -22,10 +26,7 @@
         <activity
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
-        <activity
-            android:name=".TabActivity"
-            android:screenOrientation="portrait"
-            android:launchMode="singleTask" />
+
         <activity android:name=".contacts.NewFriendsActivity" />
         <activity android:name=".setting.SettingActivity" />
         <activity android:name=".group.GroupQrActivity" />
@@ -56,9 +57,18 @@
         <activity android:name=".setting.WKAboutActivity" />
 
         <activity android:name=".search.MailListActivity" />
-        <activity android:name=".group.GroupHeaderActivity" />
         <activity android:name=".message.BackupRestoreMessageActivity" />
+        <activity android:name=".setting.AppModulesActivity" />
         <activity android:name=".setting.ErrorLogsActivity" />
+        <activity
+            android:name="com.chat.uikit.TabActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustPan"
+            android:launchMode="singleTask"/>
+
+        <service
+            android:name="com.chat.uikit.AliveJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
     </application>
 </manifest>

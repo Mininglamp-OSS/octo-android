@@ -137,6 +137,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
     private byte channelType;
     //是否在查看历史消息
     private boolean isShowHistory;
+    private boolean isSyncLastMsg = false;
     private boolean isToEnd = true;
     private boolean isViewingPicture = false;
     private boolean showNickName = true;// 是否显示聊天昵称
@@ -276,6 +277,10 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         Theme.setPressedBackground(wkVBinding.topLayout.backIv);
         wkVBinding.topLayout.backIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.titleBarIcon), PorterDuff.Mode.MULTIPLY));
         wkVBinding.topLayout.avatarView.setSize(40);
+        wkVBinding.chatUnreadLayout.progress.setSize(40);
+        wkVBinding.chatUnreadLayout.progress.setStrokeWidth(1.5f);
+        wkVBinding.chatUnreadLayout.progress.setProgressColor(ContextCompat.getColor(this, R.color.popupTextColor));
+
         int h = WKConstants.getKeyboardHeight();
         keyboardHelper = new KeyboardHelper();
         keyboardHelper.init(this).bindInputPanel(wkVBinding.chatInputPanel).bindRecyclerView(wkVBinding.recyclerView).bindMorePanel(wkVBinding.morePanel).bindRootLayout(wkVBinding.viewGroupLayout).setScrollBodyLayout(true).setKeyboardHeight(h).setOnKeyboardStateListener(new KeyboardHelper.OnKeyboardStateListener() {
@@ -307,9 +312,16 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         numberTextView.setTextColor(Theme.colorAccount);
         wkVBinding.topLayout.rightView.addView(numberTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.END, 0, 0, 15, 0));
 
+        Object isRegisterRTC = EndpointManager.getInstance().invoke("is_register_rtc", null);
+
         callIV = new AppCompatImageView(this);
         callIV.setImageResource(R.mipmap.ic_call);
-        wkVBinding.topLayout.rightView.addView(callIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.END, 0, 0, 15, 0));
+        if (isRegisterRTC instanceof Boolean) {
+            boolean isRegister = (boolean) isRegisterRTC;
+            if (isRegister) {
+                wkVBinding.topLayout.rightView.addView(callIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.END, 0, 0, 15, 0));
+            }
+        }
         callIV.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.popupTextColor), PorterDuff.Mode.MULTIPLY));
         callIV.setBackground(Theme.createSelectorDrawable(Theme.getPressedColor()));
 
@@ -520,14 +532,21 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 }
             });
             if (isCanLoadMore) {
-                chatAdapter.setList(new ArrayList<>());
+                isSyncLastMsg = true;
+                // chatAdapter.setList(new ArrayList<>());
+                wkVBinding.chatUnreadLayout.progress.setVisibility(View.VISIBLE);
+                wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.GONE);
                 unreadStartMsgOrderSeq = 0;
                 lastPreviewMsgOrderSeq = 0;
-                getData(0, true, 0, true);
+                new Handler().postDelayed(() -> {
+                    getData(0, true, 0, true);
+                    showUnReadCountView();
+                }, 500);
             } else {
                 scrollToPosition(chatAdapter.getItemCount() - 1);
+                showUnReadCountView();
             }
-            showUnReadCountView();
+
             isShowHistory = false;
             isCanLoadMore = false;
         });
@@ -1167,6 +1186,9 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         } else {
             oldestOrderSeq = chatAdapter.getFirstMsgOrderSeq();
         }
+        if (isSyncLastMsg) {
+            oldestOrderSeq = 0;
+        }
         //定位消息
         if (lastPreviewMsgOrderSeq != 0) {
             contain = true;
@@ -1185,7 +1207,12 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
 
             @Override
             public void onResult(List<WKMsg> list) {
+
+                isSyncLastMsg = false;
                 showData(list, pullMode, isSetNewData, isScrollToEnd);
+                wkVBinding.chatUnreadLayout.progress.setVisibility(View.GONE);
+                wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.VISIBLE);
+
                 if (WKReader.isNotEmpty(chatAdapter.getData())) {
                     for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
                         if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.type == WKContentType.loading) {
@@ -1231,6 +1258,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         if (WKReader.isNotEmpty(msgList)) {
             long pre_msg_time = chatAdapter.getLastTimeMsg();
             for (int i = 0, size = msgList.size(); i < size; i++) {
+
                 if (!WKTimeUtils.getInstance().isSameDay(msgList.get(i).timestamp, pre_msg_time) && msgList.get(i).type != WKContentType.emptyView) {
                     //显示聊天时间
                     WKUIChatMsgItemEntity uiChatMsgEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
@@ -1333,7 +1361,6 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         setting.receipt = channel.receipt;
         wkMsg.setting = setting;
         wkMsg.setChannelInfo(channel);
-        wkMsg.fromUID = WKConfig.getInstance().getUid();
         WKSendMsgUtils.getInstance().sendMessage(wkMsg);
         //setting.signal = signal;
 //        messageContent.flame = channel.flame;

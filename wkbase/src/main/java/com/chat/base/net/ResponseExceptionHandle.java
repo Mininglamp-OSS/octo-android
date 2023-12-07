@@ -27,12 +27,12 @@ public class ResponseExceptionHandle {
         return ResponseExceptionHandleBinder.response;
     }
 
-    public ResponeThrowable handleException(Throwable e) {
-        ResponeThrowable responeThrowable = null;
+    public ResponseThrowable handleException(Throwable e) {
+        ResponseThrowable responeThrowable = null;
         if (e instanceof HttpException) {
             HttpException httpException = (HttpException) e;
 
-            responeThrowable = new ResponeThrowable(e, httpException.code());
+            responeThrowable = new ResponseThrowable(e, httpException.code());
             switch (httpException.code()) {
                 case 400:
                     try {

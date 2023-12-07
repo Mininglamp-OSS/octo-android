@@ -99,9 +99,14 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void initListener() {
+        Object orgViewObject = EndpointManager.getInstance().invoke("org_contacts_view", requireContext());
         friendAdapter = new FriendAdapter();
         RecyclerView headerRecyclerView = new RecyclerView(requireContext());
         friendAdapter.addHeaderView(headerRecyclerView);
+        if (orgViewObject != null) {
+            View orgView = (View) orgViewObject;
+            friendAdapter.addHeaderView(orgView);
+        }
         friendAdapter.addFooterView(getFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
         headerRecyclerView.setNestedScrollingEnabled(false);

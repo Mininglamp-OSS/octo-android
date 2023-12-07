@@ -965,7 +965,7 @@ public class RecyclerListView extends RecyclerView {
                 checkSection();
             }
         });
-        addOnItemTouchListener(new RecyclerListViewItemClickListener(context));
+      //  addOnItemTouchListener(new RecyclerListViewItemClickListener(context));
     }
     @Override
     public void setVerticalScrollBarEnabled(boolean verticalScrollBarEnabled) {

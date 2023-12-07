@@ -34,9 +34,7 @@
     <string name="my_in_group_name">My Alias in Group</string>
     <string name="update_in_gorup_name">Editing your alias only changers your name displayed in this group. It is visible to all group members.</string>
     <string name="group_name">Group name</string>
-    <string name="group_avatar">Group header</string>
     <string name="group_qr">Group QR Code</string>
-    <string name="group_manage">Manage Group</string>
     <string name="group_card">Group Card</string>
     <string name="group_announcement">Group Notice</string>
     <string name="delete_group">Delete and Leave</string>
@@ -110,7 +108,6 @@
     <string name="single_update_id">%s Can only be modified once</string>
     <string name="complete">Complete</string>
     <string name="update_name">Update Name</string>
-    <string name="update_avatar">Update Avatar</string>
     <string name="update_app_id">Update %s ID</string>
     <string name="delete_friends_tips">Delete contact "%s"and the chat history with that contact.</string>
     <string name="join_black_list_tips">When you block this user,you will not receive any messages from them and you will not see each other\'s Moments updates.Block this user now?</string>
@@ -213,7 +210,7 @@
     <string name="bot">Bot</string>
     <string name="no_relation_request">%s has started friend verification. You are not his (her) friend yet. Please send a friend verification request first, and chat only after the other party passes the verification. Send authentication request</string>
     <string name="send_request">Send authentication request</string>
-
+    <string name="update_avatar">Update Avatar</string>
     <string name="in_group_name">In Group Name:</string>
     <string name="group_owner">owner</string>
     <string name="group_manager">manager</string>
@@ -231,7 +228,7 @@
     <string name="non_friend_relationship">Non friend relationship</string>
     <string name="standard">Standard</string>
     <string name="wk_system_notice">System Notice</string>
-    <string name="customer_service">Customer Service</string>
+    <string name="customer_service">CSR</string>
     <string name="visitor">Visitor</string>
     <string name="clear_all_remind">Read all mentions</string>
     <string name="burn_after_reading">Burn after Reading</string>
@@ -271,5 +268,7 @@
     <string name="delete_messages">Delete messages</string>
     <string name="delete_chat">Delete chat</string>
     <string name="clear_history">Clear history</string>
+    <string name="all_staff">All Staff</string>
+    <string name="department">Department</string>
 </resources>
 

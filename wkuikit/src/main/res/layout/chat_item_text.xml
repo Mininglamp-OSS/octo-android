@@ -21,10 +21,10 @@
         android:minWidth="40dp"
         android:minHeight="40dp"
         android:orientation="vertical"
-        android:paddingStart="10dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="10dp"
-        android:paddingBottom="5dp"
+        android:paddingStart="@dimen/chat_bubble_padding_lr"
+        android:paddingTop="@dimen/chat_bubble_padding_tb"
+        android:paddingEnd="@dimen/chat_bubble_padding_lr"
+        android:paddingBottom="@dimen/chat_bubble_padding_tb"
         android:visibility="visible"
         app:shadowRadius="0dp">
 
@@ -42,24 +42,27 @@
 
         <LinearLayout
             android:id="@+id/replyLayout"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:layout_marginEnd="10dp"
             android:layout_marginBottom="10dp"
+            android:background="@drawable/reply_bg"
             android:orientation="horizontal">
 
             <View
                 android:id="@+id/replyLine"
-                android:layout_marginEnd="10dp"
-                android:layout_width="2dp"
+                android:layout_width="3dp"
                 android:layout_height="match_parent"
+                android:layout_marginEnd="5dp"
                 android:background="@drawable/reply_line" />
 
             <LinearLayout
-
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginEnd="5dp"
+                android:layout_marginBottom="5dp"
                 android:orientation="vertical"
                 android:visibility="visible">
 
@@ -124,6 +127,7 @@
                 android:textColor="@color/receive_text_color"
                 android:textSize="@dimen/font_size_16"
                 android:visibility="visible" />
+
 
             <include
                 android:id="@+id/msgTimeView"

@@ -414,23 +414,4 @@ public class GroupModel extends WKBaseModel {
         });
     }
 
-    public void uploadAvatar(String groupNO, String filePath, IUploadBack iUploadBack) {
-        String url = WKApiConfig.baseUrl + "groups/" + groupNO + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
-        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
-            @Override
-            public void onSuccess(String url) {
-                iUploadBack.onResult(HttpResponseCode.success);
-            }
-
-            @Override
-            public void onError() {
-                iUploadBack.onResult(HttpResponseCode.error);
-            }
-        });
-    }
-
-    public interface IUploadBack {
-        void onResult(int code);
-    }
-
 }

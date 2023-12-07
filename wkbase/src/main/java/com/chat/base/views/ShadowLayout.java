@@ -12,6 +12,8 @@ import android.os.Build;
 import android.util.AttributeSet;
 import android.widget.FrameLayout;
 
+import androidx.core.content.ContextCompat;
+
 import com.chat.base.R;
 
 
@@ -91,7 +93,7 @@ public class ShadowLayout extends FrameLayout {
 
     public void setCornerRadius(int mCornerRadius) {
         this.mCornerRadius = mCornerRadius;
-        setBackgroundCompat(getWidth(), getHeight());
+       // setBackgroundCompat(getWidth(), getHeight());
     }
 
 
@@ -221,10 +223,10 @@ public class ShadowLayout extends FrameLayout {
             mDx = attr.getDimension(R.styleable.ShadowLayout_hl_dx, 0);
             //y轴偏移量
             mDy = attr.getDimension(R.styleable.ShadowLayout_hl_dy, 0);
-            mShadowColor = attr.getColor(R.styleable.ShadowLayout_hl_shadowColor, getResources().getColor(R.color.default_shadow_color));
+            mShadowColor = attr.getColor(R.styleable.ShadowLayout_hl_shadowColor, ContextCompat.getColor(getContext(),R.color.default_shadow_color));
             //判断传入的颜色值是否有透明度
             isAddAlpha(mShadowColor);
-            mBackGroundColor = attr.getColor(R.styleable.ShadowLayout_hl_shadowBackColor, getResources().getColor(R.color.default_shadowback_color));
+            mBackGroundColor = attr.getColor(R.styleable.ShadowLayout_hl_shadowBackColor, ContextCompat.getColor(getContext(),R.color.layoutColor));
         } finally {
             attr.recycle();
         }

@@ -262,7 +262,7 @@ public class EmojiPanelView extends LinearLayout implements OnKeyBoardStateListe
             }
             mEditText.setHint(hitStr);
             showOrHideAnimation(true);
-            new Handler(Looper.myLooper()).postDelayed(this::showSoftKeyBoard, 400);
+            new Handler(Looper.getMainLooper()).postDelayed(this::showSoftKeyBoard, 400);
 //            showSoftKeyBoard();
         }
     }

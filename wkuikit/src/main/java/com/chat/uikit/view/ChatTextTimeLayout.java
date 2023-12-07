@@ -28,7 +28,6 @@ public class ChatTextTimeLayout extends FrameLayout {
 
     private TextView textView;
     private View containerView;
-
     private int containerWidth = 0;
     private int containerHeight = 0;
 
@@ -46,9 +45,8 @@ public class ChatTextTimeLayout extends FrameLayout {
         }
 
         int availableWidth = widthSize - getPaddingLeft() - getPaddingRight();
-        int textViewWidth =
-                textView.getMeasuredWidth() + viewPartMainLayoutParams.leftMargin + viewPartMainLayoutParams.rightMargin;
-
+        int textViewWidth = textView.getMeasuredWidth() +
+                viewPartMainLayoutParams.leftMargin + viewPartMainLayoutParams.rightMargin;
         int textViewHeight =
                 textView.getMeasuredHeight() + viewPartMainLayoutParams.topMargin + viewPartMainLayoutParams.bottomMargin;
 

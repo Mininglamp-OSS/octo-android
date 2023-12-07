@@ -3,6 +3,8 @@ package com.chat.base.adapter;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
+import androidx.lifecycle.Lifecycle;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
 import java.util.ArrayList;
@@ -13,6 +15,11 @@ public class WKFragmentStateAdapter extends FragmentStateAdapter {
     List<Fragment> fragmentList;
     private final List<Long> fragmentIds = new ArrayList<>();
     private final HashSet<Long> createIds = new HashSet<>();
+
+    public WKFragmentStateAdapter(@NonNull FragmentManager fragmentManager, Lifecycle lifecycle, List<Fragment> fragmentList) {
+        super(fragmentManager, lifecycle);
+        setFragmentList(fragmentList);
+    }
 
     public WKFragmentStateAdapter(@NonNull FragmentActivity fragmentActivity, List<Fragment> fragmentList) {
         super(fragmentActivity);

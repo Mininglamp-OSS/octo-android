@@ -35,9 +35,7 @@
     <string name="my_in_group_name">我在本群的昵称</string>
     <string name="update_in_gorup_name">设置你在群里的昵称，这个昵称只会在这个群内显示</string>
     <string name="group_name">群聊名称</string>
-    <string name="group_avatar">群头像</string>
     <string name="group_qr">群二维码</string>
-    <string name="group_manage">群管理</string>
     <string name="group_card">群名片</string>
     <string name="group_announcement">群公告</string>
     <string name="delete_group">删除并退出</string>
@@ -110,7 +108,6 @@
     <string name="single_update_id">%s号只允许修改一次</string>
     <string name="complete">完成</string>
     <string name="update_name">修改名称</string>
-    <string name="update_avatar">修改头像</string>
     <string name="update_app_id">修改%s号</string>
     <string name="delete_friends_tips">将联系人"%s"删除，同时删除与该联系人到聊天记录</string>
     <string name="join_black_list_tips">加入黑名单，你将不在收到对方的消息。</string>
@@ -214,7 +211,7 @@
     <string name="bot">机器人</string>
     <string name="no_relation_request">%s开启了朋友验证，你还不是他（她）朋友。请先发送朋友验证请求，对方验证通过后，才能聊天。发送验证请求</string>
     <string name="send_request">发送验证请求</string>
-
+    <string name="update_avatar">修改头像</string>
     <string name="in_group_name">群内昵称：</string>
     <string name="group_owner">群主</string>
     <string name="group_manager">管理员</string>
@@ -271,5 +268,7 @@
     <string name="delete_messages">删除消息</string>
     <string name="delete_chat">删除聊天</string>
     <string name="clear_history">清除历史记录</string>
+    <string name="all_staff">全员</string>
+    <string name="department">部门</string>
 </resources>
 

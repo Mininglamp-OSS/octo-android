@@ -35,6 +35,8 @@ public class WKSendMsgUtils {
         return SendMsgUtilsBinder.utils;
     }
 
+    final String AutoDeleteMessage = "msg_auto_delete";
+
     public void sendMessage(WKMsg wkMsg) {
         EndpointManager.getInstance().invoke("send_message", wkMsg);
         WKIM.getInstance().getMsgManager().sendMessage(wkMsg);

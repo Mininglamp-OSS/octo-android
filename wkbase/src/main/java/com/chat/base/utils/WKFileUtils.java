@@ -488,7 +488,7 @@ public class WKFileUtils {
      * @return
      */
     public boolean isFileOverSize(Context context, String filePath) {
-        Long fileSize = WKFileUtils.getInstance().getFileSize(filePath);
+        long fileSize = WKFileUtils.getInstance().getFileSize(filePath);
         if (fileSize > 500 * 1024 * 1024) {
             WKToastUtils.getInstance().showToastNormal(context.getString(R.string.max_file_size));
             return true;
@@ -505,9 +505,10 @@ public class WKFileUtils {
         long blockSize = 0;
         try {
             blockSize = getFileSize(file);
-
+            Log.e("文件大小",blockSize+"");
         } catch (Exception e) {
             e.printStackTrace();
+            Log.e("获取文件大小错误", "-->");
         }
         return blockSize;
     }
@@ -519,9 +520,11 @@ public class WKFileUtils {
             if (file.exists()) {
                 FileInputStream fis = new FileInputStream(file);
                 size = fis.available();
+            }else {
+                Log.e("文件不存在","-->");
             }
-        } catch (IOException ignored) {
-
+        } catch (IOException e) {
+            Log.e("读取文件错误", "-->"+e.getLocalizedMessage());
         }
         return size;
     }

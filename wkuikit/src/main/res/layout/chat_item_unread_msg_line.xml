@@ -2,14 +2,14 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:paddingTop="@dimen/msg_item_margin"
+    android:paddingBottom="@dimen/msg_item_margin"
     android:background="@color/transparent">
 
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:layout_marginTop="@dimen/msg_item_margin"
-        android:layout_marginBottom="@dimen/msg_item_margin"
         android:background="@color/colorSystemBg"
         android:orientation="horizontal">
 

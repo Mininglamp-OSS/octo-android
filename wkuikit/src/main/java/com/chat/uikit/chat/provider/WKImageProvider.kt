@@ -406,7 +406,7 @@ class WKImageProvider : WKChatBaseProvider() {
         imageView: FilterImageView,
         blurView: ShapeBlurView
     ) {
-
+        imageView.strokeWidth = 0f
         val bgType = getMsgBgType(
             uiChatMsgItemEntity.previousMsg,
             uiChatMsgItemEntity.wkMsg,

@@ -13,6 +13,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:paddingStart="@dimen/chat_bubble_padding_lr"
+        android:paddingTop="@dimen/chat_bubble_padding_tb"
+        android:paddingEnd="@dimen/chat_bubble_padding_lr"
+        android:paddingBottom="@dimen/chat_bubble_padding_tb"
         app:shadowRadius="0dp">
 
         <LinearLayout
@@ -29,6 +33,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:layout_marginStart="5dp"
                 android:orientation="vertical">
 
                 <com.chat.uikit.view.WaveformView

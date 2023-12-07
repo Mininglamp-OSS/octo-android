@@ -30,6 +30,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
+                    android:tint="@color/popupTextColor"
                     android:src="@mipmap/icon_reminder_member_invite" />
             </FrameLayout>
         </FrameLayout>
@@ -69,6 +70,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
+                    android:tint="@color/popupTextColor"
                     android:src="@mipmap/icon_remind" />
             </FrameLayout>
         </FrameLayout>
@@ -103,10 +105,18 @@
                 android:layout_gravity="center"
                 android:background="@drawable/msg_go_down">
 
+                <com.chat.base.ui.components.RadialProgressView
+                    android:id="@+id/progress"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="center" />
+
                 <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/msgDownIv"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
+                    android:tint="@color/popupTextColor"
                     android:src="@mipmap/icon_msg_down" />
             </FrameLayout>
         </FrameLayout>

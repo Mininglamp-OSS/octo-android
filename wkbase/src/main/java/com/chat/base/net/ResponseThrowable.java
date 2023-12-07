@@ -1,13 +1,13 @@
 package com.chat.base.net;
 
 
-public class ResponeThrowable extends Exception {
+public class ResponseThrowable extends Exception {
 
     private int status;
     private String msg;
     private String errJson;
 
-    public ResponeThrowable(Throwable throwable, int code) {
+    public ResponseThrowable(Throwable throwable, int code) {
         super(throwable);
         this.status = code;
     }

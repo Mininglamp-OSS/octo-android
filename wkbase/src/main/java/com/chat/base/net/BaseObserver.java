@@ -32,7 +32,7 @@ public abstract class BaseObserver<T> implements Observer<T> {
 
     @Override
     public void onError(@NotNull Throwable e) {
-        ResponeThrowable throwable = ResponseExceptionHandle.getInstance().handleException(e);
+        ResponseThrowable throwable = ResponseExceptionHandle.getInstance().handleException(e);
         if (throwable != null) {
             String msg = throwable.getMessage();
             if (TextUtils.isEmpty(msg)) msg = "";

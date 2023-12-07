@@ -1,7 +1,5 @@
 package com.chat.uikit.chat;
 
-import static com.xinbida.wukongim.entity.WKChannelExtras.chatPwdOn;
-
 import android.content.Intent;
 import android.text.TextUtils;
 import android.view.View;
@@ -13,7 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -80,6 +77,11 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
         }
 
+        View chatPwdView = (View) EndpointManager.getInstance().invoke("chat_pwd_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgSettingLayout));
+        if (chatPwdView != null) {
+            wkVBinding.chatPwdView.addView(chatPwdView);
+        }
+
     }
 
     @Override
@@ -114,23 +116,6 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
                         showToast(msg);
                     }
                 });
-        });
-        //设置聊天密码
-        wkVBinding.chatPwdSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (compoundButton.isPressed()) {
-                if (TextUtils.isEmpty(WKConfig.getInstance().getUserInfo().chat_pwd)) {
-                    EndpointManager.getInstance().invoke("show_set_chat_pwd", null);
-                    wkVBinding.chatPwdSwitchView.setChecked(!b);
-                } else {
-                    FriendModel.getInstance().updateUserSetting(channelId, "chat_pwd_on", b ? 1 : 0, (code, msg) -> {
-                        if (code != HttpResponseCode.success) {
-                            wkVBinding.chatPwdSwitchView.setChecked(!b);
-                            showToast(msg);
-                        }
-                    });
-                }
-            }
-
         });
         wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
             String content = String.format(getString(R.string.clear_chat_personal_msg_dialog), channel == null ? "" : channel.channelName);
@@ -180,12 +165,7 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             wkVBinding.nameTv.setText(TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark);
             wkVBinding.muteSwitchView.setChecked(channel.mute == 1);
             wkVBinding.stickSwitchView.setChecked(channel.top == 1);
-            if (channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(chatPwdOn)) {
-                Object object = channel.remoteExtraMap.get(chatPwdOn);
-                if (object != null) {
-                    wkVBinding.chatPwdSwitchView.setChecked((int) object == 1);
-                }
-            }
+
         }
     }
 

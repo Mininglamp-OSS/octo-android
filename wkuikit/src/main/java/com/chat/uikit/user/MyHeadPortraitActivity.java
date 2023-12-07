@@ -62,11 +62,6 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
         WKBaseApplication.getInstance().disconnect = true;
@@ -134,7 +129,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
                 @Override
                 public void clickResult(boolean isCancel) {
                 }
-            }, this, desc, Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }, this, desc, Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission.READ_EXTERNAL_STORAGE);
         }
 
 

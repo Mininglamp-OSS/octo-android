@@ -102,19 +102,12 @@
                             android:layout_height="40dp" />
                     </LinearLayout>
 
-                    <LinearLayout style="@style/layoutBgPaddingSmall">
+                    <LinearLayout
+                        android:id="@+id/chatPwdView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
 
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_width="0dp"
-                            android:layout_weight="1"
-                            android:text="@string/chat_pwd" />
-
-                        <com.chat.base.ui.components.SwitchView
-                            android:id="@+id/chatPwdSwitchView"
-                            android:layout_width="45dp"
-                            android:layout_height="40dp" />
-                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/msgSettingLayout"

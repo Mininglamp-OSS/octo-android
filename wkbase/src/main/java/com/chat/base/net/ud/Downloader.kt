@@ -31,7 +31,7 @@ internal class Downloader private constructor() {
             .build()
     }
 
-    private val mHandler: Handler = Handler(Looper.myLooper()!!)
+//    private val mHandler: Handler = Handler(Looper.myLooper()!!)
 
     companion object {
         private const val TAG: String = "Downloader"
@@ -249,7 +249,7 @@ internal class Downloader private constructor() {
                 }
                 val len = mTask.inputStream!!.read(bytes)
                 if (len == -1) {
-                    mHandler.post {
+                    Handler(Looper.getMainLooper()).post {
                         callback?.second?.invoke(mTask.url, mTask.file)
                     }
                     mDownloadTasks.remove(mTask.url)
@@ -257,7 +257,7 @@ internal class Downloader private constructor() {
                 }
                 mTask.fileOutputStream!!.write(bytes, 0, len)
                 mTask.hasDownloadSize += len
-                mHandler.post {
+                Handler(Looper.getMainLooper()).post {
                     callback?.first?.invoke(
                         mTask.url,
                         ((mTask.hasDownloadSize * 1f / mTask.contentSize) * 100).toInt()

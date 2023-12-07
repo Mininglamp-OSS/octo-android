@@ -222,6 +222,7 @@ public class Theme {
         RoundTextView roundTextView = new RoundTextView(context);
         roundTextView.setTextSize(12);
         roundTextView.setText(text);
+        roundTextView.setLines(1);
         roundTextView.setPadding(AndroidUtilities.dp(2), 0, AndroidUtilities.dp(2), 0);
         roundTextView.setTextColor(textColor);
         roundTextView.setBorderColor(borderColor);

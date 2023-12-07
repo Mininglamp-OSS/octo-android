@@ -42,10 +42,8 @@ import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
-import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKCommonUtils;
 import com.chat.base.utils.WKDialogUtils;
-import com.chat.base.utils.WKJsoupUtils;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.views.pwdview.NumPwdDialog;
@@ -144,29 +142,23 @@ public class WKIMUtils {
                 } else {
                     return true;
                 }
-            } else {
-                return msg == null || (msg.type != 9995 && msg.type != 9996 && msg.type != 9997 && msg.type != 9998 && msg.type != 9999);
             }
-
+            return true;
         });
         //监听聊天附件上传
-
         WKIM.getInstance().getMsgManager().addOnUploadAttachListener((msg, listener) -> WKSendMsgUtils.getInstance().uploadChatAttachment(msg, listener));
-        //监听同步离线消息
-        //   WKIM.getInstance().getMsgManager().addOnSyncOfflineMsgListener((i, iSyncOfflineMsgBack) -> MsgModel.getInstance().syncMsg(i, iSyncOfflineMsgBack));
         //监听同步会话
         WKIM.getInstance().getConversationManager().addOnSyncConversationListener((s, i, l, iSyncConvChatBack) -> MsgModel.getInstance().syncChat(s, i, l, iSyncConvChatBack));
         //监听同步频道会话
         WKIM.getInstance().getMsgManager().addOnSyncChannelMsgListener((channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack) -> MsgModel.getInstance().syncChannelMsg(channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack));
         //新消息监听
         WKIM.getInstance().getMsgManager().addOnNewMsgListener("system", msgList -> {
-//            boolean playNewMsgMedia = false;
             boolean isAlertMsg = false;
             String channelID = "";
             byte channelType = WKChannelType.PERSONAL;
             WKMsg sensitiveWordsMsg = null;
+            String loginUID = WKConfig.getInstance().getUid();
             if (msgList != null && msgList.size() > 0) {
-                String loginUID = WKConfig.getInstance().getUid();
                 channelID = msgList.get(msgList.size() - 1).channelID;
                 channelType = msgList.get(msgList.size() - 1).channelType;
                 for (int i = 0, size = msgList.size(); i < size; i++) {
@@ -187,7 +179,9 @@ public class WKIMUtils {
                     if (msgList.get(i).header.noPersist || !msgList.get(i).header.redDot || !WKContentType.isSupportNotification(msgList.get(i).type)) {
                         isAlertMsg = false;
                     }
-
+                    if (!TextUtils.isEmpty(loginUID) && !TextUtils.isEmpty(msgList.get(i).fromUID) && msgList.get(i).fromUID.equals(loginUID)) {
+                        isAlertMsg = false;
+                    }
                     if (msgList.get(i).type == WKContentType.WK_TEXT) {
                         boolean isContains = false;
                         WKTextContent textContent = (WKTextContent) msgList.get(i).baseContentMsgModel;
@@ -350,35 +344,34 @@ public class WKIMUtils {
         });
     }
 
-    //本地播放语音使用
     public WKUIChatMsgItemEntity msg2UiMsg(IConversationContext context, WKMsg msg, int memberCount, boolean showNickName, boolean isChoose) {
         if (msg.remoteExtra.readedCount == 0) {
             msg.remoteExtra.unreadCount = memberCount - 1;
         }
         if (msg.type == WKContentType.WK_TEXT) {
-            WKTextContent textContent = (WKTextContent) msg.baseContentMsgModel;
-            if (textContent != null && !TextUtils.isEmpty(textContent.getDisplayContent())) {
-                List<String> urls = StringUtils.getStrUrls(textContent.getDisplayContent());
-                if (urls.size() > 0) {
-                    String url = urls.get(urls.size() - 1);
-                    String contentJson = WKSharedPreferencesUtil.getInstance().getSP(url);
-                    if (!TextUtils.isEmpty(contentJson)) {
-                        try {
-                            JSONObject jsonObject = new JSONObject(contentJson);
-                            long expirationTime = jsonObject.optLong("expirationTime");
-                            long tempTime = WKTimeUtils.getInstance().getCurrentSeconds() - expirationTime;
-                            if (tempTime >= 60 * 60 * 24 * 360) {
-                                WKJsoupUtils.getInstance().getURLContent(url, msg.clientMsgNO);
-                            }
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        WKJsoupUtils.getInstance().getURLContent(url, msg.clientMsgNO);
-                    }
-                }
-
-            }
+//            WKTextContent textContent = (WKTextContent) msg.baseContentMsgModel;
+//            if (textContent != null && !TextUtils.isEmpty(textContent.getDisplayContent())) {
+//                List<String> urls = StringUtils.getStrUrls(textContent.getDisplayContent());
+//                if (urls.size() > 0) {
+//                    String url = urls.get(urls.size() - 1);
+//                    String contentJson = WKSharedPreferencesUtil.getInstance().getSP(url);
+//                    if (!TextUtils.isEmpty(contentJson)) {
+//                        try {
+//                            JSONObject jsonObject = new JSONObject(contentJson);
+//                            long expirationTime = jsonObject.optLong("expirationTime");
+//                            long tempTime = WKTimeUtils.getInstance().getCurrentSeconds() - expirationTime;
+//                            if (tempTime >= 60 * 60 * 24 * 360) {
+//                                WKJsoupUtils.getInstance().getURLContent(url, msg.clientMsgNO);
+//                            }
+//                        } catch (JSONException e) {
+//                            e.printStackTrace();
+//                        }
+//                    } else {
+//                        WKJsoupUtils.getInstance().getURLContent(url, msg.clientMsgNO);
+//                    }
+//                }
+//
+//            }
             resetMsgProhibitWord(msg);
         }
         WKUIChatMsgItemEntity uiChatMsgItemEntity = new WKUIChatMsgItemEntity(context, msg, new WKUIChatMsgItemEntity.ILinkClick() {

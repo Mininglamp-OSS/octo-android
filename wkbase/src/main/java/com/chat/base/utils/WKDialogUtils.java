@@ -299,10 +299,10 @@ public class WKDialogUtils {
         TextView cancelTv = view.findViewById(R.id.cancelTv);
         Button sureBtn = view.findViewById(R.id.sureBtn);
         //ProgressBar progressBar = view.findViewById(R.id.progressBar);
-        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.AlertDialog);
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(context, R.style.AlertDialog);
         view.setBackgroundColor(ContextCompat.getColor(context, R.color.transparent));
 //        builder.setCancelable(versionEntity.is_force == 0);
-        AlertDialog alertDialog = builder.create();
+        android.app.AlertDialog alertDialog = builder.create();
         alertDialog.setCanceledOnTouchOutside(versionEntity.is_force == 0);
         alertDialog.show();
         alertDialog.setContentView(view);

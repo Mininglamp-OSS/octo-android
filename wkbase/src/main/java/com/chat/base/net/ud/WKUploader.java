@@ -41,12 +41,16 @@ public class WKUploader extends WKBaseModel {
         request(createService(UploadService.class).upload(uploadUrl, part), new IRequestResultListener<>() {
             @Override
             public void onSuccess(UploadResultEntity result) {
-                iUploadBack.onSuccess(result.path);
+                if (iUploadBack != null ) {
+                    iUploadBack.onSuccess(result.path);
+                }
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iUploadBack.onError();
+                if (iUploadBack != null) {
+                    iUploadBack.onError();
+                }
             }
         });
     }

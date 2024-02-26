@@ -26,6 +26,7 @@ import com.chat.base.config.WKConfig
 import com.chat.base.config.WKConstants
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
+import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.*
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.msg.ChatAdapter
@@ -891,7 +892,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                     mMessageContent
                                 )
                             EndpointManager.getInstance()
-                                .invoke("chat_show_choose_chat", chooseChatMenu)
+                                .invoke(EndpointSID.showChooseChatView, chooseChatMenu)
                         }
                     })
             )
@@ -1263,6 +1264,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         fromType: WKChatIteMsgFromType,
         msgItemEntity: WKUIChatMsgItemEntity
     ): Int {
+        val maxWidth =
+            if (AndroidUtilities.isPORTRAIT) AndroidUtilities.getScreenWidth() else AndroidUtilities.getScreenHeight()
         val width: Int
         val checkBoxMargin = 30
         var flameWidth = 0
@@ -1273,9 +1276,9 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         width =
             if (fromType == WKChatIteMsgFromType.SEND || msgItemEntity.wkMsg.channelType == WKChannelType.PERSONAL) {
-                AndroidUtilities.getScreenWidth() - AndroidUtilities.dp((70 + checkBoxMargin).toFloat() + flameWidth)
+                maxWidth - AndroidUtilities.dp((70 + checkBoxMargin).toFloat() + flameWidth)
             } else {
-                AndroidUtilities.getScreenWidth() - AndroidUtilities.dp((70 + 40 + checkBoxMargin).toFloat() + flameWidth)
+                maxWidth - AndroidUtilities.dp((70 + 40 + checkBoxMargin).toFloat() + flameWidth)
             }
         return width
     }
@@ -1285,15 +1288,11 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     private fun isAddFlameView(msgItemEntity: WKUIChatMsgItemEntity): Boolean {
-        if (msgItemEntity.wkMsg.flame == 0 || WKContentType.isSystemMsg(msgItemEntity.wkMsg.type) || WKContentType.isLocalMsg(
-                msgItemEntity.wkMsg.type
-            ) || (msgItemEntity.wkMsg.flame == 1 && msgItemEntity.wkMsg.flameSecond == 0)
-            || msgItemEntity.wkMsg.type == WKContentType.WK_IMAGE
-            || msgItemEntity.wkMsg.type == WKContentType.WK_VIDEO
-        ) {
-            return false
-        }
-        return true
+        return !(msgItemEntity.wkMsg.flame == 0 || WKContentType.isSystemMsg(msgItemEntity.wkMsg.type) || WKContentType.isLocalMsg(
+            msgItemEntity.wkMsg.type
+        ) || (msgItemEntity.wkMsg.flame == 1 && msgItemEntity.wkMsg.flameSecond == 0)
+                || msgItemEntity.wkMsg.type == WKContentType.WK_IMAGE
+                || msgItemEntity.wkMsg.type == WKContentType.WK_VIDEO)
     }
 
     private fun canResendMsg(channelID: String, channelType: Byte): Boolean {

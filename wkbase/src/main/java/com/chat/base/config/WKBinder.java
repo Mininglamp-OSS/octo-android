@@ -1,5 +1,5 @@
 package com.chat.base.config;
 
 public class WKBinder {
-    public static boolean isDebug = true;
+    public static boolean isDebug = false;
 }

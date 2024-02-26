@@ -138,8 +138,8 @@ public class GlideUtils {
                                 .apply(GlideRequestOptions.getInstance().normalRequestOption())
                                 .into(imageView);
                     } else {
-                        Glide.with(context).load(url).dontAnimate()
-                                .apply(GlideRequestOptions.getInstance().normalRequestOption()).signature(new ObjectKey(key))
+                        Glide.with(context).load(new MyGlideUrlWithId(url,key)).dontAnimate()
+                                .apply(GlideRequestOptions.getInstance().normalRequestOption())
                                 .into(imageView);
                     }
 

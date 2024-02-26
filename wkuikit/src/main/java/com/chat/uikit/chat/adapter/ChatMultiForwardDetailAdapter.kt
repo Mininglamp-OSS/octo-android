@@ -18,9 +18,11 @@ import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.config.WKApiConfig
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
+import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChooseChatMenu
 import com.chat.base.endpoint.entity.PlayVideoMenu
+import com.chat.base.entity.ImagePopupBottomSheetItem
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.model.WKGifContent
@@ -30,8 +32,6 @@ import com.chat.base.utils.ImageUtils
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKTimeUtils
 import com.chat.base.utils.WKToastUtils
-import com.chat.base.views.BottomEntity
-import com.chat.base.views.CustomImageViewerPopup.IImgPopupMenu
 import com.chat.uikit.R
 import com.chat.uikit.enity.ChatMultiForwardEntity
 import com.google.android.material.snackbar.Snackbar
@@ -144,9 +144,11 @@ class ChatMultiForwardDetailAdapter(
                         layoutParams.width = ints[0]
                         holder.getView<View>(R.id.imageView).layoutParams = layoutParams
 
-                        holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.height = ints[1]
+                        holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.height =
+                            ints[1]
                         holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.width = ints[0]
                     }
+
                     WKContentType.WK_VIDEO -> {
                         holder.setGone(R.id.contentTv, true)
                         holder.setGone(R.id.contentLayout, false)
@@ -174,7 +176,8 @@ class ChatMultiForwardDetailAdapter(
                         layoutParams.height = ints[1]
                         layoutParams.width = ints[0]
                         holder.getView<View>(R.id.imageView).layoutParams = layoutParams
-                        holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.height = ints[1]
+                        holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.height =
+                            ints[1]
                         holder.getView<FrameLayout>(R.id.contentLayout).layoutParams.width = ints[0]
                         holder.getView<View>(R.id.imageView)
                             .setOnClickListener {
@@ -198,6 +201,7 @@ class ChatMultiForwardDetailAdapter(
                                 )
                             }
                     }
+
                     WKContentType.WK_GIF -> {
                         holder.setGone(R.id.progressView, true)
                         holder.setGone(R.id.playIv, true)
@@ -213,6 +217,7 @@ class ChatMultiForwardDetailAdapter(
                             holder.getView(R.id.gifIv)
                         )
                     }
+
                     else -> {
                         MoonUtil.identifyFaceExpression(
                             context,
@@ -249,7 +254,8 @@ class ChatMultiForwardDetailAdapter(
                                     }
                                 })
                         )
-                        WKDialogUtils.getInstance().setViewLongClickPopup(holder.getView<TextView>(R.id.contentTv),list)
+                        WKDialogUtils.getInstance()
+                            .setViewLongClickPopup(holder.getView<TextView>(R.id.contentTv), list)
 
                     }
                 }
@@ -269,12 +275,46 @@ class ChatMultiForwardDetailAdapter(
         imgList.add(imageView)
         val tempImgList: MutableList<Any> = ArrayList()
         tempImgList.add(uri)
-        val bottomEntityList: MutableList<BottomEntity> = ArrayList()
+        val bottomEntityList: MutableList<ImagePopupBottomSheetItem> = ArrayList()
         bottomEntityList.add(
-            BottomEntity(
+            ImagePopupBottomSheetItem(
                 context.getString(
                     R.string.forward
-                )
+                ), R.mipmap.msg_forward, object : ImagePopupBottomSheetItem.IBottomSheetClick {
+                    override fun onClick(index: Int) {
+                        EndpointManager.getInstance().invoke(
+                            EndpointSID.showChooseChatView,
+                            ChooseChatMenu(
+                                ChatChooseContacts { list1: List<WKChannel>? ->
+                                    if (!list1.isNullOrEmpty()) {
+                                        for (channel in list1) {
+                                            WKIM.getInstance().msgManager.sendMessage(
+                                                messageContent,
+                                                channel.channelID,
+                                                channel.channelType
+                                            )
+                                        }
+                                        val viewGroup =
+                                            (context as Activity).findViewById<View>(android.R.id.content)
+                                                .rootView as ViewGroup
+                                        Snackbar.make(
+                                            viewGroup,
+                                            context.getString(R.string.is_forward),
+                                            1000
+                                        )
+                                            .setAction(
+                                                ""
+                                            ) { }
+                                            .show()
+                                    }
+                                },
+                                messageContent
+                            )
+                        )
+
+                    }
+
+                }
             )
         )
         WKDialogUtils.getInstance().showImagePopup(
@@ -283,43 +323,7 @@ class ChatMultiForwardDetailAdapter(
             imgList,
             imageView,
             0,
-            bottomEntityList,
-            object : IImgPopupMenu {
-                override fun onForward(position: Int) {
-                    EndpointManager.getInstance().invoke(
-                        "chat_show_choose_chat",
-                        ChooseChatMenu(
-                            ChatChooseContacts { list1: List<WKChannel>? ->
-                                if (!list1.isNullOrEmpty()) {
-                                    for (channel in list1) {
-                                        WKIM.getInstance().msgManager.sendMessage(
-                                            messageContent,
-                                            channel.channelID,
-                                            channel.channelType
-                                        )
-                                    }
-                                    val viewGroup =
-                                        (context as Activity).findViewById<View>(android.R.id.content)
-                                            .rootView as ViewGroup
-                                    Snackbar.make(
-                                        viewGroup,
-                                        context.getString(R.string.is_forward),
-                                        1000
-                                    )
-                                        .setAction(
-                                            ""
-                                        ) { }
-                                        .show()
-                                }
-                            },
-                            messageContent
-                        )
-                    )
-                }
-
-                override fun onFavorite(position: Int) {}
-                override fun onShowInChat(position: Int) {}
-            },
+            bottomEntityList, null,
             null
         )
     }

@@ -18,6 +18,7 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -222,6 +223,7 @@ public class Theme {
         RoundTextView roundTextView = new RoundTextView(context);
         roundTextView.setTextSize(12);
         roundTextView.setText(text);
+        roundTextView.setTypeface(Typeface.DEFAULT_BOLD);
         roundTextView.setLines(1);
         roundTextView.setPadding(AndroidUtilities.dp(2), 0, AndroidUtilities.dp(2), 0);
         roundTextView.setTextColor(textColor);

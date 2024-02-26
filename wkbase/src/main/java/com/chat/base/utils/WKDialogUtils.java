@@ -12,6 +12,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.text.InputFilter;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -42,14 +43,12 @@ import com.chat.base.endpoint.entity.EditMsgMenu;
 import com.chat.base.endpoint.entity.ParseQrCodeMenu;
 import com.chat.base.entity.AppVersion;
 import com.chat.base.entity.BottomSheetItem;
+import com.chat.base.entity.ImagePopupBottomSheetItem;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.ui.components.ActionBarMenuSubItem;
 import com.chat.base.ui.components.ActionBarPopupWindow;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.ui.components.BottomSheet;
-import com.chat.base.utils.singleclick.SingleClickUtil;
-import com.chat.base.views.BottomEntity;
-import com.chat.base.views.CommonBottomView;
 import com.chat.base.views.CustomImageViewerPopup;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.core.BasePopupView;
@@ -133,24 +132,78 @@ public class WKDialogUtils {
         void onClick(int index);
     }
 
-    public void showImageBottomViewDialog(@NonNull Context context, String path, boolean isShowInChat, IImageBottomClick iImageBottomClick) {
-        Dialog mDialog = new Dialog(context, R.style.pop_dialog);
-        mDialog.setCanceledOnTouchOutside(true);
-        mDialog.setCancelable(true);
-        Window window = mDialog.getWindow();
-        window.setGravity(Gravity.BOTTOM);
-        window.setWindowAnimations(R.style.dialog_share);
-        View inflate = View.inflate(context, R.layout.image_bottom_view, null);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.forwardIv), R.color.popupTextColor);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.favoriteIV), R.color.popupTextColor);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.downloadIV), R.color.popupTextColor);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.editIV), R.color.popupTextColor);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.showInChatIV), R.color.popupTextColor);
-//        Theme.setColorFilter(context, inflate.findViewById(R.id.qrIV), R.color.popupTextColor);
-        View qrView = inflate.findViewById(R.id.qrView);
-        View showInChatLayout = inflate.findViewById(R.id.showInChatLayout);
-        showInChatLayout.setVisibility(isShowInChat ? VISIBLE : GONE);
+    public void showChatImageBottomViewDialog(@NonNull Context context, String path, IImageBottomClick iImageBottomClick) {
         final Bitmap[] qrBitmap = new Bitmap[1];
+        BottomSheet.Builder builder = new BottomSheet.Builder(context, false);
+        builder.setApplyBottomPadding(false);
+        LinearLayout linearLayout = new LinearLayout(context);
+        linearLayout.setGravity(Gravity.CENTER);
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+        linearLayout.setBackgroundColor(ContextCompat.getColor(context, R.color.screen_bg));
+        TextView textView = new TextView(context);
+        textView.setText(R.string.str_choose);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp( 8), AndroidUtilities.dp(21), AndroidUtilities.dp(8));
+        textView.setTextColor(ContextCompat.getColor(context, R.color.popupTextColor));
+        linearLayout.addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 8, 0, 0));
+        // 转发
+        LinearLayout contentLayout = new LinearLayout(context);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        BottomSheet.BottomSheetCell cell = new BottomSheet.BottomSheetCell(context, 0);
+        cell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        cell.setTextAndIcon(context.getString(R.string.forward), R.mipmap.msg_forward, null, false);
+        contentLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        cell.setOnClickListener(v -> {
+            builder.getDismissRunnable().run();
+            iImageBottomClick.onForward();
+        });
+        // 收藏
+        BottomSheet.BottomSheetCell favoriteCell = new BottomSheet.BottomSheetCell(context, 0);
+        favoriteCell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        favoriteCell.setTextAndIcon(context.getString(R.string.favorite), R.mipmap.msg_fave, null, false);
+        contentLayout.addView(favoriteCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        favoriteCell.setOnClickListener(v -> {
+            builder.getDismissRunnable().run();
+            iImageBottomClick.onFavorite();
+        });
+        // 下载
+        BottomSheet.BottomSheetCell downloadCell = new BottomSheet.BottomSheetCell(context, 0);
+        downloadCell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        downloadCell.setTextAndIcon(context.getString(R.string.save_img), R.mipmap.msg_download, null, false);
+        contentLayout.addView(downloadCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        downloadCell.setOnClickListener(v -> {
+            builder.getDismissRunnable().run();
+            iImageBottomClick.onDownload();
+        });
+        // 编辑
+        BottomSheet.BottomSheetCell editCell = new BottomSheet.BottomSheetCell(context, 0);
+        editCell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        editCell.setTextAndIcon(context.getString(R.string.str_edit), R.mipmap.msg_edit, null, false);
+        contentLayout.addView(editCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        editCell.setOnClickListener(v -> {
+            EndpointManager.getInstance().invoke("editMsg", new EditMsgMenu(path, context));
+            builder.getDismissRunnable().run();
+        });
+        // 编辑
+        BottomSheet.BottomSheetCell showInChatCell = new BottomSheet.BottomSheetCell(context, 0);
+        showInChatCell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        showInChatCell.setTextAndIcon(context.getString(R.string.show_in_chat), R.mipmap.msg_message, null, false);
+        contentLayout.addView(showInChatCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        showInChatCell.setOnClickListener(v -> {
+            builder.getDismissRunnable().run();
+            iImageBottomClick.onShowInChat();
+        });
+        // 识别图中二维码
+        BottomSheet.BottomSheetCell qrCodeCell = new BottomSheet.BottomSheetCell(context, 0);
+        qrCodeCell.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        qrCodeCell.setTextAndIcon(context.getString(R.string.scan_qr_code), R.mipmap.menu_scan, null, false);
+        contentLayout.addView(qrCodeCell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 0, 0, 0));
+        qrCodeCell.setOnClickListener(v -> {
+            builder.getDismissRunnable().run();
+            EndpointManager.getInstance().invoke("parse_qrcode", new ParseQrCodeMenu((AppCompatActivity) context, qrBitmap[0], true, null));
+        });
+        qrCodeCell.setVisibility(GONE);
         if (!TextUtils.isEmpty(path)) {
             new Thread(() -> Glide.with(context)
                     .asBitmap()
@@ -164,7 +217,7 @@ public class WKDialogUtils {
                                     ((AppCompatActivity) context).runOnUiThread(() -> {
                                         if (!TextUtils.isEmpty(codeContentStr)) {
                                             qrBitmap[0] = resource;
-                                            qrView.setVisibility(VISIBLE);
+                                            qrCodeCell.setVisibility(VISIBLE);
                                         }
                                     });
 
@@ -176,40 +229,14 @@ public class WKDialogUtils {
                         public void onLoadCleared(@Nullable Drawable placeholder) {
                         }
                     })).start();
-
+//
         }
-        SingleClickUtil.onSingleClick(inflate.findViewById(R.id.downloadView), view -> {
-            mDialog.dismiss();
-            iImageBottomClick.onDownload();
-        });
-        SingleClickUtil.onSingleClick(inflate.findViewById(R.id.favoriteView), view -> {
-            mDialog.dismiss();
-            iImageBottomClick.onFavorite();
-        });
-        SingleClickUtil.onSingleClick(inflate.findViewById(R.id.forwardView), view -> {
-            mDialog.dismiss();
-            iImageBottomClick.onForward();
-        });
-        SingleClickUtil.onSingleClick(inflate.findViewById(R.id.showInChatView), view -> {
-            mDialog.dismiss();
-            iImageBottomClick.onShowInChat();
-        });
-        SingleClickUtil.onSingleClick(inflate.findViewById(R.id.editView), view -> {
-            EndpointManager.getInstance().invoke("editMsg", new EditMsgMenu(path, context));
-            mDialog.dismiss();
-        });
-        SingleClickUtil.onSingleClick(qrView, view -> {
-            mDialog.dismiss();
-            EndpointManager.getInstance().invoke("parse_qrcode", new ParseQrCodeMenu((AppCompatActivity) context, qrBitmap[0], true, null));
-        });
-        inflate.findViewById(R.id.cancelTv).setOnClickListener(v -> {
-            if (mDialog.isShowing()) {
-                mDialog.dismiss();
-            }
-        });
-        window.setContentView(inflate);
-        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT);
-        mDialog.show();
+
+
+        linearLayout.addView(contentLayout);
+        builder.setCustomView(linearLayout);
+        BottomSheet bottomSheet = builder.show();
+        bottomSheet.setBackgroundColor(ContextCompat.getColor(context, R.color.screen_bg));
     }
 
     public void showBottomSheet(Context context, CharSequence title, boolean bigTitle, List<BottomSheetItem> list) {
@@ -227,25 +254,9 @@ public class WKDialogUtils {
         bottomSheet.show();
         bottomSheet.setCanceledOnTouchOutside(true);
         bottomSheet.setBackgroundColor(ContextCompat.getColor(context, R.color.screen_bg));
+
     }
 
-    /**
-     * 下次更新将删除该方法，请使用 showBottomSheet() 替代
-     */
-    @Deprecated
-    public void showCommonBottomViewDialog(@NonNull Context context, @NonNull List<BottomEntity> list, @NonNull CommonBottomView.IBottomClick iBottomClick) {
-        new XPopup.Builder(context)
-                .autoOpenSoftInput(false).hasShadowBg(true)
-                .asCustom(new CommonBottomView(context, "", list, iBottomClick))
-                .show();
-    }
-
-    public void showCommonBottomViewDialog(@NonNull Context context, String path, @NonNull List<BottomEntity> list, @NonNull CommonBottomView.IBottomClick iBottomClick) {
-        new XPopup.Builder(context)
-                .autoOpenSoftInput(false).hasShadowBg(true)
-                .asCustom(new CommonBottomView(context, path, list, iBottomClick))
-                .show();
-    }
 
     public interface IInputDialog {
         void onResult(String text);
@@ -490,11 +501,11 @@ public class WKDialogUtils {
         void onDismiss();
     }
 
-    public BasePopupView showImagePopup(Context context, List<Object> tempImgList, List<ImageView> imgList, ImageView imageView, int index, List<BottomEntity> list, final CustomImageViewerPopup.IImgPopupMenu iImgPopupMenu, final IImagePopupListener iImagePopupListener) {
+    public BasePopupView showImagePopup(Context context, List<Object> tempImgList, List<ImageView> imgList, ImageView imageView, int index, List<ImagePopupBottomSheetItem> list, final CustomImageViewerPopup.IImgPopupMenu iImgPopupMenu, final IImagePopupListener iImagePopupListener) {
         return showImagePopup(context, null, tempImgList, imgList, imageView, index, list, iImgPopupMenu, iImagePopupListener);
     }
 
-    public BasePopupView showImagePopup(Context context, WKMsg msg, List<Object> tempImgList, List<ImageView> imgList, ImageView imageView, int index, List<BottomEntity> list, final CustomImageViewerPopup.IImgPopupMenu iImgPopupMenu, final IImagePopupListener iImagePopupListener) {
+    public BasePopupView showImagePopup(Context context, WKMsg msg, List<Object> tempImgList, List<ImageView> imgList, ImageView imageView, int index, List<ImagePopupBottomSheetItem> list, final CustomImageViewerPopup.IImgPopupMenu iImgPopupMenu, final IImagePopupListener iImagePopupListener) {
         Object o = imageView.getTag();
         int flame = 0;
         if (o != null) {
@@ -502,7 +513,7 @@ public class WKDialogUtils {
         }
 
         int finalFlame = flame;
-        CustomImageViewerPopup viewerPopup = new CustomImageViewerPopup(context, flame, msg, true, list, iImgPopupMenu);
+        CustomImageViewerPopup viewerPopup = new CustomImageViewerPopup(context, flame, msg, list, iImgPopupMenu);
         //自定义的ImageViewer弹窗需要自己手动设置相应的属性，必须设置的有srcView，url和imageLoader。
         viewerPopup.setSrcView(imageView, index);
         viewerPopup.setImageUrls(tempImgList);

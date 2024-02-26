@@ -314,7 +314,6 @@ public class AlertDialog extends Dialog implements Drawable.Callback {
                     setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec));
                 } else {
                     inLayout = true;
-                    Log.e("原始宽度", widthMeasureSpec + "_" + heightMeasureSpec);
                     int width = MeasureSpec.getSize(widthMeasureSpec);
                     int height = MeasureSpec.getSize(heightMeasureSpec);
                     int maxContentHeight;

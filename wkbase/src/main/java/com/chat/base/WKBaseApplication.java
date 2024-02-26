@@ -159,6 +159,8 @@ public class WKBaseApplication {
         WKFileUtils.getInstance().createFileDir(WKConstants.avatarCacheDir);
         WKConstants.imageDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkImages")).getAbsolutePath() + "/";
         WKFileUtils.getInstance().createFileDir(WKConstants.imageDir);
+        WKConstants.videoDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkVideos")).getAbsolutePath() + "/";
+        WKFileUtils.getInstance().createFileDir(WKConstants.videoDir);
         WKConstants.voiceDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkVoices")).getAbsolutePath() + "/";
         WKFileUtils.getInstance().createFileDir(WKConstants.voiceDir);
         WKConstants.chatBgCacheDir = Objects.requireNonNull(getContext().getExternalFilesDir("wkChatBg")).getAbsolutePath() + "/";

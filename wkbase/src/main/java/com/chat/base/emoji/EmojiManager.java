@@ -237,8 +237,17 @@ public class EmojiManager {
     public List<String> getEmojiWithType(String type) {
         List<String> list = new ArrayList<>();
         for (int i = 0, size = defaultEntries.size(); i < size; i++) {
-            if (defaultEntries.get(i).id.startsWith(type)) {
-                list.add(defaultEntries.get(i).text);
+            boolean isAdd = true;
+            for (String str : list){
+                if (str.equals(defaultEntries.get(i).text)){
+                    isAdd = false;
+                    break;
+                }
+            }
+            if (isAdd) {
+                if (defaultEntries.get(i).id.startsWith(type)) {
+                    list.add(defaultEntries.get(i).text);
+                }
             }
         }
         return list;

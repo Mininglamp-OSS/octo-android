@@ -13,6 +13,7 @@ public class WKConstants {
     public static final String newMsgChannelID = "wk_new_msg_notification";
     public static final String newRTCChannelID = "wk_new_rtc_notification";
     public static String imageDir;
+    public static String videoDir;
     public static String voiceDir;
     public static String avatarCacheDir;
     public static String chatBgCacheDir;
@@ -63,4 +64,14 @@ public class WKConstants {
         return !TextUtils.isEmpty(WKConfig.getInstance().getUid());
     }
 
+    public static float getFontScale() {
+        float fontScale = WKSharedPreferencesUtil.getInstance().getFloat("font_scale", 1);
+        if (fontScale <= 0) {
+            fontScale = 1;
+        }
+        return fontScale;
+    }
+    public static void setFontScale(float fontSizeScale){
+        WKSharedPreferencesUtil.getInstance().putFloat("font_scale",fontSizeScale);
+    }
 }

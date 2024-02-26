@@ -111,18 +111,18 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     @Override
     protected void onResume() {
         super.onResume();
-//        boolean disable_screenshot;
-//        String uid = WKConfig.getInstance().getUid();
-//        if (!TextUtils.isEmpty(uid)) {
-//            disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean(uid + "_disable_screenshot");
-//        } else {
-//            disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot");
-//        }
-//        if (disable_screenshot)
-//            getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-//        else {
-//            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-//        }
+        boolean disable_screenshot;
+        String uid = WKConfig.getInstance().getUid();
+        if (!TextUtils.isEmpty(uid)) {
+            disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean(uid + "_disable_screenshot");
+        } else {
+            disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot");
+        }
+        if (disable_screenshot)
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+        else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
     }
 
     protected void initData(Bundle savedInstanceState) {
@@ -284,6 +284,12 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     protected void showTitleRightView() {
         if (titleRightLayout != null) {
             CommonAnim.getInstance().showOrHide(titleRightLayout, true, true, true);
+        }
+    }
+
+    protected void setRightViewEnabled(boolean isEnabled) {
+        if (titleRightLayout != null) {
+            titleRightLayout.setEnabled(isEnabled);
         }
     }
 

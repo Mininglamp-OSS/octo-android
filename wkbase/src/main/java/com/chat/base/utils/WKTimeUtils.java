@@ -168,6 +168,9 @@ public class WKTimeUtils {
     }
 
     public String time2DataDay(long timeStamp) {
+        if (String.valueOf(timeStamp).length() < 13) {
+            timeStamp = timeStamp * 1000;
+        }
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
@@ -409,4 +412,15 @@ public class WKTimeUtils {
         }
     }
 
+    public  long getTimeWithFormat(String dateStr) {
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+
+        try {
+            Date date = df.parse(dateStr);
+            assert date != null;
+            return date.getTime();
+        } catch (ParseException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

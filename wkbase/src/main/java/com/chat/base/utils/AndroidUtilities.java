@@ -1,5 +1,7 @@
 package com.chat.base.utils;
 
+import android.app.ActivityManager;
+import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -28,6 +30,7 @@ import com.chat.base.WKBaseApplication;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Locale;
 
 public class AndroidUtilities {
@@ -36,7 +39,7 @@ public class AndroidUtilities {
     public static DisplayMetrics displayMetrics = new DisplayMetrics();
     public static float density = 1;
     public static boolean isRTL = false;
-
+    public static boolean isPORTRAIT = true;
     public static final Rect rectTmp2 = new Rect();
     public static final RectF rectTmp = new RectF();
     public static Point displaySize = new Point();
@@ -265,7 +268,6 @@ public class AndroidUtilities {
             if (color4 != 0) {
                 averageColor = AndroidUtilities.getAverageColor(color4, averageColor);
             }
-            Log.e("返回黑色111", "-->");
             return (AndroidUtilities.getPatternColor(averageColor, true) & 0x00ffffff) | 0x64000000;
 
         }
@@ -531,5 +533,20 @@ public class AndroidUtilities {
             }
         }
     }
-
+    public static boolean isBackground(Context context) {
+        ActivityManager activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningAppProcessInfo> appProcesses = activityManager.getRunningAppProcesses();
+        for (ActivityManager.RunningAppProcessInfo appProcess : appProcesses) {
+            if (appProcess.processName.equals(context.getPackageName())) {
+                if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND) {
+                    Log.i("后台", appProcess.processName);
+                    return true;
+                }else{
+                    Log.i("前台", appProcess.processName);
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
 }

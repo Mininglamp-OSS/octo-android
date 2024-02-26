@@ -113,7 +113,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         }));
         list.add(new PopupMenuItem(getString(R.string.forward), R.mipmap.msg_forward, () -> {
             WKTextContent textContent = new WKTextContent(wkVBinding.webView.getUrl());
-            EndpointManager.getInstance().invoke("chat_show_choose_chat", new ChooseChatMenu(new ChatChooseContacts(new ChatChooseContacts.IChoose() {
+            EndpointManager.getInstance().invoke(EndpointSID.showChooseChatView, new ChooseChatMenu(new ChatChooseContacts(new ChatChooseContacts.IChoose() {
                 @Override
                 public void onResult(List<WKChannel> list) {
                     for (WKChannel channel : list) {

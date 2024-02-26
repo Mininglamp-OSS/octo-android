@@ -94,7 +94,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
 
     private void getCommonEmoji() {
         //查看最近使用到表情
-        String ids = WKSharedPreferencesUtil.getInstance().getSP("common_used_emojis");
+        String ids = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis");
         List<String> list = new ArrayList<>();
         String tempIds = "";
         if (!TextUtils.isEmpty(ids)) {
@@ -130,7 +130,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
         recyclerView.setLayoutManager(new StaggeredGridLayoutManager(8, StaggeredGridLayoutManager.VERTICAL));
         recyclerView.setAdapter(headerAdapter);
         emojiAdapter.addHeaderView(headerView);
-        WKSharedPreferencesUtil.getInstance().putSP("common_used_emojis", tempIds);
+        WKSharedPreferencesUtil.getInstance().putSPWithUID("common_used_emojis", tempIds);
         headerAdapter.setOnItemClickListener((adapter, view, position) -> {
             String index = (String) adapter.getItem(position);
             emojiClick(index);
@@ -142,7 +142,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
             if (iEmojiClick != null) {
                 iEmojiClick.onEmojiClick(name);
             }
-            String usedIndexs = WKSharedPreferencesUtil.getInstance().getSP("common_used_emojis");
+            String usedIndexs = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis");
             String tempIndexs = "";
             if (!TextUtils.isEmpty(usedIndexs)) {
                 if (usedIndexs.contains(",")) {
@@ -159,7 +159,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
                 }
             }
             tempIndexs = name + "," + tempIndexs;
-            WKSharedPreferencesUtil.getInstance().putSP("common_used_emojis", tempIndexs);
+            WKSharedPreferencesUtil.getInstance().putSPWithUID("common_used_emojis", tempIndexs);
         }
     }
 

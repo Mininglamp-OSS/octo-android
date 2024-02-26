@@ -15,6 +15,7 @@ import android.widget.TextView;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.R;
+import com.chat.base.config.WKConstants;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
@@ -64,7 +65,14 @@ public class ActionBarMenuSubItem extends FrameLayout {
         textView.setGravity(Gravity.START);
         textView.setEllipsize(TextUtils.TruncateAt.END);
         textView.setTextColor(textColor);
+//        int dimension = getResources().getDimensionPixelSize(R.dimen.font_size_14);
+//        //根据position 获取字体倍数
+//        float fontSizeScale = WKConstants.getFontScale();
+//        //放大后的sp单位
+//        double v = fontSizeScale * (int) AndroidUtilities.px2sp(dimension);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+//        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, (int) v); //22SP
+
         addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (AndroidUtilities.isRTL ? Gravity.END : Gravity.START) | Gravity.CENTER_VERTICAL));
 
         if (needCheck) {

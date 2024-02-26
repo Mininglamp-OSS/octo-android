@@ -1,9 +1,16 @@
 package com.chat.base.utils;
 
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.media.SoundPool;
 
+import com.chat.base.R;
 import com.chat.base.WKBaseApplication;
+
+import java.io.IOException;
 
 public class WKPlaySound {
     private int soundIn;
@@ -105,4 +112,5 @@ public class WKPlaySound {
         } catch (Exception ignored) {
         }
     }
+
 }

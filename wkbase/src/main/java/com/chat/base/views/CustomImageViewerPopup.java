@@ -25,6 +25,8 @@ import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.R;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
+import com.chat.base.entity.BottomSheetItem;
+import com.chat.base.entity.ImagePopupBottomSheetItem;
 import com.chat.base.ui.components.SecretDeleteTimer;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.LayoutHelper;
@@ -35,6 +37,7 @@ import com.lxj.xpopup.util.XPopupUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKMsg;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,17 +49,16 @@ public class CustomImageViewerPopup extends ImageViewerPopupView {
     Context context;
     //唯一标记和图片数组长度必须一样
     private final IImgPopupMenu iImgPopupMenu;
-    List<BottomEntity> list;
-    private final boolean isShowInChat;
+    List<ImagePopupBottomSheetItem> list;
     private final WKMsg msg;
     private final int flame;
-    public CustomImageViewerPopup(@NonNull Context context, int flame,WKMsg msg, boolean isShowInChat, List<BottomEntity> list, IImgPopupMenu iImgPopupMenu) {
+
+    public CustomImageViewerPopup(@NonNull Context context, int flame, WKMsg msg, List<ImagePopupBottomSheetItem> list, IImgPopupMenu iImgPopupMenu) {
         super(context);
         this.context = context;
         this.list = list;
         this.msg = msg;
         this.flame = flame;
-        this.isShowInChat = isShowInChat;
         this.iImgPopupMenu = iImgPopupMenu;
         bgColor = ContextCompat.getColor(context, R.color.black);
     }
@@ -70,10 +72,15 @@ public class CustomImageViewerPopup extends ImageViewerPopupView {
     protected void onCreate() {
         super.onCreate();
         ImageView imgMoreIv = findViewById(R.id.imgMoreIv);
-        imgMoreIv.setVisibility(flame==0 ? VISIBLE : GONE);
+        imgMoreIv.setVisibility(flame == 0 ? VISIBLE : GONE);
         imgMoreIv.setOnClickListener(view -> showLongClickDialog(pager.getCurrentItem(), urls.get(pager.getCurrentItem())));
         if (list != null) {
-            list.add(new BottomEntity(context.getString(R.string.save_img)));
+            list.add(new ImagePopupBottomSheetItem(context.getString(R.string.save_img), R.mipmap.msg_download, new ImagePopupBottomSheetItem.IBottomSheetClick() {
+                @Override
+                public void onClick(int index) {
+                    download(urls.get(pager.getCurrentItem()).toString());
+                }
+            }));
         }
         FrameLayout contentLayout = findViewById(R.id.contentLayout);
         SecretDeleteTimer deleteTimer = new SecretDeleteTimer(context);
@@ -135,17 +142,14 @@ public class CustomImageViewerPopup extends ImageViewerPopupView {
     public void showLongClickDialog(int position, Object url) {
 
         if (list != null) {
-            WKDialogUtils.getInstance().showCommonBottomViewDialog(context, String.valueOf(url), list, (index, text) -> {
-                if (index == list.size() - 1) {
-                    download(url.toString());
-                } else {
-                    if (index != -1 && iImgPopupMenu != null)
-                        iImgPopupMenu.onForward(position);
-                }
-            });
+            List<BottomSheetItem> sheetItemList = new ArrayList<>();
+            for (ImagePopupBottomSheetItem item : list) {
+                sheetItemList.add(new BottomSheetItem(item.getText(), item.getIcon(), () -> item.getIClick().onClick(position)));
+            }
+            WKDialogUtils.getInstance().showBottomSheet(getContext(), context.getString(R.string.str_choose), false, sheetItemList);
         } else {
 
-            WKDialogUtils.getInstance().showImageBottomViewDialog(context, String.valueOf(url), isShowInChat, new WKDialogUtils.IImageBottomClick() {
+            WKDialogUtils.getInstance().showChatImageBottomViewDialog(context, String.valueOf(url), new WKDialogUtils.IImageBottomClick() {
                 @Override
                 public void onForward() {
                     if (iImgPopupMenu != null)

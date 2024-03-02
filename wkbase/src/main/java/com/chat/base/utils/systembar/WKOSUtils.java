@@ -11,8 +11,6 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.chat.base.config.WKConstants;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -158,13 +156,18 @@ public class WKOSUtils {
         return !TextUtils.isEmpty(s) && s.equalsIgnoreCase("Meizu");
     }
 
-    public static void openChannelSetting(Context context) {
+    public static void openChannelSetting(Context context, String channelId) {
         if (isEmui()) {
-            openPermissionSetting(context);
+            openPermissionSetting(context,channelId);
         } else {
             Intent intent = new Intent();
-            intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
-            intent.putExtra("app_package", context.getPackageName());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.setAction(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_CHANNEL_ID, channelId);
+            } else {
+                intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+            }
+//            intent.putExtra("app_package", context.getPackageName());
             intent.putExtra("app_uid", context.getApplicationInfo().uid);
             intent.putExtra("android.provider.extra.APP_PACKAGE", context.getPackageName());
             context.startActivity(intent);
@@ -213,7 +216,7 @@ public class WKOSUtils {
 
     }
 
-    public static void openPermissionSetting(Context context) {
+    public static void openPermissionSetting(Context context,String channelID) {
         try {
             Intent localIntent = new Intent();
             localIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -221,7 +224,7 @@ public class WKOSUtils {
             if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 localIntent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
                 localIntent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
-                localIntent.putExtra(Settings.EXTRA_CHANNEL_ID, WKConstants.newMsgChannelID);
+                localIntent.putExtra(Settings.EXTRA_CHANNEL_ID, channelID);
                 context.startActivity(localIntent);
                 Log.e("跳转的类型", "-->1");
                 return;

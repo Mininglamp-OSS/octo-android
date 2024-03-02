@@ -57,7 +57,6 @@
     <string name="user_card">个人名片</string>
     <string name="send_msg">发消息</string>
     <string name="setting">设置</string>
-    <string name="open_notice">打开消息通知</string>
     <string name="group_qr_desc">该二维码%d天内(%s)有效，重新进入将更新</string>
     <string name="fullStaffing">全员禁言中</string>
     <string name="start_group_chat">发起群聊</string>
@@ -270,5 +269,15 @@
     <string name="clear_history">清除历史记录</string>
     <string name="all_staff">全员</string>
     <string name="department">部门</string>
+    <string name="community">社区</string>
+    <string name="invite_call">邀请通话</string>
+    <string name="new_msg_notification">新消息通知</string>
+    <string name="new_rtc_notification">音视频邀请通知</string>
+    <string name="new_msg_notification_desc">接受新消息的推送通知</string>
+    <string name="new_rtc_notification_desc">接受音视频的推送通知</string>
+    <string name="open_new_msg_notice">打开新消息通知</string>
+    <string name="open_new_msg_notice_desc">在系统通知权限页面的类别分类中，打开‘新消息通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
+    <string name="open_new_rtc_notice">打开音视频邀请通知</string>
+    <string name="open_new_rtc_notice_desc">在系统通知权限页面的类别分类中，打开‘音视频邀请通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
 </resources>
 

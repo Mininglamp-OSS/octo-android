@@ -3,10 +3,6 @@
     <string name="app_name" tools:ignore="ExtraTranslation">WKChat</string>
     <string name="agree">Agree</string>
     <string name="disagree">Disagree</string>
-    <string name="new_msg_notification">New message notification</string>
-    <string name="new_rtc_notification">New call notification</string>
-    <string name="new_msg_notification_desc">Accept push notifications for new messages</string>
-    <string name="new_rtc_notification_desc">Accept push notifications for new call</string>
     <string name="app_slogan">Two lines of code to communicate</string>
     <string name="dialog_title">Privacy policy and user agreement</string>
     <string name="dialog_content">Dear users: before using the software, in order to let you better understand how we protect users\' personal information, please carefully read the user agreement and privacy policy \n key contents are as follows:\n 1. When you use the service, we will obtain your mobile phone number, device information, etc. according to your consent \n 2. We will use cookies and similar technologies to ensure the normal operation of the service. \n 3. You can access and correct your personal information through the ways listed in this privacy policy, and you can also contact us to delete it. \n 4. Without your permission, we will not provide your information to any third party. \n 5. Click the blue link above to view the complete content.</string>

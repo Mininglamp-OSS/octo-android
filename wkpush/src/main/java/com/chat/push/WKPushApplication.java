@@ -163,7 +163,7 @@ public class WKPushApplication {
             Context context = (Context) object;
             WKDialogUtils.getInstance().showDialog(context, context.getString(R.string.open_notification_title), context.getString(R.string.open_notification_content), true, "", context.getString(R.string.open_setting), 0, Theme.colorAccount, index -> {
                 if (index == 1) {
-                    WKOSUtils.openChannelSetting(context);
+                    WKOSUtils.openChannelSetting(context,WKConstants.newMsgChannelID);
                 }
             });
             return null;

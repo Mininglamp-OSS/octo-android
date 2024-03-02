@@ -4,4 +4,8 @@
     <color name="chat_function_text">#8E8F90</color>
     <color name="pc_login_bg">#80111111</color>
     <color name="chat_more_bg">#1D2733</color>
+    <color name="category_org_bg">#243048</color>
+    <color name="category_org_text">#96b3ed</color>
+    <color name="category_community_bg">#30283E</color>
+    <color name="category_community_text">#8DEC59D8</color>
 </resources>

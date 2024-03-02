@@ -121,10 +121,43 @@
                         <TextView
                             style="@style/leftTextView"
                             android:layout_weight="1"
-                            android:text="@string/open_notice" />
+                            android:text="@string/open_new_msg_notice" />
 
                         <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:paddingStart="15dp"
+                        android:paddingTop="5dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="20dp"
+                        android:text="@string/open_new_msg_notice_desc" />
+
+                    <LinearLayout
+                        android:id="@+id/openRTCNoticeLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/open_new_rtc_notice" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:paddingStart="15dp"
+                        android:paddingTop="5dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="20dp"
+                        android:text="@string/open_new_rtc_notice_desc" />
+
                 </LinearLayout>
 
             </LinearLayout>

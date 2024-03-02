@@ -23,6 +23,7 @@ import com.chat.base.adapter.WKFragmentStateAdapter;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -33,6 +34,7 @@ import com.chat.base.ui.components.CounterView;
 import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.language.WKMultiLanguageUtil;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActTabMainBinding;
@@ -46,6 +48,8 @@ import org.telegram.ui.Components.RLottieImageView;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.reactivex.rxjava3.disposables.Disposable;
+
 
 /**
  * 2019-11-12 13:57
@@ -56,7 +60,8 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     CounterView contactsCounterView;
 //    CounterView workplaceCounterView;
     View contactsSpotView;
-    RLottieImageView chatIV, contactsIV, meIV;
+    RLottieImageView chatIV, contactsIV, workplaceIV, meIV;
+    private long lastClickChatTabTime = 0L;
 
     @Override
     protected ActTabMainBinding getViewBinding() {
@@ -94,7 +99,6 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
                         }
                     });
                 }
-
             });
         } else {
             boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
@@ -111,8 +115,8 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         List<Fragment> fragments = new ArrayList<>(3);
         fragments.add(new ChatFragment());
         fragments.add(new ContactsFragment());
-      //  Fragment workplaceFra = (Fragment) EndpointManager.getInstance().invoke("get_workplace_fragment", null);
-     //   fragments.add(workplaceFra);
+//        Fragment workplaceFra = (Fragment) EndpointManager.getInstance().invoke("get_workplace_fragment", null);
+//        fragments.add(workplaceFra);
         fragments.add(new MyFragment());
 
         wkVBinding.vp.setAdapter(new WKFragmentStateAdapter(this, fragments));
@@ -189,6 +193,14 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         wkVBinding.bottomNavigation.setItemIconTintList(null);
         wkVBinding.bottomNavigation.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.i_chat) {
+                long nowTime = WKTimeUtils.getInstance().getCurrentMills();
+                if (wkVBinding.vp.getCurrentItem() == 0){
+                    if (nowTime - lastClickChatTabTime <= 300) {
+                        EndpointManager.getInstance().invoke("scroll_to_unread_channel", null);
+                    }
+                    lastClickChatTabTime = nowTime;
+                    return true;
+                }
                 wkVBinding.vp.setCurrentItem(0);
                 playAnimation(0);
             } else if (item.getItemId() == R.id.i_contacts) {
@@ -275,10 +287,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 
     @Override
     public Resources getResources() {
-        float fontScale = WKSharedPreferencesUtil.getInstance().getFloat("font_scale", 1);
-        if (fontScale <= 0) {
-            fontScale = 1;
-        }
+        float fontScale = WKConstants.getFontScale();
         Resources res = super.getResources();
         Configuration config = res.getConfiguration();
         config.fontScale = fontScale; //1 设置正常字体大小的倍数
@@ -297,6 +306,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 
     private void playAnimation(int index) {
         if (index == 0) {
+            lastClickChatTabTime = 0;
             meIV.setImageResource(R.mipmap.ic_mine_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             chatIV.setImageResource(R.mipmap.ic_chat_s);
@@ -306,14 +316,12 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_s);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
-        }
-//        else if (index == 2) {
-//            meIV.setImageResource(R.mipmap.ic_mine_n);
-//            chatIV.setImageResource(R.mipmap.ic_chat_n);
-//            contactsIV.setImageResource(R.mipmap.ic_contacts_n);
+        } else if (index == 2) {
+            meIV.setImageResource(R.mipmap.ic_mine_n);
+            chatIV.setImageResource(R.mipmap.ic_chat_n);
+            contactsIV.setImageResource(R.mipmap.ic_contacts_n);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_s);
-//        }
-        else {
+        } else {
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             meIV.setImageResource(R.mipmap.ic_mine_s);

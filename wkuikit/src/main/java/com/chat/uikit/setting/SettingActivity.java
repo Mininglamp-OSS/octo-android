@@ -55,6 +55,10 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     protected void initView() {
         getCacheSize();
         EndpointManager.getInstance().invoke("set_chat_bg_view", new ChatBgItemMenu(this, wkVBinding.chatBgLayout, "", WKChannelType.PERSONAL));
+        View keepAliveView = (View) EndpointManager.getInstance().invoke("show_keep_alive_item", this);
+        if (keepAliveView != null) {
+            wkVBinding.keepAliveLayout.addView(keepAliveView);
+        }
     }
 
     @Override
@@ -73,9 +77,11 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         SingleClickUtil.onSingleClick(wkVBinding.languageLayout, view1 -> startActivity(new Intent(this, WKLanguageActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.darkLayout, view1 -> startActivity(new Intent(this, WKThemeSettingActivity.class)));
         wkVBinding.clearImgCacheLayout.setOnClickListener(v -> showDialog(getString(R.string.clear_img_cache_tips), index -> {
-            DataCleanManager.clearAllCache(SettingActivity.this);
-            str = "0.00M";
-            wkVBinding.imageCacheTv.setText(str);
+            if (index == 1) {
+                DataCleanManager.clearAllCache(SettingActivity.this);
+                str = "0.00M";
+                wkVBinding.imageCacheTv.setText(str);
+            }
         }));
         wkVBinding.clearChatMsgLayout.setOnClickListener(v -> showDialog(getString(R.string.clear_all_msg_tips), index -> {
             if (index == 1) {

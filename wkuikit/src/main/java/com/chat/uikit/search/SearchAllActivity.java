@@ -51,7 +51,7 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
 
     @Override
     protected void initPresenter() {
-        Theme.setColorFilter(this, wkVBinding.searchIv, R.color.color999);
+        Theme.setColorFilter(this, wkVBinding.searchIv, R.color.popupTextColor);
         ViewCompat.setTransitionName(wkVBinding.searchIv, "searchView");
     }
 

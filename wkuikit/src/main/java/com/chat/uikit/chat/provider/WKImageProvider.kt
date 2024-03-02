@@ -13,6 +13,7 @@ import android.widget.TextView
 import com.alibaba.fastjson.JSONObject
 import com.chat.base.config.WKApiConfig
 import com.chat.base.endpoint.EndpointManager
+import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChooseChatMenu
 import com.chat.base.glide.GlideUtils
@@ -233,7 +234,7 @@ class WKImageProvider : WKChatBaseProvider() {
                 override fun onForward(position: Int) {
                     val mMessageContent = showImgList[position].baseContentMsgModel
                     EndpointManager.getInstance().invoke(
-                        "chat_show_choose_chat",
+                        EndpointSID.showChooseChatView,
                         ChooseChatMenu(
                             ChatChooseContacts { list1: List<WKChannel>? ->
                                 if (!list1.isNullOrEmpty()) {
@@ -328,8 +329,8 @@ class WKImageProvider : WKChatBaseProvider() {
             hashMap["author_name"] = mMsg.from.channelName
         }
         hashMap["payload"] = jsonObject
-        hashMap["context"] = context
-        EndpointManager.getInstance().invoke("collection_add_collect", hashMap)
+        hashMap["activity"] = context
+        EndpointManager.getInstance().invoke("favorite_add", hashMap)
     }
 
     private fun onImageClick(

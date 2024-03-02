@@ -38,6 +38,7 @@ import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
+import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.CanReactionMenu
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChatItemPopupMenu
@@ -102,6 +103,7 @@ open class WKTextProvider : WKChatBaseProvider() {
         val replyIv = parentView.findViewById<ImageView>(R.id.replyIv)
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
         val mTextContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        //replyLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
         // 这里要指定文本宽度 - padding的距离
 //        textContentLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
 //        val bgType = getMsgBgType(
@@ -387,7 +389,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                                 textContent
                             )
                         EndpointManager.getInstance()
-                            .invoke("chat_show_choose_chat", chooseChatMenu)
+                            .invoke(EndpointSID.showChooseChatView, chooseChatMenu)
                     }
 
                 }).setPopSpanCount(3) // 设置操作弹窗每行个数 default 5

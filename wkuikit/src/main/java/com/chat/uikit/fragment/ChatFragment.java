@@ -13,12 +13,14 @@ import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
 import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
+import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.PopupMenuItem;
@@ -115,10 +117,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         Theme.setPressedBackground(wkVBinding.deviceIv);
         Theme.setPressedBackground(wkVBinding.searchIv);
         Theme.setPressedBackground(wkVBinding.rightIv);
-    }
-
-    @Override
-    protected void initPresenter() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -671,6 +669,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 //        if (muteForApp == 1) {
 //            pcLoginTv.setText(String.format("%s %s", appLoginType, getString(R.string.wk_kit_phone_notice_close)));
 //        } else pcLoginTv.setText(appLoginType);
+        EndpointManager.getInstance().setMethod("scroll_to_unread_channel", object -> {
+            scrollToUnreadChannel();
+            return null;
+        });
     }
 
     private void startConnectTimer() {
@@ -790,4 +792,37 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
     }
+
+    long lastMessageTime = 0L;
+
+    private void scrollToUnreadChannel() {
+        long firstTime = 0L;
+        int firstIndex = 0;
+        boolean isScrollToFirstIndex = true;
+        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            if (chatConversationAdapter.getData().get(i).getUnReadCount() > 0 && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel().mute == 0) {
+                if (firstTime == 0) {
+                    firstTime = chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp;
+                    firstIndex = i;
+                }
+                if (lastMessageTime == 0 || lastMessageTime > chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp) {
+                    lastMessageTime = chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp;
+                    if (linearLayoutManager != null) {
+                        linearLayoutManager.scrollToPositionWithOffset(i, 0);
+                    }
+                    isScrollToFirstIndex = false;
+                    break;
+                }
+            }
+
+        }
+        if (isScrollToFirstIndex) {
+            lastMessageTime = firstTime;
+            if (linearLayoutManager != null) {
+                linearLayoutManager.scrollToPositionWithOffset(firstIndex, 0);
+            }
+        }
+    }
+
 }

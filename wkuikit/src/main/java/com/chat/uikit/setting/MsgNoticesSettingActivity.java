@@ -4,6 +4,7 @@ import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKConstants;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.systembar.WKOSUtils;
@@ -88,7 +89,10 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
             }
         });
         wkVBinding.openNoticeLayout.setOnClickListener(v -> {
-            WKOSUtils.openChannelSetting(this);
+            WKOSUtils.openChannelSetting(this, WKConstants.newMsgChannelID);
+        });
+        wkVBinding.openRTCNoticeLayout.setOnClickListener(v -> {
+            WKOSUtils.openChannelSetting(this, WKConstants.newRTCChannelID);
         });
     }
 }

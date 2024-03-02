@@ -109,6 +109,7 @@
                     android:id="@+id/progress"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
+                    android:visibility="gone"
                     android:layout_gravity="center" />
 
                 <androidx.appcompat.widget.AppCompatImageView

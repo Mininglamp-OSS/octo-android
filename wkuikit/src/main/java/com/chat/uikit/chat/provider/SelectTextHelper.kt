@@ -601,15 +601,15 @@ class SelectTextHelper(builder: Builder) {
         // 处理空格 把空格转成不间断空格
         // 为什么处理2个，而不是1个呢？
         // 避免英文单词出现断节
-        val newContent = mOriginalContent
-            // 半角空格(英文符号) 转 不间断空格
-            .replace("\u0020\u0020", "\u00A0\u00A0")
-            // 全角空格(中文符号) 转 不间断空格
-            .replace("\u3000\u3000", "\u00A0\u00A0")
+//        val newContent = mOriginalContent
+//            // 半角空格(英文符号) 转 不间断空格
+//            .replace("\u0020\u0020", "\u00A0\u00A0")
+//            // 全角空格(中文符号) 转 不间断空格
+//            .replace("\u3000\u3000", "\u00A0\u00A0")
         // val spanStr = SpannableStringBuilder(newContent)
         // replaceText2Emoji(mContext, spanStr, newContent)
 
-        // 去除超链接点击背景色 https://github.com/ITxiaoguang/SelectTextHelper/issues/2
+        // 去除超链接点击背景色
         //  mTextView.highlightColor = Color.TRANSPARENT
         //  mTextView.setText(spanStr, TextView.BufferType.SPANNABLE)
         val fullLayoutLocation = arrayOf(FloatArray(2))

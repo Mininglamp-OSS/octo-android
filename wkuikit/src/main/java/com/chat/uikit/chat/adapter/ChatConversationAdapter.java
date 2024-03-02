@@ -172,6 +172,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             content = getContext().getString(R.string.str_content_format_err);
         } else if (msg.type == WKContentType.WK_SIGNAL_DECRYPT_ERROR) {
             content = getContext().getString(R.string.str_signal_decrypt_err);
+        } else if (msg.type == WKContentType.noRelation) {
+            String showName = "";
+            if (msg.getChannelInfo() != null) {
+                if (TextUtils.isEmpty(msg.getChannelInfo().channelRemark)) {
+                    showName = msg.getChannelInfo().channelName;
+                } else {
+                    showName = msg.getChannelInfo().channelRemark;
+                }
+            }
+            content = String.format(getContext().getString(R.string.no_relation_request), showName);
         } else {
             if (!WKMsgItemViewManager.getInstance().getChatItemProviderList().containsKey(msg.type)) {
                 if (TextUtils.isEmpty(content)) {
@@ -277,15 +287,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         counterView.setCount(item.getUnReadCount(), isAnimated);
         counterView.setGravity(Gravity.END);
         counterView.setVisibility(item.getUnReadCount() > 0 ? View.VISIBLE : View.GONE);
-        ImageView unRemindIv = baseViewHolder.getView(R.id.unremindIv);
-        unRemindIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
-        if (isMute) {
-            if (item.getUnReadCount() > 0) {
-                baseViewHolder.setGone(R.id.unremindIv, true);
-            } else baseViewHolder.setGone(R.id.unremindIv, false);
-        } else {
-            baseViewHolder.setGone(R.id.unremindIv, true);
-        }
     }
 
     private void showTime(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
@@ -401,17 +402,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
             LinearLayout categoryLayout = helper.getView(R.id.categoryLayout);
             categoryLayout.removeAllViews();
-            if (item.getWkChannel().mute == 1) {
-                if (item.unreadCount > 0) {
-                    helper.setGone(R.id.unremindIv, true);
-                } else helper.setGone(R.id.unremindIv, false);
-            } else {
-                helper.setGone(R.id.unremindIv, true);
-            }
             ImageView forbiddenIv = helper.getView(R.id.forbiddenIv);
             forbiddenIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
             //设置是否置顶
             helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+            if (item.getWkChannel().mute == 1) {
+                ImageView muteIV = new ImageView(getContext());
+                muteIV.setImageResource(R.mipmap.list_mute);
+                Theme.setColorFilter(muteIV, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+                categoryLayout.addView(muteIV, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 3, 1, 0, 0));
+            }
             if (!TextUtils.isEmpty(item.getWkChannel().category)) {
 
                 if (item.getWkChannel().category.equals(WKSystemAccount.accountCategorySystem)) {
@@ -424,11 +424,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.visitor), ContextCompat.getColor(getContext(), R.color.transparent), ContextCompat.getColor(getContext(), R.color.colorFFC107), ContextCompat.getColor(getContext(), R.color.colorFFC107)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
                 }
                 if (item.getWkChannel().category.equals(WKSystemAccount.channelCategoryOrganization)) {
-                    categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.all_staff), ContextCompat.getColor(getContext(), R.color.colorAccent), ContextCompat.getColor(getContext(), R.color.colorAccentUn), ContextCompat.getColor(getContext(), R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
+                    categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.all_staff), ContextCompat.getColor(getContext(), R.color.category_org_bg), ContextCompat.getColor(getContext(), R.color.category_org_text), ContextCompat.getColor(getContext(), R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
                 }
                 if (item.getWkChannel().category.equals(WKSystemAccount.channelCategoryDepartment)) {
-                    categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.department), ContextCompat.getColor(getContext(), R.color.colorAccent), ContextCompat.getColor(getContext(), R.color.colorAccentUn), ContextCompat.getColor(getContext(), R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
+                    categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.department), ContextCompat.getColor(getContext(), R.color.category_org_bg), ContextCompat.getColor(getContext(), R.color.category_org_text), ContextCompat.getColor(getContext(), R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
                 }
+            }
+            if (item.channelType == WKChannelType.COMMUNITY) {
+                categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.community), ContextCompat.getColor(getContext(), R.color.category_community_bg), ContextCompat.getColor(getContext(), R.color.category_community_text), ContextCompat.getColor(getContext(), R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
             }
             if (item.getWkChannel().robot == 1)
                 categoryLayout.addView(Theme.getChannelCategoryTV(getContext(), getContext().getString(R.string.bot), ContextCompat.getColor(getContext(), R.color.colorFFC107), ContextCompat.getColor(getContext(), R.color.white), ContextCompat.getColor(getContext(), R.color.colorFFC107)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));

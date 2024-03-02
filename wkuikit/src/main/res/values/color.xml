@@ -5,4 +5,8 @@
     <color name="chat_function_text">#585858</color>
     <color name="pc_login_bg">#FAFAFA</color>
     <color name="chat_more_bg">#f6f6f6</color>
+    <color name="category_org_bg">#d0ddfd</color>
+    <color name="category_org_text">#1856e7</color>
+    <color name="category_community_bg">#D0BCF3</color>
+    <color name="category_community_text">#7E51CC</color>
 </resources>

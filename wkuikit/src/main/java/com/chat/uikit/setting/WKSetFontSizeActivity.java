@@ -8,6 +8,7 @@ import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointManager;
@@ -49,17 +50,12 @@ public class WKSetFontSizeActivity extends WKBaseActivity<ActSetFontSizeLayoutBi
         if (isChange) {
             showDialog(String.format(getString(R.string.dark_save_tips), getString(R.string.app_name)), index -> {
                 if (index == 1) {
-                    WKSharedPreferencesUtil.getInstance().putFloat("font_scale", fontSizeScale);
+                    WKConstants.setFontScale(fontSizeScale);
                     //重启应用
                     EndpointManager.getInstance().invoke("main_show_home_view", 0);
                 }
             });
         }
-    }
-
-    @Override
-    protected void initPresenter() {
-
     }
 
     @Override
@@ -90,7 +86,7 @@ public class WKSetFontSizeActivity extends WKBaseActivity<ActSetFontSizeLayoutBi
             isChange = !(position == defaultPos);
         });
 
-        float scale = WKSharedPreferencesUtil.getInstance().getFloat("font_scale", 0.0f);
+        float scale = WKConstants.getFontScale();
         if (scale > 0.5) {
             defaultPos = (int) ((scale - 0.875) / 0.125);
         } else {
@@ -101,7 +97,6 @@ public class WKSetFontSizeActivity extends WKBaseActivity<ActSetFontSizeLayoutBi
     }
 
     private void changeTextSize(int dimension) {
-
         wkVBinding.textSizeTv1.setTextSize(TypedValue.COMPLEX_UNIT_SP, dimension); //22SP
         wkVBinding.textSizeTv2.setTextSize(TypedValue.COMPLEX_UNIT_SP, dimension); //22SP
         wkVBinding.textSizeTv3.setTextSize(TypedValue.COMPLEX_UNIT_SP, dimension); //22SP

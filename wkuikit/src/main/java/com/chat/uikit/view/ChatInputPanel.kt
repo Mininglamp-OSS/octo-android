@@ -39,6 +39,7 @@ import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
+import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.*
 import com.chat.base.entity.BottomSheetItem
 import com.chat.base.msg.IConversationContext
@@ -837,7 +838,7 @@ class ChatInputPanel : LinearLayout, IInputPanel {
                             forwardContent.msgList = list
                             EndpointManager.getInstance()
                                 .invoke(
-                                    "chat_show_choose_chat",
+                                    EndpointSID.showChooseChatView,
                                     ChooseChatMenu(
                                         ChatChooseContacts { channelList: List<WKChannel>? ->
                                             if (!channelList.isNullOrEmpty()) {
@@ -916,7 +917,7 @@ class ChatInputPanel : LinearLayout, IInputPanel {
                             if (list.size > 0) {
                                 EndpointManager.getInstance()
                                     .invoke(
-                                        "chat_show_choose_chat",
+                                        EndpointSID.showChooseChatView,
                                         ChooseChatMenu(
                                             ChatChooseContacts { channelList: List<WKChannel>? ->
                                                 val sendMsgEntityList: MutableList<SendMsgEntity> =

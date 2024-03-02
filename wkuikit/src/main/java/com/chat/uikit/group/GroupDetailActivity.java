@@ -56,6 +56,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     private WKChannel groupChannel;
     private int groupType = 0;
     private TextView titleTv;
+    private boolean isResetMembers = false;
 
     @Override
     protected ActGroupDetailLayoutBinding getViewBinding() {
@@ -201,20 +202,17 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             startActivity(intent);
         });
 
-        wkVBinding.exitBtn.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.delete_group), getString(R.string.exit_group_tips), true, "", getString(R.string.delete_group), 0, ContextCompat.getColor(this, R.color.red), new WKDialogUtils.IClickListener() {
-            @Override
-            public void onClick(int index) {
-                if (index == 1) {
-                    GroupModel.getInstance().exitGroup(groupNo, (code, msg) -> {
-                        if (code == HttpResponseCode.success) {
-                            WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
-                            MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
-                            WKIM.getInstance().getConversationManager().deleteWitchChannel(groupNo, WKChannelType.GROUP);
-                            EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat, new WKChannel(groupNo, WKChannelType.GROUP));
-                            finish();
-                        } else showToast(msg);
-                    });
-                }
+        wkVBinding.exitBtn.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.delete_group), getString(R.string.exit_group_tips), true, "", getString(R.string.delete_group), 0, ContextCompat.getColor(this, R.color.red), index -> {
+            if (index == 1) {
+                GroupModel.getInstance().exitGroup(groupNo, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
+                        MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
+                        WKIM.getInstance().getConversationManager().deleteWitchChannel(groupNo, WKChannelType.GROUP);
+                        EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat, new WKChannel(groupNo, WKChannelType.GROUP));
+                        finish();
+                    } else showToast(msg);
+                });
             }
         }));
 
@@ -267,14 +265,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         //监听频道成员信息改变通知
         WKIM.getInstance().getChannelMembersManager().addOnRefreshChannelMemberInfo("group_detail_refresh_channel_member", (channelMember, isEnd) -> {
             if (channelMember != null) {
-                if (channelMember.channelID.equalsIgnoreCase(groupNo) && channelMember.channelType == WKChannelType.GROUP) {
-
+                if (channelMember.channelID.equals(groupNo) && channelMember.channelType == WKChannelType.GROUP) {
+                    boolean isUpdate = false;
                     //本群内某个成员
                     for (int i = 0, size = groupMemberAdapter.getData().size(); i < size; i++) {
                         if (groupMemberAdapter.getData().get(i).memberUID.equalsIgnoreCase(channelMember.memberUID)) {
-                            if (groupMemberAdapter.getData().get(i).role != channelMember.role) {
-                                //如果有角色更改就重新获取成员
-                                getMembers();
+                            isUpdate = true;
+                            if (groupMemberAdapter.getData().get(i).role != channelMember.role || groupMemberAdapter.getData().get(i).status != channelMember.status) {
+                                isResetMembers = true;
                             } else {
                                 groupMemberAdapter.getData().get(i).memberName = channelMember.memberName;
                                 groupMemberAdapter.getData().get(i).memberRemark = channelMember.memberRemark;
@@ -283,7 +281,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                             break;
                         }
                     }
+                    if (!isUpdate) {
+                        isResetMembers = true;
+                    }
                 }
+            }
+            if (isEnd && isResetMembers) {
+                //如果有角色更改就重新获取成员
+                getMembers();
             }
         });
         //移除群成员监听
@@ -367,7 +372,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     }
 
     private void getMembers() {
-
+        isResetMembers = false;
         WKIM.getInstance().getChannelMembersManager().getWithPageOrSearch(groupNo, WKChannelType.GROUP, "", 1, 20, (list, b) -> {
             if (groupType == 0)
                 resortData(list);
@@ -377,9 +382,6 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 }
             }
         });
-
-//        List<WKChannelMember> list = WKIM.getInstance().getChannelMembersManager().getMembersWithPage(groupNo, WKChannelType.GROUP,1,20);
-
     }
 
     private void resortData(List<WKChannelMember> list) {

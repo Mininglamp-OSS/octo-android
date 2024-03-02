@@ -9,15 +9,14 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.media.AudioAttributes;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcelable;
 import android.os.Vibrator;
 import android.text.TextUtils;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -42,6 +41,7 @@ import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
+import com.chat.base.utils.NotificationCompatUtil;
 import com.chat.base.utils.WKCommonUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKTimeUtils;
@@ -59,6 +59,7 @@ import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.SearchUserActivity;
 import com.chat.uikit.user.UserDetailActivity;
+import com.chat.uikit.utils.PushNotificationHelper;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -100,6 +101,38 @@ public class WKIMUtils {
      * 初始化事件
      */
     public void initIMListener() {
+        EndpointManager.getInstance().setMethod("show_rtc_notification", object -> {
+            if (object instanceof String fromUID) {
+                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(fromUID, WKChannelType.PERSONAL);
+                var fromName = "";
+                if (channel != null) {
+                    if (TextUtils.isEmpty(channel.channelRemark)) {
+                        fromName = channel.channelName;
+                    } else fromName = channel.channelRemark;
+                }
+
+                Vibrator mVibrator = (Vibrator) WKBaseApplication.getInstance().getContext().getSystemService(Context.VIBRATOR_SERVICE);
+                long[] pattern = {0, 1000, 1000};
+                AudioAttributes audioAttributes = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    audioAttributes = new AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION) //key
+                            .build();
+                    mVibrator.vibrate(pattern, 0, audioAttributes);
+                } else {
+                    mVibrator.vibrate(pattern, 0);
+                }
+                PushNotificationHelper.INSTANCE.notifyCall(WKUIKitApplication.getInstance().getContext(), 2, fromName, WKBaseApplication.getInstance().getContext().getString(R.string.invite_call));
+            }
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("cancel_rtc_notification", object -> {
+            Vibrator vibrator = (Vibrator) WKBaseApplication.getInstance().getContext().getSystemService(Context.VIBRATOR_SERVICE);
+            vibrator.cancel();
+            NotificationCompatUtil.Companion.cancel(WKUIKitApplication.getInstance().getContext(), 2);
+            return null;
+        });
         // 获取用户密钥
 //        WKIM.getInstance().getSignalProtocolManager().addOnCryptoSignalDataListener((channelID, channelTyp, iCryptoSignalDataResult) -> {
 //            if (channelTyp == WKChannelType.PERSONAL) {
@@ -251,7 +284,7 @@ public class WKIMUtils {
 
             if (sensitiveWordsMsg != null) {
                 WKMsg finalSensitiveWordsMsg = sensitiveWordsMsg;
-                new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> WKIM.getInstance().getMsgManager().saveMsg(finalSensitiveWordsMsg), 1000 * 2);
+                new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(finalSensitiveWordsMsg, false), 1000 * 2);
             }
         });
         WKIM.getInstance().getMsgManager().addOnUploadMsgExtraListener(msgExtra -> {
@@ -531,24 +564,25 @@ public class WKIMUtils {
             // 强提醒某条消息
             intent.putExtra("tipsOrderSeq", chatViewMenu.tipMsgOrderSeq);
         } else {
-            WKUIConversationMsg uiMsg = WKIM.getInstance().getConversationManager().getUIConversationMsg(chatViewMenu.channelID, chatViewMenu.channelType);
             if (redDot > 0) {
                 long orderSeq;
                 int messageSeq = 0;
-                if (msg != null && msg.messageSeq == 0) {
-                    orderSeq = msg.orderSeq;
-                } else {
-                    if (msg != null) {
+                if (msg != null) {
+                    if (msg.messageSeq == 0) {
+                        int maxMsgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
+                        messageSeq = maxMsgSeq - redDot + 1;
+                    } else {
                         messageSeq = msg.messageSeq - redDot + 1;
-                        if (messageSeq <= 0) {
-                            messageSeq = WKIM.getInstance().getMsgManager().getMinMessageSeqWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
-                        }
                     }
-                    orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(messageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
+                    if (messageSeq <= 0) {
+                        messageSeq = WKIM.getInstance().getMsgManager().getMinMessageSeqWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
+                    }
                 }
+                orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(messageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
                 intent.putExtra("unreadStartMsgOrderSeq", orderSeq);
                 intent.putExtra("redDot", redDot);
             } else {
+                WKUIConversationMsg uiMsg = WKIM.getInstance().getConversationManager().getUIConversationMsg(chatViewMenu.channelID, chatViewMenu.channelType);
                 if (uiMsg != null && uiMsg.getRemoteMsgExtra() != null && uiMsg.getRemoteMsgExtra().keepMessageSeq != 0) {
                     long lastPreviewMsgOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(uiMsg.getRemoteMsgExtra().keepMessageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
                     intent.putExtra("lastPreviewMsgOrderSeq", lastPreviewMsgOrderSeq);
@@ -659,8 +693,13 @@ public class WKIMUtils {
 //        } else {
 //            url = WKApiConfig.getShowAvatar(channel.channelID, channel.channelType);
 //        }
-        String finalShowContent = showContent;
-        showNotice(showTitle, finalShowContent, null, isVibrate);
+//        String finalShowContent = showContent;
+        if (isVibrate) {
+            PushNotificationHelper.INSTANCE.notifyMention(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
+        } else {
+            PushNotificationHelper.INSTANCE.notifyMessage(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
+        }
+//        showNotice(showTitle, finalShowContent, null, isVibrate);
 //        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
     }
 
@@ -668,43 +707,44 @@ public class WKIMUtils {
         //1.获取消息服务
         NotificationManager manager = (NotificationManager) WKUIKitApplication.getInstance().getContext().getSystemService(Context.NOTIFICATION_SERVICE);
         //默认通道是default
-        String channelId = "default";
+        String channelId = WKConstants.newMsgChannelID;
+//        String channelId = "default";
         //2.如果是android8.0以上的系统，则新建一个消息通道
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            channelId = WKConstants.newMsgChannelID;
-        /*
-         通道优先级别：
-         * IMPORTANCE_NONE 关闭通知
-         * IMPORTANCE_MIN 开启通知，不会弹出，但没有提示音，状态栏中无显示
-         * IMPORTANCE_LOW 开启通知，不会弹出，不发出提示音，状态栏中显示
-         * IMPORTANCE_DEFAULT 开启通知，不会弹出，发出提示音，状态栏中显示
-         * IMPORTANCE_HIGH 开启通知，会弹出，发出提示音，状态栏中显示
-         */
-            NotificationChannel channel = new NotificationChannel(channelId, "消息提醒", NotificationManager.IMPORTANCE_HIGH);
-            //设置该通道的描述（可以不写）
-            channel.setDescription("重要消息，请不要关闭这个通知。");
-            //是否绕过勿打扰模式
-            channel.setBypassDnd(true);
-            //是否允许呼吸灯闪烁
-            channel.enableLights(true);
-            //闪关灯的灯光颜色
-            channel.setLightColor(Color.RED);
-            //桌面launcher的消息角标
-            channel.canShowBadge();
-            //设置是否应在锁定屏幕上显示此频道的通知
-            channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
-            if (isVibrate) {
-                //是否允许震动
-                channel.enableVibration(true);
-                //先震动1秒，然后停止0.5秒，再震动2秒则可设置数组为：new long[]{1000, 500, 2000}
-                channel.setVibrationPattern(new long[]{1000, 500, 2000});
-            } else {
-                channel.enableVibration(false);
-                channel.setVibrationPattern(new long[]{0});
-            }
-            //创建消息通道
-            manager.createNotificationChannel(channel);
-        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//            channelId = WKConstants.newMsgChannelID;
+//        /*
+//         通道优先级别：
+//         * IMPORTANCE_NONE 关闭通知
+//         * IMPORTANCE_MIN 开启通知，不会弹出，但没有提示音，状态栏中无显示
+//         * IMPORTANCE_LOW 开启通知，不会弹出，不发出提示音，状态栏中显示
+//         * IMPORTANCE_DEFAULT 开启通知，不会弹出，发出提示音，状态栏中显示
+//         * IMPORTANCE_HIGH 开启通知，会弹出，发出提示音，状态栏中显示
+//         */
+//            NotificationChannel channel = new NotificationChannel(channelId, "消息提醒", NotificationManager.IMPORTANCE_HIGH);
+//            //设置该通道的描述（可以不写）
+//            channel.setDescription("重要消息，请不要关闭这个通知。");
+//            //是否绕过勿打扰模式
+//            channel.setBypassDnd(true);
+//            //是否允许呼吸灯闪烁
+//            channel.enableLights(true);
+//            //闪关灯的灯光颜色
+//            channel.setLightColor(Color.RED);
+//            //桌面launcher的消息角标
+//            channel.canShowBadge();
+//            //设置是否应在锁定屏幕上显示此频道的通知
+//            channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+//            if (isVibrate) {
+//                //是否允许震动
+//                channel.enableVibration(true);
+//                //先震动1秒，然后停止0.5秒，再震动2秒则可设置数组为：new long[]{1000, 500, 2000}
+//                channel.setVibrationPattern(new long[]{1000, 500, 2000});
+//            } else {
+//                channel.enableVibration(false);
+//                channel.setVibrationPattern(new long[]{0});
+//            }
+//            //创建消息通道
+//            manager.createNotificationChannel(channel);
+//        }
         //3.实例化通知
         NotificationCompat.Builder nc = new NotificationCompat.Builder(WKUIKitApplication.getInstance().getContext(), channelId);
         //通知默认的声音 震动 呼吸灯
@@ -744,6 +784,51 @@ public class WKIMUtils {
         manager.notify(1, notification);
     }
 
+    private void showRTCNotice(String showTitle, String showContent) {
+        //1.获取消息服务
+        NotificationManager manager = (NotificationManager) WKUIKitApplication.getInstance().getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        //默认通道是default
+        String channelId = "application_notification";
+//        String channelId = WKConstants.newMsgChannelID;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(channelId, "音视频通知", NotificationManager.IMPORTANCE_LOW);
+            manager.createNotificationChannel(channel);
+        }
+        //3.实例化通知
+        NotificationCompat.Builder nc = new NotificationCompat.Builder(WKUIKitApplication.getInstance().getContext(), channelId);
+        nc.setVibrate(new long[]{0, 500, 1000});
+        //通知默认的声音 震动 呼吸灯
+        //通知标题
+        nc.setContentTitle(showTitle);
+        //通知内容
+        nc.setContentText(showContent);
+        //设置通知的小图标
+        nc.setSmallIcon(R.mipmap.ic_logo);
+        //设置通知的大图标
+        //设定通知显示的时间
+        nc.setWhen(System.currentTimeMillis());
+        //设置通知的优先级
+        nc.setPriority(NotificationCompat.PRIORITY_DEFAULT);
+        //设置点击通知之后通知是否消失
+        nc.setAutoCancel(true);
+        //点击通知打开软件
+        Context application = WKUIKitApplication.getInstance().getContext();
+        Intent resultIntent = new Intent(application, TabActivity.class);
+        resultIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        resultIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pendingIntent;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_IMMUTABLE);
+        } else {
+            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_MUTABLE);
+        }
+        nc.setContentIntent(pendingIntent);
+        //4.创建通知，得到build
+        Notification notification = nc.build();
+        //5.发送通知
+        manager.notify(2, notification);
+    }
+
     private void defaultMediaPlayer() {
         EndpointManager.getInstance().invoke("play_new_msg_Media", null);
     }
@@ -758,4 +843,6 @@ public class WKIMUtils {
         WKIM.getInstance().getCMDManager().removeCmdListener("system");
         WKIM.getInstance().getMsgManager().removeNewMsgListener("system");
     }
+
+
 }

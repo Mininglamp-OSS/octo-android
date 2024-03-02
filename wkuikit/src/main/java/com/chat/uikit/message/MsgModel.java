@@ -340,6 +340,9 @@ public class MsgModel extends WKBaseModel {
             @Override
             public void onSuccess(WKSyncChat result) {
                 if (result != null && !TextUtils.isEmpty(result.uid) && result.uid.equals(WKConfig.getInstance().getUid())) {
+                    if (WKReader.isNotEmpty(result.conversations)) {
+                        WKUIKitApplication.getInstance().isRefreshChatActivityMessage = true;
+                    }
                     iSyncConversationChatBack.onBack(result);
                     last_message_seq = 0;
                     syncCmdMsgs(0);
@@ -514,7 +517,7 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void syncReaction(String channelID, byte channelType) {
-        long maxSeq = WKIM.getInstance().getMsgManager().getMaxSeqWithChannel(channelID, channelType);
+        long maxSeq = WKIM.getInstance().getMsgManager().getMaxReactionSeqWithChannel(channelID, channelType);
         syncReaction(channelID, channelType, maxSeq);
     }
 
@@ -704,12 +707,12 @@ public class MsgModel extends WKBaseModel {
         WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
             @Override
             public void onSuccess(String url) {
-                iCommonListener.onResult(HttpResponseCode.success,"");
+                iCommonListener.onResult(HttpResponseCode.success, "");
             }
 
             @Override
             public void onError() {
-                iCommonListener.onResult(HttpResponseCode.error,"");
+                iCommonListener.onResult(HttpResponseCode.error, "");
             }
         });
     }

@@ -8,6 +8,7 @@ import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.os.Build;
@@ -104,7 +105,9 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.entity.WKReminder;
+import com.xinbida.wukongim.interfaces.IConnectionStatus;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
+import com.xinbida.wukongim.message.type.WKConnectStatus;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
@@ -148,6 +151,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
     private int redDot = 0;// 未读消息数量
     private int lastVisibleMsgSeq = 0;// 最后可见消息序号
     private int maxMsgSeq = 0;
+    private long maxMsgOrderSeq = 0;
     //回复的消息对象
     private WKMsg replyWKMsg;
     // 编辑对象
@@ -199,7 +203,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         channelId = getIntent().getStringExtra("channelId");
         //频道类型
         channelType = getIntent().getByteExtra("channelType", WKChannelType.PERSONAL);
-
+        maxMsgOrderSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
         maxMsgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(channelId, channelType);
         // 是否含有带转发的消息
         if (getIntent().hasExtra("msgContentList")) {
@@ -487,11 +491,27 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
+                if (chatAdapter.getData().size() <= 1) return;
                 setShowTime();
-
+                // boolean isEnd = true;
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+//                if (lastItemPosition <= chatAdapter.getData().size() - 1) {
+//                    WKUIChatMsgItemEntity uiMsg = chatAdapter.getData().get(lastItemPosition);
+//                    if (uiMsg != null && uiMsg.wkMsg != null) {
+//                        Log.e("编号","-->"+uiMsg.wkMsg.orderSeq+"_"+maxMsgOrderSeq);
+//                        if (uiMsg.wkMsg.orderSeq < maxMsgOrderSeq) {
+//                            isEnd = false;
+//                        }
+//                    }
+//                }
+//                if (isEnd) {
+//                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, false, true, true));
+//                } else {
+//                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, true, true, true));
+//                }
+
                 if (lastItemPosition < chatAdapter.getItemCount() - 1) {
-                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, dy > 0 || redDot > 0, true, true));
+                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, dy > 0 || redDot > 0 , true, true));
                 } else {
                     wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, true));
                 }
@@ -863,7 +883,7 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                         if (isToEnd) {
                             scrollToEnd();
                         }
-                        WKIM.getInstance().getMsgManager().saveMsg(noRelationMsg);
+                        WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(noRelationMsg, false);
                     }
 
                     break;
@@ -884,6 +904,9 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         //监听发送消息返回
         WKIM.getInstance().getMsgManager().addOnSendMsgCallback(channelId, msg -> {
             if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {
+                if (msg.orderSeq > maxMsgOrderSeq) {
+                    maxMsgOrderSeq = msg.orderSeq;
+                }
                 WKMsg timeMsg = addTimeMsg(msg.timestamp);
                 //判断当前会话是否存在正在输入
                 int index = chatAdapter.getData().size() - 1;
@@ -960,6 +983,9 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                                 if (msg.messageSeq > maxMsgSeq) {
                                     maxMsgSeq = msg.messageSeq;
                                 }
+                                if (msg.orderSeq > maxMsgOrderSeq) {
+                                    maxMsgOrderSeq = msg.orderSeq;
+                                }
                                 if (previousMsgIndex != -1) {
                                     chatAdapter.notifyBackground(previousMsgIndex);
                                 }
@@ -1004,7 +1030,32 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
             }
             return null;
         });
-
+        WKIM.getInstance().getConnectionManager().addOnConnectionStatusListener(channelId, new IConnectionStatus() {
+            @Override
+            public void onStatus(int i, String s) {
+                if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
+                    WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
+                    int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+                    int endItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+//                    long keepMsgSeq = 0;
+//                    int offsetY = 0;
+//                    long lastPreviewMsgOrderSeq=0;
+                    if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                        WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
+                        if (msg != null) {
+//                            keepMsgSeq = msg.messageSeq;
+                            lastPreviewMsgOrderSeq = msg.orderSeq;
+                            int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
+                            View view = linearLayoutManager.findViewByPosition(index);
+                            if (view != null) {
+                                keepOffsetY = view.getTop();
+                            }
+                        }
+                    }
+                    getData(1, true, lastPreviewMsgOrderSeq, false);
+                }
+            }
+        });
     }
 
     @Override
@@ -1060,6 +1111,12 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 }
                 if (channel.category.equals(WKSystemAccount.accountCategoryVisitor)) {
                     wkVBinding.topLayout.categoryLayout.addView(Theme.getChannelCategoryTV(this, getString(R.string.visitor), ContextCompat.getColor(this, R.color.transparent), ContextCompat.getColor(this, R.color.colorFFC107), ContextCompat.getColor(this, R.color.colorFFC107)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
+                }
+                if (channel.category.equals(WKSystemAccount.channelCategoryOrganization)) {
+                    wkVBinding.topLayout.categoryLayout.addView(Theme.getChannelCategoryTV(this, getString(R.string.all_staff), ContextCompat.getColor(this, R.color.category_org_bg), ContextCompat.getColor(this, R.color.category_org_text), ContextCompat.getColor(this, R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
+                }
+                if (channel.category.equals(WKSystemAccount.channelCategoryDepartment)) {
+                    wkVBinding.topLayout.categoryLayout.addView(Theme.getChannelCategoryTV(this, getString(R.string.department), ContextCompat.getColor(this, R.color.category_org_bg), ContextCompat.getColor(this, R.color.category_org_text), ContextCompat.getColor(this, R.color.transparent)), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 5, 1, 0, 0));
                 }
             }
             showChannelName(channel);
@@ -2173,5 +2230,22 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
         List<PopupMenuItem> list = new ArrayList<>();
         list.add(item);
         return list;
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        float density = getResources().getDisplayMetrics().density;
+        AndroidUtilities.setDensity(density);
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            // 横屏
+            AndroidUtilities.isPORTRAIT = false;
+            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            // 竖屏
+            AndroidUtilities.isPORTRAIT = true;
+            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
+        }
+
     }
 }

@@ -127,6 +127,7 @@ public class WKUIKitApplication {
     int totalMsgCount = 0;
     public String chattingChannelID;
     public SensitiveWords sensitiveWords;
+    public boolean isRefreshChatActivityMessage = false;
 
     private WKUIKitApplication() {
     }
@@ -347,7 +348,7 @@ public class WKUIKitApplication {
             return null;
         });
         //选择会话
-        EndpointManager.getInstance().setMethod("chat_show_choose_chat", object -> {
+        EndpointManager.getInstance().setMethod(EndpointSID.showChooseChatView, object -> {
             ChooseChatMenu messageContent = (ChooseChatMenu) object;
             Intent intent = new Intent(mContext.get(), ChooseChatActivity.class);
             intent.putExtra("isChoose", true);
@@ -529,6 +530,7 @@ public class WKUIKitApplication {
                         @Override
                         public void onBack(List<ChooseResult> paths) {
                             if (paths.size() == 1 && paths.get(0).model == ChooseResultModel.video) {
+//                                EndpointManager.getInstance().invoke("videoCompress",paths.get(0).path);
                                 WKVideoContent videoContent = new WKVideoContent();
                                 videoContent.coverLocalPath = WKMediaFileUtils.getInstance().getVideoCover(paths.get(0).path);
                                 videoContent.localPath = paths.get(0).path;

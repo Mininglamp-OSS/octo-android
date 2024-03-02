@@ -56,7 +56,6 @@
     <string name="user_card">Contact Card</string>
     <string name="send_msg">Chat</string>
     <string name="setting">Setting</string>
-    <string name="open_notice">Open Notice</string>
     <string name="group_qr_desc">Valid until %d(%s) and will update upon joining group</string>
     <string name="fullStaffing">FullStaffing</string>
     <string name="start_group_chat">New Chat</string>
@@ -228,7 +227,7 @@
     <string name="non_friend_relationship">Non friend relationship</string>
     <string name="standard">Standard</string>
     <string name="wk_system_notice">System Notice</string>
-    <string name="customer_service">CSR</string>
+    <string name="customer_service">Customer service</string>
     <string name="visitor">Visitor</string>
     <string name="clear_all_remind">Read all mentions</string>
     <string name="burn_after_reading">Burn after Reading</string>
@@ -270,5 +269,15 @@
     <string name="clear_history">Clear history</string>
     <string name="all_staff">All Staff</string>
     <string name="department">Department</string>
+    <string name="community">Community</string>
+    <string name="invite_call">Invitation call</string>
+    <string name="new_msg_notification">New message notification</string>
+    <string name="new_rtc_notification">New call notification</string>
+    <string name="new_msg_notification_desc">Accept push notifications for new messages</string>
+    <string name="new_rtc_notification_desc">Accept push notifications for new call</string>
+    <string name="open_new_msg_notice">Open new message notifications</string>
+    <string name="open_new_msg_notice_desc">Open New Message notifications</string>
+    <string name="open_new_rtc_notice">Open audio and video invitation notifications</string>
+    <string name="open_new_rtc_notice_desc">In the category classification of the system notification permission page, open the \'Audio and Video Invitation Notification\' page, enable \'Allow Notification\' and \'Vibration\', and select the \'Sound\' option</string>
 </resources>
 

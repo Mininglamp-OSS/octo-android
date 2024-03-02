@@ -175,10 +175,6 @@ class TSApplication : MultiDexApplication() {
             }
             null
         }
-        EndpointManager.getInstance().setMethod("play_new_msg_Media") {
-            WKPlaySound.getInstance().playRecordMsg(R.raw.newmsg)
-            null
-        }
     }
 
 

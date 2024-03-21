@@ -113,11 +113,11 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             wkVBinding.groupAvatarLayout.addView(groupAvatarLayout);
         }
 
-        View groupManagerLayout = (View) EndpointManager.getInstance().invoke("group_manager_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.groupAvatarLayout));
+        View groupManagerLayout = (View) EndpointManager.getInstance().invoke("group_manager_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.groupManageLayout));
         if (groupManagerLayout != null) {
             wkVBinding.groupManageLayout.addView(groupManagerLayout);
         }
-        View chatPwdView = (View) EndpointManager.getInstance().invoke("chat_pwd_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.groupAvatarLayout));
+        View chatPwdView = (View) EndpointManager.getInstance().invoke("chat_pwd_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.chatPwdView));
         if (chatPwdView != null) {
             wkVBinding.chatPwdView.addView(chatPwdView);
         }

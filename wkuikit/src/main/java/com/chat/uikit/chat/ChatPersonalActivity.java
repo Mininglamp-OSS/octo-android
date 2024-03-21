@@ -77,7 +77,7 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
         }
 
-        View chatPwdView = (View) EndpointManager.getInstance().invoke("chat_pwd_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgSettingLayout));
+        View chatPwdView = (View) EndpointManager.getInstance().invoke("chat_pwd_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.chatPwdView));
         if (chatPwdView != null) {
             wkVBinding.chatPwdView.addView(chatPwdView);
         }

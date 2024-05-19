@@ -154,7 +154,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     @Override
     protected String getRightBtnText(Button titleRightBtn) {
         this.rightBtn = titleRightBtn;
-        CommonAnim.getInstance().showOrHide(this.rightBtn, false);
+        CommonAnim.getInstance().showOrHide(this.rightBtn, false,false,true);
         return getString(R.string.sure);
     }
 
@@ -185,7 +185,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
             }
             showTitleRightLoading();
             rightBtn.setVisibility(View.GONE);
-            CommonAnim.getInstance().showOrHide(rightBtn, false);
+            CommonAnim.getInstance().showOrHide(rightBtn, false,false,true);
             if (type == 0) {
                 if (ids.size() == 1) {
                     WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, ids.get(0), WKChannelType.PERSONAL, 0, true, msgContentList));
@@ -197,7 +197,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                             WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, groupEntity.group_no, WKChannelType.GROUP, 0, true, msgContentList));
                             finish();
                         } else {
-                            CommonAnim.getInstance().showOrHide(rightBtn, true);
+                            CommonAnim.getInstance().showOrHide(rightBtn, true,true,false);
                             hideTitleRightLoading();
                             showToast(msg);
                         }
@@ -234,7 +234,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                             finish();
                         } else {
                             hideTitleRightLoading();
-                            CommonAnim.getInstance().showOrHide(rightBtn, true);
+                            CommonAnim.getInstance().showOrHide(rightBtn, true,false,true);
                             showToast(msg);
                         }
                     });
@@ -461,13 +461,13 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     private void checkSelect() {
         int count = selectedAdapter.getData().size() - 1;
         if (count > 0 || type == 2) {
-            CommonAnim.getInstance().showOrHide(rightBtn, true);
+            CommonAnim.getInstance().showOrHide(rightBtn, true,true,false);
             if (count > 0)
                 rightBtn.setText(String.format("%s(%s)", getString(R.string.sure), count));
             else rightBtn.setText(R.string.sure);
         } else {
             rightBtn.setText(R.string.sure);
-            CommonAnim.getInstance().showOrHide(rightBtn, false);
+            CommonAnim.getInstance().showOrHide(rightBtn, false,true,true);
         }
     }
 }

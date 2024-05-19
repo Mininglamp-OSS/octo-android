@@ -1415,10 +1415,10 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                 isRefreshLoading = false;
                 isMoreLoading = false;
                 if (pullMode == 0) {
-                    if (WKReader.isEmpty(list) || list.size() < limit)
+                    if (WKReader.isEmpty(list) )
                         isCanRefresh = false;
                 } else {
-                    if (WKReader.isEmpty(list) || list.size() < limit) {
+                    if (WKReader.isEmpty(list) ) {
                         isCanLoadMore = false;
                     }
                 }

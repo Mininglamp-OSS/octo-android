@@ -6,6 +6,7 @@ import android.database.Cursor;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.db.WKCursor;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.enity.MailListEntity;
 
 import java.util.ArrayList;
@@ -54,7 +55,7 @@ public class WKContactsDB {
     }
 
     public void save(List<MailListEntity> list) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         try {
             WKBaseApplication.getInstance().getDbHelper().getDB().beginTransaction();
             for (int i = 0, size = list.size(); i < size; i++) {

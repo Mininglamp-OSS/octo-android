@@ -63,7 +63,7 @@ public class GroupNoticeActivity extends WKBaseActivity<ActGroupNoticeLayoutBind
     protected void rightLayoutClick() {
         super.rightLayoutClick();
         String content = Objects.requireNonNull(wkVBinding.contentEt.getText()).toString();
-        content = content.replaceAll(" ", "");
+//        content = StringUtils.replaceBlank(content);
         if ((!TextUtils.isEmpty(oldNotice) && content.equals(oldNotice))) {
             return;
         }
@@ -76,11 +76,6 @@ public class GroupNoticeActivity extends WKBaseActivity<ActGroupNoticeLayoutBind
                 showToast(msg);
             }
         });
-    }
-
-    @Override
-    protected void initPresenter() {
-
     }
 
     @SuppressLint("ClickableViewAccessibility")

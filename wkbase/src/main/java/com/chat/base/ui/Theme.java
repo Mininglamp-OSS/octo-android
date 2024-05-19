@@ -56,6 +56,7 @@ public class Theme {
     public static int colorCCC = 0xFFCCCCCC;
     public static int pressedColor = 0xff8c9197;
     private static final Paint maskPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     public static final String LIGHT_MODE = "light";
     public static final String DARK_MODE = "dark";
     public static final String DEFAULT_MODE = "default";

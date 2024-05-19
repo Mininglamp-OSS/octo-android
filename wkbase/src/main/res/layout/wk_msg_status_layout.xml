@@ -6,7 +6,18 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:paddingStart="5dp"
+    android:animateLayoutChanges="true"
     android:paddingEnd="5dp">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/pinIV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="3dp"
+        android:src="@mipmap/msg_pin_mini"
+        android:tint="@color/color999"
+        android:visibility="visible" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/editedTv"
@@ -16,10 +27,9 @@
         android:layout_marginEnd="2dp"
         android:text="@string/edited"
         android:textColor="@color/color999"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:visibility="gone"
         tools:ignore="SmallSp" />
-
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/msgTimeTv"

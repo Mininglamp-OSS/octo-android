@@ -8,7 +8,7 @@ import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.uikit.R
 
-class WKEmptyProvider: WKChatBaseProvider() {
+class WKEmptyProvider : WKChatBaseProvider() {
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
         return null
     }
@@ -18,8 +18,7 @@ class WKEmptyProvider: WKChatBaseProvider() {
         parentView: View,
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         from: WKChatIteMsgFromType
-    ) {
-    }
+    ) { }
 
     override val itemViewType: Int
         get() = WKContentType.emptyView

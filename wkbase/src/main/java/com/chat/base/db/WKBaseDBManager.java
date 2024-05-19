@@ -11,6 +11,8 @@ import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.DBMenu;
+import com.chat.base.utils.WKLogUtils;
+import com.chat.base.utils.WKReader;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -43,7 +45,7 @@ public class WKBaseDBManager {
         long tempIndex = maxIndex;
         for (Long key : map.keySet()) {
             List<String> list = map.get(key);
-            if (key > maxIndex && list != null && list.size() > 0) {
+            if (key > maxIndex && WKReader.isNotEmpty(list)) {
                 for (String sql : list) {
                     if (!TextUtils.isEmpty(sql)) {
                         db.execSQL(sql);
@@ -93,7 +95,7 @@ public class WKBaseDBManager {
 
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                WKLogUtils.e("读取sql错误");
             }
         }
         return sqlList;

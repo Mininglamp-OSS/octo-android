@@ -62,6 +62,9 @@ public class WKUIChatMsgItemEntity {
     public WKMsg nextMsg; // 下一条消息
     public boolean isUpdateStatus;
     public boolean isRefreshReaction;
+    public boolean isRefreshAvatarAndName;
+    public boolean isShowPinnedMessage;
+    public int isPinned = 0;
     //=========本地数据========
     public ILinkClick iLinkClick;
     public SpannableStringBuilder displaySpans;

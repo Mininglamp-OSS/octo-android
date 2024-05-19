@@ -7,6 +7,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.robot.entity.WKRobotEntity;
 import com.chat.uikit.robot.entity.WKRobotInlineQueryResult;
 import com.chat.uikit.robot.entity.WKRobotMenuEntity;
@@ -56,13 +57,13 @@ public class WKRobotModel extends WKBaseModel {
         }
         if (channel.channelType == WKChannelType.GROUP) {
             List<WKChannelMember> memberList = WKIM.getInstance().getChannelMembersManager().getRobotMembers(channel.channelID, channel.channelType);
-            if (memberList != null && memberList.size() > 0) {
+            if (WKReader.isNotEmpty(memberList)) {
                 List<String> robotIds = new ArrayList<>();
                 for (WKChannelMember member : memberList) {
                     robotIds.add(member.memberUID);
                 }
                 List<WKRobot> robotList = WKIM.getInstance().getRobotManager().getWithRobotIds(robotIds);
-                if (robotList != null && robotList.size() > 0) {
+                if (WKReader.isNotEmpty(robotList)) {
                     for (String robotID : robotIds) {
                         long version = 0;
                         for (WKRobot robot : robotList) {
@@ -81,7 +82,7 @@ public class WKRobotModel extends WKBaseModel {
                 isSync = true;
             }
         }
-        if (isSync && list.size() > 0) {
+        if (isSync && WKReader.isNotEmpty(list)) {
             WKRobotModel.getInstance().syncRobot(1, list);
         }
     }
@@ -102,7 +103,7 @@ public class WKRobotModel extends WKBaseModel {
             public void onSuccess(List<WKSyncRobotEntity> result) {
                 List<WKRobot> robotList = new ArrayList<>();
                 List<WKRobotMenu> menuList = new ArrayList<>();
-                if (result != null && result.size() > 0) {
+                if (WKReader.isNotEmpty(result)) {
                     for (WKSyncRobotEntity entity : result) {
                         WKRobot robot = new WKRobot();
                         robot.username = entity.username;
@@ -115,7 +116,7 @@ public class WKRobotModel extends WKBaseModel {
                         robot.createdAT = entity.created_at;
                         robotList.add(robot);
 
-                        if (entity.menus != null && entity.menus.size() > 0) {
+                        if (WKReader.isNotEmpty(entity.menus)) {
                             for (WKRobotMenuEntity mRobotMenuEntity : entity.menus) {
                                 WKRobotMenu menu = new WKRobotMenu();
                                 menu.cmd = mRobotMenuEntity.cmd;
@@ -158,20 +159,20 @@ public class WKRobotModel extends WKBaseModel {
             }
         } else {
             List<WKChannelMember> memberList = WKIM.getInstance().getChannelMembersManager().getRobotMembers(channelID, channelType);
-            if (memberList != null && memberList.size() > 0) {
+            if (WKReader.isNotEmpty(memberList)) {
                 List<String> robotIds = new ArrayList<>();
                 for (WKChannelMember member : memberList) {
                     if (!TextUtils.isEmpty(member.memberUID) && member.robot == 1) {
                         robotIds.add(member.memberUID);
                     }
                 }
-                if (robotIds.size() > 0) {
+                if (WKReader.isNotEmpty(robotIds)) {
                     HashMap<String, List<WKRobotMenuEntity>> hashMap = new HashMap<>();
                     List<WKRobot> robotList = WKIM.getInstance().getRobotManager().getWithRobotIds(robotIds);
                     List<WKRobotMenu> menuList = WKIM.getInstance().getRobotManager().getRobotMenus(robotIds);
                     for (WKRobotMenu menu : menuList) {
                         boolean isAddMenu = true;
-                        if (robotList != null && robotList.size() > 0) {
+                        if (WKReader.isNotEmpty(robotList)) {
                             for (WKRobot robot : robotList) {
                                 if (menu.robotID.equals(robot.robotID)) {
                                     if (robot.status == 0) {

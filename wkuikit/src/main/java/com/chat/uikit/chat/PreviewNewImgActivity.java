@@ -14,6 +14,7 @@ import com.chat.base.endpoint.entity.EditImgMenu;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.WKPermissions;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActPreviewNewImgLayoutBinding;
 
@@ -44,7 +45,7 @@ public class PreviewNewImgActivity extends WKBaseActivity<ActPreviewNewImgLayout
     protected void rightLayoutClick() {
         super.rightLayoutClick();
         GlideUtils.getInstance().compressImg(this, path, files -> {
-            if (files != null && files.size() > 0) {
+            if (WKReader.isNotEmpty(files)) {
                 Intent intent = new Intent();
                 intent.putExtra("path", files.get(0).getAbsolutePath());
                 setResult(RESULT_OK, intent);

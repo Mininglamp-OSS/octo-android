@@ -8,6 +8,7 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 
+import com.chat.base.utils.WKReader;
 import com.tencent.smtt.sdk.WebView;
 
 import java.net.URLEncoder;
@@ -168,14 +169,14 @@ public class BridgeWebView extends WebView implements WebViewJavascriptBridge {
                 @Override
                 public void onCallBack(String data) {
                     // deserializeMessage 反序列化消息
-                    List<Message> list = null;
+                    List<Message> list;
                     try {
                         list = Message.toArrayList(data);
                     } catch (Exception e) {
                         e.printStackTrace();
                         return;
                     }
-                    if (list == null || list.size() == 0) {
+                    if (WKReader.isEmpty(list)) {
                         return;
                     }
                     for (int i = 0; i < list.size(); i++) {

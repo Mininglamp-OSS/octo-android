@@ -35,9 +35,6 @@ public class WKSystemTeamActivity extends WKBaseActivity<ActSystemTeamLayoutBind
         titleTv.setText("");
     }
 
-    @Override
-    protected void initPresenter() {
-    }
 
     @Override
     protected void initView() {
@@ -46,7 +43,7 @@ public class WKSystemTeamActivity extends WKBaseActivity<ActSystemTeamLayoutBind
         WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(WKSystemAccount.system_team, WKChannelType.PERSONAL);
         if (channel != null) {
             wkVBinding.nameTv.setText(channel.channelName);
-            wkVBinding.appIdNumTv.setText(WKSystemAccount.system_team);
+            wkVBinding.appIdNumTv.setText(WKSystemAccount.system_team_short_no);
         }
         wkVBinding.nameTv.setText(R.string.wk_system_notice);
         wkVBinding.avatarView.setSize(70);

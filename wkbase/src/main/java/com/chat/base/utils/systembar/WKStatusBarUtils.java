@@ -17,6 +17,8 @@ import android.view.WindowManager;
 
 import androidx.annotation.ColorInt;
 
+import com.chat.base.utils.AndroidUtilities;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.UUID;
@@ -186,8 +188,22 @@ public class WKStatusBarUtils {
      * @return
      */
     public static int getStatusBarHeight(Context context) {
-        int resourceId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
-        return context.getResources().getDimensionPixelSize(resourceId);
+        int result = 0;
+        try {
+            Class<?> c = Class.forName("com.android.internal.R$dimen");
+            Object o = c.newInstance();
+            Field field = c.getField("status_bar_height");
+            int x = (Integer) field.get(o);
+            result = context.getResources().getDimensionPixelSize(x);
+        } catch (Exception var6) {
+            var6.printStackTrace();
+        }
+
+        if (result == 0) {
+            result = AndroidUtilities.dp(25.0F);
+        }
+
+        return result;
     }
 
     /**

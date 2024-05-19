@@ -72,6 +72,6 @@ class WKCardProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
-        addLongClick(contentLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(contentLayout, uiChatMsgItemEntity)
     }
 }

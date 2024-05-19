@@ -19,6 +19,7 @@ import retrofit2.http.GET;
 import retrofit2.http.POST;
 import retrofit2.http.PUT;
 import retrofit2.http.Path;
+import retrofit2.http.Query;
 
 /**
  * 2020-07-20 18:02
@@ -26,7 +27,7 @@ import retrofit2.http.Path;
  */
 public interface UserService {
     @GET("users/{uid}")
-    Observable<UserInfo> getUserInfo(@Path("uid") String uid);
+    Observable<UserInfo> getUserInfo(@Path("uid") String uid, @Query("group_no") String groupNo);
 
     @PUT("user/current")
     Observable<CommonResponse> updateUserInfo(@Body JSONObject jsonObject);

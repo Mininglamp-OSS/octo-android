@@ -164,7 +164,7 @@ class WKImageProvider : WKChatBaseProvider() {
 
                 })
         }
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+        addLongClick(imageView, uiChatMsgItemEntity)
         imageView.setOnClickListener {
             onImageClick(
                 uiChatMsgItemEntity,
@@ -387,7 +387,7 @@ class WKImageProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
-        addLongClick(imageView, uiChatMsgItemEntity.wkMsg)
+        addLongClick(imageView, uiChatMsgItemEntity)
     }
 
     override fun resetCellBackground(

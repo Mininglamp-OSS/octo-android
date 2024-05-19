@@ -374,7 +374,7 @@ class WKVoiceProvider : WKChatBaseProvider() {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val voiceLayout = parentView.findViewById<BubbleLayout>(R.id.voiceLayout)
         val playBtn = parentView.findViewById<CircleProgress>(R.id.playBtn)
-        addLongClick(voiceLayout, uiChatMsgItemEntity.wkMsg)
-        addLongClick(playBtn, uiChatMsgItemEntity.wkMsg)
+        addLongClick(voiceLayout, uiChatMsgItemEntity)
+        addLongClick(playBtn, uiChatMsgItemEntity)
     }
 }

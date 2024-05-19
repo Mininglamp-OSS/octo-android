@@ -1,9 +1,10 @@
 package com.chat.base.msgitem
 
 import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
+import android.animation.ArgbEvaluator
 import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.PorterDuff
@@ -11,12 +12,23 @@ import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.text.TextUtils
 import android.util.Log
-import android.view.*
-import android.view.View.*
+import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.View.GONE
+import android.view.View.INVISIBLE
+import android.view.View.MeasureSpec
+import android.view.View.OnTouchListener
+import android.view.View.TRANSLATION_X
+import android.view.View.VISIBLE
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
 import com.chad.library.adapter.base.provider.BaseItemProvider
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
@@ -27,14 +39,35 @@ import com.chat.base.config.WKConstants
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.EndpointSID
-import com.chat.base.endpoint.entity.*
+import com.chat.base.endpoint.entity.CanReactionMenu
+import com.chat.base.endpoint.entity.ChatChooseContacts
+import com.chat.base.endpoint.entity.ChatItemPopupMenu
+import com.chat.base.endpoint.entity.ChooseChatMenu
+import com.chat.base.endpoint.entity.MsgConfig
+import com.chat.base.endpoint.entity.MsgReactionMenu
+import com.chat.base.endpoint.entity.PrivacyMessageMenu
+import com.chat.base.endpoint.entity.ReadMsgDetailMenu
+import com.chat.base.endpoint.entity.ShowMsgReactionMenu
+import com.chat.base.endpoint.entity.WithdrawMsgMenu
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.msg.ChatAdapter
 import com.chat.base.ui.Theme
-import com.chat.base.ui.components.*
+import com.chat.base.ui.components.ActionBarMenuSubItem
+import com.chat.base.ui.components.ActionBarPopupWindow
 import com.chat.base.ui.components.ActionBarPopupWindow.ActionBarPopupWindowLayout
+import com.chat.base.ui.components.AvatarView
+import com.chat.base.ui.components.ChatScrimPopupContainerLayout
+import com.chat.base.ui.components.CheckBox
+import com.chat.base.ui.components.PopupSwipeBackLayout
+import com.chat.base.ui.components.ReactionsContainerLayout
 import com.chat.base.ui.components.ReactionsContainerLayout.ReactionsContainerDelegate
-import com.chat.base.utils.*
+import com.chat.base.ui.components.SecretDeleteTimer
+import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.LayoutHelper
+import com.chat.base.utils.StringUtils
+import com.chat.base.utils.WKDialogUtils
+import com.chat.base.utils.WKTimeUtils
+import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.ChatItemView
 import com.google.android.material.snackbar.Snackbar
 import com.xinbida.wukongim.WKIM
@@ -46,9 +79,10 @@ import com.xinbida.wukongim.message.type.WKSendMsgResult
 import com.xinbida.wukongim.msgmodel.WKVoiceContent
 import org.telegram.ui.Components.RLottieDrawable
 import org.telegram.ui.Components.RLottieImageView
-import java.util.*
+import java.util.Objects
 import kotlin.math.abs
 import kotlin.math.max
+
 
 abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
@@ -71,6 +105,20 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     msgItemEntity.wkMsg.reactionList
                 )
             )
+        }
+        if (msgItemEntity.isRefreshAvatarAndName && helper.getViewOrNull<AvatarView>(R.id.avatarView) != null) {
+            val avatarView = helper.getView<AvatarView>(R.id.avatarView)
+            setAvatar(msgItemEntity, avatarView)
+            val from = getMsgFromType(msgItemEntity.wkMsg)
+            if (helper.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
+                setFromName(msgItemEntity, from, helper.getView(R.id.receivedNameTv))
+            } else {
+                if (helper.getViewOrNull<View>(R.id.wkBaseContentLayout) != null) {
+                    val baseView = helper.getView<LinearLayout>(R.id.wkBaseContentLayout)
+                    resetFromName(helper.bindingAdapterPosition, baseView, msgItemEntity, from)
+                }
+            }
+            msgItemEntity.isRefreshReaction = false
         }
     }
 
@@ -115,6 +163,14 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
     }
 
+    open fun resetFromName(
+        position: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+    }
+
     open fun getMsgFromType(wkMsg: WKMsg?): WKChatIteMsgFromType {
         val from: WKChatIteMsgFromType = if (wkMsg != null) {
             if (!TextUtils.isEmpty(wkMsg.fromUID)
@@ -139,18 +195,17 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
             // 提示本条消息
             if (msgItemEntity.isShowTips) {
-                val animator =
-                    ObjectAnimator.ofFloat(viewGroupLayout, "translationX", 0f, 50f, -50f, 0f)
-                animator.duration = 800
-                animator.repeatCount = 1
-                animator.start()
-                animator.addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        super.onAnimationEnd(animation)
-                        msgItemEntity.isShowTips = false
-                        getAdapter()!!.notifyItemChanged(baseViewHolder.bindingAdapterPosition)
-                    }
-                })
+                val colorAnimation = ValueAnimator.ofObject(
+                    ArgbEvaluator(),
+                    ContextCompat.getColor(context, R.color.tip_message_cell_bg),
+                    ContextCompat.getColor(context, R.color.transparent)
+                )
+                colorAnimation.setDuration(1000)
+                colorAnimation.addUpdateListener { animator ->
+                    viewGroupLayout.setBackgroundColor(animator.animatedValue as Int)
+                }
+                colorAnimation.start()
+                msgItemEntity.isShowTips = false
             }
             setItemPadding(baseViewHolder.bindingAdapterPosition, viewGroupLayout)
             viewGroupLayout.setOnClickListener {
@@ -243,6 +298,55 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     deleteTimer.visibility = INVISIBLE
                 } else deleteTimer.visibility = VISIBLE
             }
+
+            if (msgItemEntity.isShowPinnedMessage) {
+                val openMessageFrameLayout = FrameLayout(context)
+                openMessageFrameLayout.background =
+                    ContextCompat.getDrawable(context, R.drawable.shape_corner_rectangle)
+                val openMessageImageView = AppCompatImageView(context)
+                openMessageImageView.setImageResource(R.mipmap.filled_open_message)
+                openMessageFrameLayout.addView(
+                    openMessageImageView,
+                    LayoutHelper.createFrame(25, 25, Gravity.CENTER)
+                )
+                if (from == WKChatIteMsgFromType.RECEIVED) {
+                    baseView.addView(
+                        openMessageFrameLayout,
+                        LayoutHelper.createLinear(
+                            30,
+                            30,
+                            Gravity.CENTER or Gravity.BOTTOM,
+                            5,
+                            0,
+                            0,
+                            0
+                        )
+                    )
+                } else {
+                    baseView.addView(
+                        openMessageFrameLayout,
+                        0,
+                        LayoutHelper.createLinear(
+                            30,
+                            30,
+                            Gravity.CENTER or Gravity.BOTTOM,
+                            0,
+                            0,
+                            5,
+                            0
+                        )
+                    )
+
+                }
+                openMessageFrameLayout.setOnClickListener {
+                    EndpointManager.getInstance()
+                        .invoke("tip_msg_in_chat", msgItemEntity.wkMsg.clientMsgNO)
+                    val chatAdapter = getAdapter() as ChatAdapter
+                    chatAdapter.conversationContext.closeActivity()
+                }
+            }
+
+
             setData(baseViewHolder.bindingAdapterPosition, baseView, msgItemEntity, from)
             if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
                 setFromName(msgItemEntity, from, baseViewHolder.getView(R.id.receivedNameTv))
@@ -371,13 +475,15 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             if (TextUtils.isEmpty(showName)) {
                 if (uiChatMsgItemEntity.wkMsg.memberOfFrom != null) {
                     showName = uiChatMsgItemEntity.wkMsg.memberOfFrom.remark
-                    if (TextUtils.isEmpty(showName))
-                        showName =
-                            if (TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark)) uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName else uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark
-                } else {
-                    if (uiChatMsgItemEntity.wkMsg.from != null) {
-                        showName = uiChatMsgItemEntity.wkMsg.from.channelName
+                    if (TextUtils.isEmpty(showName)) {
+                        showName = uiChatMsgItemEntity.wkMsg.memberOfFrom.memberRemark
                     }
+                }
+                if (TextUtils.isEmpty(showName) && uiChatMsgItemEntity.wkMsg.from != null) {
+                    showName = uiChatMsgItemEntity.wkMsg.from.channelName
+                }
+                if (TextUtils.isEmpty(showName) && uiChatMsgItemEntity.wkMsg.memberOfFrom != null) {
+                    showName = uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName
                 }
             }
             val os = getMsgFromOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
@@ -500,19 +606,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
 
         if (uiChatMsgItemEntity.wkMsg != null && avatarView.visibility == VISIBLE) {
-            if (uiChatMsgItemEntity.wkMsg.from != null) {
-                avatarView.showAvatar(uiChatMsgItemEntity.wkMsg.from)
-            } else {
-                WKIM.getInstance().channelManager.fetchChannelInfo(
-                    uiChatMsgItemEntity.wkMsg.fromUID,
-                    WKChannelType.PERSONAL
-                )
-                avatarView.showAvatar(
-                    uiChatMsgItemEntity.wkMsg.fromUID,
-                    WKChannelType.PERSONAL,
-                    false
-                )
-            }
+            setAvatar(uiChatMsgItemEntity, avatarView)
         }
     }
 
@@ -542,8 +636,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         ) {
             isBubble = true
         }
-        val itemProvider =
-            WKMsgItemViewManager.getInstance().getItemProvider(uiChatMsgItemEntity.wkMsg.type)
+        val itemProvider = if (!uiChatMsgItemEntity.isShowPinnedMessage)
+            WKMsgItemViewManager.getInstance()
+                .getItemProvider(uiChatMsgItemEntity.wkMsg.type) else WKMsgItemViewManager.getInstance()
+            .getPinnedItemProvider(uiChatMsgItemEntity.wkMsg.type)
         if (itemProvider == null) {
             isBubble = true
         }
@@ -566,6 +662,24 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         fullContentLayout.layoutParams = fullContentLayoutParams
     }
 
+    open fun setAvatar(uiChatMsgItemEntity: WKUIChatMsgItemEntity, avatarView: AvatarView) {
+
+        if (uiChatMsgItemEntity.wkMsg.from != null) {
+            avatarView.showAvatar(uiChatMsgItemEntity.wkMsg.from)
+        } else {
+            WKIM.getInstance().channelManager.fetchChannelInfo(
+                uiChatMsgItemEntity.wkMsg.fromUID,
+                WKChannelType.PERSONAL
+            )
+            avatarView.showAvatar(
+                uiChatMsgItemEntity.wkMsg.fromUID,
+                WKChannelType.PERSONAL,
+                false
+            )
+        }
+
+    }
+
     open fun setMsgTimeAndStatus(
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         parentView: View,
@@ -576,14 +690,20 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val msgTimeTv = parentView.findViewById<TextView>(R.id.msgTimeTv)
         val editedTv = parentView.findViewById<TextView>(R.id.editedTv)
         val statusIV = parentView.findViewById<RLottieImageView>(R.id.statusIV)
+        val pinIV = parentView.findViewById<AppCompatImageView>(R.id.pinIV)
         if (msgTimeTv == null || mMsg == null) return
         var msgTime = mMsg.timestamp
-        if (mMsg.remoteExtra != null && mMsg.remoteExtra.editedAt != 0L) {
-            msgTime = mMsg.remoteExtra.editedAt
-            editedTv.visibility = VISIBLE
+        if (mMsg.remoteExtra != null) {
+            if (mMsg.remoteExtra.editedAt != 0L) {
+                msgTime = mMsg.remoteExtra.editedAt
+                editedTv.visibility = VISIBLE
+            } else {
+                editedTv.visibility = GONE
+            }
         } else {
             editedTv.visibility = GONE
         }
+        pinIV.visibility = if (uiChatMsgItemEntity.isPinned == 1) VISIBLE else GONE
         val timeSpace = WKTimeUtils.getInstance().getTimeSpace(msgTime * 1000)
         val time = WKTimeUtils.getInstance().time2HourStr(msgTime * 1000)
         if (!WKTimeUtils.getInstance().is24Hour) msgTimeTv.text =
@@ -599,6 +719,13 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             isShowNormalColor = true
             msgTimeTv.setTextColor(ContextCompat.getColor(context, R.color.color999))
         }
+        pinIV.colorFilter =
+            PorterDuffColorFilter(
+                ContextCompat.getColor(
+                    context,
+                    if (isShowNormalColor) R.color.color999 else R.color.white
+                ), PorterDuff.Mode.MULTIPLY
+            )
         if (mMsg.remoteExtra.needUpload == 1) mMsg.status = WKSendMsgResult.send_loading
         if (fromType == WKChatIteMsgFromType.SEND) {
             if (mMsg.setting.receipt == 1 && mMsg.remoteExtra.readedCount > 0) {
@@ -697,6 +824,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     }
                 }
             }
+
+
             if (mMsg.status <= WKSendMsgResult.send_success) {
                 statusIV.colorFilter =
                     PorterDuffColorFilter(
@@ -730,15 +859,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
      * @param clickView 需要长按的控件
      */
     @SuppressLint("ClickableViewAccessibility")
-    protected open fun addLongClick(clickView: View, mMsg: WKMsg) {
-        val mMsgConfig: MsgConfig = getMsgConfig(mMsg.type)
+    protected open fun addLongClick(clickView: View, uiChatMsgItemEntity: WKUIChatMsgItemEntity) {
+        if (uiChatMsgItemEntity.isShowPinnedMessage) return
+        val mMsgConfig: MsgConfig = getMsgConfig(uiChatMsgItemEntity.wkMsg.type)
         var isShowReaction = false
         val `object` = EndpointManager.getInstance()
-            .invoke("is_show_reaction", CanReactionMenu(mMsg, mMsgConfig))
+            .invoke("is_show_reaction", CanReactionMenu(uiChatMsgItemEntity.wkMsg, mMsgConfig))
         if (`object` != null) {
             isShowReaction = `object` as Boolean
         }
-        if (mMsg.flame == 1) isShowReaction = false
+        if (uiChatMsgItemEntity.wkMsg.flame == 1) isShowReaction = false
         val finalIsShowReaction = isShowReaction
         val location = arrayOf(FloatArray(2))
         clickView.setOnTouchListener { _: View?, event: MotionEvent ->
@@ -749,7 +879,13 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         clickView.setOnLongClickListener {
             EndpointManager.getInstance().invoke("stop_reaction_animation", null)
-            showChatPopup(mMsg, clickView, location[0], finalIsShowReaction, getPopupList(mMsg))
+            showChatPopup(
+                uiChatMsgItemEntity.wkMsg,
+                clickView,
+                location[0],
+                finalIsShowReaction,
+                getPopupList(uiChatMsgItemEntity.wkMsg)
+            )
             true
         }
 
@@ -790,13 +926,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             EndpointManager.getInstance()
                 .invoke(EndpointCategory.msgConfig + msgType, null) as MsgConfig
         } else {
-            MsgConfig(
-                false,
-                false,
-                false,
-                false,
-                false
-            )
+            MsgConfig(false)
         }
         return mMsgConfig
     }
@@ -804,11 +934,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     var scrimPopupWindow: ActionBarPopupWindow? = null
 
     protected fun getPopupList(mMsg: WKMsg): List<PopupMenuItem> {
+        var isRegisterMsgPrivacyModule = false
+        val obj = EndpointManager.getInstance().invoke("is_register_msg_privacy_module", null)
+        if (obj != null && obj is PrivacyMessageMenu) {
+            isRegisterMsgPrivacyModule = true
+        }
         //防止重复添加
         val list: MutableList<PopupMenuItem> = ArrayList()
         var isAddDelete = true
         val mMsgConfig = getMsgConfig(mMsg.type)
-        if (mMsgConfig.isCanWithdraw && canWithdraw(mMsg)) {
+        if (mMsgConfig.isCanWithdraw && canWithdraw(mMsg) && !isRegisterMsgPrivacyModule) {
             isAddDelete = false
             list.add(
                 0,
@@ -970,15 +1105,94 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             addIndex++
         }
         //撤回和删除不能同时存在
-        if (isAddDelete && mMsg.flame == 0 && result == null) {
+        if (isAddDelete && mMsg.flame == 0 && result == null && isRegisterMsgPrivacyModule) {
             list.add(
                 addIndex,
                 PopupMenuItem(
                     context.getString(R.string.base_delete),
                     R.mipmap.msg_delete, object : PopupMenuItem.IClick {
                         override fun onClick() {
-                            EndpointManager.getInstance().invoke("str_delete_msg", mMsg)
-                            WKIM.getInstance().msgManager.deleteWithClientMsgNO(mMsg.clientMsgNO)
+                            var singleDelete = false
+                            if (mMsg.status != WKSendMsgResult.send_success) {
+                                singleDelete = true
+                            } else {
+                                if (mMsg.channelType == WKChannelType.GROUP) {
+                                    val loginUID = WKConfig.getInstance().uid
+                                    val member = WKIM.getInstance().channelMembersManager.getMember(
+                                        mMsg.channelID,
+                                        mMsg.channelType,
+                                        loginUID
+                                    )
+                                    if (member == null || (member.role == WKChannelMemberRole.normal && (!TextUtils.isEmpty(
+                                            mMsg.fromUID
+                                        ) && mMsg.fromUID != loginUID)
+                                                )
+                                    ) {
+                                        singleDelete = true
+                                    }
+                                }
+                            }
+                            if (obj != null && obj is PrivacyMessageMenu && !singleDelete) {
+                                val checkBoxText: String
+                                if (mMsg.channelType == WKChannelType.GROUP) {
+                                    checkBoxText =
+                                        context.getString(R.string.str_delete_message_for_all)
+                                } else {
+                                    var showName = ""
+                                    val channel = WKIM.getInstance().channelManager.getChannel(
+                                        mMsg.channelID,
+                                        mMsg.channelType
+                                    )
+                                    if (channel != null) {
+                                        showName =
+                                            if (TextUtils.isEmpty(channel.channelRemark)) channel.channelName else channel.channelRemark
+                                    }
+                                    checkBoxText = String.format(
+                                        context.getString(R.string.str_delete_message_also_to),
+                                        showName
+                                    )
+                                }
+                                WKDialogUtils.getInstance().showCheckBoxDialog(
+                                    context,
+                                    context.getString(R.string.str_delete_message),
+                                    context.getString(R.string.str_delete_message_tip),
+                                    checkBoxText,
+                                    true,
+                                    "",
+                                    context.getString(R.string.base_delete),
+                                    0,
+                                    ContextCompat.getColor(context, R.color.red)
+                                ) { index, isChecked ->
+                                    if (index == 1) {
+                                        if (isChecked) {
+                                            obj.iClick.onDelete(mMsg)
+                                        } else {
+                                            EndpointManager.getInstance()
+                                                .invoke("str_delete_msg", mMsg)
+                                            WKIM.getInstance().msgManager.deleteWithClientMsgNO(
+                                                mMsg.clientMsgNO
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                WKDialogUtils.getInstance().showDialog(
+                                    context,
+                                    context.getString(R.string.str_delete_message),
+                                    context.getString(R.string.str_delete_message_tip),
+                                    true,
+                                    "",
+                                    context.getString(R.string.base_delete),
+                                    0,
+                                    ContextCompat.getColor(context, R.color.red)
+                                ) { index ->
+                                    if (index == 1) {
+                                        EndpointManager.getInstance().invoke("str_delete_msg", mMsg)
+                                        WKIM.getInstance().msgManager.deleteWithClientMsgNO(mMsg.clientMsgNO)
+                                    }
+                                }
+
+                            }
                         }
                     })
             )
@@ -1269,16 +1483,20 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val width: Int
         val checkBoxMargin = 30
         var flameWidth = 0
+        var pinnedWidth = 0
         if ((msgItemEntity.wkMsg.flame == 1 && msgItemEntity.wkMsg.flameSecond > 0) && msgItemEntity.wkMsg.type != WKContentType.WK_IMAGE
             && msgItemEntity.wkMsg.type != WKContentType.WK_VIDEO
         ) {
             flameWidth = 30
         }
+        if (msgItemEntity.isShowPinnedMessage) {
+            pinnedWidth = 35
+        }
         width =
             if (fromType == WKChatIteMsgFromType.SEND || msgItemEntity.wkMsg.channelType == WKChannelType.PERSONAL) {
-                maxWidth - AndroidUtilities.dp((70 + checkBoxMargin).toFloat() + flameWidth)
+                maxWidth - AndroidUtilities.dp((70 + checkBoxMargin).toFloat() + flameWidth + pinnedWidth)
             } else {
-                maxWidth - AndroidUtilities.dp((70 + 40 + checkBoxMargin).toFloat() + flameWidth)
+                maxWidth - AndroidUtilities.dp((70 + 40 + checkBoxMargin).toFloat() + flameWidth + pinnedWidth)
             }
         return width
     }
@@ -1338,12 +1556,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             bottom = AndroidUtilities.dp(4f)
         } else {
             top = if (!TextUtils.isEmpty(previousFromUID) && previousFromUID == currentFromUID) {
-                AndroidUtilities.dp(1.5f)
+                AndroidUtilities.dp(1f)
             } else {
                 AndroidUtilities.dp(4f)
             }
             bottom = if (!TextUtils.isEmpty(nextFromUID) && nextFromUID == currentFromUID) {
-                AndroidUtilities.dp(1.5f)
+                AndroidUtilities.dp(1f)
             } else {
                 AndroidUtilities.dp(4f)
             }
@@ -1361,9 +1579,11 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         return if (clientMsgNo.endsWith("1")) {
             "Android"
         } else if (clientMsgNo.endsWith("2")) {
-            "IOS"
+            "iOS"
         } else if (clientMsgNo.endsWith("3")) {
             "Web"
+        } else if (clientMsgNo.endsWith("5")) {
+            "Flutter"
         } else {
             "PC"
         }

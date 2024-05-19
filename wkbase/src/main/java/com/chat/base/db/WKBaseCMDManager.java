@@ -7,6 +7,8 @@ import android.text.TextUtils;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.utils.WKLogUtils;
+import com.chat.base.utils.WKReader;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMD;
 import com.xinbida.wukongim.entity.WKCMDKeys;
@@ -40,7 +42,7 @@ public class WKBaseCMDManager {
 
     //添加
     public void addCmd(List<WKBaseCMD> list) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         try {
             List<WKBaseCMD> tempList = new ArrayList<>();
             List<ContentValues> cvList = new ArrayList<>();
@@ -54,7 +56,7 @@ public class WKBaseCMDManager {
             }
             tempList.addAll(queryWithClientMsgNos(clientMsgNos));
             tempList.addAll(queryWithMsgIds(msgIds));
-            boolean isCheck = tempList.size() > 0;
+            boolean isCheck = WKReader.isNotEmpty(tempList);
 
             for (int i = 0; i < list.size(); i++) {
                 boolean isAdd = true;
@@ -232,7 +234,7 @@ public class WKBaseCMDManager {
     public void handleCmd() {
         List<WKCMD> rtcList = new ArrayList<>();
         List<WKBaseCMD> cmdList = queryAllCmd();
-        if (cmdList.size() == 0) return;
+        if (WKReader.isEmpty(cmdList)) return;
         HashMap<String, List<WKBaseCMD>> revokeMap = new HashMap<>();
         for (WKBaseCMD WKBaseCmd : cmdList) {
             if (WKBaseCmd.is_deleted == 0 && !TextUtils.isEmpty(WKBaseCmd.cmd)) {
@@ -261,7 +263,7 @@ public class WKBaseCMDManager {
                                 revokeMap.put(key, list);
                             }
                         } catch (JSONException e) {
-                            e.printStackTrace();
+                            WKLogUtils.e("处理cmd错误");
                         }
                     }
                 } else if (WKBaseCmd.cmd.startsWith("rtc.p2p")) {
@@ -269,16 +271,16 @@ public class WKBaseCMDManager {
                         JSONObject jsonObject = new JSONObject(WKBaseCmd.param);
                         rtcList.add(new WKCMD(WKBaseCmd.cmd, jsonObject));
                     } catch (JSONException e) {
-                        e.printStackTrace();
+                        WKLogUtils.e("解析cmd错误");
                     }
                 } else
                     WKIM.getInstance().getCMDManager().handleCMD(WKBaseCmd.cmd, WKBaseCmd.param, WKBaseCmd.sign);
             }
         }
-        if (rtcList.size() > 0) {
+        if (WKReader.isNotEmpty(rtcList)) {
             EndpointManager.getInstance().invoke("rtc_offline_data", rtcList);
         }
-        if (revokeMap.size() > 0) {
+        if (!revokeMap.isEmpty()) {
             List<WKBaseCMD> tempList = new ArrayList<>();
             for (String key : revokeMap.keySet()) {
                 String channelID = key.split(",")[0];
@@ -296,10 +298,10 @@ public class WKBaseCMDManager {
                     EndpointManager.getInstance().invoke("syncExtraMsg", new WKChannel(channelID, channelType));
                 } else {
                     List<WKBaseCMD> list = revokeMap.get(key);
-                    if (list != null && list.size() > 0)
+                    if (WKReader.isNotEmpty(list))
                         tempList.addAll(list);
                 }
-                if (tempList.size() > 0) {
+                if (WKReader.isNotEmpty(tempList)) {
                     new Thread(() -> handleRevokeCmd(tempList)).start();
                 }
             }

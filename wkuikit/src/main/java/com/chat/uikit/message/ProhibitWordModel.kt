@@ -2,7 +2,10 @@ package com.chat.uikit.message
 
 import com.chat.base.base.WKBaseModel
 import com.chat.base.config.WKConstants
+import com.chat.base.endpoint.EndpointCategory
+import com.chat.base.endpoint.EndpointManager
 import com.chat.base.net.IRequestResultListener
+import com.chat.base.utils.WKReader
 import com.chat.uikit.db.ProhibitWordDB
 import com.chat.uikit.enity.ProhibitWord
 
@@ -15,7 +18,7 @@ class ProhibitWordModel private constructor() : WKBaseModel() {
         val holder = ProhibitWordModel()
     }
 
-    private var words: List<ProhibitWord> = ArrayList()
+    private var words: ArrayList<ProhibitWord> = ArrayList()
     fun getAll(): List<ProhibitWord> {
         if (words.isEmpty()) {
             words = ProhibitWordDB.instance.getAll()
@@ -29,8 +32,13 @@ class ProhibitWordModel private constructor() : WKBaseModel() {
         request(createService(MsgService::class.java).syncProhibitWord(version),
             object : IRequestResultListener<List<ProhibitWord>> {
                 override fun onSuccess(result: List<ProhibitWord>) {
-                    ProhibitWordDB.instance.save(result)
-                    getAll()
+                    if (WKReader.isNotEmpty(result)) {
+                        ProhibitWordDB.instance.save(result)
+                        words.clear()
+                        getAll()
+                        val list: List<Any>? = EndpointManager.getInstance()
+                            .invokes(EndpointCategory.refreshProhibitWord, 1)
+                    }
                 }
 
                 override fun onFail(code: Int, msg: String?) {

@@ -196,6 +196,11 @@ public class DownloadApkUtils {
     public void installAPK(File file) {
         try {
             Context context = WKBaseApplication.getInstance().getContext();
+            if (!checkPermissions()) {
+                requestPermissions(context);
+                return;
+            }
+
             if (null != context && file != null && file.exists()) {
                 PackageManager pm = context.getPackageManager();
                 PackageInfo info = pm.getPackageArchiveInfo(file.getAbsolutePath(), PackageManager.GET_ACTIVITIES);
@@ -259,10 +264,11 @@ public class DownloadApkUtils {
     /**
      * 检测安装权限
      */
-    public boolean checkPermissions(FragmentActivity activity) {
+    public boolean checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             //先获取是否有安装未知来源应用的权限
-            return activity.getPackageManager().canRequestPackageInstalls();
+            return WKBaseApplication.getInstance().getContext().getPackageManager().canRequestPackageInstalls();
+            //   return activity.getPackageManager().canRequestPackageInstalls();
         } else {
             return true;
         }
@@ -271,12 +277,18 @@ public class DownloadApkUtils {
     /**
      * 申请权限
      */
-    public void requestPermissions(FragmentActivity activity, ActivityResultLauncher<Intent> activityResult) {
+    public void requestPermissions(Context activity) {
         //注意这个是8.0新API
         try {
-            Uri packageURI = Uri.parse("package:" + activity.getPackageName());
             Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-            activityResult.launch(intent);
+            Uri packageURI = Uri.parse("package:" + activity.getPackageName());
+            intent.setData(packageURI);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+
+//            Uri packageURI = Uri.parse("package:" + activity.getPackageName());
+//            Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+//            activityResult.launch(intent);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -13,6 +13,7 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
@@ -177,7 +178,7 @@ public class GroupModel extends WKBaseModel {
         request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> list) {
-                if (list == null || list.size() == 0) return;
+                if (WKReader.isEmpty(list)) return;
                 List<WKChannelMember> members = serialize(list);
                 WKIM.getInstance().getChannelMembersManager().save(members);
                 if (iCommonListener != null)

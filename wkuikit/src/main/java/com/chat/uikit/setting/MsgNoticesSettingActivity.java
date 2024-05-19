@@ -1,16 +1,20 @@
 package com.chat.uikit.setting;
 
+import android.view.View;
 import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
+import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.systembar.WKOSUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActMsgNoticesSetLayoutBinding;
 import com.chat.uikit.user.service.UserModel;
+import com.xinbida.wukongim.entity.WKChannelType;
 
 /**
  * 2020-06-30 13:31
@@ -44,6 +48,10 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
         wkVBinding.voiceSwitch.setChecked(userInfoEntity.setting.voice_on == 1);
         wkVBinding.shockSwitch.setChecked(userInfoEntity.setting.shock_on == 1);
         wkVBinding.newMsgNoticeDetailSwitch.setChecked(userInfoEntity.setting.msg_show_detail == 1);
+        View keepAliveView = (View) EndpointManager.getInstance().invoke("show_keep_alive_item", this);
+        if (keepAliveView != null) {
+            wkVBinding.keepAliveLayout.addView(keepAliveView);
+        }
     }
 
     @Override

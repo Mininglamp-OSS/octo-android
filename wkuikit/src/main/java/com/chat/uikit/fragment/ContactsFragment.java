@@ -29,6 +29,7 @@ import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
 import com.chat.uikit.R;
@@ -92,10 +93,6 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         Theme.setPressedBackground(wkVBinding.rightIv);
     }
 
-    @Override
-    protected void initPresenter() {
-    }
-
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void initListener() {
@@ -114,25 +111,20 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         initAdapter(headerRecyclerView, contactsHeaderAdapter);
         wkVBinding.quickSideBarView.setOnQuickSideBarTouchListener(this);
         friendAdapter.addChildClickViewIds(R.id.contentLayout);
-        friendAdapter.setOnItemChildClickListener((adapter, view, position) -> {
-            SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
-                FriendUIEntity friendEntity = (FriendUIEntity) adapter.getItem(position);
-                if (friendEntity != null) {
-                    Intent intent = new Intent(getActivity(), UserDetailActivity.class);
-                    intent.putExtra("uid", friendEntity.channel.channelID);
-                    startActivity(intent);
-                }
-            });
-
-        });
-        contactsHeaderAdapter.setOnItemClickListener((adapter, view, position) -> {
-            SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
-                ContactsMenu item = (ContactsMenu) adapter.getItem(position);
-                if (item != null && item.iMenuClick != null) {
-                    item.iMenuClick.onClick();
-                }
-            });
-        });
+        friendAdapter.setOnItemChildClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
+            FriendUIEntity friendEntity = (FriendUIEntity) adapter.getItem(position);
+            if (friendEntity != null) {
+                Intent intent = new Intent(getActivity(), UserDetailActivity.class);
+                intent.putExtra("uid", friendEntity.channel.channelID);
+                startActivity(intent);
+            }
+        }));
+        contactsHeaderAdapter.setOnItemClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
+            ContactsMenu item = (ContactsMenu) adapter.getItem(position);
+            if (item != null && item.iMenuClick != null) {
+                item.iMenuClick.onClick();
+            }
+        }));
         wkVBinding.rightIv.setOnClickListener(view -> {
             List<PopupMenuItem> list = EndpointManager.getInstance().invokes(EndpointCategory.tabMenus, null);
             WKDialogUtils.getInstance().showScreenPopup(view, list);
@@ -158,7 +150,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                             break;
                         }
                     }
-                }).observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io()).subscribe(new Observer<Integer>() {
+                }).observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io()).subscribe(new Observer<>() {
                     @Override
                     public void onSubscribe(@NotNull Disposable d) {
 
@@ -208,12 +200,6 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         contactsHeaderAdapter.setList(EndpointManager.getInstance().invokes(EndpointCategory.mailList, getActivity()));
         getContacts();
     }
-
-    @Override
-    protected void setTitle(TextView titleTv) {
-
-    }
-
 
     @Override
     public void onResume() {
@@ -294,7 +280,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
         //有此key则获取位置并滚动到该位置
         List<FriendUIEntity> list = friendAdapter.getData();
-        if (list.size() > 0) {
+        if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying.startsWith(letter)) {
                     wkVBinding.recyclerView.scrollToPosition(i + friendAdapter.getHeaderLayoutCount());

@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:gravity="bottom"
     android:orientation="vertical"
-    android:visibility="gone">
+    android:visibility="visible">
 
     <FrameLayout
         android:id="@+id/layout_null"

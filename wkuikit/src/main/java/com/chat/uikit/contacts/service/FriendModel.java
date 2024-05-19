@@ -15,6 +15,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.enity.UserInfo;
 import com.xinbida.wukongim.WKIM;
@@ -100,7 +101,7 @@ public class FriendModel extends WKBaseModel {
         request(createService(FriendService.class).syncFriends(version, 5000, 1), new IRequestResultListener<List<UserInfo>>() {
             @Override
             public void onSuccess(List<UserInfo> list) {
-                if (list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     long tempVersion = 0;
                     List<WKChannel> channels = new ArrayList<>();
                     for (int i = 0, size = list.size(); i < size; i++) {

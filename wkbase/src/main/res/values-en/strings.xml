@@ -89,6 +89,7 @@
     <string name="location_permissions_desc">Allow storage permission in Setting-Apps-%s-permissions to allow location services in order to user features such as location sharing,Search,Street scan,and more</string>
     <string name="album_permissions_desc">Allow storage permission in Setting-Apps-%s-permissions to view or select images in Chats,Moments,profile phone settings,or chat background settings</string>
     <string name="notification_permissions_desc">Allow notification permission in Settings Application %s Permissions. To remind you promptly when receiving new messages</string>
+    <string name="call_phone_permissions_desc"> Allow call-phone permission in Settings Application %s Permissions. To remind you promptly when receiving new messages</string>
     <string name="scan_qr_code">Scan QR Code</string>
     <string name="favorite">Favorites</string>
     <string name="show_in_chat">Show in chat</string>
@@ -111,4 +112,9 @@
     <string name="str_get_name_avatar">Get your nickname and avatar</string>
     <string name="msg_send_fail">Message sending failed</string>
     <string name="msg_send_fail_resend">Resend</string>
+    <string name="str_you">You </string>
+    <string name="str_delete_message">Delete message</string>
+    <string name="str_delete_message_tip">Are you sure you want to delete this message?</string>
+    <string name="str_delete_message_also_to">Also delete for %s</string>
+    <string name="str_delete_message_for_all">Delete for all members</string>
 </resources>

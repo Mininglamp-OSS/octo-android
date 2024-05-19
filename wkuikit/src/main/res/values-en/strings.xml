@@ -50,8 +50,6 @@
     <string name="applyed">Applied</string>
     <string name="hint_search">Search(Precise search)</string>
     <string name="choose_contacts">Select contact</string>
-    <string name="clear_chat_group_msg_dialog">Confirm deletion of this group chat\'s history ?</string>
-    <string name="clear_chat_personal_msg_dialog">Confirm deletion of the chat history with %s</string>
     <string name="cleared">cleared</string>
     <string name="user_card">Contact Card</string>
     <string name="send_msg">Chat</string>
@@ -267,6 +265,7 @@
     <string name="delete_messages">Delete messages</string>
     <string name="delete_chat">Delete chat</string>
     <string name="clear_history">Clear history</string>
+    <string name="clear_history_tip">Are you sure you want to clear your chat history with %s?</string>
     <string name="all_staff">All Staff</string>
     <string name="department">Department</string>
     <string name="community">Community</string>

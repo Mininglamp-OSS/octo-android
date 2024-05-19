@@ -3,6 +3,7 @@ package com.chat.base.act;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.text.TextUtils;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -71,18 +72,9 @@ public class WKCropImageActivity extends WKBaseActivity<ActCutImgLayoutBinding> 
     @Override
     protected void initView() {
         String path = getIntent().getStringExtra("path");
-//        GlideUtils.getInstance().compressImg(this, path, files -> {
-//            if (files != null && files.size() > 0) {
-//                Bitmap bitmap = BitmapFactory.decodeFile(files.get(0).getAbsolutePath());
-//                wkVBinding.cropImageView.setImageBitmap(bitmap);
-//            } else finish();
-//        });
-        Bitmap bitmap = BitmapFactory.decodeFile(new File(path).getAbsolutePath());
-        wkVBinding.cropImageView.setImageBitmap(bitmap);
-    }
-
-    @Override
-    protected void initListener() {
-
+        if (!TextUtils.isEmpty(path)) {
+            Bitmap bitmap = BitmapFactory.decodeFile(new File(path).getAbsolutePath());
+            wkVBinding.cropImageView.setImageBitmap(bitmap);
+        }
     }
 }

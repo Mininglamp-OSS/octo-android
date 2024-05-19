@@ -7,6 +7,7 @@ import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
@@ -15,7 +16,9 @@ import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatSettingCellMenu;
+import com.chat.base.endpoint.entity.PrivacyMessageMenu;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.ChooseContactsActivity;
@@ -118,15 +121,42 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
                 });
         });
         wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
-            String content = String.format(getString(R.string.clear_chat_personal_msg_dialog), channel == null ? "" : channel.channelName);
-            showDialog(content, index -> {
-                if (index == 1) {
-                    MsgModel.getInstance().offsetMsg(channelId, WKChannelType.PERSONAL, null);
-                    WKIM.getInstance().getMsgManager().clearWithChannel(channelId, WKChannelType.PERSONAL);
-                    showToast(R.string.cleared);
+            String content = String.format(getString(R.string.clear_history_tip), channel == null ? "" : channel.channelName);
+
+            Object object = EndpointManager.getInstance().invoke("is_register_msg_privacy_module", null);
+            if (object instanceof PrivacyMessageMenu) {
+                String showName = "";
+                if (channel != null) {
+                    if (TextUtils.isEmpty(channel.channelRemark)) {
+                        showName = channel.channelName;
+                    } else {
+                        showName = channel.channelRemark;
+                    }
+                }
+                String checkBoxText = String.format(getString(R.string.str_delete_message_also_to), showName);
+                WKDialogUtils.getInstance().showCheckBoxDialog(this, getString(R.string.clear_history), content, checkBoxText, true, "", getString(R.string.base_delete), 0, ContextCompat.getColor(this, R.color.red), (index, isChecked) -> {
+                    if (index == 1) {
+                        if (isChecked) {
+                            ((PrivacyMessageMenu) object).getIClick().clearChannelMsg(channelId, WKChannelType.PERSONAL);
+                        } else {
+                            MsgModel.getInstance().offsetMsg(channelId, WKChannelType.PERSONAL, null);
+                            WKIM.getInstance().getMsgManager().clearWithChannel(channelId, WKChannelType.PERSONAL);
+                            showToast(R.string.cleared);
+                        }
+                    }
+                });
+                return;
+            }
+            WKDialogUtils.getInstance().showDialog(this, getString(R.string.clear_history), content, true, "", getString(R.string.base_delete), 0, ContextCompat.getColor(this, R.color.red), new WKDialogUtils.IClickListener() {
+                @Override
+                public void onClick(int index) {
+                    if (index == 1) {
+                        MsgModel.getInstance().offsetMsg(channelId, WKChannelType.PERSONAL, null);
+                        WKIM.getInstance().getMsgManager().clearWithChannel(channelId, WKChannelType.PERSONAL);
+                        showToast(R.string.cleared);
+                    }
                 }
             });
-
         });
         SingleClickUtil.onSingleClick(wkVBinding.addIv, view1 -> {
             Intent intent = new Intent(ChatPersonalActivity.this, ChooseContactsActivity.class);

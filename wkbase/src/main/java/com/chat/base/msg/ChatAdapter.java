@@ -20,6 +20,7 @@ import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.SecretDeleteTimer;
+import com.chat.base.utils.WKReader;
 import com.chat.base.views.ChatItemView;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsg;
@@ -38,10 +39,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity> {
     private final IConversationContext iConversationContext;
 
-    public ChatAdapter(@NonNull IConversationContext iConversationContext) {
+    public enum AdapterType {
+        normalMessage, pinnedMessage
+    }
+
+    private final AdapterType adapterType;
+
+    ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getItemProviderList() {
+        return adapterType == AdapterType.normalMessage ? WKMsgItemViewManager.getInstance().getChatItemProviderList() : WKMsgItemViewManager.getInstance().getPinnedChatItemProviderList();
+    }
+
+    public ChatAdapter(@NonNull IConversationContext iConversationContext, AdapterType adapterType) {
         super();
+        this.adapterType = adapterType;
         this.iConversationContext = iConversationContext;
-        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = WKMsgItemViewManager.getInstance().getChatItemProviderList();
+        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = getItemProviderList();
         for (int type : list.keySet()) {
             addItemProvider(Objects.requireNonNull(list.get(type)));
         }
@@ -53,7 +65,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             //撤回消息
             return WKContentType.revoke;
         } else {
-            if (WKMsgItemViewManager.getInstance().getChatItemProviderList().containsKey(list.get(i).wkMsg.type))
+            if (getItemProviderList().containsKey(list.get(i).wkMsg.type))
                 return list.get(i).wkMsg.type;
             else {
                 if (list.get(i).wkMsg.type >= 1000 && list.get(i).wkMsg.type <= 2000) {
@@ -173,7 +185,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     public void resetData(List<WKUIChatMsgItemEntity> list) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         for (int i = 0, size = list.size(); i < size; i++) {
             int previousIndex = i - 1;
             int nextIndex = i + 1;
@@ -238,7 +250,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             return false;
         }
         WKChannel channel = iConversationContext.getChatChannelInfo();
-        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = WKMsgItemViewManager.getInstance().getChatItemProviderList();
+        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = getItemProviderList();
         WKChatBaseProvider baseItemProvider = (WKChatBaseProvider) list.get(type);
         if (baseItemProvider != null && channel.status == 1)
             return baseItemProvider.getMsgConfig(type).isCanReply;
@@ -255,7 +267,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             baseView = view.findViewById(R.id.wkBaseContentLayout);
         }
         if (baseView == null) return;
-        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = WKMsgItemViewManager.getInstance().getChatItemProviderList();
+        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = getItemProviderList();
         WKChatBaseProvider baseItemProvider = (WKChatBaseProvider) list.get(entity.wkMsg.type);
         if (baseItemProvider != null) {
             SecretDeleteTimer deleteTimer = null;
@@ -312,7 +324,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             baseView = view.findViewById(R.id.wkBaseContentLayout);
         }
         if (baseView == null) return;
-        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = WKMsgItemViewManager.getInstance().getChatItemProviderList();
+        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = getItemProviderList();
         WKChatBaseProvider baseItemProvider = (WKChatBaseProvider) list.get(entity.wkMsg.type);
         if (baseItemProvider != null) {
             WKChatIteMsgFromType from = baseItemProvider.getMsgFromType(entity.wkMsg);
@@ -358,6 +370,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                         from
                 );
             }
+
         }
 
     }

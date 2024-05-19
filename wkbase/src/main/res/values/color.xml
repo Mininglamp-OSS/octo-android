@@ -45,6 +45,7 @@
     <color name="bottom_drawer_handle_view_color">#E0E0E0</color>
     <color name="titleBarIcon">#313131</color>
     <color name="dialogText">#4A4949</color>
+    <color name="tip_message_cell_bg">#CCf6f6f6</color>
     <array name="name_colors">
         <item>#8C8DFF</item>
         <item>#7983C2</item>

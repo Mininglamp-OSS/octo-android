@@ -102,6 +102,6 @@ public class WKGifContent extends WKMediaMessageContent implements Parcelable {
 
     @Override
     public String getDisplayContent() {
-        return WKBaseApplication.getInstance().getContext().getString(R.string.str_msg_content_sticker);
+        return "[GIF]";
     }
 }

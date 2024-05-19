@@ -8,6 +8,8 @@ package com.chat.base.config;
 public class WKSystemAccount {
     public final static String system_team = "u_10000";
     public final static String system_file_helper = "fileHelper";
+    public final static String system_team_short_no = "10000";
+    public final static String system_file_helper_short_no = "20000";
 
     public final static String accountCategorySystem = "system";
     public final static String accountCategoryVisitor = "visitor";

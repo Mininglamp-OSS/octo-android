@@ -4,6 +4,7 @@ import android.os.Parcel;
 import android.text.TextUtils;
 
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
 import com.xinbida.wukongim.WKIM;
@@ -93,7 +94,7 @@ public class WKMultiForwardContent extends WKMessageContent {
                 jsonArray.put(json);
             }
             jsonObject.put("msgs", jsonArray);
-            if (userList != null && userList.size() > 0) {
+            if (WKReader.isNotEmpty(userList)) {
                 JSONArray userArr = new JSONArray();
                 for (int i = 0, size = userList.size(); i < size; i++) {
                     JSONObject json = new JSONObject();

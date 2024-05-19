@@ -38,7 +38,7 @@ class WKChatFormatErrorProvider : WKChatBaseProvider() {
             linearLayout.gravity = Gravity.START
             contentTv.setTextColor(ContextCompat.getColor(context, R.color.colorDark))
         }
-        addLongClick(bubbleLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(bubbleLayout, uiChatMsgItemEntity)
     }
 
     override val itemViewType: Int

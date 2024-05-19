@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.os.SystemClock
 import android.view.View
-import androidx.databinding.BindingAdapter
 import com.chat.base.R
 import java.util.concurrent.TimeUnit
 

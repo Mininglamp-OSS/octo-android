@@ -47,7 +47,7 @@ class WKUnknownProvider : WKChatBaseProvider() {
                 contentTv.setBackgroundResource(R.drawable.radian_normal_layout)
             }
         }
-        addLongClick(linearLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(linearLayout, uiChatMsgItemEntity)
     }
 
     override val itemViewType: Int

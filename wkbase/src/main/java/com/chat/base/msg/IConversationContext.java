@@ -65,4 +65,6 @@ public interface IConversationContext {
     void onMsgViewed(WKMsg wkMsg, int position);
 
     View getRecyclerViewLayout();
+    boolean isShowChatActivity();
+    void closeActivity();
 }

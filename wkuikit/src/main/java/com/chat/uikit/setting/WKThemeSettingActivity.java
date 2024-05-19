@@ -45,10 +45,6 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
     }
 
     @Override
-    protected void initPresenter() {
-    }
-
-    @Override
     protected void initView() {
         String sp = Theme.getTheme();
         if (sp.equals(Theme.DARK_MODE)) {
@@ -67,6 +63,7 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
             wkVBinding.normalIv.setVisibility(View.VISIBLE);
             wkVBinding.bottomView.setVisibility(View.GONE);
         }
+
     }
 
     @Override
@@ -75,7 +72,10 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
             if (b) {
                 wkVBinding.bottomView.setVisibility(View.GONE);
                 type = 0;
-            } else wkVBinding.bottomView.setVisibility(View.VISIBLE);
+            } else {
+                type = 1;
+                wkVBinding.bottomView.setVisibility(View.VISIBLE);
+            }
         });
         wkVBinding.darkLayout.setOnClickListener(v -> {
             type = 2;
@@ -90,15 +90,16 @@ public class WKThemeSettingActivity extends WKBaseActivity<ActDarkSettingLayoutB
     }
 
     private void saveType() {
-        String s;
+        String s = Theme.DEFAULT_MODE;
         if (type == 0) {
             s = Theme.DEFAULT_MODE;
         } else if (type == 1) {
             s = Theme.LIGHT_MODE;
-        } else {
+        } else if (type == 2){
             s = Theme.DARK_MODE;
         }
         Theme.setTheme(s);
+        finish();
     }
 
     @Override

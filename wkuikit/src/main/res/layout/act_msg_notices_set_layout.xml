@@ -159,7 +159,15 @@
                         android:text="@string/open_new_rtc_notice_desc" />
 
                 </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/keepAliveLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
 
+                <Space
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp"/>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </com.scwang.smart.refresh.layout.SmartRefreshLayout>

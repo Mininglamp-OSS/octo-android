@@ -24,6 +24,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActMyHeadPortraitLayoutBinding;
 import com.chat.uikit.user.service.UserModel;
@@ -140,7 +141,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
         GlideUtils.getInstance().chooseIMG(MyHeadPortraitActivity.this, 1, true, ChooseMimeType.img, false, new GlideUtils.ISelectBack() {
             @Override
             public void onBack(List<ChooseResult> paths) {
-                if (paths.size() > 0) {
+                if (WKReader.isNotEmpty(paths)) {
                     String path = paths.get(0).path;
                     if (!TextUtils.isEmpty(path)) {
                         Intent intent = new Intent(MyHeadPortraitActivity.this, WKCropImageActivity.class);

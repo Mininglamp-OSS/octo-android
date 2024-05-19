@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.chat.base.utils.WKReader;
 import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
@@ -61,11 +62,6 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected String getRightTvText(TextView textView) {
         this.textView = textView;
         return getString(R.string.delete);
@@ -80,7 +76,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
                 selectedList.add(groupMemberAdapter.getData().get(i));
         }
 
-        if (selectedList.size() > 0) {
+        if (WKReader.isNotEmpty(selectedList)) {
             List<String> uids = new ArrayList<>();
             List<String> names = new ArrayList<>();
             for (int i = 0, size = selectedList.size(); i < size; i++) {
@@ -90,7 +86,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
             showTitleRightLoading();
             GroupModel.getInstance().deleteGroupMembers(groupId, uids, names, (code, msg) -> {
                 if (code == HttpResponseCode.success) {
-                    new Handler(Looper.myLooper()).postDelayed(() -> {
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
                         SoftKeyboardUtils.getInstance().hideSoftKeyboard(DeleteGroupMemberActivity.this);
                         setResult(RESULT_OK);
                         finish();
@@ -307,7 +303,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
         //有此key则获取位置并滚动到该位置
         List<GroupMemberEntity> list = groupMemberAdapter.getData();
-        if (list.size() > 0) {
+        if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying.startsWith(letter)) {
                     wkVBinding.recyclerView.scrollToPosition(i);

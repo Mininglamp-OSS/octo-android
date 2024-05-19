@@ -29,6 +29,7 @@ public class WKContentType extends WKMsgContentType {
     // 敏感词提醒
     public final static int sensitiveWordsTips = -10;
     public final static int emptyView = -12;
+    public final static int spanEmptyView = -13;
     // 富文本
     public final static int richText = 14;
     //新朋友
@@ -64,7 +65,7 @@ public class WKContentType extends WKMsgContentType {
         return type <= 0;
     }
 
-    public static boolean isSupportNotification(int type){
+    public static boolean isSupportNotification(int type) {
         return type >= WK_TEXT && type <= richText;
     }
 }

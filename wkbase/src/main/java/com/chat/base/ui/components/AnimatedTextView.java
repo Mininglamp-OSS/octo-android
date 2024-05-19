@@ -32,6 +32,7 @@ import androidx.annotation.Nullable;
 
 
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.WKReader;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -594,7 +595,7 @@ public class AnimatedTextView extends View {
                         boolean thisEqual = a >= 0 && b >= 0 && partEquals(newText, oldText, a, b);
                         if (equal != thisEqual || i == minLength) {
                             if (i - start > 0) {
-                                if (indexes.size() == 0) {
+                                if (WKReader.isEmpty(indexes)) {
                                     eq = equal;
                                 }
                                 indexes.add(i - start);

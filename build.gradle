@@ -14,7 +14,7 @@ buildscript {
         maven {url 'https://developer.huawei.com/repo/'}
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.3.1'
+        classpath 'com.android.tools.build:gradle:8.4.0'
         classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8'
         //华为推送
         classpath 'com.huawei.agconnect:agcp:1.6.0.300'
@@ -33,9 +33,9 @@ allprojects {
 
 project.ext {
     minSdkVersion = 23
-    targetSdkVersion = 33
-    compileSdkVersion = 33
-    buildToolsVersion = "33.0.0"
+    targetSdkVersion = 34
+    compileSdkVersion = 34
+    buildToolsVersion = "34.0.0"
 }
 task clean(type: Delete) {
     delete rootProject.buildDir

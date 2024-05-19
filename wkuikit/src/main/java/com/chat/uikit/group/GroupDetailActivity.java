@@ -16,15 +16,18 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatSettingCellMenu;
+import com.chat.base.endpoint.entity.PrivacyMessageMenu;
 import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.FullyGridLayoutManager;
+import com.chat.uikit.Const;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActGroupDetailLayoutBinding;
@@ -125,34 +128,48 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
     @Override
     protected void initListener() {
+        EndpointManager.getInstance().setMethod("group_detail", EndpointCategory.wkExitChat, object -> {
+            if (object != null) {
+                WKChannel channel = (WKChannel) object;
+                if (groupNo.equals(channel.channelID) && channel.channelType == WKChannelType.GROUP) {
+                    finish();
+                }
+            }
+            return null;
+        });
         SingleClickUtil.onSingleClick(wkVBinding.remarkLayout, view1 -> {
-            Intent intent = new Intent(GroupDetailActivity.this, WKSetGroupRemarkActivity.class);
-            intent.putExtra("groupNo", groupNo);
-            startActivity(intent);
+            if (groupIsEnable()) {
+                Intent intent = new Intent(GroupDetailActivity.this, WKSetGroupRemarkActivity.class);
+                intent.putExtra("groupNo", groupNo);
+                startActivity(intent);
+            }
         });
         wkVBinding.showNickSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (compoundButton.isPressed()) {
+            if (compoundButton.isPressed() && groupIsEnable()) {
                 groupPresenter.updateGroupSetting(groupNo, "show_nick", b ? 1 : 0);
             }
         });
         wkVBinding.saveSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (compoundButton.isPressed()) {
+            if (compoundButton.isPressed() && groupIsEnable()) {
                 groupPresenter.updateGroupSetting(groupNo, "save", b ? 1 : 0);
             }
         });
 
         wkVBinding.muteSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (compoundButton.isPressed()) {
+            if (compoundButton.isPressed() && groupIsEnable()) {
                 groupPresenter.updateGroupSetting(groupNo, "mute", b ? 1 : 0);
             }
         });
         wkVBinding.stickSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
-            if (compoundButton.isPressed()) {
+            if (compoundButton.isPressed() && groupIsEnable()) {
                 groupPresenter.updateGroupSetting(groupNo, "top", b ? 1 : 0);
             }
         });
         groupMemberAdapter.addChildClickViewIds(R.id.handlerIv, R.id.userLayout);
         groupMemberAdapter.setOnItemChildClickListener((adapter, view1, position) -> {
+            if (!groupIsEnable()) {
+                return;
+            }
             WKChannelMember groupMemberEntity = groupMemberAdapter.getItem(position);
             if (groupMemberEntity != null) {
                 if (view1.getId() == R.id.handlerIv) {
@@ -189,17 +206,21 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             }
         });
         SingleClickUtil.onSingleClick(wkVBinding.showAllMembersTv, view1 -> {
-            Intent intent = new Intent(this, WKAllMembersActivity.class);
-            intent.putExtra("channelID", groupNo);
-            intent.putExtra("channelType", WKChannelType.GROUP);
-            startActivity(intent);
+            if (groupIsEnable()) {
+                Intent intent = new Intent(this, WKAllMembersActivity.class);
+                intent.putExtra("channelID", groupNo);
+                intent.putExtra("channelType", WKChannelType.GROUP);
+                startActivity(intent);
+            }
         });
         SingleClickUtil.onSingleClick(wkVBinding.reportLayout, view1 -> {
-            Intent intent = new Intent(this, WKWebViewActivity.class);
-            intent.putExtra("channelType", WKChannelType.GROUP);
-            intent.putExtra("channelID", groupNo);
-            intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
-            startActivity(intent);
+            if (groupIsEnable()) {
+                Intent intent = new Intent(this, WKWebViewActivity.class);
+                intent.putExtra("channelType", WKChannelType.GROUP);
+                intent.putExtra("channelID", groupNo);
+                intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
+                startActivity(intent);
+            }
         });
 
         wkVBinding.exitBtn.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.delete_group), getString(R.string.exit_group_tips), true, "", getString(R.string.delete_group), 0, ContextCompat.getColor(this, R.color.red), index -> {
@@ -217,20 +238,54 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         }));
 
         SingleClickUtil.onSingleClick(wkVBinding.groupQrLayout, view1 -> {
-            Intent intent = new Intent(this, GroupQrActivity.class);
-            intent.putExtra("groupId", groupNo);
-            startActivity(intent);
-        });
-        wkVBinding.clearChatMsgLayout.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.clear_history), getString(R.string.clear_chat_group_msg_dialog), true, "", getString(R.string.delete), 0, ContextCompat.getColor(this, R.color.red), index -> {
-            if (index == 1) {
-                MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
-                WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
-                showToast(getString(R.string.cleared));
+            if (groupIsEnable()) {
+                Intent intent = new Intent(this, GroupQrActivity.class);
+                intent.putExtra("groupId", groupNo);
+                startActivity(intent);
             }
-        }));
+        });
+        wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
+            String showName = "";
+            if (groupChannel != null) {
+                if (TextUtils.isEmpty(groupChannel.channelRemark)) {
+                    showName = groupChannel.channelName;
+                } else {
+                    showName = groupChannel.channelRemark;
+                }
+            }
+            Object object = EndpointManager.getInstance().invoke("is_register_msg_privacy_module", null);
+            WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+            if (member != null && member.role != WKChannelMemberRole.normal) {
+                if (object instanceof PrivacyMessageMenu) {
+                    String checkBoxText = getString(R.string.str_delete_message_for_all);
+                    WKDialogUtils.getInstance().showCheckBoxDialog(this, getString(R.string.clear_history), String.format(getString(R.string.clear_history_tip), showName), checkBoxText, true, "", getString(R.string.delete), 0, ContextCompat.getColor(this, R.color.red), new WKDialogUtils.ICheckBoxDialog() {
+                        @Override
+                        public void onClick(int index, boolean isChecked) {
+                            if (index == 1) {
+                                if (isChecked) {
+                                    ((PrivacyMessageMenu) object).getIClick().clearChannelMsg(groupNo, WKChannelType.GROUP);
+                                } else {
+                                    MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
+                                    WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
+                                    showToast(getString(R.string.cleared));
+                                }
+                            }
+                        }
+                    });
+                    return;
+                }
+            }
+            WKDialogUtils.getInstance().showDialog(this, getString(R.string.clear_history), String.format(getString(R.string.clear_history_tip), showName), true, "", getString(R.string.delete), 0, ContextCompat.getColor(this, R.color.red), index -> {
+                if (index == 1) {
+                    MsgModel.getInstance().offsetMsg(groupNo, WKChannelType.GROUP, null);
+                    WKIM.getInstance().getMsgManager().clearWithChannel(groupNo, WKChannelType.GROUP);
+                    showToast(getString(R.string.cleared));
+                }
+            });
+        });
         wkVBinding.inGroupNameLayout.setOnClickListener(v -> updateNameInGroupDialog());
         SingleClickUtil.onSingleClick(wkVBinding.noticeLayout, view1 -> {
-            if (groupChannel == null) return;
+            if (!groupIsEnable()) return;
             String notice = "";
             if (groupChannel.localExtra != null && groupChannel.localExtra.containsKey(WKChannelExtras.notice)) {
                 notice = (String) groupChannel.localExtra.get(WKChannelExtras.notice);
@@ -245,7 +300,8 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             startActivity(intent);
         });
         SingleClickUtil.onSingleClick(wkVBinding.groupNameLayout, view1 -> {
-            if (memberRole != WKChannelMemberRole.normal && groupChannel != null) {
+            if (!groupIsEnable()) return;
+            if (memberRole != WKChannelMemberRole.normal) {
                 Intent intent = new Intent(this, UpdateGroupNameActivity.class);
                 intent.putExtra("groupNo", groupNo);
                 startActivity(intent);
@@ -293,7 +349,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         });
         //移除群成员监听
         WKIM.getInstance().getChannelMembersManager().addOnRemoveChannelMemberListener("group_detail_remove_channel_member", list -> {
-            if (list != null && list.size() > 0) {
+            if (WKReader.isNotEmpty(list)) {
                 for (int i = 0, size = list.size(); i < size; i++) {
                     for (int j = 0, len = groupMemberAdapter.getData().size(); j < len; j++) {
                         if (list.get(i).memberUID.equalsIgnoreCase(groupMemberAdapter.getData().get(j).memberUID)
@@ -315,7 +371,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             //这里这是演示sdk数据转成UI层数据。
             // 当然UI层也可以直接使用sdk的数据库
             List<WKChannelMember> tempList = new ArrayList<>();
-            if (list != null && list.size() > 0) {
+            if (WKReader.isNotEmpty(list)) {
                 for (int i = 0, size = list.size(); i < size; i++) {
                     if (list.get(i).channelID.equalsIgnoreCase(groupNo)
                             && list.get(i).channelType == WKChannelType.GROUP) {
@@ -505,6 +561,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     }
 
     private void updateNameInGroupDialog() {
+        if (!groupIsEnable()) return;
         String showName = "";
         WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
         if (member != null) {
@@ -537,4 +594,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener("group_detail_add_channel_member");
     }
 
+    private boolean groupIsEnable() {
+        return groupChannel != null && groupChannel.status != Const.GroupStatusDisband;
+    }
 }

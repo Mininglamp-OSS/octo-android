@@ -15,6 +15,7 @@ import com.chat.base.utils.WKFileUtils
 import com.chat.base.utils.WKPermissions
 import com.chat.base.utils.WKPermissions.IPermissionResult
 import com.chat.base.utils.WKReader
+import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
 import com.chat.uikit.databinding.ActCommonListLayoutBinding
 import java.io.File
@@ -103,7 +104,7 @@ class ErrorLogsActivity : WKBaseActivity<ActCommonListLayoutBinding>() {
             }
         }
         if (WKReader.isNotEmpty(fileList))
-            fileList.sortWith { t: LogEntity, t1: LogEntity -> (t1.time - t.time).toInt() }
+            fileList.sortWith { t: LogEntity, t1: LogEntity -> (t.time - t1.time).toInt() }
         return fileList
     }
 
@@ -119,6 +120,7 @@ class ErrorLogsActivity : WKBaseActivity<ActCommonListLayoutBinding>() {
         override fun convert(holder: BaseViewHolder, item: LogEntity) {
             holder.setText(R.id.nameTv, item.name)
             holder.setText(R.id.sizeTv, item.sizeStr)
+            holder.setText(R.id.timeTv, WKTimeUtils.getInstance().time2DateStr1(item.time))
             val list: MutableList<PopupMenuItem> = ArrayList()
             list.add(
                 PopupMenuItem(context.getString(R.string.forward),
@@ -145,7 +147,7 @@ class ErrorLogsActivity : WKBaseActivity<ActCommonListLayoutBinding>() {
             )
             WKDialogUtils.getInstance()
                 .setViewLongClickPopup(holder.getView(R.id.contentLayout), list)
-           
+
         }
     }
 }

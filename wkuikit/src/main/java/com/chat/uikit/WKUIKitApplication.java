@@ -36,6 +36,7 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
+import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatChooseContacts;
@@ -52,6 +53,7 @@ import com.chat.base.endpoint.entity.MsgConfig;
 import com.chat.base.endpoint.entity.PersonalInfoMenu;
 import com.chat.base.endpoint.entity.ScanResultMenu;
 import com.chat.base.endpoint.entity.UserDetailMenu;
+import com.chat.base.endpoint.entity.WKMsg2UiMsgMenu;
 import com.chat.base.endpoint.entity.WithdrawMsgMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.entity.UserInfoEntity;
@@ -73,6 +75,7 @@ import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKMediaFileUtils;
 import com.chat.base.utils.WKPermissions;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.chat.ChooseChatActivity;
 import com.chat.uikit.chat.face.WKVoiceViewManager;
@@ -88,6 +91,7 @@ import com.chat.uikit.chat.provider.WKMultiForwardProvider;
 import com.chat.uikit.chat.provider.WKNoRelationProvider;
 import com.chat.uikit.chat.provider.WKPromptNewMsgProvider;
 import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
+import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
 import com.chat.uikit.contacts.ChooseContactsActivity;
@@ -197,29 +201,27 @@ public class WKUIKitApplication {
 
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
         //添加消息item
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.msgPromptNewMsg, new WKPromptNewMsgProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
-
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VOICE, new WKVoiceProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
-
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider(), new WKSensitiveWordsProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider(), new WKNoRelationProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.msgPromptNewMsg, new WKPromptNewMsgProvider(), new WKPromptNewMsgProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider(), new WKTextProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider(), new WKImageProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider(), new WKEmptyProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.spanEmptyView, new WKSpanEmptyProvider(), new WKSpanEmptyProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VOICE, new WKVoiceProvider(), new WKVoiceProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider(), new WKCardProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider(), new WKMultiForwardProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider(), new LoadingProvider());
         // 设置消息长按选项
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig());
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig());
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig());
-
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig());
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_MULTIPLE_FORWARD, object -> new MsgConfig());
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_MULTIPLE_FORWARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod("uikit_sql", EndpointCategory.wkDBMenus, object -> new DBMenu("uikit_sql"));
         //注册消息长按菜单配置
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false));
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.typing, object -> new MsgConfig(false, false, false, false, false));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false, false));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.typing, object -> new MsgConfig(false));
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkChatPopupItem, 90, object -> {
             WKMsg wkMsg = (WKMsg) object;
             if (wkMsg.type == WKContentType.WK_TEXT) {
@@ -387,7 +389,7 @@ public class WKUIKitApplication {
             if (contactsMenu != null) {
                 intent.putParcelableArrayListExtra("defaultSelected", (ArrayList<? extends Parcelable>) contactsMenu.defaultSelected);
                 intent.putExtra("isShowSaveLabelDialog", contactsMenu.isShowSaveLabelDialog);
-                if (contactsMenu.defaultSelected != null && contactsMenu.defaultSelected.size() > 0 && !contactsMenu.isCanDeselect) {
+                if (WKReader.isNotEmpty(contactsMenu.defaultSelected) && !contactsMenu.isCanDeselect) {
                     String unSelectUids = "";
                     for (int i = 0, size = contactsMenu.defaultSelected.size(); i < size; i++) {
                         if (TextUtils.isEmpty(unSelectUids)) {
@@ -472,6 +474,12 @@ public class WKUIKitApplication {
             }
             return null;
         });
+        EndpointManager.getInstance().setMethod("get_chat_uid_msg", object -> {
+            if (object instanceof WKMsg2UiMsgMenu wkMsg2UiMsgMenu) {
+                return WKIMUtils.getInstance().msg2UiMsg(wkMsg2UiMsgMenu.getIConversationContext(), wkMsg2UiMsgMenu.getWkMsg(), wkMsg2UiMsgMenu.getMemberCount(), wkMsg2UiMsgMenu.getShowNickName(), wkMsg2UiMsgMenu.isChoose());
+            }
+            return null;
+        });
     }
 
     public void sendChooseChatBack(List<WKChannel> list) {
@@ -509,9 +517,11 @@ public class WKUIKitApplication {
     }
 
     private void chooseIMG(IConversationContext iConversationContext) {
-        String permissionStr = Manifest.permission.READ_EXTERNAL_STORAGE;
+        String[] permissionStr = new String[]{Manifest.permission.READ_EXTERNAL_STORAGE};
+//        String permissionStr = Manifest.permission.READ_EXTERNAL_STORAGE;
         if (Build.VERSION.SDK_INT >= 33) {
-            permissionStr = Manifest.permission.READ_MEDIA_IMAGES;
+//            permissionStr = Manifest.permission.READ_MEDIA_IMAGES;
+            permissionStr = new String[]{Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO};
         }
         String desc = String.format(iConversationContext.getChatActivity().getString(R.string.album_permissions_desc), iConversationContext.getChatActivity().getString(R.string.app_name));
         WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {

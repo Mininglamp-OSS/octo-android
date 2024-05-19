@@ -122,7 +122,7 @@ public class SearchUserActivity extends WKBaseActivity<ActSearchUserLayoutBindin
         if (searchUser != null && searchUser.exist == 1) {
             WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(searchUser.data.uid, WKChannelType.PERSONAL);
             //已是好友不显示加好友
-            if (channel != null && channel.follow == 1) {
+            if (channel != null && channel.follow == 1 && channel.isDeleted == 0) {
                 searchUser.showApply = false;
             }
             list.add(searchUser);

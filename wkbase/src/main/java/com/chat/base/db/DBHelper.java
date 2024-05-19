@@ -7,6 +7,8 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.text.TextUtils;
 
+import com.chat.base.utils.WKLogUtils;
+
 
 /**
  * 2019-12-05 14:42
@@ -33,7 +35,7 @@ public class DBHelper {
             mDb = mDbHelper.getWritableDatabase();
             onUpgrade();
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("初始化db错误");
         }
     }
 
@@ -86,7 +88,7 @@ public class DBHelper {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("关闭db错误");
         }
     }
 
@@ -98,8 +100,27 @@ public class DBHelper {
         return mDb.rawQuery(sql, selectionArgs);
     }
 
+    public Cursor select(String table, String selection,
+                         String[] selectionArgs,
+                         String orderBy) {
+        if (mDb == null) return null;
+        Cursor cursor;
+        try {
+            cursor = mDb.query(table, null, selection, selectionArgs,
+                    null, null, orderBy);
+        } catch (Exception e) {
+            WKLogUtils.e("执行查询操作错误");
+            return null;
+        }
+        return cursor;
+    }
+
     public long insert(String table, ContentValues cv) {
         return mDb.insert(table, null, cv);
+    }
+
+    public long insertOrReplace(String table, ContentValues cv) {
+        return mDb.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public boolean update(String tableName, ContentValues cv, String where,
@@ -108,7 +129,7 @@ public class DBHelper {
         try {
             flag = mDb.update(tableName, cv, where, whereValue) > 0;
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("执行修改操作错误");
         }
         return flag;
     }

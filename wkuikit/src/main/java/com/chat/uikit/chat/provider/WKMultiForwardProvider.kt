@@ -88,7 +88,7 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
         }
         // 显示表情
         MoonUtil.identifyFaceExpression(context, contentTv, sBuilder.toString(), MoonUtil.DEF_SCALE)
-        addLongClick(contentLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(contentLayout, uiChatMsgItemEntity)
         contentLayout.setOnClickListener {
             val intent = Intent(context, ChatMultiForwardDetailActivity::class.java)
             intent.putExtra("client_msg_no", uiChatMsgItemEntity.wkMsg.clientMsgNO)
@@ -122,6 +122,6 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
-        addLongClick(contentLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(contentLayout, uiChatMsgItemEntity)
     }
 }

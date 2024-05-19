@@ -43,11 +43,6 @@ public class WKLanguageActivity extends WKBaseActivity<ActLanguageLayoutBinding>
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected void initView() {
         selectedLanguage = WKMultiLanguageUtil.getInstance().getLanguageType();
         setSelectedLanguage();

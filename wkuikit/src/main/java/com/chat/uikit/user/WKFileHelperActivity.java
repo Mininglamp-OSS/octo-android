@@ -41,7 +41,7 @@ public class WKFileHelperActivity extends WKBaseActivity<ActFileHelperLayoutBind
     @Override
     protected void initView() {
         wkVBinding.appIdNumLeftTv.setText(String.format(getString(R.string.app_idnum), getString(R.string.app_name)));
-        wkVBinding.appIdNumTv.setText(WKSystemAccount.system_file_helper);
+        wkVBinding.appIdNumTv.setText(WKSystemAccount.system_file_helper_short_no);
         wkVBinding.avatarView.setSize(70);
         wkVBinding.avatarView.showAvatar(WKSystemAccount.system_file_helper, WKChannelType.PERSONAL);
         SingleClickUtil.onSingleClick(wkVBinding.sendMsgBtn, v -> WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, WKSystemAccount.system_file_helper, WKChannelType.PERSONAL, 0, true)));

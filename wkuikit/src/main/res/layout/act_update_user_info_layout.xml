@@ -30,6 +30,7 @@
                 android:background="@color/transparent"
                 android:hint="@string/input"
                 android:minHeight="40dp"
+                android:lines="1"
                 android:paddingStart="15dp"
                 android:textColorHint="@color/color999"
                 android:textColor="@color/colorDark"

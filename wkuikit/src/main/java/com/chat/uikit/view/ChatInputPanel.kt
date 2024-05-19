@@ -1,10 +1,9 @@
 package com.chat.uikit.view
 
+import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorSet
-import android.animation.LayoutTransition
 import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -26,6 +25,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -51,6 +51,7 @@ import com.chat.base.ui.Theme
 import com.chat.base.ui.components.ContactEditText
 import com.chat.base.ui.components.SeekBarView
 import com.chat.base.utils.*
+import com.chat.base.utils.WKPermissions.IPermissionResult
 import com.chat.base.utils.singleclick.SingleClickUtil
 import com.chat.base.views.*
 import com.chat.base.views.keyboard.*
@@ -78,13 +79,12 @@ import com.lxj.xpopup.XPopup
 import com.lxj.xpopup.enums.PopupPosition
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.*
-import com.xinbida.wukongim.msgmodel.WKTextContent
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
+import com.xinbida.wukongim.msgmodel.WKTextContent
 import org.json.JSONObject
 import org.telegram.ui.Components.RLottieDrawable
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.math.min
 
 
@@ -553,6 +553,49 @@ class ChatInputPanel : LinearLayout, IInputPanel {
         return viewBinding.editText
     }
 
+    private fun toolBarClick(
+        mChatToolBarMenu: ChatToolBarMenu,
+        position: Int,
+        adapter1: WKChatToolBarAdapter,
+        chatMorePanel: ChatMorePanel
+    ) {
+
+        //存在点击显示的view
+        if (mChatToolBarMenu.bottomView != null) {
+            if (mChatToolBarMenu.isSelected) {
+                //已经选中就隐藏底部view弹起软键盘
+                mChatToolBarMenu.isSelected = false
+                UIUtil.requestFocus(viewBinding.editText)
+                UIUtil.showSoftInput(context, viewBinding.editText)
+                handleAnimator(PanelType.INPUT_MOTHOD)
+                toolBarAdapter!!.notifyItemChanged(position)
+            } else {
+                var i = 0
+                val size = toolBarAdapter!!.data.size
+                while (i < size) {
+                    toolBarAdapter!!.data[i].isSelected = false
+                    i++
+                }
+                mChatToolBarMenu.isSelected = true
+                adapter1.notifyItemRangeChanged(0, adapter1.data.size)
+                chatMorePanel.addBottomView(mChatToolBarMenu.bottomView)
+                mChatToolBarMenu.bottomView.startAnimation(
+                    loadAnimation(
+                        iConversationContext!!
+                    )
+                )
+                UIUtil.loseFocus(viewBinding.editText)
+                UIUtil.hideSoftInput(context, viewBinding.editText)
+                handleAnimator(PanelType.MORE)
+                onInputPanelStateChangedListener?.onShowMorePanel()
+            }
+        }
+        if (mChatToolBarMenu.iChatToolBarListener != null) mChatToolBarMenu.iChatToolBarListener.onChecked(
+            true,
+            iConversationContext
+        )
+    }
+
     fun initView(
         iConversationContext: IConversationContext,
         recyclerViewContentView: FrameLayout,
@@ -632,40 +675,17 @@ class ChatInputPanel : LinearLayout, IInputPanel {
                             }, 300)
                         }
                     }
-                    //存在点击显示的view
-                    if (mChatToolBarMenu.bottomView != null) {
-                        if (mChatToolBarMenu.isSelected) {
-                            //已经选中就隐藏底部view弹起软键盘
-                            mChatToolBarMenu.isSelected = false
-                            UIUtil.requestFocus(viewBinding.editText)
-                            UIUtil.showSoftInput(context, viewBinding.editText)
-                            handleAnimator(PanelType.INPUT_MOTHOD)
-                            toolBarAdapter!!.notifyItemChanged(position)
-                        } else {
-                            var i = 0
-                            val size = toolBarAdapter!!.data.size
-                            while (i < size) {
-                                toolBarAdapter!!.data[i].isSelected = false
-                                i++
-                            }
-                            mChatToolBarMenu.isSelected = true
-                            adapter1.notifyItemRangeChanged(0, adapter1.data.size)
-                            chatMorePanel.addBottomView(mChatToolBarMenu.bottomView)
-                            mChatToolBarMenu.bottomView.startAnimation(
-                                loadAnimation(
-                                    iConversationContext
-                                )
-                            )
-                            UIUtil.loseFocus(viewBinding.editText)
-                            UIUtil.hideSoftInput(context, viewBinding.editText)
-                            handleAnimator(PanelType.MORE)
-                            onInputPanelStateChangedListener?.onShowMorePanel()
-                        }
+                    if (mChatToolBarMenu.sid == "wk_chat_toolbar_voice") {
+                        checkPermission(
+                            iConversationContext.chatActivity,
+                            mChatToolBarMenu,
+                            position,
+                            toolBarAdapter!!,
+                            chatMorePanel
+                        )
+                        return@determineTriggerSingleClick
                     }
-                    if (mChatToolBarMenu.iChatToolBarListener != null) mChatToolBarMenu.iChatToolBarListener.onChecked(
-                        true,
-                        iConversationContext
-                    )
+                    toolBarClick(mChatToolBarMenu, position, toolBarAdapter!!, chatMorePanel)
                 }
             }
         }
@@ -2401,5 +2421,31 @@ class ChatInputPanel : LinearLayout, IInputPanel {
             viewBinding.editText.setSelection(curPosition + emojiName.length)
         }
         return emojiLayout
+    }
+
+    private fun checkPermission(
+        activity: FragmentActivity, mChatToolBarMenu: ChatToolBarMenu,
+        position: Int,
+        adapter1: WKChatToolBarAdapter,
+        chatMorePanel: ChatMorePanel
+    ) {
+        val desc = String.format(
+            activity.getString(R.string.microphone_permissions_des),
+            activity.getString(R.string.app_name)
+        )
+        WKPermissions.getInstance().checkPermissions(object : IPermissionResult {
+            override fun onResult(result: Boolean) {
+                if (result) {
+                    toolBarClick(
+                        mChatToolBarMenu,
+                        position,
+                        adapter1,
+                        chatMorePanel
+                    )
+                }
+            }
+
+            override fun clickResult(isCancel: Boolean) {}
+        }, activity, desc, Manifest.permission.RECORD_AUDIO)
     }
 }

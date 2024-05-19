@@ -56,7 +56,7 @@
     <string name="about">关于</string>
     <string name="time_am">上午</string>
     <string name="time_pm">下午</string>
-    <string name="str_msg_content_sticker">[动画表情]</string>
+    <string name="str_msg_content_sticker">[贴纸]</string>
     <string name="copy">复制</string>
     <string name="copyed">已复制</string>
     <string name="blacklist_group">群内黑名单，消息发送失败，确定重发吗？</string>
@@ -88,6 +88,7 @@
     <string name="location_permissions_desc">在设置-应用-%s-权限中开启位置信息权限。以正常使用位置共享、搜索等功能</string>
     <string name="album_permissions_desc">在设置-应用-%s-权限中开启存储空间权限。以正常使用在聊天、朋友圈、设置头像、设置聊天背景图片等功能中的图片查看和选择能力。</string>
     <string name="notification_permissions_desc">在设置-应用-%s-权限中开启通知权限。以收到新消息时能及时提醒你。</string>
+    <string name="call_phone_permissions_desc">在设置-应用-%s-权限中开启拨打电话延续。以正常使用拨号功能</string>
     <string name="scan_qr_code">识别图中二维码</string>
     <string name="favorite">收藏</string>
     <string name="show_in_chat">定位到聊天</string>
@@ -110,4 +111,9 @@
     <string name="str_get_name_avatar">获取你的昵称、头像</string>
     <string name="msg_send_fail">消息发送失败</string>
     <string name="msg_send_fail_resend">重新发送</string>
+    <string name="str_you">你</string>
+    <string name="str_delete_message">删除消息</string>
+    <string name="str_delete_message_tip">您确定要删除这条消息吗？</string>
+    <string name="str_delete_message_also_to">同时为 %s 删除</string>
+    <string name="str_delete_message_for_all">为所有成员删除</string>
 </resources>

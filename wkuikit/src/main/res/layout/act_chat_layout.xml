@@ -38,72 +38,88 @@
                 android:id="@+id/topLayout"
                 layout="@layout/chat_title_layout" />
 
-
-            <LinearLayout
+            <RelativeLayout
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
                 android:layout_weight="1"
-                android:orientation="vertical">
-
+                android:layout_height="0dp">
 
                 <LinearLayout
-                    android:id="@+id/topView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:orientation="vertical">
 
 
-                    <RelativeLayout
-                        android:id="@+id/recyclerViewLayout"
+                    <LinearLayout
+                        android:id="@+id/topView"
                         android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1">
+                        android:layout_height="match_parent"
+                        android:orientation="vertical">
 
 
-                        <com.chat.base.views.RecyclerListView
-                            android:id="@+id/recyclerView"
+                        <RelativeLayout
+                            android:id="@+id/recyclerViewLayout"
                             android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="@color/transparent"
-                            android:visibility="visible" />
+                            android:layout_height="0dp"
+                            android:layout_weight="1">
 
 
-                        <include
-                            android:id="@+id/chatUnreadLayout"
-                            layout="@layout/chat_unread_layout"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentEnd="true"
-                            android:layout_alignParentBottom="true"
-                            android:layout_marginEnd="5dp"
-                            android:layout_marginBottom="5dp" />
+                            <com.chat.base.views.RecyclerListView
+                                android:id="@+id/recyclerView"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:background="@color/transparent"
+                                android:visibility="visible" />
 
-                        <FrameLayout
-                            android:id="@+id/recyclerViewContentLayout"
+
+                            <include
+                                android:id="@+id/chatUnreadLayout"
+                                layout="@layout/chat_unread_layout"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:layout_alignParentBottom="true"
+                                android:layout_marginEnd="5dp"
+                                android:layout_marginBottom="5dp" />
+
+                            <FrameLayout
+                                android:id="@+id/recyclerViewContentLayout"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentBottom="true" />
+
+                            <LinearLayout
+                                android:id="@+id/pinnedLayout"
+                                android:layout_width="match_parent"
+                                android:layout_height="50dp"
+                                android:background="@color/colorAccent"
+                                android:orientation="horizontal"
+                                android:visibility="gone" />
+
+                        </RelativeLayout>
+
+
+                        <com.chat.uikit.view.ChatInputPanel
+                            android:id="@+id/chat_input_panel"
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentBottom="true" />
-                    </RelativeLayout>
+                            android:layout_height="wrap_content" />
 
 
-                    <com.chat.uikit.view.ChatInputPanel
-                        android:id="@+id/chat_input_panel"
+                    </LinearLayout>
+
+                    <com.chat.uikit.view.ChatMorePanel
+                        android:id="@+id/more_panel"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
-
-
+                        android:layout_height="wrap_content"
+                        android:background="@color/homeColor"
+                        android:visibility="visible" />
                 </LinearLayout>
+            </RelativeLayout>
 
-                <com.chat.uikit.view.ChatMorePanel
-                    android:id="@+id/more_panel"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@color/homeColor"
-                    android:visibility="visible" />
-            </LinearLayout>
+
         </LinearLayout>
 
     </RelativeLayout>
+
 
     <TextView
         android:id="@+id/timeTv"

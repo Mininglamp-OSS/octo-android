@@ -110,11 +110,19 @@ public class UpdateUserInfoActivity extends WKBaseActivity<ActUpdateUserInfoLayo
             @Override
             public void afterTextChanged(Editable editable) {
                 String content = editable.toString();
+                if (content.contains("\n")){
+                    content = content.replace("\n", "");
+                    wkVBinding.contentEt.setText(content);
+                    wkVBinding.contentEt.setSelection(content.length());
+                }
                 if (TextUtils.isEmpty(content) || content.equals(oldStr)) {
                     hideTitleRightView();
                 } else showTitleRightView();
+
+
             }
         });
+
     }
 
     @Override
@@ -141,4 +149,6 @@ public class UpdateUserInfoActivity extends WKBaseActivity<ActUpdateUserInfoLayo
         super.finish();
         SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
     }
+
+
 }

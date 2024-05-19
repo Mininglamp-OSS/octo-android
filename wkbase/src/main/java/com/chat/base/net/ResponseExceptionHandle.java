@@ -3,6 +3,8 @@ package com.chat.base.net;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.chat.base.utils.WKLogUtils;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -48,14 +50,14 @@ public class ResponseExceptionHandle {
                                 responeThrowable.setStatus(status);
                                 Log.e("请求错误：", status + "|" + msg);
                             } catch (JSONException ex) {
-                                ex.printStackTrace();
+                                WKLogUtils.e("解析请求【400】不是json结构");
                             }
                         } else {
                             responeThrowable.setMessage("");
                             responeThrowable.setStatus(400);
                         }
                     } catch (IOException ex) {
-                        ex.printStackTrace();
+                        WKLogUtils.e("解析请求【400】结果错误");
                     }
                     break;
                 case 401:

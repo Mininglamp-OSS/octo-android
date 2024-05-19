@@ -82,7 +82,6 @@ public class WKMultiLanguageUtil {
 
     private String getSystemLanguage(Locale locale) {
         return locale.getLanguage() + "_" + locale.getCountry();
-
     }
 
     //以上获取方式需要特殊处理一下

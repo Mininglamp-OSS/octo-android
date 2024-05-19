@@ -11,6 +11,8 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.chat.base.config.WKSystemAccount;
+import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.views.CommonAnim;
 import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
@@ -246,7 +248,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 }
             }
             if (WKReader.isNotEmpty(selectedList) && isShowSaveLabelDialog) {
-                WKDialogUtils.getInstance().showDialog(this, getString(R.string.message_tips), getString(R.string.save_label_tips),true, getString(R.string.cancel), getString(R.string.save_label_sure),0,Theme.colorAccount, index -> {
+                WKDialogUtils.getInstance().showDialog(this, getString(R.string.message_tips), getString(R.string.save_label_tips), true, getString(R.string.cancel), getString(R.string.save_label_sure), 0, Theme.colorAccount, index -> {
                     if (index == 1) {
                         EndpointManager.getInstance().invoke("save_label", new SaveLabelMenu(ChooseContactsActivity.this, selectedList));
                         finish();
@@ -351,18 +353,25 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     @Override
     protected void initData() {
         super.initData();
-
+        WKAPPConfig wkappConfig = WKConfig.getInstance().getAppConfig();
+        int inviteSystemAccountJoinGroupOn = 0;
+        if (wkappConfig != null) {
+            inviteSystemAccountJoinGroupOn = wkappConfig.invite_system_account_join_group_on;
+        }
         List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = tempList.size(); i < size; i++) {
             if (!TextUtils.isEmpty(unVisibleUIDs) && unVisibleUIDs.contains(tempList.get(i).channelID))
                 continue;
+            if (inviteSystemAccountJoinGroupOn == 0 && tempList.get(i).channelID.equals(WKSystemAccount.system_file_helper)) {
+                continue;
+            }
             FriendUIEntity friendUIEntity = new FriendUIEntity(tempList.get(i));
             if (!TextUtils.isEmpty(unSelectUids) && unSelectUids.contains(tempList.get(i).channelID)) {
                 friendUIEntity.isCanCheck = false;
             }
             boolean isCheck = false;
-            if (type == 2 && defaultSelected != null && defaultSelected.size() > 0) {
+            if (type == 2 && WKReader.isNotEmpty(defaultSelected)) {
                 for (int j = 0, len = defaultSelected.size(); j < len; j++) {
                     if (friendUIEntity.channel.channelID.equals(defaultSelected.get(j).channelID)
                             && friendUIEntity.channel.channelType == defaultSelected.get(j).channelType) {
@@ -433,7 +442,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
         //有此key则获取位置并滚动到该位置
         List<FriendUIEntity> list = contactsAdapter.getData();
-        if (list.size() > 0) {
+        if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying.startsWith(letter)) {
                     wkVBinding.recyclerView.smoothScrollToPosition(i);

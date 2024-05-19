@@ -14,6 +14,7 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.ChatActivity;
@@ -92,7 +93,7 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
                     startActivity(intent);
                 } else {
                     List<WKMsg> msgList = WKIM.getInstance().getMsgManager().searchWithChannel(Objects.requireNonNull(wkVBinding.searchEt.getText()).toString(),result.wkChannel.channelID, result.wkChannel.channelType);
-                    if (msgList != null && msgList.size() > 0) {
+                    if (WKReader.isNotEmpty(msgList)) {
                         WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, msgList.get(0).channelID, msgList.get(0).channelType, msgList.get(0).orderSeq, false));
                     }
 
@@ -156,7 +157,7 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
         List<WKChannelSearchResult> groupList = WKIM.getInstance().getChannelManager().search(key);
         List<WKChannel> tempList = WKIM.getInstance().getChannelManager().searchWithChannelTypeAndFollow(key, WKChannelType.PERSONAL, 1);
         List<WKChannelSearchResult> userList = new ArrayList<>();
-        if (tempList != null && tempList.size() > 0) {
+        if (WKReader.isNotEmpty(tempList)) {
             for (int i = 0, size = tempList.size(); i < size; i++) {
                 WKChannelSearchResult result = new WKChannelSearchResult();
                 result.wkChannel = tempList.get(i);
@@ -177,19 +178,19 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
         userAdapter.setSearchKey(key);
         groupAdapter.setSearchKey(key);
         msgAdapter.setSearchKey(key);
-        if (userList.size() > 0) {
+        if (WKReader.isNotEmpty(userList)) {
             wkVBinding.userLayout.setVisibility(View.VISIBLE);
         } else {
             wkVBinding.userLayout.setVisibility(View.GONE);
         }
         userAdapter.setList(userList);
-        if (groupList.size() > 0) {
+        if (WKReader.isNotEmpty(groupList)) {
             wkVBinding.groupLayout.setVisibility(View.VISIBLE);
         } else {
             wkVBinding.groupLayout.setVisibility(View.GONE);
         }
         groupAdapter.setList(groupList);
-        if (msgList.size() > 0) {
+        if (WKReader.isNotEmpty(msgList)) {
             wkVBinding.msgLayout.setVisibility(View.VISIBLE);
         } else {
             wkVBinding.msgLayout.setVisibility(View.GONE);

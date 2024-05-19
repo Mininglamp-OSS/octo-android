@@ -89,6 +89,7 @@
                         </LinearLayout>
 
                         <LinearLayout
+                            android:visibility="gone"
                             android:id="@+id/nickNameLayout"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -115,7 +116,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="5dp"
-                            android:visibility="visible">
+                            android:visibility="gone">
 
                             <TextView
                                 android:id="@+id/appIdNumLeftTv"
@@ -167,8 +168,10 @@
                             android:text="@string/source_from" />
 
                         <TextView
+                            android:gravity="end"
+                            android:layout_weight="5"
                             android:id="@+id/sourceFromTv"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center_vertical"
                             android:text="@string/source_from_unknown"
@@ -250,7 +253,7 @@
                     android:layout_marginTop="30dp"
                     android:layout_marginEnd="15dp"
                     android:text="@string/send_msg"
-                    android:visibility="visible"
+                    android:visibility="gone"
                     app:cornerRadius="@dimen/button_radian" />
 
                 <TextView

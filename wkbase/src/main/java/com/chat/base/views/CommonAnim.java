@@ -282,26 +282,81 @@ public class CommonAnim {
         view.setVisibility(View.GONE);
     }
 
+    public void slideIntoView(View view) {
+        Animation slideAnimation = new TranslateAnimation(
+                Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+                Animation.RELATIVE_TO_SELF, 1.0f, Animation.RELATIVE_TO_SELF, 0.0f);
+        slideAnimation.setDuration(500); // 动画持续时间，毫秒
+//        slideAnimation.setFillAfter(true); // 动画结束后保持结束状态
+        view.startAnimation(slideAnimation);
+    }
+
+    // 从底部滑出的动画
+    public void slideOutOfView(View view) {
+        Animation slideAnimation = new TranslateAnimation(
+                Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+                Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 1.0f);
+        slideAnimation.setDuration(500); // 动画持续时间，毫秒
+//        slideAnimation.setFillAfter(true); // 动画结束后保持结束状态
+        slideAnimation.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.setVisibility(View.GONE); // 动画结束后隐藏View
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+            }
+        });
+        view.startAnimation(slideAnimation);
+    }
+
+    public void showOrHide(View view) {
+        view.setTranslationY(view.getHeight());
+        AnimatorSet animatorSet = new AnimatorSet();
+        ObjectAnimator translateAnim = ObjectAnimator.ofFloat(view, "translationY", view.getHeight(), 0);
+        translateAnim.setDuration(200);
+        translateAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+                view.setVisibility(View.VISIBLE);
+            }
+        });
+        animatorSet.play(translateAnim);
+        animatorSet.start();
+    }
+
     public void showOrHide(View view, boolean show) {
-        this.showOrHide(view, show, true, true);
+        if (show) {
+//            slideOutOfView(view);
+            showOrHide(view);
+        } else {
+            slideIntoView(view);
+        }
+//        this.showOrHide(view, show, true, true);
     }
 
     public void showOrHide(View view, boolean show, boolean animated) {
         showOrHide(view, show, animated, false);
     }
 
+
     public void showOrHide(View view, boolean show, boolean animated, boolean isGone) {
 
         if (view == null || (show && view.getTag() == null) || (!show && view.getTag() != null)) {
             return;
         }
-        AnimatorSet animatorSet;
+
         view.setTag(show ? null : 1);
         if (animated) {
             if (show) {
                 view.setVisibility(VISIBLE);
             }
-            animatorSet = new AnimatorSet();
+            AnimatorSet animatorSet = new AnimatorSet();
             animatorSet.playTogether(ObjectAnimator.ofFloat(view, View.ALPHA, show ? 1.0f : 0.0f),
                     ObjectAnimator.ofFloat(view, View.SCALE_X, show ? 1.0f : 0.0f),
                     ObjectAnimator.ofFloat(view, View.SCALE_Y, show ? 1.0f : 0.0f));

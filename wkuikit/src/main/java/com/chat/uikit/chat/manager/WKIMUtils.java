@@ -44,6 +44,8 @@ import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.NotificationCompatUtil;
 import com.chat.base.utils.WKCommonUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKLogUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.views.pwdview.NumPwdDialog;
@@ -113,7 +115,7 @@ public class WKIMUtils {
 
                 Vibrator mVibrator = (Vibrator) WKBaseApplication.getInstance().getContext().getSystemService(Context.VIBRATOR_SERVICE);
                 long[] pattern = {0, 1000, 1000};
-                AudioAttributes audioAttributes = null;
+                AudioAttributes audioAttributes;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     audioAttributes = new AudioAttributes.Builder()
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -158,9 +160,7 @@ public class WKIMUtils {
 //        });
 
         //监听sdk获取IP和port
-        WKIM.getInstance().getConnectionManager().addOnGetIpAndPortListener(andPortListener -> {
-            MsgModel.getInstance().getChatIp((code, ip, port) -> andPortListener.onGetSocketIpAndPort(ip, Integer.parseInt(port)));
-        });
+        WKIM.getInstance().getConnectionManager().addOnGetIpAndPortListener(andPortListener -> MsgModel.getInstance().getChatIp((code, ip, port) -> andPortListener.onGetSocketIpAndPort(ip, Integer.parseInt(port))));
         //消息存库拦截器监听
         WKIM.getInstance().getMsgManager().addMessageStoreBeforeIntercept(msg -> {
             if (msg != null && msg.type == WKContentType.screenshot) {
@@ -191,7 +191,7 @@ public class WKIMUtils {
             byte channelType = WKChannelType.PERSONAL;
             WKMsg sensitiveWordsMsg = null;
             String loginUID = WKConfig.getInstance().getUid();
-            if (msgList != null && msgList.size() > 0) {
+            if (WKReader.isNotEmpty(msgList)) {
                 channelID = msgList.get(msgList.size() - 1).channelID;
                 channelType = msgList.get(msgList.size() - 1).channelType;
                 for (int i = 0, size = msgList.size(); i < size; i++) {
@@ -220,8 +220,7 @@ public class WKIMUtils {
                         WKTextContent textContent = (WKTextContent) msgList.get(i).baseContentMsgModel;
                         // 判断是否包含敏感词
                         if (WKUIKitApplication.getInstance().sensitiveWords != null
-                                && WKUIKitApplication.getInstance().sensitiveWords.list != null
-                                && WKUIKitApplication.getInstance().sensitiveWords.list.size() > 0
+                                && WKReader.isNotEmpty(WKUIKitApplication.getInstance().sensitiveWords.list)
                                 && textContent != null && !TextUtils.isEmpty(textContent.getDisplayContent())) {
                             for (String word : WKUIKitApplication.getInstance().sensitiveWords.list) {
                                 if (textContent.getDisplayContent().contains(word)) {
@@ -239,7 +238,7 @@ public class WKIMUtils {
                                 jsonObject.put("content", WKUIKitApplication.getInstance().sensitiveWords.tips);
                                 jsonObject.put("type", WKContentType.sensitiveWordsTips);
                             } catch (JSONException e) {
-                                e.printStackTrace();
+                                WKLogUtils.e("解析敏感词错误");
                             }
                             WKChannel channel = new WKChannel(msgList.get(i).channelID, msgList.get(i).channelType);
                             sensitiveWordsMsg.setChannelInfo(channel);
@@ -295,8 +294,6 @@ public class WKIMUtils {
             }
             MsgModel.getInstance().editMsg(msgExtra.messageID, msgSeq, msgExtra.channelID, msgExtra.channelType, msgExtra.contentEdit, null);
         });
-        // 监听同步消息回应
-        WKIM.getInstance().getMsgManager().addOnSyncMsgReactionListener((s, b, l) -> MsgModel.getInstance().syncReaction(s, b, l));
 
         /*
          * 设置获取频道信息的监听
@@ -366,12 +363,8 @@ public class WKIMUtils {
                         }
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
                     }
-                    case WKCMDKeys.wk_sync_reminders -> {
-                        MsgModel.getInstance().syncReminder();
-                    }
-                    case WKCMDKeys.wk_sync_conversation_extra -> {
-                        MsgModel.getInstance().syncCoverExtra();
-                    }
+                    case WKCMDKeys.wk_sync_reminders -> MsgModel.getInstance().syncReminder();
+                    case WKCMDKeys.wk_sync_conversation_extra -> MsgModel.getInstance().syncCoverExtra();
                 }
             }
         });
@@ -438,7 +431,7 @@ public class WKIMUtils {
             return;
         }
         List<ProhibitWord> list = ProhibitWordModel.Companion.getInstance().getAll();
-        if (list.size() > 0) {
+        if (WKReader.isNotEmpty(list)) {
             String content = getContent(msg);
             for (ProhibitWord word : list) {
                 if (content.contains(word.content)) {
@@ -593,7 +586,7 @@ public class WKIMUtils {
         if (chatViewMenu.isNewTask) {
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         }
-        if (chatViewMenu.forwardMsgList != null && chatViewMenu.forwardMsgList.size() > 0) {
+        if (WKReader.isNotEmpty(chatViewMenu.forwardMsgList)) {
             intent.putParcelableArrayListExtra("msgContentList", (ArrayList<? extends Parcelable>) chatViewMenu.forwardMsgList);
         }
         intent.putExtra("aroundMsgSeq", aroundMsgSeq);

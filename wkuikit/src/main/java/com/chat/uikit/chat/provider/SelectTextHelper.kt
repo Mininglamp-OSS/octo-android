@@ -61,6 +61,7 @@ class SelectTextHelper(builder: Builder) {
     private val mCursorHandleSize: Int // 游标大小
     private val mSelectAll: Boolean // 全选
     private val mFlame: Int // 是否阅后即焚
+    private val mIsShowPinnedMessage: Int // 是否显示置顶消息
     private val mSelectedAllNoPop: Boolean // 已经全选无弹窗
     private val mScrollShow: Boolean // 滑动依然显示弹窗
     private val mMagnifierShow: Boolean // 显示放大镜
@@ -91,6 +92,7 @@ class SelectTextHelper(builder: Builder) {
         mCursorHandleColor = builder.mCursorHandleColor
         mSelectAll = builder.mSelectAll
         mFlame = builder.mFlame
+        mIsShowPinnedMessage = builder.mIsShowPinnedMessage
         mScrollShow = builder.mScrollShow
         mMagnifierShow = builder.mMagnifierShow
         mPopSpanCount = builder.mPopSpanCount
@@ -395,6 +397,7 @@ class SelectTextHelper(builder: Builder) {
         var mPopArrowImg = 0
         val itemTextList: MutableList<Pair<Int, String>> = LinkedList()
         val itemListenerList: MutableList<onSeparateItemClickListener> = LinkedList()
+        var mIsShowPinnedMessage = 0
 
         /**
          * 选择游标颜色
@@ -430,6 +433,11 @@ class SelectTextHelper(builder: Builder) {
 
         fun setFlame(flame: Int): Builder {
             mFlame = flame
+            return this
+        }
+
+        fun setIsShowPinnedMessage(isShowPinnedMessage: Int): Builder {
+            mIsShowPinnedMessage = isShowPinnedMessage
             return this
         }
 
@@ -632,8 +640,11 @@ class SelectTextHelper(builder: Builder) {
                 mSelectListener!!.onClick(mTextView, mOriginalContent)
             }
         }
-        fullLayout.setOnLongClickListener(object :View.OnLongClickListener{
+        fullLayout.setOnLongClickListener(object : View.OnLongClickListener {
             override fun onLongClick(p0: View?): Boolean {
+                if (mIsShowPinnedMessage == 1) {
+                    return true
+                }
                 coordinate = fullLayoutLocation[0]
                 mTouchX = fullLayoutLocation[0][0].toInt()
                 mTouchY = fullLayoutLocation[0][1].toInt()
@@ -726,8 +737,11 @@ class SelectTextHelper(builder: Builder) {
                 mSelectListener!!.onClick(mTextView, mOriginalContent)
             }
         }
-        mTextView.setOnLongClickListener(object :View.OnLongClickListener{
+        mTextView.setOnLongClickListener(object : View.OnLongClickListener {
             override fun onLongClick(p0: View?): Boolean {
+                if (mIsShowPinnedMessage == 1) {
+                    return true
+                }
                 coordinate = textViewLocation[0]
                 mTouchX = textViewLocation[0][0].toInt()
                 mTouchY = textViewLocation[0][1].toInt()

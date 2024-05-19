@@ -1,6 +1,5 @@
 package com.chat.base.utils;
 
-import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.net.Uri;
 
@@ -9,11 +8,6 @@ import androidx.fragment.app.FragmentActivity;
 import com.chat.base.R;
 import com.chat.base.ui.Theme;
 import com.tbruyelle.rxpermissions3.RxPermissions;
-
-import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.core.Observer;
-import io.reactivex.rxjava3.disposables.Disposable;
-import io.reactivex.rxjava3.functions.Consumer;
 
 public class WKPermissions {
     private WKPermissions() {

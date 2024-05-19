@@ -33,6 +33,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -318,7 +319,7 @@ public class WKFileUtils {
                             return path;
                         }
                     } catch (Exception e) {
-
+                        Log.e("获取文件路径异常", Objects.requireNonNull(e.getLocalizedMessage()));
                     }
                 }
 
@@ -339,20 +340,22 @@ public class WKFileUtils {
                 final String docId = DocumentsContract.getDocumentId(uri);
                 final String[] split = docId.split(":");
                 final String type = split[0];
-
-                Uri contentUri = null;
+                Uri contentUri;
                 if ("image".equals(type)) {
                     contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-
                 } else if ("video".equals(type)) {
                     contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-
                 } else if ("audio".equals(type)) {
                     contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-
                 } else {
-                    Log.e("是否content了", "--->");
-                    return uri.getPath();
+                    String fileName = getFileName(context, uri);
+                    File file = generateFileName(fileName);
+                    String destinationPath = null;
+                    if (file != null) {
+                        destinationPath = file.getAbsolutePath();
+                        saveFileFromUri(context, uri, destinationPath);
+                    }
+                    return destinationPath;
                 }
 
                 final String selection = "_id=?";
@@ -389,8 +392,8 @@ public class WKFileUtils {
                 }
                 return value;
             }
-        } catch (Exception ignore) {
-
+        } catch (Exception e) {
+            Log.e("获取文件路径异常", e.getMessage());
         }
         return null;
 
@@ -591,7 +594,6 @@ public class WKFileUtils {
             blockSize = getFileSize(file);
             Log.e("文件大小", blockSize + "");
         } catch (Exception e) {
-            e.printStackTrace();
             Log.e("获取文件大小错误", "-->");
         }
         return blockSize;
@@ -600,7 +602,6 @@ public class WKFileUtils {
     public long getFileSize(File file) {
         long size = 0;
         try {
-
             if (file.exists()) {
                 FileInputStream fis = new FileInputStream(file);
                 size = fis.available();
@@ -968,7 +969,7 @@ public class WKFileUtils {
 
 
     @SuppressLint("NewApi")
-    public  String getPath(final Uri uri) {
+    public String getPath(final Uri uri) {
         try {
             final boolean isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
             if (isKitKat && DocumentsContract.isDocumentUri(WKBaseApplication.getInstance().application, uri)) {

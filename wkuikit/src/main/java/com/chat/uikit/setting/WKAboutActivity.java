@@ -34,12 +34,12 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected void initView() {
+
+        SingleClickUtil.onSingleClick(wkVBinding.icpTV, view1 -> {
+            // 隐私政策
+            showWebView("https://beian.miit.gov.cn/#/home");
+        });
         SingleClickUtil.onSingleClick(wkVBinding.privacyPolicyLayout, view1 -> {
             // 隐私政策
             showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html");
@@ -59,7 +59,6 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
     protected void initListener() {
         wkVBinding.avatarView.setSize(80);
         wkVBinding.avatarView.showAvatar(WKSystemAccount.system_team, WKChannelType.PERSONAL);
-        SingleClickUtil.onSingleClick(wkVBinding.avatarView, view1 -> upCrashFile());
     }
 
     private void checkNewVersion(boolean isShowDialog) {
@@ -76,16 +75,5 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
         });
     }
 
-    private void upCrashFile() {
-        //点击头像，连续点击8次 提交音视频闪退日志数据
-        try {
-            click += 1;
-            if (click >= 8) {
-                EndpointManager.getInstance().invoke("upRtcCrashFile", this);
-                click = 0;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+
 }

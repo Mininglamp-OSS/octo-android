@@ -300,11 +300,11 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
             if (clip != null) {
                 int curPosition = getSelectionStart();
                 StringBuilder sb = new StringBuilder(Objects.requireNonNull(getText()).toString());
-                sb.insert(curPosition, " " + editContent);
+                sb.insert(curPosition, editContent);
 //                this.setText(sb.toString());
                 this.setText(MoonUtil.getEmotionContent(getContext(), this, sb.toString()));
                 // 将光标设置到新增完表情的右侧
-                this.setSelection(curPosition + editContent.length() + 1);
+                this.setSelection(curPosition + editContent.length() );
                 return true;
             }
             // clip.setText("改变剪贴板中Content" + clip.getText());

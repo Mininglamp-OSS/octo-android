@@ -60,7 +60,7 @@ public class EndpointManager {
                         break;
                     }
                 }
-                if (list.size() == 0) {
+                if (WKReader.isEmpty(list)) {
                     endpointList.remove(category);
                 } else {
                     endpointList.put(category, list);
@@ -90,12 +90,12 @@ public class EndpointManager {
     }
 
     public <K> List<K> invokes(String category, Object object) {
-        if (endpointList == null || endpointList.size() == 0 || !endpointList.containsKey(category))
+        if (endpointList == null || endpointList.isEmpty() || !endpointList.containsKey(category))
             return null;
         else {
             List<K> list = new ArrayList<>();
             List<Endpoint> tempList = endpointList.get(category);
-            if (tempList == null || tempList.size() == 0) {
+            if (tempList == null || tempList.isEmpty()) {
                 return list;
             } else {
                 Collections.sort(tempList);

@@ -17,6 +17,7 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.adapter.ChooseChatAdapter;
@@ -69,7 +70,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 selectedList.add(chooseChatAdapter.getData().get(i).uiConveursationMsg);
         }
         List<WKChannel> list = new ArrayList<>();
-        if (selectedList.size() > 0) {
+        if (WKReader.isNotEmpty(selectedList)) {
             for (int i = 0; i < selectedList.size(); i++) {
                 list.add(selectedList.get(i).getWkChannel());
             }

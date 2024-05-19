@@ -63,9 +63,6 @@ public interface MsgService {
     Observable<List<WKSyncExtraMsg>> syncExtraMsg(@Body JSONObject jsonObject);
 
 
-    @POST("reaction/sync")
-    Observable<List<WKSyncMsgReaction>> syncReaction(@Body JSONObject jsonObject);
-
     @POST("message/offset")
     Observable<CommonResponse> offsetMsg(@Body JSONObject jsonObject);
 

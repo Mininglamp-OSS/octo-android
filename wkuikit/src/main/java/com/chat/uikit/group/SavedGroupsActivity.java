@@ -8,6 +8,7 @@ import android.widget.TextView;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.ChannelInfoEntity;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.contacts.ChooseContactsActivity;
@@ -102,7 +103,7 @@ public class SavedGroupsActivity extends WKBaseActivity<ActCommonListLayoutBindi
 
     @Override
     public void setMyGroups(List<GroupEntity> list) {
-        if (list == null || list.size() == 0) {
+        if (WKReader.isEmpty(list)) {
             wkVBinding.nodataTv.setVisibility(View.VISIBLE);
         } else {
             List<String> channelIds = new ArrayList<>();

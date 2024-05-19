@@ -42,6 +42,7 @@ import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.BottomSheet;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.google.gson.JsonObject;
 import com.tencent.smtt.sdk.ValueCallback;
@@ -248,7 +249,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
                     EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(WKWebViewActivity.this, channelID, channelType, 0, true));
                     finish();
                 } catch (JSONException e) {
-                    e.printStackTrace();
+                    WKLogUtils.e("显示最近会话页面错误");
                 }
             }
         });

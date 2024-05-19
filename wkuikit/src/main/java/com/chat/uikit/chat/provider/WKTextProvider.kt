@@ -1,5 +1,6 @@
 package com.chat.uikit.chat.provider
 
+import android.Manifest
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -59,6 +60,8 @@ import com.chat.base.ui.components.NormalClickableSpan
 import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.base.utils.StringUtils
 import com.chat.base.utils.WKDialogUtils
+import com.chat.base.utils.WKPermissions
+import com.chat.base.utils.WKPermissions.IPermissionResult
 import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
@@ -334,6 +337,7 @@ open class WKTextProvider : WKChatBaseProvider() {
             .setSelectTextLength(2)// 首次选中文本的长度 default 2
             .setPopDelay(100)// 弹窗延迟时间 default 100毫秒
             .setFlame(uiChatMsgItemEntity.wkMsg.flame)
+            .setIsShowPinnedMessage(if (uiChatMsgItemEntity.isShowPinnedMessage) 1 else 0)
             .addItem(R.mipmap.msg_copy,
                 R.string.copy,
                 object : SelectTextHelper.Builder.onSeparateItemClickListener {
@@ -494,12 +498,32 @@ open class WKTextProvider : WKChatBaseProvider() {
                                 R.mipmap.msg_calls,
                                 object : BottomSheetItem.IBottomSheetClick {
                                     override fun onClick() {
-                                        val intent =
-                                            Intent(
-                                                Intent.ACTION_CALL,
-                                                Uri.parse("tel:$content")
-                                            )
-                                        context.startActivity(intent)
+                                        val desc = String.format(
+                                            context.getString(R.string.call_phone_permissions_desc),
+                                            context.getString(R.string.app_name)
+                                        );
+                                        WKPermissions.getInstance().checkPermissions(
+                                            object : IPermissionResult {
+                                                override fun onResult(result: Boolean) {
+                                                    if (result) {
+                                                        val intent =
+                                                            Intent(
+                                                                Intent.ACTION_CALL,
+                                                                Uri.parse("tel:$content")
+                                                            )
+                                                        context.startActivity(intent)
+                                                    }
+                                                }
+
+                                                override fun clickResult(isCancel: Boolean) {
+
+                                                }
+                                            },
+                                            chatAdapter.conversationContext.chatActivity,
+                                            desc,
+                                            Manifest.permission.CALL_PHONE
+                                        )
+
                                     }
                                 })
                         )
@@ -879,5 +903,15 @@ open class WKTextProvider : WKChatBaseProvider() {
         if (textContentLayout.layoutParams.width < msgTimeView.layoutParams.width) {
             textContentLayout.layoutParams.width = msgTimeView.layoutParams.width
         }
+    }
+
+    override fun resetFromName(
+        position: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
+        setFromName(uiChatMsgItemEntity, from, receivedTextNameTv)
     }
 }

@@ -7,6 +7,8 @@ import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.entity.NewFriendEntity;
+import com.chat.base.utils.WKLogUtils;
+import com.chat.base.utils.WKReader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,7 +71,7 @@ public class ApplyDB {
         try {
             cv = getContentValues(friendEntity);
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("新增申请数据错误");
         }
         long result = -1;
         try {
@@ -87,7 +89,7 @@ public class ApplyDB {
      * @param list List<NewFriendEntity>
      */
     public synchronized void insert(List<NewFriendEntity> list) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         try {
             WKBaseApplication.getInstance().getDbHelper().getDB()
                     .beginTransaction();
@@ -113,7 +115,7 @@ public class ApplyDB {
         try {
             cv = getContentValues(friendEntity);
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("修改申请加好友数据错误");
         }
         return WKBaseApplication.getInstance().getDbHelper()
                 .update("apply_tab", cv, "apply_uid=?", update);

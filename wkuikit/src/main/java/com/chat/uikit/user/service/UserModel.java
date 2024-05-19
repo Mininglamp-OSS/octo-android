@@ -14,10 +14,12 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
+import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -189,8 +191,8 @@ public class UserModel extends WKBaseModel {
                 WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_mute_of_app", muteOfAPP);
                 List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
                 List<WKChannel> list = new ArrayList<>();
-                if (result.friends != null && result.friends.size() > 0) {
-                    if (tempList != null && tempList.size() > 0) {
+                if (WKReader.isNotEmpty(result.friends)) {
+                    if (WKReader.isNotEmpty(tempList)) {
                         for (int i = 0, size = tempList.size(); i < size; i++) {
                             boolean isReset = true;
                             for (int j = 0, len = result.friends.size(); j < len; j++) {
@@ -245,8 +247,8 @@ public class UserModel extends WKBaseModel {
                     }
                 }
 
-                if (result.friends != null && result.friends.size() > 0) {
-                    if (tempList != null && tempList.size() > 0) {
+                if (WKReader.isNotEmpty(result.friends)) {
+                    if (WKReader.isNotEmpty(tempList)) {
                         for (int i = 0, size = tempList.size(); i < size; i++) {
                             for (int j = 0, len = result.friends.size(); j < len; j++) {
                                 if (result.friends.get(j).uid.equals(tempList.get(i).channelID)) {
@@ -328,4 +330,21 @@ public class UserModel extends WKBaseModel {
         void onResult(int code, String msg, List<MailListEntity> list);
     }
 
+    public interface IUserInfo {
+        void onResult(int code, String msg, UserInfo userInfo);
+    }
+
+    public void getUserInfo(String uid,String groupNo, IUserInfo iUserInfo) {
+        request(createService(UserService.class).getUserInfo(uid,groupNo), new IRequestResultListener<UserInfo>() {
+            @Override
+            public void onSuccess(UserInfo result) {
+                iUserInfo.onResult(HttpResponseCode.success, "", result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iUserInfo.onResult(code, msg, null);
+            }
+        });
+    }
 }

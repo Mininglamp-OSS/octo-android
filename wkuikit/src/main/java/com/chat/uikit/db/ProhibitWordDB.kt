@@ -84,8 +84,8 @@ class ProhibitWordDB private constructor() {
         return num
     }
 
-    fun getAll(): List<ProhibitWord> {
-        val sql = "select * from $table"
+    fun getAll(): ArrayList<ProhibitWord> {
+        val sql = "select * from $table where is_deleted=0"
         val result = ArrayList<ProhibitWord>()
         if (WKBaseApplication.getInstance().dbHelper != null) {
             val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, null)

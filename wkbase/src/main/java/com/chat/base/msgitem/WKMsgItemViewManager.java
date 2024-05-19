@@ -22,8 +22,10 @@ public class WKMsgItemViewManager {
     }
 
     private ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> chatItemProviderList;
+    private ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> pinnedChatItemProviderList;
 
-    public void addChatItemViewProvider(int type, BaseItemProvider<WKUIChatMsgItemEntity> itemProvider) {
+
+    public void addChatItemViewProvider(int type, BaseItemProvider<WKUIChatMsgItemEntity> itemProvider, BaseItemProvider<WKUIChatMsgItemEntity> pinnedItemProvider) {
         if (chatItemProviderList == null) {
             chatItemProviderList = new ConcurrentHashMap<>();
             chatItemProviderList.put(WKContentType.WK_SIGNAL_DECRYPT_ERROR, new WKSignalDecryptErrorProvider());
@@ -36,27 +38,43 @@ public class WKMsgItemViewManager {
             for (int i = 1000; i <= 2000; i++) {
                 chatItemProviderList.put(i, new WKSystemProvider(i));
             }
-
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.setNewGroupAdmin, new WKSystemProvider(WKContentType.setNewGroupAdmin));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.createGroupSysMsg, new WKSystemProvider(WKContentType.createGroupSysMsg));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.addGroupMembersMsg, new WKSystemProvider(WKContentType.addGroupMembersMsg));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.removeGroupMembersMsg, new WKSystemProvider(WKContentType.removeGroupMembersMsg));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.groupSystemInfo, new WKSystemProvider(WKContentType.groupSystemInfo));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.withdrawSystemInfo, new WKSystemProvider(WKContentType.withdrawSystemInfo));
-//            WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.approveGroupMember, new WKSystemProvider(WKContentType.approveGroupMember));
-
-
         }
         chatItemProviderList.put(type, itemProvider);
+        // 置顶消息的itemProvider
+        if (pinnedChatItemProviderList == null) {
+            pinnedChatItemProviderList = new ConcurrentHashMap<>();
+            pinnedChatItemProviderList.put(WKContentType.WK_SIGNAL_DECRYPT_ERROR, new WKSignalDecryptErrorProvider());
+            pinnedChatItemProviderList.put(WKContentType.WK_CONTENT_FORMAT_ERROR, new WKChatFormatErrorProvider());
+            pinnedChatItemProviderList.put(WKContentType.unknown_msg, new WKUnknownProvider());
+            pinnedChatItemProviderList.put(WKContentType.typing, new WKTypingProvider());
+            pinnedChatItemProviderList.put(WKContentType.revoke, new WKRevokeProvider());
+            pinnedChatItemProviderList.put(WKContentType.systemMsg, new WKSystemProvider(WKContentType.systemMsg));
+            pinnedChatItemProviderList.put(WKContentType.msgPromptTime, new WKSystemProvider(WKContentType.msgPromptTime));
+            for (int i = 1000; i <= 2000; i++) {
+                pinnedChatItemProviderList.put(i, new WKSystemProvider(i));
+            }
+        }
+        pinnedChatItemProviderList.put(type, pinnedItemProvider);
     }
 
     public ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getChatItemProviderList() {
         return chatItemProviderList;
     }
 
+    public ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getPinnedChatItemProviderList() {
+        return pinnedChatItemProviderList;
+    }
+
     public BaseItemProvider<WKUIChatMsgItemEntity> getItemProvider(Integer type) {
         if (chatItemProviderList != null) {
             return chatItemProviderList.get(type);
+        }
+        return null;
+    }
+
+    public BaseItemProvider<WKUIChatMsgItemEntity> getPinnedItemProvider(Integer type) {
+        if (pinnedChatItemProviderList != null) {
+            return pinnedChatItemProviderList.get(type);
         }
         return null;
     }

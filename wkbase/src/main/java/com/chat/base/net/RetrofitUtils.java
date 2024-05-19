@@ -25,12 +25,14 @@ public class RetrofitUtils {
 
     public Retrofit getRetrofit() {
         if (retrofit == null) {
+            synchronized (RetrofitUtils.class) {
+                retrofit = new Retrofit.Builder()
+                        .baseUrl(WKApiConfig.baseUrl)
+                        .client(OkHttpUtils.getInstance().getOkHttpClient())
+                        .addConverterFactory(FastJsonConverterFactory.Companion.create())
+                        .addCallAdapterFactory(RxJava3CallAdapterFactory.create()).build();
+            }
             // GsonConverterFactory.create(new GsonBuilder().setLenient().create())
-            retrofit = new Retrofit.Builder()
-                    .baseUrl(WKApiConfig.baseUrl)
-                    .client(OkHttpUtils.getInstance().getOkHttpClient())
-                    .addConverterFactory(FastJsonConverterFactory.Companion.create())
-                    .addCallAdapterFactory(RxJava3CallAdapterFactory.create()).build();
         }
         return retrofit;
     }

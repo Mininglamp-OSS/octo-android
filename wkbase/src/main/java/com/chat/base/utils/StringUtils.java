@@ -22,6 +22,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import com.chat.base.R;
+import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKConfig;
 
 import org.jetbrains.annotations.NotNull;
@@ -591,14 +592,14 @@ public class StringUtils {
                         if (jsonObject1.has("uid")) {
                             String uid = jsonObject1.optString("uid");
                             if (!TextUtils.isEmpty(uid) && uid.equals(loginUID)) {
-                                name = "你";
+                                name = context.getString(R.string.str_you);
                             }
                         }
                     }
                     names.add(name);
                 }
             }
-            if (names.size() > 0)
+            if (WKReader.isNotEmpty(names))
                 content = MessageFormat.format(string, names.toArray());
             else content = string;
         } catch (JSONException e) {

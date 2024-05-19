@@ -5,12 +5,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import androidx.core.content.FileProvider;
 
@@ -30,6 +32,7 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 /**
@@ -274,11 +277,13 @@ public class WKDeviceUtils {
 
     /**
      * 获取系统版本
+     *
      * @return string
      */
-    public  String getSystemVersion() {
+    public String getSystemVersion() {
         return android.os.Build.VERSION.RELEASE;
     }
+
     private String capitalize(String s) {
         if (s == null || s.length() == 0) {
             return "";
@@ -401,4 +406,37 @@ public class WKDeviceUtils {
         return gps || network;
     }
 
+    public static String getSignature(Context context) {
+        try {
+            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNATURES);
+            Signature[] signatures = packageInfo.signatures;
+            for (Signature signature : signatures) {
+                return hash(signature.toByteArray());
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            WKLogUtils.e("获取签名错误");
+        }
+        return null;
+    }
+
+
+    private static String hash(byte[] bytes) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA");
+            md.update(bytes);
+            byte[] digest = md.digest();
+            return bytesToHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            // Should never happen
+            throw new RuntimeException("SHA hash not supported", e);
+        }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder();
+        for (byte b : bytes) {
+            builder.append(String.format("%02x", b));
+        }
+        return builder.toString();
+    }
 }

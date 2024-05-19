@@ -15,6 +15,7 @@ import android.util.Xml;
 import androidx.collection.LruCache;
 
 import com.chat.base.WKBaseApplication;
+import com.chat.base.utils.WKLogUtils;
 
 import org.jetbrains.annotations.NotNull;
 import org.xml.sax.Attributes;
@@ -162,7 +163,7 @@ public class EmojiManager {
             }
             return bitmap;
         } catch (Exception e) {
-            e.printStackTrace();
+            WKLogUtils.e("解析emoji错误");
         } finally {
             if (is != null) {
                 try {

@@ -96,12 +96,24 @@
         android:layout_weight="1" />
 
     <TextView
+        android:id="@+id/icpTV"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center|bottom"
+        android:layout_marginBottom="3dp"
+        android:background="@drawable/send_chat_text_bg"
+        android:gravity="center"
+        android:text=" ICP备案号: 沪ICP备2021032718号-6A >"
+        android:textColor="@color/color999"
+        android:textSize="12sp" />
+
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center|bottom"
         android:layout_marginBottom="50dp"
         android:gravity="center"
-        android:text=" Copyright © 2023 \n上海信必达网络科技有限公司 版权所有"
+        android:text=" Copyright © 2024 \n上海信必达网络科技有限公司 版权所有"
         android:textColor="@color/color999"
         android:textSize="12sp" />
 </LinearLayout>

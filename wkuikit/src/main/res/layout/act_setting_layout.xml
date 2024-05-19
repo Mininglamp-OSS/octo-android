@@ -95,11 +95,6 @@
                         android:layout_height="10dp"
                         android:background="@color/homeColor" />
 
-                    <LinearLayout
-                        android:id="@+id/keepAliveLayout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
 
                     <LinearLayout
                         android:id="@+id/msgBackupLayout"

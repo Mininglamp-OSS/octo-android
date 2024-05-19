@@ -18,6 +18,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActMailListLayoutBinding;
@@ -89,7 +90,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
             MailListEntity entity = (MailListEntity) adapter1.getData().get(position);
             if (entity != null) {
                 if (!TextUtils.isEmpty(entity.uid)) {
-                    WKDialogUtils.getInstance().showInputDialog(MailListActivity.this, getString(R.string.apply),  getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(entity.uid, entity.vercode, text, (code, msg) -> {
+                    WKDialogUtils.getInstance().showInputDialog(MailListActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(entity.uid, entity.vercode, text, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
                             showToast(R.string.applyed);
                         } else showToast(msg);
@@ -132,7 +133,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
     }
 
     private void searchUser(String content) {
-        if (allList == null || allList.size() == 0) return;
+        if (WKReader.isEmpty(allList)) return;
         if (TextUtils.isEmpty(content)) {
             adapter.setList(allList);
             return;
@@ -150,10 +151,10 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
     }
 
     private void getContacts() {
-       LoadingPopupView loadingPopup =  new XPopup.Builder(this)
+        LoadingPopupView loadingPopup = new XPopup.Builder(this)
                 .asLoading(getString(R.string.loading));
         loadingPopup.show();
-        Observable.create((ObservableOnSubscribe<List<ContactEntity>>) e -> e.onNext(get())).observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io()).subscribe(new Observer<List<ContactEntity>>() {
+        Observable.create((ObservableOnSubscribe<List<ContactEntity>>) e -> e.onNext(get())).observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io()).subscribe(new Observer<>() {
             @Override
             public void onSubscribe(@NotNull Disposable d) {
 
@@ -162,10 +163,10 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
             @Override
             public void onNext(@NotNull List<ContactEntity> list) {
                 loadingPopup.dismiss();
-                if (list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     List<MailListEntity> localList = WKContactsDB.getInstance().query();
                     List<MailListEntity> uploadList = new ArrayList<>();
-                    if (localList != null && localList.size() > 0) {
+                    if (WKReader.isNotEmpty(localList)) {
                         for (ContactEntity entity : list) {
                             boolean isAdd = true;
                             for (MailListEntity localEntity : localList) {
@@ -192,7 +193,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
                         }
                     }
 
-                    if (uploadList.size() > 0) {
+                    if (WKReader.isNotEmpty(uploadList)) {
                         WKContactsDB.getInstance().save(uploadList);
                         UserModel.getInstance().uploadContacts(uploadList, (code, msg) -> {
                             if (code == HttpResponseCode.success) {
@@ -229,7 +230,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
         UserModel.getInstance().getContacts((code, msg, list) -> {
             loadingPopup.dismiss();
             if (code == HttpResponseCode.success) {
-                if (list != null && list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     //  WKContactsDB.getInstance().save(list);
                     List<MailListEntity> localList = WKContactsDB.getInstance().query();
                     List<MailListEntity> allList = new ArrayList<>();
@@ -254,7 +255,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
     }
 
     private void sort(List<MailListEntity> list) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         List<MailListEntity> topList = new ArrayList<>();
         List<MailListEntity> otherList = new ArrayList<>();
         List<MailListEntity> letterList = new ArrayList<>();
@@ -287,7 +288,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
         allList.addAll(letterList);
         allList.addAll(numList);
         allList.addAll(otherList);
-        if (topList.size() > 0) {
+        if (WKReader.isNotEmpty(topList)) {
             MailListEntity entity = new MailListEntity();
             entity.itemType = 1;
             entity.pying = "1";
@@ -309,19 +310,21 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
         List<ContactEntity> list = new ArrayList<>();
         ContentResolver cr = MailListActivity.this.getContentResolver();
         Cursor cursor = cr.query(phoneUri, new String[]{NUM, NAME}, null, null, null);
-        while (cursor.moveToNext()) {
-            String phone = cursor.getString(cursor.getColumnIndex(NUM));
-            String name = cursor.getString(cursor.getColumnIndex(NAME));
-            ContactEntity contactEntity = new ContactEntity();
-            if (!TextUtils.isEmpty(name)) {
-                contactEntity.name = name.replaceAll(" ", "");
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                String phone = cursor.getString(cursor.getColumnIndex(NUM));
+                String name = cursor.getString(cursor.getColumnIndex(NAME));
+                ContactEntity contactEntity = new ContactEntity();
+                if (!TextUtils.isEmpty(name)) {
+                    contactEntity.name = name.replaceAll(" ", "");
+                }
+                if (!TextUtils.isEmpty(phone)) {
+                    contactEntity.phone = phone.replace(" ", "").replace("+", "00");
+                }
+                list.add(contactEntity);
             }
-            if (!TextUtils.isEmpty(phone)) {
-                contactEntity.phone = phone.replace(" ", "").replace("+", "00");
-            }
-            list.add(contactEntity);
+            cursor.close();
         }
-        cursor.close();
         return list;
     }
 }

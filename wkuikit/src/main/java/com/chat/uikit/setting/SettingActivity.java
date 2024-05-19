@@ -55,10 +55,6 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     protected void initView() {
         getCacheSize();
         EndpointManager.getInstance().invoke("set_chat_bg_view", new ChatBgItemMenu(this, wkVBinding.chatBgLayout, "", WKChannelType.PERSONAL));
-        View keepAliveView = (View) EndpointManager.getInstance().invoke("show_keep_alive_item", this);
-        if (keepAliveView != null) {
-            wkVBinding.keepAliveLayout.addView(keepAliveView);
-        }
     }
 
     @Override

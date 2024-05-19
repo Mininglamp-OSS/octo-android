@@ -15,6 +15,7 @@ import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.databinding.FragEmojiLayoutBinding;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.WKReader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -121,7 +122,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
                 tempIds = ids;
             }
         }
-        if (list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         emojiAdapter.removeAllHeaderView();
         View headerView = LayoutInflater.from(getContext()).inflate(R.layout.common_used_emoji_header_layout, null);
         RecyclerView recyclerView = headerView.findViewById(R.id.recyclerView);

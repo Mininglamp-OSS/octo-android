@@ -3,17 +3,17 @@ package com.chat.base.common;
 import android.text.TextUtils;
 
 import com.alibaba.fastjson.JSON;
-import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
+import com.chat.base.WKBaseApplication;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.AppModule;
+import com.chat.base.entity.AppVersion;
 import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.WKAPPConfig;
-import com.chat.base.entity.AppVersion;
 import com.chat.base.entity.WKChannelState;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
@@ -72,16 +72,25 @@ public class WKCommonModel extends WKBaseModel {
         void onNewVersion(AppVersion version);
     }
 
-    public void getAppConfig() {
-        request(createService(WKCommonService.class).getAppConfig(), new IRequestResultListener<WKAPPConfig>() {
+    public interface IAppConfig {
+        void onResult(int code, String msg, WKAPPConfig wkappConfig);
+    }
+
+    public void getAppConfig(IAppConfig iAppConfig) {
+        request(createService(WKCommonService.class).getAppConfig(), new IRequestResultListener<>() {
             @Override
             public void onSuccess(WKAPPConfig result) {
                 WKConfig.getInstance().saveAppConfig(result);
+                if (iAppConfig != null) {
+                    iAppConfig.onResult(HttpResponseCode.success, "", result);
+                }
             }
 
             @Override
             public void onFail(int code, String msg) {
-
+                if (iAppConfig != null) {
+                    iAppConfig.onResult(code, msg, null);
+                }
             }
         });
     }

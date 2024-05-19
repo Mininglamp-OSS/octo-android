@@ -51,8 +51,6 @@
     <string name="applyed">已申请</string>
     <string name="hint_search">搜索(精确搜索)</string>
     <string name="choose_contacts">选择联系人</string>
-    <string name="clear_chat_group_msg_dialog">删除本地聊天记录和远程数据，确定删除群的聊天记录吗？</string>
-    <string name="clear_chat_personal_msg_dialog">删除本地聊天记录和远程数据，确定删除与 %s 的聊天记录吗？</string>
     <string name="cleared">已清空</string>
     <string name="user_card">个人名片</string>
     <string name="send_msg">发消息</string>
@@ -266,7 +264,8 @@
     <string name="voice_download_fail">语音下载失败</string>
     <string name="delete_messages">删除消息</string>
     <string name="delete_chat">删除聊天</string>
-    <string name="clear_history">清除历史记录</string>
+    <string name="clear_history">清除聊天记录</string>
+    <string name="clear_history_tip">您确定要清空 %s 的消息记录吗？</string>
     <string name="all_staff">全员</string>
     <string name="department">部门</string>
     <string name="community">社区</string>

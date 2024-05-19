@@ -20,10 +20,10 @@ import com.chat.base.base.WKBaseFragment;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
-import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.PopupMenuItem;
+import com.chat.base.msgitem.WKContentType;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.WKDialogUtils;
@@ -127,9 +127,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             WKDialogUtils.getInstance().showScreenPopup(view, list);
         });
 
-        wkVBinding.deviceIv.setOnClickListener(v -> {
-            EndpointManager.getInstance().invoke("show_pc_login_view", getActivity());
-        });
+        wkVBinding.deviceIv.setOnClickListener(v -> EndpointManager.getInstance().invoke("show_pc_login_view", getActivity()));
         wkVBinding.searchIv.setOnClickListener(view1 -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 @SuppressWarnings("unchecked") ActivityOptionsCompat activityOptions = ActivityOptionsCompat.makeSceneTransitionAnimation(requireActivity(), new Pair<>(wkVBinding.searchIv, "searchView"));
@@ -312,7 +310,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     break;
                 }
             }
-            if (left && refreshIds.size() > 0) {
+            if (left && WKReader.isNotEmpty(refreshIds)) {
                 for (int i = 0, size = refreshIds.size(); i < size; i++) {
                     notifyRecycler(refreshIds.get(i), chatConversationAdapter.getData().get(refreshIds.get(i)));
 //                    chatConversationAdapter.notifyItemChanged(refreshIds.get(i), chatConversationAdapter.getData().get(refreshIds.get(i)));
@@ -401,6 +399,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             return null;
         });
+
+        EndpointManager.getInstance().setMethod("chat_cover", EndpointCategory.refreshProhibitWord, object -> {
+            if (WKReader.isEmpty(chatConversationAdapter.getData())) {
+                return 1;
+            }
+            for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).uiConversationMsg != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().type == WKContentType.WK_TEXT) {
+                    WKIMUtils.getInstance().resetMsgProhibitWord(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg());
+                    chatConversationAdapter.notifyItemChanged(i);
+                }
+            }
+            return 1;
+        });
     }
 
 
@@ -415,15 +426,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     }
 
-    @Override
-    protected void setTitle(TextView titleTv) {
-
-    }
 
     private List<ChatConversationMsg> getChatMsg() {
         List<ChatConversationMsg> list = new ArrayList<>();
         List<WKUIConversationMsg> tempList = WKIM.getInstance().getConversationManager().getAll();
-        if (tempList != null && tempList.size() > 0) {
+        if (WKReader.isNotEmpty(tempList)) {
             for (int i = 0, size = tempList.size(); i < size; i++) {
                 list.add(new ChatConversationMsg(tempList.get(i)));
             }
@@ -511,7 +518,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         boolean isAdd = true;
         int index = -1;
         boolean isSort = false;
-        if (chatConversationAdapter.getData().size() > 0) {
+        if (WKReader.isNotEmpty(chatConversationAdapter.getData())) {
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                 if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
                     if (!isEnd) {
@@ -604,7 +611,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     //检测正在输入的定时器
     private void startTimer() {
-        Observable.interval(0, 1, TimeUnit.SECONDS).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(new Observer<Long>() {
+        Observable.interval(0, 1, TimeUnit.SECONDS).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(new Observer<>() {
             @Override
             public void onComplete() {
             }
@@ -749,7 +756,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
 
-        if (msgMap.size() > 0) {
+        if (!msgMap.isEmpty()) {
             for (String key : msgMap.keySet()) {
                 List<ChatConversationMsg> msgList = msgMap.get(key);
                 WKUIConversationMsg lastMsg = new WKUIConversationMsg();
@@ -761,7 +768,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 //  ChatConversationMsg lastMsg = new ChatConversationMsg(msg);
                 //lastMsg.childList = msgList;
                 ChatConversationMsg lastConvMsg = null;
-                if (msgList != null && msgList.size() > 0) {
+                if (WKReader.isNotEmpty(msgList)) {
                     lastMsg.channelID = msgList.get(0).uiConversationMsg.parentChannelID;
                     lastMsg.channelType = msgList.get(0).uiConversationMsg.parentChannelType;
                     int unreadCount = 0;
@@ -777,7 +784,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         }
                         unreadCount += msg.unreadCount;
                         List<WKReminder> tempReminders = msg.getReminderList();
-                        if (tempReminders != null && tempReminders.size() > 0) {
+                        if (WKReader.isNotEmpty(tempReminders)) {
                             reminderList.addAll(tempReminders);
                         }
                     }

@@ -29,6 +29,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatTextView;
 import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
@@ -49,6 +50,8 @@ import com.chat.base.ui.components.ActionBarMenuSubItem;
 import com.chat.base.ui.components.ActionBarPopupWindow;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.ui.components.BottomSheet;
+import com.chat.base.ui.components.CheckBoxSquare;
+import com.chat.base.ui.components.FlatCheckBox;
 import com.chat.base.views.CustomImageViewerPopup;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.core.BasePopupView;
@@ -92,6 +95,8 @@ public class WKDialogUtils {
         AlertDialog dialog = builder.create();
         dialog.setBlurParams(1f, true, true);
         builder.show();
+        TextView positiveTv = (TextView) dialog.getButton(Dialog.BUTTON_POSITIVE);
+        positiveTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
     }
 
     public void showDialog(Context context, String title, CharSequence msg, boolean isCancelable, String canStr, String sureStr, int canColor, int sureColor, final IClickListener iClickListener) {
@@ -108,8 +113,17 @@ public class WKDialogUtils {
         if (TextUtils.isEmpty(sureStr)) {
             sureStr = context.getString(R.string.sure);
         }
-        builder.setNegativeButton(canStr, (dialog, which) -> iClickListener.onClick(0));
-        builder.setPositiveButton(sureStr, (dialog, which) -> iClickListener.onClick(1));
+        builder.setNegativeButton(canStr, (dialog, which) -> {
+                    if (iClickListener != null) {
+                        iClickListener.onClick(0);
+                    }
+                }
+        );
+        builder.setPositiveButton(sureStr, (dialog, which) -> {
+            if (iClickListener != null) {
+                iClickListener.onClick(1);
+            }
+        });
         AlertDialog dialog = builder.create();
         dialog.setBlurParams(1f, true, true);
         dialog.setCanceledOnTouchOutside(isCancelable);
@@ -144,7 +158,7 @@ public class WKDialogUtils {
         textView.setText(R.string.str_choose);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        textView.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp( 8), AndroidUtilities.dp(21), AndroidUtilities.dp(8));
+        textView.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(21), AndroidUtilities.dp(8));
         textView.setTextColor(ContextCompat.getColor(context, R.color.popupTextColor));
         linearLayout.addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.START | Gravity.TOP, 0, 8, 0, 0));
         // 转发
@@ -257,6 +271,67 @@ public class WKDialogUtils {
 
     }
 
+    public interface ICheckBoxDialog {
+        void onClick(int index, boolean isChecked);
+    }
+
+    public void showCheckBoxDialog(@NonNull Context context, String title, CharSequence msg, CharSequence checkBoxText, boolean isCancelable, String canStr, String sureStr, int canColor, int sureColor, final ICheckBoxDialog iClickListener) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        if (TextUtils.isEmpty(title)) {
+            builder.setTitle(context.getString(R.string.str_base_tips));
+        } else {
+            builder.setTitle(title);
+        }
+        builder.setMessage(msg);
+        if (TextUtils.isEmpty(canStr)) {
+            canStr = context.getString(R.string.cancel);
+        }
+        if (TextUtils.isEmpty(sureStr)) {
+            sureStr = context.getString(R.string.sure);
+        }
+        LinearLayout linearLayout = new LinearLayout(context);
+        linearLayout.setOrientation(LinearLayout.HORIZONTAL);
+        linearLayout.setGravity(Gravity.CENTER | Gravity.START);
+        linearLayout.setBackground(ContextCompat.getDrawable(context, R.drawable.layout_bg));
+        linearLayout.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(15), AndroidUtilities.dp(24), AndroidUtilities.dp(15));
+        CheckBoxSquare checkBox = new CheckBoxSquare(context, true);
+        TextView cbTextView = new AppCompatTextView(context);
+        cbTextView.setTextColor(ContextCompat.getColor(context, R.color.dialogText));
+        cbTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        cbTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        cbTextView.setText(checkBoxText);
+        linearLayout.addView(checkBox, LayoutHelper.createLinear(18, 18, Gravity.CENTER | Gravity.START, 0, 0, 10, 0));
+        linearLayout.addView(cbTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+        linearLayout.setOnClickListener(view -> checkBox.setChecked(!checkBox.isChecked(), true));
+        builder.setNegativeButton(canStr, (dialog, which) -> {
+                    if (iClickListener != null) {
+                        iClickListener.onClick(0, checkBox.isChecked());
+                    }
+                }
+        );
+        builder.setView(linearLayout);
+        builder.setPositiveButton(sureStr, (dialog, which) -> {
+            if (iClickListener != null) {
+                iClickListener.onClick(1, checkBox.isChecked());
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.setBlurParams(1f, true, true);
+        dialog.setCanceledOnTouchOutside(isCancelable);
+        dialog.show();
+        TextView textView = (TextView) dialog.getButton(Dialog.BUTTON_NEGATIVE);
+        if (canColor == 0) {
+            textView.setTextColor(ContextCompat.getColor(context, R.color.colorAccentUn));
+        } else {
+            textView.setTextColor(canColor);
+        }
+        TextView positiveTv = (TextView) dialog.getButton(Dialog.BUTTON_POSITIVE);
+        if (sureColor == 0) {
+            positiveTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
+        } else {
+            positiveTv.setTextColor(sureColor);
+        }
+    }
 
     public interface IInputDialog {
         void onResult(String text);
@@ -318,6 +393,7 @@ public class WKDialogUtils {
         alertDialog.show();
         alertDialog.setContentView(view);
         Window window = alertDialog.getWindow();
+        assert window != null;
         WindowManager.LayoutParams param = window.getAttributes();
         param.width = AndroidUtilities.getScreenWidth() / 5 * 4;
         if (versionEntity.is_force == 1) {

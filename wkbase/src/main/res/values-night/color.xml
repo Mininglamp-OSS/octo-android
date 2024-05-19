@@ -21,4 +21,5 @@
     <color name="popupTextColor">#FFFFFF</color>
     <color name="titleBarIcon">#FFFFFF</color>
     <color name="dialogText">#fbf9fe</color>
+    <color name="tip_message_cell_bg">#CC111315</color>
 </resources>

@@ -53,10 +53,6 @@ public class UserQrActivity extends WKBaseActivity<ActUserQrLayoutBinding> {
 
     }
 
-    @Override
-    protected void initPresenter() {
-
-    }
 
     @Override
     protected void initView() {

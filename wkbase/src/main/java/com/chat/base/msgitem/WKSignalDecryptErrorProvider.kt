@@ -49,7 +49,7 @@ class WKSignalDecryptErrorProvider : WKChatBaseProvider() {
                 contentTv.setBackgroundResource(R.drawable.radian_normal_layout)
             }
         }
-        addLongClick(bubbleLayout, uiChatMsgItemEntity.wkMsg)
+        addLongClick(bubbleLayout, uiChatMsgItemEntity)
     }
 
     override val itemViewType: Int

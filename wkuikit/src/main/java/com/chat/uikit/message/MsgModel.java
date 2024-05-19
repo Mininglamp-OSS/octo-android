@@ -1,6 +1,7 @@
 package com.chat.uikit.message;
 
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -38,7 +39,6 @@ import com.xinbida.wukongim.entity.WKSyncChat;
 import com.xinbida.wukongim.entity.WKSyncConvMsgExtra;
 import com.xinbida.wukongim.entity.WKSyncExtraMsg;
 import com.xinbida.wukongim.entity.WKSyncMsg;
-import com.xinbida.wukongim.entity.WKSyncMsgReaction;
 import com.xinbida.wukongim.interfaces.ISyncChannelMsgBack;
 import com.xinbida.wukongim.interfaces.ISyncConversationChatBack;
 import com.xinbida.wukongim.message.type.WKMsgContentType;
@@ -136,7 +136,7 @@ public class MsgModel extends WKBaseModel {
      * 删除消息
      */
     public void deleteMsg(List<WKMsg> list, final ICommonListener iCommonListener) {
-        if (list == null || list.size() == 0) return;
+        if (WKReader.isEmpty(list)) return;
         JSONArray jsonArray = new JSONArray();
         for (WKMsg msg : list) {
             JSONObject jsonObject = new JSONObject();
@@ -423,7 +423,7 @@ public class MsgModel extends WKBaseModel {
         request(createService(MsgService.class).syncMsg(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<SyncMsg> list) {
-                if (list != null && list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     List<WKBaseCMD> cmdList = new ArrayList<>();
                     for (int i = 0, size = list.size(); i < size; i++) {
                         WKSyncMsg WKSyncMsg = getWKSyncMsg(list.get(i));
@@ -455,7 +455,7 @@ public class MsgModel extends WKBaseModel {
                                     }
                                 }
                             } catch (JSONException e) {
-                                e.printStackTrace();
+                                Log.e("MsgModel","cmd messages not json struct");
                             }
                             cmdList.add(WKBaseCmd);
                         }
@@ -501,7 +501,8 @@ public class MsgModel extends WKBaseModel {
         long maxExtraVersion = WKIM.getInstance().getMsgManager().getMsgExtraMaxVersionWithChannel(channelID, channelType);
         jsonObject.put("extra_version", maxExtraVersion);
         jsonObject.put("limit", 100);
-        jsonObject.put("source", WKConstants.getDeviceUUID());
+        String deviceUUID = WKConstants.getDeviceUUID();
+        jsonObject.put("source", deviceUUID);
         request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncExtraMsg> result) {
@@ -516,28 +517,6 @@ public class MsgModel extends WKBaseModel {
         });
     }
 
-    public void syncReaction(String channelID, byte channelType) {
-        long maxSeq = WKIM.getInstance().getMsgManager().getMaxReactionSeqWithChannel(channelID, channelType);
-        syncReaction(channelID, channelType, maxSeq);
-    }
-
-    public void syncReaction(String channelID, byte channelType, long maxSeq) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("channel_id", channelID);
-        jsonObject.put("channel_type", channelType);
-        jsonObject.put("seq", maxSeq);
-        request(createService(MsgService.class).syncReaction(jsonObject), new IRequestResultListener<>() {
-            @Override
-            public void onSuccess(List<WKSyncMsgReaction> result) {
-                WKIM.getInstance().getMsgManager().saveMessageReactions(result);
-            }
-
-            @Override
-            public void onFail(int code, String msg) {
-
-            }
-        });
-    }
 
 
     // 同步敏感词

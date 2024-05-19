@@ -19,6 +19,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.CreateVideoCallMenu;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.ChooseUserSelectedAdapter;
 import com.chat.uikit.contacts.FriendUIEntity;
@@ -71,7 +72,7 @@ public class ChooseVideoCallMembersActivity extends WKBaseActivity<ActChooseVide
     @Override
     protected void rightButtonClick() {
         super.rightButtonClick();
-        if (selectedAdapter.getData().size() > 0) {
+        if (WKReader.isNotEmpty(selectedAdapter.getData())) {
             List<WKChannel> channels = new ArrayList<>();
             for (int i = 0, size = selectedAdapter.getData().size(); i < size; i++) {
                 if (!TextUtils.isEmpty(selectedAdapter.getData().get(i).channel.channelID))
@@ -81,13 +82,14 @@ public class ChooseVideoCallMembersActivity extends WKBaseActivity<ActChooseVide
             if (isCreate) {
                 if (channels.size() > maxSelectCount) {
                     String content = String.format(getString(R.string.max_select_count), maxSelectCount);
-                    showDialog(content, null);
+                    showSingleBtnDialog(content);
                     return;
                 }
                 isFinish = EndpointManager.getInstance().invoke("create_video_call", new CreateVideoCallMenu(this, channelID, channelType, channels));
             } //else
             //WKKitApplication.getInstance().chooseVideoCallBack(uids);
-            if (null == isFinish) new Handler(Looper.myLooper()).postDelayed(this::finish, 500);
+            if (null == isFinish)
+                new Handler(Looper.getMainLooper()).postDelayed(this::finish, 500);
         }
 
     }
@@ -201,9 +203,9 @@ public class ChooseVideoCallMembersActivity extends WKBaseActivity<ActChooseVide
         adapter.setOnItemClickListener((adapter, view1, position) -> {
             GroupMemberEntity memberEntity = (GroupMemberEntity) adapter.getItem(position);
             if (memberEntity != null) {
-                if (maxSelectCount != -1 && selectedAdapter.getItemCount() >= maxSelectCount) {
+                if (maxSelectCount != -1 && (selectedAdapter.getItemCount() - 1) >= maxSelectCount) {
                     String content = String.format(getString(R.string.max_select_count), maxSelectCount);
-                    showDialog(content, null);
+                    showSingleBtnDialog(content);
                     return;
                 }
                 if (memberEntity.isCanCheck == 1) {
@@ -278,7 +280,7 @@ public class ChooseVideoCallMembersActivity extends WKBaseActivity<ActChooseVide
         } else {
             adapter.addData(tempList);
         }
-        if (tempList.size() == 0) {
+        if (WKReader.isEmpty(tempList)) {
             wkVBinding.refreshLayout.setEnableLoadMore(false);
             wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
         }

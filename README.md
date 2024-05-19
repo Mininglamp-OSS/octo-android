@@ -83,10 +83,10 @@ override val itemViewType: Int
  ```
 2、完成消息item提供者的编写后需将该item注册到消息提供管理中。
 ```kotlin
-WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_LOCATION, WKCardProvider())
+WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_LOCATION, WKCardProvider(), WKCardProvider())
 ```
 对此自定义消息Item已经完成，在收到此类型的消息时就会展示到聊天列表中了
-
+详细实现步骤可以查看代码`wkuikit`模块中`provider`包中的`WKImageProvider`文件
 ## 效果图
 
 |对方正在输入|语音消息|合并转发|

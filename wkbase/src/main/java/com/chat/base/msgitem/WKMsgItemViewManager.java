@@ -25,7 +25,7 @@ public class WKMsgItemViewManager {
     private ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> pinnedChatItemProviderList;
 
 
-    public void addChatItemViewProvider(int type, BaseItemProvider<WKUIChatMsgItemEntity> itemProvider, BaseItemProvider<WKUIChatMsgItemEntity> pinnedItemProvider) {
+    public void addChatItemViewProvider(int type, BaseItemProvider<WKUIChatMsgItemEntity> itemProvider) {
         if (chatItemProviderList == null) {
             chatItemProviderList = new ConcurrentHashMap<>();
             chatItemProviderList.put(WKContentType.WK_SIGNAL_DECRYPT_ERROR, new WKSignalDecryptErrorProvider());
@@ -54,7 +54,13 @@ public class WKMsgItemViewManager {
                 pinnedChatItemProviderList.put(i, new WKSystemProvider(i));
             }
         }
-        pinnedChatItemProviderList.put(type, pinnedItemProvider);
+        try {
+            Object myObject = itemProvider.getClass().newInstance();
+            pinnedChatItemProviderList.put(type, (BaseItemProvider<WKUIChatMsgItemEntity>) myObject);
+        } catch (IllegalAccessException | InstantiationException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     public ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getChatItemProviderList() {

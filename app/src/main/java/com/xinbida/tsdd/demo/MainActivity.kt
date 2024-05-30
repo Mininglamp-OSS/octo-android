@@ -4,11 +4,7 @@ import android.content.Intent
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
-import android.text.method.LinkMovementMethod
-import android.view.LayoutInflater
 import android.view.View
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import com.chat.base.WKBaseApplication
 import com.chat.base.base.WKBaseActivity
@@ -17,11 +13,8 @@ import com.chat.base.config.WKConfig
 import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.ui.components.NormalClickableContent
 import com.chat.base.ui.components.NormalClickableSpan
-import com.chat.base.utils.AndroidUtilities
 import com.chat.base.utils.WKDialogUtils
-import com.chat.base.utils.singleclick.SingleClickUtil
 import com.chat.login.ui.PerfectUserInfoActivity
-import com.chat.login.ui.ThirdLoginActivity
 import com.chat.login.ui.WKLoginActivity
 import com.chat.uikit.TabActivity
 import com.xinbida.tsdd.demo.databinding.ActivityMainBinding
@@ -50,9 +43,6 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                 val publicRSAKey: String =
                     WKIM.getInstance().cmdManager.rsaPublicKey
                 if (TextUtils.isEmpty(publicRSAKey)) {
-//                    val intent = Intent(this@MainActivity, ThirdLoginActivity::class.java)
-//                    intent.putExtra("from", getIntent().getIntExtra("from", 0))
-//                    startActivity(intent)
                     val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
                     intent.putExtra("from", getIntent().getIntExtra("from", 0))
                     startActivity(intent)
@@ -64,9 +54,6 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
             val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
             intent.putExtra("from", getIntent().getIntExtra("from", 0))
             startActivity(intent)
-//            val intent = Intent(this@MainActivity, ThirdLoginActivity::class.java)
-//            intent.putExtra("from", getIntent().getIntExtra("from", 0))
-//            startActivity(intent)
         }
         finish()
     }

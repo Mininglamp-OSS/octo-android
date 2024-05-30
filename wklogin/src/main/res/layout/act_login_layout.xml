@@ -220,16 +220,6 @@
 
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/baseUrlTv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginBottom="50dp"
-        android:layout_centerHorizontal="true"
-        android:text="@string/update_api"
-        android:textColor="@color/color999" />
-
     <FrameLayout
         android:id="@+id/otherView"
         android:layout_width="match_parent"

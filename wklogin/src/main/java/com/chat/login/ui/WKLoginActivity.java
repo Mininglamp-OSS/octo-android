@@ -23,23 +23,21 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
-import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.endpoint.entity.OtherLoginResultMenu;
-import com.chat.base.endpoint.entity.UpdateBaseAPIMenu;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.keyboard.SoftKeyboardStateHelper;
-import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.OtherDeviceLoginDialogView;
 import com.chat.login.R;
-import com.chat.login.UpdateApiDialog;
 import com.chat.login.databinding.ActLoginLayoutBinding;
+import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginPresenter;
 import com.lxj.xpopup.XPopup;
@@ -61,11 +59,6 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     protected ActLoginLayoutBinding getViewBinding() {
         return ActLoginLayoutBinding.inflate(getLayoutInflater());
     }
-
-    @Override
-    protected void setTitle(TextView titleTv) {
-    }
-
     @Override
     protected void initPresenter() {
         loginPresenter = new LoginPresenter(this);
@@ -185,26 +178,6 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
             return null;
         });
-        wkVBinding.baseUrlTv.setOnClickListener(v -> {
-            String ip = "";
-            String port = "";
-            new XPopup.Builder(this)
-                    .autoOpenSoftInput(true).hasShadowBg(true)
-                    .asCustom(new UpdateApiDialog(this, ip, port, (ip1, port1) -> {
-                        UpdateBaseAPIMenu apiMenu = new UpdateBaseAPIMenu(ip1, port1);
-                        EndpointManager.getInstance().invoke("update_base_url", apiMenu);
-                        showBaseUrl();
-                    }))
-                    .show();
-        });
-        showBaseUrl();
-    }
-
-    private void showBaseUrl() {
-        String apiURL = WKSharedPreferencesUtil.getInstance().getSP("api_base_url");
-        if (!TextUtils.isEmpty(apiURL)) {
-            wkVBinding.baseUrlTv.setText(apiURL);
-        }
     }
 
     @Override
@@ -219,7 +192,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             hideLoading();
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
-                if (list != null && list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     for (LoginMenu menu : list) {
                         if (menu.iMenuClick != null) menu.iMenuClick.onClick();
                     }

@@ -19,7 +19,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.base.WKBaseActivity;
-import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
@@ -29,7 +28,6 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.UserDetailViewMenu;
 import com.chat.base.entity.PopupMenuItem;
-import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.NormalClickableContent;
@@ -45,15 +43,12 @@ import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActUserDetailLayoutBinding;
 import com.chat.uikit.db.WKContactsDB;
-import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.user.service.UserModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
-import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
-import com.xinbida.wukongim.entity.WKChannelStatus;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
@@ -325,6 +320,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         UserModel.getInstance().getUserInfo(uid, groupID, (code, msg, userInfo) -> {
             if (code == HttpResponseCode.success) {
                 if (userInfo != null) {
+                    if (!TextUtils.isEmpty(userInfo.vercode)) {
+                        vercode = userInfo.vercode;
+                    }
                     wkVBinding.nameTv.setText(TextUtils.isEmpty(userInfo.remark) ? userInfo.name : userInfo.remark);
                     wkVBinding.nickNameTv.setText(userInfo.name);
                     wkVBinding.nickNameLayout.setVisibility(TextUtils.isEmpty(userInfo.remark) ? View.GONE : View.VISIBLE);
@@ -350,71 +348,17 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     wkVBinding.applyBtn.setVisibility(userInfo.follow == 1 ? View.GONE : View.VISIBLE);
                     wkVBinding.deleteLayout.setVisibility(userInfo.follow == 1 ? View.VISIBLE : View.GONE);
                     wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
+                    if (userInfo.follow == 0) {
+                        wkVBinding.applyBtn.setVisibility(TextUtils.isEmpty(vercode) ? View.GONE : View.VISIBLE);
+                    } else {
+                        wkVBinding.applyBtn.setVisibility(View.GONE);
+                    }
                 }
             } else {
                 showToast(msg);
             }
         });
     }
-
-
-//    private void showShortNum() {
-//        boolean isShowId = true;
-//        boolean isFriend = false;
-//        int status = 1;
-//        if (!TextUtils.isEmpty(groupID)) {
-//            WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(groupID, WKChannelType.GROUP);
-//            WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(groupID, WKChannelType.GROUP, WKConfig.getInstance().getUid());
-//            if (member != null && member.role == WKChannelMemberRole.normal && channel != null && channel.remoteExtraMap != null) {
-//                Object object = channel.remoteExtraMap.get(WKChannelExtras.forbiddenAddFriend);
-//                int forbiddenAddFriend = 0;
-//                if (object != null) {
-//                    forbiddenAddFriend = (int) object;
-//                }
-//                if (forbiddenAddFriend == 1)
-//                    isShowId = false;
-//            }
-//        }
-//
-//        String sourceDesc = "";
-//        if (userChannel != null && userChannel.remoteExtraMap != null) {
-//            Object sourceDescObject = userChannel.remoteExtraMap.get(WKChannelExtras.sourceDesc);
-//            if (sourceDescObject != null) {
-//                sourceDesc = (String) sourceDescObject;
-//            }
-//        }
-//        if (!TextUtils.isEmpty(sourceDesc)) {
-//            wkVBinding.sourceFromTv.setText(sourceDesc);
-//            wkVBinding.fromLayout.setVisibility(View.VISIBLE);
-//        } else {
-//            wkVBinding.fromLayout.setVisibility(View.GONE);
-//        }
-//
-//        if (userChannel != null) {
-//            status = userChannel.status;
-//            if (userChannel.follow == 1) {
-//                isFriend = true;
-//            }
-//            if (status == WKChannelStatus.statusBlacklist) {
-//                isShowId = false;
-//            }
-//            if (userChannel.status == 2) {
-//                wkVBinding.blacklistTv.setText(R.string.pull_out_black_list);
-//            } else {
-//                wkVBinding.blacklistTv.setText(R.string.push_black_list);
-//            }
-//        }
-//        if (isFriend || isShowId) {
-//            wkVBinding.identityLayout.setVisibility(View.VISIBLE);
-//        } else {
-//            wkVBinding.identityLayout.setVisibility(View.GONE);
-//        }
-//
-//        wkVBinding.sendMsgBtn.setVisibility(isFriend ? View.VISIBLE : View.GONE);
-//        wkVBinding.applyBtn.setVisibility(isFriend ? View.GONE : View.VISIBLE);
-//        wkVBinding.deleteLayout.setVisibility(isFriend ? View.VISIBLE : View.GONE);
-//        wkVBinding.blacklistDescTv.setVisibility(status == 2 ? View.VISIBLE : View.GONE);
-//    }
 
     @Override
     protected void onDestroy() {

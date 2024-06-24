@@ -924,12 +924,13 @@ public class ChatActivity extends WKBaseActivity<ActChatLayoutBinding> implement
                     break;
                 }
             }
-            if (wkMsg.remoteExtra.editedAt != 0 && !TextUtils.isEmpty(wkMsg.messageID)) {
+            if ((wkMsg.remoteExtra.editedAt != 0 || wkMsg.remoteExtra.revoke == 1) && !TextUtils.isEmpty(wkMsg.messageID)) {
                 for (int i = 0, size = list.size(); i < size; i++) {
                     if (list.get(i).wkMsg.baseContentMsgModel != null && list.get(i).wkMsg.baseContentMsgModel.reply != null && !TextUtils.isEmpty(list.get(i).wkMsg.baseContentMsgModel.reply.message_id) && list.get(i).wkMsg.baseContentMsgModel.reply.message_id.equals(wkMsg.messageID)) {
                         list.get(i).wkMsg.baseContentMsgModel.reply.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
                         list.get(i).wkMsg.baseContentMsgModel.reply.contentEdit = wkMsg.remoteExtra.contentEdit;
                         list.get(i).wkMsg.baseContentMsgModel.reply.editAt = wkMsg.remoteExtra.editedAt;
+                        list.get(i).wkMsg.baseContentMsgModel.reply.revoke = wkMsg.remoteExtra.revoke;
                         chatAdapter.notifyItemChanged(i);
                     }
                 }

@@ -529,7 +529,11 @@ class ChatInputPanel : LinearLayout, IInputPanel {
         }
         viewBinding.topLeftIv.setImageResource(R.mipmap.msg_panel_reply)
         viewBinding.topTitleTv.text = showName
-        val content = mMsg.baseContentMsgModel.getDisplayContent()
+        val content  = if (mMsg.remoteExtra != null && mMsg.remoteExtra.contentEditMsgModel != null) {
+            mMsg.remoteExtra.contentEditMsgModel.getDisplayContent()
+        } else {
+            mMsg.baseContentMsgModel.getDisplayContent()
+        }
         viewBinding.contentTv.text = content
 //        MoonUtil.identifyFaceExpression(
 //            iConversationContext!!.chatActivity,

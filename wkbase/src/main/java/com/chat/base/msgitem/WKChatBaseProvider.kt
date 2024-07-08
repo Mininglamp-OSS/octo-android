@@ -92,9 +92,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity, payloads: List<Any>) {
         super.convert(helper, item, payloads)
         val msgItemEntity = payloads[0] as WKUIChatMsgItemEntity
+        val from = getMsgFromType(msgItemEntity.wkMsg)
+
         if (msgItemEntity.isRefreshReaction && helper.getViewOrNull<AvatarView>(R.id.avatarView) != null) {
             msgItemEntity.isRefreshReaction = false
-            val from = getMsgFromType(msgItemEntity.wkMsg)
             val avatarView = helper.getView<AvatarView>(R.id.avatarView)
             setAvatarLayoutParams(msgItemEntity, from, avatarView)
             EndpointManager.getInstance().invoke(
@@ -109,21 +110,44 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         if (msgItemEntity.isRefreshAvatarAndName && helper.getViewOrNull<AvatarView>(R.id.avatarView) != null) {
             val avatarView = helper.getView<AvatarView>(R.id.avatarView)
             setAvatar(msgItemEntity, avatarView)
-            val from = getMsgFromType(msgItemEntity.wkMsg)
             if (helper.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
                 setFromName(msgItemEntity, from, helper.getView(R.id.receivedNameTv))
             } else {
                 if (helper.getViewOrNull<View>(R.id.wkBaseContentLayout) != null) {
                     val baseView = helper.getView<LinearLayout>(R.id.wkBaseContentLayout)
                     resetFromName(helper.bindingAdapterPosition, baseView, msgItemEntity, from)
+
                 }
             }
             msgItemEntity.isRefreshReaction = false
+        }
+        if (helper.getViewOrNull<CheckBox>(R.id.checkBox) != null) {
+            setCheckBox(
+                msgItemEntity,
+                from,
+                helper.getView(R.id.checkBox),
+                helper.getView(R.id.viewContentLayout)
+            )
+            if (helper.getViewOrNull<View>(R.id.viewGroupLayout) != null) {
+                val viewGroupLayout = helper.getView<ChatItemView>(R.id.viewGroupLayout)
+                viewGroupLayout.setTouchData(
+                    !msgItemEntity.isChoose
+                ) { setChoose(helper, msgItemEntity) }
+            }
         }
     }
 
     override fun convert(helper: BaseViewHolder, item: WKUIChatMsgItemEntity) {
         showData(helper, item)
+    }
+
+    open fun refreshReply(
+        adapterPosition: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+
     }
 
     protected abstract fun getChatViewItem(
@@ -192,7 +216,6 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         if (baseViewHolder.getViewOrNull<View>(R.id.viewGroupLayout) != null) {
             val viewGroupLayout = baseViewHolder.getView<ChatItemView>(R.id.viewGroupLayout)
-
             // 提示本条消息
             if (msgItemEntity.isShowTips) {
                 val colorAnimation = ValueAnimator.ofObject(
@@ -486,7 +509,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     showName = uiChatMsgItemEntity.wkMsg.memberOfFrom.memberName
                 }
             }
-            val os = getMsgFromOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
+            val os = getMsgOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
             if (receivedNameTv.tag is String && receivedNameTv.tag == uiChatMsgItemEntity.wkMsg.fromUID) {
                 if (uiChatMsgItemEntity.wkMsg.type == WKContentType.typing) {
                     receivedNameTv.text = showName
@@ -824,8 +847,6 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     }
                 }
             }
-
-
             if (mMsg.status <= WKSendMsgResult.send_success) {
                 statusIV.colorFilter =
                     PorterDuffColorFilter(
@@ -1076,9 +1097,14 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                 if (getAdapter()!!.data[i].wkMsg.clientMsgNO == mMsg.clientMsgNO) {
                                     getAdapter()!!.data[i].isChecked = true
                                 }
+                                getAdapter()!!.notifyItemChanged(
+                                    i,
+                                    getAdapter()!!.data[i]
+                                )
                                 i++
                             }
-                            getAdapter()!!.notifyItemRangeChanged(0, getAdapter()!!.data.size)
+
+                            //    getAdapter()!!.notifyItemRangeChanged(0, getAdapter()!!.data.size)
                             (Objects.requireNonNull(
                                 getAdapter()
                             ) as ChatAdapter).showTitleRightText("1")
@@ -1105,7 +1131,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             addIndex++
         }
         //撤回和删除不能同时存在
-        if (isAddDelete && mMsg.flame == 0 && result == null && isRegisterMsgPrivacyModule) {
+        if (isAddDelete && mMsg.flame == 0 && result == null) {
             list.add(
                 addIndex,
                 PopupMenuItem(
@@ -1313,7 +1339,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 EndpointManager.getInstance().invoke("chat_popup_item", subItem)
             }
             subItem.setOnClickListener {
-                scrimPopupWindow!!.dismiss()
+                scrimPopupWindow?.dismiss()
                 item.iClick.onClick()
                 EndpointManager.getInstance().invoke("chat_activity_touch", null)
             }
@@ -1334,7 +1360,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 AndroidUtilities.dp(pad.toFloat())
             )
             reactionsLayout.setDelegate(ReactionsContainerDelegate { _: View?, reaction: String?, _: Boolean, location: IntArray? ->
-                scrimPopupWindow!!.dismiss(true)
+                scrimPopupWindow?.dismiss(true)
                 EndpointManager.getInstance().invoke(
                     "wk_msg_reaction",
                     MsgReactionMenu(mMsg, reaction, getAdapter() as ChatAdapter?, location)
@@ -1359,7 +1385,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             )
             scrimPopupContainerLayout.addView(reactionsLayout, params)
             scrimPopupContainerLayout.setReactionsLayout(reactionsLayout)
-            reactionsLayout!!.setTransitionProgress(0f)
+            reactionsLayout?.setTransitionProgress(0f)
         }
         scrimPopupContainerLayout.clipChildren = false
         val fl = FrameLayout(context)
@@ -1388,7 +1414,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 popupLayout.swipeBack!!
                     .addOnSwipeBackProgressListener { _: PopupSwipeBackLayout?, toProgress: Float, progress: Float ->
                         if (toProgress == 0f) {
-                            finalReactionsLayout!!.startEnterAnimation()
+                            finalReactionsLayout?.startEnterAnimation()
                         } else if (toProgress == 1f) finalReactionsLayout!!.alpha = 1f - progress
                     }
             }
@@ -1575,7 +1601,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         viewGroupLayout.setPadding(0, top, 0, bottom)
     }
 
-    private fun getMsgFromOS(clientMsgNo: String): String {
+    private fun getMsgOS(clientMsgNo: String): String {
         return if (clientMsgNo.endsWith("1")) {
             "Android"
         } else if (clientMsgNo.endsWith("2")) {

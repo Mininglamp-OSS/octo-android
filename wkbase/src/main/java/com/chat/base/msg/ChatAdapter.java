@@ -295,7 +295,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
 
 
     public enum RefreshType {
-        status, background, data, reaction
+        status, background, data, reaction, reply
     }
 
     public void notifyStatus(int position) {
@@ -331,6 +331,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             // 刷新
             if (refreshType == RefreshType.data) {
                 baseItemProvider.refreshData(position, baseView, entity, from);
+                return;
             }
             if (refreshType == RefreshType.reaction) {
                 FrameLayout reactionsView = view.findViewById(R.id.reactionsView);
@@ -345,6 +346,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 if (avatarView != null) {
                     baseItemProvider.setAvatarLayoutParams(entity, from, avatarView);
                 }
+                return;
             }
             if (refreshType == RefreshType.background) {
                 AvatarView avatarView = view.findViewById(R.id.avatarView);
@@ -360,6 +362,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 if (viewGroupLayout != null) {
                     baseItemProvider.setItemPadding(position, viewGroupLayout);
                 }
+                return;
             }
 
             if (refreshType == RefreshType.status) {
@@ -369,26 +372,33 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                         baseView,
                         from
                 );
+                return;
+            }
+
+            if (refreshType == RefreshType.reply) {
+                baseItemProvider.refreshReply(position,baseView,entity,from);
             }
 
         }
 
     }
 
-    public void updateReplyMsgRevoke(WKMsg wkMsg) {
+    public void refreshReplyMsg(WKMsg wkMsg) {
         if (wkMsg == null || wkMsg.remoteExtra == null || TextUtils.isEmpty(wkMsg.remoteExtra.messageID))
             return;
         List<WKUIChatMsgItemEntity> list = getData();
         for (int i = 0, size = list.size(); i < size; i++) {
-            if (list.get(i).wkMsg.baseContentMsgModel != null
-                    && list.get(i).wkMsg.baseContentMsgModel.reply != null
-                    && !TextUtils.isEmpty(list.get(i).wkMsg.baseContentMsgModel.reply.message_id)) {
-                if (list.get(i).wkMsg.baseContentMsgModel.reply.message_id.equals(wkMsg.messageID)) {
-                    list.get(i).wkMsg.baseContentMsgModel.reply.revoke = wkMsg.remoteExtra.revoke;
-                    notifyItemChanged(i);
-                    break;
-                }
+            if (list.get(i).wkMsg.baseContentMsgModel == null || list.get(i).wkMsg.baseContentMsgModel.reply == null) {
+                continue;
+            }
+            if (list.get(i).wkMsg.baseContentMsgModel.reply.message_seq == wkMsg.messageSeq) {
+                list.get(i).wkMsg.baseContentMsgModel.reply.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
+                list.get(i).wkMsg.baseContentMsgModel.reply.contentEdit = wkMsg.remoteExtra.contentEdit;
+                list.get(i).wkMsg.baseContentMsgModel.reply.editAt = wkMsg.remoteExtra.editedAt;
+                list.get(i).wkMsg.baseContentMsgModel.reply.revoke = wkMsg.remoteExtra.revoke;
+                notify(i,RefreshType.reply,null);
             }
         }
+
     }
 }

@@ -1,139 +1,281 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/homeColor"
-    android:orientation="vertical">
+    xmlns:tools="http://schemas.android.com/tools">
 
-
-    <RelativeLayout
-        android:id="@+id/rootLayout"
+    <LinearLayout
+        android:id="@+id/rootView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@color/homeColor"
         android:orientation="vertical">
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/imageView"
+        <!-- 不需要被框架处理的布局，可自由布置 -->
+        <include
+            android:id="@+id/topLayout"
+            layout="@layout/chat_title_layout" />
+
+        <com.effective.android.panel.view.PanelSwitchLayout
+            android:id="@+id/panel_switch_layout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop" />
+            android:orientation="vertical"
+            app:android11KeyboardFeature="true"
+            app:animationSpeed="standard">
 
-        <com.chat.base.views.blurview.ShapeBlurView
-            android:id="@+id/blurView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone"
-            app:blur_corner_radius="0dp"
-            app:blur_mode="rectangle"
-            app:blur_radius="3dp" />
-
-        <LinearLayout
-            android:id="@+id/viewGroupLayout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-
-            <include
-                android:id="@+id/topLayout"
-                layout="@layout/chat_title_layout" />
-
-            <RelativeLayout
+            <!-- 内容区域 -->
+            <!-- linear_edit_view 指定一个 EditText 用于输入 ，必须项-->
+            <!-- linear_auto_reset_enable 指定是否 LinearContentContainer 是否能够接受 Touch 事件自动隐藏面板-->
+            <!-- linear_auto_reset_area 指定是否 LinearContentContainer 只接受某个 View 区域的 Touch 事件来自定隐藏面板-->
+            <com.effective.android.panel.view.content.RelativeContentContainer
+                android:id="@+id/content_view"
                 android:layout_width="match_parent"
-                android:layout_weight="1"
-                android:layout_height="0dp">
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                app:edit_view="@id/editText">
 
-                <LinearLayout
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/imageView"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:orientation="vertical">
+                    android:scaleType="centerCrop" />
 
+                <com.chat.base.views.blurview.ShapeBlurView
+                    android:id="@+id/blurView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"
+                    app:blur_corner_radius="0dp"
+                    app:blur_mode="rectangle"
+                    app:blur_radius="3dp" />
 
-                    <LinearLayout
-                        android:id="@+id/topView"
+                <RelativeLayout
+                    android:id="@+id/recyclerViewLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_above="@id/bottomView">
+
+                    <com.chat.base.views.RecyclerListView
+                        android:id="@+id/recyclerView"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:orientation="vertical">
+                        android:background="@color/transparent"
+                        android:visibility="visible" />
 
+                    <include
+                        android:id="@+id/chatUnreadLayout"
+                        layout="@layout/chat_unread_layout"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
+                        android:layout_alignParentBottom="true"
+                        android:layout_marginEnd="5dp"
+                        android:layout_marginBottom="5dp" />
 
-                        <RelativeLayout
-                            android:id="@+id/recyclerViewLayout"
-                            android:layout_width="match_parent"
-                            android:layout_height="0dp"
-                            android:layout_weight="1">
-
-
-                            <com.chat.base.views.RecyclerListView
-                                android:id="@+id/recyclerView"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:background="@color/transparent"
-                                android:visibility="visible" />
-
-
-                            <include
-                                android:id="@+id/chatUnreadLayout"
-                                layout="@layout/chat_unread_layout"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_alignParentEnd="true"
-                                android:layout_alignParentBottom="true"
-                                android:layout_marginEnd="5dp"
-                                android:layout_marginBottom="5dp" />
-
-                            <FrameLayout
-                                android:id="@+id/recyclerViewContentLayout"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_alignParentBottom="true" />
-
-                            <LinearLayout
-                                android:id="@+id/pinnedLayout"
-                                android:layout_width="match_parent"
-                                android:layout_height="50dp"
-                                android:background="@color/colorAccent"
-                                android:orientation="horizontal"
-                                android:visibility="gone" />
-
-                        </RelativeLayout>
-
-
-                        <com.chat.uikit.view.ChatInputPanel
-                            android:id="@+id/chat_input_panel"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content" />
-
-
-                    </LinearLayout>
-
-                    <com.chat.uikit.view.ChatMorePanel
-                        android:id="@+id/more_panel"
+                    <FrameLayout
+                        android:id="@+id/recyclerViewContentLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:background="@color/homeColor"
+                        android:layout_alignParentBottom="true" />
+
+                    <LinearLayout
+                        android:id="@+id/pinnedLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="50dp"
+                        android:orientation="horizontal"
+                        android:visibility="gone" />
+
+
+                    <TextView
+                        android:id="@+id/timeTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentTop="true"
+                        android:layout_centerHorizontal="true"
+                        android:layout_marginTop="10dp"
+                        android:paddingStart="5dp"
+                        android:paddingTop="2dp"
+                        android:paddingEnd="5dp"
+                        android:paddingBottom="2dp"
+                        android:textColor="@color/white"
+                        android:textSize="13sp"
                         android:visibility="visible" />
+                </RelativeLayout>
+
+                <FrameLayout
+                    android:id="@+id/followScrollView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_above="@id/bottomView"
+                    android:background="@color/transparent" />
+
+                <LinearLayout
+                    android:id="@+id/bottomView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentBottom="true"
+                    android:background="@color/chat_face_tab_bg"
+                    android:orientation="vertical">
+
+                    <FrameLayout
+                        android:id="@+id/chatTopLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1px"
+                        android:background="@color/layoutColorSelected" />
+
+                    <FrameLayout
+                        android:id="@+id/panelView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <LinearLayout
+                            android:id="@+id/chatView"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:padding="10dp">
+
+                            <LinearLayout
+                                android:id="@+id/menuView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="bottom"
+                                android:layout_marginEnd="10dp"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:id="@+id/menuLayout"
+                                    android:layout_width="50dp"
+                                    android:layout_height="30dp"
+                                    android:gravity="center">
+
+                                    <androidx.appcompat.widget.AppCompatImageView
+                                        android:id="@+id/menuIv"
+                                        android:layout_width="25dp"
+                                        android:layout_height="25dp"
+                                        android:src="@mipmap/icon_menu" />
+                                </LinearLayout>
+                            </LinearLayout>
+
+                            <RelativeLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:animateLayoutChanges="true"
+                                android:background="@drawable/chat_edit_bg"
+                                android:orientation="horizontal">
+
+                                <com.chat.base.ui.components.ContactEditText
+                                    android:id="@+id/editText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@color/transparent"
+                                    android:focusable="true"
+                                    android:gravity="center_vertical"
+                                    android:maxHeight="200dp"
+                                    android:maxLines="3"
+                                    android:minHeight="35dp"
+                                    android:padding="5dp"
+                                    android:paddingStart="5dp"
+                                    android:paddingEnd="5dp"
+                                    android:paddingBottom="3dp"
+                                    android:textColor="@color/colorDark"
+                                    android:textColorHint="@color/color999"
+                                    android:textSize="14sp" />
+
+
+                                <TextView
+                                    android:id="@+id/hitTv"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_alignParentStart="true"
+                                    android:layout_centerInParent="true"
+                                    android:layout_marginEnd="10dp"
+                                    android:textSize="14sp"
+                                    tools:ignore="RelativeOverlap" />
+
+                                <LinearLayout
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_alignParentEnd="true"
+                                    android:layout_centerInParent="true">
+
+                                    <androidx.appcompat.widget.AppCompatImageView
+                                        android:id="@+id/flameIV"
+                                        android:layout_width="15dp"
+                                        android:layout_height="20dp"
+                                        android:layout_gravity="center"
+                                        android:layout_marginTop="3dp"
+                                        android:layout_marginEnd="10dp"
+                                        android:layout_marginBottom="3dp"
+                                        android:src="@mipmap/flame_small"
+                                        android:tint="#ff2d51"
+                                        android:visibility="gone" />
+
+                                    <androidx.appcompat.widget.AppCompatImageView
+                                        android:id="@+id/markdownIv"
+                                        android:layout_width="20dp"
+                                        android:layout_height="20dp"
+                                        android:layout_marginTop="3dp"
+                                        android:layout_marginEnd="10dp"
+                                        android:layout_marginBottom="3dp"
+                                        android:src="@mipmap/ic_a"
+                                        android:visibility="visible" />
+                                </LinearLayout>
+
+                            </RelativeLayout>
+
+                            <View
+                                android:id="@+id/emotionView"
+                                android:layout_width="1dp"
+                                android:layout_height="1dp"
+                                android:visibility="gone" />
+
+                            <FrameLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="bottom"
+                                android:layout_marginStart="8dp"
+                                android:animateLayoutChanges="true">
+
+                                <androidx.appcompat.widget.AppCompatImageView
+                                    android:id="@+id/sendIV"
+                                    android:layout_width="35dp"
+                                    android:layout_height="35dp"
+                                    android:padding="5dp"
+                                    android:src="@mipmap/icon_chat_send"
+                                    android:tint="@color/popupTextColor"
+                                    android:visibility="visible" />
+                            </FrameLayout>
+                        </LinearLayout>
+                    </FrameLayout>
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/toolbarRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/chat_face_tab_bg" />
                 </LinearLayout>
-            </RelativeLayout>
+            </com.effective.android.panel.view.content.RelativeContentContainer>
 
 
-        </LinearLayout>
+            <com.effective.android.panel.view.panel.PanelContainer
+                android:id="@+id/panel_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/homeColor">
 
-    </RelativeLayout>
+                <com.effective.android.panel.view.panel.PanelView
+                    android:id="@+id/panel_emotion"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:panel_layout="@layout/chat_panel_emotion_layout"
+                    app:panel_trigger="@id/emotionView" />
+            </com.effective.android.panel.view.panel.PanelContainer>
+        </com.effective.android.panel.view.PanelSwitchLayout>
 
-
-    <TextView
-        android:id="@+id/timeTv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="90dp"
-        android:paddingStart="5dp"
-        android:paddingTop="2dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="2dp"
-        android:textColor="@color/white"
-        android:textSize="13sp"
-        android:visibility="visible" />
-
-</RelativeLayout>
-
+    </LinearLayout>
+</layout>

@@ -1,7 +1,8 @@
 package com.chat.uikit.message;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -22,6 +23,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.WKUIKitApplication;
@@ -455,7 +457,7 @@ public class MsgModel extends WKBaseModel {
                                     }
                                 }
                             } catch (JSONException e) {
-                                Log.e("MsgModel","cmd messages not json struct");
+                                WKLogUtils.e("MsgModel", "cmd messages not json struct");
                             }
                             cmdList.add(WKBaseCmd);
                         }
@@ -506,8 +508,11 @@ public class MsgModel extends WKBaseModel {
         request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncExtraMsg> result) {
-                // 更改扩展消息
-                WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
+                if (WKReader.isNotEmpty(result)) {
+                    // 更改扩展消息
+                    WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
+                }
             }
 
             @Override
@@ -516,7 +521,6 @@ public class MsgModel extends WKBaseModel {
             }
         });
     }
-
 
 
     // 同步敏感词

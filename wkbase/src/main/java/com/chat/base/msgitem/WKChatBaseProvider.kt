@@ -251,7 +251,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 //            val deleteTimerLP = deleteTimer.layoutParams as RelativeLayout.LayoutParams
             baseView.removeAllViews()
             baseView.addView(getChatViewItem(baseView, from))
-
+            baseViewHolder.getView<View>(R.id.viewContentLayout).setOnClickListener {
+                val chatAdapter = getAdapter() as ChatAdapter
+                chatAdapter.conversationContext.hideSoftKeyboard()
+            }
             setFullLayoutParams(msgItemEntity, from, fullContentLayout)
             setAvatarLayoutParams(msgItemEntity, from, avatarView)
             resetCellBackground(baseView, msgItemEntity, from)
@@ -1335,7 +1338,6 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 subItem.setSubtext(item.subText)
             }
             if (!TextUtils.isEmpty(item.tag) && item.tag == "auto_delete") {
-                Log.e("发布了", "-->")
                 EndpointManager.getInstance().invoke("chat_popup_item", subItem)
             }
             subItem.setOnClickListener {

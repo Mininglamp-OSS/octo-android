@@ -15,6 +15,7 @@ import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.WKReader;
 import com.chat.login.R;
 import com.chat.login.databinding.ActPerfectUserInfoLayoutBinding;
 import com.chat.login.service.LoginModel;
@@ -39,11 +40,6 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
     @Override
     protected void setTitle(TextView titleTv) {
         titleTv.setText(R.string.wklogin_perfect_userinfo);
-    }
-
-    @Override
-    protected void initPresenter() {
-
     }
 
     @Override
@@ -72,7 +68,7 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
                         WKConfig.getInstance().saveUserInfo(userInfoEntity);
                         WKConfig.getInstance().setUserName(wkVBinding.nameEt.getText().toString());
                         List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
-                        if (list != null && list.size() > 0) {
+                        if (WKReader.isNotEmpty(list)) {
                             for (LoginMenu menu : list) {
                                 if (menu.iMenuClick != null)
                                     menu.iMenuClick.onClick();
@@ -92,7 +88,7 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
         GlideUtils.getInstance().chooseIMG(this, 1, true, ChooseMimeType.img, false, new GlideUtils.ISelectBack() {
             @Override
             public void onBack(List<ChooseResult> paths) {
-                if (paths.size() > 0) {
+                if (WKReader.isNotEmpty(paths)) {
                     path = paths.get(0).path;
                     LoginModel.getInstance().uploadAvatar(path, code -> {
                         if (code == HttpResponseCode.success) {

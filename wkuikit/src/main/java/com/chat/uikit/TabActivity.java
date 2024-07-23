@@ -6,8 +6,10 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -16,6 +18,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -49,8 +52,6 @@ import org.telegram.ui.Components.RLottieImageView;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.reactivex.rxjava3.disposables.Disposable;
-
 
 /**
  * 2019-11-12 13:57
@@ -59,19 +60,16 @@ import io.reactivex.rxjava3.disposables.Disposable;
 public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     CounterView msgCounterView;
     CounterView contactsCounterView;
-//    CounterView workplaceCounterView;
+    //    CounterView workplaceCounterView;
     View contactsSpotView;
-    RLottieImageView chatIV, contactsIV, workplaceIV, meIV;
+    RLottieImageView chatIV, contactsIV, meIV;
+    private TextView chatTV, contactsTV, meTV;
     private long lastClickChatTabTime = 0L;
+    private final boolean isShowTabText = true;
 
     @Override
     protected ActTabMainBinding getViewBinding() {
         return ActTabMainBinding.inflate(getLayoutInflater());
-    }
-
-    @Override
-    protected void setTitle(TextView titleTv) {
-
     }
 
     @Override
@@ -112,7 +110,23 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         contactsIV = new RLottieImageView(this);
 //        workplaceIV = new RLottieImageView(this);
         meIV = new RLottieImageView(this);
-
+        chatTV = new TextView(this);
+        contactsTV = new TextView(this);
+        meTV = new TextView(this);
+        Typeface face = Typeface.createFromAsset(getResources().getAssets(),
+                "fonts/mw_bold.ttf");
+        chatTV.setTypeface(face);
+        contactsTV.setTypeface(face);
+        meTV.setTypeface(face);
+        chatTV.setText(R.string.tab_text_chat);
+        chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+        chatTV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
+        contactsTV.setText(R.string.tab_text_contacts);
+        contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+        contactsTV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
+        meTV.setText(R.string.tab_text_me);
+        meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+        meTV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         List<Fragment> fragments = new ArrayList<>(3);
         fragments.add(new ChatFragment());
         fragments.add(new ContactsFragment());
@@ -136,14 +150,25 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         FrameLayout view = wkVBinding.bottomNavigation.findViewById(R.id.i_chat);
         msgCounterView = new CounterView(this);
         msgCounterView.setColors(R.color.white, R.color.reminderColor);
-        view.addView(chatIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-        view.addView(msgCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
-
+        if (isShowTabText) {
+            view.addView(chatIV, LayoutHelper.createFrame(35, 35, Gravity.CENTER | Gravity.TOP, 0, 5, 0, 0));
+            view.addView(msgCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
+            view.addView(chatTV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 15, 0, 0));
+        } else {
+            view.addView(chatIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+            view.addView(msgCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
+        }
         FrameLayout contactsView = wkVBinding.bottomNavigation.findViewById(R.id.i_contacts);
         contactsCounterView = new CounterView(this);
         contactsCounterView.setColors(R.color.white, R.color.reminderColor);
-        contactsView.addView(contactsIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-        contactsView.addView(contactsCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
+        if (isShowTabText) {
+            contactsView.addView(contactsIV, LayoutHelper.createFrame(35, 35, Gravity.CENTER | Gravity.TOP, 0, 5, 0, 0));
+            contactsView.addView(contactsCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
+            contactsView.addView(contactsTV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 15, 0, 0));
+        } else {
+            contactsView.addView(contactsIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+            contactsView.addView(contactsCounterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 5, 0, 15));
+        }
         contactsSpotView = new View(this);
         contactsSpotView.setBackgroundResource(R.drawable.msg_bg);
         contactsView.addView(contactsSpotView, LayoutHelper.createFrame(10, 10, Gravity.CENTER_HORIZONTAL, 10, 10, 0, 0));
@@ -157,8 +182,12 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 
 
         FrameLayout meView = wkVBinding.bottomNavigation.findViewById(R.id.i_my);
-        meView.addView(meIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
-
+        if (isShowTabText) {
+            meView.addView(meIV, LayoutHelper.createFrame(35, 35, Gravity.CENTER | Gravity.TOP, 0, 5, 0, 0));
+            meView.addView(meTV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 15, 0, 0));
+        } else {
+            meView.addView(meIV, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+        }
         contactsSpotView.setVisibility(View.GONE);
         contactsCounterView.setVisibility(View.GONE);
 //        workplaceCounterView.setVisibility(View.GONE);
@@ -195,7 +224,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         wkVBinding.bottomNavigation.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.i_chat) {
                 long nowTime = WKTimeUtils.getInstance().getCurrentMills();
-                if (wkVBinding.vp.getCurrentItem() == 0){
+                if (wkVBinding.vp.getCurrentItem() == 0) {
                     if (nowTime - lastClickChatTabTime <= 300) {
                         EndpointManager.getInstance().invoke("scroll_to_unread_channel", null);
                     }
@@ -312,21 +341,41 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             chatIV.setImageResource(R.mipmap.ic_chat_s);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            if (isShowTabText) {
+                chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_selected));
+                contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+            }
         } else if (index == 1) {
             meIV.setImageResource(R.mipmap.ic_mine_n);
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_s);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            if (isShowTabText) {
+                chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_selected));
+                meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+            }
         } else if (index == 2) {
             meIV.setImageResource(R.mipmap.ic_mine_n);
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_s);
+            if (isShowTabText) {
+                chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+            }
         } else {
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             meIV.setImageResource(R.mipmap.ic_mine_s);
 //            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            if (isShowTabText) {
+                chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
+                meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_selected));
+            }
         }
     }
 

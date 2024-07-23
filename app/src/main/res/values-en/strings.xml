@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="no_permissions">Authorization fails, some functions of the APP will not be available, please open the application permissions and try again</string>
-    <string name="app_name" tools:ignore="ExtraTranslation">WKChat</string>
+    <string name="app_name" tools:ignore="ExtraTranslation">demo</string>
     <string name="agree">Agree</string>
     <string name="disagree">Disagree</string>
     <string name="app_slogan">Two lines of code to communicate</string>

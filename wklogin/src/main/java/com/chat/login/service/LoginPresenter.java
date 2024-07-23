@@ -91,8 +91,8 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
     }
 
     @Override
-    public void registerApp(String code, String zone, String name, String phone, String password) {
-        LoginModel.getInstance().registerApp(code, zone, name, phone, password, (code1, errorMsg, userInfoEntity) -> {
+    public void registerApp(String code, String zone, String name, String phone, String password,String inviteCode) {
+        LoginModel.getInstance().registerApp(code, zone, name, phone, password,inviteCode, (code1, errorMsg, userInfoEntity) -> {
             if (code1 == HttpResponseCode.success) {
                 if (loginView.get() != null) loginView.get().loginResult(userInfoEntity);
             } else {

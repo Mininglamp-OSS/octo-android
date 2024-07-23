@@ -6,7 +6,6 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
-import android.widget.TextView;
 
 import androidx.core.view.ViewCompat;
 
@@ -23,9 +22,9 @@ import com.chat.uikit.databinding.ActSearchAllLayoutBinding;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelSearchResult;
+import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMessageSearchResult;
 import com.xinbida.wukongim.entity.WKMsg;
-import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,11 +42,6 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
     @Override
     protected ActSearchAllLayoutBinding getViewBinding() {
         return ActSearchAllLayoutBinding.inflate(getLayoutInflater());
-    }
-
-    @Override
-    protected void setTitle(TextView titleTv) {
-
     }
 
     @Override

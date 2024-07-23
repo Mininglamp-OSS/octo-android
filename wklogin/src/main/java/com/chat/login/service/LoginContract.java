@@ -28,7 +28,7 @@ public class LoginContract {
 
         void forgetPwd(String zone, String phone);
 
-        void registerApp(String code, String zone, String name, String phone, String password);
+        void registerApp(String code, String zone, String name, String phone, String password,String inviteCode);
 
         void checkLoginAuth(String uid, String code);
 

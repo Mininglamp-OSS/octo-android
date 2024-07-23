@@ -11,36 +11,34 @@ import android.text.method.PasswordTransformationMethod;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 
-import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
+import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.endpoint.entity.OtherLoginResultMenu;
 import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
-import com.chat.base.views.keyboard.SoftKeyboardStateHelper;
-import com.chat.login.OtherDeviceLoginDialogView;
 import com.chat.login.R;
 import com.chat.login.databinding.ActLoginLayoutBinding;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginPresenter;
-import com.lxj.xpopup.XPopup;
 
 import java.util.List;
 import java.util.Objects;
@@ -50,15 +48,15 @@ import java.util.Objects;
  * 登录
  */
 public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> implements LoginContract.LoginView {
-
+    private WKAPPConfig wkappConfig;
     private String code = "0086";
     private LoginPresenter loginPresenter;
-    private SoftKeyboardStateHelper softKeyboardStateHelper;
 
     @Override
     protected ActLoginLayoutBinding getViewBinding() {
         return ActLoginLayoutBinding.inflate(getLayoutInflater());
     }
+
     @Override
     protected void initPresenter() {
         loginPresenter = new LoginPresenter(this);
@@ -81,10 +79,14 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         wkVBinding.checkbox.setVisibility(View.VISIBLE);
         wkVBinding.checkbox.setEnabled(true);
         wkVBinding.checkbox.setChecked(false, true);
-        softKeyboardStateHelper = new SoftKeyboardStateHelper(wkVBinding.mainView);
         int from = getIntent().getIntExtra("from", 0);
         if (from == 1 || from == 2) {
-            new XPopup.Builder(this).asCustom(new OtherDeviceLoginDialogView(this, from)).show();
+            String content = getString(R.string.wk_ban);
+            if (from == 1) {
+                content = getString(R.string.other_device_login);
+            }
+            WKDialogUtils.getInstance().showSingleBtnDialog(this, "", content, getString(R.string.sure), index -> {
+            });
         }
         UserInfoEntity userInfoEntity = WKConfig.getInstance().getUserInfo();
         if (userInfoEntity != null) {
@@ -113,23 +115,9 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
 
     @Override
     protected void initListener() {
-        wkVBinding.myTv.setOnClickListener(view1 -> {
-            wkVBinding.checkbox.setChecked(!wkVBinding.checkbox.isChecked(), true);
-        });
-        wkVBinding.checkbox.setOnClickListener(view1 -> {
-            wkVBinding.checkbox.setChecked(!wkVBinding.checkbox.isChecked(), true);
-        });
-        softKeyboardStateHelper.addSoftKeyboardStateListener(new SoftKeyboardStateHelper.SoftKeyboardStateListener() {
-            @Override
-            public void onSoftKeyboardOpened(int keyboardHeight) {
-                WKConstants.setKeyboardHeight(keyboardHeight);
-            }
+        wkVBinding.myTv.setOnClickListener(view1 -> wkVBinding.checkbox.setChecked(!wkVBinding.checkbox.isChecked(), true));
+        wkVBinding.checkbox.setOnClickListener(view1 -> wkVBinding.checkbox.setChecked(!wkVBinding.checkbox.isChecked(), true));
 
-            @Override
-            public void onSoftKeyboardClosed() {
-
-            }
-        });
         wkVBinding.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
                 wkVBinding.pwdEt.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
@@ -155,8 +143,8 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
             loadingPopup.show();
             loadingPopup.setTitle(getString(R.string.logging_in));
-            loginPresenter.login(code + wkVBinding.nameEt.getText().toString(), wkVBinding.pwdEt.getText().toString());
-
+            String name = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
+            loginPresenter.login(code + name, wkVBinding.pwdEt.getText().toString());
         });
         SingleClickUtil.onSingleClick(wkVBinding.registerTv, v -> startActivity(new Intent(this, WKRegisterActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.chooseCodeTv, v -> {
@@ -178,6 +166,49 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
             return null;
         });
+        wkVBinding.baseUrlTv.setOnClickListener(v -> {
+            if (wkappConfig == null || wkappConfig.can_modify_api_url == 0) {
+                return;
+            }
+            String url = WKSharedPreferencesUtil.getInstance().getSP("api_base_url", "");
+            WKDialogUtils.getInstance().showInputDialog(this, getString(R.string.update_api), getString(R.string.update_api_content), url, getString(R.string.update_api_ip), 100, text -> {
+                if (!TextUtils.isEmpty(text)) {
+                    if (!text.toLowerCase().startsWith("http")) {
+                        text = "http://" + text;
+                    }
+                    WKSharedPreferencesUtil.getInstance().putSP("api_base_url", text);
+                    showBaseUrl();
+                    EndpointManager.getInstance().invoke("update_base_url", text);
+                }
+            });
+        });
+        wkVBinding.resetTv.setOnClickListener(view -> {
+            WKSharedPreferencesUtil.getInstance().putSP("api_base_url", "");
+            EndpointManager.getInstance().invoke("update_base_url", "");
+        });
+        showBaseUrl();
+    }
+
+    @Override
+    protected void initData() {
+        super.initData();
+        WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
+            this.wkappConfig = wkappConfig;
+            if (wkappConfig != null && wkappConfig.can_modify_api_url == 1) {
+                wkVBinding.settingLayout.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void showBaseUrl() {
+        String apiURL = WKSharedPreferencesUtil.getInstance().getSP("api_base_url");
+        if (!TextUtils.isEmpty(apiURL)) {
+            wkVBinding.baseUrlTv.setText(apiURL);
+            wkVBinding.resetTv.setVisibility(View.VISIBLE);
+        } else {
+            wkVBinding.baseUrlTv.setText(R.string.update_api);
+            wkVBinding.resetTv.setVisibility(View.GONE);
+        }
     }
 
     @Override
@@ -190,7 +221,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             finish();
         } else {
             hideLoading();
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> {
                 List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
                 if (WKReader.isNotEmpty(list)) {
                     for (LoginMenu menu : list) {
@@ -256,17 +287,14 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         return this;
     }
 
-    ActivityResultLauncher<Intent> intentActivityResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
-        @Override
-        public void onActivityResult(ActivityResult result) {
-            //此处是跳转的result回调方法
-            if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
-                CountryCodeEntity entity = result.getData().getParcelableExtra("entity");
-                assert entity != null;
-                code = entity.code;
-                String codeName = code.substring(2);
-                wkVBinding.codeTv.setText(String.format("+%s", codeName));
-            }
+    ActivityResultLauncher<Intent> intentActivityResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        //此处是跳转的result回调方法
+        if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
+            CountryCodeEntity entity = result.getData().getParcelableExtra("entity");
+            assert entity != null;
+            code = entity.code;
+            String codeName = code.substring(2);
+            wkVBinding.codeTv.setText(String.format("+%s", codeName));
         }
     });
 

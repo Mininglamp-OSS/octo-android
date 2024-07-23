@@ -39,6 +39,7 @@ import com.chat.base.msgitem.ReactionSticker;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.views.RecyclerListView;
+
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 
@@ -101,9 +102,11 @@ public class ReactionsContainerLayout extends FrameLayout {
 
     public ReactionsContainerLayout(@NonNull Context context) {
         super(context);
-
-        List<ReactionSticker> list = (List<ReactionSticker>) EndpointManager.getInstance().invoke("reaction_sticker", null);
-
+        Object object = EndpointManager.getInstance().invoke("reaction_sticker", null);
+        List<ReactionSticker> list = (List<ReactionSticker>) object;
+        if (list == null) {
+            list = new ArrayList<>();
+        }
         reactionsList.addAll(list);
         animationEnabled = true;
         shadow = ContextCompat.getDrawable(context, R.mipmap.reactions_bubble_shadow);

@@ -76,14 +76,18 @@ public class DispatchQueuePool {
             runnable.run();
             AndroidUtilities.runOnUIThread(() -> {
                 totalTasksCount--;
-                int remainingTasksCount = busyQueuesMap.get(queue) - 1;
-                if (remainingTasksCount == 0) {
-                    busyQueuesMap.remove(queue);
-                    busyQueues.remove(queue);
-                    queues.add(queue);
-                } else {
-                    busyQueuesMap.put(queue, remainingTasksCount);
+                Integer i = busyQueuesMap.get(queue);
+                if (i != null) {
+                    int remainingTasksCount = i - 1;
+                    if (remainingTasksCount == 0) {
+                        busyQueuesMap.remove(queue);
+                        busyQueues.remove(queue);
+                        queues.add(queue);
+                    } else {
+                        busyQueuesMap.put(queue, remainingTasksCount);
+                    }
                 }
+
             });
         });
     }

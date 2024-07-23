@@ -33,7 +33,7 @@
     <string name="login_auth">登录验证</string>
     <string name="send_code_desc">我们已给你的手机号码%s发送了一条验证短信</string>
     <string name="login_authing">登录验证中</string>
-    <string name="other_device_login">您的设备在其他设备登录，请重新登录!</string>
+    <string name="other_device_login">您已在其他设备登录，请重新登录!</string>
     <string name="auth_phone">验证您的手机号</string>
     <string name="auth_phone_tips">%s会发送短信验证手机号码，请输入您的验证码</string>
     <string name="logging_in">登录中</string>
@@ -57,5 +57,10 @@
     <string name="phone_error">手机号不合法</string>
     <string name="agree_auth_tips">请先阅读并同意《隐私政策》和《用户协议》</string>
     <string name="choose_login_type">—  第三方登录  —</string>
-    <string name="update_api_ip">以http开头(如http://172.0.0.1)</string>
+    <string name="update_api_ip">以http开头(如http://172.0.0.1:8090)</string>
+    <string name="input_invite_code_must">请输入邀请码（必填）</string>
+    <string name="input_invite_code_not_must">请输入邀请码（选填）</string>
+    <string name="invite_code_not_null">邀请码不能为空</string>
+    <string name="reset_base_url">重置</string>
+    <string name="update_api_content">填写服务器地址，域名或IP+端口的方式，都必须是http开头。\n例：https://api.botgate.cn\n例：https://172.0.0.1:8090</string>
 </resources>

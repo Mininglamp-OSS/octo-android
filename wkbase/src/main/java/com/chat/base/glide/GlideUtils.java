@@ -14,8 +14,10 @@ import androidx.core.content.ContextCompat;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.signature.ObjectKey;
 import com.chat.base.R;
@@ -127,6 +129,32 @@ public class GlideUtils {
         showAvatarImg(mContext, url, key, imageView);
     }
 
+    public void showRoundedAvatar(Context mContext, String url, String key, ImageView imageView, int radius) {
+        RequestOptions options = new RequestOptions().transform(new RoundedCorners(radius));
+        if (mContext != null) {
+            WeakReference<Context> weakReference = new WeakReference<>(mContext);
+            Context context = weakReference.get();
+            if (context instanceof Activity activity) {
+                if (!activity.isDestroyed()) {
+                    if (TextUtils.isEmpty(key)) {
+                        Glide.with(context)
+                                .load(url)
+                                .apply(options)
+                                .into(imageView);
+                    } else {
+                        Glide.with(context)
+                                .load(new MyGlideUrlWithId(url, key)).dontAnimate()
+                                .apply(options)
+                                .into(imageView);
+                    }
+
+                }
+            }
+        }
+// 在ImageView上显示圆角头像
+
+    }
+
     public void showAvatarImg(Context mContext, String url, String key, ImageView imageView) {
         if (mContext != null) {
             WeakReference<Context> weakReference = new WeakReference<>(mContext);
@@ -138,7 +166,7 @@ public class GlideUtils {
                                 .apply(GlideRequestOptions.getInstance().normalRequestOption())
                                 .into(imageView);
                     } else {
-                        Glide.with(context).load(new MyGlideUrlWithId(url,key)).dontAnimate()
+                        Glide.with(context).load(new MyGlideUrlWithId(url, key)).dontAnimate()
                                 .apply(GlideRequestOptions.getInstance().normalRequestOption())
                                 .into(imageView);
                     }

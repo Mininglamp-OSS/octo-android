@@ -13,33 +13,33 @@ import android.text.method.PasswordTransformationMethod;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 
-import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.SoftKeyboardUtils;
-import com.chat.base.views.keyboard.SoftKeyboardStateHelper;
-import com.chat.login.entity.CountryCodeEntity;
+import com.chat.base.utils.WKReader;
 import com.chat.login.R;
 import com.chat.login.databinding.ActRegisterLayoutBinding;
+import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginPresenter;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 2020-06-19 15:42
@@ -48,16 +48,11 @@ import java.util.List;
 public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding> implements LoginContract.LoginView {
     private String code = "0086";
     private LoginPresenter presenter;
-    private SoftKeyboardStateHelper softKeyboardStateHelper;
+    private WKAPPConfig appConfig;
 
     @Override
     protected ActRegisterLayoutBinding getViewBinding() {
         return ActRegisterLayoutBinding.inflate(getLayoutInflater());
-    }
-
-    @Override
-    protected void setTitle(TextView titleTv) {
-
     }
 
     @Override
@@ -82,8 +77,6 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
         wkVBinding.authCheckBox.setVisibility(View.VISIBLE);
         wkVBinding.authCheckBox.setEnabled(true);
         wkVBinding.authCheckBox.setChecked(false, true);
-
-        softKeyboardStateHelper = new SoftKeyboardStateHelper(wkVBinding.mainView);
 
         wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
         wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
@@ -153,20 +146,26 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                 showToast(R.string.agree_auth_tips);
                 return;
             }
-            String phone = wkVBinding.nameEt.getText().toString();
-            String verfiCode = wkVBinding.verfiEt.getText().toString();
-            String pwd = wkVBinding.pwdEt.getText().toString();
-            if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(verfiCode) && !TextUtils.isEmpty(pwd)) {
+
+            String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
+            String smsCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+            String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
+            String inviteCode = Objects.requireNonNull(wkVBinding.inviteCodeTv.getText()).toString();
+            if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(smsCode) && !TextUtils.isEmpty(pwd)) {
                 if (pwd.length() < 6 || pwd.length() > 16) {
                     showSingleBtnDialog(getString(R.string.pwd_length_error));
                 } else {
+                    if (appConfig != null && appConfig.register_invite_on == 1 && TextUtils.isEmpty(inviteCode)) {
+                        showSingleBtnDialog(getString(R.string.invite_code_not_null));
+                        return;
+                    }
                     loadingPopup.show();
-                    presenter.registerApp(verfiCode, code, "", phone, pwd);
+                    presenter.registerApp(smsCode, code, "", phone, pwd, inviteCode);
                 }
             }
         });
         wkVBinding.getVCodeBtn.setOnClickListener(v -> {
-            String phone = wkVBinding.nameEt.getText().toString();
+            String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
             if (!TextUtils.isEmpty(phone)) {
                 if (code.equals("0086") && wkVBinding.nameEt.getText().toString().length() != 11) {
                     showSingleBtnDialog(getString(R.string.phone_error));
@@ -176,42 +175,47 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
             }
         });
 
-        wkVBinding.myTv.setOnClickListener(view1 -> {
-            wkVBinding.authCheckBox.setChecked(!wkVBinding.authCheckBox.isChecked(), true);
-        });
-        wkVBinding.authCheckBox.setOnClickListener(view1 -> {
-            wkVBinding.authCheckBox.setChecked(!wkVBinding.authCheckBox.isChecked(), true);
-        });
+        wkVBinding.myTv.setOnClickListener(view1 -> wkVBinding.authCheckBox.setChecked(!wkVBinding.authCheckBox.isChecked(), true));
+        wkVBinding.authCheckBox.setOnClickListener(view1 -> wkVBinding.authCheckBox.setChecked(!wkVBinding.authCheckBox.isChecked(), true));
     }
 
     @Override
     protected void initListener() {
-        softKeyboardStateHelper.addSoftKeyboardStateListener(new SoftKeyboardStateHelper.SoftKeyboardStateListener() {
-            @Override
-            public void onSoftKeyboardOpened(int keyboardHeight) {
-                WKConstants.setKeyboardHeight(keyboardHeight);
-            }
-
-            @Override
-            public void onSoftKeyboardClosed() {
-
-            }
-        });
         wkVBinding.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
                 wkVBinding.pwdEt.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
             } else {
                 wkVBinding.pwdEt.setTransformationMethod(PasswordTransformationMethod.getInstance());
             }
-            wkVBinding.pwdEt.setSelection(wkVBinding.pwdEt.getText().length());
+            wkVBinding.pwdEt.setSelection(Objects.requireNonNull(wkVBinding.pwdEt.getText()).length());
+        });
+    }
+
+    @Override
+    protected void initData() {
+        WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
+            if (code == HttpResponseCode.success) {
+                appConfig = wkappConfig;
+                if (appConfig != null && appConfig.register_invite_on == 1) {
+                    wkVBinding.inviteCodeTv.setHint(R.string.input_invite_code_must);
+                    wkVBinding.inviteLayout.setVisibility(View.VISIBLE);
+                    wkVBinding.inviteLineView.setVisibility(View.VISIBLE);
+                } else {
+                    wkVBinding.inviteCodeTv.setHint(R.string.input_invite_code_not_must);
+                    wkVBinding.inviteLayout.setVisibility(View.GONE);
+                    wkVBinding.inviteLineView.setVisibility(View.GONE);
+                }
+            } else {
+                showToast(msg);
+            }
         });
     }
 
     private void checkStatus() {
-        String phone = wkVBinding.nameEt.getText().toString();
-        String verfiCode = wkVBinding.verfiEt.getText().toString();
-        String pwd = wkVBinding.pwdEt.getText().toString();
-        if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(verfiCode) && !TextUtils.isEmpty(pwd)) {
+        String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
+        String smsCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+        String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
+        if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(smsCode) && !TextUtils.isEmpty(pwd)) {
             wkVBinding.registerBtn.setAlpha(1f);
             wkVBinding.registerBtn.setEnabled(true);
         } else {
@@ -221,17 +225,14 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     }
 
 
-    ActivityResultLauncher<Intent> intentActivityResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
-        @Override
-        public void onActivityResult(ActivityResult result) {
-            //此处是跳转的result回调方法
-            if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
-                CountryCodeEntity entity = result.getData().getParcelableExtra("entity");
-                assert entity != null;
-                code = entity.code;
-                String codeName = code.substring(2);
-                wkVBinding.codeTv.setText(String.format("+%s", codeName));
-            }
+    ActivityResultLauncher<Intent> intentActivityResultLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        //此处是跳转的result回调方法
+        if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
+            CountryCodeEntity entity = result.getData().getParcelableExtra("entity");
+            assert entity != null;
+            code = entity.code;
+            String codeName = code.substring(2);
+            wkVBinding.codeTv.setText(String.format("+%s", codeName));
         }
     });
 
@@ -240,15 +241,22 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
         loadingPopup.dismiss();
         SoftKeyboardUtils.getInstance().hideInput(this, wkVBinding.pwdEt);
         hideLoading();
-        new Handler(Looper.myLooper()).postDelayed(() -> {
-            List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
-            if (list != null && list.size() > 0) {
-                for (LoginMenu menu : list) {
-                    if (menu.iMenuClick != null) menu.iMenuClick.onClick();
-                }
-            }
+
+        if (TextUtils.isEmpty(userInfoEntity.name)) {
+            Intent intent = new Intent(this, PerfectUserInfoActivity.class);
+            startActivity(intent);
             finish();
-        }, 500);
+        } else {
+            new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> {
+                List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
+                if (WKReader.isNotEmpty(list)) {
+                    for (LoginMenu menu : list) {
+                        if (menu.iMenuClick != null) menu.iMenuClick.onClick();
+                    }
+                }
+                finish();
+            }, 500);
+        }
     }
 
     @Override

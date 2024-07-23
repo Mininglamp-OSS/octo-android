@@ -465,7 +465,6 @@ public class WKIMUtils {
     public void revokeMsg(JSONObject jsonObject) {
         //撤回消息
         if (jsonObject != null) {
-
             if (jsonObject.has("message_id")) {
                 String messageId = jsonObject.optString("message_id");
                 //  String client_msg_no = jsonObject.optString("client_msg_no");

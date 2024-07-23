@@ -20,6 +20,7 @@ import com.chat.base.utils.WKTimeUtils;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.entity.ThirdAuthCode;
 import com.chat.login.entity.ThirdLoginResult;
+import com.chat.login.entity.VerfiCodeResult;
 
 import org.json.JSONException;
 
@@ -185,13 +186,14 @@ public class LoginModel extends WKBaseModel {
         void onResult(int code, String msg, int exit);
     }
 
-    void registerApp(String code, String zone, String name, String phone, String password, final ILoginListener iLoginListener) {
+    void registerApp(String code, String zone, String name, String phone, String password,String inviteCode, final ILoginListener iLoginListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("code", code);
         jsonObject.put("zone", zone);
         jsonObject.put("name", name);
         jsonObject.put("phone", phone);
         jsonObject.put("password", password);
+        jsonObject.put("invite_code", inviteCode);
         JSONObject deviceJson = new JSONObject();
         deviceJson.put("device_id", WKConstants.getDeviceID());
         deviceJson.put("device_name", WKDeviceUtils.getInstance().getDeviceName());

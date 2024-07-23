@@ -97,15 +97,12 @@ open class WKTextProvider : WKChatBaseProvider() {
         val contentTv = parentView.findViewById<TextView>(R.id.contentTv)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
-        val replyLayout = parentView.findViewById<View>(R.id.replyLayout)
-        val replyTv = parentView.findViewById<TextView>(R.id.replyTv)
-        val replyNameTv = parentView.findViewById<TextView>(R.id.replyNameTv)
-        val replyAvatarIv = parentView.findViewById<AvatarView>(R.id.replyAvatarIv)
-        replyAvatarIv.setSize(20f)
+
+
         val contentTvLayout = parentView.findViewById<BubbleLayout>(R.id.contentTvLayout)
-        val replyIv = parentView.findViewById<ImageView>(R.id.replyIv)
+
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
-        val mTextContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+
         //replyLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
         // 这里要指定文本宽度 - padding的距离
 //        textContentLayout.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
@@ -132,166 +129,6 @@ open class WKTextProvider : WKChatBaseProvider() {
         contentTv.text = uiChatMsgItemEntity.displaySpans
         contentTv.movementMethod = LinkMovementMethod.getInstance()
 
-        //设置回复内容
-        replyLayout.visibility =
-            if (mTextContent.reply == null || mTextContent.reply.payload == null) View.GONE else View.VISIBLE
-        if (mTextContent.reply != null && mTextContent.reply.payload != null) {
-            if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
-                val colors =
-                    WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
-                val index = abs(mTextContent.reply.from_uid.hashCode()) % colors.size
-                val replyLine = parentView.findViewById<View>(R.id.replyLine)
-                val myShapeDrawable = replyLine.background as GradientDrawable
-                myShapeDrawable.setColor(colors[index])
-                replyNameTv.setTextColor(colors[index])
-                val bgColor = ColorUtils.setAlphaComponent(colors[index], 30)
-                val bgShapeDrawable = replyLayout.background as GradientDrawable
-                bgShapeDrawable.setColor(bgColor)
-            }
-            replyTv.setTextColor(textColor)
-            if (mTextContent.reply.revoke == 1) {
-                replyTv.setText(R.string.reply_msg_is_revoked)
-                replyIv.visibility = View.GONE
-                replyNameTv.visibility = View.GONE
-                replyAvatarIv.visibility = View.GONE
-            } else {
-                replyIv.visibility = View.VISIBLE
-                replyNameTv.visibility = View.VISIBLE
-                replyAvatarIv.visibility = View.VISIBLE
-                replyAvatarIv.showAvatar(mTextContent.reply.from_uid, WKChannelType.PERSONAL)
-                val mChannel = WKIM.getInstance().channelManager.getChannel(
-                    mTextContent.reply.from_uid, WKChannelType.PERSONAL
-                )
-                if (mChannel != null) {
-                    replyNameTv.text = mChannel.channelName
-                } else {
-                    replyNameTv.text = mTextContent.reply.from_name
-                    WKIM.getInstance().channelManager.fetchChannelInfo(
-                        mTextContent.reply.from_uid, WKChannelType.PERSONAL
-                    )
-                }
-                when (mTextContent.reply.payload.type) {
-                    WKContentType.WK_GIF -> {
-                        replyIv.visibility = View.VISIBLE
-                        replyTv.visibility = View.GONE
-                        val gifContent = mTextContent.reply.payload as WKGifContent
-                        GlideUtils.getInstance()
-                            .showGif(
-                                context,
-                                WKApiConfig.getShowUrl(gifContent.url),
-                                replyIv,
-                                null
-                            )
-                    }
-
-                    WKContentType.WK_IMAGE -> {
-                        replyIv.visibility = View.VISIBLE
-                        replyTv.visibility = View.GONE
-                        val imageContent = mTextContent.reply.payload as WKImageContent
-                        var showUrl: String
-                        if (!TextUtils.isEmpty(imageContent.localPath)) {
-                            showUrl = imageContent.localPath
-                            val file = File(showUrl)
-                            if (!file.exists()) {
-                                //如果本地文件被删除就显示网络图片
-                                showUrl = WKApiConfig.getShowUrl(imageContent.url)
-                            }
-                        } else {
-                            showUrl = WKApiConfig.getShowUrl(imageContent.url)
-                        }
-                        GlideUtils.getInstance().showImg(context, showUrl, replyIv)
-                    }
-
-                    else -> {
-                        replyIv.visibility = View.GONE
-                        replyTv.visibility = View.VISIBLE
-                        var content = mTextContent.reply.payload.getDisplayContent()
-                        if (mTextContent.reply.contentEditMsgModel != null && !TextUtils.isEmpty(
-                                mTextContent.reply.contentEditMsgModel.getDisplayContent()
-                            )
-                        ) {
-                            content = mTextContent.reply.contentEditMsgModel.getDisplayContent()
-                        }
-                        replyTv.movementMethod = LinkMovementMethod.getInstance()
-                        val strUrls = StringUtils.getStrUrls(content)
-                        val replySpan = SpannableStringBuilder()
-                        replySpan.append(content)
-                        if (strUrls.size > 0) {
-                            for (url in strUrls) {
-                                var fromIndex = 0
-                                while (fromIndex >= 0) {
-                                    fromIndex = content.indexOf(url, fromIndex)
-                                    if (fromIndex >= 0) {
-                                        replySpan.setSpan(
-                                            StyleSpan(Typeface.BOLD),
-                                            fromIndex,
-                                            fromIndex + url.length,
-                                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                                        )
-                                        replySpan.setSpan(
-                                            NormalClickableSpan(true,
-                                                ContextCompat.getColor(context, R.color.blue),
-                                                NormalClickableContent(
-                                                    NormalClickableContent.NormalClickableTypes.URL,
-                                                    url
-                                                ),
-                                                object : NormalClickableSpan.IClick {
-                                                    override fun onClick(view: View) {
-                                                        SoftKeyboardUtils.getInstance()
-                                                            .hideSoftKeyboard(context as Activity)
-                                                        val intent = Intent(
-                                                            context, WKWebViewActivity::class.java
-                                                        )
-                                                        intent.putExtra("url", url)
-                                                        context.startActivity(intent)
-                                                    }
-                                                }),
-                                            fromIndex,
-                                            fromIndex + url.length,
-                                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                                        )
-                                        fromIndex += url.length
-                                    }
-                                }
-                            }
-                        }
-
-                        // emoji
-                        val matcher = EmojiManager.getInstance().pattern.matcher(content)
-                        while (matcher.find()) {
-                            val start = matcher.start()
-                            val end = matcher.end()
-                            val emoji = content.substring(start, end)
-                            val d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.SMALL_SCALE)
-                            if (d != null) {
-                                val span: AlignImageSpan =
-                                    object : AlignImageSpan(d, ALIGN_CENTER) {
-                                        override fun onClick(view: View) {}
-                                    }
-                                replySpan.setSpan(
-                                    span,
-                                    start,
-                                    end,
-                                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                                )
-                            }
-                        }
-                        replyTv.text = replySpan
-                    }
-                }
-                replyLayout.setOnClickListener {
-                    shotTipsMsg(
-                        mTextContent
-                    )
-                }
-                replyTv.setOnClickListener {
-                    shotTipsMsg(
-                        mTextContent
-                    )
-                }
-            }
-
-        }
         // 链接识别
         val urls = StringUtils.getStrUrls(contentTv.text.toString())
         if (urls.size > 0) {
@@ -302,8 +139,7 @@ open class WKTextProvider : WKChatBaseProvider() {
         }
         //setSelectableTextHelper(contentTv,0,true)
         selectText(contentTv, contentTvLayout, uiChatMsgItemEntity)
-
-
+        setReplyInfo(adapterPosition, parentView, uiChatMsgItemEntity, from)
     }
 
     private var mSelectableTextHelper: SelectTextHelper? = null
@@ -913,5 +749,196 @@ open class WKTextProvider : WKChatBaseProvider() {
     ) {
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         setFromName(uiChatMsgItemEntity, from, receivedTextNameTv)
+    }
+
+    override fun refreshReply(
+        adapterPosition: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        super.refreshReply(adapterPosition, parentView, uiChatMsgItemEntity, from)
+
+        setReplyInfo(adapterPosition, parentView, uiChatMsgItemEntity, from)
+    }
+
+    private fun setReplyInfo(
+        adapterPosition: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        val mTextContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        val replyIv = parentView.findViewById<ImageView>(R.id.replyIv)
+        val replyLayout = parentView.findViewById<View>(R.id.replyLayout)
+        val replyContentLayout = parentView.findViewById<View>(R.id.replyContentLayout)
+        val replyTv = parentView.findViewById<TextView>(R.id.replyTv)
+        val replyContentRevokedTv = parentView.findViewById<TextView>(R.id.replyContentRevokedTv)
+        val replyNameTv = parentView.findViewById<TextView>(R.id.replyNameTv)
+        val replyAvatarIv = parentView.findViewById<AvatarView>(R.id.replyAvatarIv)
+        replyAvatarIv.setSize(20f)
+        val textColor: Int
+        if (from == WKChatIteMsgFromType.SEND) {
+            textColor = ContextCompat.getColor(context, R.color.colorDark)
+        } else {
+            textColor = ContextCompat.getColor(context, R.color.receive_text_color)
+        }
+        //设置回复内容
+        replyLayout.visibility =
+            if (mTextContent.reply == null || mTextContent.reply.payload == null) View.GONE else View.VISIBLE
+        if (mTextContent.reply == null || mTextContent.reply.payload == null) {
+            return
+        }
+        replyTv.setTextColor(textColor)
+        if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
+            val colors =
+                WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
+            val index = abs(mTextContent.reply.from_uid.hashCode()) % colors.size
+            val replyLine = parentView.findViewById<View>(R.id.replyLine)
+            val myShapeDrawable = replyLine.background as GradientDrawable
+            myShapeDrawable.setColor(colors[index])
+            replyNameTv.setTextColor(colors[index])
+            val bgColor = ColorUtils.setAlphaComponent(colors[index], 30)
+            val bgShapeDrawable = replyLayout.background as GradientDrawable
+            bgShapeDrawable.setColor(bgColor)
+        }
+        if (mTextContent.reply.revoke == 1) {
+            replyContentLayout.visibility = View.GONE
+            replyContentRevokedTv.visibility = View.VISIBLE
+        } else {
+            replyContentLayout.visibility = View.VISIBLE
+            replyContentRevokedTv.visibility = View.GONE
+            replyAvatarIv.showAvatar(mTextContent.reply.from_uid, WKChannelType.PERSONAL)
+            val mChannel = WKIM.getInstance().channelManager.getChannel(
+                mTextContent.reply.from_uid, WKChannelType.PERSONAL
+            )
+            if (mChannel != null) {
+                replyNameTv.text = mChannel.channelName
+            } else {
+                replyNameTv.text = mTextContent.reply.from_name
+                WKIM.getInstance().channelManager.fetchChannelInfo(
+                    mTextContent.reply.from_uid, WKChannelType.PERSONAL
+                )
+            }
+            when (mTextContent.reply.payload.type) {
+                WKContentType.WK_GIF -> {
+                    replyIv.visibility = View.VISIBLE
+                    replyTv.visibility = View.GONE
+                    val gifContent = mTextContent.reply.payload as WKGifContent
+                    GlideUtils.getInstance()
+                        .showGif(
+                            context,
+                            WKApiConfig.getShowUrl(gifContent.url),
+                            replyIv,
+                            null
+                        )
+                }
+
+                WKContentType.WK_IMAGE -> {
+                    replyIv.visibility = View.VISIBLE
+                    replyTv.visibility = View.GONE
+                    val imageContent = mTextContent.reply.payload as WKImageContent
+                    var showUrl: String
+                    if (!TextUtils.isEmpty(imageContent.localPath)) {
+                        showUrl = imageContent.localPath
+                        val file = File(showUrl)
+                        if (!file.exists()) {
+                            //如果本地文件被删除就显示网络图片
+                            showUrl = WKApiConfig.getShowUrl(imageContent.url)
+                        }
+                    } else {
+                        showUrl = WKApiConfig.getShowUrl(imageContent.url)
+                    }
+                    GlideUtils.getInstance().showImg(context, showUrl, replyIv)
+                }
+
+                else -> {
+                    replyIv.visibility = View.GONE
+                    replyTv.visibility = View.VISIBLE
+                    var content = mTextContent.reply.payload.getDisplayContent()
+                    if (mTextContent.reply.contentEditMsgModel != null && !TextUtils.isEmpty(
+                            mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                        )
+                    ) {
+                        content = mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                    }
+                    replyTv.movementMethod = LinkMovementMethod.getInstance()
+                    val strUrls = StringUtils.getStrUrls(content)
+                    val replySpan = SpannableStringBuilder()
+                    replySpan.append(content)
+                    if (strUrls.size > 0) {
+                        for (url in strUrls) {
+                            var fromIndex = 0
+                            while (fromIndex >= 0) {
+                                fromIndex = content.indexOf(url, fromIndex)
+                                if (fromIndex >= 0) {
+                                    replySpan.setSpan(
+                                        StyleSpan(Typeface.BOLD),
+                                        fromIndex,
+                                        fromIndex + url.length,
+                                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                    )
+                                    replySpan.setSpan(
+                                        NormalClickableSpan(true,
+                                            ContextCompat.getColor(context, R.color.blue),
+                                            NormalClickableContent(
+                                                NormalClickableContent.NormalClickableTypes.URL,
+                                                url
+                                            ),
+                                            object : NormalClickableSpan.IClick {
+                                                override fun onClick(view: View) {
+                                                    SoftKeyboardUtils.getInstance()
+                                                        .hideSoftKeyboard(context as Activity)
+                                                    val intent = Intent(
+                                                        context, WKWebViewActivity::class.java
+                                                    )
+                                                    intent.putExtra("url", url)
+                                                    context.startActivity(intent)
+                                                }
+                                            }),
+                                        fromIndex,
+                                        fromIndex + url.length,
+                                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                    )
+                                    fromIndex += url.length
+                                }
+                            }
+                        }
+                    }
+
+                    // emoji
+                    val matcher = EmojiManager.getInstance().pattern.matcher(content)
+                    while (matcher.find()) {
+                        val start = matcher.start()
+                        val end = matcher.end()
+                        val emoji = content.substring(start, end)
+                        val d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.SMALL_SCALE)
+                        if (d != null) {
+                            val span: AlignImageSpan =
+                                object : AlignImageSpan(d, ALIGN_CENTER) {
+                                    override fun onClick(view: View) {}
+                                }
+                            replySpan.setSpan(
+                                span,
+                                start,
+                                end,
+                                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                        }
+                    }
+                    replyTv.text = replySpan
+                }
+            }
+            replyLayout.setOnClickListener {
+                shotTipsMsg(
+                    mTextContent
+                )
+            }
+            replyTv.setOnClickListener {
+                shotTipsMsg(
+                    mTextContent
+                )
+            }
+        }
     }
 }

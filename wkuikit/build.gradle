@@ -3,8 +3,7 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-parcelize'
 
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -28,6 +27,7 @@ android {
     }
     buildFeatures {
         viewBinding true
+        dataBinding true
     }
     namespace 'com.chat.uikit'
 //    kotlin {
@@ -38,4 +38,5 @@ android {
 }
 dependencies {
     api project(':wkbase')
+//    implementation "androidx.work:work-runtime:2.8.1"
 }

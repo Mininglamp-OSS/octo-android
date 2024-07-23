@@ -21,7 +21,6 @@ import com.chat.base.config.WKConfig
 import com.chat.base.config.WKConstants
 import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.endpoint.EndpointManager
-import com.chat.base.endpoint.entity.UpdateBaseAPIMenu
 import com.chat.base.net.RetrofitUtils
 import com.chat.base.ui.Theme
 import com.chat.base.utils.ActManagerUtils
@@ -158,20 +157,6 @@ class TSApplication : MultiDexApplication() {
             val intent = Intent(applicationContext, TabActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
-            null
-        }
-        EndpointManager.getInstance().setMethod("update_base_url") { `object` ->
-            if (`object` != null) {
-                val apiMenu: UpdateBaseAPIMenu = `object` as UpdateBaseAPIMenu
-                if (TextUtils.isEmpty(apiMenu.ip) || TextUtils.isEmpty(apiMenu.toString())) {
-                    initApi()
-                } else {
-                    val baseUrl: String = apiMenu.ip + ":" + apiMenu.port
-                    WKSharedPreferencesUtil.getInstance().putSP("api_base_url", baseUrl)
-                    WKApiConfig.initBaseURLIncludeIP(baseUrl)
-                    RetrofitUtils.getInstance().resetRetrofit()
-                }
-            }
             null
         }
     }

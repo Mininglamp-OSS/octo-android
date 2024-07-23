@@ -19,6 +19,5 @@ public class GroupMember {
     public String updated_at;
     public String invite_uid;
     public long forbidden_expir_time;
-    //邀请码
     public String vercode;
 }

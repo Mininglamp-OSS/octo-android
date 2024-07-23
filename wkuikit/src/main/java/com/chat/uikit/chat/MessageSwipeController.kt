@@ -95,9 +95,9 @@ class MessageSwipeController(
         drawReplyButton(c)
 
         if (dX == 0f) {
-            Handler(Looper.myLooper()!!).postDelayed({
-                swipeControllerActions.hideSoft()
-            }, 2000)
+//            Handler(Looper.myLooper()!!).postDelayed({
+//                swipeControllerActions.hideSoft()
+//            }, 2000)
         }
     }
 

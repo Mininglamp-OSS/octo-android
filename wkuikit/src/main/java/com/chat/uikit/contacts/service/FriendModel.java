@@ -15,6 +15,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.enity.UserInfo;
@@ -56,7 +57,7 @@ public class FriendModel extends WKBaseModel {
         jsonObject1.put("to_uid", uid);
         jsonObject1.put("remark", remark);
         jsonObject1.put("vercode", vercode);
-        request(createService(FriendService.class).applyAddFriend(jsonObject1), new IRequestResultListener<CommonResponse>() {
+        request(createService(FriendService.class).applyAddFriend(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -79,7 +80,7 @@ public class FriendModel extends WKBaseModel {
 
         JSONObject jsonObject1 = new JSONObject();
         jsonObject1.put("token", token);
-        request(createService(FriendService.class).agreeFriendApply(jsonObject1), new IRequestResultListener<CommonResponse>() {
+        request(createService(FriendService.class).agreeFriendApply(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -98,7 +99,7 @@ public class FriendModel extends WKBaseModel {
     public void syncFriends(final ICommonListener iCommonListener) {
         String key = String.format("%s_friend_sync_version", WKConfig.getInstance().getUid());
         long version = WKSharedPreferencesUtil.getInstance().getLong(key);
-        request(createService(FriendService.class).syncFriends(version, 5000, 1), new IRequestResultListener<List<UserInfo>>() {
+        request(createService(FriendService.class).syncFriends(version, 500, 1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<UserInfo> list) {
                 if (WKReader.isNotEmpty(list)) {
@@ -137,9 +138,11 @@ public class FriendModel extends WKBaseModel {
                     //将好友信息设置到sdk
                     WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
-                }
-                if (iCommonListener != null) {
-                    iCommonListener.onResult(HttpResponseCode.success, "");
+                    AndroidUtilities.runOnUIThread(() -> syncFriends(iCommonListener), 500);
+                } else {
+                    if (iCommonListener != null) {
+                        iCommonListener.onResult(HttpResponseCode.success, "");
+                    }
                 }
             }
 
@@ -189,7 +192,7 @@ public class FriendModel extends WKBaseModel {
     public void updateUserSetting(String uid, String key, int value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(FriendService.class).updateUserSetting(uid, jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(FriendService.class).updateUserSetting(uid, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);

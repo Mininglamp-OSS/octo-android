@@ -46,8 +46,8 @@
     <string name="pc_file">Send File</string>
     <string name="pc_login">Logged into %s for Web.</string>
     <string name="sign_in_agree">I have read and agree</string>
-    <string name="privacy_policy">Privacy Policy</string>
-    <string name="user_agreement">User Agreement</string>
+    <string name="privacy_policy"> Privacy Policy </string>
+    <string name="user_agreement"> User Agreement </string>
     <string name="update_api">Update api address</string>
     <string name="web_url">Web url</string>
     <string name="qr_scan_login">QR code scanning login</string>
@@ -58,4 +58,9 @@
     <string name="agree_auth_tips">Please read and agree to the privacy policy and user agreement first</string>
     <string name="choose_login_type">Log in</string>
     <string name="update_api_ip">Start with http(for example http://172.0.0.1)</string>
+    <string name="input_invite_code_must">Please enter the invitation code (required)</string>
+    <string name="input_invite_code_not_must">Please enter the invitation code (optional)</string>
+    <string name="invite_code_not_null">The invitation code cannot be empty</string>
+    <string name="reset_base_url">Reset</string>
+    <string name="update_api_content">The method of filling in server address, domain name, or IP+port must start with HTTP.\nExample：https://api.botgate.cn\nExample：https://172.0.0.1:8090</string>
 </resources>

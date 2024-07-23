@@ -278,5 +278,8 @@
     <string name="open_new_msg_notice_desc">Open New Message notifications</string>
     <string name="open_new_rtc_notice">Open audio and video invitation notifications</string>
     <string name="open_new_rtc_notice_desc">In the category classification of the system notification permission page, open the \'Audio and Video Invitation Notification\' page, enable \'Allow Notification\' and \'Vibration\', and select the \'Sound\' option</string>
+    <string name="tab_text_chat">Chat</string>
+    <string name="tab_text_contacts">Contacts</string>
+    <string name="tab_text_me">Me</string>
 </resources>
 

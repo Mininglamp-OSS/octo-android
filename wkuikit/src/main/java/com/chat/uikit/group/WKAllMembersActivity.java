@@ -58,10 +58,6 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
     }
 
     @Override
-    protected void initPresenter() {
-    }
-
-    @Override
     protected void initView() {
         channelID = getIntent().getStringExtra("channelID");
         channelType = getIntent().getByteExtra("channelType", WKChannelType.GROUP);

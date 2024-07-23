@@ -10,6 +10,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.utils.WKReader;
 import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.entity.UserInfoEntity;
@@ -33,7 +35,7 @@ import java.util.Locale;
  * 选择区号
  */
 public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayoutBinding> implements LoginContract.LoginView, OnQuickSideBarTouchListener {
-
+    private boolean setResult = false;
     private LoginPresenter loginPresenter;
     private ChooseCountryCodeAdapter adapter;
     private List<CountryCodeEntity> allList;
@@ -55,6 +57,7 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
 
     @Override
     protected void initView() {
+        setResult = getIntent().getBooleanExtra("set_result", false);
         wkVBinding.quickSideBarTipsView.setBackgroundColor(Theme.colorAccount);
         wkVBinding.quickSideBarView.setTextChooseColor(Theme.colorAccount);
         loginPresenter.getCountryCode();
@@ -67,11 +70,16 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
         wkVBinding.quickSideBarView.setOnQuickSideBarTouchListener(this);
         adapter.setOnItemClickListener((adapter1, view1, position) -> SingleClickUtil.determineTriggerSingleClick(view1, view2 -> {
             CountryCodeEntity entity = (CountryCodeEntity) adapter1.getItem(position);
-            if (entity != null) {
-                Intent intent = new Intent();
-                intent.putExtra("entity", entity);
-                setResult(RESULT_OK, intent);
+            if (setResult) {
+                EndpointManager.getInstance().invoke("set_choose_area_code", entity.code);
                 finish();
+            } else {
+                if (entity != null) {
+                    Intent intent = new Intent();
+                    intent.putExtra("entity", entity);
+                    setResult(RESULT_OK, intent);
+                    finish();
+                }
             }
         }));
 
@@ -182,7 +190,7 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
         //有此key则获取位置并滚动到该位置
         List<CountryCodeEntity> list = adapter.getData();
-        if (list.size() > 0) {
+        if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying.startsWith(letter)) {
                     wkVBinding.recyclerView.smoothScrollToPosition(i);

@@ -6,6 +6,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.entity.ThirdAuthCode;
 import com.chat.login.entity.ThirdLoginResult;
+import com.chat.login.entity.VerfiCodeResult;
 
 import java.util.List;
 

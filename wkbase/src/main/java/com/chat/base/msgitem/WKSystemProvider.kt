@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.R
+import com.chat.base.msg.ChatAdapter
 import com.chat.base.ui.components.SystemMsgBackgroundColorSpan
 import com.chat.base.utils.AndroidUtilities
 
@@ -34,6 +35,10 @@ class WKSystemProvider(val type: Int) : WKChatBaseProvider() {
         item: WKUIChatMsgItemEntity
     ) {
         super.convert(helper, item)
+        helper.getView<View>(R.id.systemRootView).setOnClickListener {
+            val chatAdapter = getAdapter() as ChatAdapter
+            chatAdapter.conversationContext.hideSoftKeyboard()
+        }
         val textView = helper.getView<TextView>(R.id.contentTv)
         val content: String? = if (type == WKContentType.msgPromptTime) item.wkMsg.content else {
             getShowContent(item.wkMsg.content)

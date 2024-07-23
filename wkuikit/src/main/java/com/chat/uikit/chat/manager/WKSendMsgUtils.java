@@ -3,14 +3,13 @@ package com.chat.uikit.chat.manager;
 import android.text.TextUtils;
 
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.net.ud.WKUploader;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKMsg;
-import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.interfaces.IUploadAttacResultListener;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
-import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
 import java.util.List;
@@ -36,19 +35,9 @@ public class WKSendMsgUtils {
     }
 
     public void sendMessage(WKMsg wkMsg) {
-        EndpointManager.getInstance().invoke("send_message", wkMsg);
+        EndpointManager.getInstance().invokes(EndpointSID.sendMessage, wkMsg);
         WKIM.getInstance().getMsgManager().sendMessage(wkMsg);
     }
-
-    /**
-     * 发送消息
-     *
-     * @param messageContent 消息model
-     */
-    public void sendMessage(WKMessageContent messageContent, WKMsgSetting msgSetting, String channelID, byte channelType) {
-        WKIM.getInstance().getMsgManager().sendMessage(messageContent, msgSetting, channelID, channelType);
-    }
-
 
     public void sendMessages(List<SendMsgEntity> list) {
         final Timer[] timer = {new Timer()};
@@ -60,10 +49,15 @@ public class WKSendMsgUtils {
                     timer[0].cancel();
                     timer[0] = null;
                 }
-                WKIM.getInstance().getMsgManager().sendMessage(list.get(i[0]).messageContent, list.get(i[0]).wkChannel.channelID, list.get(i[0]).wkChannel.channelType);
+                WKMsg wkMsg = new WKMsg();
+                wkMsg.channelID = list.get(i[0]).wkChannel.channelID;
+                wkMsg.channelType = list.get(i[0]).wkChannel.channelType;
+                wkMsg.type = list.get(i[0]).messageContent.type;
+                wkMsg.baseContentMsgModel = list.get(i[0]).messageContent;
+                sendMessage(wkMsg);
                 i[0]++;
             }
-        }, 0, 100);
+        }, 0, 150);
     }
 
     /**
@@ -118,23 +112,18 @@ public class WKSendMsgUtils {
                                         @Override
                                         public void onSuccess(String url) {
                                             videoMsgModel.cover = url;
-                                            WKUploader.getInstance().getUploadFileUrl(msg.channelID, msg.channelType, videoMsgModel.localPath, new WKUploader.IGetUploadFileUrl() {
+                                            WKUploader.getInstance().getUploadFileUrl(msg.channelID, msg.channelType, videoMsgModel.localPath, (url1, fileUrl) -> WKUploader.getInstance().upload(url1, videoMsgModel.localPath, msg.clientSeq, new WKUploader.IUploadBack() {
                                                 @Override
-                                                public void onResult(String url, String fileUrl) {
-                                                    WKUploader.getInstance().upload(url, videoMsgModel.localPath, msg.clientSeq, new WKUploader.IUploadBack() {
-                                                        @Override
-                                                        public void onSuccess(String url) {
-                                                            videoMsgModel.url = url;
-                                                            listener.onUploadResult(true, videoMsgModel);
-                                                        }
-
-                                                        @Override
-                                                        public void onError() {
-                                                            listener.onUploadResult(false, videoMsgModel);
-                                                        }
-                                                    });
+                                                public void onSuccess(String url1) {
+                                                    videoMsgModel.url = url1;
+                                                    listener.onUploadResult(true, videoMsgModel);
                                                 }
-                                            });
+
+                                                @Override
+                                                public void onError() {
+                                                    listener.onUploadResult(false, videoMsgModel);
+                                                }
+                                            }));
                                         }
 
                                         @Override

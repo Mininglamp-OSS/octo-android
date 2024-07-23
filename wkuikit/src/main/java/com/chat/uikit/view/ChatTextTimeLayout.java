@@ -92,7 +92,9 @@ public class ChatTextTimeLayout extends FrameLayout {
         if (usernameWidth > textViewWidth + containerWidth) {
             widthSize = usernameWidth;
         }
-
+        if (widthSize < Math.max(textViewWidth, containerWidth)) {
+            widthSize = Math.max(textViewWidth, containerWidth);
+        }
         setMeasuredDimension(widthSize, heightSize);
         super.onMeasure(
                 MeasureSpec.makeMeasureSpec(widthSize, MeasureSpec.EXACTLY),

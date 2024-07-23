@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">唐僧叨叨</string>
+    <string name="app_name">demo</string>
     <string name="no_permissions">授权失败,APP部分功能将无法使用，请打开应用权限后重试</string>
     <string name="agree">同意</string>
     <string name="disagree">不同意</string>

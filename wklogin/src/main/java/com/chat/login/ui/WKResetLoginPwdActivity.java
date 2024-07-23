@@ -48,11 +48,6 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
     }
 
     @Override
-    protected void setTitle(TextView titleTv) {
-
-    }
-
-    @Override
     protected void initPresenter() {
         presenter = new LoginPresenter(this);
     }

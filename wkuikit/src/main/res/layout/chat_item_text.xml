@@ -45,11 +45,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:visibility="gone"
             android:layout_marginEnd="10dp"
             android:layout_marginBottom="10dp"
             android:background="@drawable/reply_bg"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:visibility="visible">
 
             <View
                 android:id="@+id/replyLine"
@@ -58,7 +58,22 @@
                 android:layout_marginEnd="5dp"
                 android:background="@drawable/reply_line" />
 
+            <TextView
+                android:id="@+id/replyContentRevokedTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="10dp"
+                android:layout_marginBottom="10dp"
+                android:lineSpacingExtra="2dp"
+                android:singleLine="true"
+                android:visibility="gone"
+                android:text="@string/reply_msg_is_revoked"
+                android:textColor="@color/popupTextColor"
+                android:textSize="14sp" />
+
             <LinearLayout
+                android:id="@+id/replyContentLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"

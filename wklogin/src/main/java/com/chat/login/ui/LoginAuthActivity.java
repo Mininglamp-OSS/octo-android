@@ -32,11 +32,6 @@ public class LoginAuthActivity extends WKBaseActivity<ActLoginAuthLayoutBinding>
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected void initView() {
         wkVBinding.loginAuthBtn.getBackground().setTint(Theme.colorAccount);
         wkVBinding.loginAuthDescTv.setText(String.format(getString(R.string.login_auth_desc), getString(R.string.app_name)));

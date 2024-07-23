@@ -11,6 +11,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import com.chat.base.utils.WKReader;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.R;
 import com.chat.login.databinding.ActInputLoginAuthVerifCodeBinding;
@@ -106,12 +107,12 @@ public class InputLoginAuthVerifCodeActivity extends WKBaseActivity<ActInputLogi
         } else {
 
             List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
-            if (list != null && list.size() > 0) {
+            if (WKReader.isNotEmpty(list)) {
                 for (LoginMenu loginMenu : list) {
                     if (loginMenu.iMenuClick != null) loginMenu.iMenuClick.onClick();
                 }
             }
-            new Handler(Looper.myLooper()).postDelayed(() -> {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 setResult(RESULT_OK);
                 finish();
             }, 200);

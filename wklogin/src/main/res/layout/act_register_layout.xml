@@ -172,6 +172,40 @@
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp" />
 
+        <LinearLayout
+            android:id="@+id/inviteLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginRight="20dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/inviteCodeTv"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="@color/transparent"
+                android:gravity="center_vertical"
+                android:hint="@string/input_invite_code_must"
+                android:inputType="numberSigned"
+                android:maxLength="20"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:textColor="@color/colorDark"
+                android:textColorHint="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <View
+            android:id="@+id/inviteLineView"
+            style="@style/view_line"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"

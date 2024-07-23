@@ -6,15 +6,13 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.common.WKCommonModel;
-import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
-import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
-import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
@@ -178,11 +176,14 @@ public class GroupModel extends WKBaseModel {
         request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> list) {
-                if (WKReader.isEmpty(list)) return;
-                List<WKChannelMember> members = serialize(list);
-                WKIM.getInstance().getChannelMembersManager().save(members);
-                if (iCommonListener != null)
-                    iCommonListener.onResult(HttpResponseCode.success, "");
+                if (WKReader.isNotEmpty(list)) {
+                    List<WKChannelMember> members = serialize(list);
+                    WKIM.getInstance().getChannelMembersManager().save(members);
+                    AndroidUtilities.runOnUIThread(() -> groupMembersSync(groupNo, iCommonListener), 500);
+                } else {
+                    if (iCommonListener != null)
+                        iCommonListener.onResult(HttpResponseCode.success, "");
+                }
             }
 
             @Override
@@ -195,6 +196,9 @@ public class GroupModel extends WKBaseModel {
 
     private List<WKChannelMember> serialize(List<GroupMember> list) {
         List<WKChannelMember> members = new ArrayList<>();
+        if (WKReader.isEmpty(list)) {
+            return members;
+        }
         for (int i = 0, size = list.size(); i < size; i++) {
             WKChannelMember member = new WKChannelMember();
             member.memberUID = list.get(i).uid;

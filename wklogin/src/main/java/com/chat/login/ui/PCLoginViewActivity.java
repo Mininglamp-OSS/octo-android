@@ -31,16 +31,6 @@ public class PCLoginViewActivity extends WKBaseActivity<PcLoginViewLayoutBinding
     }
 
     @Override
-    protected void setTitle(TextView titleTv) {
-
-    }
-
-    @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected void initView() {
         Theme.setColorFilter(this, wkVBinding.closeIv, R.color.popupTextColor);
         wkVBinding.closeIv.setOnClickListener(v -> finish());

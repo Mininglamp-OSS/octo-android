@@ -278,5 +278,8 @@
     <string name="open_new_msg_notice_desc">在系统通知权限页面的类别分类中，打开‘新消息通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
     <string name="open_new_rtc_notice">打开音视频邀请通知</string>
     <string name="open_new_rtc_notice_desc">在系统通知权限页面的类别分类中，打开‘音视频邀请通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
+    <string name="tab_text_chat">聊天</string>
+    <string name="tab_text_contacts">联系人</string>
+    <string name="tab_text_me">我的</string>
 </resources>
 

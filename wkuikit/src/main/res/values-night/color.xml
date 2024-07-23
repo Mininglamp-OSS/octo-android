@@ -8,4 +8,5 @@
     <color name="category_org_text">#96b3ed</color>
     <color name="category_community_bg">#30283E</color>
     <color name="category_community_text">#8DEC59D8</color>
+    <color name="tab_bg">#08090B</color>
 </resources>

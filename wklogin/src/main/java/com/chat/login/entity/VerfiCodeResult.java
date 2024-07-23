@@ -1,4 +1,4 @@
-package com.chat.login.service;
+package com.chat.login.entity;
 
 /**
  * 2020-08-03 23:06

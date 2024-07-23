@@ -10,6 +10,7 @@ import android.text.TextUtils;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ScanResultMenu;
+import com.chat.login.ui.ChooseAreaCodeActivity;
 import com.chat.login.ui.PCLoginViewActivity;
 import com.chat.login.ui.WKResetLoginPwdActivity;
 import com.chat.login.ui.WKWebLoginActivity;
@@ -58,7 +59,7 @@ public class WKLoginApplication {
 
         }));
 
-        EndpointManager.getInstance().setMethod("wk_chow_reset_login_pwd_view", object -> {
+        EndpointManager.getInstance().setMethod("chow_reset_login_pwd_view", object -> {
             Intent intent = new Intent(context, WKResetLoginPwdActivity.class);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
@@ -76,6 +77,14 @@ public class WKLoginApplication {
         EndpointManager.getInstance().setMethod("show_web_login_desc", object -> {
             Context activity = (Context) object;
             Intent intent = new Intent(activity, WKWebLoginActivity.class);
+            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("choose_area_code", object -> {
+            Context activity = (Context) object;
+            Intent intent = new Intent(activity, ChooseAreaCodeActivity.class);
+            intent.putExtra("set_result", true);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(intent);
             return null;

@@ -22,11 +22,6 @@ public class WKWebLoginConfirmActivity extends WKBaseActivity<ActWebLoginAuthLay
     }
 
     @Override
-    protected void setTitle(TextView titleTv) {
-
-    }
-
-    @Override
     protected void initPresenter() {
         Theme.setColorFilter(this, wkVBinding.closeIv,R.color.popupTextColor);
     }

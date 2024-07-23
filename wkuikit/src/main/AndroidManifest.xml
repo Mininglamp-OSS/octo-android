@@ -7,13 +7,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application>
-        <activity
-            android:name=".chat.ChatActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
-            android:screenOrientation="portrait"
-            android:resizeableActivity="true"
-            android:windowSoftInputMode="adjustNothing"
-            tools:targetApi="n" />
+
         <activity android:name=".group.DeleteGroupMemberActivity" />
         <activity
             android:name=".group.GroupNoticeActivity"
@@ -68,6 +62,8 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustPan"
             android:launchMode="singleTask"/>
+        <activity android:name="com.chat.uikit.chat.ChatActivity"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
 
         <service
             android:name="com.chat.uikit.AliveJobService"

@@ -220,6 +220,35 @@
 
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/settingLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="50dp"
+        android:visibility="gone"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/baseUrlTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/update_api"
+            android:textColor="@color/color999" />
+
+        <TextView
+            android:id="@+id/resetTv"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/reset_base_url"
+            android:textColor="@color/colorAccent" />
+    </LinearLayout>
+
+
     <FrameLayout
         android:id="@+id/otherView"
         android:layout_width="match_parent"

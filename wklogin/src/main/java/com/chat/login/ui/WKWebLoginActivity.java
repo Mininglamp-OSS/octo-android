@@ -9,9 +9,12 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.login.R;
 import com.chat.login.databinding.ActWebLoginLayoutBinding;
+
+import org.telegram.ui.Components.RLottieDrawable;
 
 public class WKWebLoginActivity extends WKBaseActivity<ActWebLoginLayoutBinding> {
     @Override
@@ -24,10 +27,6 @@ public class WKWebLoginActivity extends WKBaseActivity<ActWebLoginLayoutBinding>
         titleTv.setText("");
     }
 
-    @Override
-    protected void initPresenter() {
-
-    }
 
     @Override
     protected void initView() {
@@ -35,6 +34,11 @@ public class WKWebLoginActivity extends WKBaseActivity<ActWebLoginLayoutBinding>
         wkVBinding.webLoginDescTv.setText(String.format(getString(R.string.web_scan_login_desc), WKConfig.getInstance().getAppConfig().web_url));
         wkVBinding.nameTv.setText(String.format(getString(R.string.web_side), getString(R.string.app_name)));
         Theme.setPressedBackground(wkVBinding.copyIv);
+
+        RLottieDrawable drawable = new RLottieDrawable(this, R.raw.qrcode_web, "", AndroidUtilities.dp(180), AndroidUtilities.dp(180), false, null);
+        wkVBinding.imageView.setAutoRepeat(false);
+        wkVBinding.imageView.setAnimation(drawable);
+        wkVBinding.imageView.playAnimation();
     }
 
     @Override

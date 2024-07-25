@@ -183,7 +183,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ImageView callIV;
     //查询聊天数据偏移量
     private final int limit = 20;
-    private RecyclerAnimationScrollHelper scrollHelper;
+//    private RecyclerAnimationScrollHelper scrollHelper;
     private boolean isShowPinnedView = false;
     private boolean isTipMessage = false;
     private int hideChannelAllPinnedMessage = 0;
@@ -420,7 +420,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.recyclerView.setAdapter(chatAdapter);
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
-        scrollHelper = new RecyclerAnimationScrollHelper(wkVBinding.recyclerView, linearLayoutManager);
+//        scrollHelper = new RecyclerAnimationScrollHelper(wkVBinding.recyclerView, linearLayoutManager);
 
     }
 
@@ -1719,8 +1719,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void scrollToPosition(int index) {
-        scrollHelper.setScrollDirection(linearLayoutManager.findFirstVisibleItemPosition() < index ? RecyclerAnimationScrollHelper.SCROLL_DIRECTION_DOWN : RecyclerAnimationScrollHelper.SCROLL_DIRECTION_UP);
-        scrollHelper.scrollToPosition(index, 0, false, true);
+//        scrollHelper.setScrollDirection(linearLayoutManager.findFirstVisibleItemPosition() < index ? RecyclerAnimationScrollHelper.SCROLL_DIRECTION_DOWN : RecyclerAnimationScrollHelper.SCROLL_DIRECTION_UP);
+//        scrollHelper.scrollToPosition(index, 0, false, true);
+        linearLayoutManager.scrollToPosition(index);
     }
 
 
@@ -2056,11 +2057,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (channelType == WKChannelType.GROUP && !wkMsg.fromUID.equals(WKConfig.getInstance().getUid())) {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, wkMsg.fromUID);
             if (member != null) {
-                chatPanelManager.getEditText().addSpan("@" + member.memberName + " ", member.memberUID);
+                chatPanelManager.addSpan(member.memberName, member.memberUID);
             } else {
                 WKChannel mChannel = WKIM.getInstance().getChannelManager().getChannel(wkMsg.fromUID, WKChannelType.PERSONAL);
                 if (mChannel != null) {
-                    chatPanelManager.getEditText().addSpan("@" + mChannel.channelName + " ", mChannel.channelID);
+                    chatPanelManager.addSpan(mChannel.channelName, mChannel.channelID);
                 }
             }
 //            WKVBinding.toolbarView.editText.addAtSpan("@", member.memberName, member.memberUID);

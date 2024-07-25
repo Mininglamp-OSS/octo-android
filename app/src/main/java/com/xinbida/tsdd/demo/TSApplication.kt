@@ -21,9 +21,9 @@ import com.chat.base.config.WKConfig
 import com.chat.base.config.WKConstants
 import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.endpoint.EndpointManager
-import com.chat.base.net.RetrofitUtils
 import com.chat.base.ui.Theme
 import com.chat.base.utils.ActManagerUtils
+import com.chat.base.utils.WKPlaySound
 import com.chat.base.utils.WKTimeUtils
 import com.chat.base.utils.language.WKMultiLanguageUtil
 import com.chat.login.WKLoginApplication
@@ -157,6 +157,11 @@ class TSApplication : MultiDexApplication() {
             val intent = Intent(applicationContext, TabActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
+            null
+        }
+
+        EndpointManager.getInstance().setMethod("play_new_msg_Media") {
+            WKPlaySound.getInstance().playRecordMsg(R.raw.newmsg)
             null
         }
     }

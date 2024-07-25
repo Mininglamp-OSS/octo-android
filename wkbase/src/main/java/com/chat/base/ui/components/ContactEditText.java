@@ -30,6 +30,7 @@ import com.chat.base.R;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.utils.StringUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ import java.util.Objects;
 
 public class ContactEditText extends AppCompatAutoCompleteTextView {
     private int itemPadding;
+    private int maxLength;
 
     public ContactEditText(Context context) {
         super(context);
@@ -58,6 +60,10 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
 
     private void init() {
         itemPadding = dip2px(getContext(), 3);
+    }
+
+    public void setMaxLength(int maxLength) {
+        this.maxLength = maxLength;
     }
 
     @Override
@@ -128,6 +134,12 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
 
     //添加一个Span
     public void addSpan(String showText, String uid) {
+        if (!TextUtils.isEmpty(getText().toString()) && getText().toString().length() + showText.length() > maxLength) {
+            WKToastUtils.getInstance()
+                    .showToast(getContext().getString(R.string.content_too_long));
+            return;
+        }
+
         int index = getSelectionStart();
         getText().insert(index, showText);
         SpannableString spannableString = new SpannableString(getText());
@@ -294,6 +306,21 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
             String editContent = "";
             if (item.getText() != null)
                 editContent = item.getText().toString();
+            if (!TextUtils.isEmpty(editContent) && maxLength > 0) {
+                int len = 0;
+                if (!TextUtils.isEmpty(getText())) {
+                    len = getText().toString().length();
+                }
+                if (len + editContent.length() > maxLength) {
+                    WKToastUtils.getInstance().showToast(getContext().getString(R.string.content_too_long));
+                    int addLen = maxLength - len;
+                    if (addLen > 0) {
+                        editContent = editContent.substring(0, addLen);
+                    }else{
+                        return true;
+                    }
+                }
+            }
             //调用剪贴板
             ClipboardManager clip = (ClipboardManager) getContext().getSystemService(CLIPBOARD_SERVICE);
             //改变剪贴板中Content
@@ -304,7 +331,7 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
 //                this.setText(sb.toString());
                 this.setText(MoonUtil.getEmotionContent(getContext(), this, sb.toString()));
                 // 将光标设置到新增完表情的右侧
-                this.setSelection(curPosition + editContent.length() );
+                this.setSelection(curPosition + editContent.length());
                 return true;
             }
             // clip.setText("改变剪贴板中Content" + clip.getText());

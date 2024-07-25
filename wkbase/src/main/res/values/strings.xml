@@ -116,4 +116,5 @@
     <string name="str_delete_message_tip">您确定要删除这条消息吗？</string>
     <string name="str_delete_message_also_to">同时为 %s 删除</string>
     <string name="str_delete_message_for_all">为所有成员删除</string>
+    <string name="content_too_long">内容太长</string>
 </resources>

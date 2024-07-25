@@ -1,7 +1,6 @@
 package com.chat.scan;
 
 import android.content.Intent;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -16,6 +15,7 @@ import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.ScanResultMenu;
 import com.chat.base.net.IRequestResultListener;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.scan.entity.ScanResult;
 import com.xinbida.wukongim.WKIM;
@@ -71,7 +71,7 @@ class ScanUtils extends WKBaseModel {
     }
 
     private void requestScanResult(AppCompatActivity activity, String url) {
-        request(createService(ScanService.class).getScanResult(url), new IRequestResultListener<ScanResult>() {
+        request(createService(ScanService.class).getScanResult(url), new IRequestResultListener<>() {
             @Override
             public void onSuccess(ScanResult result) {
                 handleResult(activity, result);
@@ -117,7 +117,6 @@ class ScanUtils extends WKBaseModel {
                                     .getString(R.string.scan_remove_group));
                         }
                     } else {
-                        Log.e("扫描群二维码","-->");
                         // TODO: 2020-04-19  加入群聊
                     }
                 }
@@ -127,7 +126,7 @@ class ScanUtils extends WKBaseModel {
                 hashMap.put("type", type);
                 hashMap.put("data", dataJson);
                 List<ScanResultMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.wkScan, hashMap);
-                if (list != null && list.size() > 0) {
+                if (WKReader.isNotEmpty(list)) {
                     for (int i = 0, size = list.size(); i < size; i++) {
                         boolean canHandle = list.get(i).iResultClick.invoke(hashMap);
                         if (canHandle) {

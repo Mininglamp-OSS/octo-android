@@ -164,7 +164,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             if (WKReader.isNotEmpty(reminderIds))
                                 MsgModel.getInstance().doneReminder(reminderIds);
                         }
-
+                        MsgModel.getInstance().offsetMsg(item.channelID, item.channelType, null);
                         WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list);
                         MsgModel.getInstance().clearUnread(item.channelID, item.channelType, 0, null);
                         boolean result = WKIM.getInstance().getConversationManager().deleteWitchChannel(item.channelID, item.channelType);
@@ -405,7 +405,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return 1;
             }
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-                if (chatConversationAdapter.getData().get(i).uiConversationMsg != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().type == WKContentType.WK_TEXT) {
+                if (chatConversationAdapter.getData().get(i).uiConversationMsg != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().type == WKContentType.WK_TEXT) {
                     WKIMUtils.getInstance().resetMsgProhibitWord(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg());
                     chatConversationAdapter.notifyItemChanged(i);
                 }

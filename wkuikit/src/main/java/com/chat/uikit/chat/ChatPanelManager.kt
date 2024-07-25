@@ -7,10 +7,10 @@ import android.graphics.PorterDuffColorFilter
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
+import android.text.InputFilter
 import android.text.TextPaint
 import android.text.TextUtils
 import android.text.TextWatcher
-import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -108,6 +108,7 @@ import java.util.Timer
 import java.util.TimerTask
 import kotlin.math.min
 
+
 class ChatPanelManager(
     val helper: PanelSwitchHelper,
     val parentView: View,
@@ -123,6 +124,7 @@ class ChatPanelManager(
     private var inlineQueryOffset: String = ""
     private var searchKey: String = ""
     private var username: String = ""
+    private val maxLength = 300
 
     private val menuView: View
     private val menuLayout: View
@@ -185,6 +187,8 @@ class ChatPanelManager(
         this.chatView = parentView.findViewById(R.id.chatView)
         this.chatTopLayout = parentView.findViewById(R.id.chatTopLayout)
         this.menuView.background = Theme.getBackground(Theme.colorAccount, 30f)
+        editText.filters = arrayOf<InputFilter>(StringUtils.getInputFilter(maxLength))
+        editText.setMaxLength(maxLength)
         initListener()
         initRemind()
         initRobotGIF()
@@ -672,20 +676,15 @@ class ChatPanelManager(
                         uid
                     )
                 if (member != null) {
-                    editText.addSpan(
-                        "@${member.memberName} ",
-                        member.memberUID
-                    )
+
+                    addSpan(member.memberName, member.memberUID)
                 } else {
                     val channel = WKIM.getInstance().channelManager.getChannel(
                         uid,
                         WKChannelType.PERSONAL
                     )
                     if (channel != null) {
-                        editText.addSpan(
-                            "@${channel.channelName} ",
-                            channel.channelID
-                        )
+                        addSpan(channel.channelName, channel.channelID)
                     }
                 }
             }
@@ -894,8 +893,7 @@ class ChatPanelManager(
                 R.mipmap.icon_chat_toolbar_emoji,
                 R.mipmap.icon_chat_toolbar_emoji,
                 getEmojiLayout()
-            ) { _, _ ->
-            }
+            ) { _, _ -> }
             tempToolBarList.add(0, emojiToolBar)
         }
         toolBarAdapter?.setList(tempToolBarList)
@@ -1156,7 +1154,7 @@ class ChatPanelManager(
                 }
                 //追加一个@提醒并弹出软键盘
                 editText.requestFocus()
-                editText.addSpan("@$showName ", memberEntity.memberUID)
+                addSpan(showName, memberEntity.memberUID)
             }
         }
         this.remindRecycleView!!.visibility = View.GONE
@@ -1716,20 +1714,21 @@ class ChatPanelManager(
         list.addAll(naturelList)
         list.addAll(symbolsList)
         val emojiLayout = LinearLayout(iConversationContext.chatActivity)
-        val  emojiAdapter = EmojiAdapter(list, width)
+        val emojiAdapter = EmojiAdapter(list, width)
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
-        val emojiLayoutManager = FullyGridLayoutManager(iConversationContext.chatActivity, 8)
+        val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
         recyclerView.layoutManager = emojiLayoutManager
         recyclerView.adapter = emojiAdapter
+        val height = WKConstants.getKeyboardHeight()
         emojiLayout.addView(
             recyclerView,
             LayoutHelper.createLinear(
                 LayoutHelper.MATCH_PARENT,
-                LayoutHelper.MATCH_PARENT
+                (height / AndroidUtilities.density).toInt()
             )
         )
 
-        emojiAdapter?.setOnItemClickListener { adapter, _, position ->
+        emojiAdapter.setOnItemClickListener { adapter, _, position ->
             val emojiName = adapter.getItem(position) as String
             val curPosition: Int = editText.selectionStart
             val sb = java.lang.StringBuilder(
@@ -2639,6 +2638,14 @@ class ChatPanelManager(
         newImageLayout?.addView(
             imageView,
             LayoutHelper.createLinear(70, 120, Gravity.CENTER, 0, 10, 0, 0)
+        )
+    }
+
+     fun addSpan(name: String, uid: String) {
+        val text = "@${name} "
+        editText.addSpan(
+            text,
+            uid
         )
     }
 }

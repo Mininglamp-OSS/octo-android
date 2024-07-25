@@ -664,8 +664,8 @@ public class WKIMUtils {
         if (msgNotice == 0) {
             return;
         }
-        Activity activity = ActManagerUtils.getInstance().getCurrentActivity();
-        if (activity == null || activity.getComponentName().getClassName().equals(TabActivity.class.getName())) {
+//        Activity activity = ActManagerUtils.getInstance().getCurrentActivity();
+//        if (activity == null || activity.getComponentName().getClassName().equals(TabActivity.class.getName())) {
             if (playNewMsgMedia) {
                 defaultMediaPlayer();
             }
@@ -673,7 +673,7 @@ public class WKIMUtils {
                 vibrate();
             }
 //            return;
-        }
+//        }
         String showTitle = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
         String showContent = WKBaseApplication.getInstance().getContext().getString(R.string.default_new_msg);
         if (msgShowDetail == 1 && msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.getDisplayContent())) {
@@ -686,11 +686,11 @@ public class WKIMUtils {
 //            url = WKApiConfig.getShowAvatar(channel.channelID, channel.channelType);
 //        }
 //        String finalShowContent = showContent;
-        if (isVibrate) {
-            PushNotificationHelper.INSTANCE.notifyMention(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
-        } else {
+//        if (isVibrate) {
+//            PushNotificationHelper.INSTANCE.notifyMention(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
+//        } else {
             PushNotificationHelper.INSTANCE.notifyMessage(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
-        }
+//        }
 //        showNotice(showTitle, finalShowContent, null, isVibrate);
 //        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
     }

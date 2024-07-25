@@ -27,8 +27,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
+import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.text.PrecomputedTextCompat
+import androidx.core.widget.TextViewCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
@@ -78,6 +81,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.util.Objects
+import java.util.concurrent.Future
 import kotlin.math.abs
 
 
@@ -94,7 +98,7 @@ open class WKTextProvider : WKChatBaseProvider() {
     ) {
 //        val textContentLayout = parentView.findViewById<View>(R.id.textContentLayout)
         val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
-        val contentTv = parentView.findViewById<TextView>(R.id.contentTv)
+        val contentTv = parentView.findViewById<AppCompatTextView>(R.id.contentTv)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
 
@@ -128,6 +132,23 @@ open class WKTextProvider : WKChatBaseProvider() {
         contentTv.setTextColor(textColor)
         contentTv.text = uiChatMsgItemEntity.displaySpans
         contentTv.movementMethod = LinkMovementMethod.getInstance()
+//        val preText =  PrecomputedTextCompat.create(
+//            uiChatMsgItemEntity.displaySpans,
+//            TextViewCompat.getTextMetricsParams(contentTv)
+//        )
+//
+//        TextViewCompat.setPrecomputedText(contentTv, preText)
+//
+//
+//        fun AppCompatTextView.setTextFuture(charSequence: CharSequence){
+//            this.setTextFuture(PrecomputedTextCompat.getTextFuture(
+//                charSequence,
+//                TextViewCompat.getTextMetricsParams(this),
+//                null
+//            ))
+//        }
+//
+//        contentTv.setTextFuture(uiChatMsgItemEntity.displaySpans)
 
         // 链接识别
         val urls = StringUtils.getStrUrls(contentTv.text.toString())

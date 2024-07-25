@@ -13,19 +13,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <com.king.zxing.ViewfinderView
+    <com.king.view.viewfinderview.ViewfinderView
         android:id="@+id/viewfinderView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:cornerColor="@color/colorAccent"
-        app:frameColor="@color/colorAccent"
-        app:gridHeight="0dp"
-        app:labelText="@string/tips_scan_code"
-        app:labelTextLocation="bottom"
-        app:labelTextSize="@dimen/font_size_14"
-        app:labelTextWidth="180dp"
-        app:laserColor="@color/colorAccent"
-        app:laserStyle="grid" />
+        app:vvFrameColor="@color/colorAccent"
+        app:vvFrameCornerColor="@color/colorAccent"
+        app:vvLabelText="@string/tips_scan_code"
+        app:vvLabelTextLocation="bottom"
+        app:vvLaserColor="@color/colorAccent"
+        app:vvLaserStyle="grid"
+        app:vvPointColor="@color/colorAccent"
+        app:vvPointStrokeColor="@color/colorAccent" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/ivFlash"

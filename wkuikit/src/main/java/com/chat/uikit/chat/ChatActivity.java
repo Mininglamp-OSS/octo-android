@@ -81,7 +81,6 @@ import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.utils.systembar.WKStatusBarUtils;
 import com.chat.base.views.CommonAnim;
-import com.chat.base.views.RecyclerAnimationScrollHelper;
 import com.chat.base.views.swipeback.SwipeBackActivity;
 import com.chat.base.views.swipeback.SwipeBackLayout;
 import com.chat.uikit.R;
@@ -103,6 +102,7 @@ import com.effective.android.panel.interfaces.ContentScrollMeasurer;
 import com.effective.android.panel.interfaces.listener.OnPanelChangeListener;
 import com.effective.android.panel.view.panel.IPanelView;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKCMD;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
@@ -174,7 +174,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     boolean isCanRefresh = true;
     private boolean isShowChatActivity = true;
     LinearLayoutManager linearLayoutManager;
-    //    private ScrollHelper scrollHelper;
     private final List<WKReminder> reminderList = new ArrayList<>();
     private final List<WKReminder> groupApproveList = new ArrayList<>();
     private final List<Long> reminderIds = new ArrayList<>();
@@ -183,7 +182,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ImageView callIV;
     //查询聊天数据偏移量
     private final int limit = 20;
-//    private RecyclerAnimationScrollHelper scrollHelper;
     private boolean isShowPinnedView = false;
     private boolean isTipMessage = false;
     private int hideChannelAllPinnedMessage = 0;
@@ -283,6 +281,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         @Override
                         public void onKeyboard() {
                             chatPanelManager.resetToolBar();
+                            SoftKeyboardUtils.getInstance().requestFocus(wkVBinding.editText);
                         }
 
                         @Override
@@ -387,7 +386,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.chatUnreadLayout.progress.setStrokeWidth(1.5f);
         wkVBinding.chatUnreadLayout.progress.setProgressColor(ContextCompat.getColor(this, R.color.popupTextColor));
 
-
         wkVBinding.chatUnreadLayout.msgCountTv.setColors(R.color.white, R.color.reminderColor);
         wkVBinding.chatUnreadLayout.remindCountTv.setColors(R.color.white, R.color.reminderColor);
         wkVBinding.chatUnreadLayout.approveCountTv.setColors(R.color.white, R.color.reminderColor);
@@ -418,10 +416,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
+        wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
-//        scrollHelper = new RecyclerAnimationScrollHelper(wkVBinding.recyclerView, linearLayoutManager);
-
     }
 
     private void initListener() {
@@ -485,8 +482,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 public void clickResult(boolean isCancel) {
                 }
             }, this, desc, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO);
-
-
         });
 
         WKDialogUtils.getInstance().setViewLongClickPopup(wkVBinding.chatUnreadLayout.groupApproveLayout, getGroupApprovePopupItems());
@@ -502,6 +497,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.chatUnreadLayout.remindLayout.setOnClickListener(view -> {
 
             if (WKReader.isNotEmpty(reminderList)) {
+                reminderIds.add(reminderList.get(0).reminderID);
                 WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(reminderList.get(0).messageID);
                 if (msg != null && !TextUtils.isEmpty(msg.clientMsgNO)) {
                     tipsMsg(msg.clientMsgNO);
@@ -534,22 +530,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 setShowTime();
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
                 if (lastItemPosition < chatAdapter.getItemCount() - 1) {
-                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, dy > 0 || redDot > 0, dy > 0 || redDot > 0, false));
+                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, dy > 0 || redDot > 0, true, false));
                 } else {
-                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, dy > 0 || redDot > 0, false));
+                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
                 }
                 resetRemindView();
                 resetGroupApproveView();
 
-
-                RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
-                if (layoutManager instanceof LinearLayoutManager) {
-                    View lastChildView = layoutManager.findViewByPosition(lastItemPosition);
-                    if (lastChildView != null) {
-                        int bottom = lastChildView.getBottom();
-                        int listHeight = wkVBinding.recyclerView.getHeight() - wkVBinding.recyclerView.getPaddingBottom();
-                        unfilledHeight = listHeight - bottom;
-                    }
+                View lastChildView = linearLayoutManager.findViewByPosition(lastItemPosition);
+                if (lastChildView != null) {
+                    int bottom = lastChildView.getBottom();
+                    int listHeight = wkVBinding.recyclerView.getHeight() - wkVBinding.recyclerView.getPaddingBottom();
+                    unfilledHeight = listHeight - bottom;
                 }
             }
 
@@ -726,66 +718,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (wkCmd == null || TextUtils.isEmpty(wkCmd.cmdKey)) return;
             // 监听正在输入
             if (wkCmd.cmdKey.equals(WKCMDKeys.wk_typing)) {
-                if (redDot > 0) return;
-                String channel_id = wkCmd.paramJsonObject.optString("channel_id");
-                byte channel_type = (byte) wkCmd.paramJsonObject.optInt("channel_type");
-                String from_uid = wkCmd.paramJsonObject.optString("from_uid");
-                String from_name = wkCmd.paramJsonObject.optString("from_name");
-                int isRobot;
-                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(from_uid, WKChannelType.PERSONAL);
-                if (channel == null) {
-                    channel = new WKChannel(from_uid, WKChannelType.PERSONAL);
-                    channel.channelName = from_name;
-                }
-                isRobot = channel.robot;
-                if (channelId.equals(channel_id) && channelType == channel_type && !TextUtils.equals(from_uid, WKConfig.getInstance().getUid())) {
-                    WKChannelMember mChannelMember = null;
-                    if (channelType == WKChannelType.GROUP && isRobot == 0) {
-                        // 没在群内的cmd不显示
-                        mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, from_uid);
-                        if (mChannelMember == null || mChannelMember.isDeleted == 1) return;
-                    }
-                    if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
-                        chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setFrom(channel);
-                        chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.fromUID = from_uid;
-                        chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setMemberOfFrom(mChannelMember);
-                        chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
-                    } else {
-                        addTimeMsg(WKTimeUtils.getInstance().getCurrentSeconds());
-                        int index = chatAdapter.getData().size() - 1;
-                        if (chatAdapter.lastMsgIsTyping()) index--;
-                        if (index < 0) index = 0;
-
-                        WKUIChatMsgItemEntity msgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
-                        msgItemEntity.wkMsg.channelType = channelType;
-                        msgItemEntity.wkMsg.channelID = channelId;
-                        msgItemEntity.wkMsg.type = WKContentType.typing;
-                        msgItemEntity.wkMsg.setFrom(channel);
-                        msgItemEntity.showNickName = showNickName;
-                        msgItemEntity.wkMsg.fromUID = channel.channelID;
-                        WKChannelMember member = new WKChannelMember();
-                        member.memberUID = channel.channelID;
-                        member.channelID = channelId;
-                        member.channelType = channelType;
-                        member.memberName = channel.channelName;
-                        member.memberRemark = channel.channelRemark;
-                        msgItemEntity.wkMsg.setMemberOfFrom(member);
-                        msgItemEntity.previousMsg = chatAdapter.getLastMsg();
-                        chatAdapter.addData(msgItemEntity);
-                        chatAdapter.getData().get(index).nextMsg = msgItemEntity.wkMsg;
-
-                        int type = chatAdapter.getData().get(index).wkMsg.type;
-                        if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
-                            chatAdapter.notifyItemChanged(index);
-                        } else {
-                            chatAdapter.notifyBackground(index);
-                        }
-
-                        if (!isShowHistory && !isCanLoadMore) {
-                            scrollToEnd();
-                        }
-                    }
-                }
+                typing(wkCmd);
             }
         });
 
@@ -795,245 +728,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 removeMsg(wkMsg);
                 return;
             }
-
-            WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
-            List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
-            chatAdapter.refreshReplyMsg(wkMsg);
-            for (int i = 0, size = list.size(); i < size; i++) {
-                if (list.get(i).wkMsg == null) {
-                    continue;
-                }
-                boolean isNotify = false;
-                if (list.get(i).wkMsg.clientSeq == wkMsg.clientSeq
-                        || list.get(i).wkMsg.clientMsgNO.equals(wkMsg.clientMsgNO)
-                        || (!TextUtils.isEmpty(list.get(i).wkMsg.messageID) && !TextUtils.isEmpty(wkMsg.messageID) && list.get(i).wkMsg.messageID.equals(wkMsg.messageID))) {
-                    if (wkMsg.messageSeq > maxMsgSeq) {
-                        maxMsgSeq = wkMsg.messageSeq;
-                    }
-                    if (wkMsg.messageSeq > lastVisibleMsgSeq) {
-                        lastVisibleMsgSeq = wkMsg.messageSeq;
-                    }
-                    if (list.get(i).wkMsg.remoteExtra.revoke != wkMsg.remoteExtra.revoke) {
-                        isNotify = true;
-                    }
-                    // 消息撤回
-                    list.get(i).wkMsg.remoteExtra.revoke = wkMsg.remoteExtra.revoke;
-                    list.get(i).wkMsg.remoteExtra.revoker = wkMsg.remoteExtra.revoker;
-                    if (list.get(i).wkMsg.status != WKSendMsgResult.send_success && wkMsg.status == WKSendMsgResult.send_success) {
-                        WKPlaySound.getInstance().playOutMsg(R.raw.sound_out);
-                    }
-                    boolean isResetStatus = false;
-                    boolean isResetData = false;
-                    boolean isResetReaction = false;
-                    if (list.get(i).wkMsg.status != wkMsg.status
-                            || (list.get(i).wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && list.get(i).wkMsg.remoteExtra.readedCount == 0)
-                            || list.get(i).wkMsg.remoteExtra.editedAt != wkMsg.remoteExtra.editedAt
-                    ) {
-                        list.get(i).isUpdateStatus = true;
-                        isResetStatus = true;
-                    }
-                    if (list.get(i).wkMsg.remoteExtra.isPinned != wkMsg.remoteExtra.isPinned) {
-                        isResetStatus = true;
-                    }
-                    list.get(i).wkMsg.voiceStatus = wkMsg.voiceStatus;
-                    if (hideChannelAllPinnedMessage == 0) {
-                        list.get(i).isPinned = wkMsg.remoteExtra.isPinned;
-                    } else {
-                        list.get(i).isPinned = 0;
-                    }
-                    list.get(i).wkMsg.remoteExtra.isPinned = wkMsg.remoteExtra.isPinned;
-                    list.get(i).wkMsg.remoteExtra.readed = wkMsg.remoteExtra.readed;
-                    list.get(i).wkMsg.remoteExtra.readedCount = wkMsg.remoteExtra.readedCount;
-                    list.get(i).wkMsg.remoteExtra.needUpload = wkMsg.remoteExtra.needUpload;
-                    if (list.get(i).wkMsg.remoteExtra.readedCount == 0) {
-                        list.get(i).wkMsg.remoteExtra.unreadCount = count - 1;
-                    } else
-                        list.get(i).wkMsg.remoteExtra.unreadCount = wkMsg.remoteExtra.unreadCount;
-                    if ((TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit)) || (!TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit) && !list.get(i).wkMsg.remoteExtra.contentEdit.equals(wkMsg.remoteExtra.contentEdit))) {
-                        list.get(i).wkMsg.remoteExtra.editedAt = wkMsg.remoteExtra.editedAt;
-                        list.get(i).wkMsg.remoteExtra.contentEdit = wkMsg.remoteExtra.contentEdit;
-                        list.get(i).wkMsg.remoteExtra.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
-                        list.get(i).isUpdateStatus = true;
-                        list.get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
-                        isResetData = true;
-                    }
-
-                    list.get(i).wkMsg.isDeleted = wkMsg.isDeleted;
-                    list.get(i).wkMsg.messageID = wkMsg.messageID;
-                    list.get(i).wkMsg.messageSeq = wkMsg.messageSeq;
-                    list.get(i).wkMsg.orderSeq = wkMsg.orderSeq;
-                    if ((wkMsg.localExtraMap != null && !wkMsg.localExtraMap.isEmpty())) {
-                        isNotify = true;
-                    }
-                    if (isRefreshReaction(list.get(i).wkMsg.reactionList, wkMsg.reactionList)) {
-                        isResetReaction = true;
-                    }
-                    list.get(i).wkMsg.localExtraMap = wkMsg.localExtraMap;
-                    list.get(i).wkMsg.content = wkMsg.content;
-                    list.get(i).wkMsg.reactionList = wkMsg.reactionList;
-                    list.get(i).wkMsg.baseContentMsgModel = wkMsg.baseContentMsgModel;
-                    list.get(i).wkMsg.status = wkMsg.status;
-                    if (isNotify) {
-                        EndpointManager.getInstance().invoke("stop_reaction_animation", null);
-                        chatAdapter.notifyItemChanged(i);
-                    } else {
-                        if (isResetStatus) {
-                            chatAdapter.notifyStatus(i);
-                        }
-                        if (isResetData) {
-                            chatAdapter.notifyData(i);
-                        }
-                        if (isResetReaction) {
-                            list.get(i).isRefreshReaction = true;
-                            chatAdapter.notifyItemChanged(i, list.get(i));
-                            //chatAdapter.notifyReaction(i, wkMsg.reactionList);
-                        }
-                    }
-
-                    if (list.get(i).wkMsg.remoteExtra.revoke == 1) {
-                        int previousIndex = i - 1;
-                        int nextIndex = i + 1;
-                        if (previousIndex >= 0 && list.get(previousIndex).wkMsg.remoteExtra.revoke == 0) {
-                            chatAdapter.notifyItemChanged(previousIndex);
-                        }
-                        if (nextIndex <= chatAdapter.getData().size() - 1 && list.get(nextIndex).wkMsg.remoteExtra.revoke == 0) {
-                            chatAdapter.notifyItemChanged(nextIndex);
-                        }
-                    }
-
-                    if ((wkMsg.status == WKSendMsgResult.no_relation || wkMsg.status == WKSendMsgResult.not_on_white_list) && channelType == WKChannelType.PERSONAL) {
-                        if (UserUtils.getInstance().checkBlacklist(channelId)) {
-                            return;
-                        }
-                        // 不是好友
-                        WKMsg noRelationMsg = new WKMsg();
-                        noRelationMsg.channelID = channelId;
-                        noRelationMsg.channelType = channelType;
-                        noRelationMsg.type = WKContentType.noRelation;
-                        long tempOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(0, wkMsg.channelID, wkMsg.channelType);
-                        noRelationMsg.orderSeq = tempOrderSeq + 1;
-                        noRelationMsg.status = WKSendMsgResult.send_success;
-
-                        int index = chatAdapter.getData().size() - 1;
-                        if (chatAdapter.lastMsgIsTyping()) index--;
-                        WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, noRelationMsg, count, showNickName, chatAdapter.isShowChooseItem());
-                        chatAdapter.getData().get(index).nextMsg = noRelationMsg;
-                        itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
-
-                        chatAdapter.notifyItemChanged(index);
-                        chatAdapter.addData(index + 1, itemEntity);
-                        if (isToEnd) {
-                            scrollToEnd();
-                        }
-                        WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(noRelationMsg, false);
-                    }
-
-                    break;
-                }
-            }
+            refreshMsg(wkMsg);
         });
         //监听发送消息返回
-        WKIM.getInstance().getMsgManager().addOnSendMsgCallback(channelId, msg -> {
-            if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {
-                if (msg.orderSeq > maxMsgOrderSeq) {
-                    maxMsgOrderSeq = msg.orderSeq;
-                }
-                WKMsg timeMsg = addTimeMsg(msg.timestamp);
-                //判断当前会话是否存在正在输入
-                int index = chatAdapter.getData().size() - 1;
-                if (chatAdapter.lastMsgIsTyping()) index--;
-                if (index < 0) index = 0;
-                WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
-                if (timeMsg == null) {
-                    if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                        chatAdapter.getData().get(index).nextMsg = msg;
-                        itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
-                    }
-                } else {
-                    chatAdapter.getData().get(index).nextMsg = timeMsg;
-                    itemEntity.previousMsg = timeMsg;
-                }
-                chatAdapter.addData(index + 1, itemEntity);
-                int type = chatAdapter.getData().get(index).wkMsg.type;
-                if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
-                    chatAdapter.notifyItemChanged(index);
-                } else {
-                    chatAdapter.notifyBackground(index);
-                }
-
-                if (isToEnd) {
-                    scrollToEnd();
-                }
-                isToEnd = true;
-            }
-        });
+        WKIM.getInstance().getMsgManager().addOnSendMsgCallback(channelId, this::sendMsgInserted);
 
         //监听新消息
-        WKIM.getInstance().getMsgManager().addOnNewMsgListener(channelId, list -> {
-            if (WKReader.isNotEmpty(list)) {
-                for (WKMsg msg : list) {
-                    // 命令消息和撤回消息不显示在聊天
-                    if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist)
-                        continue;
-
-                    if (msg.remoteExtra.readedCount == 0) {
-                        msg.remoteExtra.unreadCount = count - 1;
-                    }
-
-                    if (msg.channelID.equals(channelId) && msg.channelType == channelType) {
-                        if (!chatAdapter.isExist(msg.clientMsgNO)) {
-                            if (!isCanLoadMore) {
-                                //移除正在输入
-                                if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg != null && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
-                                    chatAdapter.removeAt(chatAdapter.getItemCount() - 1);
-                                }
-                                WKMsg timeMsg = addTimeMsg(msg.timestamp);
-                                WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
-                                if (timeMsg != null && chatAdapter.getData().size() > 1) {
-                                    chatAdapter.getData().get(chatAdapter.getData().size() - 2).nextMsg = timeMsg;
-                                }
-                                int previousMsgIndex = -1;
-                                if (timeMsg == null) {
-                                    if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                                        itemEntity.previousMsg = chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg;
-                                        chatAdapter.getData().get(chatAdapter.getData().size() - 1).nextMsg = itemEntity.wkMsg;
-                                    }
-                                } else {
-                                    itemEntity.previousMsg = timeMsg;
-                                }
-                                if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                                    previousMsgIndex = chatAdapter.getData().size() - 1;
-                                }
-                                if (!isShowHistory && redDot == 0 && itemEntity.wkMsg.flame == 1 && itemEntity.wkMsg.type != WKContentType.WK_VOICE && itemEntity.wkMsg.type != WKContentType.WK_IMAGE && itemEntity.wkMsg.type != WKContentType.WK_VIDEO) {
-                                    itemEntity.wkMsg.viewed = 1;
-                                    itemEntity.wkMsg.viewedAt = WKTimeUtils.getInstance().getCurrentMills();
-                                    WKIM.getInstance().getMsgManager().updateViewedAt(1, itemEntity.wkMsg.viewedAt, itemEntity.wkMsg.clientMsgNO);
-                                }
-                                WKPlaySound.getInstance().playInMsg(R.raw.sound_in);
-                                chatAdapter.addData(itemEntity);
-                                if (msg.messageSeq > maxMsgSeq) {
-                                    maxMsgSeq = msg.messageSeq;
-                                }
-                                if (msg.orderSeq > maxMsgOrderSeq) {
-                                    maxMsgOrderSeq = msg.orderSeq;
-                                }
-                                if (previousMsgIndex != -1) {
-                                    chatAdapter.notifyBackground(previousMsgIndex);
-                                }
-                            }
-                            if (isShowHistory || redDot > 0) {
-                                redDot += 1;
-                                showUnReadCountView();
-                            } else {
-                                scrollToEnd();
-                                if (msg.setting.receipt == 1) readMsgIds.add(msg.messageID);
-                            }
-                        }
-                    }
-
-                }
-            }
-        });
+        WKIM.getInstance().getMsgManager().addOnNewMsgListener(channelId, this::receivedMessages);
         //监听清空聊天记录
         WKIM.getInstance().getMsgManager().addOnClearMsgListener(channelId, (channelID, channelType, fromUID) -> {
             if (!TextUtils.isEmpty(channelID) && ChatActivity.this.channelId.equals(channelID) && ChatActivity.this.channelType == channelType) {
@@ -1099,7 +800,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
             lp.topMargin = AndroidUtilities.dp(10);
             wkVBinding.timeTv.setVisibility(View.GONE);
-            // todo 隐藏置顶view
             ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
             animator.setDuration(200);
             animator.addListener(new AnimatorListenerAdapter() {
@@ -1506,7 +1206,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (tipsOrderSeq != 0) {
                 for (int i = 0; i < chatAdapter.getData().size(); i++) {
                     if (chatAdapter.getItem(i).wkMsg.orderSeq == tipsOrderSeq) {
-//                        wkVBinding.recyclerView.scrollToPosition(i);
                         linearLayoutManager.scrollToPositionWithOffset(i, AndroidUtilities.dp(50));
                         chatAdapter.getItem(i).isShowTips = true;
                         chatAdapter.notifyItemChanged(i);
@@ -1613,9 +1312,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void showUnReadCountView() {
-        wkVBinding.chatUnreadLayout.msgCountTv.setCount(redDot, true);
+        wkVBinding.chatUnreadLayout.msgCountTv.setCount(redDot, false);
         wkVBinding.chatUnreadLayout.msgCountTv.setVisibility(redDot > 0 ? View.VISIBLE : View.GONE);
-        wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, true));
+//        wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
     }
 
     private void showChannelName(WKChannel channel) {
@@ -1719,8 +1418,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void scrollToPosition(int index) {
-//        scrollHelper.setScrollDirection(linearLayoutManager.findFirstVisibleItemPosition() < index ? RecyclerAnimationScrollHelper.SCROLL_DIRECTION_DOWN : RecyclerAnimationScrollHelper.SCROLL_DIRECTION_UP);
-//        scrollHelper.scrollToPosition(index, 0, false, true);
         linearLayoutManager.scrollToPosition(index);
     }
 
@@ -1742,7 +1439,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         chatAdapter.addData(index, new WKUIChatMsgItemEntity(this, wkMsg, null));
         wkVBinding.recyclerView.scrollToPosition(0);
         lastPreviewMsgOrderSeq = 0;
-        new Handler().postDelayed(() -> getData(0, false, 0, false), 500);
+        new Handler().postDelayed(() -> getData(0, false, 0, false), 300);
     }
 
     private void showMoreLoading() {
@@ -1754,7 +1451,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
         lastPreviewMsgOrderSeq = 0;
         unreadStartMsgOrderSeq = 0;
-        new Handler().postDelayed(() -> getData(1, false, 0, false), 500);
+        new Handler().postDelayed(() -> getData(1, false, 0, false), 300);
     }
 
     private List<PopupMenuItem> getGroupApprovePopupItems() {
@@ -1809,7 +1506,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     // 显示一条时间消息
-    private WKMsg addTimeMsg(long newMsgTime) {
+    private synchronized WKMsg addTimeMsg(long newMsgTime) {
         long lastMsgTime = chatAdapter.getLastTimeMsg();
         WKMsg msg = null;
         if (!WKTimeUtils.getInstance().isSameDay(newMsgTime, lastMsgTime)) {
@@ -2111,7 +1808,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
         if (index != -1) {
             linearLayoutManager.scrollToPositionWithOffset(index, AndroidUtilities.dp(50));
-            //scrollToPosition(index);
             chatAdapter.notifyItemChanged(index);
         } else {
             WKMsg msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
@@ -2412,4 +2108,309 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     });
 
+    private synchronized void sendMsgInserted(WKMsg msg) {
+        if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {
+            if (msg.orderSeq > maxMsgOrderSeq) {
+                maxMsgOrderSeq = msg.orderSeq;
+            }
+            WKMsg timeMsg = addTimeMsg(msg.timestamp);
+            //判断当前会话是否存在正在输入
+            int index = chatAdapter.getData().size() - 1;
+            if (chatAdapter.lastMsgIsTyping()) index--;
+            if (index < 0) index = 0;
+            WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
+            if (timeMsg == null) {
+                if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                    chatAdapter.getData().get(index).nextMsg = msg;
+                    itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
+                }
+            } else {
+                chatAdapter.getData().get(index).nextMsg = timeMsg;
+                itemEntity.previousMsg = timeMsg;
+            }
+            chatAdapter.addData(index + 1, itemEntity);
+            int type = chatAdapter.getData().get(index).wkMsg.type;
+            if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
+                chatAdapter.notifyItemChanged(index);
+            } else {
+                chatAdapter.notifyBackground(index);
+            }
+
+            if (isToEnd) {
+                scrollToEnd();
+            }
+            isToEnd = true;
+        }
+    }
+
+    private synchronized void receivedMessages(List<WKMsg> list) {
+        if (WKReader.isNotEmpty(list)) {
+            for (WKMsg msg : list) {
+                // 命令消息和撤回消息不显示在聊天
+                if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist)
+                    continue;
+
+                if (msg.remoteExtra.readedCount == 0) {
+                    msg.remoteExtra.unreadCount = count - 1;
+                }
+
+                if (msg.channelID.equals(channelId) && msg.channelType == channelType) {
+                    if (!chatAdapter.isExist(msg.clientMsgNO)) {
+                        if (!isCanLoadMore) {
+                            //移除正在输入
+                            if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg != null && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
+                                chatAdapter.removeAt(chatAdapter.getItemCount() - 1);
+                            }
+                            WKMsg timeMsg = addTimeMsg(msg.timestamp);
+                            WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
+                            if (timeMsg != null && chatAdapter.getData().size() > 1) {
+                                chatAdapter.getData().get(chatAdapter.getData().size() - 2).nextMsg = timeMsg;
+                            }
+                            int previousMsgIndex = -1;
+                            if (timeMsg == null) {
+                                if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                                    itemEntity.previousMsg = chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg;
+                                    chatAdapter.getData().get(chatAdapter.getData().size() - 1).nextMsg = itemEntity.wkMsg;
+                                }
+                            } else {
+                                itemEntity.previousMsg = timeMsg;
+                            }
+                            if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                                previousMsgIndex = chatAdapter.getData().size() - 1;
+                            }
+                            if (!isShowHistory && redDot == 0 && itemEntity.wkMsg.flame == 1 && itemEntity.wkMsg.type != WKContentType.WK_VOICE && itemEntity.wkMsg.type != WKContentType.WK_IMAGE && itemEntity.wkMsg.type != WKContentType.WK_VIDEO) {
+                                itemEntity.wkMsg.viewed = 1;
+                                itemEntity.wkMsg.viewedAt = WKTimeUtils.getInstance().getCurrentMills();
+                                WKIM.getInstance().getMsgManager().updateViewedAt(1, itemEntity.wkMsg.viewedAt, itemEntity.wkMsg.clientMsgNO);
+                            }
+                            WKPlaySound.getInstance().playInMsg(R.raw.sound_in);
+                            chatAdapter.addData(itemEntity);
+                            if (msg.messageSeq > maxMsgSeq) {
+                                maxMsgSeq = msg.messageSeq;
+                            }
+                            if (msg.orderSeq > maxMsgOrderSeq) {
+                                maxMsgOrderSeq = msg.orderSeq;
+                            }
+                            if (previousMsgIndex != -1) {
+                                chatAdapter.notifyBackground(previousMsgIndex);
+                            }
+                        }
+                        if (isShowHistory || redDot > 0) {
+                            redDot += 1;
+                            showUnReadCountView();
+                            wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+                        } else {
+                            scrollToEnd();
+                            if (msg.setting.receipt == 1) readMsgIds.add(msg.messageID);
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+    private synchronized void typing(WKCMD wkCmd) {
+
+        if (redDot > 0) return;
+        String channel_id = wkCmd.paramJsonObject.optString("channel_id");
+        byte channel_type = (byte) wkCmd.paramJsonObject.optInt("channel_type");
+        String from_uid = wkCmd.paramJsonObject.optString("from_uid");
+        String from_name = wkCmd.paramJsonObject.optString("from_name");
+        int isRobot;
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(from_uid, WKChannelType.PERSONAL);
+        if (channel == null) {
+            channel = new WKChannel(from_uid, WKChannelType.PERSONAL);
+            channel.channelName = from_name;
+        }
+        isRobot = channel.robot;
+        if (channelId.equals(channel_id) && channelType == channel_type && !TextUtils.equals(from_uid, WKConfig.getInstance().getUid())) {
+            WKChannelMember mChannelMember = null;
+            if (channelType == WKChannelType.GROUP && isRobot == 0) {
+                // 没在群内的cmd不显示
+                mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, from_uid);
+                if (mChannelMember == null || mChannelMember.isDeleted == 1) return;
+            }
+            if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
+                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setFrom(channel);
+                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.fromUID = from_uid;
+                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setMemberOfFrom(mChannelMember);
+                chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+            } else {
+                addTimeMsg(WKTimeUtils.getInstance().getCurrentSeconds());
+                int index = chatAdapter.getData().size() - 1;
+                if (chatAdapter.lastMsgIsTyping()) index--;
+                if (index < 0) index = 0;
+
+                WKUIChatMsgItemEntity msgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
+                msgItemEntity.wkMsg.channelType = channelType;
+                msgItemEntity.wkMsg.channelID = channelId;
+                msgItemEntity.wkMsg.type = WKContentType.typing;
+                msgItemEntity.wkMsg.setFrom(channel);
+                msgItemEntity.showNickName = showNickName;
+                msgItemEntity.wkMsg.fromUID = channel.channelID;
+                WKChannelMember member = new WKChannelMember();
+                member.memberUID = channel.channelID;
+                member.channelID = channelId;
+                member.channelType = channelType;
+                member.memberName = channel.channelName;
+                member.memberRemark = channel.channelRemark;
+                msgItemEntity.wkMsg.setMemberOfFrom(member);
+                msgItemEntity.previousMsg = chatAdapter.getLastMsg();
+                chatAdapter.addData(msgItemEntity);
+                chatAdapter.getData().get(index).nextMsg = msgItemEntity.wkMsg;
+
+                int type = chatAdapter.getData().get(index).wkMsg.type;
+                if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
+                    chatAdapter.notifyItemChanged(index);
+                } else {
+                    chatAdapter.notifyBackground(index);
+                }
+
+                if (!isShowHistory && !isCanLoadMore) {
+                    scrollToEnd();
+                }
+            }
+        }
+    }
+
+    private synchronized void refreshMsg(WKMsg wkMsg) {
+        WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
+        List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
+        chatAdapter.refreshReplyMsg(wkMsg);
+        for (int i = 0, size = list.size(); i < size; i++) {
+            if (list.get(i).wkMsg == null) {
+                continue;
+            }
+            boolean isNotify = false;
+            if (list.get(i).wkMsg.clientSeq == wkMsg.clientSeq
+                    || list.get(i).wkMsg.clientMsgNO.equals(wkMsg.clientMsgNO)
+                    || (!TextUtils.isEmpty(list.get(i).wkMsg.messageID) && !TextUtils.isEmpty(wkMsg.messageID) && list.get(i).wkMsg.messageID.equals(wkMsg.messageID))) {
+                if (wkMsg.messageSeq > maxMsgSeq) {
+                    maxMsgSeq = wkMsg.messageSeq;
+                }
+                if (wkMsg.messageSeq > lastVisibleMsgSeq) {
+                    lastVisibleMsgSeq = wkMsg.messageSeq;
+                }
+                if (list.get(i).wkMsg.remoteExtra.revoke != wkMsg.remoteExtra.revoke) {
+                    isNotify = true;
+                }
+                // 消息撤回
+                list.get(i).wkMsg.remoteExtra.revoke = wkMsg.remoteExtra.revoke;
+                list.get(i).wkMsg.remoteExtra.revoker = wkMsg.remoteExtra.revoker;
+                if (list.get(i).wkMsg.status != WKSendMsgResult.send_success && wkMsg.status == WKSendMsgResult.send_success) {
+                    WKPlaySound.getInstance().playOutMsg(R.raw.sound_out);
+                }
+                boolean isResetStatus = false;
+                boolean isResetData = false;
+                boolean isResetReaction = false;
+                if (list.get(i).wkMsg.status != wkMsg.status
+                        || (list.get(i).wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && list.get(i).wkMsg.remoteExtra.readedCount == 0)
+                        || list.get(i).wkMsg.remoteExtra.editedAt != wkMsg.remoteExtra.editedAt
+                ) {
+                    list.get(i).isUpdateStatus = true;
+                    isResetStatus = true;
+                }
+                if (list.get(i).wkMsg.remoteExtra.isPinned != wkMsg.remoteExtra.isPinned) {
+                    isResetStatus = true;
+                }
+                list.get(i).wkMsg.voiceStatus = wkMsg.voiceStatus;
+                if (hideChannelAllPinnedMessage == 0) {
+                    list.get(i).isPinned = wkMsg.remoteExtra.isPinned;
+                } else {
+                    list.get(i).isPinned = 0;
+                }
+                list.get(i).wkMsg.remoteExtra.isPinned = wkMsg.remoteExtra.isPinned;
+                list.get(i).wkMsg.remoteExtra.readed = wkMsg.remoteExtra.readed;
+                list.get(i).wkMsg.remoteExtra.readedCount = wkMsg.remoteExtra.readedCount;
+                list.get(i).wkMsg.remoteExtra.needUpload = wkMsg.remoteExtra.needUpload;
+                if (list.get(i).wkMsg.remoteExtra.readedCount == 0) {
+                    list.get(i).wkMsg.remoteExtra.unreadCount = count - 1;
+                } else
+                    list.get(i).wkMsg.remoteExtra.unreadCount = wkMsg.remoteExtra.unreadCount;
+                if ((TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit)) || (!TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit) && !list.get(i).wkMsg.remoteExtra.contentEdit.equals(wkMsg.remoteExtra.contentEdit))) {
+                    list.get(i).wkMsg.remoteExtra.editedAt = wkMsg.remoteExtra.editedAt;
+                    list.get(i).wkMsg.remoteExtra.contentEdit = wkMsg.remoteExtra.contentEdit;
+                    list.get(i).wkMsg.remoteExtra.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
+                    list.get(i).isUpdateStatus = true;
+                    list.get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
+                    isResetData = true;
+                }
+
+                list.get(i).wkMsg.isDeleted = wkMsg.isDeleted;
+                list.get(i).wkMsg.messageID = wkMsg.messageID;
+                list.get(i).wkMsg.messageSeq = wkMsg.messageSeq;
+                list.get(i).wkMsg.orderSeq = wkMsg.orderSeq;
+                if ((wkMsg.localExtraMap != null && !wkMsg.localExtraMap.isEmpty())) {
+                    isNotify = true;
+                }
+                if (isRefreshReaction(list.get(i).wkMsg.reactionList, wkMsg.reactionList)) {
+                    isResetReaction = true;
+                }
+                list.get(i).wkMsg.localExtraMap = wkMsg.localExtraMap;
+                list.get(i).wkMsg.content = wkMsg.content;
+                list.get(i).wkMsg.reactionList = wkMsg.reactionList;
+                list.get(i).wkMsg.baseContentMsgModel = wkMsg.baseContentMsgModel;
+                list.get(i).wkMsg.status = wkMsg.status;
+                if (isNotify) {
+                    EndpointManager.getInstance().invoke("stop_reaction_animation", null);
+                    chatAdapter.notifyItemChanged(i);
+                } else {
+                    if (isResetStatus) {
+                        chatAdapter.notifyStatus(i);
+                    }
+                    if (isResetData) {
+                        chatAdapter.notifyData(i);
+                    }
+                    if (isResetReaction) {
+                        list.get(i).isRefreshReaction = true;
+                        chatAdapter.notifyItemChanged(i, list.get(i));
+                        //chatAdapter.notifyReaction(i, wkMsg.reactionList);
+                    }
+                }
+
+                if (list.get(i).wkMsg.remoteExtra.revoke == 1) {
+                    int finalI = i;
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        int previousIndex = finalI - 1;
+                        int nextIndex = finalI + 1;
+                        if (previousIndex >= 0 && list.get(previousIndex).wkMsg.remoteExtra.revoke == 0) {
+                            chatAdapter.notifyItemChanged(previousIndex);
+                        }
+                        if (nextIndex <= chatAdapter.getData().size() - 1 && list.get(nextIndex).wkMsg.remoteExtra.revoke == 0) {
+                            chatAdapter.notifyItemChanged(nextIndex);
+                        }
+                    }, 200);
+                }
+
+                if ((wkMsg.status == WKSendMsgResult.no_relation || wkMsg.status == WKSendMsgResult.not_on_white_list) && channelType == WKChannelType.PERSONAL) {
+                    if (UserUtils.getInstance().checkBlacklist(channelId)) {
+                        return;
+                    }
+                    // 不是好友
+                    WKMsg noRelationMsg = new WKMsg();
+                    noRelationMsg.channelID = channelId;
+                    noRelationMsg.channelType = channelType;
+                    noRelationMsg.type = WKContentType.noRelation;
+                    long tempOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(0, wkMsg.channelID, wkMsg.channelType);
+                    noRelationMsg.orderSeq = tempOrderSeq + 1;
+                    noRelationMsg.status = WKSendMsgResult.send_success;
+
+                    int index = chatAdapter.getData().size() - 1;
+                    if (chatAdapter.lastMsgIsTyping()) index--;
+                    WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, noRelationMsg, count, showNickName, chatAdapter.isShowChooseItem());
+                    chatAdapter.getData().get(index).nextMsg = noRelationMsg;
+                    itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
+
+                    chatAdapter.notifyItemChanged(index);
+                    chatAdapter.addData(index + 1, itemEntity);
+                    if (isToEnd) {
+                        scrollToEnd();
+                    }
+                    WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(noRelationMsg, false);
+                }
+                break;
+            }
+        }
+    }
 }

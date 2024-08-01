@@ -378,13 +378,15 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                         tempList.add(list.get(i));
                     }
                 }
-                if (memberRole != WKChannelMemberRole.normal) {
-                    groupMemberAdapter.addData(groupMemberAdapter.getData().size() - 2, tempList);
-                } else
-                    groupMemberAdapter.addData(groupMemberAdapter.getData().size() - 1, tempList);
                 if (groupType == WKGroupType.normalGroup) {
                     int count = WKIM.getInstance().getChannelMembersManager().getMemberCount(groupNo, WKChannelType.GROUP);
                     titleTv.setText(String.format("%s(%s)", getString(R.string.chat_info), count));
+
+                    if (memberRole != WKChannelMemberRole.normal) {
+                        groupMemberAdapter.addData(groupMemberAdapter.getData().size() - 2, tempList);
+                    } else
+                        groupMemberAdapter.addData(groupMemberAdapter.getData().size() - 1, tempList);
+
                 }
             }
         });

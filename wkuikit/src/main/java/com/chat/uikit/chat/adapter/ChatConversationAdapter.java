@@ -124,32 +124,33 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private String getFromName(byte channelType, WKMsg msg) {
         String fromName = "";
-        if (channelType == WKChannelType.PERSONAL) {
-            //单聊
-            fromName = "";
-        } else {
-            //群聊
-            if (msg != null && !TextUtils.isEmpty(msg.fromUID)
-                    && !msg.fromUID.equals(WKConfig.getInstance().getUid())) {
-                if (msg.getFrom() != null) {
-                    fromName = msg.getFrom().channelRemark;
-                }
-                if (TextUtils.isEmpty(fromName)) {
-                    if (msg.getMemberOfFrom() != null && !TextUtils.isEmpty(msg.getMemberOfFrom().memberUID)) {
-                        if (!msg.getMemberOfFrom().memberUID.equals(WKConfig.getInstance().getUid())) {
-                            fromName = msg.getMemberOfFrom().memberRemark;
-                            if (TextUtils.isEmpty(fromName))
-                                fromName = msg.getMemberOfFrom().memberName;
-                        }
-                    }
-                }
-            } else fromName = "";
-        }
         if (msg != null && (WKContentType.isSystemMsg(msg.type)
                 || msg.type == WKContentType.revoke
                 || msg.remoteExtra.revoke == 1)) {
-            fromName = "";
+            return fromName;
         }
+        if (channelType == WKChannelType.PERSONAL || msg == null || TextUtils.isEmpty(msg.fromUID) || msg.fromUID.equals(WKConfig.getInstance().getUid())) {
+            return fromName;
+        }
+        String channelName = "";
+        String channelRemark = "";
+        String memberRemark = "";
+        String memberName = "";
+        if (msg.getFrom() != null) {
+            channelRemark = msg.getFrom().channelRemark;
+            channelName = msg.getFrom().channelName;
+        }
+        if (!TextUtils.isEmpty(channelRemark)) {
+            return channelRemark;
+        }
+        if (msg.getMemberOfFrom() != null) {
+            memberName = msg.getMemberOfFrom().memberName;
+            memberRemark = msg.getMemberOfFrom().memberRemark;
+        }
+        if (!TextUtils.isEmpty(memberRemark)) {
+            return memberRemark;
+        }
+        fromName = TextUtils.isEmpty(channelName) ? memberName : channelName;
         return fromName;
     }
 

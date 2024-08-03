@@ -110,7 +110,7 @@
         android:label="@string/app_name"
         android:preserveLegacyExternalStorage="true"
         android:requestLegacyExternalStorage="true"
-        android:roundIcon="@mipmap/ic_logo"
+        android:roundIcon="@mipmap/ic_logo_round"
         android:screenOrientation="portrait"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"

@@ -44,9 +44,9 @@ public class OkHttpUtils {
                         1024 * 1024 * 100);
                 if (sOkHttpClient == null) {
                     sOkHttpClient = new OkHttpClient.Builder().cache(cache)
-                            .connectTimeout(60, TimeUnit.SECONDS)
-                            .readTimeout(60, TimeUnit.SECONDS)
-                            .writeTimeout(60, TimeUnit.SECONDS)
+                            .connectTimeout(60 * 10, TimeUnit.SECONDS)
+                            .readTimeout(60 * 10, TimeUnit.SECONDS)
+                            .writeTimeout(60 * 10, TimeUnit.SECONDS)
                             .sslSocketFactory(SSLSocketClient.getSSLSocketFactory(), new X509TrustManager() {
                                 @Override
                                 public void checkClientTrusted(X509Certificate[] chain, String authType) {

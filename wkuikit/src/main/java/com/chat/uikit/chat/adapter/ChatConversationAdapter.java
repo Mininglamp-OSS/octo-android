@@ -2,6 +2,7 @@ package com.chat.uikit.chat.adapter;
 
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.Typeface;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -348,6 +349,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         remindLayout.removeAllViews();
         if (mention) {
             TextView textView = new TextView(getContext());
+            textView.setTypeface(null, Typeface.BOLD);
             textView.setText(R.string.last_msg_remind);
             textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
             textView.setTextSize(13f);
@@ -356,6 +358,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (!TextUtils.isEmpty(draft)) {
             TextView textView = new TextView(getContext());
             textView.setText(R.string.last_msg_draft);
+            textView.setTypeface(null, Typeface.BOLD);
             textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
             textView.setTextSize(13f);
             remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
@@ -366,6 +369,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (!TextUtils.isEmpty(approveContent)) {
             TextView textView = new TextView(getContext());
             textView.setText(approveContent);
+            textView.setTypeface(null, Typeface.BOLD);
             textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
             textView.setTextSize(13f);
             remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));

@@ -58,7 +58,7 @@ public class ChatConversationMsg {
         }
         List<WKReminder> resultList = new ArrayList<>();
         for (WKReminder reminder : list) {
-            if (!TextUtils.isEmpty(reminder.publisher) && !reminder.publisher.equals(loginUID)) {
+            if (TextUtils.isEmpty(reminder.publisher) || (!TextUtils.isEmpty(reminder.publisher) && !reminder.publisher.equals(loginUID))){
                 resultList.add(reminder);
             }
         }

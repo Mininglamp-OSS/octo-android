@@ -13,7 +13,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.utils.AndroidUtilities;
-import com.chat.base.utils.WKLogUtils;
 
 public class NoEventRecycleView extends RecyclerView {
     private float headerViewY;
@@ -133,7 +132,7 @@ public class NoEventRecycleView extends RecyclerView {
         final int firstPosition = firstVisibleItemPosition;
         final int lastPosition = lastVisibleItemPosition;
         if (this.getVisibility() != VISIBLE) return;
-        new Handler(Looper.myLooper()).postDelayed(() -> {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (headerView.getHeight() == 0) {
                 scrollToPosition(firstPosition);
                 return;

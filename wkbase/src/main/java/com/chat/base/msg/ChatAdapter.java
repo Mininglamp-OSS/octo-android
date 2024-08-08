@@ -7,9 +7,11 @@ import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.chad.library.adapter.base.BaseProviderMultiAdapter;
 import com.chad.library.adapter.base.provider.BaseItemProvider;
+import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.R;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ShowMsgReactionMenu;
@@ -22,6 +24,7 @@ import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.SecretDeleteTimer;
 import com.chat.base.utils.WKReader;
 import com.chat.base.views.ChatItemView;
+import com.chat.base.views.pinnedsectionitemdecoration.utils.FullSpanUtil;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
@@ -43,6 +46,18 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         normalMessage, pinnedMessage
     }
 
+
+    @Override
+    public void onAttachedToRecyclerView(@NotNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        FullSpanUtil.onAttachedToRecyclerView(recyclerView, this, WKContentType.msgPromptTime);
+    }
+
+    @Override
+    public void onViewAttachedToWindow(@NotNull BaseViewHolder holder) {
+        super.onViewAttachedToWindow(holder);
+        FullSpanUtil.onViewAttachedToWindow(holder, this, WKContentType.msgPromptTime);
+    }
     private final AdapterType adapterType;
 
     ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getItemProviderList() {

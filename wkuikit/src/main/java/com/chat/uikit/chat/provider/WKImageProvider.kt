@@ -398,7 +398,9 @@ class WKImageProvider : WKChatBaseProvider() {
         super.resetCellBackground(parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
         val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
-        setCorners(from, uiChatMsgItemEntity, imageView, blurView)
+        if (imageView != null && blurView != null) {
+            setCorners(from, uiChatMsgItemEntity, imageView, blurView)
+        }
     }
 
     private fun setCorners(

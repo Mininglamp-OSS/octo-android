@@ -7,71 +7,66 @@
     android:paddingTop="2dp"
     android:paddingBottom="2dp">
 
-    <LinearLayout
+    <com.chat.base.ui.components.CheckBox
+        android:id="@+id/checkBox"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="end|bottom"
+        android:layout_marginStart="-24dp"
+        android:layout_marginTop="8dp"
+        android:visibility="visible" />
+
+    <FrameLayout
+        android:id="@+id/viewContentLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <com.chat.base.ui.components.CheckBox
-            android:id="@+id/checkBox"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_gravity="end|bottom"
-            android:layout_marginStart="-24dp"
-            android:layout_marginTop="8dp"
-            android:visibility="visible" />
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/avatarView"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp" />
 
-        <FrameLayout
-            android:id="@+id/viewContentLayout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+        <LinearLayout
+            android:id="@+id/fullContentLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-            <com.chat.base.ui.components.AvatarView
-                android:id="@+id/avatarView"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="end"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp" />
-
-            <LinearLayout
-                android:id="@+id/fullContentLayout"
+            <TextView
+                android:id="@+id/receivedNameTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/receivedNameTv"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
-                    android:layout_marginBottom="3dp"
-                    android:fontFamily="sans-serif-medium"
-                    android:gravity="center"
-                    android:singleLine="true"
-                    android:textColor="@color/colorDark"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
+                android:layout_marginStart="5dp"
+                android:layout_marginBottom="3dp"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textColor="@color/colorDark"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
 
-                <LinearLayout
-                    android:id="@+id/wkBaseContentLayout"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:animateLayoutChanges="true"
-                    android:orientation="horizontal" />
+            <LinearLayout
+                android:id="@+id/wkBaseContentLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:animateLayoutChanges="true"
+                android:orientation="horizontal" />
 
-                <FrameLayout
-                    android:id="@+id/reactionsView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|end"
-                    android:visibility="gone" />
+            <FrameLayout
+                android:id="@+id/reactionsView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:visibility="gone" />
 
-            </LinearLayout>
+        </LinearLayout>
 
 
-        </FrameLayout>
+    </FrameLayout>
 
-    </LinearLayout>
 
 </com.chat.base.views.ChatItemView>

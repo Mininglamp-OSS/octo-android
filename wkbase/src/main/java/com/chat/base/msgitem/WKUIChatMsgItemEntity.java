@@ -314,7 +314,11 @@ public class WKUIChatMsgItemEntity {
                         showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
                     }
                     boolean isUserDetail = !TextUtils.isEmpty(uid) && !uid.equals("-1");
-                    String oldName = getContent().substring(entity.offset, (entity.offset + entity.length));
+                    String displayContent = getContent();
+                    if (entity.offset > displayContent.length() || (entity.offset + entity.length) > displayContent.length()) {
+                        continue;
+                    }
+                    String oldName = displayContent.substring(entity.offset, (entity.offset + entity.length));
                     if (!TextUtils.isEmpty(showName)) {
                         if (!showName.startsWith("@"))
                             showName = "@" + showName;

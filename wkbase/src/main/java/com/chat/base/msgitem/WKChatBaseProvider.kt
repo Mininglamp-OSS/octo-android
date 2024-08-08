@@ -223,7 +223,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     ContextCompat.getColor(context, R.color.tip_message_cell_bg),
                     ContextCompat.getColor(context, R.color.transparent)
                 )
-                colorAnimation.setDuration(1000)
+                colorAnimation.setDuration(2500)
                 colorAnimation.addUpdateListener { animator ->
                     viewGroupLayout.setBackgroundColor(animator.animatedValue as Int)
                 }
@@ -1059,7 +1059,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val menus = EndpointManager.getInstance()
             .invokes<ChatItemPopupMenu>(EndpointCategory.wkChatPopupItem, mMsg)
 
-        if (menus.size > 0 && mMsg.flame == 0) {
+        if (menus != null && menus.size > 0 && mMsg.flame == 0) {
             for (menu in menus) {
                 val popupMenu =
                     PopupMenuItem(menu.text, menu.imageResource,

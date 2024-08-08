@@ -189,7 +189,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ChatPanelManager chatPanelManager;
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
-
     private void p2pCall(int callType) {
         EndpointManager.getInstance().invoke("wk_p2p_call", new RTCMenu(this, callType));
     }
@@ -419,6 +418,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
+
     }
 
     private void initListener() {
@@ -1282,7 +1282,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             break;
                         }
                     }
-                    if (isAdd) reminderList.add(reminder);
+                    if (isAdd && reminder.type == WKMentionType.WKReminderTypeMentionMe) reminderList.add(reminder);
                     boolean isAddApprove = true;
                     for (int i = 0, size = groupApproveList.size(); i < size; i++) {
                         if (reminder.reminderID == groupApproveList.get(i).reminderID && reminder.type == groupApproveList.get(i).type) {
@@ -1296,6 +1296,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 }
             }
             resetRemindView();
+            resetGroupApproveView();
         }
     }
 
@@ -1378,7 +1379,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKToastUtils.getInstance().showToast(getString(textId));
     }
 
-    private void setShowTime() {
+    private synchronized void setShowTime() {
         String showTime = "";
         int index = linearLayoutManager.findFirstVisibleItemPosition();
         if (index > 0 && index < chatAdapter.getData().size()) {
@@ -1392,6 +1393,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             str.setSpan(new SystemMsgBackgroundColorSpan(ContextCompat.getColor(this, R.color.colorSystemBg), AndroidUtilities.dp(5), AndroidUtilities.dp(2 * 5)), 0, showTime.length(), 0);
             wkVBinding.timeTv.setText(str);
             CommonAnim.getInstance().showOrHide(wkVBinding.timeTv, true, true);
+        } else {
+            CommonAnim.getInstance().showOrHide(wkVBinding.timeTv, false, false);
         }
     }
 

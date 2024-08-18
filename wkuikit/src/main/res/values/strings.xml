@@ -281,5 +281,6 @@
     <string name="tab_text_chat">聊天</string>
     <string name="tab_text_contacts">联系人</string>
     <string name="tab_text_me">我的</string>
+    <string name="invitation_sent">邀请已发送</string>
 </resources>
 

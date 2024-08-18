@@ -4,10 +4,13 @@ import android.text.TextUtils;
 
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
+import com.chat.base.endpoint.entity.WKSendMsgMenu;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.net.ud.WKUploader;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.interfaces.IUploadAttacResultListener;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
@@ -35,8 +38,14 @@ public class WKSendMsgUtils {
     }
 
     public void sendMessage(WKMsg wkMsg) {
-        EndpointManager.getInstance().invokes(EndpointSID.sendMessage, wkMsg);
-        WKIM.getInstance().getMsgManager().sendMessage(wkMsg);
+        WKSendOptions options = new WKSendOptions();
+        options.robotID = wkMsg.robotID;
+        WKChannel channel = wkMsg.getChannelInfo();
+        if (channel == null) {
+            channel = new WKChannel(wkMsg.channelID, wkMsg.channelType);
+        }
+        EndpointManager.getInstance().invokes(EndpointSID.sendMessage, new WKSendMsgMenu(channel, options));
+        WKIM.getInstance().getMsgManager().sendWithOptions(wkMsg.baseContentMsgModel, channel, options);
     }
 
     public void sendMessages(List<SendMsgEntity> list) {

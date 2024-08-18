@@ -239,10 +239,9 @@ class WKImageProvider : WKChatBaseProvider() {
                             ChatChooseContacts { list1: List<WKChannel>? ->
                                 if (!list1.isNullOrEmpty()) {
                                     for (mChannel in list1) {
-                                        WKIM.getInstance().msgManager.sendMessage(
+                                        WKIM.getInstance().msgManager.send(
                                             mMessageContent,
-                                            mChannel.channelID,
-                                            mChannel.channelType
+                                            mChannel
                                         )
                                     }
                                     val viewGroup =

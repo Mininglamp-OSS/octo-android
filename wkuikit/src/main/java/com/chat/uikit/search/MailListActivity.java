@@ -15,6 +15,7 @@ import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.HanziToPinyin;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
@@ -26,7 +27,6 @@ import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.user.service.UserModel;
 import com.chat.uikit.utils.PyingUtils;
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.impl.LoadingPopupView;
 
@@ -266,7 +266,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
                 if (PyingUtils.getInstance().isStartNum(showName)) {
                     list.get(i).pying = "#";
                 } else
-                    list.get(i).pying = Pinyin.toPinyin(showName, "").toUpperCase();
+                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
         }
 

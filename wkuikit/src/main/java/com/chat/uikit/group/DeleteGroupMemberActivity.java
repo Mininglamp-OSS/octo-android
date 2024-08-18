@@ -10,8 +10,8 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.chat.base.utils.HanziToPinyin;
 import com.chat.base.utils.WKReader;
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.msgitem.WKChannelMemberRole;
@@ -253,7 +253,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
                 if (PyingUtils.getInstance().isStartNum(showName)) {
                     list.get(i).pying = "#";
                 } else
-                    list.get(i).pying = Pinyin.toPinyin(showName, "").toUpperCase();
+                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
 
         }

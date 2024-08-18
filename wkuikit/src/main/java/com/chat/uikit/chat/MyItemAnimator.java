@@ -344,18 +344,18 @@ public class MyItemAnimator extends SimpleItemAnimator {
 //            oldViewAnim.alpha(0).setListener(new AnimatorListenerAdapter() {
 //                @Override
 //                public void onAnimationStart(Animator animator) {
-            dispatchChangeStarting(changeInfo.oldHolder, true);
+                    dispatchChangeStarting(changeInfo.oldHolder, true);
 //                }
 //
 //                @Override
 //                public void onAnimationEnd(Animator animator) {
-            oldViewAnim.setListener(null);
-            view.setAlpha(1);
-            view.setTranslationX(0);
-            view.setTranslationY(0);
-            dispatchChangeFinished(changeInfo.oldHolder, true);
-            mChangeAnimations.remove(changeInfo.oldHolder);
-            dispatchFinishedWhenDone();
+                    oldViewAnim.setListener(null);
+                    view.setAlpha(1);
+                    view.setTranslationX(0);
+                    view.setTranslationY(0);
+                    dispatchChangeFinished(changeInfo.oldHolder, true);
+                    mChangeAnimations.remove(changeInfo.oldHolder);
+                    dispatchFinishedWhenDone();
 //                }
 //            }).start();
         }
@@ -366,17 +366,17 @@ public class MyItemAnimator extends SimpleItemAnimator {
 //                    .alpha(1).setListener(new AnimatorListenerAdapter() {
 //                        @Override
 //                        public void onAnimationStart(Animator animator) {
-            dispatchChangeStarting(changeInfo.newHolder, false);
+                            dispatchChangeStarting(changeInfo.newHolder, false);
 //                        }
 //                        @Override
 //                        public void onAnimationEnd(Animator animator) {
-            newViewAnimation.setListener(null);
-            newView.setAlpha(1);
-            newView.setTranslationX(0);
-            newView.setTranslationY(0);
-            dispatchChangeFinished(changeInfo.newHolder, false);
-            mChangeAnimations.remove(changeInfo.newHolder);
-            dispatchFinishedWhenDone();
+                            newViewAnimation.setListener(null);
+                            newView.setAlpha(1);
+                            newView.setTranslationX(0);
+                            newView.setTranslationY(0);
+                            dispatchChangeFinished(changeInfo.newHolder, false);
+                            mChangeAnimations.remove(changeInfo.newHolder);
+                            dispatchFinishedWhenDone();
 //                        }
 //                    }).start();
         }

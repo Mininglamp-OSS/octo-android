@@ -27,6 +27,7 @@ import com.chat.base.endpoint.entity.ContactsMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.HanziToPinyin;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
@@ -40,7 +41,6 @@ import com.chat.uikit.search.SearchAllActivity;
 import com.chat.uikit.user.UserDetailActivity;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -235,7 +235,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 if (PyingUtils.getInstance().isStartNum(showName)) {
                     list.get(i).pying = "#";
                 } else
-                    list.get(i).pying = Pinyin.toPinyin(showName, "").toUpperCase();
+                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
         }
         PyingUtils.getInstance().sortListBasic(list);

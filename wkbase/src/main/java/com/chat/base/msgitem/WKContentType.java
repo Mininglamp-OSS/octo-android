@@ -32,16 +32,10 @@ public class WKContentType extends WKMsgContentType {
     public final static int spanEmptyView = -13;
     // 富文本
     public final static int richText = 14;
-    //新朋友
-    public final static int newFriendsMsg = 1000;
-    //创建群聊系统消息
-    public final static int createGroupSysMsg = 1001;
     //群聊加人
     public final static int addGroupMembersMsg = 1002;
     //群聊减人
     public final static int removeGroupMembersMsg = 1003;
-    //通过好友验证
-    public final static int newFriendsApproved = 1004;
     //群系统消息
     public final static int groupSystemInfo = 1005;
     //撤回消息
@@ -50,10 +44,6 @@ public class WKContentType extends WKMsgContentType {
     public final static int setNewGroupAdmin = 1008;
     //审核群成员
     public final static int approveGroupMember = 1009;
-    //成员拒绝入群
-    public final static int groupMemberRefund = 1010;
-    //群内禁止添加好友
-    public final static int forbiddenAddFriend = 1013;
     //截屏消息
     public final static int screenshot = 1014;
 

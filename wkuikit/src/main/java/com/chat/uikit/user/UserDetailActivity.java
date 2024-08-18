@@ -353,6 +353,18 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     } else {
                         wkVBinding.applyBtn.setVisibility(View.GONE);
                     }
+
+                    if (!TextUtils.isEmpty(userInfo.join_group_invite_uid)){
+                        wkVBinding.joinGroupWayLayout.setVisibility(View.VISIBLE);
+                        String content = String.format("%s %s", userInfo.join_group_time, String.format(getString(R.string.invite_join_group), userInfo.join_group_invite_name));
+                        wkVBinding.joinGroupWayTv.setText(content);
+                        int index = content.indexOf(userInfo.join_group_invite_name);
+                        SpannableString span = new SpannableString(content);
+                        span.setSpan(new NormalClickableSpan(false, Theme.colorAccount, new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Other, ""), view -> {
+
+                        }), index, index + userInfo.join_group_invite_name.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        wkVBinding.joinGroupWayTv.setText(span);
+                    }
                 }
             } else {
                 showToast(msg);

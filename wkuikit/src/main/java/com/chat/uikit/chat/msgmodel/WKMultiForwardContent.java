@@ -4,6 +4,7 @@ import android.os.Parcel;
 import android.text.TextUtils;
 
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
@@ -53,9 +54,9 @@ public class WKMultiForwardContent extends WKMessageContent {
                 msg.messageID = msgJson.optString("message_id");
                 if (msgJson.has("from_uid")) {
                     msg.fromUID = msgJson.optString("from_uid");
-                    if (msg.baseContentMsgModel != null) {
-                        msg.baseContentMsgModel.fromUID = msg.fromUID;
-                    }
+//                    if (msg.baseContentMsgModel != null) {
+//                        msg.baseContentMsgModel.fromUID = msg.fromUID;
+//                    }
                 }
                 msgList.add(msg);
             }
@@ -106,7 +107,7 @@ public class WKMultiForwardContent extends WKMessageContent {
                 jsonObject.put("users", userArr);
             }
         } catch (JSONException e) {
-            e.printStackTrace();
+            WKLogUtils.e("编码合并转发消息错误");
         }
         return jsonObject;
     }

@@ -11,7 +11,6 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.text.TextUtils
-import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -74,7 +73,7 @@ import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMsg
-import com.xinbida.wukongim.entity.WKMsgSetting
+import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.message.type.WKSendMsgResult
 import com.xinbida.wukongim.msgmodel.WKVoiceContent
 import org.telegram.ui.Components.RLottieDrawable
@@ -1024,14 +1023,11 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                                 }
                                                 msgContent.mentionAll = 0
                                                 msgContent.mentionInfo = null
-                                                val setting = WKMsgSetting()
-                                                setting.receipt = mChannel.receipt
-//                                                setting.signal = 0
-                                                WKIM.getInstance().msgManager.sendMessage(
+                                                val option = WKSendOptions()
+                                                option.setting.receipt = mChannel.receipt
+                                                WKIM.getInstance().msgManager.sendWithOptions(
                                                     msgContent,
-                                                    setting,
-                                                    mChannel.channelID,
-                                                    mChannel.channelType
+                                                    mChannel,option
                                                 )
                                             }
                                             val viewGroup =

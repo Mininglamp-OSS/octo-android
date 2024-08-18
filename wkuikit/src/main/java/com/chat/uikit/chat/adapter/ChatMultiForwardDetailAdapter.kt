@@ -76,9 +76,9 @@ class ChatMultiForwardDetailAdapter(
                 )
                 val avatarView: AvatarView = holder.getView(R.id.avatarView)
                 avatarView.setSize(40f)
-                if (!TextUtils.isEmpty(item.msg.baseContentMsgModel.fromUID)) {
+                if (!TextUtils.isEmpty(item.msg.fromUID)) {
                     val channel = WKIM.getInstance().channelManager.getChannel(
-                        item.msg.baseContentMsgModel.fromUID,
+                        item.msg.fromUID,
                         WKChannelType.PERSONAL
                     )
                     if (channel != null) {
@@ -86,21 +86,21 @@ class ChatMultiForwardDetailAdapter(
                         avatarView.showAvatar(channel)
                     } else {
                         avatarView.showAvatar(
-                            item.msg.baseContentMsgModel.fromUID,
+                            item.msg.fromUID,
                             WKChannelType.PERSONAL
                         )
                         WKIM.getInstance().channelManager.fetchChannelInfo(
-                            item.msg.baseContentMsgModel.fromUID,
+                            item.msg.fromUID,
                             WKChannelType.PERSONAL
                         )
                     }
                 }
                 val isGone =
                     (holder.bindingAdapterPosition != 0 && data[holder.bindingAdapterPosition - 1].itemType == 0 && item.msg.baseContentMsgModel != null && data[holder.bindingAdapterPosition - 1].msg.baseContentMsgModel != null && !TextUtils.isEmpty(
-                        item.msg.baseContentMsgModel.fromUID
+                        item.msg.fromUID
                     )
-                            && !TextUtils.isEmpty(data[holder.bindingAdapterPosition - 1].msg.baseContentMsgModel.fromUID)
-                            && item.msg.baseContentMsgModel.fromUID == data[holder.bindingAdapterPosition - 1].msg.baseContentMsgModel.fromUID)
+                            && !TextUtils.isEmpty(data[holder.bindingAdapterPosition - 1].msg.fromUID)
+                            && item.msg.fromUID == data[holder.bindingAdapterPosition - 1].msg.fromUID)
                 avatarView.visibility = if (isGone) View.INVISIBLE else View.VISIBLE
                 when (item.msg.baseContentMsgModel.type) {
                     WKContentType.WK_IMAGE -> {
@@ -288,10 +288,9 @@ class ChatMultiForwardDetailAdapter(
                                 ChatChooseContacts { list1: List<WKChannel>? ->
                                     if (!list1.isNullOrEmpty()) {
                                         for (channel in list1) {
-                                            WKIM.getInstance().msgManager.sendMessage(
+                                            WKIM.getInstance().msgManager.send(
                                                 messageContent,
-                                                channel.channelID,
-                                                channel.channelType
+                                                channel
                                             )
                                         }
                                         val viewGroup =

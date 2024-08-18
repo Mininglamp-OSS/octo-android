@@ -115,6 +115,7 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.entity.WKReminder;
+import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKConnectStatus;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
@@ -181,7 +182,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private boolean isUpdateRedDot = true;
     private ImageView callIV;
     //查询聊天数据偏移量
-    private final int limit = 20;
+    private final int limit = 30;
     private boolean isShowPinnedView = false;
     private boolean isTipMessage = false;
     private int hideChannelAllPinnedMessage = 0;
@@ -189,6 +190,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ChatPanelManager chatPanelManager;
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
+
     private void p2pCall(int callType) {
         EndpointManager.getInstance().invoke("wk_p2p_call", new RTCMenu(this, callType));
     }
@@ -220,11 +222,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 list.add(channel);
                 WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, msgContentList, (list1, messageContentList) -> {
                     List<SendMsgEntity> msgList = new ArrayList<>();
-                    WKMsgSetting setting = new WKMsgSetting();
-                    //setting.signal = signal;
-                    setting.receipt = getChatChannelInfo().receipt;
+                    WKSendOptions options = new WKSendOptions();
+                    options.setting.receipt = getChatChannelInfo().receipt;
                     for (int i = 0, size = msgContentList.size(); i < size; i++) {
-                        msgList.add(new SendMsgEntity(msgContentList.get(i), new WKChannel(channelId, channelType), setting));
+                        msgList.add(new SendMsgEntity(msgContentList.get(i), channel, options));
                     }
                     WKSendMsgUtils.getInstance().sendMessages(msgList);
                 });
@@ -766,6 +767,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
                 WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
                 int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+                if (firstItemPosition ==-1) return;
                 if (WKReader.isNotEmpty(chatAdapter.getData())) {
                     WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
                     if (msg != null) {
@@ -875,7 +877,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     @Override
-    protected void onNewIntent(Intent intent) {
+    protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
         initParam();
@@ -1282,7 +1284,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             break;
                         }
                     }
-                    if (isAdd && reminder.type == WKMentionType.WKReminderTypeMentionMe) reminderList.add(reminder);
+                    if (isAdd && reminder.type == WKMentionType.WKReminderTypeMentionMe)
+                        reminderList.add(reminder);
                     boolean isAddApprove = true;
                     for (int i = 0, size = groupApproveList.size(); i < size; i++) {
                         if (reminder.reminderID == groupApproveList.get(i).reminderID && reminder.type == groupApproveList.get(i).type) {
@@ -1810,7 +1813,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         }
         if (index != -1) {
-            linearLayoutManager.scrollToPositionWithOffset(index, AndroidUtilities.dp(50));
+            int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+            int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+            if (index < firstItemPosition || index > lastItemPosition) {
+                linearLayoutManager.scrollToPositionWithOffset(index, AndroidUtilities.dp(70));
+            }
             chatAdapter.notifyItemChanged(index);
         } else {
             WKMsg msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);

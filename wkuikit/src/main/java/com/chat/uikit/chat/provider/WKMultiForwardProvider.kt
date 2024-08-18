@@ -60,26 +60,27 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
             for (i in 0 until size) {
                 var name = ""
                 var content = ""
+                val fromUID = multiForwardContent.msgList[i].fromUID
                 val messageContent = multiForwardContent.msgList[i].baseContentMsgModel
                 if (messageContent != null) {
-                    if (!TextUtils.isEmpty(messageContent.fromUID)) {
-                        val mChannel = WKIM.getInstance().channelManager.getChannel(
-                            messageContent.fromUID,
-                            WKChannelType.PERSONAL
-                        )
-                        if (mChannel != null) {
-                            name = mChannel.channelName
-                        } else {
-                            WKIM.getInstance().channelManager.fetchChannelInfo(
-                                messageContent.fromUID,
-                                WKChannelType.PERSONAL
-                            )
-                        }
-                    }
-                    content = messageContent.getDisplayContent()
+                    content = messageContent.displayContent
                     // 如果文字太长滑动会卡顿
                     if (content.length > 100) {
                         content = content.substring(0, 80)
+                    }
+                }
+                if (!TextUtils.isEmpty(fromUID)) {
+                    val mChannel = WKIM.getInstance().channelManager.getChannel(
+                        fromUID,
+                        WKChannelType.PERSONAL
+                    )
+                    if (mChannel != null) {
+                        name = mChannel.channelName
+                    } else {
+                        WKIM.getInstance().channelManager.fetchChannelInfo(
+                            fromUID,
+                            WKChannelType.PERSONAL
+                        )
                     }
                 }
                 if (!TextUtils.isEmpty(sBuilder)) sBuilder.append("\n")

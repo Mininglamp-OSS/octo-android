@@ -603,7 +603,6 @@ public class StringUtils {
                 content = MessageFormat.format(string, names.toArray());
             else content = string;
         } catch (JSONException e) {
-            e.printStackTrace();
             content = context.getString(R.string.base_unknow_msg);
         }
         if (TextUtils.isEmpty(content)) {

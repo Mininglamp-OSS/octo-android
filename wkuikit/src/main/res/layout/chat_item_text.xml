@@ -40,91 +40,6 @@
             android:textSize="12sp"
             android:visibility="visible" />
 
-        <LinearLayout
-            android:id="@+id/replyLayout"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="10dp"
-            android:background="@drawable/reply_bg"
-            android:orientation="horizontal"
-            android:visibility="visible">
-
-            <View
-                android:id="@+id/replyLine"
-                android:layout_width="3dp"
-                android:layout_height="match_parent"
-                android:layout_marginEnd="5dp"
-                android:background="@drawable/reply_line" />
-
-            <TextView
-                android:id="@+id/replyContentRevokedTv"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:layout_marginEnd="10dp"
-                android:layout_marginBottom="10dp"
-                android:lineSpacingExtra="2dp"
-                android:singleLine="true"
-                android:visibility="gone"
-                android:text="@string/reply_msg_is_revoked"
-                android:textColor="@color/popupTextColor"
-                android:textSize="14sp" />
-
-            <LinearLayout
-                android:id="@+id/replyContentLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:layout_marginEnd="5dp"
-                android:layout_marginBottom="5dp"
-                android:orientation="vertical"
-                android:visibility="visible">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content">
-
-                    <com.chat.base.ui.components.AvatarView
-                        android:id="@+id/replyAvatarIv"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-
-
-                    <TextView
-                        android:id="@+id/replyNameTv"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
-                        android:textColor="@color/color999"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/replyTv"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:ellipsize="end"
-                    android:gravity="center|start"
-                    android:lineSpacingExtra="2dp"
-                    android:singleLine="true"
-                    android:textColor="@color/color999"
-                    android:textSize="14sp"
-                    android:visibility="visible" />
-
-                <androidx.appcompat.widget.AppCompatImageView
-                    android:id="@+id/replyIv"
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:layout_marginTop="10dp"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/default_view_bg" />
-
-            </LinearLayout>
-        </LinearLayout>
 
 
         <com.chat.uikit.view.ChatTextTimeLayout
@@ -154,12 +69,6 @@
 
         </com.chat.uikit.view.ChatTextTimeLayout>
 
-        <LinearLayout
-            android:id="@+id/linkView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone" />
 
     </com.chat.base.views.BubbleLayout>
 </LinearLayout>

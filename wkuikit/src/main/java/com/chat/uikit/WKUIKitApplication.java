@@ -103,7 +103,6 @@ import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
-import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -175,9 +174,9 @@ public class WKUIKitApplication {
             String uid = WKConfig.getInstance().getUid();
             WKIM.getInstance().init(mContext.get(), uid, imToken);
 
-            CrashReport.initCrashReport(getContext(), "4083bcaa8c", false);
-            CrashReport.setUserId(WKConfig.getInstance().getUid());
-            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
+//            CrashReport.initCrashReport(getContext(), "4083bcaa8c", false);
+//            CrashReport.setUserId(WKConfig.getInstance().getUid());
+//            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
 
         }
     }
@@ -560,19 +559,23 @@ public class WKUIKitApplication {
                                     iConversationContext.sendMessage(videoContent);
                                 } else {
                                     if (WKFileUtils.getInstance().isGif(path)) {
-                                        WKGifContent mGifContent = new WKGifContent();
-                                        mGifContent.format = "gif";
-                                        mGifContent.localPath = path;
-                                        Bitmap bitmap = BitmapFactory.decodeFile(path);
-                                        if (bitmap != null) {
-                                            mGifContent.height = bitmap.getHeight();
-                                            mGifContent.width = bitmap.getWidth();
+                                        Object isRegisterSticker = EndpointManager.getInstance().invoke("is_register_sticker", null);
+                                        if (isRegisterSticker instanceof Boolean) {
+                                            WKGifContent mGifContent = new WKGifContent();
+                                            mGifContent.format = "gif";
+                                            mGifContent.localPath = path;
+                                            Bitmap bitmap = BitmapFactory.decodeFile(path);
+                                            if (bitmap != null) {
+                                                mGifContent.height = bitmap.getHeight();
+                                                mGifContent.width = bitmap.getWidth();
+                                            }
+                                            iConversationContext.sendMessage(mGifContent);
+                                            return;
                                         }
-                                        iConversationContext.sendMessage(mGifContent);
-                                    } else {
-                                        WKImageContent imageContent = new WKImageContent(path);
-                                        iConversationContext.sendMessage(imageContent);
                                     }
+                                    WKImageContent imageContent = new WKImageContent(path);
+                                    iConversationContext.sendMessage(imageContent);
+
                                 }
 
                             }

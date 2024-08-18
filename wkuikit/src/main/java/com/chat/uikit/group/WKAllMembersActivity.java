@@ -10,6 +10,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.SoftKeyboardUtils;
@@ -126,12 +127,20 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
     protected void initData() {
         super.initData();
         int count = WKIM.getInstance().getChannelMembersManager().getMemberCount(channelID, channelType);
+
         titleTv.setText(String.format(getString(R.string.group_members), count + ""));
         WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
-        if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.groupType)) {
-            Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
-            if (groupTypeObject instanceof Integer) {
-                groupType = (int) groupTypeObject;
+        if (channel != null && channel.remoteExtraMap != null ) {
+            if (channel.remoteExtraMap.containsKey(WKChannelExtras.groupType)) {
+                Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
+                if (groupTypeObject instanceof Integer) {
+                    groupType = (int) groupTypeObject;
+                }
+            }
+            Object memberCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.memberCount);
+            if (memberCountObject instanceof Integer) {
+                 count = (int) memberCountObject;
+                titleTv.setText(String.format(getString(R.string.group_members), count + ""));
             }
         }
         getData();

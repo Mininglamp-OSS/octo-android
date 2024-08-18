@@ -445,10 +445,8 @@ public class WKIMUtils {
 
             if (msg.remoteExtra.contentEditMsgModel != null && !TextUtils.isEmpty(msg.remoteExtra.contentEditMsgModel.getDisplayContent())) {
                 msg.remoteExtra.contentEditMsgModel.content = content;
-                msg.remoteExtra.contentEditMsgModel.displayContent = content;
             } else {
                 msg.baseContentMsgModel.content = content;
-                msg.baseContentMsgModel.displayContent = content;
             }
         }
     }

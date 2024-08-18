@@ -281,5 +281,6 @@
     <string name="tab_text_chat">Chat</string>
     <string name="tab_text_contacts">Contacts</string>
     <string name="tab_text_me">Me</string>
+    <string name="invitation_sent">Invitation sent</string>
 </resources>
 

@@ -11,8 +11,8 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.utils.HanziToPinyin;
 import com.chat.base.utils.WKReader;
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.ui.Theme;
@@ -131,7 +131,7 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
         for (int i = 0, size = list.size(); i < size; i++) {
             String showName = list.get(i).name;
             if (!TextUtils.isEmpty(showName)) {
-                list.get(i).pying = Pinyin.toPinyin(showName, "").toUpperCase();
+                list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
 
         }

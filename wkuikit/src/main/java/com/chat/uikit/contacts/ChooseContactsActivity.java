@@ -13,8 +13,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.entity.WKAPPConfig;
+import com.chat.base.utils.HanziToPinyin;
 import com.chat.base.views.CommonAnim;
-import com.github.promeg.pinyinhelper.Pinyin;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
@@ -230,6 +230,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 } else {
                     GroupModel.getInstance().inviteGroupMembers(groupId, ids, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
+                            WKToastUtils.getInstance().showToast(getString(R.string.invitation_sent));
                             setResult(RESULT_OK);
                             finish();
                         } else {
@@ -395,7 +396,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 if (PyingUtils.getInstance().isStartNum(showName)) {
                     list.get(i).pying = "#";
                 } else
-                    list.get(i).pying = Pinyin.toPinyin(showName, "").toUpperCase();
+                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
 
         }

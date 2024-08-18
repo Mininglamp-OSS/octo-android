@@ -87,6 +87,7 @@
 
 
                     <TextView
+                        android:tag="1"
                         android:id="@+id/timeTv"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -99,7 +100,7 @@
                         android:paddingBottom="2dp"
                         android:textColor="@color/white"
                         android:textSize="13sp"
-                        android:visibility="visible" />
+                        android:visibility="gone" />
                 </RelativeLayout>
 
                 <FrameLayout
@@ -156,7 +157,8 @@
                                         android:id="@+id/menuIv"
                                         android:layout_width="25dp"
                                         android:layout_height="25dp"
-                                        android:src="@mipmap/icon_menu" />
+                                        android:src="@mipmap/icon_menu"
+                                        tools:ignore="TooDeepLayout" />
                                 </LinearLayout>
                             </LinearLayout>
 

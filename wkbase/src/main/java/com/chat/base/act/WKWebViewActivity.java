@@ -25,7 +25,6 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
-import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.databinding.ActWebvieiwLayoutBinding;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
@@ -50,7 +49,7 @@ import com.tencent.smtt.sdk.WebChromeClient;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
-import com.xinbida.wukongim.entity.WKMsgSetting;
+import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
 
 import org.json.JSONException;
@@ -118,10 +117,9 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
                 @Override
                 public void onResult(List<WKChannel> list) {
                     for (WKChannel channel : list) {
-                        WKMsgSetting setting = new WKMsgSetting();
-                        setting.receipt = channel.receipt;
-//                        setting.signal = 0;
-                        WKIM.getInstance().getMsgManager().sendMessage(textContent, setting, channel.channelID, channel.channelType);
+                        WKSendOptions options = new WKSendOptions();
+                        options.setting.receipt = channel.receipt;
+                        WKIM.getInstance().getMsgManager().sendWithOptions(textContent, channel,options);
                     }
                 }
             }), textContent));

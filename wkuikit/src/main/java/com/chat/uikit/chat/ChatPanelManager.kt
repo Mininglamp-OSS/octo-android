@@ -11,6 +11,7 @@ import android.text.InputFilter
 import android.text.TextPaint
 import android.text.TextUtils
 import android.text.TextWatcher
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -97,7 +98,7 @@ import com.xinbida.wukongim.entity.WKChannelStatus
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMentionInfo
 import com.xinbida.wukongim.entity.WKMsg
-import com.xinbida.wukongim.entity.WKMsgSetting
+import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import com.xinbida.wukongim.msgmodel.WKTextContent
@@ -126,17 +127,17 @@ class ChatPanelManager(
     private var username: String = ""
     private val maxLength = 300
 
-    private val menuView: View
-    private val menuLayout: View
-    private val editText: ContactEditText
-    private val hitTv: AppCompatTextView
-    private val sendIV: AppCompatImageView
-    private val markdownIv: AppCompatImageView
-    private val flameIV: AppCompatImageView
-    private val menuIv: AppCompatImageView
-    private val panelView: FrameLayout
-    private val chatView: LinearLayout
-    private val chatTopLayout: FrameLayout
+    private val menuView: View = parentView.findViewById(R.id.menuView)
+    private val menuLayout: View = parentView.findViewById(R.id.menuLayout)
+    private val editText: ContactEditText = parentView.findViewById(R.id.editText)
+    private val hitTv: AppCompatTextView = parentView.findViewById(R.id.hitTv)
+    private val sendIV: AppCompatImageView = parentView.findViewById(R.id.sendIV)
+    private val markdownIv: AppCompatImageView = parentView.findViewById(R.id.markdownIv)
+    private val flameIV: AppCompatImageView = parentView.findViewById(R.id.flameIV)
+    private val menuIv: AppCompatImageView = parentView.findViewById(R.id.menuIv)
+    private val panelView: FrameLayout = parentView.findViewById(R.id.panelView)
+    private val chatView: LinearLayout = parentView.findViewById(R.id.chatView)
+    private val chatTopLayout: FrameLayout = parentView.findViewById(R.id.chatTopLayout)
     private var flameLayout: LinearLayout? = null
 
     // 相册有新图
@@ -156,7 +157,8 @@ class ChatPanelManager(
 
     // 工具栏
     private var toolBarAdapter: WKChatToolBarAdapter? = null
-    private val toolbarRecyclerView: RecyclerView
+    private val toolbarRecyclerView: RecyclerView =
+        parentView.findViewById(R.id.toolbarRecyclerView)
 
     // 艾特
     private var remindRecycleView: NoEventRecycleView? = null
@@ -174,18 +176,6 @@ class ChatPanelManager(
     private var robotMenuAdapter: RobotMenuAdapter? = null
 
     init {
-        this.menuView = parentView.findViewById(R.id.menuView)
-        this.menuIv = parentView.findViewById(R.id.menuIv)
-        this.menuLayout = parentView.findViewById(R.id.menuLayout)
-        this.editText = parentView.findViewById(R.id.editText)
-        this.sendIV = parentView.findViewById(R.id.sendIV)
-        this.hitTv = parentView.findViewById(R.id.hitTv)
-        this.markdownIv = parentView.findViewById(R.id.markdownIv)
-        this.flameIV = parentView.findViewById(R.id.flameIV)
-        this.toolbarRecyclerView = parentView.findViewById(R.id.toolbarRecyclerView)
-        this.panelView = parentView.findViewById(R.id.panelView)
-        this.chatView = parentView.findViewById(R.id.chatView)
-        this.chatTopLayout = parentView.findViewById(R.id.chatTopLayout)
         this.menuView.background = Theme.getBackground(Theme.colorAccount, 30f)
         editText.filters = arrayOf<InputFilter>(StringUtils.getInputFilter(maxLength))
         editText.setMaxLength(maxLength)
@@ -383,9 +373,9 @@ class ChatPanelManager(
         topTitleTv?.text = showName
         val content =
             if (mMsg.remoteExtra != null && mMsg.remoteExtra.contentEditMsgModel != null) {
-                mMsg.remoteExtra.contentEditMsgModel.getDisplayContent()
+                mMsg.remoteExtra.contentEditMsgModel.displayContent
             } else {
-                mMsg.baseContentMsgModel.getDisplayContent()
+                mMsg.baseContentMsgModel.displayContent
             }
         contentTv?.text = content
 //        MoonUtil.identifyFaceExpression(
@@ -414,7 +404,7 @@ class ChatPanelManager(
 
     fun showEditLayout(mMsg: WKMsg) {
         val textModel = mMsg.baseContentMsgModel as WKTextContent
-        var content = textModel.getDisplayContent()
+        var content = textModel.displayContent
         if (!TextUtils.isEmpty(mMsg.remoteExtra.contentEdit)) {
             val json = JSONObject(mMsg.remoteExtra.contentEdit)
             content = json.optString("content")
@@ -986,6 +976,7 @@ class ChatPanelManager(
                 HapticFeedbackConstants.KEYBOARD_TAP,
                 HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
             )
+
             if (robotMenuAdapter!!.data.size == 0) {
                 val tempMenu: List<WKRobotMenuEntity> =
                     WKRobotModel.getInstance().getRobotMenus(
@@ -1009,7 +1000,6 @@ class ChatPanelManager(
             if (menu != null) {
                 menuLayout.performClick()
                 val textContent = WKTextContent(menu.cmd)
-                textContent.robotID = menu.robot_id
                 val list: MutableList<WKMsgEntity> =
                     ArrayList()
                 val entity = WKMsgEntity()
@@ -1018,7 +1008,16 @@ class ChatPanelManager(
                 entity.type = "bot_command"
                 list.add(entity)
                 textContent.entities = list
-                iConversationContext.sendMessage(textContent)
+
+                val wkMsg = WKMsg()
+                wkMsg.channelID = iConversationContext.chatChannelInfo.channelID
+                wkMsg.channelType = iConversationContext.chatChannelInfo.channelType
+                wkMsg.type = textContent.type
+                wkMsg.baseContentMsgModel = textContent
+                wkMsg.channelInfo = iConversationContext.chatChannelInfo
+                wkMsg.robotID = menu.robot_id
+                Log.e("ID是：", menu.robot_id)
+                WKSendMsgUtils.getInstance().sendMessage(wkMsg)
             }
         }
         // 监听机器人刷新菜单
@@ -1106,6 +1105,14 @@ class ChatPanelManager(
         remindRecycleView!!.adapter = remindMemberAdapter
         remindMemberAdapter!!.addHeaderView(remindHeaderView!!)
         remindMemberAdapter!!.onNormal()
+//        remindRecycleView!!.addIScrollListener { _, _ ->
+//            val layoutManager = remindRecycleView!!.layoutManager as LinearLayoutManager
+//            val lastCompletelyVisibleItemPosition =
+//                layoutManager.findLastCompletelyVisibleItemPosition()
+//            if (lastCompletelyVisibleItemPosition == layoutManager.itemCount - 1) {
+//                remindMemberAdapter!!.loadMore()
+//            }
+//        }
         this.followScrollLayout.addView(this.remindRecycleView)
         parentView.post {
             var height = 40f
@@ -1204,7 +1211,7 @@ class ChatPanelManager(
             stickerContent.width = entity.width
             stickerContent.url = entity.url
             iConversationContext.sendMessage(stickerContent)
-            editText.setText("")
+            editText.text = null
 //            CommonAnim.getInstance().showOrHide(closeSearchLottieIV, false, true)
             CommonAnim.getInstance().showOrHide(sendIV, true, true)
             CommonAnim.getInstance().showOrHide(hitTv, false, true)
@@ -1213,6 +1220,9 @@ class ChatPanelManager(
     }
 
     private fun initListener() {
+        panelView.setOnClickListener {
+
+        }
         EndpointManager.getInstance().setMethod(
             "emoji_click"
         ) { `object` ->
@@ -1270,7 +1280,7 @@ class ChatPanelManager(
                     if (`object` != null) {
                         val result = `object` as Boolean
                         if (result) {
-                            editText.setText("")
+                            editText.text = null
                             lastInputTime = 0
                             return@setOnClickListener
                         }
@@ -1298,7 +1308,7 @@ class ChatPanelManager(
                 textMsgModel.entities = editText.allEntity
 
                 iConversationContext.sendMessage(textMsgModel)
-                editText.setText("")
+                editText.text = null
                 lastInputTime = 0
                 if (chatTopView?.visibility == View.VISIBLE) {
                     CommonAnim.getInstance().animateClose(chatTopView)
@@ -1451,7 +1461,7 @@ class ChatPanelManager(
                                 iConversationContext.chatActivity,
                                 s.toString(),
                                 parentView
-                            ) { editText.setText("") })
+                            ) { editText.text = null })
                 } else {
                     EndpointManager.getInstance().invoke("hide_search_chat_edit_view", null)
                 }
@@ -2023,17 +2033,13 @@ class ChatPanelManager(
 
 
                                                 for (mChannel: WKChannel in channelList) {
-                                                    val setting = WKMsgSetting()
-                                                    setting.receipt = mChannel.receipt
-//                                                        setting.signal = 0
-                                                    WKIM.getInstance()
-                                                        .msgManager
-                                                        .sendMessage(
-                                                            forwardContent,
-                                                            setting,
-                                                            mChannel.channelID,
-                                                            mChannel.channelType
-                                                        )
+                                                    val option = WKSendOptions()
+                                                    option.setting.receipt = mChannel.receipt
+                                                    WKIM.getInstance().msgManager.sendWithOptions(
+                                                        forwardContent,
+                                                        mChannel,
+                                                        option
+                                                    )
                                                 }
                                                 WKToastUtils.getInstance()
                                                     .showToastNormal(
@@ -2083,7 +2089,7 @@ class ChatPanelManager(
                                                 ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_GIF)
                                     ) list.add(chatAdapter.getItem(i).wkMsg.baseContentMsgModel) else {
                                         val textContent =
-                                            WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.getDisplayContent())
+                                            WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.displayContent)
                                         list.add(textContent)
                                     }
                                 }
@@ -2100,18 +2106,13 @@ class ChatPanelManager(
                                                 if (!channelList.isNullOrEmpty()) {
                                                     for (mChannel: WKChannel in channelList) {
                                                         for (index in list.indices) {
-                                                            val setting = WKMsgSetting()
-                                                            setting.receipt =
+                                                            val option = WKSendOptions()
+                                                            option.setting.receipt =
                                                                 iConversationContext.chatChannelInfo.receipt
-//                                                                setting.signal = signal
                                                             sendMsgEntityList.add(
                                                                 SendMsgEntity(
-                                                                    list[index],
-                                                                    WKChannel(
-                                                                        mChannel.channelID,
-                                                                        mChannel.channelType
-                                                                    ),
-                                                                    setting
+                                                                    list[index], mChannel,
+                                                                    option
                                                                 )
                                                             )
                                                         }
@@ -2310,9 +2311,9 @@ class ChatPanelManager(
         )
         chatTopView?.setPadding(
             AndroidUtilities.dp(10f),
+            AndroidUtilities.dp(8f),
             AndroidUtilities.dp(10f),
-            AndroidUtilities.dp(10f),
-            AndroidUtilities.dp(10f)
+            AndroidUtilities.dp(8f)
         )
         chatTopLayout.addView(
             chatTopView,
@@ -2412,7 +2413,7 @@ class ChatPanelManager(
         )
         rightIv.setOnClickListener {
             CommonAnim.getInstance().animateClose(chatTopView)
-            editText.setText("")
+            editText.text = null
             iConversationContext.deleteOperationMsg()
         }
         rightIv.background = Theme.createSelectorDrawable(Theme.getPressedColor())
@@ -2641,7 +2642,7 @@ class ChatPanelManager(
         )
     }
 
-     fun addSpan(name: String, uid: String) {
+    fun addSpan(name: String, uid: String) {
         val text = "@${name} "
         editText.addSpan(
             text,

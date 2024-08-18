@@ -6,9 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Typeface
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.provider.ContactsContract
@@ -19,6 +17,7 @@ import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -30,15 +29,9 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
-import androidx.core.text.PrecomputedTextCompat
-import androidx.core.widget.TextViewCompat
-import com.bumptech.glide.Glide
-import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.transition.Transition
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
 import com.chat.base.config.WKApiConfig
-import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
@@ -60,6 +53,7 @@ import com.chat.base.ui.components.AlignImageSpan
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.ui.components.NormalClickableContent
 import com.chat.base.ui.components.NormalClickableSpan
+import com.chat.base.utils.LayoutHelper
 import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.base.utils.StringUtils
 import com.chat.base.utils.WKDialogUtils
@@ -75,13 +69,11 @@ import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.entity.WKMsgSetting
+import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKTextContent
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.File
 import java.util.Objects
-import java.util.concurrent.Future
 import kotlin.math.abs
 
 
@@ -97,10 +89,10 @@ open class WKTextProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
 //        val textContentLayout = parentView.findViewById<View>(R.id.textContentLayout)
-        val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
+        //   val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
         val contentTv = parentView.findViewById<AppCompatTextView>(R.id.contentTv)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
-        val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
+        //val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
 
 
         val contentTvLayout = parentView.findViewById<BubbleLayout>(R.id.contentTvLayout)
@@ -151,16 +143,19 @@ open class WKTextProvider : WKChatBaseProvider() {
 //        contentTv.setTextFuture(uiChatMsgItemEntity.displaySpans)
 
         // 链接识别
-        val urls = StringUtils.getStrUrls(contentTv.text.toString())
-        if (urls.size > 0) {
-            showLinkInfo(uiChatMsgItemEntity, msgTimeView, linkView, from, urls[urls.size - 1])
-        } else {
-            linkView.visibility = View.GONE
-            msgTimeView.visibility = View.VISIBLE
-        }
+//        val urls = StringUtils.getStrUrls(contentTv.text.toString())
+//        if (urls.size > 0) {
+//            showLinkInfo(uiChatMsgItemEntity, msgTimeView, linkView, from, urls[urls.size - 1])
+//        } else {
+//            linkView.visibility = View.GONE
+//            msgTimeView.visibility = View.VISIBLE
+//        }
+
         //setSelectableTextHelper(contentTv,0,true)
         selectText(contentTv, contentTvLayout, uiChatMsgItemEntity)
-        setReplyInfo(adapterPosition, parentView, uiChatMsgItemEntity, from)
+        if (uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply != null && uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply.payload != null) {
+            replyView(contentTvLayout, from, uiChatMsgItemEntity)
+        }
     }
 
     private var mSelectableTextHelper: SelectTextHelper? = null
@@ -223,14 +218,11 @@ open class WKTextProvider : WKChatBaseProvider() {
                                         for (mChannel in channelList) {
                                             textContent.mentionAll = 0
                                             textContent.mentionInfo = null
-                                            val setting = WKMsgSetting()
-                                            setting.receipt = mChannel.receipt
-//                                            setting.signal = 0
-                                            WKIM.getInstance().msgManager.sendMessage(
+                                            val option = WKSendOptions()
+                                            option.setting.receipt = mChannel.receipt
+                                            WKIM.getInstance().msgManager.sendWithOptions(
                                                 textContent,
-                                                setting,
-                                                mChannel.channelID,
-                                                mChannel.channelType
+                                                mChannel, option
                                             )
                                         }
                                         val viewGroup =
@@ -621,107 +613,107 @@ open class WKTextProvider : WKChatBaseProvider() {
         (Objects.requireNonNull(getAdapter()) as ChatAdapter).showTipsMsg(clientMsgNo)
     }
 
-    private fun showLinkInfo(
-        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
-        msgTimeStatusView: View,
-        parentView: LinearLayout,
-        from: WKChatIteMsgFromType,
-        url: String
-    ) {
-        uiChatMsgItemEntity.isUpdateStatus = false
-        val linkView = LayoutInflater.from(context)
-            .inflate(R.layout.chat_text_link_desc_layout, parentView, false)
-        val msgTimeView = linkView.findViewById<View>(R.id.msgTimeView)
-        setMsgTimeAndStatus(uiChatMsgItemEntity, msgTimeView, from)
-        val titleTv = linkView.findViewById<TextView>(R.id.linkTitleTv)
-        val nameTv = linkView.findViewById<TextView>(R.id.linkNameTv)
-        val contentTv = linkView.findViewById<TextView>(R.id.linkContentTv)
-        val logoIv = linkView.findViewById<AppCompatImageView>(R.id.linkLogoIv)
-        val coverIv = linkView.findViewById<AppCompatImageView>(R.id.linkCoverIv)
-        if (from == WKChatIteMsgFromType.SEND) {
-            contentTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
-            nameTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
-            titleTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
-        } else {
-            contentTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
-            nameTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
-            titleTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
-        }
-        val jsonStr = WKSharedPreferencesUtil.getInstance().getSP(url)
-        var jsonObject: JSONObject? = null
-        try {
-            if (!TextUtils.isEmpty(jsonStr)) jsonObject = JSONObject(jsonStr)
-        } catch (e: JSONException) {
-            e.printStackTrace()
-        }
-        if (jsonObject == null) {
-            parentView.visibility = View.GONE
-            msgTimeStatusView.visibility = View.VISIBLE
-        } else {
-            val title = jsonObject.optString("title")
-            val content = jsonObject.optString("content")
-            val coverURL = jsonObject.optString("coverURL")
-            val logo = jsonObject.optString("logo")
-            if (!TextUtils.isEmpty(title) && !TextUtils.isEmpty(content)) {
-                titleTv.text = title
-                contentTv.text = content
-                Glide.with(context).asBitmap().load(logo)
-                    .into(object : CustomTarget<Bitmap?>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
-                        override fun onResourceReady(
-                            resource: Bitmap, transition: Transition<in Bitmap?>?
-                        ) {
-                            logoIv.visibility = View.VISIBLE
-                            logoIv.setImageBitmap(resource)
-                        }
-
-                        override fun onLoadCleared(placeholder: Drawable?) {}
-                        override fun onLoadFailed(errorDrawable: Drawable?) {
-                            super.onLoadFailed(errorDrawable)
-                            logoIv.visibility = View.GONE
-                        }
-                    })
-                // GlideUtils.getInstance().showImg(getContext(), logo, logoIv);
-                if (!TextUtils.isEmpty(coverURL)) {
-                    // GlideUtils.getInstance().showImg(getContext(), coverURL.replaceAll(" ", ""), coverIv);
-                    Glide.with(context).asBitmap().load(coverURL.replace(" ".toRegex(), ""))
-                        .into(object : CustomTarget<Bitmap?>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
-                            override fun onResourceReady(
-                                resource: Bitmap, transition: Transition<in Bitmap?>?
-                            ) {
-                                coverIv.visibility = View.VISIBLE
-                                coverIv.setImageBitmap(resource)
-                            }
-
-                            override fun onLoadCleared(placeholder: Drawable?) {
-
-                            }
-
-                            override fun onLoadFailed(errorDrawable: Drawable?) {
-                                super.onLoadFailed(errorDrawable)
-                                coverIv.visibility = View.GONE
-                            }
-
-                        })
-                } else coverIv.visibility = View.GONE
-                val strings = url.split("\\.").toTypedArray()
-                if (strings.size > 1) {
-                    val stringBuffer = StringBuffer()
-                    for (i in 1 until strings.size) {
-                        if (!TextUtils.isEmpty(stringBuffer)) stringBuffer.append(".")
-                        stringBuffer.append(strings[i])
-                    }
-                    nameTv.text = stringBuffer
-                }
-                parentView.removeAllViews()
-                parentView.addView(linkView)
-                parentView.visibility = View.VISIBLE
-                msgTimeStatusView.visibility = View.GONE
-            } else {
-                parentView.visibility = View.GONE
-                msgTimeStatusView.visibility = View.VISIBLE
-            }
-        }
-    }
+//    private fun showLinkInfo(
+//        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+//        msgTimeStatusView: View,
+//        parentView: LinearLayout,
+//        from: WKChatIteMsgFromType,
+//        url: String
+//    ) {
+//        uiChatMsgItemEntity.isUpdateStatus = false
+//        val linkView = LayoutInflater.from(context)
+//            .inflate(R.layout.chat_text_link_desc_layout, parentView, false)
+//        val msgTimeView = linkView.findViewById<View>(R.id.msgTimeView)
+//        setMsgTimeAndStatus(uiChatMsgItemEntity, msgTimeView, from)
+//        val titleTv = linkView.findViewById<TextView>(R.id.linkTitleTv)
+//        val nameTv = linkView.findViewById<TextView>(R.id.linkNameTv)
+//        val contentTv = linkView.findViewById<TextView>(R.id.linkContentTv)
+//        val logoIv = linkView.findViewById<AppCompatImageView>(R.id.linkLogoIv)
+//        val coverIv = linkView.findViewById<AppCompatImageView>(R.id.linkCoverIv)
+//        if (from == WKChatIteMsgFromType.SEND) {
+//            contentTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
+//            nameTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
+//            titleTv.setTextColor(ContextCompat.getColor(context, R.color.send_text_color))
+//        } else {
+//            contentTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
+//            nameTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
+//            titleTv.setTextColor(ContextCompat.getColor(context, R.color.receive_text_color))
+//        }
+//        val jsonStr = WKSharedPreferencesUtil.getInstance().getSP(url)
+//        var jsonObject: JSONObject? = null
+//        try {
+//            if (!TextUtils.isEmpty(jsonStr)) jsonObject = JSONObject(jsonStr)
+//        } catch (e: JSONException) {
+//            e.printStackTrace()
+//        }
+//        if (jsonObject == null) {
+//            parentView.visibility = View.GONE
+//            msgTimeStatusView.visibility = View.VISIBLE
+//        } else {
+//            val title = jsonObject.optString("title")
+//            val content = jsonObject.optString("content")
+//            val coverURL = jsonObject.optString("coverURL")
+//            val logo = jsonObject.optString("logo")
+//            if (!TextUtils.isEmpty(title) && !TextUtils.isEmpty(content)) {
+//                titleTv.text = title
+//                contentTv.text = content
+//                Glide.with(context).asBitmap().load(logo)
+//                    .into(object : CustomTarget<Bitmap?>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
+//                        override fun onResourceReady(
+//                            resource: Bitmap, transition: Transition<in Bitmap?>?
+//                        ) {
+//                            logoIv.visibility = View.VISIBLE
+//                            logoIv.setImageBitmap(resource)
+//                        }
+//
+//                        override fun onLoadCleared(placeholder: Drawable?) {}
+//                        override fun onLoadFailed(errorDrawable: Drawable?) {
+//                            super.onLoadFailed(errorDrawable)
+//                            logoIv.visibility = View.GONE
+//                        }
+//                    })
+//                // GlideUtils.getInstance().showImg(getContext(), logo, logoIv);
+//                if (!TextUtils.isEmpty(coverURL)) {
+//                    // GlideUtils.getInstance().showImg(getContext(), coverURL.replaceAll(" ", ""), coverIv);
+//                    Glide.with(context).asBitmap().load(coverURL.replace(" ".toRegex(), ""))
+//                        .into(object : CustomTarget<Bitmap?>(SIZE_ORIGINAL, SIZE_ORIGINAL) {
+//                            override fun onResourceReady(
+//                                resource: Bitmap, transition: Transition<in Bitmap?>?
+//                            ) {
+//                                coverIv.visibility = View.VISIBLE
+//                                coverIv.setImageBitmap(resource)
+//                            }
+//
+//                            override fun onLoadCleared(placeholder: Drawable?) {
+//
+//                            }
+//
+//                            override fun onLoadFailed(errorDrawable: Drawable?) {
+//                                super.onLoadFailed(errorDrawable)
+//                                coverIv.visibility = View.GONE
+//                            }
+//
+//                        })
+//                } else coverIv.visibility = View.GONE
+//                val strings = url.split("\\.").toTypedArray()
+//                if (strings.size > 1) {
+//                    val stringBuffer = StringBuffer()
+//                    for (i in 1 until strings.size) {
+//                        if (!TextUtils.isEmpty(stringBuffer)) stringBuffer.append(".")
+//                        stringBuffer.append(strings[i])
+//                    }
+//                    nameTv.text = stringBuffer
+//                }
+//                parentView.removeAllViews()
+//                parentView.addView(linkView)
+//                parentView.visibility = View.VISIBLE
+//                msgTimeStatusView.visibility = View.GONE
+//            } else {
+//                parentView.visibility = View.GONE
+//                msgTimeStatusView.visibility = View.VISIBLE
+//            }
+//        }
+//    }
 
     override fun resetCellListener(
         position: Int,
@@ -730,11 +722,11 @@ open class WKTextProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
-        val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
-        if (linkView != null && linkView.childCount > 0) {
-            val msgTimeView = linkView.getChildAt(0)
-            setMsgTimeAndStatus(uiChatMsgItemEntity, msgTimeView, from)
-        }
+//        val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
+//        if (linkView != null && linkView.childCount > 0) {
+//            val msgTimeView = linkView.getChildAt(0)
+//            setMsgTimeAndStatus(uiChatMsgItemEntity, msgTimeView, from)
+//        }
     }
 
     override fun resetCellBackground(
@@ -779,186 +771,306 @@ open class WKTextProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         super.refreshReply(adapterPosition, parentView, uiChatMsgItemEntity, from)
-
-        setReplyInfo(adapterPosition, parentView, uiChatMsgItemEntity, from)
+        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        val replyContentRevokedTv = parentView.findViewWithTag<View>("replyRevokedTv")
+        val replyContentLayout = parentView.findViewWithTag<View>("replyContentLayout")
+        if (replyContentRevokedTv == null || replyContentLayout == null)
+            return
+        if (textModel.reply != null) {
+            if (uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply.revoke == 1) {
+                replyContentRevokedTv.visibility = View.VISIBLE
+                replyContentLayout.visibility = View.GONE
+            } else {
+                val replyIV = parentView.findViewWithTag<AppCompatImageView>("replyIV")
+                val replyTV = parentView.findViewWithTag<AppCompatTextView>("replyTV")
+                if (replyIV != null && replyTV != null) {
+                    showReplyContent(textModel, replyIV, replyTV)
+                }
+            }
+        }
     }
 
-    private fun setReplyInfo(
-        adapterPosition: Int,
-        parentView: View,
-        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
-        from: WKChatIteMsgFromType
+    private fun replyView(
+        contentLayout: BubbleLayout,
+        from: WKChatIteMsgFromType,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity
     ) {
-        val mTextContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
-        val replyIv = parentView.findViewById<ImageView>(R.id.replyIv)
-        val replyLayout = parentView.findViewById<View>(R.id.replyLayout)
-        val replyContentLayout = parentView.findViewById<View>(R.id.replyContentLayout)
-        val replyTv = parentView.findViewById<TextView>(R.id.replyTv)
-        val replyContentRevokedTv = parentView.findViewById<TextView>(R.id.replyContentRevokedTv)
-        val replyNameTv = parentView.findViewById<TextView>(R.id.replyNameTv)
-        val replyAvatarIv = parentView.findViewById<AvatarView>(R.id.replyAvatarIv)
-        replyAvatarIv.setSize(20f)
-        val textColor: Int
-        if (from == WKChatIteMsgFromType.SEND) {
-            textColor = ContextCompat.getColor(context, R.color.colorDark)
+        val replyLayout = LinearLayout(context)
+        replyLayout.orientation = LinearLayout.HORIZONTAL
+        replyLayout.setBackgroundResource(R.drawable.reply_bg)
+        contentLayout.addView(
+            replyLayout, 1,
+            LayoutHelper.createLinear(
+                LayoutHelper.WRAP_CONTENT,
+                LayoutHelper.WRAP_CONTENT,
+                0f,
+                5f,
+                0f,
+                10f
+            )
+        )
+        val lineView = View(context)
+        lineView.setBackgroundResource(R.drawable.reply_line)
+        replyLayout.addView(
+            lineView,
+            LayoutHelper.createLinear(3, LayoutHelper.MATCH_PARENT, 0f, 0f, 5f, 0f)
+        )
+
+        // revoke
+        val replyContentRevokedTv = AppCompatTextView(context)
+        replyLayout.addView(
+            replyContentRevokedTv,
+            LayoutHelper.createLinear(
+                LayoutHelper.WRAP_CONTENT,
+                LayoutHelper.WRAP_CONTENT,
+                0f,
+                10f,
+                10f,
+                10f
+            )
+        )
+        replyContentRevokedTv.setTextColor(ContextCompat.getColor(context, R.color.popupTextColor))
+        replyContentRevokedTv.setText(R.string.reply_msg_is_revoked)
+        val size = context.resources.getDimension(R.dimen.font_size_14)
+        val pSize = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_PX,
+            size,
+            contentLayout.resources.displayMetrics
+        )
+        replyContentRevokedTv.setTextSize(TypedValue.COMPLEX_UNIT_PX, pSize)
+        // reply content layout
+        val replyContentLayout = LinearLayout(context)
+        replyContentLayout.orientation = LinearLayout.VERTICAL
+        replyLayout.addView(
+            replyContentLayout,
+            LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT,
+                LayoutHelper.WRAP_CONTENT,
+                0f,
+                5f,
+                5f,
+                5f
+            )
+        )
+
+        val userLayout = LinearLayout(context)
+        replyContentLayout.addView(
+            userLayout,
+            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT)
+        )
+        userLayout.orientation = LinearLayout.HORIZONTAL
+        val avatarView = AvatarView(context)
+        avatarView.setSize(20f)
+        val userNameTv = AppCompatTextView(context)
+        val nameSize = context.resources.getDimension(R.dimen.font_size_12)
+        val namePSize = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_PX,
+            nameSize,
+            contentLayout.resources.displayMetrics
+        )
+        userNameTv.setTextSize(TypedValue.COMPLEX_UNIT_PX, namePSize)
+        userNameTv.setTextColor(ContextCompat.getColor(context, R.color.color999))
+        userLayout.addView(
+            avatarView,
+            LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT)
+        )
+        userLayout.addView(
+            userNameTv,
+            LayoutHelper.createLinear(
+                LayoutHelper.WRAP_CONTENT,
+                LayoutHelper.WRAP_CONTENT,
+                5f,
+                0f,
+                0f,
+                0f
+            )
+        )
+        val replyTV = AppCompatTextView(context)
+        replyTV.ellipsize = TextUtils.TruncateAt.END
+        replyTV.isSingleLine = true
+        replyTV.setLines(1)
+        replyContentLayout.addView(
+            replyTV,
+            LayoutHelper.createLinear(
+                LayoutHelper.WRAP_CONTENT,
+                LayoutHelper.WRAP_CONTENT,
+                0f,
+                10f,
+                0f,
+                0f
+            )
+        )
+        replyTV.setTextSize(TypedValue.COMPLEX_UNIT_PX, pSize)
+        val textColor: Int = if (from == WKChatIteMsgFromType.SEND) {
+            ContextCompat.getColor(context, R.color.colorDark)
         } else {
-            textColor = ContextCompat.getColor(context, R.color.receive_text_color)
+            ContextCompat.getColor(context, R.color.receive_text_color)
         }
-        //设置回复内容
-        replyLayout.visibility =
-            if (mTextContent.reply == null || mTextContent.reply.payload == null) View.GONE else View.VISIBLE
-        if (mTextContent.reply == null || mTextContent.reply.payload == null) {
-            return
+        replyTV.setTextColor(textColor)
+
+        val replyIV = AppCompatImageView(context)
+        replyIV.scaleType = ImageView.ScaleType.CENTER
+        replyContentLayout.addView(replyIV, LayoutHelper.createLinear(80, 80, 0f, 10f, 0f, 0f))
+
+        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        val mChannel = WKIM.getInstance().channelManager.getChannel(
+            textModel.reply.from_uid, WKChannelType.PERSONAL
+        )
+        if (mChannel != null) {
+            val showName =
+                if (TextUtils.isEmpty(mChannel.channelRemark)) {
+                    mChannel.channelName
+                } else mChannel.channelRemark
+            userNameTv.text = showName
+            avatarView.showAvatar(mChannel)
         }
-        replyTv.setTextColor(textColor)
         if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {
             val colors =
                 WKBaseApplication.getInstance().context.resources.getIntArray(R.array.name_colors)
-            val index = abs(mTextContent.reply.from_uid.hashCode()) % colors.size
-            val replyLine = parentView.findViewById<View>(R.id.replyLine)
-            val myShapeDrawable = replyLine.background as GradientDrawable
+            val index = abs(textModel.reply.from_uid.hashCode()) % colors.size
+            val myShapeDrawable = lineView.background as GradientDrawable
             myShapeDrawable.setColor(colors[index])
-            replyNameTv.setTextColor(colors[index])
+            userNameTv.setTextColor(colors[index])
             val bgColor = ColorUtils.setAlphaComponent(colors[index], 30)
             val bgShapeDrawable = replyLayout.background as GradientDrawable
             bgShapeDrawable.setColor(bgColor)
         }
-        if (mTextContent.reply.revoke == 1) {
+        if (textModel.reply.revoke == 1) {
             replyContentLayout.visibility = View.GONE
             replyContentRevokedTv.visibility = View.VISIBLE
-        } else {
-            replyContentLayout.visibility = View.VISIBLE
-            replyContentRevokedTv.visibility = View.GONE
-            replyAvatarIv.showAvatar(mTextContent.reply.from_uid, WKChannelType.PERSONAL)
-            val mChannel = WKIM.getInstance().channelManager.getChannel(
-                mTextContent.reply.from_uid, WKChannelType.PERSONAL
+            return
+        }
+        replyContentRevokedTv.visibility = View.GONE
+        showReplyContent(textModel, replyIV, replyTV)
+        replyLayout.setOnClickListener {
+            shotTipsMsg(
+                textModel
             )
-            if (mChannel != null) {
-                replyNameTv.text = mChannel.channelName
-            } else {
-                replyNameTv.text = mTextContent.reply.from_name
-                WKIM.getInstance().channelManager.fetchChannelInfo(
-                    mTextContent.reply.from_uid, WKChannelType.PERSONAL
-                )
-            }
-            when (mTextContent.reply.payload.type) {
-                WKContentType.WK_GIF -> {
-                    replyIv.visibility = View.VISIBLE
-                    replyTv.visibility = View.GONE
-                    val gifContent = mTextContent.reply.payload as WKGifContent
-                    GlideUtils.getInstance()
-                        .showGif(
-                            context,
-                            WKApiConfig.getShowUrl(gifContent.url),
-                            replyIv,
-                            null
-                        )
-                }
+        }
+        replyTV.setOnClickListener {
+            shotTipsMsg(
+                textModel
+            )
+        }
 
-                WKContentType.WK_IMAGE -> {
-                    replyIv.visibility = View.VISIBLE
-                    replyTv.visibility = View.GONE
-                    val imageContent = mTextContent.reply.payload as WKImageContent
-                    var showUrl: String
-                    if (!TextUtils.isEmpty(imageContent.localPath)) {
-                        showUrl = imageContent.localPath
-                        val file = File(showUrl)
-                        if (!file.exists()) {
-                            //如果本地文件被删除就显示网络图片
-                            showUrl = WKApiConfig.getShowUrl(imageContent.url)
-                        }
-                    } else {
+        replyContentRevokedTv.tag = "replyRevokedTv"
+        replyIV.tag = "replyIV"
+        replyTV.tag = "replyTV"
+        replyContentLayout.tag = "replyContentLayout"
+    }
+
+    private fun showReplyContent(
+        mTextContent: WKTextContent,
+        replyIv: AppCompatImageView,
+        replyTv: AppCompatTextView
+    ) {
+        when (mTextContent.reply.payload.type) {
+            WKContentType.WK_GIF -> {
+                replyIv.visibility = View.VISIBLE
+                replyTv.visibility = View.GONE
+                val gifContent = mTextContent.reply.payload as WKGifContent
+                GlideUtils.getInstance()
+                    .showGif(
+                        context,
+                        WKApiConfig.getShowUrl(gifContent.url),
+                        replyIv,
+                        null
+                    )
+            }
+
+            WKContentType.WK_IMAGE -> {
+                replyIv.visibility = View.VISIBLE
+                replyTv.visibility = View.GONE
+                val imageContent = mTextContent.reply.payload as WKImageContent
+                var showUrl: String
+                if (!TextUtils.isEmpty(imageContent.localPath)) {
+                    showUrl = imageContent.localPath
+                    val file = File(showUrl)
+                    if (!file.exists()) {
+                        //如果本地文件被删除就显示网络图片
                         showUrl = WKApiConfig.getShowUrl(imageContent.url)
                     }
-                    GlideUtils.getInstance().showImg(context, showUrl, replyIv)
+                } else {
+                    showUrl = WKApiConfig.getShowUrl(imageContent.url)
                 }
+                GlideUtils.getInstance().showImg(context, showUrl, replyIv)
+            }
 
-                else -> {
-                    replyIv.visibility = View.GONE
-                    replyTv.visibility = View.VISIBLE
-                    var content = mTextContent.reply.payload.getDisplayContent()
-                    if (mTextContent.reply.contentEditMsgModel != null && !TextUtils.isEmpty(
-                            mTextContent.reply.contentEditMsgModel.getDisplayContent()
-                        )
-                    ) {
-                        content = mTextContent.reply.contentEditMsgModel.getDisplayContent()
-                    }
-                    replyTv.movementMethod = LinkMovementMethod.getInstance()
-                    val strUrls = StringUtils.getStrUrls(content)
-                    val replySpan = SpannableStringBuilder()
-                    replySpan.append(content)
-                    if (strUrls.size > 0) {
-                        for (url in strUrls) {
-                            var fromIndex = 0
-                            while (fromIndex >= 0) {
-                                fromIndex = content.indexOf(url, fromIndex)
-                                if (fromIndex >= 0) {
-                                    replySpan.setSpan(
-                                        StyleSpan(Typeface.BOLD),
-                                        fromIndex,
-                                        fromIndex + url.length,
-                                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                                    )
-                                    replySpan.setSpan(
-                                        NormalClickableSpan(true,
-                                            ContextCompat.getColor(context, R.color.blue),
-                                            NormalClickableContent(
-                                                NormalClickableContent.NormalClickableTypes.URL,
-                                                url
-                                            ),
-                                            object : NormalClickableSpan.IClick {
-                                                override fun onClick(view: View) {
-                                                    SoftKeyboardUtils.getInstance()
-                                                        .hideSoftKeyboard(context as Activity)
-                                                    val intent = Intent(
-                                                        context, WKWebViewActivity::class.java
-                                                    )
-                                                    intent.putExtra("url", url)
-                                                    context.startActivity(intent)
-                                                }
-                                            }),
-                                        fromIndex,
-                                        fromIndex + url.length,
-                                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                                    )
-                                    fromIndex += url.length
-                                }
+            else -> {
+                replyIv.visibility = View.GONE
+                replyTv.visibility = View.VISIBLE
+                var content = mTextContent.reply.payload.getDisplayContent()
+                if (mTextContent.reply.contentEditMsgModel != null && !TextUtils.isEmpty(
+                        mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                    )
+                ) {
+                    content = mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                }
+                replyTv.movementMethod = LinkMovementMethod.getInstance()
+                val strUrls = StringUtils.getStrUrls(content)
+                val replySpan = SpannableStringBuilder()
+                replySpan.append(content)
+                if (strUrls.size > 0) {
+                    for (url in strUrls) {
+                        var fromIndex = 0
+                        while (fromIndex >= 0) {
+                            fromIndex = content.indexOf(url, fromIndex)
+                            if (fromIndex >= 0) {
+                                replySpan.setSpan(
+                                    StyleSpan(Typeface.BOLD),
+                                    fromIndex,
+                                    fromIndex + url.length,
+                                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                )
+                                replySpan.setSpan(
+                                    NormalClickableSpan(true,
+                                        ContextCompat.getColor(context, R.color.blue),
+                                        NormalClickableContent(
+                                            NormalClickableContent.NormalClickableTypes.URL,
+                                            url
+                                        ),
+                                        object : NormalClickableSpan.IClick {
+                                            override fun onClick(view: View) {
+                                                SoftKeyboardUtils.getInstance()
+                                                    .hideSoftKeyboard(context as Activity)
+                                                val intent = Intent(
+                                                    context, WKWebViewActivity::class.java
+                                                )
+                                                intent.putExtra("url", url)
+                                                context.startActivity(intent)
+                                            }
+                                        }),
+                                    fromIndex,
+                                    fromIndex + url.length,
+                                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                )
+                                fromIndex += url.length
                             }
                         }
                     }
-
-                    // emoji
-                    val matcher = EmojiManager.getInstance().pattern.matcher(content)
-                    while (matcher.find()) {
-                        val start = matcher.start()
-                        val end = matcher.end()
-                        val emoji = content.substring(start, end)
-                        val d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.SMALL_SCALE)
-                        if (d != null) {
-                            val span: AlignImageSpan =
-                                object : AlignImageSpan(d, ALIGN_CENTER) {
-                                    override fun onClick(view: View) {}
-                                }
-                            replySpan.setSpan(
-                                span,
-                                start,
-                                end,
-                                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                            )
-                        }
-                    }
-                    replyTv.text = replySpan
                 }
-            }
-            replyLayout.setOnClickListener {
-                shotTipsMsg(
-                    mTextContent
-                )
-            }
-            replyTv.setOnClickListener {
-                shotTipsMsg(
-                    mTextContent
-                )
+
+                // emoji
+                val matcher = EmojiManager.getInstance().pattern.matcher(content)
+                while (matcher.find()) {
+                    val start = matcher.start()
+                    val end = matcher.end()
+                    val emoji = content.substring(start, end)
+                    val d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.SMALL_SCALE)
+                    if (d != null) {
+                        val span: AlignImageSpan =
+                            object : AlignImageSpan(d, ALIGN_CENTER) {
+                                override fun onClick(view: View) {}
+                            }
+                        replySpan.setSpan(
+                            span,
+                            start,
+                            end,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                }
+                replyTv.text = replySpan
             }
         }
     }

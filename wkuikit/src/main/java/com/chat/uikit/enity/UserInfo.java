@@ -32,4 +32,7 @@ public class UserInfo {
     public int be_blacklist;
     public String updated_at;
     public String created_at;
+    public String join_group_invite_uid;
+    public String join_group_invite_name;
+    public String join_group_time;
 }

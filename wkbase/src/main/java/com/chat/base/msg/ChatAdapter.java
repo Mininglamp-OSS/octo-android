@@ -58,6 +58,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         super.onViewAttachedToWindow(holder);
         FullSpanUtil.onViewAttachedToWindow(holder, this, WKContentType.msgPromptTime);
     }
+
     private final AdapterType adapterType;
 
     ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getItemProviderList() {
@@ -79,18 +80,15 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         if (list.get(i).wkMsg.remoteExtra != null && list.get(i).wkMsg.remoteExtra.revoke == 1) {
             //撤回消息
             return WKContentType.revoke;
-        } else {
-            if (getItemProviderList().containsKey(list.get(i).wkMsg.type))
-                return list.get(i).wkMsg.type;
-            else {
-                if (list.get(i).wkMsg.type >= 1000 && list.get(i).wkMsg.type <= 2000) {
-                    //系统消息
-                    return WKContentType.systemMsg;
-                } else {
-                    return WKContentType.unknown_msg;
-                }
-            }
         }
+        if (getItemProviderList().containsKey(list.get(i).wkMsg.type)) {
+            return list.get(i).wkMsg.type;
+        }
+        if (list.get(i).wkMsg.type >= 1000 && list.get(i).wkMsg.type <= 2000) {
+            //系统消息
+            return WKContentType.systemMsg;
+        }
+        return WKContentType.unknown_msg;
     }
 
     public long getLastTimeMsg() {
@@ -391,7 +389,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             }
 
             if (refreshType == RefreshType.reply) {
-                baseItemProvider.refreshReply(position,baseView,entity,from);
+                baseItemProvider.refreshReply(position, baseView, entity, from);
             }
 
         }
@@ -411,7 +409,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 list.get(i).wkMsg.baseContentMsgModel.reply.contentEdit = wkMsg.remoteExtra.contentEdit;
                 list.get(i).wkMsg.baseContentMsgModel.reply.editAt = wkMsg.remoteExtra.editedAt;
                 list.get(i).wkMsg.baseContentMsgModel.reply.revoke = wkMsg.remoteExtra.revoke;
-                notify(i,RefreshType.reply,null);
+                notify(i, RefreshType.reply, null);
             }
         }
 

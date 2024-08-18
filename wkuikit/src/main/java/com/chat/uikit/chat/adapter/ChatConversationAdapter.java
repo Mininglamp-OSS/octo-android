@@ -161,7 +161,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (msg.baseContentMsgModel != null) {
             content = msg.baseContentMsgModel.getDisplayContent();
         }
-        if (TextUtils.isEmpty(content)) {
+
+        if (TextUtils.isEmpty(content) && WKContentType.isSystemMsg(msg.type)) {
             content = getShowContent(msg.content);
         }
         if (msg.remoteExtra.contentEditMsgModel != null) {

@@ -127,7 +127,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         String fromName = "";
         if (msg != null && (WKContentType.isSystemMsg(msg.type)
                 || msg.type == WKContentType.revoke
-                || msg.remoteExtra.revoke == 1)) {
+                || msg.remoteExtra.revoke == 1 || msg.type == WKContentType.screenshot)) {
             return fromName;
         }
         if (channelType == WKChannelType.PERSONAL || msg == null || TextUtils.isEmpty(msg.fromUID) || msg.fromUID.equals(WKConfig.getInstance().getUid())) {
@@ -162,7 +162,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             content = msg.baseContentMsgModel.getDisplayContent();
         }
 
-        if (TextUtils.isEmpty(content) && WKContentType.isSystemMsg(msg.type)) {
+        if (TextUtils.isEmpty(content) || WKContentType.isSystemMsg(msg.type)) {
             content = getShowContent(msg.content);
         }
         if (msg.remoteExtra.contentEditMsgModel != null) {

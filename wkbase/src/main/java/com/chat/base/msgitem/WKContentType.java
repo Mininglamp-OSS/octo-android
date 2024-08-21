@@ -48,7 +48,7 @@ public class WKContentType extends WKMsgContentType {
     public final static int screenshot = 1014;
 
     public static boolean isSystemMsg(int type) {
-        return (type >= 1000 && type <= 2000);
+        return (type >= 1000 && type <= 2000 && type !=screenshot);
     }
 
     public static boolean isLocalMsg(int type) {

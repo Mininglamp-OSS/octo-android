@@ -125,6 +125,9 @@ class WKRevokeProvider : WKChatBaseProvider() {
                             if (member != null) showName =
                                 if (TextUtils.isEmpty(member.memberRemark)) member.memberName else member.memberRemark
                         }
+                        if (TextUtils.isEmpty(showName)){
+                            WKIM.getInstance().channelManager.fetchChannelInfo(mMsg.fromUID,WKChannelType.PERSONAL)
+                        }
                         content = String.format(
                             WKBaseApplication.getInstance().context.getString(R.string.user_revoke_msg),
                             showName

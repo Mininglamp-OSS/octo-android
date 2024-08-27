@@ -40,7 +40,6 @@ import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
-import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.NotificationCompatUtil;
 import com.chat.base.utils.WKCommonUtils;
 import com.chat.base.utils.WKDialogUtils;

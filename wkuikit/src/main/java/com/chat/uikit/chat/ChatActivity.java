@@ -113,7 +113,6 @@ import com.xinbida.wukongim.entity.WKConversationMsgExtra;
 import com.xinbida.wukongim.entity.WKMentionType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
-import com.xinbida.wukongim.entity.WKMsgSetting;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
@@ -767,7 +766,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
                 WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
                 int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
-                if (firstItemPosition ==-1) return;
+                if (firstItemPosition == -1) return;
                 if (WKReader.isNotEmpty(chatAdapter.getData())) {
                     WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
                     if (msg != null) {
@@ -947,7 +946,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 GroupModel.getInstance().groupMembersSync(channelId, (code, msg) -> {
                     if (code == HttpResponseCode.success) {
                         WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, WKConfig.getInstance().getUid());
-                        hideOrShowRightView(member != null && member.isDeleted != 1);
+                        hideOrShowRightView(member == null || member.isDeleted != 1);
                         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
                         chatPanelManager.showOrHideForbiddenView();
                     }
@@ -969,7 +968,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
 
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, WKConfig.getInstance().getUid());
-            hideOrShowRightView(member != null && member.isDeleted == 0);
+            hideOrShowRightView(member == null || member.isDeleted == 0);
             if (groupType == WKGroupType.normalGroup) {
                 wkVBinding.topLayout.subtitleTv.setText(String.format(getString(R.string.group_member), count));
             }
@@ -1500,10 +1499,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private void checkLoginUserInGroupStatus() {
         if (channelType == WKChannelType.GROUP) {
-            WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, WKConfig.getInstance().getUid());
-            if (mChannelMember != null) {
-                hideOrShowRightView(mChannelMember.isDeleted == 0);
-            }
+            WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, WKConfig.getInstance().getUid());
+            hideOrShowRightView(member == null || member.isDeleted == 0);
         }
     }
 

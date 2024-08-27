@@ -1,21 +1,16 @@
 package com.chat.base.msgitem
 
-import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.chat.base.R
-import com.chat.base.WKBaseApplication
 import com.chat.base.views.BubbleLayout
-import com.xinbida.wukongim.WKIM
-import com.xinbida.wukongim.entity.WKChannelType
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.observers.ResourceObserver
 import io.reactivex.rxjava3.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 
 class WKTypingProvider : WKChatBaseProvider() {
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {

@@ -27,11 +27,6 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
     String clientMsgNo = "";
 
     @Override
-    protected boolean isShowTitleBottomView() {
-        return false;
-    }
-
-    @Override
     protected ActCommonListLayoutWhiteBinding getViewBinding() {
         return ActCommonListLayoutWhiteBinding.inflate(getLayoutInflater());
     }
@@ -99,11 +94,6 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
         list.add(view);
         ChatMultiForwardDetailAdapter adapter = new ChatMultiForwardDetailAdapter(showDetailTime, list);
         initAdapter(wkVBinding.recyclerView, adapter);
-    }
-
-    @Override
-    protected void initView() {
-
     }
 
     @Override

@@ -222,7 +222,7 @@ class ChatMultiForwardDetailAdapter(
                         MoonUtil.identifyFaceExpression(
                             context,
                             holder.getView(R.id.contentTv),
-                            item.msg.baseContentMsgModel.getDisplayContent(),
+                            item.msg.baseContentMsgModel.displayContent,
                             MoonUtil.DEF_SCALE
                         )
                         (holder.getView<View>(R.id.contentTv) as TextView).movementMethod =

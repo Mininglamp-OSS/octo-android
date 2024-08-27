@@ -1027,7 +1027,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                                                 option.setting.receipt = mChannel.receipt
                                                 WKIM.getInstance().msgManager.sendWithOptions(
                                                     msgContent,
-                                                    mChannel,option
+                                                    mChannel, option
                                                 )
                                             }
                                             val viewGroup =

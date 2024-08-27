@@ -130,7 +130,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 || msg.remoteExtra.revoke == 1 || msg.type == WKContentType.screenshot)) {
             return fromName;
         }
-        if (channelType == WKChannelType.PERSONAL || msg == null || TextUtils.isEmpty(msg.fromUID) || msg.fromUID.equals(WKConfig.getInstance().getUid())) {
+        if (channelType == WKChannelType.PERSONAL || channelType == WKChannelType.CUSTOMER_SERVICE || msg == null || TextUtils.isEmpty(msg.fromUID) || msg.fromUID.equals(WKConfig.getInstance().getUid())) {
             return fromName;
         }
         String channelName = "";

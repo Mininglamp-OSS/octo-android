@@ -663,12 +663,12 @@ public class WKIMUtils {
         }
 //        Activity activity = ActManagerUtils.getInstance().getCurrentActivity();
 //        if (activity == null || activity.getComponentName().getClassName().equals(TabActivity.class.getName())) {
-            if (playNewMsgMedia) {
-                defaultMediaPlayer();
-            }
-            if (isVibrate) {
-                vibrate();
-            }
+        if (playNewMsgMedia) {
+            defaultMediaPlayer();
+        }
+        if (isVibrate) {
+            vibrate();
+        }
 //            return;
 //        }
         String showTitle = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
@@ -686,7 +686,7 @@ public class WKIMUtils {
 //        if (isVibrate) {
 //            PushNotificationHelper.INSTANCE.notifyMention(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
 //        } else {
-            PushNotificationHelper.INSTANCE.notifyMessage(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
+        PushNotificationHelper.INSTANCE.notifyMessage(WKUIKitApplication.getInstance().getContext(), 1, showTitle, showContent);
 //        }
 //        showNotice(showTitle, finalShowContent, null, isVibrate);
 //        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));

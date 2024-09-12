@@ -72,9 +72,6 @@ dependencies {
     //刷新
     api 'io.github.scwang90:refresh-layout-kernel:2.0.6'      //核心必须依赖
     api 'io.github.scwang90:refresh-header-classics:2.0.6'    //经典刷新头
-//    api 'com.scwang.smart:refresh-layout-kernel:2.0.1'
-//    //没有使用特殊Header，可以不加这行
-//    api 'com.scwang.smart:refresh-header-classics:2.0.1'
     api 'com.github.ybq:Android-SpinKit:1.4.0'
     api 'com.squareup.retrofit2:retrofit:2.11.0'
     implementation('com.squareup.retrofit2:converter-gson:2.11.0') {

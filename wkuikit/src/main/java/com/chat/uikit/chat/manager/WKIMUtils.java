@@ -1,15 +1,8 @@
 package com.chat.uikit.chat.manager;
 
-import android.app.Activity;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.drawable.Drawable;
 import android.media.AudioAttributes;
 import android.os.Build;
 import android.os.Handler;
@@ -18,17 +11,9 @@ import android.os.Parcelable;
 import android.os.Vibrator;
 import android.text.TextUtils;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.app.NotificationCompat;
-
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.request.target.CustomTarget;
-import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKConfig;
-import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.ApplyDB;
 import com.chat.base.endpoint.EndpointManager;
@@ -49,7 +34,6 @@ import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.views.pwdview.NumPwdDialog;
 import com.chat.uikit.R;
-import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.ChatActivity;
 import com.chat.uikit.contacts.service.FriendModel;
@@ -626,35 +610,6 @@ public class WKIMUtils {
 
     }
 
-    private void getChannelLogo(String url, Activity activity, final IGetChannelLogo iGetChannelLogo) {
-        Glide.with(activity)
-                .asBitmap()
-                .override(200, 200)
-                .load(url)
-                .into(new CustomTarget<Bitmap>() {
-
-                    @Override
-                    public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
-                        iGetChannelLogo.onSuccess(resource);
-                    }
-
-                    @Override
-                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
-                        iGetChannelLogo.onSuccess(null);
-                    }
-
-                    @Override
-                    public void onLoadCleared(@Nullable Drawable placeholder) {
-
-                    }
-
-                });
-    }
-
-    interface IGetChannelLogo {
-        // 获取成功
-        void onSuccess(Bitmap logo);
-    }
 
     private void showNotification(WKMsg msg, int msgShowDetail, WKChannel channel, boolean playNewMsgMedia, boolean isVibrate) {
         int msgNotice = WKConfig.getInstance().getUserInfo().setting.new_msg_notice;
@@ -692,131 +647,6 @@ public class WKIMUtils {
 //        getChannelLogo(url, activity, logo -> showNotice(showTitle, finalShowContent, logo, isVibrate));
     }
 
-    private void showNotice(String showTitle, String showContent, Bitmap logo, boolean isVibrate) {
-        //1.获取消息服务
-        NotificationManager manager = (NotificationManager) WKUIKitApplication.getInstance().getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        //默认通道是default
-        String channelId = WKConstants.newMsgChannelID;
-//        String channelId = "default";
-        //2.如果是android8.0以上的系统，则新建一个消息通道
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//            channelId = WKConstants.newMsgChannelID;
-//        /*
-//         通道优先级别：
-//         * IMPORTANCE_NONE 关闭通知
-//         * IMPORTANCE_MIN 开启通知，不会弹出，但没有提示音，状态栏中无显示
-//         * IMPORTANCE_LOW 开启通知，不会弹出，不发出提示音，状态栏中显示
-//         * IMPORTANCE_DEFAULT 开启通知，不会弹出，发出提示音，状态栏中显示
-//         * IMPORTANCE_HIGH 开启通知，会弹出，发出提示音，状态栏中显示
-//         */
-//            NotificationChannel channel = new NotificationChannel(channelId, "消息提醒", NotificationManager.IMPORTANCE_HIGH);
-//            //设置该通道的描述（可以不写）
-//            channel.setDescription("重要消息，请不要关闭这个通知。");
-//            //是否绕过勿打扰模式
-//            channel.setBypassDnd(true);
-//            //是否允许呼吸灯闪烁
-//            channel.enableLights(true);
-//            //闪关灯的灯光颜色
-//            channel.setLightColor(Color.RED);
-//            //桌面launcher的消息角标
-//            channel.canShowBadge();
-//            //设置是否应在锁定屏幕上显示此频道的通知
-//            channel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
-//            if (isVibrate) {
-//                //是否允许震动
-//                channel.enableVibration(true);
-//                //先震动1秒，然后停止0.5秒，再震动2秒则可设置数组为：new long[]{1000, 500, 2000}
-//                channel.setVibrationPattern(new long[]{1000, 500, 2000});
-//            } else {
-//                channel.enableVibration(false);
-//                channel.setVibrationPattern(new long[]{0});
-//            }
-//            //创建消息通道
-//            manager.createNotificationChannel(channel);
-//        }
-        //3.实例化通知
-        NotificationCompat.Builder nc = new NotificationCompat.Builder(WKUIKitApplication.getInstance().getContext(), channelId);
-        //通知默认的声音 震动 呼吸灯
-//        nc.setDefaults(NotificationCompat.DEFAULT_ALL);
-        //通知标题
-        nc.setContentTitle(showTitle);
-        //通知内容
-        nc.setContentText(showContent);
-        //设置通知的小图标
-        nc.setSmallIcon(R.mipmap.ic_logo);
-        //设置通知的大图标
-        if (logo != null) {
-            nc.setLargeIcon(logo);
-        }
-//        nc.setLargeIcon(BitmapFactory.decodeResource(WKUIKitApplication.getInstance().getContext().getResources(), R.mipmap.icon_approve));
-        //设定通知显示的时间
-        nc.setWhen(System.currentTimeMillis());
-        //设置通知的优先级
-        nc.setPriority(NotificationCompat.PRIORITY_MAX);
-        //设置点击通知之后通知是否消失
-        nc.setAutoCancel(true);
-        //点击通知打开软件
-        Context application = WKUIKitApplication.getInstance().getContext();
-        Intent resultIntent = new Intent(application, TabActivity.class);
-        resultIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-        resultIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_IMMUTABLE);
-        } else {
-            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_MUTABLE);
-        }
-        nc.setContentIntent(pendingIntent);
-        //4.创建通知，得到build
-        Notification notification = nc.build();
-        //5.发送通知
-        manager.notify(1, notification);
-    }
-
-    private void showRTCNotice(String showTitle, String showContent) {
-        //1.获取消息服务
-        NotificationManager manager = (NotificationManager) WKUIKitApplication.getInstance().getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        //默认通道是default
-        String channelId = "application_notification";
-//        String channelId = WKConstants.newMsgChannelID;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "音视频通知", NotificationManager.IMPORTANCE_LOW);
-            manager.createNotificationChannel(channel);
-        }
-        //3.实例化通知
-        NotificationCompat.Builder nc = new NotificationCompat.Builder(WKUIKitApplication.getInstance().getContext(), channelId);
-        nc.setVibrate(new long[]{0, 500, 1000});
-        //通知默认的声音 震动 呼吸灯
-        //通知标题
-        nc.setContentTitle(showTitle);
-        //通知内容
-        nc.setContentText(showContent);
-        //设置通知的小图标
-        nc.setSmallIcon(R.mipmap.ic_logo);
-        //设置通知的大图标
-        //设定通知显示的时间
-        nc.setWhen(System.currentTimeMillis());
-        //设置通知的优先级
-        nc.setPriority(NotificationCompat.PRIORITY_DEFAULT);
-        //设置点击通知之后通知是否消失
-        nc.setAutoCancel(true);
-        //点击通知打开软件
-        Context application = WKUIKitApplication.getInstance().getContext();
-        Intent resultIntent = new Intent(application, TabActivity.class);
-        resultIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-        resultIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_IMMUTABLE);
-        } else {
-            pendingIntent = PendingIntent.getActivity(application, 0, resultIntent, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_MUTABLE);
-        }
-        nc.setContentIntent(pendingIntent);
-        //4.创建通知，得到build
-        Notification notification = nc.build();
-        //5.发送通知
-        manager.notify(2, notification);
-    }
 
     private void defaultMediaPlayer() {
         EndpointManager.getInstance().invoke("play_new_msg_Media", null);

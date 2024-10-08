@@ -601,62 +601,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         //监听频道改变通知
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo(channelId, (channel, isEnd) -> {
-            if (channel == null) return;
-            if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
-                showChannelName(channel);
-                wkVBinding.topLayout.avatarView.showAvatar(channel);
-                EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
-                //用户在线状态
-                if (channel.channelType == WKChannelType.PERSONAL) {
-                    setOnlineView(channel);
-                } else {
-                    if (channel.remoteExtraMap != null) {
-                        Object memberCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.memberCount);
-                        if (memberCountObject instanceof Integer) {
-                            int count = (int) memberCountObject;
-                            wkVBinding.topLayout.subtitleTv.setText(String.format(getString(R.string.group_member), count));
-                        }
-                        Object onlineCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.onlineCount);
-                        if (onlineCountObject instanceof Integer) {
-                            int onlineCount = (int) onlineCountObject;
-                            if (onlineCount > 0) {
-                                wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
-                                wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), onlineCount));
-                            }
-                        }
-                    }
-                }
-                EndpointManager.getInstance().invoke("set_chat_bg", new SetChatBgMenu(channelId, channelType, wkVBinding.imageView, wkVBinding.rootView, wkVBinding.blurView));
-            } else {
-                for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                    if (TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID)) continue;
-                    boolean isRefresh = false;
-                    if (chatAdapter.getData().get(i).wkMsg.fromUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
-                        chatAdapter.getData().get(i).wkMsg.setFrom(channel);
-                        isRefresh = true;
-                    }
-                    if (chatAdapter.getData().get(i).wkMsg.getMemberOfFrom() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberRemark = channel.channelRemark;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberName = channel.channelName;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatar = channel.avatar;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatarCacheKey = channel.avatarCacheKey;
-                        isRefresh = true;
-                    }
-                    if (chatAdapter.getData().get(i).wkMsg.baseContentMsgModel != null && WKReader.isNotEmpty(chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities)) {
-                        for (WKMsgEntity entity : chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities) {
-                            if (entity.type.equals(ChatContentSpanType.getMention()) && !TextUtils.isEmpty(entity.value) && entity.value.equals(channel.channelID)) {
-                                isRefresh = true;
-                                chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
-                                break;
-                            }
-                        }
-                    }
-                    if (isRefresh) {
-                        chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
-                        chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
-                    }
-                }
-            }
+          refreshMsgChannel(channel);
         });
 
         //监听频道成员信息改变通知
@@ -2276,6 +2221,65 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
                 if (!isShowHistory && !isCanLoadMore) {
                     scrollToEnd();
+                }
+            }
+        }
+    }
+
+    private synchronized void refreshMsgChannel(WKChannel channel){
+        if (channel == null) return;
+        if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
+            showChannelName(channel);
+            wkVBinding.topLayout.avatarView.showAvatar(channel);
+            EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
+            //用户在线状态
+            if (channel.channelType == WKChannelType.PERSONAL) {
+                setOnlineView(channel);
+            } else {
+                if (channel.remoteExtraMap != null) {
+                    Object memberCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.memberCount);
+                    if (memberCountObject instanceof Integer) {
+                        int count = (int) memberCountObject;
+                        wkVBinding.topLayout.subtitleTv.setText(String.format(getString(R.string.group_member), count));
+                    }
+                    Object onlineCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.onlineCount);
+                    if (onlineCountObject instanceof Integer) {
+                        int onlineCount = (int) onlineCountObject;
+                        if (onlineCount > 0) {
+                            wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
+                            wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), onlineCount));
+                        }
+                    }
+                }
+            }
+            EndpointManager.getInstance().invoke("set_chat_bg", new SetChatBgMenu(channelId, channelType, wkVBinding.imageView, wkVBinding.rootView, wkVBinding.blurView));
+        } else {
+            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                if (TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID)) continue;
+                boolean isRefresh = false;
+                if (chatAdapter.getData().get(i).wkMsg.fromUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
+                    chatAdapter.getData().get(i).wkMsg.setFrom(channel);
+                    isRefresh = true;
+                }
+                if (chatAdapter.getData().get(i).wkMsg.getMemberOfFrom() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
+                    chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberRemark = channel.channelRemark;
+                    chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberName = channel.channelName;
+                    chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatar = channel.avatar;
+                    chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatarCacheKey = channel.avatarCacheKey;
+                    isRefresh = true;
+                }
+                if (chatAdapter.getData().get(i).wkMsg.baseContentMsgModel != null && WKReader.isNotEmpty(chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities)) {
+                    for (WKMsgEntity entity : chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities) {
+                        if (entity.type.equals(ChatContentSpanType.getMention()) && !TextUtils.isEmpty(entity.value) && entity.value.equals(channel.channelID)) {
+                            isRefresh = true;
+                            chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
+                            break;
+                        }
+                    }
+                }
+                if (isRefresh) {
+                    chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
+                    chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
                 }
             }
         }

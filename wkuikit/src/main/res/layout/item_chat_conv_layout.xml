@@ -67,7 +67,6 @@
                         android:ellipsize="end"
                         android:fontFamily="sans-serif-medium"
                         android:lines="1"
-                        android:text="名字"
                         android:textColor="@color/colorDark"
                         android:textSize="16sp"
                         app:layout_constraintBottom_toBottomOf="parent"
@@ -114,7 +113,6 @@
                         android:layout_height="wrap_content"
                         android:layout_gravity="center_vertical"
                         android:layout_marginStart="3dp"
-                        android:text="上午12：09"
                         android:textColor="@color/color999"
                         android:textSize="13sp" />
                 </LinearLayout>
@@ -156,7 +154,7 @@
                         android:layout_gravity="center_vertical"
                         android:ellipsize="end"
                         android:lines="1"
-                        android:text="你傻乐视电视打开电视看了"
+                        android:text=""
                         android:textColor="@color/color999"
                         android:textSize="13sp" />
                 </LinearLayout>
@@ -172,7 +170,7 @@
 
                 <com.chat.base.ui.components.CounterView
                     android:id="@+id/msgCountTv"
-                    android:layout_width="35dp"
+                    android:layout_width="45dp"
                     android:layout_height="20dp"
                     android:layout_gravity="end"
                     android:layout_marginStart="5dp"

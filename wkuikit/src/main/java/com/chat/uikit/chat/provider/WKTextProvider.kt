@@ -995,16 +995,18 @@ open class WKTextProvider : WKChatBaseProvider() {
                 }
                 GlideUtils.getInstance().showImg(context, showUrl, replyIv)
             }
-
             else -> {
                 replyIv.visibility = View.GONE
                 replyTv.visibility = View.VISIBLE
-                var content = mTextContent.reply.payload.getDisplayContent()
+                var content = mTextContent.reply.payload.displayContent
                 if (mTextContent.reply.contentEditMsgModel != null && !TextUtils.isEmpty(
-                        mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                        mTextContent.reply.contentEditMsgModel.displayContent
                     )
                 ) {
-                    content = mTextContent.reply.contentEditMsgModel.getDisplayContent()
+                    content = mTextContent.reply.contentEditMsgModel.displayContent
+                }
+                if (TextUtils.isEmpty(content)){
+                    content=context.getString(R.string.base_unknow_msg)
                 }
                 replyTv.movementMethod = LinkMovementMethod.getInstance()
                 val strUrls = StringUtils.getStrUrls(content)
@@ -1012,6 +1014,9 @@ open class WKTextProvider : WKChatBaseProvider() {
                 replySpan.append(content)
                 if (strUrls.size > 0) {
                     for (url in strUrls) {
+                        if (TextUtils.isEmpty(url)) {
+                            continue
+                        }
                         var fromIndex = 0
                         while (fromIndex >= 0) {
                             fromIndex = content.indexOf(url, fromIndex)

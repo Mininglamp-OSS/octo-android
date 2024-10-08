@@ -10,19 +10,19 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.utils.HanziToPinyin;
-import com.chat.base.utils.WKReader;
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.HanziToPinyin;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
 import com.chat.login.ChooseCountryCodeAdapter;
-import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.PyUtils;
 import com.chat.login.R;
 import com.chat.login.databinding.ActChooseAreaCodeLayoutBinding;
+import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginPresenter;
 
@@ -182,7 +182,6 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
 
     @Override
     public void hideLoading() {
-
     }
 
     @Override

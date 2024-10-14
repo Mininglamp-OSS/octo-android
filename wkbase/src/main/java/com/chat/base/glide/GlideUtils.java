@@ -19,7 +19,6 @@ import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
-import com.bumptech.glide.signature.ObjectKey;
 import com.chat.base.R;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
@@ -31,13 +30,16 @@ import com.luck.picture.lib.animators.AnimationType;
 import com.luck.picture.lib.basic.PictureSelector;
 import com.luck.picture.lib.config.PictureMimeType;
 import com.luck.picture.lib.config.SelectMimeType;
+import com.luck.picture.lib.engine.CompressFileEngine;
 import com.luck.picture.lib.entity.LocalMedia;
+import com.luck.picture.lib.interfaces.OnKeyValueResultCallbackListener;
 import com.luck.picture.lib.interfaces.OnResultCallbackListener;
 import com.luck.picture.lib.style.BottomNavBarStyle;
 import com.luck.picture.lib.style.PictureSelectorStyle;
 import com.luck.picture.lib.style.PictureWindowAnimationStyle;
 import com.luck.picture.lib.style.SelectMainStyle;
 import com.luck.picture.lib.style.TitleBarStyle;
+import com.luck.picture.lib.utils.DateUtils;
 import com.luck.picture.lib.utils.DensityUtil;
 
 import java.io.File;
@@ -47,6 +49,8 @@ import java.util.List;
 
 import top.zibin.luban.Luban;
 import top.zibin.luban.OnCompressListener;
+import top.zibin.luban.OnNewCompressListener;
+import top.zibin.luban.OnRenameListener;
 
 /**
  * 2019-12-02 13:52
@@ -237,6 +241,10 @@ public class GlideUtils {
     }
 
     public void chooseIMG(Activity activity, int maxSelectNum, boolean isCamera, ChooseMimeType mimeType, boolean isWithSelectVideoImage, final ISelectBack iSelectBack) {
+        this.chooseIMG(activity, maxSelectNum, isCamera, mimeType, isWithSelectVideoImage, true, iSelectBack);
+    }
+
+    public void chooseIMG(Activity activity, int maxSelectNum, boolean isCamera, ChooseMimeType mimeType, boolean isWithSelectVideoImage, boolean isOriginalControl, final ISelectBack iSelectBack) {
         if (isCamera) WKBaseApplication.getInstance().disconnect = false;
         PictureSelectorStyle selectorStyle = new PictureSelectorStyle();
         selectorStyle.setTitleBarStyle(getTitleBarStyle());
@@ -262,11 +270,11 @@ public class GlideUtils {
 //                .DisplayOriginalSize(true)
 //                .setEditorImage(false)
                 .isDisplayCamera(isCamera)
-                .isPreviewImage(true)
+                .isPreviewImage(true).setCompressEngine(new ImageFileCompressEngine())
 //                .isZoomAnim(true)
 //                .isEnableCrop(false)
 //                .isCompress(true)
-                .isOriginalControl(true).setEditMediaInterceptListener((fragment, currentLocalMedia, requestCode) -> {
+                .isOriginalControl(isOriginalControl).setEditMediaInterceptListener((fragment, currentLocalMedia, requestCode) -> {
                     WKBaseApplication.getInstance().disconnect = true;
                     EndpointManager.getInstance().invoke("edit_img", new EditImgMenu(null, false, currentLocalMedia.getRealPath(), fragment, requestCode, (bitmap, path) -> {
 
@@ -384,4 +392,44 @@ public class GlideUtils {
     public interface ICompressListener {
         void onResult(List<File> files);
     }
+
+    private static class ImageFileCompressEngine implements CompressFileEngine {
+
+        @Override
+        public void onStartCompress(Context context, ArrayList<Uri> source, OnKeyValueResultCallbackListener call) {
+            Luban.with(context).load(source).ignoreBy(100).setRenameListener(new OnRenameListener() {
+                @Override
+                public String rename(String filePath) {
+                    int indexOf = filePath.lastIndexOf(".");
+                    String postfix = indexOf != -1 ? filePath.substring(indexOf) : ".jpg";
+                    return DateUtils.getCreateFileName("CMP_") + postfix;
+                }
+            }).filter(path -> {
+                if (PictureMimeType.isUrlHasImage(path) && !PictureMimeType.isHasHttp(path)) {
+                    return true;
+                }
+                return !PictureMimeType.isUrlHasGif(path);
+            }).setCompressListener(new OnNewCompressListener() {
+                @Override
+                public void onStart() {
+
+                }
+
+                @Override
+                public void onSuccess(String source, File compressFile) {
+                    if (call != null) {
+                        call.onCallback(source, compressFile.getAbsolutePath());
+                    }
+                }
+
+                @Override
+                public void onError(String source, Throwable e) {
+                    if (call != null) {
+                        call.onCallback(source, null);
+                    }
+                }
+            }).launch();
+        }
+    }
+
 }

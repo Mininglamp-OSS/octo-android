@@ -46,6 +46,9 @@ public class UpdateUserInfoActivity extends WKBaseActivity<ActUpdateUserInfoLayo
     protected void initPresenter() {
         updateType = getIntent().getIntExtra("updateType", 1);
         oldStr = getIntent().getStringExtra("oldStr");
+        if (!TextUtils.isEmpty(oldStr)) {
+            oldStr = oldStr.replaceAll("\n","");
+        }
     }
 
     @Override

@@ -29,6 +29,7 @@ android {
             abiFilters "armeabi-v7a", "arm64-v8a"
 //            abiFilters 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'x86'
         }
+        compileSdkPreview = "UpsideDownCake"
     }
 
     buildTypes {

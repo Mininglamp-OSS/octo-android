@@ -995,6 +995,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                 }
                 GlideUtils.getInstance().showImg(context, showUrl, replyIv)
             }
+
             else -> {
                 replyIv.visibility = View.GONE
                 replyTv.visibility = View.VISIBLE
@@ -1005,8 +1006,8 @@ open class WKTextProvider : WKChatBaseProvider() {
                 ) {
                     content = mTextContent.reply.contentEditMsgModel.displayContent
                 }
-                if (TextUtils.isEmpty(content)){
-                    content=context.getString(R.string.base_unknow_msg)
+                if (TextUtils.isEmpty(content)) {
+                    content = context.getString(R.string.base_unknow_msg)
                 }
                 replyTv.movementMethod = LinkMovementMethod.getInstance()
                 val strUrls = StringUtils.getStrUrls(content)

@@ -94,11 +94,16 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
             WKBaseApplication.getInstance().disconnect = false;
             chooseIMG();
         }));
-        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> ImageUtils.getInstance().downloadImg(this, WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid()), bitmap -> {
-            if (bitmap != null) {
-                ImageUtils.getInstance().saveBitmap(MyHeadPortraitActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
-            }
-        })));
+
+        list.add(new PopupMenuItem(getString(R.string.save_img), R.mipmap.msg_download, () -> {
+            String avatarURL = WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid());
+            avatarURL = avatarURL + "?key=" + UUID.randomUUID().toString().replaceAll("-","");
+            ImageUtils.getInstance().downloadImg(this, avatarURL, bitmap -> {
+                if (bitmap != null) {
+                    ImageUtils.getInstance().saveBitmap(MyHeadPortraitActivity.this, bitmap, true, path -> showToast(R.string.saved_album));
+                }
+            });
+        }));
         ImageView rightIV = findViewById(R.id.titleRightIv);
         WKDialogUtils.getInstance().showScreenPopup(rightIV, list);
     }
@@ -138,7 +143,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
 
     private void success() {
 
-        GlideUtils.getInstance().chooseIMG(MyHeadPortraitActivity.this, 1, true, ChooseMimeType.img, false, new GlideUtils.ISelectBack() {
+        GlideUtils.getInstance().chooseIMG(MyHeadPortraitActivity.this, 1, true, ChooseMimeType.img, false,false, new GlideUtils.ISelectBack() {
             @Override
             public void onBack(List<ChooseResult> paths) {
                 if (WKReader.isNotEmpty(paths)) {

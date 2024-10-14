@@ -453,7 +453,7 @@ public class WKIMUtils {
                 byte channelType = (byte) jsonObject.optInt("channel_type");
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 //是否撤回提醒
-                int revokeRemind = 0;
+                int revokeRemind = 1;
                 if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.revokeRemind)) {
                     Object object = channel.remoteExtraMap.get(WKChannelExtras.revokeRemind);
                     if (object != null) {

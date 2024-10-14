@@ -103,10 +103,14 @@ public class DownloadApkUtils {
             }
             //将下载请求加入下载队列，加入下载队列后会给该任务返回一个long型的id，通过该id可以取消任务，重启任务、获取下载的文件等等
             downloadId = downloadManager.enqueue(request);
-
             //注册广播接收者，监听下载状态
-            context.registerReceiver(receiver,
-                    new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver,
+                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
+            } else {
+                context.registerReceiver(receiver,
+                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+            }
             WKToastUtils.getInstance().showToastNormal("后台下载中，可在通知栏中查看状态");
         }
 

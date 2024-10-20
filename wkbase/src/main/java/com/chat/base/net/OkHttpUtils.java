@@ -13,6 +13,7 @@ import javax.net.ssl.X509TrustManager;
 
 import okhttp3.Cache;
 import okhttp3.CacheControl;
+import okhttp3.ConnectionPool;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -46,7 +47,7 @@ public class OkHttpUtils {
                     sOkHttpClient = new OkHttpClient.Builder().cache(cache)
                             .connectTimeout(60 * 10, TimeUnit.SECONDS)
                             .readTimeout(60 * 10, TimeUnit.SECONDS)
-                            .writeTimeout(60 * 10, TimeUnit.SECONDS)
+                            .writeTimeout(60 * 10, TimeUnit.SECONDS).connectionPool(new ConnectionPool(5, 5, TimeUnit.SECONDS))
                             .sslSocketFactory(SSLSocketClient.getSSLSocketFactory(), new X509TrustManager() {
                                 @Override
                                 public void checkClientTrusted(X509Certificate[] chain, String authType) {

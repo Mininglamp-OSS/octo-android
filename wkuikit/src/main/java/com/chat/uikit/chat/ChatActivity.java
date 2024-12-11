@@ -1300,7 +1300,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             for (WKReminder reminder : list) {
                 if (msgList.get(i).wkMsg != null && !TextUtils.isEmpty(msgList.get(i).wkMsg.messageID) && msgList.get(i).wkMsg.messageID.equals(reminder.messageID)) {
                     if (msgList.get(i).wkMsg.viewed == 1 && reminder.done == 0) {
-                        ids.add(list.get(i).reminderID);
+                        ids.add(reminder.reminderID);
                     }
                 }
             }
@@ -1318,6 +1318,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     if (reminder.reminderID == reminderList.get(i).reminderID && reminder.type == reminderList.get(i).type) {
                         isAdd = false;
                         reminderList.get(i).done = 0;
+                        break;
+                    }
+                }
+                for (int i = 0; i < ids.size(); i++) {
+                    if (ids.get(i) == reminder.reminderID) {
+                        isAdd = false;
                         break;
                     }
                 }
@@ -1424,7 +1430,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private void showUnReadCountView() {
         wkVBinding.chatUnreadLayout.msgCountTv.setCount(redDot, false);
 //        wkVBinding.chatUnreadLayout.msgCountTv.setVisibility(redDot > 0 ? View.VISIBLE : View.GONE);
-        wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+        wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, redDot > 0, false));
     }
 
     private void showChannelName(WKChannel channel) {
@@ -2009,7 +2015,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void onMsgViewed(WKMsg wkMsg, int position) {
-
         if (wkMsg == null) return;
         if (!TextUtils.isEmpty(wkMsg.messageID) && !isTipMessage) {
             EndpointManager.getInstance().invoke("tip_pinned_message", wkMsg.messageID);

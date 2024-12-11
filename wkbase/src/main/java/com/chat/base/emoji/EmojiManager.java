@@ -10,6 +10,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.Xml;
 
 import androidx.collection.LruCache;
@@ -107,6 +108,34 @@ public class EmojiManager {
 
     public Pattern getPattern() {
         return pattern;
+    }
+
+    public Drawable getDrawableWithTag(Context context, String tag) {
+        Drawable drawable = null;
+        for (int i = 0; i < defaultEntries.size(); i++) {
+            if (defaultEntries.get(i).id.equals(tag)) {
+                drawable = getDrawable(context, defaultEntries.get(i).text);
+                break;
+            }
+        }
+        return drawable;
+    }
+    public EmojiEntry getEmojiWithTag(String tag){
+        EmojiEntry entry = null;
+        for (int i = 0; i < defaultEntries.size(); i++) {
+            if (defaultEntries.get(i).id.equals(tag)) {
+                entry = new EmojiEntry(defaultEntries.get(i).id,defaultEntries.get(i).text,defaultEntries.get(i).assetPath);
+                break;
+            }
+        }
+        return entry;
+    }
+    public EmojiEntry getEmojiEntry(String text) {
+        Entry entry = text2entry.get(text);
+        if (entry == null) {
+            return null;
+        }
+        return new EmojiEntry(entry.id, entry.text, entry.assetPath);
     }
 
     public Drawable getDrawable(Context context, String text) {
@@ -235,19 +264,23 @@ public class EmojiManager {
     }
 
 
-    public List<String> getEmojiWithType(String type) {
-        List<String> list = new ArrayList<>();
+    public List<EmojiEntry> getEmojiWithType(String type) {
+        List<EmojiEntry> list = new ArrayList<>();
         for (int i = 0, size = defaultEntries.size(); i < size; i++) {
+            if (defaultEntries.get(i).id.contains("color")) {
+                continue;
+            }
             boolean isAdd = true;
-            for (String str : list){
-                if (str.equals(defaultEntries.get(i).text)){
+            for (EmojiEntry entry : list) {
+                if (entry.getText().equals(defaultEntries.get(i).text)) {
                     isAdd = false;
                     break;
                 }
             }
             if (isAdd) {
                 if (defaultEntries.get(i).id.startsWith(type)) {
-                    list.add(defaultEntries.get(i).text);
+                    EmojiEntry entry = new EmojiEntry(defaultEntries.get(i).id, defaultEntries.get(i).text, defaultEntries.get(i).assetPath);
+                    list.add(entry);
                 }
             }
         }

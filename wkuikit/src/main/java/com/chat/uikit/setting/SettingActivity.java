@@ -1,10 +1,6 @@
 package com.chat.uikit.setting;
 
-import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.TextView;
@@ -13,17 +9,19 @@ import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.DataCleanManager;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.databinding.ActSettingLayoutBinding;
 import com.chat.uikit.message.BackupRestoreMessageActivity;
+import com.chat.uikit.user.service.UserModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -67,6 +65,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         }
         wkVBinding.loginOutTv.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.login_out), getString(R.string.login_out_dialog), true, "", getString(R.string.login_out), 0, 0, index -> {
             if (index == 1) {
+                UserModel.getInstance().quit(null);
                 WKUIKitApplication.getInstance().exitLogin(0);
             }
         }));
@@ -124,21 +123,12 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
                 if (str.equalsIgnoreCase("0.0Byte")) {
                     str = "0.00M";
                 }
-                mHandler.sendEmptyMessage(1);
+                AndroidUtilities.runOnUIThread(() -> wkVBinding.imageCacheTv.setText(str));
             } catch (Exception e) {
-                e.printStackTrace();
+                WKLogUtils.e("获取图片缓存大小错误");
             }
         }).start();
 
     }
 
-
-    @SuppressLint("HandlerLeak")
-    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
-        public void handleMessage(Message msg) {
-            if (msg.what == 1) {
-                wkVBinding.imageCacheTv.setText(str);
-            }
-        }
-    };
 }

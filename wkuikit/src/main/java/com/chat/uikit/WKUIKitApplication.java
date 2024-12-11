@@ -103,6 +103,7 @@ import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -174,15 +175,16 @@ public class WKUIKitApplication {
             String uid = WKConfig.getInstance().getUid();
             WKIM.getInstance().init(mContext.get(), uid, imToken);
 
-//            CrashReport.initCrashReport(getContext(), "4083bcaa8c", false);
-//            CrashReport.setUserId(WKConfig.getInstance().getUid());
-//            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
+            CrashReport.initCrashReport(getContext(), "b8bf09f25f", false);
+            CrashReport.setUserId(WKConfig.getInstance().getUid());
+            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
 
         }
     }
 
     public void startChat() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
+            Log.e("去连接","-->");
             WKIM.getInstance().getConnectionManager().connection();
         }
     }

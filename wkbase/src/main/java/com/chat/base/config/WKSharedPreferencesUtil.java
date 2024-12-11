@@ -84,7 +84,11 @@ public class WKSharedPreferencesUtil {
 
     // 获取数据
     public boolean getBoolean(String key) {
-        return mPreferences.getBoolean(key, true);
+        return getBoolean(key, true);
+    }
+
+    public boolean getBoolean(String key, boolean defValue) {
+        return mPreferences.getBoolean(key, defValue);
     }
 
     public void putIntWithUID(String key, int value) {

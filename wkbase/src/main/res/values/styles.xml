@@ -111,11 +111,6 @@
     </style>
 
     <!--以下是弹框样式-->
-    <!--弹出框 动画-->
-    <style name="dialog_share" parent="android:Animation">
-        <item name="android:windowEnterAnimation">@anim/bottom_in</item>
-        <item name="android:windowExitAnimation">@anim/bottom_out</item>
-    </style>
     <!-- 底部弹出框 -->
     <style name="pop_dialog" parent="@android:style/Theme.Dialog">
         <item name="android:windowFrame">@null</item>

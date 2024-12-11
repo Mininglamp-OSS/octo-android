@@ -1,5 +1,7 @@
 package com.chat.uikit.user.service;
 
+import android.text.TextUtils;
+
 import androidx.annotation.NonNull;
 
 import com.alibaba.fastjson.JSONArray;
@@ -23,6 +25,7 @@ import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
@@ -334,16 +337,53 @@ public class UserModel extends WKBaseModel {
         void onResult(int code, String msg, UserInfo userInfo);
     }
 
-    public void getUserInfo(String uid,String groupNo, IUserInfo iUserInfo) {
-        request(createService(UserService.class).getUserInfo(uid,groupNo), new IRequestResultListener<UserInfo>() {
+    public void getUserInfo(String uid, String groupNo, IUserInfo iUserInfo) {
+        request(createService(UserService.class).getUserInfo(uid, groupNo), new IRequestResultListener<>() {
             @Override
             public void onSuccess(UserInfo result) {
                 iUserInfo.onResult(HttpResponseCode.success, "", result);
+                if (result.group_member != null) {
+                    WKChannelMember member = new WKChannelMember();
+                    member.memberUID = result.group_member.uid;
+                    member.memberRemark = result.group_member.remark;
+                    member.memberName = result.group_member.name;
+                    member.channelID = result.group_member.group_no;
+                    member.channelType = WKChannelType.GROUP;
+                    member.isDeleted = result.group_member.is_deleted;
+                    member.version = result.group_member.version;
+                    member.role = result.group_member.role;
+                    member.status = result.group_member.status;
+                    member.memberInviteUID = result.group_member.invite_uid;
+                    member.robot = result.group_member.robot;
+                    member.forbiddenExpirationTime = result.group_member.forbidden_expir_time;
+                    if (member.robot == 1 && !TextUtils.isEmpty(result.group_member.username)) {
+                        member.memberName = result.group_member.username;
+                    }
+                    member.updatedAt = result.group_member.updated_at;
+                    member.createdAt = result.group_member.created_at;
+                    WKIM.getInstance().getChannelMembersManager().save(member);
+                }
             }
 
             @Override
             public void onFail(int code, String msg) {
                 iUserInfo.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public void quit(ICommonListener iCommonListener) {
+        request(createService(UserService.class).quit(), new IRequestResultListener<CommonResponse>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                if (iCommonListener != null)
+                    iCommonListener.onResult(HttpResponseCode.success, "");
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (iCommonListener != null)
+                    iCommonListener.onResult(code, msg);
             }
         });
     }

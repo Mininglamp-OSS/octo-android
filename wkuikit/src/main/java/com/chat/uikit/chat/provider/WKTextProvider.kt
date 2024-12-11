@@ -29,6 +29,7 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.emoji2.widget.EmojiTextView
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
 import com.chat.base.config.WKApiConfig
@@ -90,7 +91,7 @@ open class WKTextProvider : WKChatBaseProvider() {
     ) {
 //        val textContentLayout = parentView.findViewById<View>(R.id.textContentLayout)
         //   val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
-        val contentTv = parentView.findViewById<AppCompatTextView>(R.id.contentTv)
+        val contentTv = parentView.findViewById<EmojiTextView>(R.id.contentTv)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         //val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
 

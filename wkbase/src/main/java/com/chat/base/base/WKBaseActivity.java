@@ -114,9 +114,9 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
             boolean disable_screenshot;
             String uid = WKConfig.getInstance().getUid();
             if (!TextUtils.isEmpty(uid)) {
-                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean(uid + "_disable_screenshot");
+                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean(uid + "_disable_screenshot",false);
             } else {
-                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot");
+                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot",false);
             }
             if (disable_screenshot)
                 getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);

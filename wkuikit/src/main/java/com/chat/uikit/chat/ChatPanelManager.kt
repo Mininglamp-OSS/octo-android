@@ -35,6 +35,7 @@ import com.chat.base.config.WKConfig
 import com.chat.base.config.WKConstants
 import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.EmojiAdapter
+import com.chat.base.emoji.EmojiEntry
 import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointCategory
@@ -1448,7 +1449,6 @@ class ChatPanelManager(
             }
 
             override fun afterTextChanged(s: Editable) {
-
                 MoonUtil.replaceEmoticons(
                     iConversationContext.chatActivity,
                     s, start, count
@@ -1719,7 +1719,7 @@ class ChatPanelManager(
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
         val naturelList = EmojiManager.getInstance().getEmojiWithType("1_")
         val symbolsList = EmojiManager.getInstance().getEmojiWithType("2_")
-        val list = ArrayList<String>()
+        val list = ArrayList<EmojiEntry>()
         list.addAll(normalList)
         list.addAll(naturelList)
         list.addAll(symbolsList)

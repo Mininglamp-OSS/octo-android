@@ -13,6 +13,7 @@ import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.CheckBox;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.group.GroupMemberEntity;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -24,6 +25,7 @@ import java.util.List;
  * 删除群成员
  */
 public class DeleteGroupMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, BaseViewHolder> {
+    private String searchKey;
     public DeleteGroupMemberAdapter(@Nullable List<GroupMemberEntity> data) {
         super(R.layout.item_delete_group_member_layout, data);
     }
@@ -37,6 +39,7 @@ public class DeleteGroupMemberAdapter extends BaseQuickAdapter<GroupMemberEntity
             checkBox.setChecked(groupMemberEntity.checked == 1, true);
             checkBox.setHasBorder(groupMemberEntity.checked == 1);
             checkBox.setDrawBackground(item.checked == 1);
+
         }
     }
 
@@ -58,8 +61,26 @@ public class DeleteGroupMemberAdapter extends BaseQuickAdapter<GroupMemberEntity
         if (TextUtils.isEmpty(showName)) {
             showName = TextUtils.isEmpty(item.member.memberRemark) ? item.member.memberName : item.member.memberRemark;
         }
-        helper.setText(R.id.nameTv, showName);
+      //  helper.setText(R.id.nameTv, showName);
         AvatarView avatarView = helper.getView(R.id.avatarView);
         avatarView.showAvatar(item.member.memberUID, WKChannelType.PERSONAL, item.member.memberAvatarCacheKey);
+
+        if (!TextUtils.isEmpty(searchKey)) {
+            helper.setText(
+                    R.id.nameTv, StringUtils.findSearch(
+                            Theme.colorAccount,
+                            showName,
+                            searchKey
+                    )
+            );
+        } else {
+            helper.setText(R.id.nameTv, showName);
+        }
+    }
+
+
+    public void setSearch( String searchKey) {
+        this.searchKey = searchKey;
+        notifyItemRangeChanged(0, getData().size());
     }
 }

@@ -136,11 +136,19 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     //是否存在某条消息
-    public boolean isExist(String clientMsgNo) {
+    public boolean isExist(String clientMsgNo, String messageId) {
         if (TextUtils.isEmpty(clientMsgNo)) return false;
         boolean isExist = false;
         for (int i = 0, size = getData().size(); i < size; i++) {
-            if (getData().get(i).wkMsg != null && !TextUtils.isEmpty(getData().get(i).wkMsg.clientMsgNO) && getData().get(i).wkMsg.clientMsgNO.equals(clientMsgNo)) {
+            if (getData().get(i).wkMsg == null) {
+                continue;
+            }
+            if (!TextUtils.isEmpty(messageId) && !TextUtils.isEmpty(getData().get(i).wkMsg.messageID) && getData().get(i).wkMsg.messageID.equals(messageId)) {
+                isExist = true;
+                break;
+            }
+
+            if (!TextUtils.isEmpty(getData().get(i).wkMsg.clientMsgNO) && getData().get(i).wkMsg.clientMsgNO.equals(clientMsgNo)) {
                 isExist = true;
                 break;
             }
@@ -308,7 +316,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
 
 
     public enum RefreshType {
-        status, background, data, reaction, reply
+        status, background, data, reaction, reply, listener
     }
 
     public void notifyStatus(int position) {
@@ -317,6 +325,10 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
 
     public void notifyData(int position) {
         notify(position, RefreshType.data, null);
+    }
+
+    public void notifyListener(int position) {
+        notify(position, RefreshType.listener, null);
     }
 
     public void notifyBackground(int position) {
@@ -387,11 +399,14 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 );
                 return;
             }
+            if (refreshType == RefreshType.listener) {
+                baseItemProvider.resetCellListener(position, baseView, entity, from);
+                return;
+            }
 
             if (refreshType == RefreshType.reply) {
                 baseItemProvider.refreshReply(position, baseView, entity, from);
             }
-
         }
 
     }

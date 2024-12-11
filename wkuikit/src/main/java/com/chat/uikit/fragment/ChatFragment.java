@@ -217,7 +217,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         } else {
                             chatConversationAdapter.getData().get(i).isRefreshChannelInfo = true;
                             chatConversationAdapter.getData().get(i).isResetCounter = true;
-                            chatConversationAdapter.notifyItemChanged(i, chatConversationAdapter.getData().get(i));
+                            notifyRecycler(i,chatConversationAdapter.getData().get(i));
                         }
                         setAllCount();
                         break;

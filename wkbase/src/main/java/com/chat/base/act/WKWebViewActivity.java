@@ -14,6 +14,10 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -44,8 +48,6 @@ import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.google.gson.JsonObject;
-import com.tencent.smtt.sdk.ValueCallback;
-import com.tencent.smtt.sdk.WebChromeClient;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -155,20 +157,20 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
 
     @SuppressLint("SetJavaScriptEnabled")
     private void initWebViewSetting() {
-        com.tencent.smtt.sdk.WebSettings webSettings = wkVBinding.webView.getSettings();
+        WebSettings webSettings = wkVBinding.webView.getSettings();
         webSettings.setJavaScriptEnabled(true); // 设置支持javascript脚本
         webSettings.setUseWideViewPort(true);
-        webSettings.setPluginState(com.tencent.smtt.sdk.WebSettings.PluginState.ON);
+        webSettings.setPluginState(WebSettings.PluginState.ON);
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setDefaultTextEncodingName("UTF-8");
-        webSettings.setCacheMode(com.tencent.smtt.sdk.WebSettings.LOAD_NO_CACHE);
-        webSettings.setAppCacheEnabled(true);
+        webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+//        webSettings.setAppCacheEnabled(true);
         webSettings.setSupportMultipleWindows(true);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
         webSettings.setSavePassword(false);
         webSettings.setSaveFormData(false); // 禁止保存表单
         webSettings.setDomStorageEnabled(true);
-        webSettings.setAppCacheMaxSize(1024 * 1024 * 8);
+//        webSettings.setAppCacheMaxSize(1024 * 1024 * 8);
         //webSettings.setAllowFileAccess(true);
         webSettings.setAllowUniversalAccessFromFileURLs(false);
         webSettings.setAllowFileAccessFromFileURLs(false);
@@ -176,7 +178,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             webSettings.setMixedContentMode(0);
         }
         if (WKBinder.isDebug && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            com.tencent.smtt.sdk.WebView.setWebContentsDebuggingEnabled(true);
+            WebView.setWebContentsDebuggingEnabled(true);
         }
         //支持屏幕缩放
         webSettings.setSupportZoom(true);
@@ -252,9 +254,9 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             }
         });
 
-        wkVBinding.webView.setWebChromeClient(new com.tencent.smtt.sdk.WebChromeClient() {
+        wkVBinding.webView.setWebChromeClient(new WebChromeClient() {
             @Override
-            public void onReceivedTitle(com.tencent.smtt.sdk.WebView webView, String s) {
+            public void onReceivedTitle(WebView webView, String s) {
                 super.onReceivedTitle(webView, s);
                 if (!TextUtils.isEmpty(s) && !"about:blank".equals(s)) {
                     titleTv.setText(s);
@@ -262,7 +264,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             }
 
             @Override
-            public void onProgressChanged(com.tencent.smtt.sdk.WebView webView, int i) {
+            public void onProgressChanged(WebView webView, int i) {
                 super.onProgressChanged(webView, i);
                 if (i > 99) {
                     wkVBinding.progress.setVisibility(View.GONE);
@@ -273,17 +275,17 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
                 }
             }
 
-            @Override
-            public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
-                mUploadMessage = uploadMsg;
-                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
-                WKWebViewActivity.this.startActivityForResult(Intent.createChooser(i, "File Browser"), FILE_CHOOSER_RESULT_CODE);
-            }
+//            @Override
+//            public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
+//                mUploadMessage = uploadMsg;
+//                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+//                i.addCategory(Intent.CATEGORY_OPENABLE);
+//                i.setType("*/*");
+//                WKWebViewActivity.this.startActivityForResult(Intent.createChooser(i, "File Browser"), FILE_CHOOSER_RESULT_CODE);
+//            }
 
             // For Android 5.0+
-            public boolean onShowFileChooser(com.tencent.smtt.sdk.WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
 
                 mUploadCallbackAboveL = filePathCallback;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);

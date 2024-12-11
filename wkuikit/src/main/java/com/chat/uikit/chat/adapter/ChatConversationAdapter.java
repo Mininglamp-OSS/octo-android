@@ -305,7 +305,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         String content = getContent(item.getWkMsg());
-        TextView contentTv = helper.getView(R.id.contentTv);
+        androidx.emoji2.widget.EmojiTextView contentTv = helper.getView(R.id.contentTv);
         boolean isSetChatPwd = isSetChatPwd(item.getWkChannel());
         // 聊天密码
         if (isSetChatPwd) {
@@ -316,7 +316,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 content = fromName + "：" + content;
             }
         }
-
+      //  contentTv.setText(content);
         MoonUtil.identifyFaceExpression(getContext(), contentTv, content, MoonUtil.SMALL_SCALE);
     }
 

@@ -366,10 +366,12 @@ public class WKDeviceUtils {
         try {
             packInfo = packageManager.getPackageInfo(context.getPackageName(), 0);
         } catch (PackageManager.NameNotFoundException e) {
-            e.printStackTrace();
+           WKLogUtils.e("获取版本号错误");
         }
-        if (packInfo != null)
+
+        if (packInfo != null) {
             return packInfo.versionName;
+        }
         return "";
     }
 

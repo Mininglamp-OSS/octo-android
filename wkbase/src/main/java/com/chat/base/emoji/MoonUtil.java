@@ -10,6 +10,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.text.style.ImageSpan;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -78,13 +79,14 @@ public class MoonUtil {
         if (TextUtils.isEmpty(value)) {
             value = "";
         }
-
         SpannableString mSpannableString = new SpannableString(value);
         Matcher matcher = EmojiManager.getInstance().getPattern().matcher(value);
         while (matcher.find()) {
             int start = matcher.start();
             int end = matcher.end();
+
             String emot = value.substring(start, end);
+            Log.e("找到emoji：",emot+"_"+start+"_"+end+"_"+value.length());
             Drawable d = getEmotDrawable(context, emot, scale);
             if (d != null) {
                 AlignImageSpan span = new AlignImageSpan(d, AlignImageSpan.ALIGN_CENTER) {

@@ -7,9 +7,9 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.webkit.WebView;
 
 import com.chat.base.utils.WKReader;
-import com.tencent.smtt.sdk.WebView;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;

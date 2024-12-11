@@ -10,12 +10,14 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
+import android.os.Vibrator;
 import android.text.Selection;
 import android.text.Spannable;
 import android.text.method.LinkMovementMethod;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -48,6 +50,9 @@ public class AndroidUtilities {
     public static int statusBarHeight = 0;
     private static final boolean useSoftLight = Build.VERSION.SDK_INT >= 29;
 
+    public static interface Callback2<T, T2> {
+        public void run(T arg, T2 arg2);
+    }
     public static void setDensity(float density1) {
         density = density1;
         Resources resources = WKBaseApplication.getInstance().getContext().getResources();
@@ -549,4 +554,15 @@ public class AndroidUtilities {
         }
         return false;
     }
+
+
+    public static void vibrateCursor(View view) {
+        try {
+            if (view == null || view.getContext() == null) return;
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+            if (!((Vibrator) view.getContext().getSystemService(Context.VIBRATOR_SERVICE)).hasAmplitudeControl()) return;
+            view.performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
+        } catch (Exception ignore) {}
+    }
+
 }

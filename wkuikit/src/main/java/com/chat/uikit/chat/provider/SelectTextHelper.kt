@@ -1187,7 +1187,7 @@ class SelectTextHelper(builder: Builder) {
                 false
             )
             mWindow.isClippingEnabled = false
-            listAdapter = SelectTextPopAdapter(context!!, itemTextList)
+            listAdapter = SelectTextPopAdapter(context, itemTextList)
             listAdapter.setItemWrapContent(true)
             listAdapter.setOnclickItemListener(object : SelectTextPopAdapter.onClickItemListener {
                 override fun onClick(position: Int) {

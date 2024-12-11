@@ -451,7 +451,7 @@ public class WKDialogUtils {
         });
     }
 
-    private Rect getAtViewRect(View atView) {
+    public Rect getAtViewRect(View atView) {
         int[] locations = new int[2];
         atView.getLocationInWindow(locations);
         return new Rect(locations[0], locations[1], locations[0] - atView.getMeasuredWidth(),

@@ -48,7 +48,7 @@
             android:layout_height="wrap_content"
             android:animateLayoutChanges="true">
 
-            <androidx.appcompat.widget.AppCompatTextView
+            <androidx.emoji2.widget.EmojiTextView
                 android:id="@+id/contentTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

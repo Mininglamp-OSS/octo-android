@@ -3,52 +3,52 @@ package com.chat.uikit.group;
 import android.annotation.SuppressLint;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
-import com.chat.base.utils.HanziToPinyin;
-import com.chat.base.utils.WKReader;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.SoftKeyboardUtils;
-import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
+import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.ChooseUserSelectedAdapter;
 import com.chat.uikit.contacts.FriendUIEntity;
-import com.chat.uikit.databinding.ActChooseContactsLayoutBinding;
+import com.chat.uikit.databinding.ActDeleteMemberLayoutBinding;
 import com.chat.uikit.group.adapter.DeleteGroupMemberAdapter;
 import com.chat.uikit.group.service.GroupModel;
-import com.chat.uikit.utils.CharacterParser;
-import com.chat.uikit.utils.PyingUtils;
+import com.scwang.smart.refresh.layout.api.RefreshLayout;
+import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * 2020-01-31 14:15
  * 删除群成员
  */
-public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsLayoutBinding> implements OnQuickSideBarTouchListener {
+public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLayoutBinding> {
     DeleteGroupMemberAdapter groupMemberAdapter;
     ChooseUserSelectedAdapter selectedAdapter;
     private String groupId;
-    private List<GroupMemberEntity> allList;
     private TextView textView;
+    private String searchKey;
+    private int page = 1;
+    private int groupType = 0;
 
     @Override
-    protected ActChooseContactsLayoutBinding getViewBinding() {
-        return ActChooseContactsLayoutBinding.inflate(getLayoutInflater());
+    protected ActDeleteMemberLayoutBinding getViewBinding() {
+        return ActDeleteMemberLayoutBinding.inflate(getLayoutInflater());
     }
 
     @Override
@@ -101,6 +101,13 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
 
     @Override
     protected void initView() {
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(groupId, WKChannelType.GROUP);
+        if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.groupType)) {
+            Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
+            if (groupTypeObject instanceof Integer) {
+                groupType = (int) groupTypeObject;
+            }
+        }
         groupMemberAdapter = new DeleteGroupMemberAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, groupMemberAdapter);
 
@@ -119,7 +126,11 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
 
             @Override
             public void searchUser(String key) {
-                DeleteGroupMemberActivity.this.searchUser(key);
+                page = 1;
+                searchKey = key;
+                groupMemberAdapter.setSearch(searchKey);
+                wkVBinding.refreshLayout.setEnableLoadMore(true);
+                getData();
             }
         });
         FriendUIEntity ui = new FriendUIEntity(new WKChannel("", WKChannelType.PERSONAL));
@@ -147,8 +158,19 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void initListener() {
-        wkVBinding.quickSideBarView.setLetters(CharacterParser.getInstance().getList());
-        wkVBinding.quickSideBarView.setOnQuickSideBarTouchListener(this);
+        wkVBinding.refreshLayout.setEnableRefresh(false);
+        wkVBinding.refreshLayout.setOnRefreshLoadMoreListener(new OnRefreshLoadMoreListener() {
+            @Override
+            public void onLoadMore(@NonNull RefreshLayout refreshLayout) {
+                page++;
+                getData();
+            }
+
+            @Override
+            public void onRefresh(@NonNull RefreshLayout refreshLayout) {
+
+            }
+        });
         selectedAdapter.setOnItemClickListener((adapter, view, position) -> {
             FriendUIEntity userEntity = selectedAdapter.getItem(position);
             if (userEntity != null && userEntity.itemType == 0) {
@@ -224,98 +246,54 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActChooseContactsL
     @Override
     protected void initData() {
         super.initData();
-        String loginUID = WKConfig.getInstance().getUid();
         groupId = getIntent().getStringExtra("groupId");
-        List<GroupMemberEntity> list = new ArrayList<>();
-        int loginMemberRole = 0;
-        WKChannelMember loginMember = WKIM.getInstance().getChannelMembersManager().getMember(groupId, WKChannelType.GROUP, loginUID);
-        if (loginMember != null) {
-            loginMemberRole = loginMember.role;
-        }
-        List<WKChannelMember> channelMembers = WKIM.getInstance().getChannelMembersManager().getMembers(groupId, WKChannelType.GROUP);
-        for (int i = 0, size = channelMembers.size(); i < size; i++) {
-            boolean isAdd = channelMembers.get(i).role == WKChannelMemberRole.manager && loginMemberRole == WKChannelMemberRole.admin || channelMembers.get(i).role == WKChannelMemberRole.normal;
-            if (isAdd) {
-                GroupMemberEntity entity = new GroupMemberEntity();
-                entity.member = channelMembers.get(i);
-                list.add(entity);
-            }
-        }
-
-        List<GroupMemberEntity> otherList = new ArrayList<>();
-        List<GroupMemberEntity> letterList = new ArrayList<>();
-        List<GroupMemberEntity> numList = new ArrayList<>();
-        for (int i = 0, size = list.size(); i < size; i++) {
-            String showName = list.get(i).member.memberRemark;
-            if (TextUtils.isEmpty(showName))
-                showName = list.get(i).member.memberName;
-            if (!TextUtils.isEmpty(showName)) {
-                if (PyingUtils.getInstance().isStartNum(showName)) {
-                    list.get(i).pying = "#";
-                } else
-                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
-            } else list.get(i).pying = "#";
-
-        }
-        PyingUtils.getInstance().sortListGroupMember(list);
-
-        for (int i = 0, size = list.size(); i < size; i++) {
-            if (PyingUtils.getInstance().isStartLetter(list.get(i).pying)) {
-                //字母
-                letterList.add(list.get(i));
-            } else if (PyingUtils.getInstance().isStartNum(list.get(i).pying)) {
-                //数字
-                numList.add(list.get(i));
-            } else otherList.add(list.get(i));
-        }
-        allList = new ArrayList<>();
-        allList.addAll(letterList);
-        allList.addAll(numList);
-        allList.addAll(otherList);
-        groupMemberAdapter.setList(allList);
+        getData();
     }
 
 
-    private void searchUser(String content) {
-        if (TextUtils.isEmpty(content)) {
-            groupMemberAdapter.setList(allList);
-            return;
-        }
+    private void getData() {
+        WKIM.getInstance().getChannelMembersManager().getWithPageOrSearch(groupId, WKChannelType.GROUP, searchKey, page, 20, (list, b) -> {
+            if (groupType == 0)
+                resortData(list);
+            else {
+                if (b) {
+                    resortData(list);
+                }
+            }
+        });
+    }
+
+    private void resortData(List<WKChannelMember> list) {
         List<GroupMemberEntity> tempList = new ArrayList<>();
-        for (int i = 0, size = allList.size(); i < size; i++) {
-            if ((!TextUtils.isEmpty(allList.get(i).member.memberName) && allList.get(i).member.memberName.toLowerCase(Locale.getDefault())
-                    .contains(content.toLowerCase(Locale.getDefault())))
-                    || (!TextUtils.isEmpty(allList.get(i).member.memberRemark) && allList.get(i).member.memberRemark.toLowerCase(Locale.getDefault())
-                    .contains(content.toLowerCase(Locale.getDefault())))
-                    || (!TextUtils.isEmpty(allList.get(i).member.remark) && allList.get(i).member.remark.toLowerCase(Locale.getDefault())
-                    .contains(content.toLowerCase(Locale.getDefault())))
-                    || content.contains(allList.get(i).pying.toLowerCase(
-                    Locale.getDefault()))) {
-                tempList.add(allList.get(i));
-            }
+        String loginUID = WKConfig.getInstance().getUid();
+        int loginMemberRole = 0;
+        WKChannelMember loginUserMember = WKIM.getInstance().getChannelMembersManager().getMember(groupId, WKChannelType.GROUP, loginUID);
+        if (loginUserMember != null) {
+            loginMemberRole = loginUserMember.role;
         }
-        groupMemberAdapter.setList(tempList);
-    }
-
-
-    @Override
-    public void onLetterChanged(String letter, int position, float y) {
-        wkVBinding.quickSideBarTipsView.setText(letter, position, y);
-        //有此key则获取位置并滚动到该位置
-        List<GroupMemberEntity> list = groupMemberAdapter.getData();
-        if (WKReader.isNotEmpty(list)) {
-            for (int i = 0, size = list.size(); i < size; i++) {
-                if (list.get(i).pying.startsWith(letter)) {
-                    wkVBinding.recyclerView.scrollToPosition(i);
+        for (int i = 0, size = list.size(); i < size; i++) {
+            if (loginUID.equals(list.get(i).memberUID)) continue;
+            if (loginMemberRole == WKChannelMemberRole.manager && list.get(i).role != WKChannelMemberRole.normal){
+                continue;
+            }
+            GroupMemberEntity entity = new GroupMemberEntity(list.get(i));
+            for (int j = 0, len = selectedAdapter.getData().size(); j < len; j++) {
+                if (list.get(i).memberUID.equals(selectedAdapter.getData().get(j).channel.channelID)) {
+                    entity.checked = 1;
                     break;
                 }
             }
-        }
-    }
+            tempList.add(entity);
 
-    @Override
-    public void onLetterTouching(boolean touching) {
-        //可以自己加入动画效果渐显渐隐
-        wkVBinding.quickSideBarTipsView.setVisibility(touching ? View.VISIBLE : View.INVISIBLE);
+        }
+        wkVBinding.refreshLayout.finishLoadMore();
+        if (page == 1) {
+            groupMemberAdapter.setList(tempList);
+        } else {
+            groupMemberAdapter.addData(tempList);
+        }
+        if (WKReader.isEmpty(tempList)) {
+            wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
+        }
     }
 }

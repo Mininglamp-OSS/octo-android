@@ -8,7 +8,6 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKSystemAccount;
-import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
@@ -21,7 +20,6 @@ import com.xinbida.wukongim.entity.WKChannelType;
  * 关于
  */
 public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
-    int click = 0;
 
     @Override
     protected ActAboutLayoutBinding getViewBinding() {

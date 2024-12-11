@@ -65,4 +65,6 @@ public interface UserService {
     @POST("user/signal/keys")
     Observable<CommonResponse> signalKeys(@Body JSONObject jsonObject);
 
+    @POST("user/quit")
+    Observable<CommonResponse> quit();
 }

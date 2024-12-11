@@ -38,10 +38,10 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     protected void initView() {
         width = AndroidUtilities.getScreenWidth() - (AndroidUtilities.dp(30) * 8);
         Theme.setColorFilter(getContext(), wkVBinding.deleteIv, R.color.popupTextColor);
-        List<String> emojiIndexs = new ArrayList<>();
-        List<String> normalList = EmojiManager.getInstance().getEmojiWithType("0_");
-        List<String> naturelList = EmojiManager.getInstance().getEmojiWithType("1_");
-        List<String> symbolsList = EmojiManager.getInstance().getEmojiWithType("2_");
+        List<EmojiEntry> emojiIndexs = new ArrayList<>();
+        List<EmojiEntry> normalList = EmojiManager.getInstance().getEmojiWithType("0_");
+        List<EmojiEntry> naturelList = EmojiManager.getInstance().getEmojiWithType("1_");
+        List<EmojiEntry> symbolsList = EmojiManager.getInstance().getEmojiWithType("2_");
         emojiIndexs.addAll(normalList);
         emojiIndexs.addAll(naturelList);
         emojiIndexs.addAll(symbolsList);
@@ -96,7 +96,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     private void getCommonEmoji() {
         //查看最近使用到表情
         String ids = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis");
-        List<String> list = new ArrayList<>();
+        List<EmojiEntry> list = new ArrayList<>();
         String tempIds = "";
         if (!TextUtils.isEmpty(ids)) {
             if (ids.contains(",")) {
@@ -104,9 +104,9 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
                 for (String emojiId : emojiIds) {
                     if (list.size() == 32) break;
                     if (!TextUtils.isEmpty(emojiId)) {
-                        Drawable drawable = EmojiManager.getInstance().getDrawable(getActivity(), emojiId);
-                        if (drawable != null) {
-                            list.add(emojiId);
+                        EmojiEntry entry = EmojiManager.getInstance().getEmojiEntry(emojiId);
+                        if (entry != null) {
+                            list.add(entry);
                         }
                         if (TextUtils.isEmpty(tempIds)) {
                             tempIds = emojiId;
@@ -115,9 +115,9 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
 
                 }
             } else {
-                Drawable drawable = EmojiManager.getInstance().getDrawable(getActivity(), ids);
-                if (drawable != null) {
-                    list.add(ids);
+                EmojiEntry entry = EmojiManager.getInstance().getEmojiEntry(ids);
+                if (entry != null) {
+                    list.add(entry);
                 }
                 tempIds = ids;
             }

@@ -23,6 +23,7 @@ class ContactsAdapter :
             checkBox.setChecked(isChecked, true)
             checkBox.setDrawBackground(isChecked)
         }
+
     }
 
     override fun convert(holder: BaseViewHolder, item: FriendUIEntity) {

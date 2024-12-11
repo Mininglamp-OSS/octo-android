@@ -36,6 +36,8 @@ import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
+import androidx.core.math.MathUtils;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
@@ -623,4 +625,20 @@ public class Theme {
         }
     }
 
+    public static void setDrawableColor(Drawable drawable, int color) {
+        if (drawable == null) {
+            return;
+        }
+        if (drawable instanceof ShapeDrawable) {
+            ((ShapeDrawable) drawable).getPaint().setColor(color);
+        }  else {
+            drawable.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
+        }
+    }
+
+    public static int multAlpha(int color, float multiply) {
+        if (multiply == 1f)
+            return color;
+        return ColorUtils.setAlphaComponent(color, MathUtils.clamp((int) (Color.alpha(color) * multiply), 0, 0xFF));
+    }
 }

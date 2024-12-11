@@ -22,14 +22,11 @@ import com.chat.base.utils.CrashHandler;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
-import com.tencent.smtt.export.external.TbsCoreSettings;
-import com.tencent.smtt.sdk.QbSdk;
 
 import org.telegram.ui.Components.RLottieApplication;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -88,8 +85,6 @@ public class WKBaseApplication {
             CrashHandler.getInstance().init(context);
             //158638
 //            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
-            initX5WebView();
-
         }).start();
 
     }
@@ -127,31 +122,6 @@ public class WKBaseApplication {
             fileDir = String.format("%s/%s", fileDir, WKConfig.getInstance().getUid());
         }
         return fileDir;
-    }
-
-    private void initX5WebView() {
-        boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
-        if (isShowDialog) {
-            return;
-        }
-        HashMap<String, Object> map = new HashMap<>();
-        map.put(TbsCoreSettings.TBS_SETTINGS_USE_SPEEDY_CLASSLOADER, true);
-        map.put(TbsCoreSettings.TBS_SETTINGS_USE_DEXLOADER_SERVICE, true);
-        QbSdk.initTbsSettings(map);
-
-//        QbSdk.PreInitCallback cb = new QbSdk.PreInitCallback() {
-//
-//            @Override
-//            public void onViewInitFinished(boolean arg0) {
-//                //x5內核初始化完成的回调，为true表示x5内核加载成功，否则表示x5内核加载失败，会自动切换到系统内核。
-//            }
-//
-//            @Override
-//            public void onCoreInitFinished() {
-//            }
-//        };
-//        //x5内核初始化接口
-//        QbSdk.initX5Environment(context, cb);
     }
 
     private void initCacheDir() {

@@ -39,11 +39,6 @@ public class WKCropImageActivity extends WKBaseActivity<ActCutImgLayoutBinding> 
     }
 
     @Override
-    protected void initPresenter() {
-
-    }
-
-    @Override
     protected int getRightIvLeftResourceId(ImageView imageView) {
         return R.mipmap.bg_rotate_large;
     }

@@ -1,5 +1,7 @@
 package com.chat.uikit.enity;
 
+import com.chat.uikit.group.service.entity.GroupMember;
+
 /**
  * 2019-11-20 10:13
  * 用户信息
@@ -35,4 +37,5 @@ public class UserInfo {
     public String join_group_invite_uid;
     public String join_group_invite_name;
     public String join_group_time;
+    public GroupMember group_member;
 }

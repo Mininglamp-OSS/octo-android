@@ -30,6 +30,7 @@ public class WKContentType extends WKMsgContentType {
     public final static int sensitiveWordsTips = -10;
     public final static int emptyView = -12;
     public final static int spanEmptyView = -13;
+
     // 富文本
     public final static int richText = 14;
     //群聊加人
@@ -45,7 +46,7 @@ public class WKContentType extends WKMsgContentType {
     //审核群成员
     public final static int approveGroupMember = 1009;
     //截屏消息
-    public final static int screenshot = 1014;
+    public final static int screenshot = 20;
 
     public static boolean isSystemMsg(int type) {
         return type >= 1000 && type <= 2000;

@@ -36,6 +36,7 @@ import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.CounterView;
 import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.LayoutHelper;
+import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
@@ -136,7 +137,8 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 
         wkVBinding.vp.setAdapter(new WKFragmentStateAdapter(this, fragments));
         WKCommonModel.getInstance().getAppNewVersion(false, version -> {
-            if (version != null && !TextUtils.isEmpty(version.download_url)) {
+            String v = WKDeviceUtils.getInstance().getVersionName(TabActivity.this);
+            if (version != null && !TextUtils.isEmpty(version.download_url) && !version.app_version.equals(v)) {
                 WKDialogUtils.getInstance().showNewVersionDialog(TabActivity.this, version);
             }
         });

@@ -42,6 +42,9 @@
 -keep public class * extends android.preference.Preference
 -keep interface android.database.Cursor { *; }
 
+-keep class androidx.databinding.** { *; }
+-keep public class * extends androidx.databinding.DataBinderMapper
+
 # 保持自定义控件类不被混淆
 -keepclassmembers class * extends androidx.appcompat.app.AppCompatActivity{
     public void *(android.view.View);
@@ -181,10 +184,26 @@
 #----------旗舰模块------------------
 -keep class com.chat.advanced.entity.** { *; }
 #----------音视频------------------
--keep class com.chat.videocall.entity.** { *; }
--keep class com.chat.rtc.** { *; }
+-keep class com.chat.rtc.entity.** { *; }
+-keep class owt.**{*;}
+-keep class org.webrtc.**{*;}
 #----------社区------------------
 -keep class com.community.entity.** { *; }
+#----------用户名登录------------------
+-keep class com.chat.wkusernamelogin.entity.**{*;}
+#----------web3------------------
+-keep class com.chat.wkweb3.entity.**{*;}
+#----------工作台------------------
+-keep class com.chat.workplace.entity.**{*;}
+#----------组织架构------------------
+-keep class com.chat.organization.entity.**{*;}
+#----------消息置顶------------------
+-keep class com.chat.pinned.message.entity.**{*;}
+#---------注册邀请模块-------------
+-keep class com.chat.invite.entity.**{*;}
+
+-keep class org.web3j.**{*;}
+-dontwarn org.web3j.**
 
 #---------rxjava retrofit 混淆-----------------
 -dontnote retrofit2.Platform
@@ -200,6 +219,7 @@
 
 
 #-------------gsy混淆-----------------
+-keep class com.shuyu.gsyvideoplayer.** { *; }
 -keep class com.shuyu.gsyvideoplayer.video.** { *; }
 -dontwarn com.shuyu.gsyvideoplayer.video.**
 -keep class com.shuyu.gsyvideoplayer.video.base.** { *; }
@@ -208,7 +228,22 @@
 -dontwarn com.shuyu.gsyvideoplayer.utils.**
 -keep class tv.danmaku.ijk.** { *; }
 -dontwarn tv.danmaku.ijk.**
+-keep class androidx.media3.** {*;}
+-keep interface androidx.media3.**
 
+-keep class com.shuyu.alipay.** {*;}
+-keep interface com.shuyu.alipay.**
+
+-keep public class * extends android.view.View{
+    *** get*();
+    void set*(***);
+    public <init>(android.content.Context);
+    public <init>(android.content.Context, java.lang.Boolean);
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
+}
+#--------角标---------
+-keep class me.leolin.shortcutbadger.**{*;}
 #-------------x5webview------------
 -dontwarn dalvik.**
 -dontwarn com.tencent.smtt.**
@@ -224,19 +259,36 @@
 
 -keep class com.tbruyelle.rxpermissions3.**{*;}
 
-#-------小米推送-------
+#-------------小米推送-----------
 #这里com.xiaomi.mipushdemo.DemoMessageRreceiver改成app中定义的完整类名
 -keep class com.chat.push.push.XiaoMiMessageReceiver {*;}
 #可以防止一个误报的 warning 导致无法成功编译，如果编译使用的 Android 版本是 23。
 -dontwarn com.xiaomi.push.**
 
-#-----oppo-------
+#-----------oppo----------------
 -keep public class * extends android.app.Service
 -keep class com.heytap.msp.** { *;}
 
+#------------FMC---------------
+# 保留Firebase的类和成员不被混淆
+-keep class com.google.firebase.** { *; }
+-keep class org.apache.** { *; }
+-keep class javax.** { *; }
+-keep class uk.** { *; }
 
+# 如果你使用Firebase动态链接或通知等，还需要添加以下规则
+-keep class com.google.firebase.dynamiclinks.** { *; }
+-keep class com.google.firebase.messaging.** { *; }
 
-#---------音视频----------------
+# 如果你使用Firebase Remote Config
+-keep class com.google.firebase.remoteconfig.** { *; }
+
+# 如果你使用Firebase Crashlytics
+-keep class com.google.firebase.crash.** { *; }
+-keep class com.crashlytics.** { *; }
+-dontwarn com.crashlytics.**
+
+#---------音视频------------------
 -dontwarn org.json.**
 -keep class org.json.** {*;}
 -dontwarn com.google.gson.**
@@ -246,6 +298,12 @@
 -keep class io.socket.** {*;}
 -dontwarn io.socket.**
 
+-keep class com.xinbida.rtc.WKRTCApplication {*;}
+-keep class com.xinbida.rtc.WKRTCCallType {*;}
+-keep class com.xinbida.rtc.utils.WKRTCManager {*;}
+-keep class com.xinbida.rtc.inters.** {*;}
+-keep class owt.** {*;}
+-keep class org.webrtc.** {*;}
 
 -keep public class * implements com.bumptech.glide.module.GlideModule
 -keep public enum com.bumptech.glide.load.resource.bitmap.ImageHeaderParser$** {

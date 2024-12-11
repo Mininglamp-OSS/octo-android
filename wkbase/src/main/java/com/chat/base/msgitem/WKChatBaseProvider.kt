@@ -657,6 +657,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_VOICE
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_MULTIPLE_FORWARD
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.unknown_msg
+            || uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_CONTENT_FORMAT_ERROR
             || uiChatMsgItemEntity.wkMsg.type == WKContentType.typing
         ) {
             isBubble = true
@@ -1617,7 +1618,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         super.onViewAttachedToWindow(holder)
         val chatAdapter = getAdapter() as ChatAdapter
         chatAdapter.conversationContext.onMsgViewed(
-            chatAdapter.data[holder.bindingAdapterPosition].wkMsg,
+            chatAdapter.data[holder.bindingAdapterPosition - chatAdapter.headerLayoutCount].wkMsg,
             holder.bindingAdapterPosition - chatAdapter.headerLayoutCount
         )
     }

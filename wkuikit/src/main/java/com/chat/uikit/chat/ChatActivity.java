@@ -25,7 +25,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -118,7 +117,6 @@ import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
-import com.xinbida.wukongim.message.type.WKConnectStatus;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
@@ -192,7 +190,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
     private final String loginUID = WKConfig.getInstance().getUid();
-    private View headerKeyboardEmptyView, headerEmptyView, headerSpanEmptyView;
 
     private void p2pCall(int callType) {
         EndpointManager.getInstance().invoke("wk_p2p_call", new RTCMenu(this, callType));
@@ -396,9 +393,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (pinnedLayoutView instanceof View) {
             wkVBinding.pinnedLayout.addView((View) pinnedLayoutView);
         }
-        headerKeyboardEmptyView = new LinearLayout(this);
-        headerEmptyView = new LinearLayout(this);
-        headerSpanEmptyView = new LinearLayout(this);
         wkVBinding.timeTv.setShadowLayer(AndroidUtilities.dp(5f), 0f, 0f, 0);
         CommonAnim.getInstance().showOrHide(wkVBinding.timeTv, false, true);
         Theme.setPressedBackground(wkVBinding.topLayout.backIv);
@@ -748,8 +742,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     int channelType = wkCmd.paramJsonObject.optInt("channel_type");
                     int unreadCount = wkCmd.paramJsonObject.optInt("unread");
                     if (channelId.equals(this.channelId) && channelType == this.channelType) {
-                        this.redDot = unreadCount;
-                        wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+                        if (unreadCount < redDot) {
+                            this.redDot = unreadCount;
+                            wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+                        }
                     }
                 }
             }
@@ -1429,7 +1425,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private void showUnReadCountView() {
         wkVBinding.chatUnreadLayout.msgCountTv.setCount(redDot, false);
-//        wkVBinding.chatUnreadLayout.msgCountTv.setVisibility(redDot > 0 ? View.VISIBLE : View.GONE);
+        wkVBinding.chatUnreadLayout.msgCountTv.setVisibility(redDot > 0 ? View.VISIBLE : View.GONE);
         wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, redDot > 0, false));
     }
 
@@ -2097,9 +2093,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 });
             }
         }
-        if (isResetGroupApprove) resetGroupApproveView();
-        if (isResetRemind) resetRemindView();
-        if (isResetUnread) showUnReadCountView();
+
+        if (isResetGroupApprove) {
+            resetGroupApproveView();
+        }
+        if (isResetUnread) {
+            showUnReadCountView();
+        }
+        if (isResetRemind) {
+            resetRemindView();
+        }
     }
 
     @Override

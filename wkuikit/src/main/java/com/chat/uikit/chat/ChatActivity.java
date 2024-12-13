@@ -97,6 +97,7 @@ import com.chat.uikit.group.GroupDetailActivity;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.robot.service.WKRobotModel;
+import com.chat.uikit.user.service.UserModel;
 import com.chat.uikit.view.WKPlayVoiceUtils;
 import com.effective.android.panel.PanelSwitchHelper;
 import com.effective.android.panel.interfaces.ContentScrollMeasurer;
@@ -116,6 +117,7 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSendOptions;
+import com.xinbida.wukongim.interfaces.IAddChannelMemberListener;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
@@ -981,6 +983,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         chatPanelManager.showOrHideForbiddenView();
                     }
                 });
+            } else {
+                UserModel.getInstance().getUserInfo(WKConfig.getInstance().getUid(), channelId, null);
             }
             //获取sdk频道信息
             if (channel != null) {
@@ -1272,6 +1276,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 isCanLoadMore = false;
             }
         }
+
+        new Handler().postDelayed(() -> {
+            if (isUpdateRedDot) {
+                MsgModel.getInstance().clearUnread(channelId, channelType, redDot, (code, msg) -> {
+                    if (code == HttpResponseCode.success && redDot == 0) {
+                        isUpdateRedDot = false;
+                    }
+                });
+            }
+        }, 500);
     }
 
 
@@ -2085,13 +2099,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             if (redDot < 0) redDot = 0;
             isResetUnread = true;
-            if (isUpdateRedDot) {
-                MsgModel.getInstance().clearUnread(channelId, channelType, redDot, (code, msg) -> {
-                    if (code == HttpResponseCode.success && redDot == 0) {
-                        isUpdateRedDot = false;
-                    }
-                });
-            }
+
         }
 
         if (isResetGroupApprove) {

@@ -120,6 +120,8 @@ class ChatPanelManager(
     val resetTitleViewListener: () -> Unit,
     val showNewImageListener: (path: String) -> Unit,
 ) {
+    private val eventKey = "InputPanel"
+    private val loginUID = WKConfig.getInstance().uid
     private var isShowSendBtn: Boolean = false
     private var flame = 0
     private var lastInputTime: Long = 0
@@ -432,8 +434,16 @@ class ChatPanelManager(
     }
 
     fun initRefreshListener() {
+        WKIM.getInstance().channelMembersManager.addOnAddChannelMemberListener(this.eventKey) { list ->
+            for (channelMember in list) {
+                if (channelMember.memberUID == loginUID) {
+                    showOrHideForbiddenView()
+                    break
+                }
+            }
+        }
         WKIM.getInstance().channelMembersManager.addOnRefreshChannelMemberInfo(
-            "InputPanel"
+            this.eventKey
         ) { mChannelMember, _ ->
             if (mChannelMember != null
                 && mChannelMember.channelID.equals(iConversationContext.chatChannelInfo.channelID)
@@ -441,13 +451,13 @@ class ChatPanelManager(
                 && iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP
             ) {
                 //禁言
-                if (mChannelMember.memberUID == WKConfig.getInstance().uid) {
+                if (mChannelMember.memberUID == this.loginUID) {
                     showOrHideForbiddenView()
                 }
             }
         }
         WKIM.getInstance().channelManager.addOnRefreshChannelInfo(
-            "InputPanel"
+            this.eventKey
         ) { mChannel, _ ->
             if (mChannel.channelType == iConversationContext.chatChannelInfo.channelType && mChannel.channelID.equals(
                     iConversationContext.chatChannelInfo.channelID
@@ -576,7 +586,7 @@ class ChatPanelManager(
         val mChannelMember = WKIM.getInstance().channelMembersManager.getMember(
             iConversationContext.chatChannelInfo.channelID,
             iConversationContext.chatChannelInfo.channelType,
-            WKConfig.getInstance().uid
+            this.loginUID
         )
         if (mChannelMember != null) {
             if (mChannelMember.role == WKChannelMemberRole.admin) {
@@ -648,12 +658,12 @@ class ChatPanelManager(
 
     fun chatAvatarClick(uid: String, isLongClick: Boolean) {
         if (isLongClick) {
-            if (uid == WKConfig.getInstance().uid) return
+            if (uid == this.loginUID) return
             if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP) {
                 val loginMember = WKIM.getInstance().channelMembersManager.getMember(
                     iConversationContext.chatChannelInfo.channelID,
                     iConversationContext.chatChannelInfo.channelType,
-                    WKConfig.getInstance().uid
+                    this.loginUID
                 )
                 if (loginMember != null) {
                     if ((iConversationContext.chatChannelInfo.forbidden == 1 && loginMember.role == WKChannelMemberRole.normal) || loginMember.forbiddenExpirationTime > 0) {
@@ -705,8 +715,9 @@ class ChatPanelManager(
         }
         EndpointManager.getInstance().remove("emoji_click")
         WKIM.getInstance().robotManager.removeRefreshRobotMenu(iConversationContext.chatChannelInfo.channelID)
-        WKIM.getInstance().channelManager.removeRefreshChannelInfo("InputPanel")
-        WKIM.getInstance().channelMembersManager.removeRefreshChannelMemberInfo("InputPanel")
+        WKIM.getInstance().channelManager.removeRefreshChannelInfo(this.eventKey)
+        WKIM.getInstance().channelMembersManager.removeRefreshChannelMemberInfo(this.eventKey)
+        WKIM.getInstance().channelMembersManager.removeAddChannelMemberListener(this.eventKey)
     }
 
 
@@ -1475,7 +1486,7 @@ class ChatPanelManager(
                             WKIM.getInstance().channelMembersManager.getMember(
                                 iConversationContext.chatChannelInfo.channelID,
                                 iConversationContext.chatChannelInfo.channelType,
-                                WKConfig.getInstance().uid
+                                loginUID
                             )
                         if (mChannelMember == null || mChannelMember.isDeleted == 1 || mChannelMember.status != 1) {
                             isSend = false

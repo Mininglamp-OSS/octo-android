@@ -341,7 +341,6 @@ public class UserModel extends WKBaseModel {
         request(createService(UserService.class).getUserInfo(uid, groupNo), new IRequestResultListener<>() {
             @Override
             public void onSuccess(UserInfo result) {
-                iUserInfo.onResult(HttpResponseCode.success, "", result);
                 if (result.group_member != null) {
                     WKChannelMember member = new WKChannelMember();
                     member.memberUID = result.group_member.uid;
@@ -363,11 +362,16 @@ public class UserModel extends WKBaseModel {
                     member.createdAt = result.group_member.created_at;
                     WKIM.getInstance().getChannelMembersManager().save(member);
                 }
+                if (iUserInfo != null) {
+                    iUserInfo.onResult(HttpResponseCode.success, "", result);
+                }
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iUserInfo.onResult(code, msg, null);
+                if (iUserInfo != null) {
+                    iUserInfo.onResult(code, msg, null);
+                }
             }
         });
     }

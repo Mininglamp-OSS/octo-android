@@ -16,6 +16,7 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.DispatchQueuePool;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.enity.UserInfo;
@@ -33,6 +34,8 @@ import java.util.List;
  * 好友管理
  */
 public class FriendModel extends WKBaseModel {
+    private final DispatchQueuePool dispatchQueuePool = new DispatchQueuePool(3);
+
     private FriendModel() {
 
     }
@@ -99,7 +102,7 @@ public class FriendModel extends WKBaseModel {
     public void syncFriends(final ICommonListener iCommonListener) {
         String key = String.format("%s_friend_sync_version", WKConfig.getInstance().getUid());
         long version = WKSharedPreferencesUtil.getInstance().getLong(key);
-        request(createService(FriendService.class).syncFriends(version, 500, 1), new IRequestResultListener<>() {
+        request(createService(FriendService.class).syncFriends(version, 1000, 1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<UserInfo> list) {
                 if (WKReader.isNotEmpty(list)) {
@@ -136,11 +139,18 @@ public class FriendModel extends WKBaseModel {
                     }
                     WKSharedPreferencesUtil.getInstance().putLong(key, tempVersion);
                     //将好友信息设置到sdk
-                    WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
-                    EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
-                    AndroidUtilities.runOnUIThread(() -> syncFriends(iCommonListener), 500);
+                    dispatchQueuePool.execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
+                        }
+                    });
+                    AndroidUtilities.runOnUIThread(() -> {
+                        syncFriends(iCommonListener);
+                    }, 500);
                 } else {
                     if (iCommonListener != null) {
+                        EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                         iCommonListener.onResult(HttpResponseCode.success, "");
                     }
                 }

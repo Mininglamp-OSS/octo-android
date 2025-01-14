@@ -10,6 +10,7 @@ import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Base64;
@@ -266,6 +267,10 @@ public class WKDeviceUtils {
      * @return String
      */
     public String getDeviceName() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            return Settings.Global.getString(WKBaseApplication.getInstance().getContext().getContentResolver(), Settings.Global.DEVICE_NAME);
+        }
+
         String manufacturer = android.os.Build.MANUFACTURER;
         String model = android.os.Build.MODEL;
         if (model.startsWith(manufacturer)) {

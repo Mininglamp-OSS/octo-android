@@ -20,6 +20,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.NewFriendEntity;
 import com.chat.base.entity.UserInfoSetting;
+import com.chat.base.entity.WKGroupType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
@@ -44,6 +45,7 @@ import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.SearchUserActivity;
 import com.chat.uikit.user.UserDetailActivity;
+import com.chat.uikit.user.service.UserModel;
 import com.chat.uikit.utils.PushNotificationHelper;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
@@ -346,8 +348,29 @@ public class WKIMUtils {
                         }
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
                     }
+                    case WKCMDKeys.wk_memberUpdate -> {
+                        if (cmd.paramJsonObject == null) {
+                            return;
+                        }
+                        String groupNo = cmd.paramJsonObject.optString("group_no");
+                        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(groupNo, WKChannelType.GROUP);
+                        if (channel == null || channel.remoteExtraMap == null) {
+                            return;
+                        }
+                        Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
+                        if (groupTypeObject instanceof Integer) {
+                            int groupType = (int) groupTypeObject;
+                            if (groupType == WKGroupType.superGroup) {
+                                String uid = cmd.paramJsonObject.optString("uid");
+                                if (!TextUtils.isEmpty(uid)) {
+                                    UserModel.getInstance().getUserInfo(uid,groupNo,null);
+                                }
+                            }
+                        }
+                    }
                     case WKCMDKeys.wk_sync_reminders -> MsgModel.getInstance().syncReminder();
-                    case WKCMDKeys.wk_sync_conversation_extra -> MsgModel.getInstance().syncCoverExtra();
+                    case WKCMDKeys.wk_sync_conversation_extra ->
+                            MsgModel.getInstance().syncCoverExtra();
                 }
             }
         });

@@ -3,6 +3,7 @@ package com.chat.uikit.message;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -23,6 +24,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.DispatchQueuePool;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
@@ -360,6 +362,7 @@ public class MsgModel extends WKBaseModel {
                 iSyncConversationChatBack.onBack(null);
             }
         });
+
     }
 
     public void ackDeviceUUID() {

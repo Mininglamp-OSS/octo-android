@@ -55,7 +55,7 @@
     <string name="send_msg">Chat</string>
     <string name="setting">Setting</string>
     <string name="group_qr_desc">Valid until %d(%s) and will update upon joining group</string>
-    <string name="fullStaffing">FullStaffing</string>
+    <string name="fullStaffing">Forbidden chat</string>
     <string name="start_group_chat">New Chat</string>
     <string name="add_friends">Add Contacts</string>
     <string name="scan">Scan</string>

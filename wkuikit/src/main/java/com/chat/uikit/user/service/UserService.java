@@ -4,6 +4,7 @@ package com.chat.uikit.user.service;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.uikit.enity.Device;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
@@ -67,4 +68,7 @@ public interface UserService {
 
     @POST("user/quit")
     Observable<CommonResponse> quit();
+
+    @GET("user/devices/{device_id}")
+    Observable<Device> device(@Path("device_id") String device_id);
 }

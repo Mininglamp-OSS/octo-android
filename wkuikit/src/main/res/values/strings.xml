@@ -56,7 +56,7 @@
     <string name="send_msg">发消息</string>
     <string name="setting">设置</string>
     <string name="group_qr_desc">该二维码%d天内(%s)有效，重新进入将更新</string>
-    <string name="fullStaffing">全员禁言中</string>
+    <string name="fullStaffing">禁言中</string>
     <string name="start_group_chat">发起群聊</string>
     <string name="add_friends">添加好友</string>
     <string name="scan">扫 一 扫</string>

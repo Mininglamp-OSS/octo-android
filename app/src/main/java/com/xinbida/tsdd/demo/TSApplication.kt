@@ -1,5 +1,6 @@
 package com.xinbida.tsdd.demo
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,6 +11,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -45,6 +47,29 @@ class TSApplication : MultiDexApplication() {
                 initAll()
             }
         }
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(p0: Activity, p1: Bundle?) {
+            }
+
+            override fun onActivityStarted(p0: Activity) {
+            }
+
+            override fun onActivityResumed(p0: Activity) {
+                ActManagerUtils.getInstance().currentActivity = p0
+            }
+
+            override fun onActivityPaused(p0: Activity) {
+            }
+
+            override fun onActivityStopped(p0: Activity) {
+            }
+
+            override fun onActivitySaveInstanceState(p0: Activity, p1: Bundle) {
+            }
+
+            override fun onActivityDestroyed(p0: Activity) {
+            }
+        })
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

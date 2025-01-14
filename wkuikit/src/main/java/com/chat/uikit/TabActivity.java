@@ -46,6 +46,7 @@ import com.chat.uikit.databinding.ActTabMainBinding;
 import com.chat.uikit.fragment.ChatFragment;
 import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
+import com.chat.uikit.user.service.UserModel;
 import com.tbruyelle.rxpermissions3.RxPermissions;
 
 import org.telegram.ui.Components.RLottieImageView;
@@ -87,7 +88,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @Override
     protected void initView() {
 //        wkVBinding.vp.setUserInputEnabled(false);
-
+        UserModel.getInstance().device();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
             RxPermissions rxPermissions = new RxPermissions(this);

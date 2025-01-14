@@ -10,14 +10,17 @@ import com.chat.base.base.WKBaseModel;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
+import com.chat.uikit.enity.Device;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
@@ -388,6 +391,22 @@ public class UserModel extends WKBaseModel {
             public void onFail(int code, String msg) {
                 if (iCommonListener != null)
                     iCommonListener.onResult(code, msg);
+            }
+        });
+    }
+
+    public void device(){
+        String deviceId = WKConstants.getDeviceID();
+        request(createService(UserService.class).device(deviceId), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(Device result) {
+                if (result != null) {
+                    WKIM.getInstance().setDeviceId(String.valueOf(result.id));
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
             }
         });
     }

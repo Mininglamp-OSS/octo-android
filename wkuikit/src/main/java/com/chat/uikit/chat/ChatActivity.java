@@ -51,6 +51,7 @@ import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.AvatarOtherViewMenu;
+import com.chat.base.endpoint.entity.CallingViewMenu;
 import com.chat.base.endpoint.entity.RTCMenu;
 import com.chat.base.endpoint.entity.ReadMsgMenu;
 import com.chat.base.endpoint.entity.SetChatBgMenu;
@@ -109,6 +110,7 @@ import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
+import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelStatus;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
@@ -117,7 +119,6 @@ import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSendOptions;
-import com.xinbida.wukongim.interfaces.IAddChannelMemberListener;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
@@ -185,6 +186,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     //查询聊天数据偏移量
     private final int limit = 30;
     private boolean isShowPinnedView = false;
+    private boolean isShowCallingView = false;
     private boolean isTipMessage = false;
     private int hideChannelAllPinnedMessage = 0;
     private PanelSwitchHelper mHelper;
@@ -192,6 +194,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
     private final String loginUID = WKConfig.getInstance().getUid();
+    private final int callingViewHeight = AndroidUtilities.dp(40f);
+    private final int pinnedViewHeight = AndroidUtilities.dp(50f);
+
+    private int getTopPinViewHeight() {
+        int totalHeight = 0;
+        if (isShowCallingView) {
+            totalHeight += callingViewHeight;
+        }
+        if (isShowPinnedView) {
+            totalHeight += pinnedViewHeight;
+        }
+        return totalHeight;
+    }
 
     private void p2pCall(int callType) {
         EndpointManager.getInstance().invoke("wk_p2p_call", new RTCMenu(this, callType));
@@ -335,7 +350,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
                         @Override
                         public int getScrollViewId() {
-                            return R.id.pinnedLayout;
+                            return R.id.scrollViewLayout;
                         }
                     }).addContentScrollMeasurer(new ContentScrollMeasurer() {
                         @Override
@@ -736,18 +751,26 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKIM.getInstance().getCMDManager().addCmdListener(channelId, wkCmd -> {
             if (wkCmd == null || TextUtils.isEmpty(wkCmd.cmdKey)) return;
             // 监听正在输入
-            if (wkCmd.cmdKey.equals(WKCMDKeys.wk_typing)) {
-                typing(wkCmd);
-            } else if (wkCmd.cmdKey.equals(WKCMDKeys.wk_unreadClear)) {
-                if (wkCmd.paramJsonObject.has("channel_id") && wkCmd.paramJsonObject.has("channel_type")) {
-                    String channelId = wkCmd.paramJsonObject.optString("channel_id");
-                    int channelType = wkCmd.paramJsonObject.optInt("channel_type");
-                    int unreadCount = wkCmd.paramJsonObject.optInt("unread");
-                    if (channelId.equals(this.channelId) && channelType == this.channelType) {
-                        if (unreadCount < redDot) {
-                            this.redDot = unreadCount;
-                            wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+            switch (wkCmd.cmdKey) {
+                case WKCMDKeys.wk_typing -> typing(wkCmd);
+                case WKCMDKeys.wk_unreadClear -> {
+                    if (wkCmd.paramJsonObject.has("channel_id") && wkCmd.paramJsonObject.has("channel_type")) {
+                        String channelId = wkCmd.paramJsonObject.optString("channel_id");
+                        int channelType = wkCmd.paramJsonObject.optInt("channel_type");
+                        int unreadCount = wkCmd.paramJsonObject.optInt("unread");
+                        if (channelId.equals(this.channelId) && channelType == this.channelType) {
+                            if (unreadCount < redDot) {
+                                this.redDot = unreadCount;
+                                wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
+                            }
                         }
+                    }
+                }
+                case "sync_channel_state" -> {
+                    String sourceChannelId = wkCmd.paramJsonObject.optString("channel_id");
+                    int sourceChannelType = wkCmd.paramJsonObject.optInt("channel_type");
+                    if (sourceChannelId.equals(channelId) && sourceChannelType == channelType) {
+                        getChannelState();
                     }
                 }
             }
@@ -831,7 +854,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (!isShowPinnedView) return null;
             isShowPinnedView = false;
             RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(10);
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
             wkVBinding.timeTv.setVisibility(View.GONE);
             ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
             animator.setDuration(200);
@@ -841,8 +864,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     wkVBinding.pinnedLayout.clearAnimation();
                     wkVBinding.pinnedLayout.setVisibility(View.GONE);
                     if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
-                        chatAdapter.getData().remove(0);
-                        chatAdapter.notifyItemRemoved(0);
+                        if (!isShowCallingView) {
+                            chatAdapter.getData().remove(0);
+                            chatAdapter.notifyItemRemoved(0);
+                        }
                         //chatAdapter.notifyDataSetChanged();
                     }
                 }
@@ -860,14 +885,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 return null;
             }
             isShowPinnedView = true;
+
             if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type != WKContentType.spanEmptyView) {
-                WKMsg msg = new WKMsg();
-                msg.timestamp = 0;
-                msg.type = WKContentType.spanEmptyView;
+                WKMsg msg = getSpanEmptyMsg();
                 chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
             }
             RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(60);
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
             wkVBinding.timeTv.setVisibility(View.GONE);
             ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", -wkVBinding.pinnedLayout.getHeight(), 0);
             animator.setDuration(200);
@@ -922,14 +946,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKIM.getInstance().getChannelManager().fetchChannelInfo(channelId, channelType);
         MsgModel.getInstance().syncExtraMsg(channelId, channelType);
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
-        WKCommonModel.getInstance().getChannelState(channelId, channelType, channelState -> {
-            if (channelState != null) {
-                if (channelType == WKChannelType.GROUP && channelState.online_count > 0) {
-                    wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
-                    wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), channelState.online_count));
-                }
-            }
-        });
+        getChannelState();
 
         chatAdapter.setList(new ArrayList<>());
         if (WKSystemAccount.isSystemAccount(channelId) || channelType == WKChannelType.CUSTOMER_SERVICE) {
@@ -1079,6 +1096,70 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     }
 
+    private void getChannelState() {
+        WKCommonModel.getInstance().getChannelState(channelId, channelType, channelState -> {
+            if (channelState != null) {
+                if (channelType == WKChannelType.GROUP && channelState.online_count > 0) {
+                    wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
+                    wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), channelState.online_count));
+                }
+                if (channelState.call_info == null || WKReader.isEmpty(channelState.call_info.getCalling_participants())) {
+                    wkVBinding.callLayout.setVisibility(View.GONE);
+                    isShowCallingView = false;
+                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
+                        if (!isShowPinnedView) {
+                            chatAdapter.getData().remove(0);
+                            chatAdapter.notifyItemRemoved(0);
+                        } else {
+                            chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
+                            chatAdapter.notifyItemChanged(0);
+                        }
+                    }
+                } else {
+                    Object object = EndpointManager.getInstance().invoke("show_calling_participants", new CallingViewMenu(this, channelState.call_info));
+                    if (object != null) {
+                        View view = (View) object;
+                        wkVBinding.callLayout.removeAllViews();
+                        wkVBinding.callLayout.addView(view, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+                        wkVBinding.callLayout.setVisibility(View.VISIBLE);
+                        isShowCallingView = true;
+                        if (isAddedSpanEmptyView()) {
+                            chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
+                            chatAdapter.notifyItemChanged(0);
+                        } else {
+                            WKMsg msg = getSpanEmptyMsg();
+                            chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
+                        }
+                    } else {
+                        isShowCallingView = false;
+                    }
+                }
+            }
+
+            if (WKReader.isEmpty(MsgModel.getInstance().channelStatus)) {
+                MsgModel.getInstance().channelStatus = new ArrayList<>();
+            }
+            boolean isAdd = true;
+            for (int i = 0; i < MsgModel.getInstance().channelStatus.size(); i++) {
+                if (MsgModel.getInstance().channelStatus.get(i).channel_id.equals(channelId)) {
+                    MsgModel.getInstance().channelStatus.get(i).calling = isShowCallingView ? 1 : 0;
+                    isAdd = false;
+                    break;
+                }
+            }
+            if (isAdd) {
+                WKChannelState state = new WKChannelState();
+                state.channel_id = channelId;
+                state.channel_type = channelType;
+                state.calling = isShowCallingView ? 1 : 0;
+                MsgModel.getInstance().channelStatus.add(state);
+            }
+            EndpointManager.getInstance().invoke("refresh_conversation_calling", null);
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
+            wkVBinding.timeTv.setVisibility(View.GONE);
+        });
+    }
 
     // 获取聊天记录
     private void getData(int pullMode, boolean isSetNewData, long aroundMsgOrderSeq, boolean isScrollToEnd) {
@@ -1171,7 +1252,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             msgList.add(0, msg);
         }
 
-        if (isShowPinnedView && pullMode == 0) {
+        if ((isShowCallingView || isShowPinnedView) && pullMode == 0) {
             if (WKReader.isNotEmpty(chatAdapter.getData())) {
                 for (int i = 0; i < chatAdapter.getData().size(); i++) {
                     if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.type == WKContentType.spanEmptyView) {
@@ -1180,10 +1261,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     }
                 }
             }
-            WKMsg msg = new WKMsg();
-            msg.timestamp = 0;
-            msg.type = WKContentType.spanEmptyView;
-            msgList.add(0, msg);
+            msgList.add(0, getSpanEmptyMsg());
         }
         List<WKUIChatMsgItemEntity> list = new ArrayList<>();
         if (WKReader.isNotEmpty(msgList)) {
@@ -1556,7 +1634,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKMsg wkMsg = new WKMsg();
         wkMsg.type = WKContentType.loading;
         int index = 0;
-        if (isShowPinnedView) {
+        if (isShowPinnedView || isShowCallingView) {
             for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
                 if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.type == WKContentType.spanEmptyView) {
                     index = i + 1;
@@ -2167,6 +2245,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void saveEditContent() {
+        if (WKReader.isEmpty(chatAdapter.getData())) {
+            return;
+        }
         //停止语音播放
         //AudioPlaybackManager.getInstance().stopAudio();
         int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
@@ -2445,6 +2526,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     isResetStatus = true;
                 }
                 list.get(i).wkMsg.voiceStatus = wkMsg.voiceStatus;
+
                 if (hideChannelAllPinnedMessage == 0) {
                     list.get(i).isPinned = wkMsg.remoteExtra.isPinned;
                 } else {
@@ -2548,5 +2630,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 break;
             }
         }
+    }
+
+    private WKMsg getSpanEmptyMsg() {
+        WKMsg msg = new WKMsg();
+        msg.timestamp = 0;
+        // 为了方便直接用该字段替换
+        msg.messageSeq = getTopPinViewHeight();
+        msg.type = WKContentType.spanEmptyView;
+        return msg;
+    }
+
+    private boolean isAddedSpanEmptyView() {
+        return WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView;
     }
 }

@@ -17,9 +17,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.base.WKBaseFragment;
+import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
+import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.PopupMenuItem;
@@ -46,13 +48,13 @@ import com.chat.uikit.search.SearchAllActivity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.interfaces.IAllConversations;
 import com.xinbida.wukongim.message.type.WKConnectReason;
 import com.xinbida.wukongim.message.type.WKConnectStatus;
-import com.xinbida.wukongim.utils.DispatchQueuePool;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -79,8 +81,6 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBinding> {
 
     private ChatConversationAdapter chatConversationAdapter;
-    private final DispatchQueuePool dispatchQueuePool = new DispatchQueuePool(3);
-
     private Disposable disposable;
     private final List<Integer> refreshIds = new ArrayList<>();
     private Timer connectTimer;
@@ -285,6 +285,27 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         }
                     }
                 }
+                case "sync_channel_state" -> {
+                    String channelId = wkCmd.paramJsonObject.optString("channel_id");
+                    int channelType = wkCmd.paramJsonObject.optInt("channel_type");
+                    WKCommonModel.getInstance().getChannelState(channelId, (byte) channelType, channelState -> {
+                        if (channelState!=null){
+                             int isCalling = 0;
+                             if (WKReader.isNotEmpty(channelState.call_info.getCalling_participants())){
+                                 isCalling=1;
+                             }
+                            for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                                if (chatConversationAdapter.getData().get(i).uiConversationMsg != null
+                                        && !TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)
+                                        && channelId.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)) {
+                                    chatConversationAdapter.getData().get(i).isCalling = isCalling;
+                                    chatConversationAdapter.notifyItemChanged(i);
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
             }
         });
         // 监听刷新消息
@@ -382,7 +403,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 //                                chatConversationAdapter.getData().get(i).uiConversationMsg = uiConversationMsg;
 //                                break;
 //                            }
-                        isAdd =false;
+                        isAdd = false;
                         if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp || (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null && !chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
                             chatConversationAdapter.getData().get(i).isResetTyping = true;
                             chatConversationAdapter.getData().get(i).typingUserName = "";
@@ -415,7 +436,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         break;
                     }
                 }
-                if (isAdd){
+                if (isAdd) {
                     uiList.add(new ChatConversationMsg(uiConversationMsg));
                 }
             }
@@ -488,6 +509,29 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             return 1;
         });
+
+        EndpointManager.getInstance().setMethod("refresh_conversation_calling", object -> {
+            if (WKReader.isNotEmpty(MsgModel.getInstance().channelStatus)) {
+                for (WKChannelState state : MsgModel.getInstance().channelStatus) {
+                    for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                        if (chatConversationAdapter.getData().get(i).uiConversationMsg != null
+                                && !TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)
+                                && state.channel_id.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)) {
+                            chatConversationAdapter.getData().get(i).isCalling = state.calling;
+                            chatConversationAdapter.notifyItemChanged(i);
+                        }
+                    }
+                }
+                return null;
+            }
+            for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isCalling == 1) {
+                    chatConversationAdapter.getData().get(i).isCalling = 0;
+                    chatConversationAdapter.notifyItemChanged(i);
+                }
+            }
+            return null;
+        });
     }
 
 
@@ -497,13 +541,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void getData() {
-//        dispatchQueuePool.execute(new Runnable() {
-//            @Override
-//            public void run() {
-//                List<ChatConversationMsg> list = getChatMsg();
-//                sortMsg(list);
-//            }
-//        });
         getChatMsg();
     }
 
@@ -513,19 +550,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             @Override
             public void onResult(List<WKUIConversationMsg> list) {
                 List<ChatConversationMsg> tempList = new ArrayList<>();
-//                List<WKUIConversationMsg> tempList = WKIM.getInstance().getConversationManager().getAll();
                 if (WKReader.isNotEmpty(list)) {
                     for (int i = 0, size = list.size(); i < size; i++) {
                         tempList.add(new ChatConversationMsg(list.get(i)));
                     }
                 }
-                AndroidUtilities.runOnUIThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        sortMsg(tempList);
-                    }
-                });
-
+                AndroidUtilities.runOnUIThread(() -> sortMsg(tempList));
             }
         });
 
@@ -605,6 +635,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int msgCount = 0;
 
     private void resetData(WKUIConversationMsg uiConversationMsg, boolean isEnd) {
+        if (uiConversationMsg == null) {
+            return;
+        }
         // || (uiConversationMsg.getWkChannel() != null && uiConversationMsg.getWkChannel().follow == 0 && uiConversationMsg.channelType == WKChannelType.PERSONAL)
         if (uiConversationMsg.isDeleted == 1 || TextUtils.equals(uiConversationMsg.channelID, "0")) {
             if (isEnd) {

@@ -23,6 +23,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.AvatarOtherViewMenu;
 import com.chat.base.endpoint.entity.ShowCommunityAvatarMenu;
 import com.chat.base.entity.PopupMenuItem;
+import com.chat.base.entity.WKChannelState;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.msgitem.WKRevokeProvider;
@@ -37,6 +38,7 @@ import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.enity.ChatConversationMsg;
+import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
@@ -53,6 +55,7 @@ import org.telegram.ui.Components.RLottieImageView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 2019-11-15 13:46
@@ -75,6 +78,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         showReminders(helper, conversationMsg);
         setStatus(helper, item, false);
         showTyping(helper, conversationMsg);
+        showCalling(helper, conversationMsg);
     }
 
     public void addListener(IListener iItemMenuClick) {
@@ -115,6 +119,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 showContent(baseViewHolder, item);
                 chatConversationMsg.isResetContent = false;
             }
+            showCalling(baseViewHolder, chatConversationMsg);
         }
     }
 
@@ -316,7 +321,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 content = fromName + "：" + content;
             }
         }
-      //  contentTv.setText(content);
+        //  contentTv.setText(content);
         MoonUtil.identifyFaceExpression(getContext(), contentTv, content, MoonUtil.SMALL_SCALE);
     }
 
@@ -515,6 +520,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
         list.add(new PopupMenuItem(getContext().getString(R.string.delete_msg), R.mipmap.msg_delete, () -> iListener.onClick(ItemMenu.delete, item)));
         WKDialogUtils.getInstance().setViewLongClickPopup(helper.getView(R.id.contentLayout), list);
+    }
+
+    private void showCalling(final BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        helper.setGone(R.id.callingIv, conversationMsg.isCalling == 0);
     }
 
     public enum ItemMenu {

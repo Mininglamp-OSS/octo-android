@@ -158,6 +158,16 @@
                 </LinearLayout>
 
                 <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/callingIv"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="10dp"
+                    android:src="@mipmap/calls_menu_phone"
+                    android:tint="@color/colorAccent"
+                    android:visibility="gone" />
+
+                <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/forbiddenIv"
                     android:layout_width="15dp"
                     android:layout_height="15dp"

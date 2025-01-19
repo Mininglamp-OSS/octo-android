@@ -79,15 +79,28 @@
                         android:layout_alignParentBottom="true" />
 
                     <LinearLayout
-                        android:id="@+id/pinnedLayout"
+                        android:id="@+id/scrollViewLayout"
                         android:layout_width="match_parent"
-                        android:layout_height="50dp"
-                        android:orientation="horizontal"
-                        android:visibility="gone" />
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
 
+                        <LinearLayout
+                            android:id="@+id/callLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:gravity="center"
+                            android:orientation="horizontal"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/pinnedLayout"
+                            android:layout_width="match_parent"
+                            android:layout_height="50dp"
+                            android:orientation="horizontal"
+                            android:visibility="gone" />
+                    </LinearLayout>
 
                     <TextView
-                        android:tag="1"
                         android:id="@+id/timeTv"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -98,6 +111,7 @@
                         android:paddingTop="2dp"
                         android:paddingEnd="5dp"
                         android:paddingBottom="2dp"
+                        android:tag="1"
                         android:textColor="@color/white"
                         android:textSize="13sp"
                         android:visibility="gone" />

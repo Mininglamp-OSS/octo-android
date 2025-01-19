@@ -17,6 +17,7 @@ import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.WKBaseCMD;
 import com.chat.base.db.WKBaseCMDManager;
+import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
@@ -33,6 +34,7 @@ import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.enity.WKSyncReminder;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
@@ -63,7 +65,7 @@ public class MsgModel extends WKBaseModel {
     private MsgModel() {
 
     }
-
+   public List<WKChannelState> channelStatus;
     private int last_message_seq;
 
     private static class MsgModelBinder {
@@ -347,11 +349,13 @@ public class MsgModel extends WKBaseModel {
                     if (WKReader.isNotEmpty(result.conversations)) {
                         WKUIKitApplication.getInstance().isRefreshChatActivityMessage = true;
                     }
+                    channelStatus = result.channel_status;
                     iSyncConversationChatBack.onBack(result);
                     last_message_seq = 0;
                     syncCmdMsgs(0);
                     ackDeviceUUID();
                     syncReminder();
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> EndpointManager.getInstance().invoke("refresh_conversation_calling",null),300);
                 } else {
                     iSyncConversationChatBack.onBack(null);
                 }

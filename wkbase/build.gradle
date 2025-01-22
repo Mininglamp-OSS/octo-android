@@ -95,7 +95,7 @@ dependencies {
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1'
     api project(path: ':MyLibs:rlottie')
     // 远程仓库
-    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.3.6'
+    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.3.7'
     api 'com.tencent.bugly:crashreport:latest.release'
     implementation "net.zetetic:android-database-sqlcipher:4.5.3"
     implementation "androidx.sqlite:sqlite-ktx:2.4.0"

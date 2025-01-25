@@ -6,8 +6,8 @@ import android.text.TextUtils;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
-import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.R;
+import com.chat.uikit.WKUIKitApplication;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsg;
@@ -49,6 +49,9 @@ public class WKMultiForwardContent extends WKMessageContent {
                     if (msg.baseContentMsgModel != null) {
                         msg.type = msg.baseContentMsgModel.type;
                     }
+                } else {
+                    msg.baseContentMsgModel = new WKMessageContent();
+                    msg.type = WKContentType.unknown_msg;
                 }
                 msg.timestamp = msgJson.optLong("timestamp");
                 msg.messageID = msgJson.optString("message_id");

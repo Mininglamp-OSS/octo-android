@@ -63,7 +63,11 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
                 val fromUID = multiForwardContent.msgList[i].fromUID
                 val messageContent = multiForwardContent.msgList[i].baseContentMsgModel
                 if (messageContent != null) {
-                    content = messageContent.displayContent
+                    content = if (!TextUtils.isEmpty(messageContent.displayContent)) {
+                        messageContent.displayContent
+                    } else {
+                        context.getString(R.string.base_unknow_msg)
+                    }
                     // 如果文字太长滑动会卡顿
                     if (content.length > 100) {
                         content = content.substring(0, 80)

@@ -219,10 +219,14 @@ class ChatMultiForwardDetailAdapter(
                     }
 
                     else -> {
+                        var content = item.msg.baseContentMsgModel.displayContent
+                        if (TextUtils.isEmpty(content)) {
+                            content = context.getString(R.string.base_unknow_msg)
+                        }
                         MoonUtil.identifyFaceExpression(
                             context,
                             holder.getView(R.id.contentTv),
-                            item.msg.baseContentMsgModel.displayContent,
+                            content,
                             MoonUtil.DEF_SCALE
                         )
                         (holder.getView<View>(R.id.contentTv) as TextView).movementMethod =

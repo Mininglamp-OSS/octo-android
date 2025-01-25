@@ -1,6 +1,7 @@
 package com.chat.uikit.chat;
 
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
@@ -86,7 +87,7 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
         for (int i = 0, size = WKMultiForwardContent.msgList.size(); i < size; i++) {
             ChatMultiForwardEntity temp = new ChatMultiForwardEntity();
             temp.msg = WKMultiForwardContent.msgList.get(i);
-            if (temp.msg.type != 0)
+//            if (temp.msg.type != 0)
                 list.add(temp);
         }
         ChatMultiForwardEntity view = new ChatMultiForwardEntity();

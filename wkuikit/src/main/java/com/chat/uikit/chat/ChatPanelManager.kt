@@ -895,7 +895,7 @@ class ChatPanelManager(
                 R.mipmap.icon_chat_toolbar_emoji,
                 R.mipmap.icon_chat_toolbar_emoji,
                 getEmojiLayout()
-            ) { _, _ -> }
+            ) { isSelected, iConversationContext -> }
             tempToolBarList.add(0, emojiToolBar)
         }
         toolBarAdapter?.setList(tempToolBarList)
@@ -1734,6 +1734,7 @@ class ChatPanelManager(
         list.addAll(normalList)
         list.addAll(naturelList)
         list.addAll(symbolsList)
+        Log.e("emoji的长度","${list.size}")
         val emojiLayout = LinearLayout(iConversationContext.chatActivity)
         val emojiAdapter = EmojiAdapter(list, width)
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
@@ -1750,14 +1751,14 @@ class ChatPanelManager(
         )
 
         emojiAdapter.setOnItemClickListener { adapter, _, position ->
-            val emojiName = adapter.getItem(position) as String
+            val emojiEntry = adapter.getItem(position) as EmojiEntry
             val curPosition: Int = editText.selectionStart
             val sb = java.lang.StringBuilder(
                 Objects.requireNonNull(editText.text).toString()
             )
-            sb.insert(curPosition, emojiName)
-            MoonUtil.addEmojiSpan(editText, emojiName, iConversationContext.chatActivity)
-            editText.setSelection(curPosition + emojiName.length)
+            sb.insert(curPosition, emojiEntry.text)
+            MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
+            editText.setSelection(curPosition + emojiEntry.text.length)
         }
         return emojiLayout
     }

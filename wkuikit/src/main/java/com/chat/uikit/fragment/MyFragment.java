@@ -9,8 +9,10 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.PersonalInfoMenu;
+import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.WKLogUtils;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.FragMyLayoutBinding;
@@ -39,6 +41,14 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         initAdapter(wkVBinding.recyclerView, adapter);
         //设置数据item
         List<PersonalInfoMenu> endpoints = EndpointManager.getInstance().invokes(EndpointCategory.personalCenter, null);
+        for (int i = 0; i < endpoints.size(); i++) {
+            if (!TextUtils.isEmpty(endpoints.get(i).sid)
+                    && endpoints.get(i).sid.equals("invite_code")
+                    && WKConfig.getInstance().getAppConfig().register_invite_on == 0) {
+                endpoints.remove(i);
+                break;
+            }
+        }
         adapter.setList(endpoints);
     }
 
@@ -100,5 +110,23 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                 WKLogUtils.w("检查新版本错误");
             }
         }
+        WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
+            if (code == HttpResponseCode.success) {
+                if (adapter == null || WKReader.isEmpty(adapter.getData())) {
+                    return;
+                }
+                if (wkappConfig.register_invite_on == 0) {
+                    for (int i = 0; i < adapter.getData().size(); i++) {
+                        if (!TextUtils.isEmpty(adapter.getData().get(i).sid) && adapter.getData().get(i).sid.equals("invite_code")) {
+                            adapter.removeAt(i);
+                            break;
+                        }
+                    }
+                } else {
+                    List<PersonalInfoMenu> endpoints = EndpointManager.getInstance().invokes(EndpointCategory.personalCenter, null);
+                    adapter.setList(endpoints);
+                }
+            }
+        });
     }
 }

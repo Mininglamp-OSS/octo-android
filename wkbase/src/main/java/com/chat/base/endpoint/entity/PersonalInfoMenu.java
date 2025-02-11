@@ -8,6 +8,12 @@ public class PersonalInfoMenu extends BaseEndpoint {
     public IPersonalInfoMenuClick iPersonalInfoMenuClick;
     public boolean isNewVersionIv = false;
 
+    public PersonalInfoMenu(String sid, int imgResourceID, String text, IPersonalInfoMenuClick iPersonalInfoMenuClick) {
+        this.imgResourceID = imgResourceID;
+        this.text = text;
+        this.sid = sid;
+        this.iPersonalInfoMenuClick = iPersonalInfoMenuClick;
+    }
 
     public PersonalInfoMenu(int imgResourceID, String text, IPersonalInfoMenuClick iPersonalInfoMenuClick) {
         this.imgResourceID = imgResourceID;

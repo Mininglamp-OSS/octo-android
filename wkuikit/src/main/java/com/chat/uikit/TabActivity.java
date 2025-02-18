@@ -41,13 +41,13 @@ import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.language.WKMultiLanguageUtil;
+import com.chat.base.utils.rxpermissions.RxPermissions;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActTabMainBinding;
 import com.chat.uikit.fragment.ChatFragment;
 import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
 import com.chat.uikit.user.service.UserModel;
-import com.tbruyelle.rxpermissions3.RxPermissions;
 
 import org.telegram.ui.Components.RLottieImageView;
 

@@ -7,7 +7,7 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.chat.base.R;
 import com.chat.base.ui.Theme;
-import com.tbruyelle.rxpermissions3.RxPermissions;
+import com.chat.base.utils.rxpermissions.RxPermissions;
 
 public class WKPermissions {
     private WKPermissions() {

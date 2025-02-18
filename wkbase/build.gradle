@@ -59,8 +59,6 @@ dependencies {
     api 'androidx.multidex:multidex:2.0.1'
 
     api 'com.alibaba:fastjson:1.2.83'
-    //动态权限
-    api 'com.github.tbruyelle:rxpermissions:0.12'
     //glide
     api('com.github.bumptech.glide:glide:4.16.0') {
         transitive = true

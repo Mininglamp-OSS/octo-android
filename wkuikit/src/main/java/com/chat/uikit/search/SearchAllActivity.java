@@ -134,10 +134,7 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
                 }
             }
         });
-        wkVBinding.cancelTv.setOnClickListener(v -> {
-            SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
-            onBackPressed();
-        });
+        wkVBinding.cancelTv.setOnClickListener(v -> finish());
         SingleClickUtil.onSingleClick(wkVBinding.findUserLayout, v -> {
             SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
             String searchKey = Objects.requireNonNull(wkVBinding.searchEt.getText()).toString();

@@ -16,6 +16,7 @@ import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
+import com.chat.uikit.chat.search.member.SearchWithMemberActivity;
 import com.chat.uikit.databinding.ActAllMemberLayoutBinding;
 import com.chat.uikit.enity.AllGroupMemberEntity;
 import com.chat.uikit.enity.OnlineUser;
@@ -46,6 +47,7 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
     private String searchKey;
     private TextView titleTv;
     private int groupType = 0;
+    private boolean searchMessage;
 
     @Override
     protected ActAllMemberLayoutBinding getViewBinding() {
@@ -60,10 +62,15 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
 
     @Override
     protected void initView() {
+        if (getIntent().hasExtra("searchMessage")) {
+            searchMessage = getIntent().getBooleanExtra("searchMessage", false);
+        }
         channelID = getIntent().getStringExtra("channelID");
         channelType = getIntent().getByteExtra("channelType", WKChannelType.GROUP);
         adapter = new AllMembersAdapter();
         initAdapter(wkVBinding.recyclerView, adapter);
+
+
     }
 
     @Override
@@ -115,9 +122,16 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
             AllGroupMemberEntity entity = adapter.getItem(position);
             if (entity != null) {
                 entity.getChannelMember();
-                Intent intent = new Intent(this, UserDetailActivity.class);
-                intent.putExtra("uid", entity.getChannelMember().memberUID);
-                intent.putExtra("groupID", entity.getChannelMember().channelID);
+                Intent intent;
+                if (searchMessage) {
+                    intent = new Intent(this, SearchWithMemberActivity.class);
+                    intent.putExtra("channelID", channelID);
+                    intent.putExtra("fromUID", entity.getChannelMember().memberUID);
+                } else {
+                    intent = new Intent(this, UserDetailActivity.class);
+                    intent.putExtra("uid", entity.getChannelMember().memberUID);
+                    intent.putExtra("groupID", entity.getChannelMember().channelID);
+                }
                 startActivity(intent);
             }
         }));
@@ -127,10 +141,13 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
     protected void initData() {
         super.initData();
         int count = WKIM.getInstance().getChannelMembersManager().getMemberCount(channelID, channelType);
-
-        titleTv.setText(String.format(getString(R.string.group_members), count + ""));
+        if (searchMessage) {
+            titleTv.setText(R.string.uikit_search_with_member);
+        } else {
+            titleTv.setText(String.format(getString(R.string.group_members), count + ""));
+        }
         WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
-        if (channel != null && channel.remoteExtraMap != null ) {
+        if (channel != null && channel.remoteExtraMap != null) {
             if (channel.remoteExtraMap.containsKey(WKChannelExtras.groupType)) {
                 Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
                 if (groupTypeObject instanceof Integer) {
@@ -139,8 +156,12 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
             }
             Object memberCountObject = channel.remoteExtraMap.get(WKChannelCustomerExtras.memberCount);
             if (memberCountObject instanceof Integer) {
-                 count = (int) memberCountObject;
-                titleTv.setText(String.format(getString(R.string.group_members), count + ""));
+                count = (int) memberCountObject;
+                if (searchMessage) {
+                    titleTv.setText(R.string.uikit_search_with_member);
+                } else {
+                    titleTv.setText(String.format(getString(R.string.group_members), count + ""));
+                }
             }
         }
         getData();
@@ -160,6 +181,7 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
 
     private void resortData(List<WKChannelMember> list) {
         if (WKReader.isNotEmpty(list)) {
+            wkVBinding.refreshLayout.setEnableLoadMore(true);
             List<String> uidList = new ArrayList<>();
             for (WKChannelMember member : list) {
                 uidList.add(member.memberUID);
@@ -194,7 +216,12 @@ public class WKAllMembersActivity extends WKBaseActivity<ActAllMemberLayoutBindi
                 }
             });
         } else {
-            wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
+            if (page == 1) {
+                adapter.setList(new ArrayList<>());
+            } else {
+                wkVBinding.refreshLayout.finishLoadMore();
+                wkVBinding.refreshLayout.setEnableLoadMore(false);
+            }
         }
     }
 

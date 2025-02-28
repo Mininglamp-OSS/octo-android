@@ -282,5 +282,21 @@
     <string name="tab_text_contacts">联系人</string>
     <string name="tab_text_me">我的</string>
     <string name="invitation_sent">邀请已发送</string>
+    <string name="find_chat_content">查找聊天记录</string>
+    <string name="uikit_search_specified_content">搜索指定内容</string>
+    <string name="uikit_search_with_member">按群成员查找</string>
+    <string name="uikit_search_member">群成员</string>
+    <string name="uikit_find_chat_weak_7">日</string>
+    <string name="uikit_find_chat_weak_6">六</string>
+    <string name="uikit_find_chat_weak_5">五</string>
+    <string name="uikit_find_chat_weak_4">四</string>
+    <string name="uikit_find_chat_weak_3">三</string>
+    <string name="uikit_find_chat_weak_2">二</string>
+    <string name="uikit_find_chat_weak_1">一</string>
+    <string name="uikit_find_chat_content">查找聊天记录</string>
+    <string name="uikit_today">今天</string>
+    <string name="uikit_search_for_date">日期</string>
+    <string name="uikit_go_to_chat_item">定位到聊天</string>
+    <string name="uikit_search_for_image">图片</string>
 </resources>
 

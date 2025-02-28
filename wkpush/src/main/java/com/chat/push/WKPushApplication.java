@@ -17,11 +17,14 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.systembar.WKOSUtils;
 import com.chat.push.service.PushModel;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.heytap.msp.push.HeytapPushManager;
 import com.heytap.msp.push.callback.ICallBackResultService;
 import com.huawei.hms.aaid.HmsInstanceId;
@@ -63,18 +66,20 @@ public class WKPushApplication {
 
     private void initPush() {
         if (mContext == null || mContext.get() == null) return;
+        FirebaseApp.initializeApp(mContext.get());
         notifyChannel(WKBaseApplication.getInstance().application);
-        if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
-            if (OsUtils.isEmui()) {
-                new Thread(() -> getHuaWeiToken(mContext.get())).start();
-            } else if (OsUtils.isMiui()) {
-                initXiaoMiPush(mContext.get());
-            } else if (OsUtils.isOppo()) {
-                initOPPO();
-            } else if (OsUtils.isVivo()) {
-                initVIVO();
-            }
-        }
+        getPushToken();
+//        if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
+//            if (OsUtils.isEmui()) {
+//                new Thread(() -> getHuaWeiToken(mContext.get())).start();
+//            } else if (OsUtils.isMiui()) {
+//                initXiaoMiPush(mContext.get());
+//            } else if (OsUtils.isOppo()) {
+//                initOPPO();
+//            } else if (OsUtils.isVivo()) {
+//                initVIVO();
+//            }
+//        }
 
     }
 
@@ -89,8 +94,7 @@ public class WKPushApplication {
             // 判断token是否为空
             if (!TextUtils.isEmpty(token)) {
                 Log.e("华为推送token", token);
-                String packageName = WKDeviceUtils.getInstance().getPackageName(context);
-                PushModel.getInstance().registerDeviceToken(token, packageName, "app-华为");
+                PushModel.getInstance().registerDeviceToken(token, pushBundleID,"");
             }
         } catch (ApiException e) {
         }
@@ -108,8 +112,7 @@ public class WKPushApplication {
                 if (i == 0) {
                     // 注册成功
                     Log.e("tu推送ID", HeytapPushManager.getRegisterID());
-                    String packageName = WKDeviceUtils.getInstance().getPackageName(mContext.get());
-                    com.chat.push.service.PushModel.getInstance().registerDeviceToken(s, packageName, "app-oppo");
+                    PushModel.getInstance().registerDeviceToken(s, WKPushApplication.getInstance().pushBundleID,"");
                 }
             }
 
@@ -148,8 +151,7 @@ public class WKPushApplication {
                 String regId = PushClient.getInstance(mContext.get()).getRegId();
                 if (!TextUtils.isEmpty(regId)) {
                     Log.e("获取vivopush", regId);
-                    String packageName = WKDeviceUtils.getInstance().getPackageName(mContext.get());
-                    PushModel.getInstance().registerDeviceToken(regId, packageName, "app-vivo");
+                    PushModel.getInstance().registerDeviceToken(regId, pushBundleID,"");
                 }
             });
 
@@ -163,7 +165,7 @@ public class WKPushApplication {
             Context context = (Context) object;
             WKDialogUtils.getInstance().showDialog(context, context.getString(R.string.open_notification_title), context.getString(R.string.open_notification_content), true, "", context.getString(R.string.open_setting), 0, Theme.colorAccount, index -> {
                 if (index == 1) {
-                    WKOSUtils.openChannelSetting(context,WKConstants.newMsgChannelID);
+                    WKOSUtils.openChannelSetting(context, WKConstants.newMsgChannelID);
                 }
             });
             return null;
@@ -171,11 +173,11 @@ public class WKPushApplication {
         //注销推送
         EndpointManager.getInstance().setMethod("wk_logout", object -> {
             OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), 0);
-            PushModel.getInstance().unRegisterDeviceToken((code, msg) -> {
-                if (code != HttpResponseCode.success) {
-                    WKToastUtils.getInstance().showToastNormal(msg);
-                }
-            });
+//            PushModel.getInstance().unRegisterDeviceToken((code, msg) -> {
+//                if (code != HttpResponseCode.success) {
+//                    WKToastUtils.getInstance().showToastNormal(msg);
+//                }
+//            });
             return null;
         });
 
@@ -186,6 +188,60 @@ public class WKPushApplication {
             OsUtils.setBadge(WKBaseApplication.getInstance().getContext(), num);
             return null;
         });
+    }
+
+    private void getPushToken() {
+        int statusCode = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(mContext.get());
+        Log.e("google play services", statusCode + "");
+        if (statusCode == ConnectionResult.SUCCESS) {
+            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task1 -> {
+                if (!task1.isSuccessful()) {
+                    Log.e("获取FCM令牌错误", "-->");
+                    Log.w("Firebase", "Fetching FCM registration token failed", task1.getException());
+                    return;
+                }
+                // Get new FCM registration token
+                String token = task1.getResult();
+                Log.e("获取到FCM令牌", token);
+                PushModel.getInstance().registerDeviceToken(token, pushBundleID,"FIREBASE");
+            });
+        }else {
+            if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
+                if (OsUtils.isEmui()) {
+                    new Thread(() -> getHuaWeiToken(mContext.get())).start();
+                } else if (OsUtils.isMiui()) {
+                    initXiaoMiPush(mContext.get());
+                } else if (OsUtils.isOppo()) {
+                    initOPPO();
+                } else if (OsUtils.isVivo()) {
+                    initVIVO();
+                }
+            }
+        }
+//        GoogleApiAvailability.getInstance().makeGooglePlayServicesAvailable(mContext.get()).addOnCompleteListener(new OnCompleteListener<Void>() {
+//            @Override
+//            public void onComplete(@NonNull Task<Void> task) {
+//                if (task.isSuccessful()) {
+//                    Log.d("Firebase", "onComplete: Play services OKAY");
+//                    //firebase 推送 （FCM）获取token（FCM令牌）
+//                    FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task1 -> {
+//                        if (!task1.isSuccessful()) {
+//                            Log.e("获取FCM令牌错误", "-->");
+//                            Log.w("Firebase", "Fetching FCM registration token failed", task1.getException());
+//                            return;
+//                        }
+//                        // Get new FCM registration token
+//                        String token = task1.getResult();
+//                        Log.e("获取到FCM令牌", token);
+//                    });
+//
+//                } else {
+//                    Log.e("获取FCM令牌错误11", "-->");
+//                    // Show the user some UI explaining that the needed version
+//                    // of Play services Could not be installed and the app can't run.
+//                }
+//            }
+//        });
     }
 
     private static void notifyChannel(Application context) {

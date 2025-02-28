@@ -1103,6 +1103,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
                     wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), channelState.online_count));
                 }
+                if (channelType==WKChannelType.PERSONAL){
+                    return;
+                }
                 if (channelState.call_info == null || WKReader.isEmpty(channelState.call_info.getCalling_participants())) {
                     wkVBinding.callLayout.setVisibility(View.GONE);
                     isShowCallingView = false;

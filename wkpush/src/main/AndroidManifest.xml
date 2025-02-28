@@ -2,7 +2,7 @@
 
     <uses-permission android:name="com.coloros.mcs.permission.RECIEVE_MCS_MESSAGE" />
     <uses-permission android:name="com.heytap.mcs.permission.RECIEVE_MCS_MESSAGE" />
-
+    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" />
     <application
         android:allowBackup="true"
         android:supportsRtl="true">
@@ -15,6 +15,7 @@
                 <action android:name="com.huawei.push.action.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
         <!--=================华为推送服务END==================================-->
         <!--************************小米push配置***************************-->
         <service
@@ -121,6 +122,21 @@
             android:name="com.vivo.push.sdk.service.CommandClientService"
             android:exported="true"
             android:permission="com.push.permission.UPSTAGESERVICE" />
+        <!--Firebase-->
+        <service
+            android:name="com.chat.push.push.WKFirebaseMessagingService"
+            android:exported="true"
+            android:permission="com.heytap.mcs.permission.SEND_PUSH_MESSAGE">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
+    <queries>
+        <intent>
+            <action android:name="com.huawei.hms.core.aidlservice" />
+        </intent>
+    </queries>
+
 
 </manifest>

@@ -29,6 +29,7 @@ import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.FullyGridLayoutManager;
 import com.chat.uikit.Const;
 import com.chat.uikit.R;
+import com.chat.uikit.chat.search.MessageRecordActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActGroupDetailLayoutBinding;
 import com.chat.uikit.group.adapter.GroupMemberAdapter;
@@ -92,13 +93,13 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             wkVBinding.msgRemindLayout.removeAllViews();
             wkVBinding.msgRemindLayout.addView(view);
         }
-
-        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.findContentLayout));
-        if (findMsgView != null) {
-            wkVBinding.findContentView.setVisibility(View.VISIBLE);
-            wkVBinding.findContentLayout.removeAllViews();
-            wkVBinding.findContentLayout.addView(findMsgView);
-        }
+//
+//        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.findContentLayout));
+//        if (findMsgView != null) {
+//            wkVBinding.findContentView.setVisibility(View.VISIBLE);
+//            wkVBinding.findContentLayout.removeAllViews();
+//            wkVBinding.findContentLayout.addView(findMsgView);
+//        }
 
         View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.msgSettingLayout));
         if (msgReceiptView != null) {
@@ -136,6 +137,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 }
             }
             return null;
+        });
+        SingleClickUtil.onSingleClick(wkVBinding.findContentLayout, view1 -> {
+            if (groupIsEnable()) {
+                Intent intent = new Intent(this, MessageRecordActivity.class);
+                intent.putExtra("channel_id", groupNo);
+                intent.putExtra("channel_type", WKChannelType.GROUP);
+                startActivity(intent);
+            }
         });
         SingleClickUtil.onSingleClick(wkVBinding.remarkLayout, view1 -> {
             if (groupIsEnable()) {

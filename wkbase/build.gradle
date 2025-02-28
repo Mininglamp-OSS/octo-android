@@ -33,6 +33,7 @@ android {
     }
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
     namespace 'com.chat.base'
 
@@ -91,6 +92,7 @@ dependencies {
     api "androidx.emoji2:emoji2-views:1.5.0"
     api 'org.jsoup:jsoup:1.15.2'
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1'
+    api 'com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer:v10.0.0'
     api project(path: ':MyLibs:rlottie')
     // 远程仓库
     api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.3.7'

@@ -895,7 +895,7 @@ class ChatPanelManager(
                 R.mipmap.icon_chat_toolbar_emoji,
                 R.mipmap.icon_chat_toolbar_emoji,
                 getEmojiLayout()
-            ) { isSelected, iConversationContext -> }
+            ) { _, _ -> }
             tempToolBarList.add(0, emojiToolBar)
         }
         toolBarAdapter?.setList(tempToolBarList)
@@ -1734,14 +1734,16 @@ class ChatPanelManager(
         list.addAll(normalList)
         list.addAll(naturelList)
         list.addAll(symbolsList)
-        Log.e("emoji的长度","${list.size}")
         val emojiLayout = LinearLayout(iConversationContext.chatActivity)
         val emojiAdapter = EmojiAdapter(list, width)
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
         val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
         recyclerView.layoutManager = emojiLayoutManager
         recyclerView.adapter = emojiAdapter
-        val height = WKConstants.getKeyboardHeight()
+        var height = WKConstants.getKeyboardHeight()
+        if (height == 0){
+            height = AndroidUtilities.getScreenHeight() / 3
+        }
         emojiLayout.addView(
             recyclerView,
             LayoutHelper.createLinear(

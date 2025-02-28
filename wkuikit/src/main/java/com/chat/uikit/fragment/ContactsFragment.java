@@ -38,6 +38,7 @@ import com.chat.uikit.contacts.FriendAdapter;
 import com.chat.uikit.contacts.FriendUIEntity;
 import com.chat.uikit.databinding.FragContactsLayoutBinding;
 import com.chat.uikit.search.SearchAllActivity;
+import com.chat.uikit.search.remote.GlobalActivity;
 import com.chat.uikit.user.UserDetailActivity;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
@@ -177,9 +178,9 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         wkVBinding.searchIv.setOnClickListener(view -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 @SuppressWarnings("unchecked") ActivityOptionsCompat activityOptions = ActivityOptionsCompat.makeSceneTransitionAnimation(requireActivity(), new Pair<>(wkVBinding.searchIv, "searchView"));
-                startActivity(new Intent(getActivity(), SearchAllActivity.class), activityOptions.toBundle());
+                startActivity(new Intent(getActivity(), GlobalActivity.class), activityOptions.toBundle());
             } else {
-                startActivity(new Intent(getActivity(), SearchAllActivity.class));
+                startActivity(new Intent(getActivity(), GlobalActivity.class));
             }
         });
         //监听刷新通讯录

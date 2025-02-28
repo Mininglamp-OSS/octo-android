@@ -21,6 +21,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
+import com.chat.uikit.chat.search.MessageRecordActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActChatPersonalLayoutBinding;
@@ -64,11 +65,11 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             wkVBinding.msgRemindLayout.removeAllViews();
             wkVBinding.msgRemindLayout.addView(view);
         }
-        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.findContentLayout));
-        if (findMsgView != null) {
-            wkVBinding.findContentLayout.removeAllViews();
-            wkVBinding.findContentLayout.addView(findMsgView);
-        }
+//        View findMsgView = (View) EndpointManager.getInstance().invoke("find_msg_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.findContentLayout));
+//        if (findMsgView != null) {
+//            wkVBinding.findContentLayout.removeAllViews();
+//            wkVBinding.findContentLayout.addView(findMsgView);
+//        }
 
         View msgReceiptView = (View) EndpointManager.getInstance().invoke("msg_receipt_view", new ChatSettingCellMenu(channelId, WKChannelType.PERSONAL, wkVBinding.msgSettingLayout));
         if (msgReceiptView != null) {
@@ -98,7 +99,12 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             }
             return null;
         });
-
+        SingleClickUtil.onSingleClick(wkVBinding.findContentLayout, v -> {
+            Intent intent = new Intent(this, MessageRecordActivity.class);
+            intent.putExtra("channel_id", channelId);
+            intent.putExtra("channel_type", WKChannelType.PERSONAL);
+            startActivity(intent);
+        });
         //免打扰
         wkVBinding.muteSwitchView.setOnCheckedChangeListener((compoundButton, b) -> {
             if (compoundButton.isPressed()) {

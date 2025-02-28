@@ -118,4 +118,8 @@
     <string name="str_delete_message_also_to">Also delete for %s</string>
     <string name="str_delete_message_for_all">Delete for all members</string>
     <string name="content_too_long">The content is too long</string>
+    <string name="video_deleted">Video does not exist or has been deleted</string>
+    <string name="can_not_play_video_with_revoke">The video has been recalled and cannot be played</string>
+    <string name="wk_video">Video</string>
+    <string name="last_message_file">[File]</string>
 </resources>

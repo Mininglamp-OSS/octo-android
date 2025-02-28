@@ -6,8 +6,7 @@ import android.util.Log;
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKConfig;
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.RegisterPushToken;
+import com.chat.base.config.WKConstants;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
@@ -15,7 +14,7 @@ import com.chat.push.OsUtils;
 
 /**
  * 2020-03-08 22:28
- * 推送管理
+ * 推送管理w
  */
 public class PushModel extends WKBaseModel {
 
@@ -37,18 +36,23 @@ public class PushModel extends WKBaseModel {
      * @param token     token
      * @param bundle_id Android为包名称
      */
-    public void registerDeviceToken(String token, String bundle_id,String from) {
-        Log.e("注册来源",from);
-        String device_type = "";
-        if (OsUtils.isEmui()) {
-            device_type = "HMS";
-        } else if (OsUtils.isMiui())
-            device_type = "MI";
-        else if (OsUtils.isOppo()) {
-            device_type = "OPPO";
-        } else if (OsUtils.isVivo()) {
-            device_type = "VIVO";
+    public void registerDeviceToken(String token, String bundle_id, String device_type) {
+        if (!WKConstants.isLogin()) {
+            return;
         }
+        if (TextUtils.isEmpty(device_type)) {
+            if (OsUtils.isEmui()) {
+                device_type = "HMS";
+            } else if (OsUtils.isMiui())
+                device_type = "MI";
+            else if (OsUtils.isOppo()) {
+                device_type = "OPPO";
+            } else if (OsUtils.isVivo()) {
+                device_type = "VIVO";
+            }
+        }
+
+
         //   EndpointManager.getInstance().invoke("register_push_token", new RegisterPushToken(device_type, token));
         JSONObject httpParams = new JSONObject();
         httpParams.put("device_token", token);

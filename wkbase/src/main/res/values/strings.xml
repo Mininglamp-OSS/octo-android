@@ -117,4 +117,8 @@
     <string name="str_delete_message_also_to">同时为 %s 删除</string>
     <string name="str_delete_message_for_all">为所有成员删除</string>
     <string name="content_too_long">内容太长</string>
+    <string name="video_deleted">视频不存在或已被删除</string>
+    <string name="can_not_play_video_with_revoke">视频已被撤回，无法播放</string>
+    <string name="wk_video">视频</string>
+    <string name="last_message_file">[文件]</string>
 </resources>

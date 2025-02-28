@@ -6,8 +6,10 @@ import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.utils.WKDeviceUtils;
+import com.chat.push.WKPushApplication;
 import com.chat.push.service.PushModel;
 import com.huawei.hms.push.HmsMessageService;
+import com.huawei.hms.push.RemoteMessage;
 
 /**
  * 2020-03-08 22:10
@@ -18,8 +20,13 @@ public class HuaweiHmsMessageService extends HmsMessageService {
     public void onNewToken(String s, Bundle bundle) {
         super.onNewToken(s, bundle);
         if (!TextUtils.isEmpty(s)) {
-            String packageName = WKDeviceUtils.getInstance().getPackageName(WKBaseApplication.getInstance().getContext());
-            PushModel.getInstance().registerDeviceToken(s, packageName,"service-华为");
+            PushModel.getInstance().registerDeviceToken(s, WKPushApplication.getInstance().pushBundleID,"");
         }
+    }
+
+    @Override
+    public void onMessageReceived(RemoteMessage remoteMessage) {
+        super.onMessageReceived(remoteMessage);
+        Log.e("收到偷穿消息",remoteMessage.getData());
     }
 }

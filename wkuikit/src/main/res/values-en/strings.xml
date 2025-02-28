@@ -282,5 +282,21 @@
     <string name="tab_text_contacts">Contacts</string>
     <string name="tab_text_me">Me</string>
     <string name="invitation_sent">Invitation sent</string>
+    <string name="find_chat_content">Search Chat History</string>
+    <string name="uikit_search_specified_content">Filter by</string>
+    <string name="uikit_search_with_member">Search by group members</string>
+    <string name="uikit_search_member">Members</string>
+    <string name="uikit_find_chat_weak_7">S</string>
+    <string name="uikit_find_chat_weak_6">S</string>
+    <string name="uikit_find_chat_weak_5">F</string>
+    <string name="uikit_find_chat_weak_4">T</string>
+    <string name="uikit_find_chat_weak_3">W</string>
+    <string name="uikit_find_chat_weak_2">T</string>
+    <string name="uikit_find_chat_weak_1">M</string>
+    <string name="uikit_find_chat_content">Search Chat History</string>
+    <string name="uikit_today">Today</string>
+    <string name="uikit_search_for_date">Date</string>
+    <string name="uikit_go_to_chat_item">Go to chat</string>
+    <string name="uikit_search_for_image">Image</string>
 </resources>
 

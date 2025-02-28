@@ -45,6 +45,7 @@ import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.search.SearchAllActivity;
+import com.chat.uikit.search.remote.GlobalActivity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -135,9 +136,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.searchIv.setOnClickListener(view1 -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 @SuppressWarnings("unchecked") ActivityOptionsCompat activityOptions = ActivityOptionsCompat.makeSceneTransitionAnimation(requireActivity(), new Pair<>(wkVBinding.searchIv, "searchView"));
-                startActivity(new Intent(getActivity(), SearchAllActivity.class), activityOptions.toBundle());
+                startActivity(new Intent(getActivity(), GlobalActivity.class), activityOptions.toBundle());
             } else {
-                startActivity(new Intent(getActivity(), SearchAllActivity.class));
+                startActivity(new Intent(getActivity(), GlobalActivity.class));
             }
         });
         chatConversationAdapter.addChildClickViewIds(R.id.contentLayout);
@@ -286,18 +287,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
                 case "sync_channel_state" -> {
+                    String fromUID = wkCmd.paramJsonObject.optString("from_uid");
                     String channelId = wkCmd.paramJsonObject.optString("channel_id");
                     int channelType = wkCmd.paramJsonObject.optInt("channel_type");
+                    if (channelId.equals(WKConfig.getInstance().getUid())) {
+                        channelId = fromUID;
+                    }
+                    String finalChannelId = channelId;
                     WKCommonModel.getInstance().getChannelState(channelId, (byte) channelType, channelState -> {
-                        if (channelState!=null){
-                             int isCalling = 0;
-                             if (WKReader.isNotEmpty(channelState.call_info.getCalling_participants())){
-                                 isCalling=1;
-                             }
+                        if (channelState != null) {
+                            int isCalling = 0;
+                            if (WKReader.isNotEmpty(channelState.call_info.getCalling_participants())) {
+                                isCalling = 1;
+                            }
                             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                                 if (chatConversationAdapter.getData().get(i).uiConversationMsg != null
                                         && !TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)
-                                        && channelId.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)) {
+                                        && finalChannelId.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID)) {
                                     chatConversationAdapter.getData().get(i).isCalling = isCalling;
                                     chatConversationAdapter.notifyItemChanged(i);
                                     break;

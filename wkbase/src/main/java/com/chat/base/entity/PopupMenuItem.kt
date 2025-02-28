@@ -5,7 +5,7 @@ class PopupMenuItem(var text: String, var iconResourceID: Int, var iClick: IClic
     var subText: String = ""
     var tag: String = ""
 
-    interface IClick {
+    fun interface IClick {
         fun onClick()
     }
 

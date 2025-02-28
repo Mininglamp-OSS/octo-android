@@ -64,6 +64,11 @@
             android:launchMode="singleTask"/>
         <activity android:name="com.chat.uikit.chat.ChatActivity"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
+        <activity android:name="com.chat.uikit.search.remote.GlobalActivity" />
+        <activity android:name="com.chat.uikit.chat.search.MessageRecordActivity" />
+        <activity android:name="com.chat.uikit.chat.search.member.SearchWithMemberActivity" />
+        <activity android:name="com.chat.uikit.chat.search.date.SearchWithDateActivity" />
+        <activity android:name="com.chat.uikit.chat.search.image.SearchWithImgActivity" />
 
         <service
             android:name="com.chat.uikit.AliveJobService"

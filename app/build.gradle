@@ -2,9 +2,24 @@ plugins {
     id 'com.android.application'
     id 'kotlin-parcelize'
     id 'kotlin-android'
+    id 'com.google.gms.google-services'
 }
 
 android {
+    signingConfigs {
+        debug {
+            storeFile file('../test.jks')
+            storePassword 'test1365'
+            keyAlias = 'test'
+            keyPassword 'test1365'
+        }
+        release {
+            storeFile file('../test.jks')
+            storePassword 'test1365'
+            keyAlias = 'test'
+            keyPassword 'test1365'
+        }
+    }
     namespace 'com.xinbida.tsdd.demo'
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
@@ -34,18 +49,20 @@ android {
 
     buildTypes {
         release {
-//            jniDebuggable true
-//            zipAlignEnabled true   //Zipalign优化
-//            minifyEnabled true  // 是否混淆
-//            shrinkResources true  // 是否去除无效的资源文件
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            jniDebuggable true
+            //  zipAlignEnabled true   //Zipalign优化
+            minifyEnabled true  // 是否混淆
+            shrinkResources true  // 是否去除无效的资源文件
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
         debug {
 //            jniDebuggable true
 //            zipAlignEnabled true   //Zipalign优化
 //            minifyEnabled true  // 是否混淆
 //            shrinkResources true  // 是否去除无效的资源文件
-//            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+//            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

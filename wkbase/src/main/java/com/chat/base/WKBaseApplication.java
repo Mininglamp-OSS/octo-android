@@ -2,19 +2,25 @@ package com.chat.base;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Handler;
 import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityOptionsCompat;
+import androidx.core.util.Pair;
 
 import com.alibaba.fastjson.JSON;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.model.GlideUrl;
+import com.chat.base.act.PlayVideoActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.DBHelper;
 import com.chat.base.emoji.EmojiManager;
+import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.entity.PlayVideoMenu;
 import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.utils.AndroidUtilities;
@@ -86,7 +92,20 @@ public class WKBaseApplication {
             //158638
 //            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
         }).start();
-
+        //监听视频播放
+        EndpointManager.getInstance().setMethod("play_video", object -> {
+            if (object instanceof PlayVideoMenu playVideoMenu) {
+                @SuppressWarnings("unchecked") ActivityOptionsCompat activityOptions = ActivityOptionsCompat.makeSceneTransitionAnimation(Objects.requireNonNull(playVideoMenu.activity), new Pair<>(playVideoMenu.view, "coverIv"));
+                Intent intent = new Intent(playVideoMenu.activity, PlayVideoActivity.class);
+                intent.putExtra("coverImg", playVideoMenu.coverUrl);
+                intent.putExtra("url", playVideoMenu.playUrl);
+                intent.putExtra("title", playVideoMenu.videoTitle);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                playVideoMenu.activity.startActivity(intent, activityOptions.toBundle());
+                playVideoMenu.activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
+            }
+            return null;
+        });
     }
 
     public Context getContext() {

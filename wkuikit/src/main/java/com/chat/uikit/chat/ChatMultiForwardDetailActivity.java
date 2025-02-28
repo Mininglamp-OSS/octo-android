@@ -88,7 +88,7 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
             ChatMultiForwardEntity temp = new ChatMultiForwardEntity();
             temp.msg = WKMultiForwardContent.msgList.get(i);
 //            if (temp.msg.type != 0)
-                list.add(temp);
+            list.add(temp);
         }
         ChatMultiForwardEntity view = new ChatMultiForwardEntity();
         view.itemType = 2;

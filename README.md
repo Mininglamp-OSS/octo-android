@@ -31,7 +31,7 @@
 
 **`wkpush`**
 
-推送模块  唐僧叨叨集成了`华为`,`小米`,`vivo`,`oppo`厂商推送功能。开发者二次开发是只需要替换对应的appID和appKey即可
+推送模块  唐僧叨叨集成了`华为`,`小米`,`vivo`,`oppo`,`FCM`厂商推送功能。开发者二次开发是只需要替换对应的appID和appKey即可
 - **华为** 在官方申请开发者账号并开通推送服务后，下载`agconnect-services.json`文件覆盖`app`模块下的该文件。并在`wkpush`模块的 `AndroidManifest.xml` 文件中的名为`com.huawei.hms.client.appid`的`meta-data`替换appID，`PushKeys`文件中替换`huaweiAPPID`即可
 
 - **小米** 修改此模块下的`PushKeys`文件中的`xiaoMiAppID` 和 `xiaoMiAppKey`即可
@@ -39,6 +39,8 @@
 - **OPPO** 修改此模块下的`PushKeys`文件中的`oppoAppKey` 和 `oppoAppSecret`即可
 
 - **VIVO** 修改此模块`AndroidManifest.xml` 文件中的名为`com.vivo.push.api_key`的`meta-data`的value 和修改名为`com.vivo.push.app_id`的`meta-data`的value即可
+
+- **FCM**  进入（[Firebase官网](https://firebase.google.com/ "Firebase官网")）获取 `google-services.json` 文件 。下载`google-services.json`文件覆盖`app`模块下的该文件
 
 由于开发有限，如需其他厂商的推送功能，只需在此模块按官方文档集成即可
 

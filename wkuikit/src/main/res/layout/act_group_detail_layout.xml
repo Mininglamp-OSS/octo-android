@@ -167,15 +167,24 @@
                     <View
                         android:id="@+id/findContentView"
                         style="@style/view_line_padding"
-                        android:visibility="gone" />
-
+                        android:visibility="visible" />
 
                     <LinearLayout
                         android:id="@+id/findContentLayout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
+                        style="@style/layoutBg"
+                        android:orientation="horizontal">
 
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/find_chat_content" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+
+                    <View
+                        style="@style/view_line_padding"
+                        android:visibility="visible" />
 
                     <LinearLayout
                         android:id="@+id/groupManageLayout"
@@ -230,10 +239,10 @@
                     </LinearLayout>
 
                     <LinearLayout
-                        android:orientation="vertical"
                         android:id="@+id/chatPwdView"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
 
                     <LinearLayout
                         android:id="@+id/msgSettingLayout"

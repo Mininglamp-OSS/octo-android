@@ -10,6 +10,8 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.chat.base.utils.WKReader;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -129,7 +131,6 @@ public class OsUtils {
         return line;
     }
 
-
     static void setBadge(Context context, int number) {
         if (isEmui()) {
             try {
@@ -183,6 +184,6 @@ public class OsUtils {
     public static boolean canResolveBroadcast(Context context, Intent intent) {
         PackageManager packageManager = context.getPackageManager();
         List<ResolveInfo> receivers = packageManager.queryBroadcastReceivers(intent, 0);
-        return receivers != null && receivers.size() > 0;
+        return WKReader.isNotEmpty(receivers);
     }
 }

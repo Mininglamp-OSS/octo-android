@@ -3,6 +3,7 @@ package com.chat.push.push;
 import android.content.Context;
 import android.text.TextUtils;
 
+import com.chat.base.utils.WKReader;
 import com.chat.push.WKPushApplication;
 import com.chat.push.service.PushModel;
 import com.xiaomi.mipush.sdk.ErrorCode;
@@ -69,14 +70,14 @@ public class XiaoMiMessageReceiver extends PushMessageReceiver {
     public void onCommandResult(Context context, MiPushCommandMessage message) {
         String command = message.getCommand();
         List<String> arguments = message.getCommandArguments();
-        String cmdArg1 = ((arguments != null && arguments.size() > 0) ? arguments.get(0) : null);
+        String cmdArg1 = (WKReader.isNotEmpty(arguments) ? arguments.get(0) : null);
         String cmdArg2 = ((arguments != null && arguments.size() > 1) ? arguments.get(1) : null);
         if (MiPushClient.COMMAND_REGISTER.equals(command)) {
             if (message.getResultCode() == ErrorCode.SUCCESS) {
                 mRegId = cmdArg1;
                 //注册小米推送token
                 if (!TextUtils.isEmpty(mRegId) && !TextUtils.isEmpty(WKPushApplication.getInstance().pushBundleID)) {
-                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"小米1");
+                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"");
                 }
             }
         } else if (MiPushClient.COMMAND_SET_ALIAS.equals(command)) {
@@ -107,13 +108,13 @@ public class XiaoMiMessageReceiver extends PushMessageReceiver {
     public void onReceiveRegisterResult(Context context, MiPushCommandMessage message) {
         String command = message.getCommand();
         List<String> arguments = message.getCommandArguments();
-        String cmdArg1 = ((arguments != null && arguments.size() > 0) ? arguments.get(0) : null);
+        String cmdArg1 = (WKReader.isNotEmpty(arguments) ? arguments.get(0) : null);
         String cmdArg2 = ((arguments != null && arguments.size() > 1) ? arguments.get(1) : null);
         if (MiPushClient.COMMAND_REGISTER.equals(command)) {
             if (message.getResultCode() == ErrorCode.SUCCESS) {
                 mRegId = cmdArg1;
                 if (!TextUtils.isEmpty(mRegId) && !TextUtils.isEmpty(WKPushApplication.getInstance().pushBundleID)) {
-                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"小米2");
+                    PushModel.getInstance().registerDeviceToken(mRegId, WKPushApplication.getInstance().pushBundleID,"");
                 }
             }
         }

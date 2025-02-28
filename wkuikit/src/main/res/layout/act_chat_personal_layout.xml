@@ -69,10 +69,17 @@
 
                     <LinearLayout
                         android:id="@+id/findContentLayout"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
+                        style="@style/layoutBg"
+                        android:orientation="horizontal">
 
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/find_chat_content" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <View style="@style/view_line_padding"/>
 
                     <LinearLayout style="@style/layoutBgPaddingSmall">
 

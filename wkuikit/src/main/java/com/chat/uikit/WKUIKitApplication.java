@@ -51,6 +51,7 @@ import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.endpoint.entity.MsgConfig;
 import com.chat.base.endpoint.entity.PersonalInfoMenu;
 import com.chat.base.endpoint.entity.ScanResultMenu;
+import com.chat.base.endpoint.entity.SearchChatContentMenu;
 import com.chat.base.endpoint.entity.UserDetailMenu;
 import com.chat.base.endpoint.entity.WKMsg2UiMsgMenu;
 import com.chat.base.endpoint.entity.WithdrawMsgMenu;
@@ -93,10 +94,13 @@ import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
+import com.chat.uikit.chat.search.date.SearchWithDateActivity;
+import com.chat.uikit.chat.search.image.SearchWithImgActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.NewFriendsActivity;
 import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.group.SavedGroupsActivity;
+import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.AddFriendsActivity;
@@ -184,7 +188,7 @@ public class WKUIKitApplication {
 
     public void startChat() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
-            Log.e("去连接","-->");
+            Log.e("去连接", "-->");
             WKIM.getInstance().getConnectionManager().connection();
         }
     }
@@ -480,6 +484,53 @@ public class WKUIKitApplication {
             }
             return null;
         });
+
+        // 搜索消息按群成员搜索
+        EndpointManager.getInstance().setMethod("search_message_with_member", EndpointCategory.wkSearchChatContent, 101, object -> {
+            if (object instanceof WKChannel) {
+                if (((WKChannel) object).channelType == WKChannelType.GROUP) {
+                    return new SearchChatContentMenu(WKBaseApplication.getInstance().getContext().getString(R.string.uikit_search_member), (channelID, channelType) -> {
+                        Intent intent = new Intent(WKBaseApplication.getInstance().getContext(), WKAllMembersActivity.class);
+                        intent.putExtra("channelID", ((WKChannel) object).channelID);
+                        intent.putExtra("channelType", WKChannelType.GROUP);
+                        intent.putExtra("searchMessage", true);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        WKBaseApplication.getInstance().getContext().startActivity(intent);
+                    });
+                }
+            }
+            return null;
+        });
+
+        // 搜索消息按日期搜索
+        EndpointManager.getInstance().setMethod("search_message_with_date", EndpointCategory.wkSearchChatContent, 96, object -> {
+            if (object instanceof WKChannel) {
+                return new SearchChatContentMenu(WKBaseApplication.getInstance().getContext().getString(R.string.uikit_search_for_date), (channelID, channelType) -> {
+                    Intent intent = new Intent(WKBaseApplication.getInstance().getContext(), SearchWithDateActivity.class);
+                    intent.putExtra("channel_id", ((WKChannel) object).channelID);
+                    intent.putExtra("channel_type", ((WKChannel) object).channelType);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    WKBaseApplication.getInstance().getContext().startActivity(intent);
+                });
+            }
+            return null;
+        });
+
+
+        // 搜索消息按图片搜索
+        EndpointManager.getInstance().setMethod("search_message_with_img", EndpointCategory.wkSearchChatContent, 98, object -> {
+            if (object instanceof WKChannel) {
+                return new SearchChatContentMenu(WKBaseApplication.getInstance().getContext().getString(R.string.uikit_search_for_image), (channelID, channelType) -> {
+                    Intent intent = new Intent(WKBaseApplication.getInstance().getContext(), SearchWithImgActivity.class);
+                    intent.putExtra("channel_id", ((WKChannel) object).channelID);
+                    intent.putExtra("channel_type", ((WKChannel) object).channelType);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    WKBaseApplication.getInstance().getContext().startActivity(intent);
+                });
+            }
+            return null;
+        });
+
     }
 
     public void sendChooseChatBack(List<WKChannel> list) {

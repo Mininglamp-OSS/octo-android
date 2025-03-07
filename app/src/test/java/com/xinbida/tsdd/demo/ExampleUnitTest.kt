@@ -1,4 +1,4 @@
-package com.xinbida.tsdd.demo
+package com.test.demo
 
 import org.junit.Test
 

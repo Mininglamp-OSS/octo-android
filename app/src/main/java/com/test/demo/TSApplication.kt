@@ -1,4 +1,4 @@
-package com.xinbida.tsdd.demo
+package com.test.demo
 
 import android.app.Activity
 import android.app.ActivityManager
@@ -116,7 +116,7 @@ class TSApplication : MultiDexApplication() {
     }
 
     private fun getAppPackageName(): String {
-        return "com.xinbida.tsdd.demo"
+        return "com.test.demo"
     }
 
     private fun getProcessName(cxt: Context, pid: Int): String? {

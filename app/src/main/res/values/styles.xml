@@ -8,7 +8,7 @@
     </style>
 
     <style name="Theme.FullscreenTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">@mipmap/ic_launch</item>
+        <item name="android:windowBackground">@color/layoutColor</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowTranslucentNavigation">true</item>

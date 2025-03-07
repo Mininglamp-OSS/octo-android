@@ -8,26 +8,26 @@ plugins {
 android {
     signingConfigs {
         debug {
-            storeFile file('../test.jks')
-            storePassword 'test1365'
-            keyAlias = 'test'
-            keyPassword 'test1365'
+            storeFile file('../demo.jks')
+            storePassword 'demo1365'
+            keyAlias = 'demo'
+            keyPassword 'demo1365'
         }
         release {
-            storeFile file('../test.jks')
-            storePassword 'test1365'
-            keyAlias = 'test'
-            keyPassword 'test1365'
+            storeFile file('../demo.jks')
+            storePassword 'demo1365'
+            keyAlias = 'demo'
+            keyPassword 'demo1365'
         }
     }
-    namespace 'com.xinbida.tsdd.demo'
+    namespace 'com.test.demo'
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
     aaptOptions.useNewCruncher = false
 
 
     defaultConfig {
-        applicationId "com.xinbida.tsdd.demo"
+        applicationId "com.test.demo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

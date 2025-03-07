@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.xinbida.tsdd.demo",
+  "applicationId": "com.test.demo",
   "variantName": "release",
   "elements": [
     {

@@ -1,7 +1,6 @@
 package com.chat.base.ui.components;
 
 import android.content.Context;
-import android.util.Log;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -50,7 +49,6 @@ public class ChatScrimPopupContainerLayout extends LinearLayout {
             if (reactionsLayout.getLayoutParams().width != LayoutHelper.WRAP_CONTENT && reactionsLayout.getLayoutParams().width + widthDiff > getMeasuredWidth()) {
                 widthDiff = getMeasuredWidth() - reactionsLayout.getLayoutParams().width + AndroidUtilities.dp(8);
             }
-            Log.e("重新写高宽","-->"+widthDiff);
             ((LayoutParams) reactionsLayout.getLayoutParams()).rightMargin = widthDiff;
             if (bottomView != null) {
                 if (popupWindowLayout.getSwipeBack() != null) {
@@ -75,21 +73,15 @@ public class ChatScrimPopupContainerLayout extends LinearLayout {
 
     public void setPopupWindowLayout(ActionBarPopupWindow.ActionBarPopupWindowLayout popupWindowLayout) {
         this.popupWindowLayout = popupWindowLayout;
-        popupWindowLayout.setOnSizeChangedListener(new ActionBarPopupWindow.onSizeChangedListener() {
-            @Override
-            public void onSizeChanged() {
-                if (bottomView != null) {
-                    bottomView.setTranslationY(popupWindowLayout.getVisibleHeight() - popupWindowLayout.getMeasuredHeight());
-                }
+        popupWindowLayout.setOnSizeChangedListener(() -> {
+            if (bottomView != null) {
+                bottomView.setTranslationY(popupWindowLayout.getVisibleHeight() - popupWindowLayout.getMeasuredHeight());
             }
         });
         if (popupWindowLayout.getSwipeBack() != null) {
-            popupWindowLayout.getSwipeBack().addOnSwipeBackProgressListener(new PopupSwipeBackLayout.OnSwipeBackProgressListener() {
-                @Override
-                public void onSwipeBackProgress(PopupSwipeBackLayout layout, float toProgress, float progress) {
-                    if (bottomView != null) {
-                        bottomView.setAlpha(1f - progress);
-                    }
+            popupWindowLayout.getSwipeBack().addOnSwipeBackProgressListener((layout, toProgress, progress) -> {
+                if (bottomView != null) {
+                    bottomView.setAlpha(1f - progress);
                 }
             });
         }

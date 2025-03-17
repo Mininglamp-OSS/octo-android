@@ -10,6 +10,10 @@
         <item name="colorPrimaryDark">@color/welcome_bg</item>
 <!--        <item name="android:forceDarkAllowed">false</item>-->
         <item name="colorPrimary">@color/color999</item>
+        <item name="android:windowBackground">@color/transparent</item>
+<!--        <item name="android:windowIsTranslucent">true</item>-->
+<!--        <item name="android:windowAnimationStyle">@style/animation_translucent_translate</item>-->
+
     </style>
 
 </resources>

@@ -1,5 +1,7 @@
 package com.chat.base.ui.components;
 
+import static androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE;
+
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ObjectAnimator;
@@ -163,6 +165,7 @@ public class ReactionsContainerLayout extends FrameLayout {
         });
         recyclerListView.addOnScrollListener(new LeftRightShadowsListener());
         recyclerListView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 if (recyclerView.getChildCount() > 2) {
@@ -194,6 +197,7 @@ public class ReactionsContainerLayout extends FrameLayout {
                     ((ReactionHolderView) ch).sideScale = 1f;
                 }
                 invalidate();
+
             }
         });
         recyclerListView.addItemDecoration(new RecyclerView.ItemDecoration() {
@@ -665,5 +669,4 @@ public class ReactionsContainerLayout extends FrameLayout {
         }
         super.setAlpha(alpha);
     }
-
 }

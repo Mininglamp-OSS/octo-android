@@ -5,7 +5,18 @@
         <item name="colorAccent">@color/colorAccent</item>
         <item name="colorPrimaryDark">@color/welcome_bg</item>
         <item name="colorPrimary">@color/color999</item>
+
+<!--        <item name="android:windowIsTranslucent">true</item>-->
+<!--        <item name="android:windowAnimationStyle">@style/animation_translucent_translate</item>-->
     </style>
+
+
+<!--    <style name="animation_translucent_translate">-->
+<!--        <item name="android:activityOpenEnterAnimation">@anim/slide_in_right</item>-->
+<!--        <item name="android:activityOpenExitAnimation">@anim/slide_out_right</item>-->
+<!--        <item name="android:activityCloseEnterAnimation">@anim/slide_in_right</item>-->
+<!--        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>-->
+<!--    </style>-->
 
     <style name="Theme.FullscreenTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowBackground">@color/layoutColor</item>

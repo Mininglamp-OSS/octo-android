@@ -130,7 +130,6 @@ class TSApplication : MultiDexApplication() {
         return null
     }
 
-
     private fun addAppFrontBack() {
         val helper = AppFrontBackHelper()
         helper.register(this, object : AppFrontBackHelper.OnAppStatusListener {

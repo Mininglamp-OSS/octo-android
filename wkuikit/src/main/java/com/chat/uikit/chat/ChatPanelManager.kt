@@ -1,6 +1,7 @@
 package com.chat.uikit.chat
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -17,6 +18,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.FrameLayout
@@ -103,6 +105,7 @@ import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import com.xinbida.wukongim.msgmodel.WKTextContent
+import kotlinx.coroutines.currentCoroutineContext
 import org.json.JSONObject
 import java.util.Locale
 import java.util.Objects
@@ -177,11 +180,17 @@ class ChatPanelManager(
     private var menuRecyclerView: NoEventRecycleView? = null
     private var menuHeaderView: View? = null
     private var robotMenuAdapter: RobotMenuAdapter? = null
+    private var lastHeight = 0
+    private var lastTargetLines = 1 // 追踪上一次的目标行数
+    private val maxLines: Int = 3
 
     init {
         this.menuView.background = Theme.getBackground(Theme.colorAccount, 30f)
         editText.filters = arrayOf<InputFilter>(StringUtils.getInputFilter(maxLength))
         editText.setMaxLength(maxLength)
+        // 设置输入框的初始行数
+        editText.setMinLines(1)
+        editText.setMaxLines(maxLines)
         initListener()
         initRemind()
         initRobotGIF()
@@ -1328,7 +1337,7 @@ class ChatPanelManager(
             }
         }
         editText.addTextChangedListener(object : TextWatcher {
-            var linesCount = 0
+//            var linesCount = 0
 
             // var lastHeight = AndroidUtilities.dp(35f)
             var start = 0
@@ -1427,39 +1436,15 @@ class ChatPanelManager(
 //                        .showOrHide(closeSearchLottieIV, false, true)
                     CommonAnim.getInstance().showOrHide(sendIV, true, true)
                 }
-
-                // 计算输入框高度
-//                if (s.toString().isEmpty()) {
-////                    editText.layoutParams.height = AndroidUtilities.dp(35f)
-//                    linesCount = editText.lineCount
-//                    return
-//                }
-//                if (editText.lineCount > 3) return
-//                if (linesCount == 0) {
-//                    linesCount = editText.lineCount
-////                    editText.layoutParams.height = AndroidUtilities.dp(35f)
-//                    return
-//                }
-//
-//                val anim = ValueAnimator.ofInt(
-//                            editText.layoutParams.height,
-//                            AndroidUtilities.dp(35f)
-//                        ).setDuration(150)
-//                        anim.addUpdateListener { animation: ValueAnimator ->
-//                            editText.layoutParams.height =
-//                                animation.animatedValue as Int
-//                            editText.requestLayout()
-//                        }
-                if (linesCount != editText.lineCount) {
-                    linesCount = editText.lineCount
-                    iConversationContext.chatRecyclerViewScrollToEnd()
-                }
             }
 
             override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
+                // 保存当前高度
+                lastHeight = editText.height
             }
 
             override fun afterTextChanged(s: Editable) {
+                updateEditHeight()
                 MoonUtil.replaceEmoticons(
                     iConversationContext.chatActivity,
                     s, start, count
@@ -1467,7 +1452,8 @@ class ChatPanelManager(
                 if (s.toString().length <= 2 && !s.toString().startsWith("@")) {
                     //搜索表情
                     EndpointManager.getInstance()
-                        .invoke("search_chat_edit_content",
+                        .invoke(
+                            "search_chat_edit_content",
                             SearchChatEditStickerMenu(
                                 iConversationContext.chatActivity,
                                 s.toString(),
@@ -1650,6 +1636,62 @@ class ChatPanelManager(
         }
     }
 
+    private fun updateEditHeight() {
+        val layout = editText.layout
+        // 将高度更新和动画放到post中，确保Layout已更新
+//        editText.post(Runnable {
+//            val layout = editText.layout
+//            if (layout == null) {
+//                return@Runnable
+//            }
+            val lineCount = layout.lineCount
+            // 计算目标行数（不超过MAX_LINES）
+            val targetLines = min(
+                lineCount.toDouble(),
+                maxLines.toDouble()
+            ).toInt()
+            // 只有当目标行数改变时才执行动画或调整高度
+            if (targetLines != lastTargetLines) {
+                // 计算精确的高度
+                var newHeight = layout.getLineTop(targetLines) +
+                        editText.getCompoundPaddingTop() +
+                        editText.getCompoundPaddingBottom()
+                if (newHeight < AndroidUtilities.dp(35f)){
+                    newHeight = AndroidUtilities.dp(35f)
+                }
+                // 创建高度动画
+                val animator = ValueAnimator.ofInt(lastHeight, newHeight)
+                animator.setDuration(200) // 动画持续时间
+                animator.interpolator = AccelerateDecelerateInterpolator()
+
+                animator.addUpdateListener(ValueAnimator.AnimatorUpdateListener { animation: ValueAnimator? ->
+                    val animatedValue = animation!!.getAnimatedValue() as Int
+                    val params = editText.layoutParams
+                    params.height = animatedValue
+                    editText.setLayoutParams(params)
+                    iConversationContext.chatRecyclerViewScrollToEnd()
+                })
+                animator.start()
+                // 更新上一次的目标行数
+                lastTargetLines = targetLines
+
+            } else if (lineCount <= maxLines) {
+                // 如果行数未变且在限制内，确保高度正确（无动画，作为备用检查）
+                var correctHeight = layout.getLineTop(targetLines) +
+                        editText.getCompoundPaddingTop() +
+                        editText.getCompoundPaddingBottom()
+                if (correctHeight < AndroidUtilities.dp(35f)){
+                    correctHeight = AndroidUtilities.dp(35f)
+                }
+                if (editText.height != correctHeight) {
+                    val params = editText.layoutParams
+                    params.height = correctHeight
+                    editText.setLayoutParams(params)
+                    iConversationContext.chatRecyclerViewScrollToEnd()
+                }
+            }
+//        })
+    }
 
     private fun searchRobotGif(searchKey: String, username: String) {
         this.searchKey = searchKey
@@ -1741,7 +1783,7 @@ class ChatPanelManager(
         recyclerView.layoutManager = emojiLayoutManager
         recyclerView.adapter = emojiAdapter
         var height = WKConstants.getKeyboardHeight()
-        if (height == 0){
+        if (height == 0) {
             height = AndroidUtilities.getScreenHeight() / 3
         }
         emojiLayout.addView(

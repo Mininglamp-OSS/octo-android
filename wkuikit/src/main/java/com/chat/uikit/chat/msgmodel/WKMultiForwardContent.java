@@ -90,8 +90,9 @@ public class WKMultiForwardContent extends WKMessageContent {
             JSONArray jsonArray = new JSONArray();
             for (int i = 0, size = msgList.size(); i < size; i++) {
                 JSONObject json = new JSONObject();
-                if (!TextUtils.isEmpty(msgList.get(i).content))
+                if (!TextUtils.isEmpty(msgList.get(i).content)) {
                     json.put("payload", new JSONObject(msgList.get(i).content));
+                }
                 json.put("timestamp", msgList.get(i).timestamp);
                 json.put("message_id", msgList.get(i).messageID);
                 json.put("from_uid", msgList.get(i).fromUID);

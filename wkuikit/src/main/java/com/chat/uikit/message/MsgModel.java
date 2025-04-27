@@ -25,6 +25,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.DispatchQueuePool;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
@@ -477,7 +478,7 @@ public class MsgModel extends WKBaseModel {
                     if (last_message_seq != 0) {
                         ackMsg();
                     }
-                    syncCmdMsgs(last_message_seq);
+                    AndroidUtilities.runOnUIThread(() -> syncCmdMsgs(last_message_seq),1000);
                 } else {
                     if (last_message_seq != 0) {
                         ackMsg();

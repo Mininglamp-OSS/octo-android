@@ -139,11 +139,8 @@ public class FriendModel extends WKBaseModel {
                     }
                     WKSharedPreferencesUtil.getInstance().putLong(key, tempVersion);
                     //将好友信息设置到sdk
-                    dispatchQueuePool.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
-                        }
+                    dispatchQueuePool.execute(() -> {
+                        WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
                     });
                     AndroidUtilities.runOnUIThread(() -> {
                         syncFriends(iCommonListener);

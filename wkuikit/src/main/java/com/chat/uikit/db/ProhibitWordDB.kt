@@ -45,12 +45,12 @@ class ProhibitWordDB private constructor() {
 
         try {
             WKBaseApplication.getInstance().dbHelper.db.beginTransaction()
-            if (insertCVList.size > 0) {
+            if (insertCVList.isNotEmpty()) {
                 for (cv in insertCVList) {
                     WKBaseApplication.getInstance().dbHelper.insert(table, cv)
                 }
             }
-            if (updateCVList.size > 0) {
+            if (updateCVList.isNotEmpty()) {
                 for (cv in updateCVList) {
                     val whereValue = arrayOfNulls<String>(1)
                     val sid = cv.get("sid") as Int

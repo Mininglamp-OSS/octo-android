@@ -94,8 +94,10 @@ dependencies {
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1'
     api 'com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer:v10.0.0'
     api project(path: ':MyLibs:rlottie')
+    // 本地仓库
+    api 'com.xinbida.wukongim:WKIMLib_loca:1.0.7'
     // 远程仓库
-    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.3.7'
+//    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.3.3'
     api 'com.tencent.bugly:crashreport:latest.release'
     implementation "net.zetetic:android-database-sqlcipher:4.5.3"
     implementation "androidx.sqlite:sqlite-ktx:2.4.0"

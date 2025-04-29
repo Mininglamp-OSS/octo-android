@@ -10,6 +10,7 @@ import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.ApplyDB;
 import com.chat.base.entity.NewFriendEntity;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.service.FriendModel;
@@ -17,6 +18,8 @@ import com.chat.uikit.databinding.ActCommonListLayoutBinding;
 import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.user.UserDetailActivity;
+import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,11 +39,6 @@ public class NewFriendsActivity extends WKBaseActivity<ActCommonListLayoutBindin
     @Override
     protected void setTitle(TextView titleTv) {
         titleTv.setText(getString(R.string.new_friends));
-    }
-
-    @Override
-    protected void initPresenter() {
-
     }
 
     @Override
@@ -103,6 +101,25 @@ public class NewFriendsActivity extends WKBaseActivity<ActCommonListLayoutBindin
     protected void initData() {
         super.initData();
         List<NewFriendEntity> list = ApplyDB.getInstance().queryAll();
+        List<String> uidList = new ArrayList<>();
+        for (NewFriendEntity entity : list) {
+            if (entity.status == 0) {
+                uidList.add(entity.apply_uid);
+            }
+        }
+        List<WKChannel> friends = WKIM.getInstance().getChannelManager().getChannels(uidList);
+        if (WKReader.isNotEmpty(friends)) {
+            for (WKChannel channel : friends) {
+                if (channel.follow == 1 && channel.status == 1) {
+                    for (int i = 0; i < list.size(); i++) {
+                        if (list.get(i).status == 0 && channel.channelID.equals(list.get(i).apply_uid)) {
+                            list.get(i).status = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         adapter.setList(list);
     }
 }

@@ -81,6 +81,7 @@ import org.telegram.ui.Components.RLottieImageView
 import java.util.Objects
 import kotlin.math.abs
 import kotlin.math.max
+import androidx.core.view.isVisible
 
 
 abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
@@ -440,6 +441,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             nowUID = nowMsg.fromUID
         }
         if (nextMsg != null && !TextUtils.isEmpty(nextMsg.fromUID)
+            && nextMsg.type != WKContentType.screenshot
             && nextMsg.remoteExtra.revoke == 0 && !WKContentType.isSystemMsg(nextMsg.type)
         ) {
             nextUID = nextMsg.fromUID
@@ -560,7 +562,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             animatorSet.interpolator = DecelerateInterpolator()
             animatorSet.start()
         } else {
-            if (checkBox.visibility == VISIBLE) {
+            if (checkBox.isVisible) {
                 val cbAnimator: Animator =
                     ObjectAnimator.ofFloat(checkBox, TRANSLATION_X, 0f)
                 val animator: Animator =
@@ -595,7 +597,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         avatarView.setSize(40f)
         val layoutParams = avatarView.layoutParams as FrameLayout.LayoutParams
-        if (uiChatMsgItemEntity.wkMsg.reactionList != null && uiChatMsgItemEntity.wkMsg.reactionList.size > 0) {
+        if (uiChatMsgItemEntity.wkMsg.reactionList != null && uiChatMsgItemEntity.wkMsg.reactionList.isNotEmpty()) {
             // 向下的距离是回应数据的高度+阴影高度-回应向上的距离
             layoutParams.bottomMargin = AndroidUtilities.dp(24f)
         } else layoutParams.bottomMargin = 0
@@ -630,7 +632,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 ) VISIBLE else GONE
         }
 
-        if (uiChatMsgItemEntity.wkMsg != null && avatarView.visibility == VISIBLE) {
+        if (uiChatMsgItemEntity.wkMsg != null && avatarView.isVisible) {
             setAvatar(uiChatMsgItemEntity, avatarView)
         }
     }
@@ -997,7 +999,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         if (mMsgConfig.isCanForward && mMsg.flame == 0) {
             var index = 0
-            if (list.size > 0) {
+            if (list.isNotEmpty()) {
                 index = 1
             }
             list.add(
@@ -1056,7 +1058,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val menus = EndpointManager.getInstance()
             .invokes<ChatItemPopupMenu>(EndpointCategory.wkChatPopupItem, mMsg)
 
-        if (menus != null && menus.size > 0 && mMsg.flame == 0) {
+        if (menus != null && menus.isNotEmpty() && mMsg.flame == 0) {
             for (menu in menus) {
                 val popupMenu =
                     PopupMenuItem(menu.text, menu.imageResource,

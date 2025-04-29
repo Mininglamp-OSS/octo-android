@@ -92,7 +92,7 @@ class WKRevokeProvider : WKChatBaseProvider() {
                                     chatAdapter.replyMsg(mMsg)
                                 }
                             }
-                            chatAdapter.setEditContent(item.wkMsg.baseContentMsgModel.getDisplayContent())
+                            chatAdapter.setEditContent(item.wkMsg.baseContentMsgModel.displayContent)
                         }
                     }),
                 index,

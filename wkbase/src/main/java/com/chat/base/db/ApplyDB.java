@@ -28,6 +28,8 @@ public class ApplyDB {
         private final static ApplyDB applyDb = new ApplyDB();
     }
 
+    final static String tableName = "apply_tab";
+
     public static ApplyDB getInstance() {
         return ApplyDbBinder.applyDb;
     }
@@ -38,7 +40,7 @@ public class ApplyDB {
                 .getInstance()
                 .getDbHelper()
                 .rawQuery(
-                        "select * from apply_tab order by created_at desc", null);
+                        "select * from " + tableName + " order by created_at desc", null);
         if (cursor == null) {
             return list;
         }
@@ -55,7 +57,7 @@ public class ApplyDB {
                 .getInstance()
                 .getDbHelper()
                 .rawQuery(
-                        "select * from apply_tab where apply_uid=" + "\"" + applyUid + "\"", null);
+                        "select * from " + tableName + " where apply_uid=" + "\"" + applyUid + "\"", null);
         if (cursor != null) {
             if (cursor.moveToFirst()) {
                 newFriendEntity = serializeFriend(cursor);
@@ -76,7 +78,7 @@ public class ApplyDB {
         long result = -1;
         try {
             result = WKBaseApplication.getInstance().getDbHelper()
-                    .insert("apply_tab", cv);
+                    .insert(tableName, cv);
         } catch (Exception e) {
             Log.e("插入数据库异常：", Objects.requireNonNull(e.getMessage()));
         }
@@ -118,13 +120,13 @@ public class ApplyDB {
             WKLogUtils.e("修改申请加好友数据错误");
         }
         return WKBaseApplication.getInstance().getDbHelper()
-                .update("apply_tab", cv, "apply_uid=?", update);
+                .update(tableName, cv, "apply_uid=?", update);
     }
 
     public void delete(String uid) {
         String[] where = new String[1];
         where[0] = uid;
-        WKBaseApplication.getInstance().getDbHelper().delete("apply_tab", "apply_uid=?", where);
+        WKBaseApplication.getInstance().getDbHelper().delete(tableName, "apply_uid=?", where);
     }
 
     @SuppressLint("Range")
@@ -153,4 +155,5 @@ public class ApplyDB {
 
         return contentValues;
     }
+
 }

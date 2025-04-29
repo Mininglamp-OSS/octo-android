@@ -105,13 +105,13 @@ import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import com.xinbida.wukongim.msgmodel.WKTextContent
-import kotlinx.coroutines.currentCoroutineContext
 import org.json.JSONObject
 import java.util.Locale
 import java.util.Objects
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.math.min
+import androidx.core.view.isGone
 
 
 class ChatPanelManager(
@@ -985,7 +985,7 @@ class ChatPanelManager(
             false
         )
         menuRecyclerView!!.addOnScrollListener(menuRecyclerView!!.onScrollListener)
-        if (menus.size > 0) {
+        if (menus.isNotEmpty()) {
             robotMenuAdapter!!.setList(menus)
             CommonAnim.getInstance().showLeft2Right(menuView)
         }
@@ -998,7 +998,7 @@ class ChatPanelManager(
                 HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
             )
 
-            if (robotMenuAdapter!!.data.size == 0) {
+            if (robotMenuAdapter!!.data.isEmpty()) {
                 val tempMenu: List<WKRobotMenuEntity> =
                     WKRobotModel.getInstance().getRobotMenus(
                         iConversationContext.chatChannelInfo.channelID,
@@ -1054,8 +1054,8 @@ class ChatPanelManager(
                 iConversationContext.chatChannelInfo.channelID,
                 iConversationContext.chatChannelInfo.channelType
             )
-        if ((iConversationContext.chatChannelInfo.robot == 1 || robotMembers != null) && robotMembers.size > 0) {
-            if (menuView.visibility == View.GONE) {
+        if ((iConversationContext.chatChannelInfo.robot == 1 || robotMembers != null) && robotMembers.isNotEmpty()) {
+            if (menuView.isGone) {
                 CommonAnim.getInstance().showLeft2Right(menuView)
             }
 //            if (menuRecyclerView!!.visibility == visibility && robotMenuAdapter!!.data.size == 0) {
@@ -1310,7 +1310,7 @@ class ChatPanelManager(
                 val textMsgModel = WKTextContent(content)
 
                 val list = editText.allUIDs
-                if (list != null && list.size > 0) {
+                if (list != null && list.isNotEmpty()) {
                     val mMentionInfo = WKMentionInfo()
                     val uidList: MutableList<String> = ArrayList()
                     var i = 0
@@ -1631,65 +1631,68 @@ class ChatPanelManager(
             remindHeaderView!!.layoutParams.height =
                 parentView.top - AndroidUtilities.dp((min * height))
             remindRecycleView!!.setHeaderViewY(remindHeaderView!!.layoutParams.height.toFloat())
-            if (remindRecycleView!!.visibility == View.GONE) CommonAnim.getInstance()
+            if (remindRecycleView!!.isGone) CommonAnim.getInstance()
                 .showBottom2Top(remindRecycleView)
         }
     }
 
     private fun updateEditHeight() {
         val layout = editText.layout
+        if (layout == null) {
+            return
+        }
         // 将高度更新和动画放到post中，确保Layout已更新
 //        editText.post(Runnable {
 //            val layout = editText.layout
 //            if (layout == null) {
 //                return@Runnable
 //            }
-            val lineCount = layout.lineCount
-            // 计算目标行数（不超过MAX_LINES）
-            val targetLines = min(
-                lineCount.toDouble(),
-                maxLines.toDouble()
-            ).toInt()
-            // 只有当目标行数改变时才执行动画或调整高度
-            if (targetLines != lastTargetLines) {
-                // 计算精确的高度
-                var newHeight = layout.getLineTop(targetLines) +
-                        editText.getCompoundPaddingTop() +
-                        editText.getCompoundPaddingBottom()
-                if (newHeight < AndroidUtilities.dp(35f)){
-                    newHeight = AndroidUtilities.dp(35f)
-                }
-                // 创建高度动画
-                val animator = ValueAnimator.ofInt(lastHeight, newHeight)
-                animator.setDuration(200) // 动画持续时间
-                animator.interpolator = AccelerateDecelerateInterpolator()
-
-                animator.addUpdateListener(ValueAnimator.AnimatorUpdateListener { animation: ValueAnimator? ->
-                    val animatedValue = animation!!.getAnimatedValue() as Int
-                    val params = editText.layoutParams
-                    params.height = animatedValue
-                    editText.setLayoutParams(params)
-                    iConversationContext.chatRecyclerViewScrollToEnd()
-                })
-                animator.start()
-                // 更新上一次的目标行数
-                lastTargetLines = targetLines
-
-            } else if (lineCount <= maxLines) {
-                // 如果行数未变且在限制内，确保高度正确（无动画，作为备用检查）
-                var correctHeight = layout.getLineTop(targetLines) +
-                        editText.getCompoundPaddingTop() +
-                        editText.getCompoundPaddingBottom()
-                if (correctHeight < AndroidUtilities.dp(35f)){
-                    correctHeight = AndroidUtilities.dp(35f)
-                }
-                if (editText.height != correctHeight) {
-                    val params = editText.layoutParams
-                    params.height = correctHeight
-                    editText.setLayoutParams(params)
-                    iConversationContext.chatRecyclerViewScrollToEnd()
-                }
+        val lineCount = layout.lineCount
+        // 计算目标行数（不超过MAX_LINES）
+        val targetLines = min(
+            lineCount.toDouble(),
+            maxLines.toDouble()
+        ).toInt()
+        // 只有当目标行数改变时才执行动画或调整高度
+        if (targetLines != lastTargetLines) {
+            // 计算精确的高度
+            var newHeight = layout.getLineTop(targetLines) +
+                    editText.getCompoundPaddingTop() +
+                    editText.getCompoundPaddingBottom()
+            if (newHeight < AndroidUtilities.dp(35f)) {
+                newHeight = AndroidUtilities.dp(35f)
             }
+            // 创建高度动画
+            val animator = ValueAnimator.ofInt(lastHeight, newHeight)
+            animator.setDuration(200) // 动画持续时间
+            animator.interpolator = AccelerateDecelerateInterpolator()
+
+            animator.addUpdateListener(ValueAnimator.AnimatorUpdateListener { animation: ValueAnimator? ->
+                val animatedValue = animation!!.getAnimatedValue() as Int
+                val params = editText.layoutParams
+                params.height = animatedValue
+                editText.setLayoutParams(params)
+                iConversationContext.chatRecyclerViewScrollToEnd()
+            })
+            animator.start()
+            // 更新上一次的目标行数
+            lastTargetLines = targetLines
+
+        } else if (lineCount <= maxLines) {
+            // 如果行数未变且在限制内，确保高度正确（无动画，作为备用检查）
+            var correctHeight = layout.getLineTop(targetLines) +
+                    editText.getCompoundPaddingTop() +
+                    editText.getCompoundPaddingBottom()
+            if (correctHeight < AndroidUtilities.dp(35f)) {
+                correctHeight = AndroidUtilities.dp(35f)
+            }
+            if (editText.height != correctHeight) {
+                val params = editText.layoutParams
+                params.height = correctHeight
+                editText.setLayoutParams(params)
+                iConversationContext.chatRecyclerViewScrollToEnd()
+            }
+        }
 //        })
     }
 
@@ -1709,7 +1712,7 @@ class ChatPanelManager(
                     parentView.top - AndroidUtilities.dp(100f)
                 this.robotGifRecyclerView!!.setHeaderViewY(robotGifHeaderView!!.layoutParams.height.toFloat())
             }
-            if (result?.results != null && result.results.size > 0) {
+            if (result?.results != null && result.results.isNotEmpty()) {
                 if (TextUtils.isEmpty(inlineQueryOffset)) robotGIFAdapter!!.setList(result.results) else robotGIFAdapter!!.addData(
                     result.results
                 )
@@ -2044,7 +2047,7 @@ class ChatPanelManager(
                                     list.add(chatAdapter.getItem(i).wkMsg)
                                     if (iConversationContext.chatChannelInfo.channelType == WKChannelType.PERSONAL) {
                                         var isAdd: Boolean
-                                        if (forwardContent.userList.size == 0) {
+                                        if (forwardContent.userList.isEmpty()) {
                                             isAdd = true
                                         } else {
                                             isAdd = true
@@ -2151,7 +2154,7 @@ class ChatPanelManager(
                                 }
                                 i++
                             }
-                            if (list.size > 0) {
+                            if (list.isNotEmpty()) {
                                 EndpointManager.getInstance()
                                     .invoke(
                                         EndpointSID.showChooseChatView,
@@ -2229,7 +2232,7 @@ class ChatPanelManager(
                     i++
                 }
             }
-            if (list.size > 0) {
+            if (list.isNotEmpty()) {
                 WKDialogUtils.getInstance().showDialog(
                     iConversationContext.chatActivity,
                     iConversationContext.chatActivity.getString(R.string.delete_messages),

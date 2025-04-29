@@ -213,7 +213,7 @@ class WKImageProvider : WKChatBaseProvider() {
                 }
             }
 
-        if (tempImgList.size == 0) return
+        if (tempImgList.isEmpty()) return
         var index = 0
         for (i in tempImgList.indices) {
             if (!TextUtils.isEmpty(uri) && tempImgList[i] != null && tempImgList[i] == uri) {

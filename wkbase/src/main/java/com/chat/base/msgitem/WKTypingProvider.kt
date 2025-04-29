@@ -39,7 +39,7 @@ class WKTypingProvider : WKChatBaseProvider() {
                     for (i in getAdapter()!!.data.indices.reversed()) {
                         if (getAdapter()!!.data[i].wkMsg.type == WKContentType.typing) {
                             getAdapter()!!.removeAt(i)
-                            if (getAdapter()!!.data.size > 0) {
+                            if (getAdapter()!!.data.isNotEmpty()) {
                                 val index = getAdapter()!!.data.size - 1
                                 getAdapter()!!.data[index].nextMsg = null
                                 getAdapter()!!.notifyItemChanged(index)

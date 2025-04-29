@@ -55,7 +55,7 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
         titleTv.text = String.format(context.getString(R.string.chat_title_records), title)
         //设置内容
         val sBuilder = StringBuilder()
-        if (multiForwardContent.msgList != null && multiForwardContent.msgList.size > 0) {
+        if (multiForwardContent.msgList != null && multiForwardContent.msgList.isNotEmpty()) {
             val size = min(multiForwardContent.msgList.size, 3)
             for (i in 0 until size) {
                 var name = ""

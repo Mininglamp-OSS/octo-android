@@ -1014,7 +1014,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                 val strUrls = StringUtils.getStrUrls(content)
                 val replySpan = SpannableStringBuilder()
                 replySpan.append(content)
-                if (strUrls.size > 0) {
+                if (strUrls.isNotEmpty()) {
                     for (url in strUrls) {
                         if (TextUtils.isEmpty(url)) {
                             continue

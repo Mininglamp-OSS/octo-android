@@ -1,12 +1,12 @@
 package com.chat.base.msgitem
 
-import android.graphics.Color
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.toColorInt
 import com.chat.base.R
 import com.chat.base.views.BubbleLayout
 
@@ -43,7 +43,7 @@ class WKUnknownProvider : WKChatBaseProvider() {
             else -> {
                 linearLayout.gravity = Gravity.CENTER
                 contentTv.textSize = 12f
-                contentTv.setTextColor(Color.parseColor("#8D8D8D"))
+                contentTv.setTextColor("#8D8D8D".toColorInt())
                 contentTv.setBackgroundResource(R.drawable.radian_normal_layout)
             }
         }

@@ -13,7 +13,7 @@ buildscript {
         maven {url 'https://developer.huawei.com/repo/'}
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.8.0'
+        classpath 'com.android.tools.build:gradle:8.8.2'
         classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8'
         //华为推送
         classpath 'com.huawei.agconnect:agcp:1.6.0.300'
@@ -25,10 +25,18 @@ buildscript {
 
 allprojects {
     configurations.configureEach {
-        resolutionStrategy.force "androidx.camera:camera-core:$camerax_version"
-        resolutionStrategy.force "androidx.camera:camera-camera2:$camerax_version"
-        resolutionStrategy.force "androidx.camera:camera-lifecycle:$camerax_version"
-        resolutionStrategy.force "androidx.camera:camera-view:$camerax_version"
+        resolutionStrategy {
+            force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-common:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+            force "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+            
+            force "androidx.camera:camera-core:$camerax_version"
+            force "androidx.camera:camera-camera2:$camerax_version"
+            force "androidx.camera:camera-lifecycle:$camerax_version"
+            force "androidx.camera:camera-view:$camerax_version"
+        }
     }
 }
 

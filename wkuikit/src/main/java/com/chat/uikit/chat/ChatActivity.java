@@ -120,6 +120,7 @@ import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
+import com.xinbida.wukongim.message.type.WKConnectStatus;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
@@ -817,9 +818,20 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             return null;
         });
-//        WKIM.getInstance().getConnectionManager().addOnConnectionStatusListener(channelId, (i, s) -> {
-//            if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
-//                WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
+        WKIM.getInstance().getConnectionManager().addOnConnectionStatusListener(channelId, (i, s) -> {
+            if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
+                WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
+                int maxOrderSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
+                long tempMaxOrderSeq = 0;
+                if (chatAdapter != null && chatAdapter.getLastMsg() != null) {
+                    tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
+                }
+                if (maxOrderSeq > tempMaxOrderSeq) {
+                    // scrollToEnd();
+//                    isCanRefresh = true;
+//                    isShowHistory = false;
+                    getData(0, true, maxOrderSeq, true);
+                }
 //                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
 //                if (firstItemPosition == -1) return;
 //                if (WKReader.isNotEmpty(chatAdapter.getData())) {
@@ -835,8 +847,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 //                    }
 //                }
 //                getData(1, true, lastPreviewMsgOrderSeq, false);
-//            }
-//        });
+            }
+        });
         EndpointManager.getInstance().setMethod(channelId, EndpointCategory.refreshProhibitWord, object -> {
             if (WKReader.isEmpty(chatAdapter.getData())) {
                 return 1;
@@ -1103,7 +1115,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     wkVBinding.topLayout.subtitleCountTv.setVisibility(View.VISIBLE);
                     wkVBinding.topLayout.subtitleCountTv.setText(String.format(getString(R.string.online_count), channelState.online_count));
                 }
-                if (channelType==WKChannelType.PERSONAL){
+                if (channelType == WKChannelType.PERSONAL) {
                     return;
                 }
                 if (channelState.call_info == null || WKReader.isEmpty(channelState.call_info.getCalling_participants())) {
@@ -1199,6 +1211,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
             @Override
             public void onResult(List<WKMsg> list) {
+                Log.e("实际多少条", list.size() + "");
                 if (isShowPinnedView) {
                     EndpointManager.getInstance().invoke("is_syncing_message", 0);
                 }
@@ -1213,7 +1226,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 isSyncLastMsg = false;
                 List<WKMsg> tempList = new ArrayList<>();
                 for (WKMsg msg : list) {
-                    if (!chatAdapter.isExist(msg.clientMsgNO, msg.messageID)) {
+                    if (isSetNewData || !chatAdapter.isExist(msg.clientMsgNO, msg.messageID)){
                         tempList.add(msg);
                     }
                 }

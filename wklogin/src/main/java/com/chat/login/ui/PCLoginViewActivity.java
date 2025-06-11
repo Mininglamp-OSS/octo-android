@@ -2,8 +2,6 @@ package com.chat.login.ui;
 
 import static android.view.View.VISIBLE;
 
-import android.widget.TextView;
-
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
@@ -65,11 +63,6 @@ public class PCLoginViewActivity extends WKBaseActivity<PcLoginViewLayoutBinding
             wkVBinding.lockIv.setImageResource(R.mipmap.icon_lock_white);
             wkVBinding.topLockIv.setVisibility(VISIBLE);
         });
-    }
-
-    @Override
-    protected void initListener() {
-
     }
 
 

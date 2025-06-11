@@ -17,10 +17,10 @@ import java.util.List;
  * 登录
  */
 public class LoginContract {
-    public interface LoginPersenter extends WKBasePresenter {
+    public interface LoginPresenter extends WKBasePresenter {
         void login(String name, String pwd);
 
-        void sendLoginAuthVerifCode(String uid);
+        void sendLoginAuthVerificationCode(String uid);
 
         void getCountryCode();
 
@@ -32,7 +32,7 @@ public class LoginContract {
 
         void checkLoginAuth(String uid, String code);
 
-        void resetPwd(String zooe, String phone, String code, String pwd);
+        void resetPwd(String zone, String phone, String code, String pwd);
     }
 
     public interface LoginView extends WKBaseView {
@@ -48,7 +48,7 @@ public class LoginContract {
 
         void setResetPwdResult(int code, String msg);
 
-        Button getVerfiCodeBtn();
+        Button getVerificationCodeBtn();
 
         EditText getNameEt();
 

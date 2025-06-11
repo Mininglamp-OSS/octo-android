@@ -16,7 +16,7 @@
             android:name=".ui.WKWebLoginConfirmActivity"
             android:launchMode="singleTask" />
         <activity android:name=".ui.PerfectUserInfoActivity" />
-        <activity android:name=".ui.InputLoginAuthVerifCodeActivity" />
+        <activity android:name=".ui.InputLoginAuthVerificationCodeActivity" />
         <activity android:name=".ui.WKResetLoginPwdActivity" />
         <activity android:name=".ui.PCLoginViewActivity" />
         <activity android:name=".ui.WKWebLoginActivity" />

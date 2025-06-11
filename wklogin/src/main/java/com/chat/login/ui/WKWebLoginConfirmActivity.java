@@ -1,7 +1,5 @@
 package com.chat.login.ui;
 
-import android.widget.TextView;
-
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;

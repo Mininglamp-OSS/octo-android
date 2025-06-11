@@ -23,7 +23,7 @@ public class CountryCodeEntity implements Parcelable {
         icon = in.readString();
     }
 
-    public static final Creator<CountryCodeEntity> CREATOR = new Creator<CountryCodeEntity>() {
+    public static final Creator<CountryCodeEntity> CREATOR = new Creator<>() {
         @Override
         public CountryCodeEntity createFromParcel(Parcel in) {
             return new CountryCodeEntity(in);

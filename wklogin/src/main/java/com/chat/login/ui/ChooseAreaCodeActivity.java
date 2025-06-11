@@ -161,7 +161,7 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
     }
 
     @Override
-    public Button getVerfiCodeBtn() {
+    public Button getVerificationCodeBtn() {
         return null;
     }
 

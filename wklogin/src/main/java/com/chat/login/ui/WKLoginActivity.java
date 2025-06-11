@@ -20,7 +20,6 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
-import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -262,7 +261,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     }
 
     @Override
-    public Button getVerfiCodeBtn() {
+    public Button getVerificationCodeBtn() {
         return null;
     }
 

@@ -21,7 +21,6 @@ import androidx.core.content.ContextCompat;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKConstants;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
@@ -293,7 +292,7 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     }
 
     @Override
-    public Button getVerfiCodeBtn() {
+    public Button getVerificationCodeBtn() {
         return wkVBinding.getVCodeBtn;
     }
 

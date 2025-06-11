@@ -33,7 +33,7 @@ import java.util.Objects;
  * 2020-10-26 16:31
  * 登录验认证证码
  */
-public class InputLoginAuthVerifCodeActivity extends WKBaseActivity<ActInputLoginAuthVerifCodeBinding> implements LoginContract.LoginView {
+public class InputLoginAuthVerificationCodeActivity extends WKBaseActivity<ActInputLoginAuthVerifCodeBinding> implements LoginContract.LoginView {
 
     private LoginPresenter loginPresenter;
     private String uid;
@@ -87,7 +87,7 @@ public class InputLoginAuthVerifCodeActivity extends WKBaseActivity<ActInputLogi
                 }
             }
         });
-        wkVBinding.getVerfiCodeBtn.setOnClickListener(v -> loginPresenter.sendLoginAuthVerifCode(uid));
+        wkVBinding.getVerfiCodeBtn.setOnClickListener(v -> loginPresenter.sendLoginAuthVerificationCode(uid));
         wkVBinding.sureBtn.setOnClickListener(v -> {
             loadingPopup.setTitle(getString(R.string.login_authing));
             loadingPopup.show();
@@ -147,7 +147,7 @@ public class InputLoginAuthVerifCodeActivity extends WKBaseActivity<ActInputLogi
     }
 
     @Override
-    public Button getVerfiCodeBtn() {
+    public Button getVerificationCodeBtn() {
         return wkVBinding.getVerfiCodeBtn;
     }
 

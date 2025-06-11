@@ -44,7 +44,7 @@ public class LoginAuthActivity extends WKBaseActivity<ActLoginAuthLayoutBinding>
     protected void initListener() {
         wkVBinding.loginAuthBtn.setOnClickListener(v -> LoginModel.getInstance().sendLoginAuthVerifCode(uid, (code, msg) -> {
             if (code == HttpResponseCode.success) {
-                Intent intent = new Intent(this, InputLoginAuthVerifCodeActivity.class);
+                Intent intent = new Intent(this, InputLoginAuthVerificationCodeActivity.class);
                 intent.putExtra("uid", uid);
                 intent.putExtra("phone", phone);
                 resultLac.launch(intent);

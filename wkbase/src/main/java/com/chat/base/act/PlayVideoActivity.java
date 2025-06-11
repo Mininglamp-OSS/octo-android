@@ -153,9 +153,7 @@ public class PlayVideoActivity extends GSYBaseActivityDetail<VideoPlayer> {
 
     private void showSaveDialog(String url) {
         List<BottomSheetItem> list = new ArrayList<>();
-        list.add(new BottomSheetItem(getString(R.string.save_img), R.mipmap.msg_download, () -> {
-            checkPermissions(url);
-        }));
+        list.add(new BottomSheetItem(getString(R.string.save_img), R.mipmap.msg_download, () -> checkPermissions(url)));
         if (!TextUtils.isEmpty(clientMsgNo)) {
             list.add(new BottomSheetItem(getString(R.string.forward), R.mipmap.msg_forward, () -> {
 

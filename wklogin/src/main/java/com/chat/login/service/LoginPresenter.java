@@ -18,7 +18,7 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
  * 2019-11-19 17:47
  * 登录
  */
-public class LoginPresenter implements LoginContract.LoginPersenter {
+public class LoginPresenter implements LoginContract.LoginPresenter {
     private final WeakReference<LoginContract.LoginView> loginView;
     private final int totalTime = 60;
 
@@ -46,7 +46,7 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
     }
 
     @Override
-    public void sendLoginAuthVerifCode(String uid) {
+    public void sendLoginAuthVerificationCode(String uid) {
         LoginModel.getInstance().sendLoginAuthVerifCode(uid, (code, msg) -> {
             if (loginView.get() != null) {
                 loginView.get().setSendCodeResult(code, msg);
@@ -75,8 +75,6 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
             if (code == HttpResponseCode.success) {
                 if (loginView.get() != null)
                     loginView.get().setRegisterCodeSuccess(code, msg, exist);
-            }else {
-
             }
         });
     }
@@ -120,8 +118,8 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
     }
 
     @Override
-    public void resetPwd(String zooe, String phone, String code, String pwd) {
-        LoginModel.getInstance().resetPwd(zooe, phone, code, pwd, (code1, errorMsg) -> {
+    public void resetPwd(String zone, String phone, String code, String pwd) {
+        LoginModel.getInstance().resetPwd(zone, phone, code, pwd, (code1, errorMsg) -> {
             if (code1 == HttpResponseCode.success) {
                 if (loginView.get() != null) loginView.get().setResetPwdResult(code1, errorMsg);
             } else {
@@ -145,15 +143,15 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
                 .map(takeValue -> totalTime - takeValue)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new ResourceObserver<Long>() {
+                .subscribe(new ResourceObserver<>() {
                     @Override
                     public void onComplete() {
-                        if (loginView.get() != null && loginView.get().getVerfiCodeBtn() != null) {
-                            loginView.get().getVerfiCodeBtn().setEnabled(true);
-                            loginView.get().getVerfiCodeBtn().setAlpha(1f);
-                            loginView.get().getVerfiCodeBtn().setText(R.string.get_verf_code);
+                        if (loginView.get() != null && loginView.get().getVerificationCodeBtn() != null) {
+                            loginView.get().getVerificationCodeBtn().setEnabled(true);
+                            loginView.get().getVerificationCodeBtn().setAlpha(1f);
+                            loginView.get().getVerificationCodeBtn().setText(R.string.get_verf_code);
                             loginView.get().getNameEt().setEnabled(true);
-                            loginView.get().getVerfiCodeBtn().setAlpha(1);
+                            loginView.get().getVerificationCodeBtn().setAlpha(1);
                         }
                     }
 
@@ -163,11 +161,11 @@ public class LoginPresenter implements LoginContract.LoginPersenter {
 
                     @Override
                     public void onNext(@NotNull Long value) {
-                        if (loginView.get() != null && loginView.get().getVerfiCodeBtn() != null) {
-                            loginView.get().getVerfiCodeBtn().setEnabled(false);
-                            loginView.get().getVerfiCodeBtn().setAlpha(0.2f);
+                        if (loginView.get() != null && loginView.get().getVerificationCodeBtn() != null) {
+                            loginView.get().getVerificationCodeBtn().setEnabled(false);
+                            loginView.get().getVerificationCodeBtn().setAlpha(0.2f);
                             loginView.get().getNameEt().setEnabled(true);
-                            loginView.get().getVerfiCodeBtn().setText(String.format("%s%s s", loginView.get().getContext().getString(R.string.recapture), value));
+                            loginView.get().getVerificationCodeBtn().setText(String.format("%s%s s", loginView.get().getContext().getString(R.string.recapture), value));
                         }
                     }
                 });

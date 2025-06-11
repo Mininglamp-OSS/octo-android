@@ -12,7 +12,6 @@ import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -24,9 +23,9 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
-import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.R;
 import com.chat.login.databinding.ActResetLoginPwdLayoutBinding;
+import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginPresenter;
 
@@ -232,7 +231,7 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
     }
 
     @Override
-    public Button getVerfiCodeBtn() {
+    public Button getVerificationCodeBtn() {
         return wkVBinding.getVerCodeBtn;
 
     }

@@ -59,7 +59,7 @@ public class LoginModel extends WKBaseModel {
         deviceJson.put("device_model", WKDeviceUtils.getInstance().getSystemModel());
         jsonObject.put("device", deviceJson);
 
-        requestAndErrorBack(createService(LoginService.class).login(jsonObject), new IRequestResultErrorInfoListener<UserInfoEntity>() {
+        requestAndErrorBack(createService(LoginService.class).login(jsonObject), new IRequestResultErrorInfoListener<>() {
             @Override
             public void onSuccess(UserInfoEntity userInfo) {
                 if (userInfo != null) {
@@ -97,7 +97,7 @@ public class LoginModel extends WKBaseModel {
      * @param listener  返回
      */
     public void webLogin(String auth_code, final ICommonListener listener) {
-        request(createService(LoginService.class).webLoginConfirm(auth_code), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).webLoginConfirm(auth_code), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 listener.onResult(result.status, result.msg);
@@ -111,7 +111,7 @@ public class LoginModel extends WKBaseModel {
     }
 
     void getCountries(IChooseCountryCode iChooseCountryCode) {
-        request(createService(LoginService.class).getCountries(), new IRequestResultListener<List<CountryCodeEntity>>() {
+        request(createService(LoginService.class).getCountries(), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<CountryCodeEntity> result) {
                 iChooseCountryCode.onResult(HttpResponseCode.success, "", result);
@@ -129,19 +129,19 @@ public class LoginModel extends WKBaseModel {
     }
 
 
-    void registerCode(String zone, String phone, final IGetVerCodeListener iGetVerfi) {
+    void registerCode(String zone, String phone, final IGetVerCodeListener iGetVerCodeListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("zone", zone);
         jsonObject.put("phone", phone);
-        request(createService(LoginService.class).registerCode(jsonObject), new IRequestResultListener<VerfiCodeResult>() {
+        request(createService(LoginService.class).registerCode(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(VerfiCodeResult result) {
-                iGetVerfi.onResult(HttpResponseCode.success, "", result.exist);
+                iGetVerCodeListener.onResult(HttpResponseCode.success, "", result.exist);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iGetVerfi.onResult(code, msg, 0);
+                iGetVerCodeListener.onResult(code, msg, 0);
             }
         });
     }
@@ -150,7 +150,7 @@ public class LoginModel extends WKBaseModel {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("zone", zone);
         jsonObject.put("phone", phone);
-        request(createService(LoginService.class).forgetPwd(jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).forgetPwd(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iGetVerCodeListener.onResult(HttpResponseCode.success, "", 0);
@@ -169,7 +169,7 @@ public class LoginModel extends WKBaseModel {
         jsonObject.put("phone", phone);
         jsonObject.put("code", code);
         jsonObject.put("pwd", pwd);
-        request(createService(LoginService.class).pwdForget(jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).pwdForget(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -199,7 +199,7 @@ public class LoginModel extends WKBaseModel {
         deviceJson.put("device_name", WKDeviceUtils.getInstance().getDeviceName());
         deviceJson.put("device_model", WKDeviceUtils.getInstance().getSystemModel());
         jsonObject.put("device", deviceJson);
-        request(createService(LoginService.class).register(jsonObject), new IRequestResultListener<UserInfoEntity>() {
+        request(createService(LoginService.class).register(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(UserInfoEntity userInfo) {
                 if (userInfo != null) {
@@ -235,18 +235,18 @@ public class LoginModel extends WKBaseModel {
         void onResult(int code);
     }
 
-    public void updateUserInfo(String key, String value, final ICommonListener iCommonLisenter) {
+    public void updateUserInfo(String key, String value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(LoginService.class).updateUserInfo(jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).updateUserInfo(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
-                iCommonLisenter.onResult(result.status, result.msg);
+                iCommonListener.onResult(result.status, result.msg);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iCommonLisenter.onResult(code, msg);
+                iCommonListener.onResult(code, msg);
             }
         });
     }
@@ -254,7 +254,7 @@ public class LoginModel extends WKBaseModel {
     public void sendLoginAuthVerifCode(String uid, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("uid", uid);
-        request(createService(LoginService.class).sendLoginAuthVerifCode(jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).sendLoginAuthVerifCode(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -278,7 +278,7 @@ public class LoginModel extends WKBaseModel {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("uid", uid);
         jsonObject.put("code", code);
-        request(createService(LoginService.class).checkLoginAuth(jsonObject), new IRequestResultListener<UserInfoEntity>() {
+        request(createService(LoginService.class).checkLoginAuth(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(UserInfoEntity userInfo) {
                 if (userInfo != null) {
@@ -295,7 +295,7 @@ public class LoginModel extends WKBaseModel {
     }
 
     public void quitPc(final ICommonListener iCommonListener) {
-        request(createService(LoginService.class).quitPc(), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).quitPc(), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -312,7 +312,7 @@ public class LoginModel extends WKBaseModel {
     public void updateUserSetting(String key, int value, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(key, value);
-        request(createService(LoginService.class).setting(jsonObject), new IRequestResultListener<CommonResponse>() {
+        request(createService(LoginService.class).setting(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
                 iCommonListener.onResult(result.status, result.msg);
@@ -344,7 +344,7 @@ public class LoginModel extends WKBaseModel {
     }
 
     public void getAuthCodeStatus(String authCode, final ICommonListener iCommonListener) {
-        request(createService(LoginService.class).getAuthStatus(authCode), new IRequestResultListener<ThirdLoginResult>() {
+        request(createService(LoginService.class).getAuthStatus(authCode), new IRequestResultListener<>() {
             @Override
             public void onSuccess(ThirdLoginResult result) {
                 if (result.getStatus() == 1 && result.getResult() != null) {

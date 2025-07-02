@@ -21,7 +21,6 @@ import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
-import com.chat.base.endpoint.EndpointHandler;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.entity.PopupMenuItem;
@@ -44,7 +43,6 @@ import com.chat.uikit.databinding.FragChatConversationLayoutBinding;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
-import com.chat.uikit.search.SearchAllActivity;
 import com.chat.uikit.search.remote.GlobalActivity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
@@ -450,6 +448,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 uiList.addAll(chatConversationAdapter.getData());
                 sortMsg(uiList);
                 setAllCount();
+            } else {
+                resetData(list.get(0), true);
             }
         });
 //        WKIM.getInstance().getConversationManager().addOnRefreshMsgListener("chat_fragment", this::resetData);

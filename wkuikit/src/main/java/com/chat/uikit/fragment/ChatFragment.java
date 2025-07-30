@@ -51,7 +51,6 @@ import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
-import com.xinbida.wukongim.interfaces.IAllConversations;
 import com.xinbida.wukongim.message.type.WKConnectReason;
 import com.xinbida.wukongim.message.type.WKConnectStatus;
 
@@ -444,13 +443,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     uiList.add(new ChatConversationMsg(uiConversationMsg));
                 }
             }
-            if (!uiList.isEmpty()) {
-                uiList.addAll(chatConversationAdapter.getData());
-                sortMsg(uiList);
-                setAllCount();
-            } else {
-                resetData(list.get(0), true);
-            }
+//            if (!uiList.isEmpty()) {
+//                uiList.addAll(chatConversationAdapter.getData());
+//                sortMsg(uiList);
+//                setAllCount();
+//            } else {
+//                resetData(list.get(0), true);
+//            }
+            uiList.addAll(chatConversationAdapter.getData());
+            sortMsg(uiList);
+            setAllCount();
         });
 //        WKIM.getInstance().getConversationManager().addOnRefreshMsgListener("chat_fragment", this::resetData);
         // 监听连接状态
@@ -552,17 +554,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
 
     private void getChatMsg() {
-        WKIM.getInstance().getConversationManager().getAll(new IAllConversations() {
-            @Override
-            public void onResult(List<WKUIConversationMsg> list) {
-                List<ChatConversationMsg> tempList = new ArrayList<>();
-                if (WKReader.isNotEmpty(list)) {
-                    for (int i = 0, size = list.size(); i < size; i++) {
-                        tempList.add(new ChatConversationMsg(list.get(i)));
-                    }
+        WKIM.getInstance().getConversationManager().getAll(list -> {
+            List<ChatConversationMsg> tempList = new ArrayList<>();
+            if (WKReader.isNotEmpty(list)) {
+                for (int i = 0, size = list.size(); i < size; i++) {
+                    tempList.add(new ChatConversationMsg(list.get(i)));
                 }
-                AndroidUtilities.runOnUIThread(() -> sortMsg(tempList));
             }
+            AndroidUtilities.runOnUIThread(() -> sortMsg(tempList));
         });
 
 //        List<ChatConversationMsg> list = new ArrayList<>();
@@ -745,12 +744,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         List<ChatConversationMsg> tempList = new ArrayList<>();
         tempList.addAll(normalList);
         tempList.addAll(0, topList);
-        AndroidUtilities.runOnUIThread(new Runnable() {
-            @Override
-            public void run() {
-                chatConversationAdapter.setList(tempList);
-                setAllCount();
-            }
+        AndroidUtilities.runOnUIThread(() -> {
+            chatConversationAdapter.setList(tempList);
+            setAllCount();
         });
 
     }

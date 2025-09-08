@@ -125,6 +125,9 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         .playVoice(filePath, uiChatMsgItemEntity.wkMsg.clientMsgNO)
                     updateViewed(uiChatMsgItemEntity, parentView, from)
                 } else {
+                    if (TextUtils.isEmpty(voiceContent.url)){
+                        return@setOnClickListener
+                    }
                     playBtn.enableLoading(1)
                     WKDownloader.instance.download(
                         WKApiConfig.getShowUrl(voiceContent.url),

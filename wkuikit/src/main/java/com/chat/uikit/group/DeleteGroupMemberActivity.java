@@ -42,7 +42,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
     ChooseUserSelectedAdapter selectedAdapter;
     private String groupId;
     private TextView textView;
-    private String searchKey;
+    private String searchKey = "";
     private int page = 1;
     private int groupType = 0;
 
@@ -70,18 +70,18 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
     @Override
     protected void rightLayoutClick() {
         super.rightLayoutClick();
-        List<GroupMemberEntity> selectedList = new ArrayList<>();
-        for (int i = 0, size = groupMemberAdapter.getData().size(); i < size; i++) {
-            if (groupMemberAdapter.getData().get(i).checked == 1)
-                selectedList.add(groupMemberAdapter.getData().get(i));
+        List<FriendUIEntity> selectedList = new ArrayList<>();
+        for (int i = 0, size = selectedAdapter.getData().size(); i < size; i++) {
+            if (selectedAdapter.getData().get(i).getItemType() == 0)
+                selectedList.add(selectedAdapter.getData().get(i));
         }
 
         if (WKReader.isNotEmpty(selectedList)) {
             List<String> uids = new ArrayList<>();
             List<String> names = new ArrayList<>();
             for (int i = 0, size = selectedList.size(); i < size; i++) {
-                uids.add(selectedList.get(i).member.memberUID);
-                names.add(selectedList.get(i).member.memberName);
+                uids.add(selectedList.get(i).channel.channelID);
+                names.add(selectedList.get(i).channel.channelName);
             }
             showTitleRightLoading();
             GroupModel.getInstance().deleteGroupMembers(groupId, uids, names, (code, msg) -> {
@@ -101,6 +101,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
 
     @Override
     protected void initView() {
+        groupId = getIntent().getStringExtra("groupId");
         WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(groupId, WKChannelType.GROUP);
         if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.groupType)) {
             Object groupTypeObject = channel.remoteExtraMap.get(WKChannelExtras.groupType);
@@ -179,22 +180,22 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
                     selectedAdapter.notifyItemChanged(position, userEntity);
                     return;
                 }
-                boolean isRemove = false;
+//                boolean isRemove = false;
                 for (int i = 0, size = groupMemberAdapter.getData().size(); i < size; i++) {
                     if (groupMemberAdapter.getData().get(i).member.memberUID.equalsIgnoreCase(userEntity.channel.channelID) && groupMemberAdapter.getData().get(i).isCanCheck == 1) {
                         groupMemberAdapter.getData().get(i).checked = groupMemberAdapter.getData().get(i).checked == 1 ? 0 : 1;
                         groupMemberAdapter.notifyItemChanged(i, groupMemberAdapter.getData().get(i));
-                        isRemove = true;
+//                        isRemove = true;
                         break;
                     }
                 }
-                if (isRemove) {
-                    for (int i = 0, size = selectedAdapter.getData().size(); i < size; i++) {
-                        selectedAdapter.getData().get(i).isSetDelete = false;
-                    }
-                    selectedAdapter.removeAt(position);
-                    setRightTv();
+//                if (isRemove) {
+                for (int i = 0, size = selectedAdapter.getData().size(); i < size; i++) {
+                    selectedAdapter.getData().get(i).isSetDelete = false;
                 }
+                selectedAdapter.removeAt(position);
+                setRightTv();
+//                }
             }
         });
         groupMemberAdapter.setOnItemClickListener((adapter, view1, position) -> {
@@ -246,7 +247,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
     @Override
     protected void initData() {
         super.initData();
-        groupId = getIntent().getStringExtra("groupId");
+
         getData();
     }
 
@@ -273,7 +274,7 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
         }
         for (int i = 0, size = list.size(); i < size; i++) {
             if (loginUID.equals(list.get(i).memberUID)) continue;
-            if (loginMemberRole == WKChannelMemberRole.manager && list.get(i).role != WKChannelMemberRole.normal){
+            if (loginMemberRole == WKChannelMemberRole.manager && list.get(i).role != WKChannelMemberRole.normal) {
                 continue;
             }
             GroupMemberEntity entity = new GroupMemberEntity(list.get(i));
@@ -287,13 +288,14 @@ public class DeleteGroupMemberActivity extends WKBaseActivity<ActDeleteMemberLay
 
         }
         wkVBinding.refreshLayout.finishLoadMore();
+        if (WKReader.isEmpty(tempList)) {
+            wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
+        }
         if (page == 1) {
             groupMemberAdapter.setList(tempList);
         } else {
             groupMemberAdapter.addData(tempList);
         }
-        if (WKReader.isEmpty(tempList)) {
-            wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
-        }
+
     }
 }

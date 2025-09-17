@@ -30,6 +30,7 @@ import com.chat.base.msgitem.WKRevokeProvider;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.CounterView;
+import com.chat.base.ui.components.TypingView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.StringUtils;
@@ -499,6 +500,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
             helper.setText(R.id.contentTv, content);
         }
+        TypingView typingView = helper.getView(R.id.spinKit);
+        typingView.setDotColor(ContextCompat.getColor(getContext(),R.color.color999));
+        typingView.setDotRadius(AndroidUtilities.dp(3f));
+        typingView.setDotSpacing(1);
     }
 
     private void addEvent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {

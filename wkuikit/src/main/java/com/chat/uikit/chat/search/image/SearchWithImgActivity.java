@@ -96,7 +96,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     @Override
     protected void initListener() {
         getData();
-        wkVBinding.spinKit.setColor(Theme.colorAccount);
+        
         wkVBinding.refreshLayout.setEnableRefresh(false);
         wkVBinding.refreshLayout.setOnRefreshLoadMoreListener(new OnRefreshLoadMoreListener() {
             @Override

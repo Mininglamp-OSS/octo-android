@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:dist="http://schemas.android.com/apk/distribution"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.test.demo">
+    package="com.test.demo2">
 
     <queries>
         <package android:name="com.tencent.mm" />

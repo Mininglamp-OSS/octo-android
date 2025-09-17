@@ -4,7 +4,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import com.chat.base.R
+import com.chat.base.ui.components.TypingView
+import com.chat.base.utils.AndroidUtilities
 import com.chat.base.views.BubbleLayout
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Observable
@@ -60,7 +63,10 @@ class WKTypingProvider : WKChatBaseProvider() {
         contentTvLayout.setAll(bgType, from, WKContentType.typing)
         val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         setFromName(uiChatMsgItemEntity,from,receivedTextNameTv)
-
+        val spinKit =  parentView.findViewById<TypingView>(R.id.spin_kit)
+        spinKit.setDotColor(ContextCompat.getColor(context,R.color.colorDark))
+        spinKit.setDotRadius(AndroidUtilities.dp(3f).toFloat())
+        spinKit.setDotSpacing(AndroidUtilities.dp(2f).toFloat())
     }
 
     override val itemViewType: Int

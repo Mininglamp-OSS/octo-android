@@ -61,41 +61,40 @@ dependencies {
 
     api 'com.alibaba:fastjson:1.2.83'
     //glide
-    api('com.github.bumptech.glide:glide:4.16.0') {
+    api('com.github.bumptech.glide:glide:5.0.5') {
         transitive = true
     }
     api 'jp.wasabeef:glide-transformations:4.3.0'
-    api('com.squareup.okhttp3:okhttp:5.0.0-alpha.2')
+    api('com.squareup.okhttp3:okhttp:5.1.0')
     // https://github.com/LuckSiege/PictureSelector
     api 'io.github.lucksiege:pictureselector:v3.11.2'
     implementation 'io.github.lucksiege:compress:v3.11.2'
     //刷新
-    api 'io.github.scwang90:refresh-layout-kernel:2.0.6'      //核心必须依赖
-    api 'io.github.scwang90:refresh-header-classics:2.0.6'    //经典刷新头
+    api 'io.github.scwang90:refresh-layout-kernel:2.1.1'      //核心必须依赖
+    api 'io.github.scwang90:refresh-header-classics:2.1.1'    //经典刷新头
 //    api 'com.scwang.smart:refresh-layout-kernel:2.0.1'
 //    //没有使用特殊Header，可以不加这行
 //    api 'com.scwang.smart:refresh-header-classics:2.0.1'
-    api 'com.github.ybq:Android-SpinKit:1.4.0'
-    api 'com.squareup.retrofit2:retrofit:2.11.0'
-    implementation('com.squareup.retrofit2:converter-gson:2.11.0') {
+//    api 'com.github.ybq:Android-SpinKit:1.4.0'
+    api 'com.squareup.retrofit2:retrofit:3.0.0'
+    implementation('com.squareup.retrofit2:converter-gson:3.0.0') {
         exclude group: 'com.google.code.gson'
     }
-    api 'com.squareup.retrofit2:converter-gson:2.11.0'
+    api 'com.squareup.retrofit2:converter-gson:3.0.0'
 //    api 'com.squareup.okhttp3:logging-interceptor:4.9.1'
-    api "com.squareup.retrofit2:adapter-rxjava3:2.9.0"
-    api 'io.reactivex.rxjava3:rxandroid:3.0.0'
-    api 'io.reactivex.rxjava3:rxjava:3.1.5'
+    api "com.squareup.retrofit2:adapter-rxjava3:3.0.0"
+    api 'io.reactivex.rxjava3:rxandroid:3.0.2'
+    api 'io.reactivex.rxjava3:rxjava:3.1.11'
     api 'com.github.DSAppTeam:PanelSwitchHelper:v1.5.12'
     // 图片裁剪  https://github.com/CanHub/Android-Image-Cropper
     implementation 'com.vanniktech:android-image-cropper:4.6.0'
-    api 'androidx.emoji2:emoji2:1.5.0'
-    api "androidx.emoji2:emoji2-views:1.5.0"
-    api 'org.jsoup:jsoup:1.15.2'
-    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1'
+    api 'androidx.emoji2:emoji2:1.6.0'
+    api "androidx.emoji2:emoji2-views:1.6.0"
+    api 'org.jsoup:jsoup:1.21.2'
+    api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
     api 'com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer:v10.0.0'
     api project(path: ':MyLibs:rlottie')
-    // WuKongIM
-    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.4.5'
+    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.4.6'
     api 'com.tencent.bugly:crashreport:latest.release'
 
 }

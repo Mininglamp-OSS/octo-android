@@ -30,9 +30,9 @@
             android:background="@color/transparent"
             android:gravity="center">
 
-            <com.github.ybq.android.spinkit.SpinKitView
+            <com.chat.base.ui.components.CommonLoadingView
                 android:id="@+id/spin_kit"
-                style="@style/SpinKitView.Large.DoubleBounce"
+
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_gravity="center" />

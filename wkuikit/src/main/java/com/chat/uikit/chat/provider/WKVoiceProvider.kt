@@ -15,8 +15,8 @@ import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
-import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.net.ud.WKDownloader
+import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.SecretDeleteTimer
 import com.chat.base.utils.AndroidUtilities
@@ -121,6 +121,7 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 val file = File(filePath)
                 if (file.exists()) {
                     playBtn.setPlay()
+
                     WKPlayVoiceUtils.getInstance()
                         .playVoice(filePath, uiChatMsgItemEntity.wkMsg.clientMsgNO)
                     updateViewed(uiChatMsgItemEntity, parentView, from)

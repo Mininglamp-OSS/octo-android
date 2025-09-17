@@ -10,8 +10,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import okhttp3.Interceptor;
@@ -19,8 +21,9 @@ import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-import okhttp3.internal.Util;
 import okio.Buffer;
+import okio.BufferedSource;
+import okio.ByteString;
 
 /**
  * 2020-07-20 11:50
@@ -46,13 +49,14 @@ public class LogInterceptor implements Interceptor {
                 requestBody.writeTo(source);
                 try {
                     Charset charset = type == null ? Charset.defaultCharset() : type.charset(Charset.defaultCharset());
-                    Util.readBomAsCharset(source, charset);
+                    readBomAsCharset(source, charset);
+//                    Util.readBomAsCharset(source, charset);
 //                    Util.readBomAsCharset()
                     requestParams = source.readString(charset);
                 } catch (Exception e) {
                     e.printStackTrace();
                 } finally {
-                    Util.closeQuietly(source);
+                    closeQuietly(source);
                 }
                 // request = request.newBuilder().post(requestBody).build();
             }
@@ -138,5 +142,41 @@ public class LogInterceptor implements Interceptor {
             builder.append(aSplit).append("\n");
         }
         return builder.toString();
+    }
+
+    /**
+     * 安静地关闭资源，忽略异常
+     */
+    private void closeQuietly(Closeable closeable) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (IOException ignored) {
+                // 忽略关闭时的异常
+            }
+        }
+    }
+
+    private Charset readBomAsCharset(BufferedSource source, Charset defaultCharset) {
+        try {
+            // UTF-8 BOM: EF BB BF
+            if (source.rangeEquals(0, ByteString.decodeHex("EFBBBF"))) {
+                source.skip(3);
+                return StandardCharsets.UTF_8;
+            }
+            // UTF-16 BE BOM: FE FF
+            if (source.rangeEquals(0, ByteString.decodeHex("FEFF"))) {
+                source.skip(2);
+                return StandardCharsets.UTF_16BE;
+            }
+            // UTF-16 LE BOM: FF FE
+            if (source.rangeEquals(0, ByteString.decodeHex("FFFE"))) {
+                source.skip(2);
+                return StandardCharsets.UTF_16LE;
+            }
+        } catch (Exception e) {
+            // 忽略异常，使用默认字符集
+        }
+        return defaultCharset != null ? defaultCharset : StandardCharsets.UTF_8;
     }
 }

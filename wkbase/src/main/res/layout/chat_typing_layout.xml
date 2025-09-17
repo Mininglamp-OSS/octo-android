@@ -33,12 +33,10 @@
             android:textSize="12sp"
             android:visibility="gone" />
 
-        <com.github.ybq.android.spinkit.SpinKitView
+        <com.chat.base.ui.components.TypingView
             android:id="@+id/spin_kit"
-            style="@style/SpinKitView.Large.ThreeBounce"
             android:layout_width="50dp"
             android:layout_height="20dp"
-            android:layout_gravity="start"
-            app:SpinKit_Color="@color/colorDark" />
+            android:layout_gravity="start" />
     </com.chat.base.views.BubbleLayout>
 </LinearLayout>

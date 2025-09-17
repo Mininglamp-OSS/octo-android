@@ -85,9 +85,7 @@ public class NumberTextView extends View {
             animator = null;
         }
         oldLetters.clear();
-        if (!letters.isEmpty()) {
-            oldLetters.addAll(letters);
-        }
+        oldLetters.addAll(letters);
         letters.clear();
         String oldText;
         String text;
@@ -112,37 +110,20 @@ public class NumberTextView extends View {
 
         currentNumber = number;
         progress = 0;
-        
-        // 确保新数字和旧数字的长度一致，通过在短的一方前面补空格
-        int maxLength = Math.max(text.length(), oldText.length());
-        if (text.length() < maxLength) {
-            text = String.format("%" + maxLength + "s", text);
-        }
-        if (oldText.length() < maxLength) {
-            oldText = String.format("%" + maxLength + "s", oldText);
-        }
-
-        for (int a = 0; a < maxLength; a++) {
+        for (int a = 0; a < text.length(); a++) {
             String ch = text.substring(a, a + 1);
-            String oldCh = a < oldText.length() ? oldText.substring(a, a + 1) : " ";
-            
-            if (!replace && !oldLetters.isEmpty() && a < oldLetters.size() && oldCh.equals(ch) && !oldCh.equals(" ")) {
+            String oldCh = !oldLetters.isEmpty() && a < oldText.length() ? oldText.substring(a, a + 1) : null;
+            if (!replace && oldCh != null && oldCh.equals(ch)) {
                 letters.add(oldLetters.get(a));
                 oldLetters.set(a, null);
             } else {
-                if (replace && oldCh.equals(" ")) {
+                if (replace && oldCh == null) {
                     oldLetters.add(new StaticLayout("", textPaint, 0, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false));
-                } else if (!oldLetters.isEmpty() && a < oldLetters.size()) {
-                    // 保持旧数字的布局
-                    oldLetters.set(a, new StaticLayout(oldCh, textPaint, (int) Math.ceil(textPaint.measureText(oldCh)), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false));
-                } else {
-                    oldLetters.add(new StaticLayout(oldCh, textPaint, (int) Math.ceil(textPaint.measureText(oldCh)), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false));
                 }
-                StaticLayout layout = new StaticLayout(ch.trim(), textPaint, (int) Math.ceil(textPaint.measureText(ch.trim())), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+                StaticLayout layout = new StaticLayout(ch, textPaint, (int) Math.ceil(textPaint.measureText(ch)), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
                 letters.add(layout);
             }
         }
-        
         if (animated && !oldLetters.isEmpty()) {
             animator = ObjectAnimator.ofFloat(this, "progress", forwardAnimation ? -1 : 1, 0);
             animator.setDuration(addNumber ? 180 : 150);

@@ -137,14 +137,13 @@
                     android:layout_gravity="center_vertical"
                     android:layout_weight="1">
 
-                    <com.github.ybq.android.spinkit.SpinKitView
+                    <com.chat.base.ui.components.TypingView
                         android:id="@+id/spinKit"
-                        style="@style/SpinKitView.Large.ThreeBounce"
-                        android:layout_width="25dp"
+                        android:layout_width="30dp"
                         android:layout_height="15dp"
                         android:layout_gravity="center"
                         android:visibility="gone"
-                        app:SpinKit_Color="@color/color999" />
+                         />
 
                     <androidx.emoji2.widget.EmojiTextView
                         android:id="@+id/contentTv"

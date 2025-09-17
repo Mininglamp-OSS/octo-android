@@ -172,7 +172,8 @@ public class WKUIKitApplication {
     public void initIM() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
             //设置开发模式
-            WKIM.getInstance().setDebug(WKBinder.isDebug);
+//            WKIM.getInstance().setDebug(WKBinder.isDebug);
+            WKIM.getInstance().setDebug(true);
             WKIM.getInstance().setFileCacheDir("wkIMFile");
 
             String imToken = WKConfig.getInstance().getImToken();

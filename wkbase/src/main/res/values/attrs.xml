@@ -255,4 +255,5 @@
         <attr name="adjustHeightOffset" format="dimension"/>
         <attr name="disableChildHorizontalScroll" format="boolean"/>
     </declare-styleable>
+
 </resources>

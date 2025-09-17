@@ -6,28 +6,28 @@ plugins {
 }
 
 android {
-    signingConfigs {
-        debug {
-            storeFile file('../demo.jks')
-            storePassword 'demo1365'
-            keyAlias = 'demo'
-            keyPassword 'demo1365'
-        }
-        release {
-            storeFile file('../demo.jks')
-            storePassword 'demo1365'
-            keyAlias = 'demo'
-            keyPassword 'demo1365'
-        }
-    }
-    namespace 'com.test.demo'
+//    signingConfigs {
+//        debug {
+//            storeFile file('../demo.jks')
+//            storePassword 'demo1365'
+//            keyAlias = 'demo'
+//            keyPassword 'demo1365'
+//        }
+//        release {
+//            storeFile file('../demo.jks')
+//            storePassword 'demo1365'
+//            keyAlias = 'demo'
+//            keyPassword 'demo1365'
+//        }
+//    }
+    namespace 'com.test.demo2'
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
     aaptOptions.useNewCruncher = false
 
 
     defaultConfig {
-        applicationId "com.test.demo"
+        applicationId "com.test.demo2"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -54,7 +54,7 @@ android {
             minifyEnabled true  // 是否混淆
             shrinkResources true  // 是否去除无效的资源文件
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+           // signingConfig signingConfigs.release
         }
         debug {
 //            jniDebuggable true
@@ -62,7 +62,7 @@ android {
 //            minifyEnabled true  // 是否混淆
 //            shrinkResources true  // 是否去除无效的资源文件
 //            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+           // signingConfig signingConfigs.release
         }
     }
     compileOptions {

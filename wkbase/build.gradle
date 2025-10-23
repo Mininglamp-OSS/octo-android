@@ -94,7 +94,6 @@ dependencies {
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
     api 'com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer:v10.0.0'
     api project(path: ':MyLibs:rlottie')
-    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.4.6'
-    api 'com.tencent.bugly:crashreport:latest.release'
+    api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.4.7'
 
 }

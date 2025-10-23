@@ -31,7 +31,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.alibaba.fastjson.JSON;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.config.WKSystemAccount;
@@ -107,7 +106,6 @@ import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
-import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -179,10 +177,6 @@ public class WKUIKitApplication {
             String imToken = WKConfig.getInstance().getImToken();
             String uid = WKConfig.getInstance().getUid();
             WKIM.getInstance().init(mContext.get(), uid, imToken);
-
-            CrashReport.initCrashReport(getContext(), "b8bf09f25f", false);
-            CrashReport.setUserId(WKConfig.getInstance().getUid());
-            CrashReport.setDeviceModel(getContext(), WKDeviceUtils.getInstance().getSystemModel());
 
         }
     }

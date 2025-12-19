@@ -116,7 +116,7 @@ class TSApplication : MultiDexApplication() {
     }
 
     private fun getAppPackageName(): String {
-        return "com.test.demo2"
+        return packageName  // 动态获取实际的 applicationId
     }
 
     private fun getProcessName(cxt: Context, pid: Int): String? {

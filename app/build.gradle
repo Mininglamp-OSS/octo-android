@@ -14,7 +14,7 @@ if (localPropertiesFile.exists()) {
 
 def appId = localProperties.getProperty('applicationId')
 if (appId == null || appId.isEmpty()) {
-    throw new GradleException("❌ 错误：请在 local.properties 中设置 applicationId=你的包名")
+    throw new GradleException("❌ 错误：请在 local.properties 中设置 applicationId=你的包名，并在MainActivity和TSApplication文件中导包设置的包名")
 }
 
 // 自动更新 google-services.json 中的 package_name

@@ -29,8 +29,9 @@ class FriendAdapter :
             if (TextUtils.isEmpty(item.channel.channelRemark)) item.channel.channelName else item.channel.channelRemark
         )
         val index: Int = holder.bindingAdapterPosition - 1
-        val index1: Int = getPositionForSection(item.pying.substring(0, 1))
-        holder.setText(R.id.pyTv, item.pying.substring(0, 1))
+        val firstLetter = if (item.pying.isNotEmpty()) item.pying.substring(0, 1) else "#"
+        val index1: Int = getPositionForSection(firstLetter)
+        holder.setText(R.id.pyTv, firstLetter)
         holder.setGone(R.id.pyTv, index != index1)
         val avatarView: AvatarView = holder.getView(R.id.avatarView)
         avatarView.setSize(50f)
@@ -206,7 +207,8 @@ class FriendAdapter :
         var i = 0
         val size = data.size
         while (i < size) {
-            val sortStr = data[i].pying.substring(0, 1)
+            val pying = data[i].pying
+            val sortStr = if (pying.isNotEmpty()) pying.substring(0, 1) else "#"
             if (catalog.equals(sortStr, ignoreCase = true)) {
                 return i
             }

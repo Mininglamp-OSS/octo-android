@@ -242,6 +242,10 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         PyingUtils.getInstance().sortListBasic(list);
 
         for (int i = 0, size = list.size(); i < size; i++) {
+            if (TextUtils.isEmpty(list.get(i).pying)){
+                otherList.add(list.get(i));
+                continue;
+            }
             if (PyingUtils.getInstance().isStartLetter(list.get(i).pying)) {
                 //字母
                 letterList.add(list.get(i));

@@ -121,4 +121,9 @@
     <string name="can_not_play_video_with_revoke">视频已被撤回，无法播放</string>
     <string name="wk_video">视频</string>
     <string name="last_message_file">[文件]</string>
+    <string name="str_file">文件</string>
+    <string name="str_file_download">下载</string>
+    <string name="str_file_open">打开</string>
+    <string name="str_file_download_fail">文件下载失败</string>
+    <string name="str_file_not_exist">文件不存在</string>
 </resources>

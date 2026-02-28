@@ -122,4 +122,9 @@
     <string name="can_not_play_video_with_revoke">The video has been recalled and cannot be played</string>
     <string name="wk_video">Video</string>
     <string name="last_message_file">[File]</string>
+    <string name="str_file">File</string>
+    <string name="str_file_download">Download</string>
+    <string name="str_file_open">Open</string>
+    <string name="str_file_download_fail">File download failed</string>
+    <string name="str_file_not_exist">File does not exist</string>
 </resources>

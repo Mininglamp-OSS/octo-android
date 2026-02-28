@@ -1,21 +1,21 @@
-# 唐僧叨叨（[官网](https://tangsengdaodao.com/ "官网")）
+# DMWork
 
 ![](https://img.shields.io/badge/platform-android-blue.svg)  ![](https://img.shields.io/badge/compileSdkVersion-33-blue.svg) ![](https://img.shields.io/badge/minSdkVersion-23-blue.svg) ![](https://img.shields.io/hexpm/l/plug.svg)
 
-### **唐僧叨叨 悟空IM提供动力** （[悟空IM](https://githubim.com/ "文档")）
+### **DMWork 悟空IM提供动力** （[悟空IM](https://githubim.com/ "文档")）
 
-唐僧叨叨基于底层通讯框架`悟空IM`实现聊天功能。Demo已实现`文本`，`图片`，`语音`，`名片`，`emoji`，群聊`@某人`，消息`链接`，`手机号`，`邮箱`识别等功能。聊天设置支持`名称修改`，`头像修改`，`公告编辑`，`消息免打扰`，`置顶`，`保存到通讯录`，`聊天内昵称`，`群内成员昵称显示`等丰富的设置功能。由于demo是模块化开发，开发者可完全按自己的开发习惯进行二次开发。
+DMWork基于底层通讯框架`悟空IM`实现聊天功能。已实现`文本`，`图片`，`语音`，`名片`，`emoji`，群聊`@某人`，消息`链接`，`手机号`，`邮箱`识别等功能。聊天设置支持`名称修改`，`头像修改`，`公告编辑`，`消息免打扰`，`置顶`，`保存到通讯录`，`聊天内昵称`，`群内成员昵称显示`等丰富的设置功能。由于项目是模块化开发，开发者可完全按自己的开发习惯进行二次开发。
 
-### 唐僧叨叨特点
+### DMWork特点
 
-- #### **永久保存消息** 卸载唐僧叨叨后下次安装登录后，可查看以前的聊天记录
-- #### **超大群** 唐僧叨叨群聊人数无限制，万人群进入聊天完全不卡，消息正常收发
+- #### **永久保存消息** 卸载DMWork后下次安装登录后，可查看以前的聊天记录
+- #### **超大群** DMWork群聊人数无限制，万人群进入聊天完全不卡，消息正常收发
 - #### **实时性** 所有操作实时同步，app已读消息，web/pc可实时更改状态
-- #### **扩展性强** 唐僧叨叨现已框架可轻松支持消息的已读未读回执，消息点赞，消息回复功能
-- #### **开源** 唐僧叨叨100%开源，商业开发无需授权可直接使用
+- #### **扩展性强** DMWork现有框架可轻松支持消息的已读未读回执，消息点赞，消息回复功能
+- #### **开源** DMWork 100%开源，商业开发无需授权可直接使用
 
 ### 项目模块
-唐僧叨叨是模块化开发，不限制开发者编码习惯。以下是对各个模块的说明
+DMWork是模块化开发，不限制开发者编码习惯。以下是对各个模块的说明
 
 **`wkbase`**
 
@@ -31,7 +31,7 @@
 
 **`wkpush`**
 
-推送模块  唐僧叨叨集成了`华为`,`小米`,`vivo`,`oppo`,`FCM`厂商推送功能。开发者二次开发是只需要替换对应的appID和appKey即可
+推送模块  DMWork集成了`华为`,`小米`,`vivo`,`oppo`,`FCM`厂商推送功能。开发者二次开发是只需要替换对应的appID和appKey即可
 - **华为** 在官方申请开发者账号并开通推送服务后，下载`agconnect-services.json`文件覆盖`app`模块下的该文件。并在`wkpush`模块的 `AndroidManifest.xml` 文件中的名为`com.huawei.hms.client.appid`的`meta-data`替换appID，`PushKeys`文件中替换`huaweiAPPID`即可
 
 - **小米** 修改此模块下的`PushKeys`文件中的`xiaoMiAppID` 和 `xiaoMiAppKey`即可
@@ -52,7 +52,7 @@
 
 **注意这里只是介绍如何将自定义的消息item展示在消息列表中，消息model的实现需要去查看[悟空IM](https://github.com/WuKongIM/WuKongIM "文档")文档**
 
-唐僧叨叨实现自定义消息Item也十分简单。只需要实现两步即可
+DMWork实现自定义消息Item也十分简单。只需要实现两步即可
 
 1、 编写消息item provider。继承`WKChatBaseProvider`文件，重写`getChatViewItem`方法如下
 ```kotlin
@@ -101,11 +101,6 @@ WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_LOCA
 |![](imgs/reply.webp)|![](imgs/group.webp)| ![](imgs/other.webp) |
 
 由于GIF被压缩，演示效果很模糊。真机预览效果更佳
-
-## app下载体验
-<img src='./imgs/ic_download_qr.png' width=35%/>
-
-如果扫描错误可通过 [安装地址](http://www.pgyer.com/tsdd "文档") 下载
 
 ### 许可证
 悟空IM 使用 Apache 2.0 许可证。有关详情，请参阅 LICENSE 文件。

@@ -1,4 +1,4 @@
-package com.test.demo2;
+package com.dmwork.im;
 
 import android.app.Activity;
 import android.app.Application;

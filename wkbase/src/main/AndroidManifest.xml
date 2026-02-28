@@ -13,7 +13,7 @@
 
                 <data
                     android:host="url"
-                    android:scheme="com.xinbida.tangsengdaodao" />
+                    android:scheme="com.dmwork.im" />
             </intent-filter>
         </activity>
         <activity android:name=".act.WKCropImageActivity" />

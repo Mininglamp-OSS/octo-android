@@ -126,6 +126,8 @@ import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 import com.xinbida.wukongim.msgmodel.WKReply;
+import com.chat.base.msgcontent.WKFileContent;
+import com.chat.base.utils.WKFileUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -2093,6 +2095,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     @Override
+    public void chooseFile() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        chooseFileResultLac.launch(intent);
+    }
+
+    @Override
     public void chatRecyclerViewScrollToEnd() {
         if (isToEnd) {
             scrollToEnd();
@@ -2334,6 +2344,77 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         }
     });
+    ActivityResultLauncher<Intent> chooseFileResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
+            android.net.Uri uri = result.getData().getData();
+            if (uri != null) {
+                handleFileResult(uri);
+            }
+        }
+    });
+
+    private void handleFileResult(android.net.Uri uri) {
+        try {
+            String filePath = WKFileUtils.getInstance().getChooseFileResultPath(this, uri);
+            if (TextUtils.isEmpty(filePath)) {
+                // Copy file from content URI to local cache
+                String fileName = "file_" + System.currentTimeMillis();
+                android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex >= 0) {
+                        fileName = cursor.getString(nameIndex);
+                    }
+                    cursor.close();
+                }
+                java.io.File cacheDir = new java.io.File(getCacheDir(), "file_pick");
+                if (!cacheDir.exists()) cacheDir.mkdirs();
+                java.io.File destFile = new java.io.File(cacheDir, fileName);
+                java.io.InputStream is = getContentResolver().openInputStream(uri);
+                if (is != null) {
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile);
+                    byte[] buffer = new byte[4096];
+                    int len;
+                    while ((len = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, len);
+                    }
+                    fos.close();
+                    is.close();
+                    filePath = destFile.getAbsolutePath();
+                }
+            }
+            if (!TextUtils.isEmpty(filePath)) {
+                java.io.File file = new java.io.File(filePath);
+                if (file.exists()) {
+                    // Check file size limit (100MB)
+                    long maxSize = 100L * 1024 * 1024;
+                    if (file.length() > maxSize) {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.str_file_too_large));
+                        return;
+                    }
+                    // Check dangerous file extensions
+                    String name = file.getName();
+                    int dotIndex = name.lastIndexOf('.');
+                    String ext = dotIndex > 0 ? name.substring(dotIndex + 1).toLowerCase(java.util.Locale.getDefault()) : "";
+                    java.util.Set<String> dangerousExts = new java.util.HashSet<>(java.util.Arrays.asList(
+                            "exe", "bat", "cmd", "sh", "msi", "apk", "dex", "jsp", "cgi", "scr", "com", "pif", "vbs", "ws", "wsf"
+                    ));
+                    if (dangerousExts.contains(ext)) {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.str_file_type_dangerous));
+                        return;
+                    }
+                    WKFileContent fileContent = new WKFileContent();
+                    fileContent.localPath = filePath;
+                    fileContent.name = name;
+                    fileContent.extension = ext;
+                    fileContent.size = file.length();
+                    sendMsg(fileContent);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     private synchronized void sendMsgInserted(WKMsg msg) {
         if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {

@@ -67,4 +67,7 @@ public interface IConversationContext {
     View getRecyclerViewLayout();
     boolean isShowChatActivity();
     void closeActivity();
+
+    // 选择文件发送
+    void chooseFile();
 }

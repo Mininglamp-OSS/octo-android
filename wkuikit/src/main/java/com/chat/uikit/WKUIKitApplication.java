@@ -302,6 +302,7 @@ public class WKUIKitApplication {
         //添加聊天功能面板
         EndpointManager.getInstance().setMethod(EndpointCategory.chatFunction + "_chooseImg", EndpointCategory.chatFunction, 100, object -> new ChatFunctionMenu("chooseImg", R.mipmap.icon_func_album, mContext.get().getString(R.string.image), this::chooseIMG));
         EndpointManager.getInstance().setMethod(EndpointCategory.chatFunction + "_chooseCard", EndpointCategory.chatFunction, 95, object -> new ChatFunctionMenu("chooseCard", R.mipmap.icon_func_card, mContext.get().getString(R.string.card), IConversationContext::sendCardMsg));
+        EndpointManager.getInstance().setMethod(EndpointCategory.chatFunction + "_chooseFile", EndpointCategory.chatFunction, 90, object -> new ChatFunctionMenu("chooseFile", R.drawable.ic_func_file, mContext.get().getString(R.string.str_file), IConversationContext::chooseFile));
 
         //添加tab页
         EndpointManager.getInstance().setMethod(EndpointCategory.tabMenus + "_start_chat", EndpointCategory.tabMenus, 200, object -> new PopupMenuItem(mContext.get().getString(R.string.start_group_chat), R.mipmap.menu_chats, () -> {

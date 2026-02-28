@@ -127,4 +127,6 @@
     <string name="str_file_open">Open</string>
     <string name="str_file_download_fail">File download failed</string>
     <string name="str_file_not_exist">File does not exist</string>
+    <string name="str_file_too_large">File exceeds 100MB size limit</string>
+    <string name="str_file_type_dangerous">This file type is not allowed</string>
 </resources>

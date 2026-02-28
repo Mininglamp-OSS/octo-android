@@ -80,6 +80,9 @@ class WKFileProvider : WKChatBaseProvider() {
 
                     override fun onFail(tag: Any?, msg: String?) {
                         progressBar.visibility = View.GONE
+                        if (tag != null) {
+                            WKProgressManager.instance.unregisterProgress(tag)
+                        }
                     }
                 })
         }
@@ -121,6 +124,13 @@ class WKFileProvider : WKChatBaseProvider() {
         addLongClick(contentLayout, uiChatMsgItemEntity)
     }
 
+    private fun sanitizeFileName(name: String): String {
+        // Extract basename to prevent path traversal (../ or /)
+        val basename = File(name).name
+        // Remove any remaining dangerous characters
+        return basename.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    }
+
     private fun handleFileClick(
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         fileContent: WKFileContent,
@@ -140,7 +150,8 @@ class WKFileProvider : WKChatBaseProvider() {
                 uiChatMsgItemEntity.wkMsg.channelType + "/" +
                 uiChatMsgItemEntity.wkMsg.channelID + "/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val fileName = fileContent.name ?: (uiChatMsgItemEntity.wkMsg.clientMsgNO + "." + fileContent.extension)
+        val rawName = fileContent.name ?: (uiChatMsgItemEntity.wkMsg.clientMsgNO + "." + fileContent.extension)
+        val fileName = sanitizeFileName(rawName)
         val filePath = downloadDir + fileName
         val file = File(filePath)
         if (file.exists()) {
@@ -149,7 +160,11 @@ class WKFileProvider : WKChatBaseProvider() {
         }
 
         // Download file
-        if (TextUtils.isEmpty(fileContent.url)) return
+        if (TextUtils.isEmpty(fileContent.url)) {
+            WKToastUtils.getInstance()
+                .showToastNormal(context.getString(R.string.str_file_not_exist))
+            return
+        }
         val downloadUrl = WKApiConfig.getShowUrl(fileContent.url)
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0

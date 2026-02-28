@@ -2386,12 +2386,27 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (!TextUtils.isEmpty(filePath)) {
                 java.io.File file = new java.io.File(filePath);
                 if (file.exists()) {
-                    WKFileContent fileContent = new WKFileContent();
-                    fileContent.localPath = filePath;
-                    fileContent.name = file.getName();
+                    // Check file size limit (100MB)
+                    long maxSize = 100L * 1024 * 1024;
+                    if (file.length() > maxSize) {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.str_file_too_large));
+                        return;
+                    }
+                    // Check dangerous file extensions
                     String name = file.getName();
                     int dotIndex = name.lastIndexOf('.');
-                    fileContent.extension = dotIndex > 0 ? name.substring(dotIndex + 1) : "";
+                    String ext = dotIndex > 0 ? name.substring(dotIndex + 1).toLowerCase(java.util.Locale.getDefault()) : "";
+                    java.util.Set<String> dangerousExts = new java.util.HashSet<>(java.util.Arrays.asList(
+                            "exe", "bat", "cmd", "sh", "msi", "apk", "dex", "jsp", "cgi", "scr", "com", "pif", "vbs", "ws", "wsf"
+                    ));
+                    if (dangerousExts.contains(ext)) {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.str_file_type_dangerous));
+                        return;
+                    }
+                    WKFileContent fileContent = new WKFileContent();
+                    fileContent.localPath = filePath;
+                    fileContent.name = name;
+                    fileContent.extension = ext;
                     fileContent.size = file.length();
                     sendMsg(fileContent);
                 }

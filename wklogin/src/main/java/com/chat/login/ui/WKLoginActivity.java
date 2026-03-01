@@ -128,7 +128,9 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         wkVBinding.loginBtn.setOnClickListener(v -> {
             if (checkEditInputIsEmpty(wkVBinding.nameEt, R.string.name_not_null)) return;
             if (checkEditInputIsEmpty(wkVBinding.pwdEt, R.string.pwd_not_null)) return;
-            if (code.equals("0086") && Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().length() != 11) {
+            String nameInput = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
+            boolean isPhoneNumber = nameInput.matches("\\d+");
+            if (isPhoneNumber && code.equals("0086") && nameInput.length() != 11) {
                 showSingleBtnDialog(getString(R.string.phone_error));
                 return;
             }
@@ -143,7 +145,9 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             loadingPopup.show();
             loadingPopup.setTitle(getString(R.string.logging_in));
             String name = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-            loginPresenter.login(code + name, wkVBinding.pwdEt.getText().toString());
+            boolean isPhone = name.matches("\\d+");
+            String loginName = isPhone ? code + name : name;
+            loginPresenter.login(loginName, wkVBinding.pwdEt.getText().toString());
         });
         SingleClickUtil.onSingleClick(wkVBinding.registerTv, v -> startActivity(new Intent(this, WKRegisterActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.chooseCodeTv, v -> {

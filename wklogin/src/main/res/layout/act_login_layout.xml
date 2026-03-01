@@ -77,7 +77,7 @@
                 android:background="@color/transparent"
                 android:gravity="center_vertical"
                 android:hint="@string/hint_name"
-                android:inputType="phone"
+                android:inputType="text"
                 android:maxLength="20"
                 android:paddingStart="10dp"
                 android:paddingEnd="0dp"

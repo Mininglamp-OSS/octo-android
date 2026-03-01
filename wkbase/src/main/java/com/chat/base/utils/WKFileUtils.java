@@ -918,12 +918,48 @@ public class WKFileUtils {
         return filename;
     }
 
+    /**
+     * 清洗文件名，移除路径遍历序列和路径分隔符，防止目录穿越攻击。
+     */
+    private String sanitizeFileName(@Nullable String name) {
+        if (name == null) return null;
+        // 移除 null 字节
+        name = name.replace("\0", "");
+        // 移除路径分隔符
+        name = name.replace("/", "").replace("\\", "");
+        // 移除 ..（防止遗留的路径遍历片段）
+        while (name.contains("..")) {
+            name = name.replace("..", "");
+        }
+        // 去除首尾空格
+        name = name.trim();
+        if (name.isEmpty()) {
+            return null;
+        }
+        return name;
+    }
+
     @Nullable
     public File generateFileName(@Nullable String name) {
         if (name == null) {
             return null;
         }
+        name = sanitizeFileName(name);
+        if (name == null) {
+            return null;
+        }
         File file = new File(WKConstants.chatDownloadFileDir, name);
+        // 二次校验：确保最终路径仍在下载目录内
+        try {
+            String canonicalDir = new File(WKConstants.chatDownloadFileDir).getCanonicalPath();
+            if (!file.getCanonicalPath().startsWith(canonicalDir)) {
+                Log.e("generateFileName", "Path traversal blocked: " + name);
+                return null;
+            }
+        } catch (IOException e) {
+            Log.e("generateFileName", "Canonical path check failed: " + e.getLocalizedMessage());
+            return null;
+        }
         if (file.exists()) {
             String fileName = name;
             String extension = "";

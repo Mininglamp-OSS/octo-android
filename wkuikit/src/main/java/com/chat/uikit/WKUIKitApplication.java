@@ -583,21 +583,49 @@ public class WKUIKitApplication {
                         }
                     }
                     GlideUtils.getInstance().chooseIMG(iConversationContext.getChatActivity(), 9, true, mimeType, true, new GlideUtils.ISelectBack() {
+                        private static final long MAX_CHAT_FILE_SIZE = 100L * 1024 * 1024; // 100MB
+
+                        private boolean isFileSizeAllowed(String path) {
+                            long fileSize = WKFileUtils.getInstance().getFileSize(path);
+                            if (fileSize > MAX_CHAT_FILE_SIZE) {
+                                WKToastUtils.getInstance().showToastNormal(
+                                        iConversationContext.getChatActivity().getString(R.string.chat_file_size_limit));
+                                return false;
+                            }
+                            return true;
+                        }
+
+                        private boolean isFileTypeAllowed(String path) {
+                            if (TextUtils.isEmpty(path)) return false;
+                            String lowerPath = path.toLowerCase();
+                            // 白名单：图片/视频/音频/文档/压缩包
+                            if (lowerPath.matches(".*\\.(jpg|jpeg|png|gif|bmp|webp|heic|heif)$")) return true;
+                            if (lowerPath.matches(".*\\.(mp4|avi|mov|mkv|flv|wmv|3gp|webm)$")) return true;
+                            if (lowerPath.matches(".*\\.(mp3|aac|wav|ogg|flac|m4a|wma|amr)$")) return true;
+                            if (lowerPath.matches(".*\\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv)$")) return true;
+                            if (lowerPath.matches(".*\\.(zip|rar|7z|tar|gz)$")) return true;
+                            WKToastUtils.getInstance().showToastNormal(
+                                    iConversationContext.getChatActivity().getString(R.string.chat_file_type_unsupported));
+                            return false;
+                        }
+
                         @Override
                         public void onBack(List<ChooseResult> paths) {
                             if (paths.size() == 1 && paths.get(0).model == ChooseResultModel.video) {
-//                                EndpointManager.getInstance().invoke("videoCompress",paths.get(0).path);
+                                String videoPath = paths.get(0).path;
+                                if (!isFileSizeAllowed(videoPath) || !isFileTypeAllowed(videoPath)) return;
                                 WKVideoContent videoContent = new WKVideoContent();
-                                videoContent.coverLocalPath = WKMediaFileUtils.getInstance().getVideoCover(paths.get(0).path);
-                                videoContent.localPath = paths.get(0).path;
-                                videoContent.second = WKMediaFileUtils.getInstance().getVideoTime(paths.get(0).path) / 1000;
-                                videoContent.size = WKFileUtils.getInstance().getFileSize(paths.get(0).path);
+                                videoContent.coverLocalPath = WKMediaFileUtils.getInstance().getVideoCover(videoPath);
+                                videoContent.localPath = videoPath;
+                                videoContent.second = WKMediaFileUtils.getInstance().getVideoTime(videoPath) / 1000;
+                                videoContent.size = WKFileUtils.getInstance().getFileSize(videoPath);
                                 iConversationContext.sendMessage(videoContent);
                                 return;
                             }
 
                             for (int i = 0, size = paths.size(); i < size; i++) {
                                 String path = paths.get(i).path;
+                                if (!isFileSizeAllowed(path) || !isFileTypeAllowed(path)) continue;
                                 if (paths.get(i).model == ChooseResultModel.video) {
                                     WKVideoContent videoContent = new WKVideoContent();
                                     videoContent.coverLocalPath = WKMediaFileUtils.getInstance().getVideoCover(path);

@@ -78,6 +78,8 @@
     <string name="saterday">周六</string>
     <string name="sunday">周日</string>
     <string name="max_file_size"> 最大支持500M</string>
+    <string name="chat_file_size_limit">文件大小不能超过100MB</string>
+    <string name="chat_file_type_unsupported">不支持的文件类型</string>
     <string name="min_file_size">不支持的文件</string>
     <string name="authorization_request">权限申请</string>
     <string name="to_set">去设置</string>

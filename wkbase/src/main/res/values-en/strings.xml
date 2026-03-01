@@ -79,6 +79,8 @@
     <string name="saterday">Sat</string>
     <string name="sunday">Sun</string>
     <string name="max_file_size"> Maximum 500M</string>
+    <string name="chat_file_size_limit">File size cannot exceed 100MB</string>
+    <string name="chat_file_type_unsupported">Unsupported file type</string>
     <string name="min_file_size"> Unsupported file</string>
     <string name="authorization_request">Authorization Request</string>
     <string name="to_set">To set</string>

@@ -18,6 +18,7 @@ import com.chat.login.ui.PerfectUserInfoActivity
 import com.chat.login.ui.WKLoginActivity
 import com.chat.uikit.TabActivity
 import com.xinbida.wukongim.WKIM
+import com.dmwork.im.databinding.ActivityMainBinding
 
 class MainActivity : WKBaseActivity<ActivityMainBinding>() {
 

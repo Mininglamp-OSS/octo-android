@@ -108,8 +108,9 @@ class TSApplication : MultiDexApplication() {
     private fun initApi() {
         var apiURL = WKSharedPreferencesUtil.getInstance().getSP("api_base_url")
         if (TextUtils.isEmpty(apiURL)) {
-            apiURL = "https://api.botgate.cn"
+            apiURL = "https://api-test.example.com/api"
             WKApiConfig.initBaseURL(apiURL)
+            WKApiConfig.baseWebUrl = "https://api-test.example.com/web/"
         } else {
             WKApiConfig.initBaseURLIncludeIP(apiURL)
         }

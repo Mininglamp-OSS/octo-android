@@ -923,14 +923,36 @@ public class WKFileUtils {
         if (name == null) {
             return null;
         }
-        File file = new File(WKConstants.chatDownloadFileDir, name);
+        // Normalize filename to avoid path traversal or separator injection
+        String safeName = name.replace("\\", "/");
+        int slashIndex = safeName.lastIndexOf("/");
+        if (slashIndex >= 0) {
+            safeName = safeName.substring(slashIndex + 1);
+        }
+        safeName = safeName.replace("..", "").trim();
+        if (TextUtils.isEmpty(safeName)) {
+            safeName = UUID.randomUUID().toString();
+        }
+        File baseDir = new File(WKConstants.chatDownloadFileDir);
+        File file = new File(baseDir, safeName);
+        try {
+            String canonicalBase = baseDir.getCanonicalPath();
+            String canonicalTarget = file.getCanonicalPath();
+            if (!canonicalTarget.startsWith(canonicalBase)) {
+                safeName = UUID.randomUUID().toString();
+                file = new File(baseDir, safeName);
+            }
+        } catch (IOException e) {
+            Log.e("fileUtils", "sanitize filename fail: " + e.getLocalizedMessage());
+            return null;
+        }
         if (file.exists()) {
-            String fileName = name;
+            String fileName = safeName;
             String extension = "";
-            int dotIndex = name.lastIndexOf('.');
+            int dotIndex = safeName.lastIndexOf('.');
             if (dotIndex > 0) {
-                fileName = name.substring(0, dotIndex);
-                extension = name.substring(dotIndex);
+                fileName = safeName.substring(0, dotIndex);
+                extension = safeName.substring(dotIndex);
             }
             int index = 0;
             while (file.exists()) {

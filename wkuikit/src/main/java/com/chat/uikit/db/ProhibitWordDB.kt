@@ -2,7 +2,6 @@ package com.chat.uikit.db
 
 import android.content.ContentValues
 import android.database.Cursor
-import android.text.TextUtils
 import com.chat.base.WKBaseApplication
 import com.chat.base.db.WKCursor
 import com.chat.uikit.enity.ProhibitWord
@@ -103,18 +102,20 @@ class ProhibitWordDB private constructor() {
     }
 
     private fun queryWithsIds(list: List<Int>): List<ProhibitWord> {
-        val ids = StringBuilder()
-        for (id in list) {
-            if (!TextUtils.isEmpty(ids)) {
-                ids.append(",")
+        if (list.isEmpty()) return ArrayList()
+        val placeholders = StringBuilder()
+        val args = arrayOfNulls<String>(list.size)
+        for ((index, id) in list.withIndex()) {
+            if (index != 0) {
+                placeholders.append(",")
             }
-            ids.append(id)
+            placeholders.append("?")
+            args[index] = id.toString()
         }
-        ids.append(")")
-        val sql = String.format("%s%s", "select * from $table where sid in (", ids)
+        val sql = "select * from $table where sid in (${placeholders})"
         val result = ArrayList<ProhibitWord>()
         if (WKBaseApplication.getInstance().dbHelper != null) {
-            val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, null)
+            val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, args)
                 ?: return result
             run {
                 cursor.moveToFirst()

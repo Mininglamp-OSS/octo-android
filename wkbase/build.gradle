@@ -58,6 +58,7 @@ dependencies {
 
     api 'com.github.li-xiaojun:XPopup:2.9.19'
     api 'androidx.multidex:multidex:2.0.1'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
 
     api 'com.alibaba:fastjson:1.2.83'
     //glide

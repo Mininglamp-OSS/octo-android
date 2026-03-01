@@ -172,12 +172,18 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             String url = WKSharedPreferencesUtil.getInstance().getSP("api_base_url", "");
             WKDialogUtils.getInstance().showInputDialog(this, getString(R.string.update_api), getString(R.string.update_api_content), url, getString(R.string.update_api_ip), 100, text -> {
                 if (!TextUtils.isEmpty(text)) {
-                    if (!text.toLowerCase().startsWith("http")) {
-                        text = "http://" + text;
+                    String sanitized = text.trim();
+                    if (!sanitized.toLowerCase().startsWith("https://")) {
+                        // Enforce HTTPS to avoid cleartext credentials
+                        if (sanitized.toLowerCase().startsWith("http://")) {
+                            sanitized = sanitized.replaceFirst("(?i)^http://", "https://");
+                        } else {
+                            sanitized = "https://" + sanitized;
+                        }
                     }
-                    WKSharedPreferencesUtil.getInstance().putSP("api_base_url", text);
+                    WKSharedPreferencesUtil.getInstance().putSP("api_base_url", sanitized);
                     showBaseUrl();
-                    EndpointManager.getInstance().invoke("update_base_url", text);
+                    EndpointManager.getInstance().invoke("update_base_url", sanitized);
                 }
             });
         });

@@ -57,7 +57,7 @@ public class ApplyDB {
                 .getInstance()
                 .getDbHelper()
                 .rawQuery(
-                        "select * from " + tableName + " where apply_uid=" + "\"" + applyUid + "\"", null);
+                        "select * from " + tableName + " where apply_uid=?", new String[]{applyUid});
         if (cursor != null) {
             if (cursor.moveToFirst()) {
                 newFriendEntity = serializeFriend(cursor);

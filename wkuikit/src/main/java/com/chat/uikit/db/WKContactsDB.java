@@ -100,8 +100,8 @@ public class WKContactsDB {
 
     private boolean isExist(MailListEntity entity) {
         boolean isExist = false;
-        String sql = "select * from user_contact where phone=" + "\"" + entity.phone + "\"" + " and name=" + "\"" + entity.name + "\"";
-        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, null);
+        String sql = "select 1 from user_contact where phone=? and name=? limit 1";
+        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, new String[]{entity.phone, entity.name});
         if (cursor != null && cursor.moveToNext()) {
             isExist = true;
         }

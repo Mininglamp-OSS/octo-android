@@ -4,6 +4,9 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKey;
+
 import com.chat.base.WKBaseApplication;
 
 
@@ -20,8 +23,27 @@ public class WKSharedPreferencesUtil {
     @SuppressLint("CommitPrefEdits")
     private WKSharedPreferencesUtil(Context context) {
         String mTAG = "wkSharedPreferences";
-        mPreferences = context.getSharedPreferences(mTAG, Context.MODE_PRIVATE);
-        mEditor = mPreferences.edit();
+        SharedPreferences prefs;
+        SharedPreferences.Editor editor;
+        try {
+            // Use EncryptedSharedPreferences to prevent plaintext storage of tokens and passwords
+            MasterKey masterKey = new MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build();
+            prefs = EncryptedSharedPreferences.create(
+                    context,
+                    mTAG,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            );
+        } catch (Exception e) {
+            // Fallback to regular SharedPreferences to avoid crashes, but still keep data scoped to the app
+            prefs = context.getSharedPreferences(mTAG, Context.MODE_PRIVATE);
+        }
+        mPreferences = prefs;
+        editor = mPreferences.edit();
+        mEditor = editor;
     }
 
 //    private static class SharedPreferencesUtilBinder {

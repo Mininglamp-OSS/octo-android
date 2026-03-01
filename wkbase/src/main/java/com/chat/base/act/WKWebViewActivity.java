@@ -143,9 +143,17 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
     protected void initView() {
         initWebViewSetting();
         String url = getIntent().getStringExtra("url");
-        assert url != null;
-        if (!url.startsWith("http") && !url.startsWith("HTTP") && !url.startsWith("file"))
-            url = "http://" + url;
+        if (TextUtils.isEmpty(url)) {
+            WKToastUtils.getInstance().showToast(getString(R.string.nodata));
+            finish();
+            return;
+        }
+        // Prefer HTTPS and block unexpected schemes to avoid MITM/file injection
+        if (!url.toLowerCase().startsWith("http")) {
+            url = "https://" + url;
+        } else if (url.toLowerCase().startsWith("http://")) {
+            url = url.replaceFirst("(?i)^http://", "https://");
+        }
 //        wkVBinding.webView.loadUrl("file:///android_asset/web/report.html");
         if (url.equals(WKApiConfig.baseWebUrl + "report.html")) {
             String wk_theme_pref = Theme.getTheme();
@@ -170,12 +178,13 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         webSettings.setSavePassword(false);
         webSettings.setSaveFormData(false); // 禁止保存表单
         webSettings.setDomStorageEnabled(true);
+        webSettings.setAllowFileAccess(false); // 防止本地文件被任意读取
 //        webSettings.setAppCacheMaxSize(1024 * 1024 * 8);
         //webSettings.setAllowFileAccess(true);
         webSettings.setAllowUniversalAccessFromFileURLs(false);
         webSettings.setAllowFileAccessFromFileURLs(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            webSettings.setMixedContentMode(0);
+            webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         }
         if (WKBinder.isDebug && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true);

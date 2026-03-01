@@ -9,6 +9,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import com.chat.base.WKBaseApplication;
+import com.chat.base.utils.WKLogUtils;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -26,7 +27,9 @@ public class BridgeWebViewClient extends WebViewClient {
 
     @Override
     public void onReceivedSslError(WebView webView, SslErrorHandler sslErrorHandler, SslError sslError) {
-        sslErrorHandler.proceed();
+        // Block pages with TLS problems instead of ignoring certificate errors
+        WKLogUtils.e("WebView SSL error: " + sslError);
+        sslErrorHandler.cancel();
     }
 
     @Override

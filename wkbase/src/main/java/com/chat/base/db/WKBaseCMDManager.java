@@ -91,14 +91,17 @@ public class WKBaseCMDManager {
 
     private List<WKBaseCMD> queryWithClientMsgNos(List<String> clientMsgNos) {
         List<WKBaseCMD> list = new ArrayList<>();
+        if (WKReader.isEmpty(clientMsgNos)) return list;
         StringBuilder sb = new StringBuilder();
         sb.append("select * from cmd where client_msg_no in (");
+        String[] args = new String[clientMsgNos.size()];
         for (int i = 0, size = clientMsgNos.size(); i < size; i++) {
             if (i != 0) sb.append(",");
-            sb.append("'").append(clientMsgNos.get(i)).append("'");
+            sb.append("?");
+            args[i] = clientMsgNos.get(i);
         }
         sb.append(")");
-        try (Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sb.toString())) {
+        try (Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sb.toString(), args)) {
             if (cursor == null) {
                 return list;
             }
@@ -112,14 +115,17 @@ public class WKBaseCMDManager {
 
     private List<WKBaseCMD> queryWithMsgIds(List<String> clientMsgNos) {
         List<WKBaseCMD> list = new ArrayList<>();
+        if (WKReader.isEmpty(clientMsgNos)) return list;
         StringBuilder sb = new StringBuilder();
         sb.append("select * from cmd where message_id in (");
+        String[] args = new String[clientMsgNos.size()];
         for (int i = 0, size = clientMsgNos.size(); i < size; i++) {
             if (i != 0) sb.append(",");
-            sb.append("'").append(clientMsgNos.get(i)).append("'");
+            sb.append("?");
+            args[i] = clientMsgNos.get(i);
         }
         sb.append(")");
-        try (Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sb.toString())) {
+        try (Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sb.toString(), args)) {
             if (cursor == null) {
                 return list;
             }
@@ -133,8 +139,8 @@ public class WKBaseCMDManager {
 
     //是否存在某条cmd
     private boolean isExistWithClientMsgNo(String clientMsgNo) {
-        String sql = "select * from cmd where client_msg_no = " + "\"" + clientMsgNo + "\"";
-        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, null);
+        String sql = "select 1 from cmd where client_msg_no = ? limit 1";
+        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, new String[]{clientMsgNo});
         boolean isExist;
         if (cursor == null) {
             isExist = false;
@@ -147,8 +153,8 @@ public class WKBaseCMDManager {
 
     //是否存在某条cmd
     private boolean isExistWithMessageID(String messageID) {
-        String sql = "select * from cmd where message_id = " + "\"" + messageID + "\"";
-        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, null);
+        String sql = "select 1 from cmd where message_id = ? limit 1";
+        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, new String[]{messageID});
         boolean isExist;
         if (cursor == null) {
             isExist = false;

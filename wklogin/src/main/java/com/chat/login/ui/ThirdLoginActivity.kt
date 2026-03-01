@@ -61,9 +61,13 @@ class ThirdLoginActivity : WKBaseActivity<ActThirdLoginLayoutBinding>() {
                 100
             ) { text ->
                 if (!TextUtils.isEmpty(text)) {
-                    var url = text
-                    if (!text.lowercase(Locale.getDefault()).startsWith("http")) {
-                        url = "http://$text"
+                    var url = text.trim()
+                    if (!url.lowercase(Locale.getDefault()).startsWith("https://")) {
+                        url = if (url.lowercase(Locale.getDefault()).startsWith("http://")) {
+                            url.replaceFirst("(?i)^http://".toRegex(), "https://")
+                        } else {
+                            "https://$url"
+                        }
                     }
                     WKSharedPreferencesUtil.getInstance().putSP("api_base_url", url)
                     EndpointManager.getInstance().invoke("update_base_url", url)

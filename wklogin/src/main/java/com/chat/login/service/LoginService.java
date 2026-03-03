@@ -65,4 +65,16 @@ public interface LoginService {
 
     @GET("user/thirdlogin/authstatus")
     Observable<ThirdLoginResult> getAuthStatus(@Query("authcode") String authcode);
+
+    @POST("user/emaillogin")
+    Observable<UserInfoEntity> emailLogin(@Body JSONObject jsonObject);
+
+    @POST("user/emailregister")
+    Observable<UserInfoEntity> emailRegister(@Body JSONObject jsonObject);
+
+    @POST("user/email/sendcode")
+    Observable<CommonResponse> emailSendCode(@Body JSONObject jsonObject);
+
+    @POST("user/email/forgetpwd")
+    Observable<CommonResponse> emailForgetPwd(@Body JSONObject jsonObject);
 }

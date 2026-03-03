@@ -65,6 +65,8 @@ public class LoginModel extends WKBaseModel {
                 if (userInfo != null) {
                     saveLoginInfo(userInfo);
                     iLoginListener.onResult(HttpResponseCode.success, "", userInfo);
+                } else {
+                    iLoginListener.onResult(HttpResponseCode.error, "Empty response", new UserInfoEntity());
                 }
             }
 
@@ -205,6 +207,8 @@ public class LoginModel extends WKBaseModel {
                 if (userInfo != null) {
                     saveLoginInfo(userInfo);
                     iLoginListener.onResult(HttpResponseCode.success, "", userInfo);
+                } else {
+                    iLoginListener.onResult(HttpResponseCode.error, "Empty response", new UserInfoEntity());
                 }
             }
 
@@ -284,6 +288,8 @@ public class LoginModel extends WKBaseModel {
                 if (userInfo != null) {
                     saveLoginInfo(userInfo);
                     iLoginListener.onResult(HttpResponseCode.success, "", userInfo);
+                } else {
+                    iLoginListener.onResult(HttpResponseCode.error, "Empty response", new UserInfoEntity());
                 }
             }
 
@@ -349,6 +355,118 @@ public class LoginModel extends WKBaseModel {
             public void onSuccess(ThirdLoginResult result) {
                 if (result.getStatus() == 1 && result.getResult() != null) {
                     saveLoginInfo(result.getResult());
+                    iCommonListener.onResult(HttpResponseCode.success, "");
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iCommonListener.onResult(code, msg);
+            }
+        });
+    }
+
+    void emailLogin(String email, String pwd, final ILoginListener iLoginListener) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("email", email);
+        jsonObject.put("password", pwd);
+        JSONObject deviceJson = new JSONObject();
+        deviceJson.put("device_id", WKConstants.getDeviceID());
+        deviceJson.put("device_name", WKDeviceUtils.getInstance().getDeviceName());
+        deviceJson.put("device_model", WKDeviceUtils.getInstance().getSystemModel());
+        jsonObject.put("device", deviceJson);
+
+        requestAndErrorBack(createService(LoginService.class).emailLogin(jsonObject), new IRequestResultErrorInfoListener<>() {
+            @Override
+            public void onSuccess(UserInfoEntity userInfo) {
+                if (userInfo != null) {
+                    saveLoginInfo(userInfo);
+                    iLoginListener.onResult(HttpResponseCode.success, "", userInfo);
+                } else {
+                    iLoginListener.onResult(HttpResponseCode.error, "Empty response", new UserInfoEntity());
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg, String errJson) {
+                UserInfoEntity userInfoEntity = new UserInfoEntity();
+                if (code == 110 && !TextUtils.isEmpty(errJson)) {
+                    try {
+                        org.json.JSONObject jsonObject1 = new org.json.JSONObject(errJson);
+                        userInfoEntity.phone = jsonObject1.optString("phone");
+                        userInfoEntity.uid = jsonObject1.optString("uid");
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+                iLoginListener.onResult(code, msg, userInfoEntity);
+            }
+        });
+    }
+
+    void emailRegister(String email, String code, String name, String pwd, String inviteCode, final ILoginListener iLoginListener) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("email", email);
+        jsonObject.put("code", code);
+        jsonObject.put("name", name);
+        jsonObject.put("password", pwd);
+        if (!TextUtils.isEmpty(inviteCode)) {
+            jsonObject.put("invite_code", inviteCode);
+        }
+        JSONObject deviceJson = new JSONObject();
+        deviceJson.put("device_id", WKConstants.getDeviceID());
+        deviceJson.put("device_name", WKDeviceUtils.getInstance().getDeviceName());
+        deviceJson.put("device_model", WKDeviceUtils.getInstance().getSystemModel());
+        jsonObject.put("device", deviceJson);
+        request(createService(LoginService.class).emailRegister(jsonObject), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(UserInfoEntity userInfo) {
+                if (userInfo != null) {
+                    saveLoginInfo(userInfo);
+                    iLoginListener.onResult(HttpResponseCode.success, "", userInfo);
+                } else {
+                    iLoginListener.onResult(HttpResponseCode.error, "Empty response", new UserInfoEntity());
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iLoginListener.onResult(code, msg, null);
+            }
+        });
+    }
+
+    void emailSendCode(String email, final ICommonListener iCommonListener) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("email", email);
+        request(createService(LoginService.class).emailSendCode(jsonObject), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                if (result != null) {
+                    iCommonListener.onResult(result.status, result.msg);
+                } else {
+                    iCommonListener.onResult(HttpResponseCode.success, "");
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iCommonListener.onResult(code, msg);
+            }
+        });
+    }
+
+    void emailForgetPwd(String email, String code, String pwd, final ICommonListener iCommonListener) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("email", email);
+        jsonObject.put("code", code);
+        jsonObject.put("password", pwd);
+        request(createService(LoginService.class).emailForgetPwd(jsonObject), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                if (result != null) {
+                    iCommonListener.onResult(result.status, result.msg);
+                } else {
                     iCommonListener.onResult(HttpResponseCode.success, "");
                 }
             }

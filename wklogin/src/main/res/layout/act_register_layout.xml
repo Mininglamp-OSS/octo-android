@@ -45,7 +45,8 @@
                 android:id="@+id/chooseCodeTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical">
+                android:layout_gravity="center_vertical"
+                android:visibility="gone">
 
                 <TextView
                     android:id="@+id/codeTv"
@@ -63,22 +64,16 @@
                     android:src="@mipmap/icon_login_arrow_bottom" />
             </LinearLayout>
 
-            <View
-                android:layout_width="1dp"
-                android:layout_height="15dp"
-                android:layout_gravity="center_vertical"
-                android:background="#d8d8d8" />
-
             <androidx.appcompat.widget.AppCompatEditText
                 android:id="@+id/nameEt"
                 android:layout_width="match_parent"
                 android:layout_height="40dp"
                 android:background="@color/transparent"
                 android:gravity="center_vertical"
-                android:hint="@string/hint_name"
-                android:inputType="phone"
-                android:maxLength="20"
-                android:paddingStart="10dp"
+                android:hint="@string/hint_email"
+                android:inputType="textEmailAddress"
+                android:maxLength="64"
+                android:paddingStart="0dp"
                 android:paddingEnd="0dp"
                 android:textColor="@color/colorDark"
                 android:textColorHint="@color/color999"
@@ -129,6 +124,36 @@
                 android:text="@string/get_verf_code"
                 android:textSize="@dimen/font_size_14"
                 app:cornerRadius="@dimen/button_radian" />
+        </LinearLayout>
+
+        <View
+            style="@style/view_line"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginRight="20dp"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/nicknameEt"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:background="@color/transparent"
+                android:gravity="center_vertical"
+                android:hint="@string/hint_nickname"
+                android:inputType="text"
+                android:maxLength="20"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:textColor="@color/colorDark"
+                android:textColorHint="@color/color999"
+                android:textSize="14sp" />
+
         </LinearLayout>
 
         <View

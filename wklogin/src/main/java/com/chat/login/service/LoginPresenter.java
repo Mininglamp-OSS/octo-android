@@ -133,6 +133,61 @@ public class LoginPresenter implements LoginContract.LoginPresenter {
     }
 
     @Override
+    public void emailLogin(String email, String pwd) {
+        LoginModel.getInstance().emailLogin(email, pwd, (code, msg, userInfoEntity) -> {
+            if (code == HttpResponseCode.success) {
+                if (loginView.get() != null) loginView.get().loginResult(userInfoEntity);
+            } else {
+                if (loginView.get() != null) {
+                    loginView.get().hideLoading();
+                    if (code == 110) {
+                        loginView.get().setLoginFail(code, userInfoEntity.uid, userInfoEntity.phone);
+                    } else {
+                        loginView.get().showError(msg);
+                    }
+                }
+            }
+        });
+    }
+
+    @Override
+    public void emailRegister(String email, String code, String name, String pwd, String inviteCode) {
+        LoginModel.getInstance().emailRegister(email, code, name, pwd, inviteCode, (code1, errorMsg, userInfoEntity) -> {
+            if (code1 == HttpResponseCode.success) {
+                if (loginView.get() != null) loginView.get().loginResult(userInfoEntity);
+            } else {
+                if (loginView.get() != null) {
+                    loginView.get().hideLoading();
+                    loginView.get().showError(errorMsg);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void emailSendCode(String email) {
+        LoginModel.getInstance().emailSendCode(email, (code, msg) -> {
+            if (loginView.get() != null) {
+                loginView.get().setEmailSendCodeResult(code, msg);
+            }
+        });
+    }
+
+    @Override
+    public void emailForgetPwd(String email, String code, String pwd) {
+        LoginModel.getInstance().emailForgetPwd(email, code, pwd, (code1, errorMsg) -> {
+            if (code1 == HttpResponseCode.success) {
+                if (loginView.get() != null) loginView.get().setResetPwdResult(code1, errorMsg);
+            } else {
+                if (loginView.get() != null) {
+                    loginView.get().hideLoading();
+                    loginView.get().showError(errorMsg);
+                }
+            }
+        });
+    }
+
+    @Override
     public void showLoading() {
 
     }

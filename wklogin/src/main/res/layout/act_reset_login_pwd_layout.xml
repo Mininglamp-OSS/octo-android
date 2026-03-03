@@ -32,7 +32,7 @@
             android:layout_marginStart="30dp"
             android:layout_marginTop="80dp"
             android:layout_marginEnd="30dp"
-            android:text="@string/auth_phone"
+            android:text="@string/auth_email"
             android:textColor="@color/colorDark"
             android:textSize="32sp"
             android:textStyle="bold" />
@@ -45,7 +45,7 @@
             android:layout_marginStart="30dp"
             android:layout_marginTop="10dp"
             android:layout_marginEnd="30dp"
-            android:text="@string/auth_phone_tips"
+            android:text="@string/auth_email_tips"
             android:textColor="@color/color999"
             android:textSize="14sp" />
 
@@ -69,7 +69,8 @@
                     android:id="@+id/chooseCodeTv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical">
+                    android:layout_gravity="center_vertical"
+                    android:visibility="gone">
 
                     <TextView
                         android:id="@+id/codeTv"
@@ -88,22 +89,16 @@
                         android:src="@mipmap/icon_login_arrow_bottom" />
                 </LinearLayout>
 
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="15dp"
-                    android:layout_gravity="center_vertical"
-                    android:background="#d8d8d8" />
-
                 <EditText
                     android:id="@+id/nameEt"
                     android:layout_width="match_parent"
                     android:layout_height="40dp"
                     android:background="@color/transparent"
                     android:gravity="center_vertical"
-                    android:hint="@string/hint_name"
-                    android:inputType="phone"
-                    android:maxLength="20"
-                    android:paddingStart="10dp"
+                    android:hint="@string/hint_email"
+                    android:inputType="textEmailAddress"
+                    android:maxLength="64"
+                    android:paddingStart="0dp"
                     android:paddingEnd="0dp"
                     android:textColor="@color/colorDark"
                     android:textColorHint="@color/color999"

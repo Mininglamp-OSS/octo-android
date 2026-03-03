@@ -39,6 +39,7 @@ import com.chat.login.service.LoginPresenter;
 
 import java.util.List;
 import java.util.Objects;
+import android.util.Patterns;
 
 /**
  * 2020-06-19 15:42
@@ -146,11 +147,20 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                 return;
             }
 
-            String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-            String smsCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+            String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().trim();
+            String verCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+            String nickname = Objects.requireNonNull(wkVBinding.nicknameEt.getText()).toString().trim();
             String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
             String inviteCode = Objects.requireNonNull(wkVBinding.inviteCodeTv.getText()).toString();
-            if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(smsCode) && !TextUtils.isEmpty(pwd)) {
+            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                showSingleBtnDialog(getString(R.string.email_format_error));
+                return;
+            }
+            if (TextUtils.isEmpty(nickname)) {
+                showSingleBtnDialog(getString(R.string.nickname_not_null));
+                return;
+            }
+            if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(verCode) && !TextUtils.isEmpty(pwd)) {
                 if (pwd.length() < 6 || pwd.length() > 16) {
                     showSingleBtnDialog(getString(R.string.pwd_length_error));
                 } else {
@@ -159,18 +169,18 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                         return;
                     }
                     loadingPopup.show();
-                    presenter.registerApp(smsCode, code, "", phone, pwd, inviteCode);
+                    presenter.emailRegister(email, verCode, nickname, pwd, inviteCode);
                 }
             }
         });
         wkVBinding.getVCodeBtn.setOnClickListener(v -> {
-            String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-            if (!TextUtils.isEmpty(phone)) {
-                if (code.equals("0086") && wkVBinding.nameEt.getText().toString().length() != 11) {
-                    showSingleBtnDialog(getString(R.string.phone_error));
+            String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().trim();
+            if (!TextUtils.isEmpty(email)) {
+                if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    showSingleBtnDialog(getString(R.string.email_format_error));
                     return;
                 }
-                presenter.registerCode(code, phone);
+                presenter.emailSendCode(email);
             }
         });
 
@@ -285,6 +295,16 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     @Override
     public void setSendCodeResult(int code, String msg) {
 
+    }
+
+    @Override
+    public void setEmailSendCodeResult(int code, String msg) {
+        if (code == HttpResponseCode.success) {
+            wkVBinding.nameEt.setEnabled(false);
+            presenter.startTimer();
+        } else {
+            showToast(msg);
+        }
     }
 
     @Override

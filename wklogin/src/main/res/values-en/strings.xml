@@ -1,6 +1,12 @@
 <resources>
     <string name="hint_pwd">Enter password</string>
     <string name="hint_name">Phone number</string>
+    <string name="hint_email">Email address</string>
+    <string name="hint_email_or_username">Email / Username</string>
+    <string name="hint_nickname">Nickname</string>
+    <string name="email_format_error">Invalid email format</string>
+    <string name="auth_email">Verify your email</string>
+    <string name="auth_email_tips">%s will send a verification code to your email, please enter the code you received</string>
     <string name="hint_verfi">Enter verification code</string>
     <string name="name_not_null">Enter name</string>
     <string name="nickname_not_null">Nickname should be filled</string>

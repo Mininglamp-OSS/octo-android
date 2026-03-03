@@ -33,6 +33,14 @@ public class LoginContract {
         void checkLoginAuth(String uid, String code);
 
         void resetPwd(String zone, String phone, String code, String pwd);
+
+        void emailLogin(String email, String pwd);
+
+        void emailRegister(String email, String code, String name, String pwd, String inviteCode);
+
+        void emailSendCode(String email);
+
+        void emailForgetPwd(String email, String code, String pwd);
     }
 
     public interface LoginView extends WKBaseView {
@@ -47,6 +55,8 @@ public class LoginContract {
         void setSendCodeResult(int code, String msg);
 
         void setResetPwdResult(int code, String msg);
+
+        void setEmailSendCodeResult(int code, String msg);
 
         Button getVerificationCodeBtn();
 

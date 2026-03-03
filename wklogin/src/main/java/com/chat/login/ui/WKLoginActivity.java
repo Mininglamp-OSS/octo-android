@@ -5,7 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.view.View;
@@ -104,7 +106,20 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         wkVBinding.loginTitleTv.setText(String.format(getString(R.string.login_title), getString(R.string.app_name)));
         wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
         wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
-        //  EndpointManager.getInstance().invoke("other_login_view", new OtherLoginViewMenu(this, wkVBinding.otherView));
+
+        wkVBinding.nameEt.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable editable) {
+                String input = editable.toString();
+                boolean isDigitsOnly = input.matches("\\d+");
+                wkVBinding.chooseCodeTv.setVisibility(isDigitsOnly ? View.VISIBLE : View.GONE);
+                wkVBinding.codeDivider.setVisibility(isDigitsOnly ? View.VISIBLE : View.GONE);
+            }
+        });
     }
 
     @Override
@@ -145,9 +160,14 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             loadingPopup.show();
             loadingPopup.setTitle(getString(R.string.logging_in));
             String name = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-            boolean isPhone = name.matches("\\d+");
-            String loginName = isPhone ? code + name : name;
-            loginPresenter.login(loginName, wkVBinding.pwdEt.getText().toString());
+            String pwd = wkVBinding.pwdEt.getText().toString();
+            if (name.contains("@")) {
+                loginPresenter.emailLogin(name, pwd);
+            } else {
+                boolean isPhone = name.matches("\\d+");
+                String loginName = isPhone ? code + name : name;
+                loginPresenter.login(loginName, pwd);
+            }
         });
         SingleClickUtil.onSingleClick(wkVBinding.registerTv, v -> startActivity(new Intent(this, WKRegisterActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.chooseCodeTv, v -> {
@@ -267,6 +287,11 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
 
     @Override
     public void setResetPwdResult(int code, String msg) {
+
+    }
+
+    @Override
+    public void setEmailSendCodeResult(int code, String msg) {
 
     }
 

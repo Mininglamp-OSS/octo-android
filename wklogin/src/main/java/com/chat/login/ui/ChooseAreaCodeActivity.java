@@ -203,4 +203,8 @@ public class ChooseAreaCodeActivity extends WKBaseActivity<ActChooseAreaCodeLayo
     public void onLetterTouching(boolean touching) {
         wkVBinding.quickSideBarTipsView.setVisibility(touching ? View.VISIBLE : View.INVISIBLE);
     }
+
+    @Override
+    public void setEmailSendCodeResult(int code, String msg) {
+    }
 }

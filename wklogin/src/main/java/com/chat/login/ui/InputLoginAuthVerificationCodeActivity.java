@@ -172,4 +172,8 @@ public class InputLoginAuthVerificationCodeActivity extends WKBaseActivity<ActIn
         return this;
     }
 
+
+    @Override
+    public void setEmailSendCodeResult(int code, String msg) {
+    }
 }

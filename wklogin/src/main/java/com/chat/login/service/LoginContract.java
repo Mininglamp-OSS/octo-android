@@ -38,7 +38,7 @@ public class LoginContract {
 
         void emailRegister(String email, String code, String name, String pwd, String inviteCode);
 
-        void emailSendCode(String email);
+        void emailSendCode(String email, int codeType);
 
         void emailForgetPwd(String email, String code, String pwd);
     }

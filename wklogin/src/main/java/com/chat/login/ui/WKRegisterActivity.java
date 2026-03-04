@@ -180,7 +180,7 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                     showSingleBtnDialog(getString(R.string.email_format_error));
                     return;
                 }
-                presenter.emailSendCode(email);
+                presenter.emailSendCode(email, 0);
             }
         });
 

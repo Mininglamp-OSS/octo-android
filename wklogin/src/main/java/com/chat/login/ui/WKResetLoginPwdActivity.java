@@ -140,7 +140,7 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
                     showToast(R.string.email_format_error);
                     return;
                 }
-                presenter.emailSendCode(email);
+                presenter.emailSendCode(email, 2);
             }
         });
         wkVBinding.backIv.setOnClickListener(v -> finish());

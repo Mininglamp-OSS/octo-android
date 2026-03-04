@@ -81,6 +81,8 @@ import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.uikit.chat.manager.FaceManger;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
+import com.chat.base.msgcontent.WKFileContent;
+import com.chat.uikit.chat.provider.WKFileProvider;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
@@ -196,7 +198,7 @@ public class WKUIKitApplication {
     private void initKitModuleListener() {
         // 注册消息model到sdk
         WKIM.getInstance().getMsgManager().registerContentMsg(WKCardContent.class);
-
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKFileContent.class);
 
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
         //添加消息item
@@ -210,6 +212,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VOICE, new WKVoiceProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_FILE, new WKFileProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));

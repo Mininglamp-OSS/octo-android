@@ -436,9 +436,10 @@ public class LoginModel extends WKBaseModel {
         });
     }
 
-    void emailSendCode(String email, final ICommonListener iCommonListener) {
+    void emailSendCode(String email, int codeType, final ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("email", email);
+        jsonObject.put("code_type", codeType);
         request(createService(LoginService.class).emailSendCode(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {

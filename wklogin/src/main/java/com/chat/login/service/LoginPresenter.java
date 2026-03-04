@@ -165,8 +165,8 @@ public class LoginPresenter implements LoginContract.LoginPresenter {
     }
 
     @Override
-    public void emailSendCode(String email) {
-        LoginModel.getInstance().emailSendCode(email, (code, msg) -> {
+    public void emailSendCode(String email, int codeType) {
+        LoginModel.getInstance().emailSendCode(email, codeType, (code, msg) -> {
             if (loginView.get() != null) {
                 loginView.get().setEmailSendCodeResult(code, msg);
             }

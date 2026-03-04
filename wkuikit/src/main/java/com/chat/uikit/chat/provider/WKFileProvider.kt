@@ -192,6 +192,12 @@ class WKFileProvider : WKChatBaseProvider() {
     }
 
     private fun openFile(file: File) {
+        val ext = file.extension.lowercase(Locale.getDefault())
+        // 文本类文件：内置预览
+        if (isTextFile(ext)) {
+            openTextPreview(file)
+            return
+        }
         try {
             val uri = FileProvider.getUriForFile(
                 context,
@@ -204,8 +210,49 @@ class WKFileProvider : WKChatBaseProvider() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         } catch (e: Exception) {
+            // 没有应用能打开 → 保存到下载目录
+            saveToDownloads(file)
+        }
+    }
+
+    private fun isTextFile(ext: String): Boolean {
+        return ext in listOf(
+            "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
+            "conf", "cfg", "ini", "properties", "toml",
+            "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
+            "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
+            "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore"
+        )
+    }
+
+    private fun openTextPreview(file: File) {
+        try {
+            val content = file.readText(Charsets.UTF_8).let {
+                if (it.length > 50000) it.substring(0, 50000) + "\n\n... (文件过大，仅显示前50000字符)" else it
+            }
+            val intent = Intent(context, TextPreviewActivity::class.java)
+            intent.putExtra("title", file.name)
+            intent.putExtra("content", content)
+            intent.putExtra("filePath", file.absolutePath)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            saveToDownloads(file)
+        }
+    }
+
+    private fun saveToDownloads(file: File) {
+        try {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS
+            )
+            val destFile = File(downloadsDir, file.name)
+            file.copyTo(destFile, overwrite = true)
             WKToastUtils.getInstance()
-                .showToastNormal(context.getString(R.string.str_file_not_exist))
+                .showToastNormal("已保存到下载目录: ${file.name}")
+        } catch (e: Exception) {
+            WKToastUtils.getInstance()
+                .showToastNormal("保存失败: ${e.message}")
         }
     }
 

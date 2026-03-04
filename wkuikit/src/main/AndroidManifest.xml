@@ -74,5 +74,10 @@
             android:name="com.chat.uikit.AliveJobService"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
+        <activity
+            android:name="com.chat.uikit.chat.provider.TextPreviewActivity"
+            android:theme="@style/Theme.AppCompat.Light"
+            android:label="文件预览" />
+
     </application>
 </manifest>

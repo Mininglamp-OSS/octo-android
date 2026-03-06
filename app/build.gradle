@@ -70,6 +70,20 @@ android {
         compileSdkPreview = "UpsideDownCake"
     }
 
+    flavorDimensions "env"
+    productFlavors {
+        dev {
+            dimension "env"
+            buildConfigField "String", "API_BASE_URL", '"https://api-test.example.com/api"'
+            buildConfigField "String", "WEB_BASE_URL", '"https://api-test.example.com/web/"'
+        }
+        prod {
+            dimension "env"
+            buildConfigField "String", "API_BASE_URL", '"https://api.example.com/api"'
+            buildConfigField "String", "WEB_BASE_URL", '"https://api.example.com/web/"'
+        }
+    }
+
     buildTypes {
         release {
             jniDebuggable true

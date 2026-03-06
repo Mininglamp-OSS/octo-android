@@ -1,22 +1,61 @@
-*.iml
-.gradle
-.idea
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
 /build
+/*/build/
+
+# Module-specific build dirs
 /wkbase/build
 /wklogin/build
 /wkscan/build
 /wkpush/build
 /wkuikit/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Release output
+app/release/
+
+# Local configuration file (sdk path, etc)
 local.properties
+/local.properties
+
+# Android Studio
+*.iml
+.idea/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore files (keep out of repo)
+*.jks
+*.keystore
+
+# AAR libraries (should use Maven/Gradle dependencies)
+*.aar
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
 /.vscode
+*.swp
+
+# Google services (may contain API keys)
+# google-services.json

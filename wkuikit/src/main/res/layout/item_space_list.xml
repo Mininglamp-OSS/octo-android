@@ -32,7 +32,7 @@
         android:id="@+id/settingsIv"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        android:src="@mipmap/msg_setting"
+        android:src="@mipmap/msg_settings"
         android:tint="@color/color999"
         android:visibility="gone" />
 </LinearLayout>

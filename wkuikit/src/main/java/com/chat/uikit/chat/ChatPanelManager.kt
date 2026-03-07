@@ -18,6 +18,8 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.PopupWindow
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
@@ -85,6 +87,7 @@ import com.chat.uikit.group.service.GroupModel
 import com.chat.uikit.message.MsgModel
 import com.chat.uikit.robot.RobotGIFAdapter
 import com.chat.uikit.robot.RobotMenuAdapter
+import com.chat.uikit.robot.SlashCommandAdapter
 import com.chat.uikit.robot.entity.WKRobotEntity
 import com.chat.uikit.robot.entity.WKRobotGIFEntity
 import com.chat.uikit.robot.entity.WKRobotInlineQueryResult
@@ -180,6 +183,10 @@ class ChatPanelManager(
     private var menuRecyclerView: NoEventRecycleView? = null
     private var menuHeaderView: View? = null
     private var robotMenuAdapter: RobotMenuAdapter? = null
+
+    // slash command popup
+    private var slashCommandPopup: PopupWindow? = null
+    private var slashCommandAdapter: SlashCommandAdapter? = null
     private var lastHeight = 0
     private var lastTargetLines = 1 // 追踪上一次的目标行数
     private val maxLines: Int = 3
@@ -195,6 +202,7 @@ class ChatPanelManager(
         initRemind()
         initRobotGIF()
         initRobotMenu()
+        initSlashCommandPopup()
         initTool()
         initMultipleChoiceView()
         initBanView()
@@ -1044,8 +1052,76 @@ class ChatPanelManager(
         // 监听机器人刷新菜单
         WKIM.getInstance().robotManager.addOnRefreshRobotMenu(iConversationContext.chatChannelInfo.channelID) {
             checkRobotMenu(iConversationContext)
+            refreshSlashCommandMenus()
         }
 
+    }
+
+    private fun refreshSlashCommandMenus() {
+        if (slashCommandAdapter == null) return
+        val menus = WKRobotModel.getInstance().getRobotMenus(
+            iConversationContext.chatChannelInfo.channelID,
+            iConversationContext.chatChannelInfo.channelType
+        )
+        slashCommandAdapter!!.setAllItems(menus)
+    }
+
+    private fun initSlashCommandPopup() {
+        if (iConversationContext.chatChannelInfo.channelType != WKChannelType.PERSONAL) return
+        if (iConversationContext.chatChannelInfo.robot != 1) return
+
+        slashCommandAdapter = SlashCommandAdapter()
+        val recyclerView = RecyclerView(iConversationContext.chatActivity)
+        recyclerView.layoutManager = LinearLayoutManager(iConversationContext.chatActivity)
+        recyclerView.adapter = slashCommandAdapter
+        recyclerView.setBackgroundColor(
+            ContextCompat.getColor(iConversationContext.chatActivity, R.color.homeColor)
+        )
+
+        slashCommandPopup = PopupWindow(
+            recyclerView,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            AndroidUtilities.dp(180f)
+        ).apply {
+            isOutsideTouchable = true
+            isFocusable = false
+            elevation = AndroidUtilities.dp(8f).toFloat()
+        }
+
+        slashCommandAdapter!!.setOnItemClickListener { _, _, position ->
+            val menu = slashCommandAdapter!!.data[position]
+            editText.setText("/${menu.cmd} ")
+            editText.setSelection(editText.text!!.length)
+            dismissSlashCommandPopup()
+        }
+
+        val menus = WKRobotModel.getInstance().getRobotMenus(
+            iConversationContext.chatChannelInfo.channelID,
+            iConversationContext.chatChannelInfo.channelType
+        )
+        slashCommandAdapter!!.setAllItems(menus)
+    }
+
+    private fun showSlashCommandPopup(query: String) {
+        if (slashCommandAdapter == null) return
+        slashCommandAdapter!!.filter(query)
+        if (slashCommandAdapter!!.data.isEmpty()) {
+            dismissSlashCommandPopup()
+            return
+        }
+        if (slashCommandPopup?.isShowing != true) {
+            val itemHeight = AndroidUtilities.dp(52f)
+            val maxItems = 4
+            val popupHeight = itemHeight * minOf(slashCommandAdapter!!.data.size, maxItems)
+            slashCommandPopup?.height = popupHeight
+            slashCommandPopup?.showAsDropDown(editText, 0, -(editText.height + popupHeight), Gravity.START)
+        } else {
+            slashCommandPopup?.update()
+        }
+    }
+
+    private fun dismissSlashCommandPopup() {
+        slashCommandPopup?.dismiss()
     }
 
     private fun checkRobotMenu(iConversationContext: IConversationContext) {
@@ -1379,6 +1455,15 @@ class ChatPanelManager(
                         ), PorterDuff.Mode.MULTIPLY
                     )
                 }
+                // slash command detection for bot chats
+                val fullText = s.toString()
+                if (fullText.startsWith("/") && !fullText.contains(" ")) {
+                    val query = fullText.substring(1)
+                    showSlashCommandPopup(query)
+                } else {
+                    dismissSlashCommandPopup()
+                }
+
                 val selectionStart = editText.selectionStart
                 val selectionEnd = editText.selectionEnd
                 if (selectionEnd != selectionStart || selectionStart <= 0) {

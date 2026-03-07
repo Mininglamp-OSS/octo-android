@@ -1,5 +1,8 @@
 package com.chat.uikit.space;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
@@ -37,6 +40,33 @@ public class SpaceMembersActivity extends WKBaseActivity<ActSpaceMembersBinding>
     protected void initPresenter() {
         spaceId = getIntent().getStringExtra("space_id");
         ownerUid = getIntent().getStringExtra("owner_uid");
+    }
+
+    @Override
+    protected void setRight(TextView rightTv) {
+        String myUid = WKConfig.getInstance().getUid();
+        if (myUid != null && myUid.equals(ownerUid)) {
+            rightTv.setText(R.string.space_invite);
+            rightTv.setVisibility(android.view.View.VISIBLE);
+        }
+    }
+
+    @Override
+    protected void rightLayoutClick() {
+        SpaceModel.getInstance().createInvite(spaceId, new SpaceModel.IInviteListener() {
+            @Override
+            public void onResult(String inviteCode) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("invite_code", inviteCode);
+                clipboard.setPrimaryClip(clip);
+                WKToastUtils.getInstance().showToastNormal(getString(R.string.space_invite_code_copied));
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                WKToastUtils.getInstance().showToastNormal(msg);
+            }
+        });
     }
 
     @Override

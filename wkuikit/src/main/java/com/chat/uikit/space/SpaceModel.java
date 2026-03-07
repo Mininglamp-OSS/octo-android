@@ -165,7 +165,9 @@ public class SpaceModel extends WKBaseModel {
 
     public void removeMembers(String spaceId, List<String> uids, ICommonListener listener) {
         JSONObject json = new JSONObject();
-        json.put("uids", new JSONArray(uids));
+        JSONArray uidArray = new JSONArray();
+        uidArray.addAll(uids);
+        json.put("uids", uidArray);
         request(createService(SpaceService.class).removeMembers(spaceId, json), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {

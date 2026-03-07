@@ -43,12 +43,12 @@ public class SpaceMembersActivity extends WKBaseActivity<ActSpaceMembersBinding>
     }
 
     @Override
-    protected void setRight(TextView rightTv) {
+    protected String getRightTvText(TextView textView) {
         String myUid = WKConfig.getInstance().getUid();
         if (myUid != null && myUid.equals(ownerUid)) {
-            rightTv.setText(R.string.space_invite);
-            rightTv.setVisibility(android.view.View.VISIBLE);
+            return getString(R.string.space_invite);
         }
+        return "";
     }
 
     @Override

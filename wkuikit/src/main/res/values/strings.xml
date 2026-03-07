@@ -298,5 +298,33 @@
     <string name="uikit_search_for_date">日期</string>
     <string name="uikit_go_to_chat_item">定位到聊天</string>
     <string name="uikit_search_for_image">图片</string>
+
+    <string name="space_title">Space</string>
+    <string name="space_create">创建 Space</string>
+    <string name="space_join">加入 Space</string>
+    <string name="space_show_all">显示全部</string>
+    <string name="space_name">名称</string>
+    <string name="space_description">描述</string>
+    <string name="space_members">成员</string>
+    <string name="space_invite">邀请成员</string>
+    <string name="space_leave">离开 Space</string>
+    <string name="space_disband">解散 Space</string>
+    <string name="space_settings">Space 设置</string>
+    <string name="space_create_title">创建 Space</string>
+    <string name="space_name_hint">请输入 Space 名称</string>
+    <string name="space_desc_hint">请输入 Space 描述（可选）</string>
+    <string name="space_leave_tips">确定要离开此 Space 吗？</string>
+    <string name="space_disband_tips">解散后所有成员将被移除，确定要解散此 Space 吗？</string>
+    <string name="space_join_title">加入 Space</string>
+    <string name="space_join_hint">请输入邀请码</string>
+    <string name="space_invite_code">邀请码</string>
+    <string name="space_invite_code_copied">邀请码已复制</string>
+    <string name="space_role_owner">拥有者</string>
+    <string name="space_role_admin">管理员</string>
+    <string name="space_role_member">成员</string>
+    <string name="space_remove_member">移除成员</string>
+    <string name="space_remove_member_tips">确定要将 %s 移出此 Space 吗？</string>
+    <string name="space_name_empty">Space 名称不能为空</string>
+    <string name="space_invite_code_empty">邀请码不能为空</string>
 </resources>
 

@@ -7,9 +7,10 @@ import androidx.annotation.NonNull;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
-import com.chat.base.glide.GlideUtils;
-import com.chat.base.config.WKApiConfig;
+import com.chat.base.ui.components.AvatarView;
 import com.chat.uikit.R;
+import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 public class SpaceMemberAdapter extends BaseQuickAdapter<SpaceEntity.SpaceMember, BaseViewHolder> {
@@ -22,10 +23,11 @@ public class SpaceMemberAdapter extends BaseQuickAdapter<SpaceEntity.SpaceMember
     protected void convert(@NonNull BaseViewHolder holder, SpaceEntity.SpaceMember member) {
         holder.setText(R.id.nameTv, member.name);
 
-        // Load avatar
-        com.chat.base.views.CircleImageView avatarIv = holder.getView(R.id.avatarIv);
-        String avatarUrl = WKApiConfig.baseUrl + "users/" + member.uid + "/avatar";
-        GlideUtils.getInstance().showImg(getContext(), avatarUrl, avatarIv);
+        // Load avatar using AvatarView pattern
+        AvatarView avatarView = holder.getView(R.id.avatarView);
+        WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
+        channel.channelName = member.name;
+        avatarView.showAvatar(channel);
 
         // Role badge
         TextView roleTv = holder.getView(R.id.roleTv);

@@ -8,8 +8,8 @@
     android:paddingStart="15dp"
     android:paddingEnd="15dp">
 
-    <com.chat.base.views.CircleImageView
-        android:id="@+id/avatarIv"
+    <com.chat.base.ui.components.AvatarView
+        android:id="@+id/avatarView"
         android:layout_width="40dp"
         android:layout_height="40dp" />
 

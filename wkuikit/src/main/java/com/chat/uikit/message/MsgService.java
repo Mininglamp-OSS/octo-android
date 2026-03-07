@@ -54,7 +54,7 @@ public interface MsgService {
     Observable<CommonResponse> typing(@Body JSONObject jsonObject);
 
     @POST("conversation/sync")
-    Observable<WKSyncChat> syncChat(@Body JSONObject jsonObject);
+    Observable<WKSyncChat> syncChat(@Body JSONObject jsonObject, @retrofit2.http.Query("space_id") String spaceId);
 
     @POST("message/channel/sync")
     Observable<WKSyncChannelMsg> syncChannelMsg(@Body JSONObject jsonObject);

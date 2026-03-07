@@ -335,13 +335,20 @@ public class MsgModel extends WKBaseModel {
      * @param msg_count     同步消息条数
      * @param version       最大版本号
      */
+    private String currentSpaceId = "";
+
+    public void setCurrentSpaceId(String spaceId) {
+        this.currentSpaceId = spaceId != null ? spaceId : "";
+    }
+
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("last_msg_seqs", last_msg_seqs);
         jsonObject.put("msg_count", msg_count);
         jsonObject.put("version", version);
         jsonObject.put("device_uuid", WKConstants.getDeviceUUID());
-        request(createService(MsgService.class).syncChat(jsonObject), new IRequestResultListener<>() {
+        String spaceId = currentSpaceId.isEmpty() ? null : currentSpaceId;
+        request(createService(MsgService.class).syncChat(jsonObject, spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(WKSyncChat result) {
                 if (result != null && !TextUtils.isEmpty(result.uid) && result.uid.equals(WKConfig.getInstance().getUid())) {

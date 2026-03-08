@@ -37,14 +37,20 @@ import com.chat.uikit.R;
 import com.chat.uikit.contacts.FriendAdapter;
 import com.chat.uikit.contacts.FriendUIEntity;
 import com.chat.uikit.databinding.FragContactsLayoutBinding;
+import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.search.SearchAllActivity;
 import com.chat.uikit.search.remote.GlobalActivity;
+import com.chat.uikit.space.SpaceEntity;
+import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.user.UserDetailActivity;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
+
+import java.util.HashSet;
+import java.util.Set;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -210,11 +216,47 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     }
 
     private void getContacts() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            getContactsFromSpace(spaceId);
+            return;
+        }
+        getContactsLocal();
+    }
+
+    private void getContactsFromSpace(String spaceId) {
+        String myUid = WKConfig.getInstance().getUid();
+        SpaceModel.getInstance().getMembers(spaceId, new SpaceModel.IMembersListener() {
+            @Override
+            public void onResult(List<SpaceEntity.SpaceMember> members) {
+                List<FriendUIEntity> list = new ArrayList<>();
+                for (SpaceEntity.SpaceMember member : members) {
+                    if (member.uid.equals(myUid)) continue; // 过滤自己
+                    WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
+                    channel.channelName = member.name;
+                    list.add(new FriendUIEntity(channel));
+                }
+                sortAndDisplay(list);
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                // fallback to local
+                getContactsLocal();
+            }
+        });
+    }
+
+    private void getContactsLocal() {
         List<WKChannel> allList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = allList.size(); i < size; i++) {
             list.add(new FriendUIEntity(allList.get(i)));
         }
+        sortAndDisplay(list);
+    }
+
+    private void sortAndDisplay(List<FriendUIEntity> list) {
         List<FriendUIEntity> otherList = new ArrayList<>();
         List<FriendUIEntity> letterList = new ArrayList<>();
         List<FriendUIEntity> numList = new ArrayList<>();

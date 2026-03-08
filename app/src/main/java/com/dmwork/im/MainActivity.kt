@@ -17,6 +17,8 @@ import com.chat.base.utils.WKDialogUtils
 import com.chat.login.ui.PerfectUserInfoActivity
 import com.chat.login.ui.WKLoginActivity
 import com.chat.uikit.TabActivity
+import com.chat.uikit.message.MsgModel
+import com.chat.uikit.space.SpaceModel
 import com.xinbida.wukongim.WKIM
 import com.dmwork.im.databinding.ActivityMainBinding
 
@@ -47,7 +49,8 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                     intent.putExtra("from", getIntent().getIntExtra("from", 0))
                     startActivity(intent)
                 } else {
-                    startActivity(Intent(this@MainActivity, TabActivity::class.java))
+                    loadSpaceAndGo()
+                    return
                 }
             }
         } else {
@@ -56,6 +59,35 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
             startActivity(intent)
         }
         finish()
+    }
+
+    private fun loadSpaceAndGo() {
+        MsgModel.getInstance().loadCurrentSpaceId()
+        val currentSpaceId = MsgModel.getInstance().currentSpaceId
+        if (!currentSpaceId.isNullOrEmpty()) {
+            // 已有 currentSpaceId，直接进入
+            startActivity(Intent(this@MainActivity, TabActivity::class.java))
+            finish()
+            return
+        }
+        // 没有 currentSpaceId，从服务器获取 Space 列表
+        SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
+            override fun onResult(list: List<com.chat.uikit.space.SpaceEntity>?) {
+                if (!list.isNullOrEmpty()) {
+                    MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
+                    startActivity(Intent(this@MainActivity, TabActivity::class.java))
+                } else {
+                    startActivity(Intent(this@MainActivity, SpaceGuideActivity::class.java))
+                }
+                finish()
+            }
+
+            override fun onError(code: Int, msg: String?) {
+                // 网络失败时仍然进入 TabActivity
+                startActivity(Intent(this@MainActivity, TabActivity::class.java))
+                finish()
+            }
+        })
     }
 
     private fun showDialog() {

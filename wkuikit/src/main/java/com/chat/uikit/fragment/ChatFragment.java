@@ -44,6 +44,9 @@ import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.search.remote.GlobalActivity;
+import com.chat.uikit.space.SpaceEntity;
+import com.chat.uikit.space.SpaceModel;
+import com.chat.uikit.space.SpacePopupWindow;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -83,6 +86,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private final List<Integer> refreshIds = new ArrayList<>();
     private Timer connectTimer;
     private TabActivity tabActivity;
+    private String currentSpaceName;
 
     @Override
     protected boolean isShowBackLayout() {
@@ -106,7 +110,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             textView.setTextColor(ContextCompat.getColor(requireActivity(), R.color.colorDark));
             return textView;
         });
-        wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+        loadCurrentSpaceName();
         //去除刷新条目闪动动画
         ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
@@ -137,6 +141,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             } else {
                 startActivity(new Intent(getActivity(), GlobalActivity.class));
             }
+        });
+        wkVBinding.textSwitcher.setOnClickListener(v -> {
+            SpacePopupWindow popup = new SpacePopupWindow(requireContext());
+            popup.setOnSpaceSelectedListener(space -> {
+                currentSpaceName = space.name;
+                MsgModel.getInstance().setCurrentSpaceId(space.space_id);
+                wkVBinding.textSwitcher.setText(space.name);
+                // 清空并重新加载会话列表
+                chatConversationAdapter.setList(new ArrayList<>());
+                getData();
+            });
+            popup.show(v);
         });
         chatConversationAdapter.addChildClickViewIds(R.id.contentLayout);
         chatConversationAdapter.setOnItemChildClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, v -> {
@@ -469,7 +485,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
             } else if (i == WKConnectStatus.success) {
-                wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                wkVBinding.textSwitcher.setText(getDisplayTitle());
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
             } else if (i == WKConnectStatus.noNetwork) {
@@ -940,6 +956,41 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (lastConvMsg != null)
                     list.add(lastConvMsg);
             }
+        }
+    }
+
+    private String getDisplayTitle() {
+        if (!TextUtils.isEmpty(currentSpaceName)) {
+            return currentSpaceName;
+        }
+        return getString(R.string.app_name);
+    }
+
+    private void loadCurrentSpaceName() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
+                @Override
+                public void onResult(List<SpaceEntity> list) {
+                    if (WKReader.isNotEmpty(list)) {
+                        for (SpaceEntity space : list) {
+                            if (spaceId.equals(space.space_id)) {
+                                currentSpaceName = space.name;
+                                wkVBinding.textSwitcher.setText(space.name);
+                                return;
+                            }
+                        }
+                    }
+                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                }
+
+                @Override
+                public void onError(int code, String msg) {
+                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                }
+            });
+        } else {
+            wkVBinding.textSwitcher.setText(getString(R.string.app_name));
         }
     }
 

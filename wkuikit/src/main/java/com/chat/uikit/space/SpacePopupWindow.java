@@ -23,12 +23,21 @@ import java.util.List;
 
 public class SpacePopupWindow {
 
+    public interface OnSpaceSelectedListener {
+        void onSpaceSelected(SpaceEntity space);
+    }
+
     private PopupWindow popupWindow;
     private final Context context;
     private SpaceListAdapter adapter;
+    private OnSpaceSelectedListener onSpaceSelectedListener;
 
     public SpacePopupWindow(Context context) {
         this.context = context;
+    }
+
+    public void setOnSpaceSelectedListener(OnSpaceSelectedListener listener) {
+        this.onSpaceSelectedListener = listener;
     }
 
     public void show(View anchorView) {
@@ -49,10 +58,14 @@ public class SpacePopupWindow {
         adapter.setOnItemClickListener((a, view, position) -> {
             SpaceEntity space = adapter.getItem(position);
             if (space == null) return;
-            Intent intent = new Intent(context, SpaceSettingsActivity.class);
-            intent.putExtra("space_id", space.space_id);
-            context.startActivity(intent);
             popupWindow.dismiss();
+            if (onSpaceSelectedListener != null) {
+                onSpaceSelectedListener.onSpaceSelected(space);
+            } else {
+                Intent intent = new Intent(context, SpaceSettingsActivity.class);
+                intent.putExtra("space_id", space.space_id);
+                context.startActivity(intent);
+            }
         });
 
         LinearLayout createLayout = contentView.findViewById(R.id.createSpaceLayout);

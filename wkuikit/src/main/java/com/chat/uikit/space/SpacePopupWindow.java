@@ -8,7 +8,6 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 
@@ -109,33 +108,26 @@ public class SpacePopupWindow {
     }
 
     private void showJoinDialog() {
-        EditText editText = new EditText(context);
-        editText.setHint(R.string.space_join_hint);
-        editText.setSingleLine(true);
-        editText.setPadding(40, 20, 40, 20);
-
-        WKDialogUtils.getInstance().showDialog(
+        WKDialogUtils.getInstance().showInputDialog(
                 context,
                 context.getString(R.string.space_join_title),
                 "",
-                true, "", context.getString(R.string.sure),
-                0, 0,
-                index -> {
-                    if (index == 1) {
-                        String code = editText.getText().toString().trim();
-                        if (TextUtils.isEmpty(code)) {
-                            WKToastUtils.getInstance().showToastNormal(
-                                    context.getString(R.string.space_invite_code_empty));
-                            return;
-                        }
-                        SpaceModel.getInstance().joinSpace(code, (status, msg) -> {
-                            if (status == 200) {
-                                loadSpaces();
-                            } else {
-                                WKToastUtils.getInstance().showToastNormal(msg);
-                            }
-                        });
+                "",
+                context.getString(R.string.space_join_hint),
+                20,
+                text -> {
+                    if (TextUtils.isEmpty(text)) {
+                        WKToastUtils.getInstance().showToastNormal(
+                                context.getString(R.string.space_invite_code_empty));
+                        return;
                     }
+                    SpaceModel.getInstance().joinSpace(text, (status, msg) -> {
+                        if (status == 200) {
+                            loadSpaces();
+                        } else {
+                            WKToastUtils.getInstance().showToastNormal(msg);
+                        }
+                    });
                 });
     }
 }

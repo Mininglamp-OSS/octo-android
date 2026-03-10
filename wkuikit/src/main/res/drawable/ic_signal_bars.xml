@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="14dp"
+    android:viewportWidth="16"
+    android:viewportHeight="14">
+
+    <!-- 第1格（最低） -->
+    <path
+        android:id="@+id/bar1"
+        android:fillColor="#676a6f"
+        android:pathData="M0,11 L3,11 L3,14 L0,14 Z" />
+
+    <!-- 第2格 -->
+    <path
+        android:fillColor="#676a6f"
+        android:pathData="M4.5,7.5 L7.5,7.5 L7.5,14 L4.5,14 Z" />
+
+    <!-- 第3格 -->
+    <path
+        android:fillColor="#676a6f"
+        android:pathData="M9,4 L12,4 L12,14 L9,14 Z" />
+
+    <!-- 第4格（最高） -->
+    <path
+        android:fillColor="#676a6f"
+        android:pathData="M13.5,0 L16,0 L16,14 L13.5,14 Z" />
+
+</vector>

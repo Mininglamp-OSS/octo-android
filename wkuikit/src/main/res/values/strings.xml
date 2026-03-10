@@ -319,6 +319,13 @@
     <string name="space_join_hint">请输入邀请码</string>
     <string name="space_invite_code">邀请码</string>
     <string name="space_invite_code_copied">邀请码已复制</string>
+    <string name="space_invite_link_copied">邀请链接已复制</string>
+    <string name="net_status_connected">状态: 已连接</string>
+    <string name="net_status_connecting">状态: 连接中</string>
+    <string name="net_status_disconnected">状态: 未连接</string>
+    <string name="net_latency">延迟: %dms</string>
+    <string name="net_connected_duration_min">已连接: %d分钟</string>
+    <string name="net_connected_duration_sec">已连接: %d秒</string>
     <string name="space_role_owner">拥有者</string>
     <string name="space_role_admin">管理员</string>
     <string name="space_role_member">成员</string>

@@ -1,17 +1,29 @@
 package com.chat.uikit.space;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
 
 public class SpaceListAdapter extends BaseQuickAdapter<SpaceEntity, BaseViewHolder> {
 
+    private String currentSpaceId = "";
+
     public SpaceListAdapter() {
         super(R.layout.item_space_list);
+    }
+
+    public void setCurrentSpaceId(String spaceId) {
+        this.currentSpaceId = spaceId != null ? spaceId : "";
     }
 
     @Override
@@ -21,5 +33,29 @@ public class SpaceListAdapter extends BaseQuickAdapter<SpaceEntity, BaseViewHold
                 ? entity.name.substring(0, 1).toUpperCase() : "S";
         avatarTv.setText(initial);
         holder.setText(R.id.nameTv, entity.name);
+
+        // 当前选中的 Space 显示勾选标记
+        boolean isSelected = entity.space_id != null && entity.space_id.equals(currentSpaceId);
+        holder.setVisible(R.id.checkTv, isSelected);
+
+        // 链接图标点击：获取邀请码并复制
+        ImageView linkIv = holder.getView(R.id.linkIv);
+        linkIv.setOnClickListener(v -> {
+            SpaceModel.getInstance().createInvite(entity.space_id, new SpaceModel.IInviteListener() {
+                @Override
+                public void onResult(String inviteCode) {
+                    Context ctx = getContext();
+                    ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(ClipData.newPlainText("invite", inviteCode));
+                    WKToastUtils.getInstance().showToastNormal(
+                            ctx.getString(R.string.space_invite_link_copied));
+                }
+
+                @Override
+                public void onError(int code, String msg) {
+                    WKToastUtils.getInstance().showToastNormal(msg);
+                }
+            });
+        });
     }
 }

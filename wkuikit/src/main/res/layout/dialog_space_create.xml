@@ -58,7 +58,7 @@
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:text="@string/cancel"
-            android:textColor="@color/color999" />
+             />
 
         <Button
             android:id="@+id/createBtn"
@@ -66,8 +66,7 @@
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_marginStart="10dp"
-            android:text="@string/sure"
-            android:textColor="@color/colorAccent" />
+            android:text="@string/sure" />
     </LinearLayout>
 
 </LinearLayout>

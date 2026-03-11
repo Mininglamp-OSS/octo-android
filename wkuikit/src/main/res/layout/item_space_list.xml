@@ -28,11 +28,23 @@
         android:textColor="@color/colorDark"
         android:textSize="15sp" />
 
+    <TextView
+        android:id="@+id/checkTv"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:gravity="center"
+        android:text="✓"
+        android:textColor="@color/colorAccent"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <ImageView
-        android:id="@+id/settingsIv"
+        android:id="@+id/linkIv"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        android:src="@mipmap/msg_settings"
-        android:tint="@color/color999"
-        android:visibility="gone" />
+        android:layout_marginStart="6dp"
+        android:padding="2dp"
+        android:src="@drawable/ic_link" />
+
 </LinearLayout>

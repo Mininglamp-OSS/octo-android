@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
+import com.chat.uikit.message.MsgModel;
 
 import java.util.List;
 
@@ -42,8 +43,9 @@ public class SpacePopupWindow {
     public void show(View anchorView) {
         View contentView = LayoutInflater.from(context).inflate(R.layout.popup_space_list, null);
 
+        int widthPx = (int) (320 * context.getResources().getDisplayMetrics().density);
         popupWindow = new PopupWindow(contentView,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                widthPx,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 true);
         popupWindow.setOutsideTouchable(true);
@@ -52,6 +54,7 @@ public class SpacePopupWindow {
         RecyclerView recyclerView = contentView.findViewById(R.id.spaceRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(context));
         adapter = new SpaceListAdapter();
+        adapter.setCurrentSpaceId(MsgModel.getInstance().getCurrentSpaceId());
         recyclerView.setAdapter(adapter);
 
         adapter.setOnItemClickListener((a, view, position) -> {

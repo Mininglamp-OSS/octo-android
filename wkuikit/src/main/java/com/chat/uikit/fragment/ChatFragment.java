@@ -3,10 +3,17 @@ package com.chat.uikit.fragment;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 
 import androidx.core.app.ActivityOptionsCompat;
@@ -18,7 +25,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.common.WKCommonModel;
+import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
+import com.chat.base.net.OkHttpUtils;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -59,6 +68,7 @@ import com.xinbida.wukongim.message.type.WKConnectStatus;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -88,6 +98,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private TabActivity tabActivity;
     private String currentSpaceName;
 
+    // 网络状态指示器
+    private long connectedAtMs = 0;
+    private long currentLatencyMs = -1;
+    private final Handler pingHandler = new Handler(Looper.getMainLooper());
+    private PopupWindow networkTooltip;
+    private static final int PING_INTERVAL_MS = 30_000;
+
     @Override
     protected boolean isShowBackLayout() {
         return false;
@@ -103,7 +120,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {
             TextView textView = new TextView(getActivity());
-            textView.setTextSize(22);
+            textView.setTextSize(18);
             Typeface face = Typeface.createFromAsset(getResources().getAssets(),
                     "fonts/mw_bold.ttf");
             textView.setTypeface(face);
@@ -142,7 +159,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 startActivity(new Intent(getActivity(), GlobalActivity.class));
             }
         });
-        wkVBinding.textSwitcher.setOnClickListener(v -> {
+        wkVBinding.signalLayout.setOnClickListener(v -> showNetworkTooltip(v));
+
+        wkVBinding.spaceHeaderLayout.setOnClickListener(v -> {
             SpacePopupWindow popup = new SpacePopupWindow(requireContext());
             popup.setOnSpaceSelectedListener(space -> {
                 currentSpaceName = space.name;
@@ -152,7 +171,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 chatConversationAdapter.setList(new ArrayList<>());
                 getData();
             });
-            popup.show(v);
+            popup.show(wkVBinding.spaceHeaderLayout);
         });
         chatConversationAdapter.addChildClickViewIds(R.id.contentLayout);
         chatConversationAdapter.setOnItemChildClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, v -> {
@@ -484,12 +503,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
+                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.success) {
                 wkVBinding.textSwitcher.setText(getDisplayTitle());
+                wkVBinding.spaceArrowTv.setVisibility(View.VISIBLE);
+                connectedAtMs = System.currentTimeMillis();
+                // 立即触发第一次 ping，有真实数据后才显示信号栏
+                startPingTimer();
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
+                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
+                stopPingTimer();
+                wkVBinding.signalLayout.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.noNetwork) {
                 wkVBinding.textSwitcher.setText(getString(R.string.network_error_tips));
+                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
+                stopPingTimer();
+                wkVBinding.signalLayout.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.kicked) {
                 int from = 0;
                 if (reason.equals(WKConnectReason.ReasonConnectKick)) {
@@ -823,6 +853,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener("chat_fragment");
         WKIM.getInstance().getMsgManager().removeSendMsgAckListener("chat_fragment");
         WKIM.getInstance().getReminderManager().removeNewReminderListener("chat_fragment");
+        stopPingTimer();
     }
 
     @Override
@@ -858,6 +889,94 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             connectTimer.cancel();
             connectTimer = null;
         }
+    }
+
+    private void startPingTimer() {
+        stopPingTimer();
+        // 立即执行第一次，有真实延迟数据后再显示信号栏
+        pingHandler.post(pingRunnable);
+    }
+
+    private void stopPingTimer() {
+        pingHandler.removeCallbacks(pingRunnable);
+    }
+
+    private final Runnable pingRunnable = new Runnable() {
+        @Override
+        public void run() {
+            String url = WKApiConfig.baseUrl;
+            if (url == null || url.isEmpty()) return;
+            long start = System.currentTimeMillis();
+            okhttp3.Request request = new okhttp3.Request.Builder()
+                    .url(url)
+                    .head()
+                    .build();
+            OkHttpUtils.getInstance().getOkHttpClient().newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onFailure(@androidx.annotation.NonNull okhttp3.Call call, @androidx.annotation.NonNull IOException e) {
+                    pingHandler.post(() -> pingHandler.postDelayed(pingRunnable, PING_INTERVAL_MS));
+                }
+
+                @Override
+                public void onResponse(@androidx.annotation.NonNull okhttp3.Call call, @androidx.annotation.NonNull okhttp3.Response response) throws IOException {
+                    response.close();
+                    currentLatencyMs = System.currentTimeMillis() - start;
+                    pingHandler.post(() -> {
+                        updateSignalView();
+                        pingHandler.postDelayed(pingRunnable, PING_INTERVAL_MS);
+                    });
+                }
+            });
+        }
+    };
+
+    private void updateSignalView() {
+        if (!isAdded() || wkVBinding == null) return;
+        wkVBinding.signalLayout.setVisibility(View.VISIBLE);
+        wkVBinding.latencyTv.setText(currentLatencyMs + "ms");
+        int color;
+        if (currentLatencyMs < 100) {
+            color = Color.parseColor("#4CAF50");   // 绿色：网速好
+        } else if (currentLatencyMs < 300) {
+            color = Color.parseColor("#FF9800");   // 橙色：一般
+        } else {
+            color = Color.parseColor("#F44336");   // 红色：较差
+        }
+        wkVBinding.signalIv.setColorFilter(color);
+        wkVBinding.latencyTv.setTextColor(color);
+    }
+
+    private void showNetworkTooltip(View anchor) {
+        // 已显示则关闭（toggle）
+        if (networkTooltip != null && networkTooltip.isShowing()) {
+            networkTooltip.dismiss();
+            return;
+        }
+
+        View tooltipView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.popup_network_status, null);
+
+        long elapsedSec = (System.currentTimeMillis() - connectedAtMs) / 1000;
+        String durationText = elapsedSec < 60
+                ? getString(R.string.net_connected_duration_sec, elapsedSec)
+                : getString(R.string.net_connected_duration_min, elapsedSec / 60);
+
+        ((TextView) tooltipView.findViewById(R.id.statusTv)).setText(getString(R.string.net_status_connected));
+        ((TextView) tooltipView.findViewById(R.id.latencyTv)).setText(getString(R.string.net_latency, currentLatencyMs));
+        ((TextView) tooltipView.findViewById(R.id.durationTv)).setText(durationText);
+
+        // 每次都创建新对象，避免复用已 dismiss 的 PopupWindow 导致状态异常
+        networkTooltip = new PopupWindow(tooltipView,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                true);
+        networkTooltip.setOutsideTouchable(true);
+        networkTooltip.setElevation(12f);
+        // dismiss 后清空引用，确保下次点击 isShowing() 判断准确
+        networkTooltip.setOnDismissListener(() -> networkTooltip = null);
+
+        // showAsDropDown 自动避免超出屏幕，不依赖 getMeasuredWidth
+        networkTooltip.showAsDropDown(anchor, 0, 4);
     }
 
     private int getTopChatCount() {

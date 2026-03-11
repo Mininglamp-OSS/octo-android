@@ -7,9 +7,12 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class SpaceModel extends WKBaseModel {
+
+    private List<SpaceEntity> cachedSpaces = null;
 
     private SpaceModel() {
     }
@@ -20,6 +23,11 @@ public class SpaceModel extends WKBaseModel {
 
     public static SpaceModel getInstance() {
         return Binder.INSTANCE;
+    }
+
+    /** 清除缓存，下次 getMySpaces 会重新从网络拉取 */
+    public void invalidateCache() {
+        cachedSpaces = null;
     }
 
     public interface ISpaceListListener {
@@ -47,15 +55,23 @@ public class SpaceModel extends WKBaseModel {
     }
 
     public void getMySpaces(ISpaceListListener listener) {
+        // 有缓存先立即返回，再后台刷新
+        if (cachedSpaces != null) {
+            listener.onResult(new ArrayList<>(cachedSpaces));
+        }
         request(createService(SpaceService.class).getMySpaces(), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<SpaceEntity> result) {
+                cachedSpaces = result;
                 listener.onResult(result);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                listener.onError(code, msg);
+                if (cachedSpaces == null) {
+                    listener.onError(code, msg);
+                }
+                // 有缓存时网络失败不报错，静默降级
             }
         });
     }
@@ -67,6 +83,10 @@ public class SpaceModel extends WKBaseModel {
         request(createService(SpaceService.class).createSpace(json), new IRequestResultListener<>() {
             @Override
             public void onSuccess(SpaceEntity result) {
+                // 直接追加进缓存，无需重新请求
+                if (cachedSpaces != null) {
+                    cachedSpaces.add(result);
+                }
                 listener.onResult(result);
             }
 
@@ -125,6 +145,7 @@ public class SpaceModel extends WKBaseModel {
         request(createService(SpaceService.class).joinSpace(json), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
+                invalidateCache(); // 加入新 Space 后清除缓存
                 listener.onResult(result.status, result.msg);
             }
 
@@ -139,6 +160,7 @@ public class SpaceModel extends WKBaseModel {
         request(createService(SpaceService.class).leaveSpace(spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
+                invalidateCache(); // 离开 Space 后清除缓存
                 listener.onResult(result.status, result.msg);
             }
 
@@ -153,6 +175,7 @@ public class SpaceModel extends WKBaseModel {
         request(createService(SpaceService.class).disbandSpace(spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
+                invalidateCache(); // 解散 Space 后清除缓存
                 listener.onResult(result.status, result.msg);
             }
 

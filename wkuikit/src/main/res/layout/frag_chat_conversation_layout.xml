@@ -12,27 +12,71 @@
         android:layout_height="48dp"
         android:gravity="center_vertical">
 
-        <TextSwitcher
-            android:id="@+id/textSwitcher"
+        <LinearLayout
+            android:id="@+id/spaceHeaderLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="15dp"
-            android:inAnimation="@anim/ts_in_anim"
-            android:outAnimation="@anim/ts_out_anim"
-            android:tag="-1"
-            android:text="@string/not_connected" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextSwitcher
+                android:id="@+id/textSwitcher"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:inAnimation="@anim/ts_in_anim"
+                android:outAnimation="@anim/ts_out_anim"
+                android:tag="-1"
+                android:text="@string/not_connected" />
+
+            <TextView
+                android:id="@+id/spaceArrowTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="▾"
+                android:textColor="@color/colorDark"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
 
         <View
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1" />
 
+        <LinearLayout
+            android:id="@+id/signalLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/signalIv"
+                android:layout_width="16dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_signal_bars" />
+
+            <TextView
+                android:id="@+id/latencyTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textColor="@color/popupTextColor"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/deviceIv"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:layout_marginEnd="30dp"
+            android:layout_marginEnd="16dp"
             android:src="@mipmap/menu_devices"
             android:tint="@color/popupTextColor"
             android:visibility="gone" />

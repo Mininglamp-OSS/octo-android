@@ -22,22 +22,18 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
         super.initView()
         setupStatusBar()
 
-        // 欢迎页：点击"输入邀请码加入团队" → 切换到加入页
         wkVBinding.btnJoin.setOnClickListener {
             wkVBinding.viewFlipper.displayedChild = 1
         }
 
-        // 欢迎页：点击"创建新团队" → 弹出创建 Dialog
         wkVBinding.btnCreate.setOnClickListener {
             showCreateDialog()
         }
 
-        // 加入页：返回 → 切换回欢迎页
         wkVBinding.btnBack.setOnClickListener {
             wkVBinding.viewFlipper.displayedChild = 0
         }
 
-        // 加入页：加入按钮
         wkVBinding.btnDoJoin.setOnClickListener {
             val code = wkVBinding.etInviteCode.text.toString().trim()
             if (code.isBlank()) return@setOnClickListener
@@ -62,8 +58,14 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
         SpaceModel.getInstance().joinSpace(inviteCode, object : ICommonListener {
             override fun onResult(code: Int, msg: String?) {
                 wkVBinding.btnDoJoin.isEnabled = true
-                // 无论成功还是"已是成员"，都查 Space 列表后进主页
-                fetchSpacesAndGo()
+                if (code == 200) {
+                    showToast("已加入 Space")
+                    fetchSpacesAndGo()
+                } else if (msg != null && (msg.contains("已经是") || msg.contains("已是") || msg.contains("already"))) {
+                    fetchSpacesAndGo()
+                } else {
+                    showToast(msg ?: "邀请码无效或已过期")
+                }
             }
         })
     }

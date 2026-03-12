@@ -38,14 +38,20 @@ public abstract class BaseObserver<T> implements Observer<T> {
             if (TextUtils.isEmpty(msg)) msg = "";
             String errJson = throwable.getErrJson();
             if (TextUtils.isEmpty(errJson)) errJson = "";
-            onFail(throwable.getCode(), msg, errJson);
             if (throwable.getCode() == 401) {
+                // 如果 token 已清空（说明已在退出流程中），跳过重复处理
+                if (TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
+                    return;
+                }
+                onFail(throwable.getCode(), msg, errJson);
                 //关闭UI层数据库
                 WKBaseApplication.getInstance().closeDbHelper();
                 WKConfig.getInstance().clearInfo();
                 WKIM.getInstance().getConnectionManager().disconnect(true);
                 ActManagerUtils.getInstance().clearAllActivity();
                 EndpointManager.getInstance().invoke("main_show_home_view",0);
+            } else {
+                onFail(throwable.getCode(), msg, errJson);
             }
         }
     }

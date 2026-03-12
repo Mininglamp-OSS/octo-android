@@ -12,6 +12,7 @@ import retrofit2.http.GET;
 import retrofit2.http.POST;
 import retrofit2.http.PUT;
 import retrofit2.http.Path;
+import retrofit2.http.Query;
 
 public interface SpaceService {
 
@@ -25,7 +26,10 @@ public interface SpaceService {
     Observable<SpaceEntity> getSpaceDetail(@Path("space_id") String spaceId);
 
     @GET("space/{space_id}/members")
-    Observable<List<SpaceEntity.SpaceMember>> getMembers(@Path("space_id") String spaceId);
+    Observable<List<SpaceEntity.SpaceMember>> getMembers(
+            @Path("space_id") String spaceId,
+            @Query("page") int page,
+            @Query("limit") int limit);
 
     @POST("space/{space_id}/invite")
     Observable<SpaceEntity.InviteResult> createInvite(@Path("space_id") String spaceId);

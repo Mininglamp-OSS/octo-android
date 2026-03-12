@@ -148,7 +148,8 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
             }
 
             String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().trim();
-            String verCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+            // TODO: 临时跳过验证码，方便测试
+            String verCode = "";
             String nickname = Objects.requireNonNull(wkVBinding.nicknameEt.getText()).toString().trim();
             String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
             String inviteCode = Objects.requireNonNull(wkVBinding.inviteCodeTv.getText()).toString();
@@ -160,7 +161,7 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                 showSingleBtnDialog(getString(R.string.nickname_not_null));
                 return;
             }
-            if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(verCode) && !TextUtils.isEmpty(pwd)) {
+            if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(pwd)) {
                 if (pwd.length() < 6 || pwd.length() > 16) {
                     showSingleBtnDialog(getString(R.string.pwd_length_error));
                 } else {
@@ -222,9 +223,9 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
 
     private void checkStatus() {
         String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-        String smsCode = Objects.requireNonNull(wkVBinding.verfiEt.getText()).toString();
+        // TODO: 临时跳过验证码校验，方便测试
         String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
-        if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(smsCode) && !TextUtils.isEmpty(pwd)) {
+        if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(pwd)) {
             wkVBinding.registerBtn.setAlpha(1f);
             wkVBinding.registerBtn.setEnabled(true);
         } else {
@@ -257,12 +258,15 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
             finish();
         } else {
             new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> {
+                // 注册场景：通知 loginMenus 跳过页面导航
+                EndpointManager.getInstance().invoke("set_skip_navigation", true);
                 List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
                 if (WKReader.isNotEmpty(list)) {
                     for (LoginMenu menu : list) {
                         if (menu.iMenuClick != null) menu.iMenuClick.onClick();
                     }
                 }
+                EndpointManager.getInstance().invoke("show_space_guide", null);
                 finish();
             }, 500);
         }

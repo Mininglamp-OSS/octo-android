@@ -184,7 +184,12 @@ class TSApplication : MultiDexApplication() {
             startActivity(intent)
             null
         }
-
+        EndpointManager.getInstance().setMethod("show_space_guide") {
+            val intent = Intent(applicationContext, SpaceGuideActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            null
+        }
         EndpointManager.getInstance().setMethod("play_new_msg_Media") {
             WKPlaySound.getInstance().playRecordMsg(R.raw.newmsg)
             null

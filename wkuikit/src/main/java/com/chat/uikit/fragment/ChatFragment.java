@@ -72,8 +72,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
@@ -97,6 +99,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private Timer connectTimer;
     private TabActivity tabActivity;
     private String currentSpaceName;
+
+    // Space 会话过滤：记录当前 Space 下已确认的会话 channel key，
+    // 用于过滤实时消息推送中不属于当前 Space 的会话
+    private final Set<String> spaceConversationKeys = new HashSet<>();
+    private boolean pendingSpaceResync = false;
+
+    private String channelKey(String channelID, byte channelType) {
+        return channelID + "_" + channelType;
+    }
 
     // 网络状态指示器
     private long connectedAtMs = 0;
@@ -167,9 +178,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id);
                 wkVBinding.textSwitcher.setText(space.name);
-                // 清空并重新加载会话列表
+                // 清空 Space 会话过滤集合、本地会话数据库，显式触发新 Space 的会话同步
+                spaceConversationKeys.clear();
+                WKIM.getInstance().getConversationManager().clearAll();
                 chatConversationAdapter.setList(new ArrayList<>());
-                getData();
+                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                    // WKIM 内部会将同步结果保存到本地 DB 并通知 RefreshMsgListListener 刷新 UI
+                });
             });
             popup.show(wkVBinding.spaceHeaderLayout);
         });
@@ -421,10 +436,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             if (chatConversationAdapter.getData().isEmpty()) {
+                // 适配器为空，说明是 Space 切换后的首次同步结果，记录有效会话 key
+                spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
                     ChatConversationMsg msg = new ChatConversationMsg(uiConversationMsg);
                     uiList.add(msg);
+                    spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
                 }
                 sortMsg(uiList);
                 setAllCount();
@@ -475,16 +493,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
                 if (isAdd) {
-                    uiList.add(new ChatConversationMsg(uiConversationMsg));
+                    // Space 过滤：只添加属于当前 Space 的会话
+                    String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                    if (spaceConversationKeys.isEmpty() || spaceConversationKeys.contains(key)) {
+                        uiList.add(new ChatConversationMsg(uiConversationMsg));
+                        spaceConversationKeys.add(key);
+                    } else {
+                        // 未知会话（可能属于其他 Space，也可能是当前 Space 的新会话）
+                        // 触发延迟 re-sync 让服务端确认
+                        scheduleSpaceResync();
+                    }
                 }
             }
-//            if (!uiList.isEmpty()) {
-//                uiList.addAll(chatConversationAdapter.getData());
-//                sortMsg(uiList);
-//                setAllCount();
-//            } else {
-//                resetData(list.get(0), true);
-//            }
             uiList.addAll(chatConversationAdapter.getData());
             sortMsg(uiList);
             setAllCount();
@@ -535,6 +555,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 stopConnectTimer();
             }
         });
+        // 如果 IM 在 Fragment 创建前已连接成功，listener 会错过回调，主动补齐状态
+        if (connectedAtMs == 0) {
+            connectedAtMs = System.currentTimeMillis();
+        }
+        wkVBinding.textSwitcher.setText(getDisplayTitle());
+        wkVBinding.spaceArrowTv.setVisibility(View.VISIBLE);
+        startPingTimer();
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
@@ -750,6 +777,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (!isEnd) msgCount++;
 
         if (isAdd) {
+            // Space 过滤：只添加属于当前 Space 的会话
+            String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
+            if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
+                // 未知会话，可能属于其他 Space，触发 re-sync 确认
+                scheduleSpaceResync();
+                return;
+            }
+            spaceConversationKeys.add(key);
             if (!isEnd) {
                 chatConversationAdapter.addData(new ChatConversationMsg(uiConversationMsg));
             } else {
@@ -774,17 +809,37 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
     }
 
+    /**
+     * 延迟触发 Space 会话重新同步。
+     * 当收到不属于当前 Space 的实时消息时调用，使用防抖避免频繁请求。
+     * 同步结果由 RefreshMsgListListener 处理，会重新校准 spaceConversationKeys。
+     */
+    private void scheduleSpaceResync() {
+        if (pendingSpaceResync) return;
+        pendingSpaceResync = true;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            pendingSpaceResync = false;
+            spaceConversationKeys.clear();
+            WKIM.getInstance().getConversationManager().clearAll();
+            chatConversationAdapter.setList(new ArrayList<>());
+            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            });
+        }, 500);
+    }
+
     //排序消息
     private void sortMsg(List<ChatConversationMsg> list) {
-        groupMsg(list);
-        Collections.sort(list, (conversationMsg, t1) -> (int) (t1.uiConversationMsg.lastMsgTimestamp - conversationMsg.uiConversationMsg.lastMsgTimestamp));
+        // 拷贝一份，避免对 adapter data list 并发修改
+        List<ChatConversationMsg> snapshot = new ArrayList<>(list);
+        groupMsg(snapshot);
+        Collections.sort(snapshot, (conversationMsg, t1) -> (int) (t1.uiConversationMsg.lastMsgTimestamp - conversationMsg.uiConversationMsg.lastMsgTimestamp));
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
-        for (int i = 0, size = list.size(); i < size; i++) {
-            if (list.get(i).uiConversationMsg.getWkChannel() != null && list.get(i).uiConversationMsg.getWkChannel().top == 1) {
-                topList.add(list.get(i));
+        for (int i = 0, size = snapshot.size(); i < size; i++) {
+            if (snapshot.get(i).uiConversationMsg.getWkChannel() != null && snapshot.get(i).uiConversationMsg.getWkChannel().top == 1) {
+                topList.add(snapshot.get(i));
             } else {
-                normalList.add(list.get(i));
+                normalList.add(snapshot.get(i));
             }
         }
         List<ChatConversationMsg> tempList = new ArrayList<>();
@@ -794,7 +849,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             chatConversationAdapter.setList(tempList);
             setAllCount();
         });
-
     }
 
     //检测正在输入的定时器

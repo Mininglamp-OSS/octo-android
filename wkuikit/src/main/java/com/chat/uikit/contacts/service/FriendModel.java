@@ -142,9 +142,18 @@ public class FriendModel extends WKBaseModel {
                     dispatchQueuePool.execute(() -> {
                         WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
                     });
-                    AndroidUtilities.runOnUIThread(() -> {
-                        syncFriends(iCommonListener);
-                    }, 500);
+                    // 返回数量达到 limit 说明可能还有更多数据，继续同步（同 iOS 逻辑）
+                    if (list.size() >= 1000) {
+                        AndroidUtilities.runOnUIThread(() -> {
+                            syncFriends(iCommonListener);
+                        }, 500);
+                    } else {
+                        // 数据已全部同步完成
+                        if (iCommonListener != null) {
+                            EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
+                            iCommonListener.onResult(HttpResponseCode.success, "");
+                        }
+                    }
                 } else {
                     if (iCommonListener != null) {
                         EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);

@@ -1,72 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="300dp"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/title_bg"
+    android:background="@drawable/bg_dialog_space_create"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="24dp">
 
+    <!-- 标题栏：标题 + 关闭按钮 -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="@string/space_create_title"
+            android:textColor="#111827"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/closeBtn"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:gravity="center"
+            android:text="\u2715"
+            android:textColor="#9CA3AF"
+            android:textSize="18sp" />
+    </RelativeLayout>
+
+    <!-- 名称标签 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="15dp"
-        android:text="@string/space_create_title"
-        android:textColor="@color/colorDark"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:layout_marginBottom="6dp"
+        android:text="@string/space_create_name_label"
+        android:textColor="#374151"
+        android:textSize="14sp" />
 
     <EditText
         android:id="@+id/nameEt"
         android:layout_width="match_parent"
         android:layout_height="44dp"
-        android:background="@color/homeColor"
+        android:background="@drawable/bg_dialog_input"
         android:hint="@string/space_name_hint"
+        android:importantForAutofill="no"
         android:maxLength="30"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:singleLine="true"
-        android:textColor="@color/colorDark"
-        android:textSize="15sp" />
+        android:textColor="#111827"
+        android:textColorHint="#9CA3AF"
+        android:textSize="14sp" />
+
+    <!-- 描述标签 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="6dp"
+        android:text="@string/space_create_desc_label"
+        android:textColor="#374151"
+        android:textSize="14sp" />
 
     <EditText
         android:id="@+id/descEt"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:background="@color/homeColor"
+        android:background="@drawable/bg_dialog_input"
         android:gravity="top"
         android:hint="@string/space_desc_hint"
+        android:importantForAutofill="no"
         android:maxLength="200"
-        android:minHeight="80dp"
+        android:minHeight="100dp"
         android:paddingStart="12dp"
-        android:paddingTop="8dp"
+        android:paddingTop="10dp"
         android:paddingEnd="12dp"
-        android:paddingBottom="8dp"
-        android:textColor="@color/colorDark"
+        android:paddingBottom="10dp"
+        android:textColor="#111827"
+        android:textColorHint="#9CA3AF"
         android:textSize="14sp" />
 
+    <!-- 字数统计 -->
+    <TextView
+        android:id="@+id/charCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="end"
+        android:text="0/200"
+        android:textColor="#9CA3AF"
+        android:textSize="12sp" />
+
+    <!-- 按钮栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="15dp"
+        android:layout_marginTop="20dp"
         android:gravity="end"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/cancelBtn"
-            style="@style/buttonNormal"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_dialog_btn_cancel"
+            android:gravity="center"
             android:text="@string/cancel"
-             />
+            android:textColor="#374151"
+            android:textSize="15sp" />
 
-        <Button
+        <TextView
             android:id="@+id/createBtn"
-            style="@style/buttonNormal"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:layout_marginStart="10dp"
-            android:text="@string/sure" />
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_dialog_btn_create"
+            android:gravity="center"
+            android:text="@string/space_create_title"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
 </LinearLayout>

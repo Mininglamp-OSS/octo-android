@@ -67,6 +67,8 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
                         userInfoEntity.name = wkVBinding.nameEt.getText().toString();
                         WKConfig.getInstance().saveUserInfo(userInfoEntity);
                         WKConfig.getInstance().setUserName(wkVBinding.nameEt.getText().toString());
+                        // 完善资料属于注册流程，跳过 loginMenus 导航
+                        EndpointManager.getInstance().invoke("set_skip_navigation", true);
                         List<LoginMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.loginMenus, null);
                         if (WKReader.isNotEmpty(list)) {
                             for (LoginMenu menu : list) {
@@ -74,6 +76,7 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
                                     menu.iMenuClick.onClick();
                             }
                         }
+                        EndpointManager.getInstance().invoke("show_space_guide", null);
                         loadingPopup.dismiss();
                         setResult(RESULT_OK);
                         finish();

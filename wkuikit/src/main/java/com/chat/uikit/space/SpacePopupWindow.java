@@ -19,7 +19,10 @@ import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.message.MsgModel;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SpacePopupWindow {
 
@@ -74,7 +77,12 @@ public class SpacePopupWindow {
         createLayout.setOnClickListener(v -> {
             popupWindow.dismiss();
             SpaceCreateDialog dialog = new SpaceCreateDialog(context);
-            dialog.setOnSpaceCreatedListener(space -> loadSpaces());
+            dialog.setOnSpaceCreatedListener(space -> {
+                // 创建成功后自动切换到新 Space
+                if (onSpaceSelectedListener != null) {
+                    onSpaceSelectedListener.onSpaceSelected(space);
+                }
+            });
             dialog.show();
         });
 
@@ -111,6 +119,14 @@ public class SpacePopupWindow {
     }
 
     private void showJoinDialog() {
+        // 记录加入前已有的 Space ID，用于识别新加入的 Space
+        Set<String> existingSpaceIds = new HashSet<>();
+        if (adapter != null && adapter.getData() != null) {
+            for (SpaceEntity s : adapter.getData()) {
+                existingSpaceIds.add(s.space_id);
+            }
+        }
+
         WKDialogUtils.getInstance().showInputDialog(
                 context,
                 context.getString(R.string.space_join_title),
@@ -126,7 +142,25 @@ public class SpacePopupWindow {
                     }
                     SpaceModel.getInstance().joinSpace(text, (status, msg) -> {
                         if (status == 200) {
-                            loadSpaces();
+                            // 加入成功后获取最新列表，找到新 Space 并自动切换
+                            SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
+                                @Override
+                                public void onResult(List<SpaceEntity> list) {
+                                    if (onSpaceSelectedListener != null && list != null) {
+                                        for (SpaceEntity space : list) {
+                                            if (!existingSpaceIds.contains(space.space_id)) {
+                                                onSpaceSelectedListener.onSpaceSelected(space);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                @Override
+                                public void onError(int code, String errorMsg) {
+                                    // 获取列表失败时静默处理，用户可手动切换
+                                }
+                            });
                         } else {
                             WKToastUtils.getInstance().showToastNormal(msg);
                         }

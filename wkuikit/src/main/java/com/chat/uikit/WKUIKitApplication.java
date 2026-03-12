@@ -103,6 +103,7 @@ import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.group.SavedGroupsActivity;
 import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
@@ -135,6 +136,8 @@ public class WKUIKitApplication {
     public String chattingChannelID;
     public SensitiveWords sensitiveWords;
     public boolean isRefreshChatActivityMessage = false;
+    // 注册场景设为 true，loginMenus 跳过页面导航
+    public static boolean skipNavigation = false;
 
     private WKUIKitApplication() {
     }
@@ -428,6 +431,10 @@ public class WKUIKitApplication {
             return null;
         });
 
+        EndpointManager.getInstance().setMethod("set_skip_navigation", object -> {
+            skipNavigation = object != null && (boolean) object;
+            return null;
+        });
         EndpointManager.getInstance().setMethod("show_tab_main", object -> {
             Intent intent = new Intent(mContext.get(), TabActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -448,9 +455,15 @@ public class WKUIKitApplication {
                 WKIM.getInstance().getCMDManager().setRSAPublicKey(userInfo.rsa_public_key);
                 WKIM.getInstance().getChannelManager().updateAvatarCacheKey(userInfo.uid, WKChannelType.PERSONAL, UUID.randomUUID().toString().replaceAll("-", ""));
             }
-            Intent intent = new Intent(mContext.get(), TabActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            mContext.get().startActivity(intent);
+            SpaceModel.getInstance().invalidateCache();
+            // 注册场景跳过导航（由注册页面自己跳引导页）；登录场景直接进主页
+            if (skipNavigation) {
+                skipNavigation = false;
+            } else {
+                Intent intent = new Intent(mContext.get(), TabActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mContext.get().startActivity(intent);
+            }
             startChat();
             ProhibitWordModel.Companion.getInstance().sync();
             MsgModel.getInstance().deleteFlameMsg();

@@ -112,7 +112,7 @@ public class SpaceModel extends WKBaseModel {
     }
 
     public void getMembers(String spaceId, IMembersListener listener) {
-        request(createService(SpaceService.class).getMembers(spaceId), new IRequestResultListener<>() {
+        request(createService(SpaceService.class).getMembers(spaceId, 1, 10000), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<SpaceEntity.SpaceMember> result) {
                 listener.onResult(result);

@@ -380,19 +380,21 @@ public class UserModel extends WKBaseModel {
     }
 
     public void quit(ICommonListener iCommonListener) {
-        request(createService(UserService.class).quit(), new IRequestResultListener<CommonResponse>() {
-            @Override
-            public void onSuccess(CommonResponse result) {
-                if (iCommonListener != null)
-                    iCommonListener.onResult(HttpResponseCode.success, "");
-            }
-
-            @Override
-            public void onFail(int code, String msg) {
-                if (iCommonListener != null)
-                    iCommonListener.onResult(code, msg);
-            }
-        });
+        // 不走 BaseObserver（避免全局 401 拦截弹出"认证失败"），直接订阅并忽略错误
+        createService(UserService.class).quit()
+                .subscribeOn(io.reactivex.rxjava3.schedulers.Schedulers.io())
+                .observeOn(io.reactivex.rxjava3.android.schedulers.AndroidSchedulers.mainThread())
+                .subscribe(
+                        result -> {
+                            if (iCommonListener != null)
+                                iCommonListener.onResult(HttpResponseCode.success, "");
+                        },
+                        throwable -> {
+                            // 退出时任何错误（含 401）都视为正常，静默处理
+                            if (iCommonListener != null)
+                                iCommonListener.onResult(HttpResponseCode.success, "");
+                        }
+                );
     }
 
     public void device(){

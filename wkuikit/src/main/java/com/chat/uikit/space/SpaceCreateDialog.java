@@ -2,15 +2,20 @@ package com.chat.uikit.space;
 
 import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.View;
 import android.view.Window;
-import android.widget.Button;
+import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
-import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
 
@@ -36,11 +41,40 @@ public class SpaceCreateDialog extends Dialog {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.dialog_space_create);
 
+        // 设置透明背景让圆角可见
+        if (getWindow() != null) {
+            getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            getWindow().setLayout(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT
+            );
+            WindowManager.LayoutParams params = getWindow().getAttributes();
+            params.horizontalMargin = 0.08f;
+            getWindow().setAttributes(params);
+        }
+
         EditText nameEt = findViewById(R.id.nameEt);
         EditText descEt = findViewById(R.id.descEt);
-        Button cancelBtn = findViewById(R.id.cancelBtn);
-        Button createBtn = findViewById(R.id.createBtn);
+        TextView charCount = findViewById(R.id.charCount);
+        View closeBtn = findViewById(R.id.closeBtn);
+        View cancelBtn = findViewById(R.id.cancelBtn);
+        View createBtn = findViewById(R.id.createBtn);
 
+        // 字数统计
+        descEt.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                charCount.setText(s.length() + "/200");
+            }
+        });
+
+        closeBtn.setOnClickListener(v -> dismiss());
         cancelBtn.setOnClickListener(v -> dismiss());
         createBtn.setOnClickListener(v -> {
             String name = nameEt.getText().toString().trim();

@@ -333,5 +333,7 @@
     <string name="space_remove_member_tips">确定要将 %s 移出此 Space 吗？</string>
     <string name="space_name_empty">Space 名称不能为空</string>
     <string name="space_invite_code_empty">邀请码不能为空</string>
+    <string name="space_create_name_label">名称</string>
+    <string name="space_create_desc_label">描述</string>
 </resources>
 

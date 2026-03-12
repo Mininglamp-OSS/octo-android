@@ -15,6 +15,7 @@ public class SpaceEntity {
         public String uid;
         public String name;
         public int role; // 0=member, 1=admin, 2=owner
+        public int robot; // 0=user, 1=bot
         public String created_at;
     }
 

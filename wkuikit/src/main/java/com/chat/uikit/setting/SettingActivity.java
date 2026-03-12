@@ -21,7 +21,6 @@ import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.databinding.ActSettingLayoutBinding;
 import com.chat.uikit.message.BackupRestoreMessageActivity;
-import com.chat.uikit.user.service.UserModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -65,7 +64,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         }
         wkVBinding.loginOutTv.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.login_out), getString(R.string.login_out_dialog), true, "", getString(R.string.login_out), 0, 0, index -> {
             if (index == 1) {
-                UserModel.getInstance().quit(null);
+                // 与 Web/iOS 一致：直接执行本地退出，不调用 user/quit
                 WKUIKitApplication.getInstance().exitLogin(0);
             }
         }));

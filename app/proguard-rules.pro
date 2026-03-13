@@ -149,6 +149,8 @@
 -keep class com.chat.base.entity.** { *; }
 -keep class com.chat.base.base.** { *; }
 -keep class com.chat.base.net.entity.** { *; }
+-keep class com.chat.base.msg.model.** { *; }
+-keep class com.chat.base.msgcontent.** { *; }
 #----------登录模块---------------
 -keep class com.chat.login.entity.** { *; }
 #----------uikit模块--------------
@@ -201,6 +203,8 @@
 -keep class com.chat.pinned.message.entity.**{*;}
 #---------注册邀请模块-------------
 -keep class com.chat.invite.entity.**{*;}
+#---------Space 模块-------------
+-keep class com.chat.uikit.space.**{*;}
 
 -keep class org.web3j.**{*;}
 -dontwarn org.web3j.**

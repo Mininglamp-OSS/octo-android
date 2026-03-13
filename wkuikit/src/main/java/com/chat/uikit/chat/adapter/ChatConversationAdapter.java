@@ -171,6 +171,22 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (TextUtils.isEmpty(content) || WKContentType.isSystemMsg(msg.type)) {
             content = getShowContent(msg.content);
         }
+        // 截屏消息：SDK 不认识 type=20，baseModel.getDisplayContent() 返回"未知消息"，需要覆盖
+        if (msg.type == WKContentType.screenshot) {
+            String name;
+            if (msg.fromUID != null && msg.fromUID.equals(WKConfig.getInstance().getUid())) {
+                name = getContext().getString(R.string.str_you);
+            } else {
+                name = "";
+                if (msg.getFrom() != null && !TextUtils.isEmpty(msg.getFrom().channelName)) {
+                    name = msg.getFrom().channelName;
+                }
+                if (TextUtils.isEmpty(name)) {
+                    name = getContext().getString(R.string.str_someone);
+                }
+            }
+            content = String.format(getContext().getString(R.string.screenshot_tip), name);
+        }
         if (msg.remoteExtra.contentEditMsgModel != null) {
             content = msg.remoteExtra.contentEditMsgModel.getDisplayContent();
         }

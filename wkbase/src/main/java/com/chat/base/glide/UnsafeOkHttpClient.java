@@ -1,5 +1,7 @@
 package com.chat.base.glide;
 
+import com.chat.base.net.CommonRequestParamInterceptor;
+
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
@@ -45,7 +47,9 @@ public class UnsafeOkHttpClient {
                         public boolean verify(String s, SSLSession sslSession) {
                             return true;
                         }
-                    }).build();
+                    })
+                    .addInterceptor(new CommonRequestParamInterceptor())
+                    .build();
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         } catch (KeyManagementException e) {

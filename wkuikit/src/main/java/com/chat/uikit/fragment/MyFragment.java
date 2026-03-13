@@ -11,8 +11,10 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.PersonalInfoMenu;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.ApiUrlDialog;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
+import com.chat.uikit.WKUIKitApplication;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.FragMyLayoutBinding;
@@ -71,6 +73,34 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         }));
         SingleClickUtil.onSingleClick(wkVBinding.avatarView, view -> gotoMyInfo());
         SingleClickUtil.onSingleClick(wkVBinding.qrIv, view -> gotoMyInfo());
+        // 隐藏入口：长按头像 3 秒修改 API 地址
+        final android.os.Handler longPressHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable longPressRunnable = () -> {
+            if (getActivity() == null) return;
+            ApiUrlDialog dialog = new ApiUrlDialog(getActivity());
+            dialog.setOnConfirmListener(url -> {
+                WKUIKitApplication.getInstance().exitLogin(0);
+                Intent intent = requireActivity().getPackageManager().getLaunchIntentForPackage(requireActivity().getPackageName());
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
+                }
+                Runtime.getRuntime().exit(0);
+            });
+            dialog.show();
+        };
+        wkVBinding.avatarView.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    longPressHandler.postDelayed(longPressRunnable, 1500);
+                    break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    longPressHandler.removeCallbacks(longPressRunnable);
+                    break;
+            }
+            return false; // 返回 false，不拦截单击事件
+        });
     }
 
     void gotoMyInfo() {

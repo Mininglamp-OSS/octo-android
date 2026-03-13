@@ -599,11 +599,19 @@ public class StringUtils {
                     names.add(name);
                 }
             }
-            if (WKReader.isNotEmpty(names))
-                content = MessageFormat.format(string, names.toArray());
-            else content = string;
+            if (WKReader.isNotEmpty(names)) {
+                try {
+                    content = MessageFormat.format(string, names.toArray());
+                } catch (Exception e) {
+                    // 模板占位符和参数不匹配时降级显示原始内容
+                    content = string;
+                }
+            } else {
+                content = string;
+            }
         } catch (JSONException e) {
-            content = context.getString(R.string.base_unknow_msg);
+            // JSON 格式异常，尝试直接显示原始内容
+            content = contentJson;
         }
         if (TextUtils.isEmpty(content)) {
             content = context.getString(R.string.base_unknow_msg);

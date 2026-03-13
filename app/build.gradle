@@ -29,20 +29,16 @@ if (googleServicesFile.exists()) {
 }
 
 android {
-//    signingConfigs {
-//        debug {
-//            storeFile file('../demo.jks')
-//            storePassword 'demo1365'
-//            keyAlias = 'demo'
-//            keyPassword 'demo1365'
-//        }
-//        release {
-//            storeFile file('../demo.jks')
-//            storePassword 'demo1365'
-//            keyAlias = 'demo'
-//            keyPassword 'demo1365'
-//        }
-//    }
+    signingConfigs {
+        release {
+            def localProps = new Properties()
+            localProps.load(new FileInputStream(rootProject.file("local.properties")))
+            storeFile file('my-app.jks')
+            storePassword localProps['RELEASE_STORE_PASSWORD']
+            keyAlias 'dmwork'
+            keyPassword localProps['RELEASE_KEY_PASSWORD']
+        }
+    }
     namespace appId
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
@@ -91,15 +87,10 @@ android {
             minifyEnabled true  // 是否混淆
             shrinkResources true  // 是否去除无效的资源文件
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-           // signingConfig signingConfigs.release
+            signingConfig signingConfigs.release
         }
         debug {
-//            jniDebuggable true
-//            zipAlignEnabled true   //Zipalign优化
-//            minifyEnabled true  // 是否混淆
-//            shrinkResources true  // 是否去除无效的资源文件
-//            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-           // signingConfig signingConfigs.release
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

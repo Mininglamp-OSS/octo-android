@@ -88,6 +88,10 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             //系统消息
             return WKContentType.systemMsg;
         }
+        // 截屏消息等提示类消息，当作系统消息显示
+        if (list.get(i).wkMsg.type == WKContentType.screenshot) {
+            return WKContentType.screenshot;
+        }
         return WKContentType.unknown_msg;
     }
 

@@ -31,6 +31,7 @@ import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.ApiUrlDialog;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
@@ -104,6 +105,25 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
         }
         wkVBinding.loginTitleTv.setText(String.format(getString(R.string.login_title), getString(R.string.app_name)));
+        // 隐藏入口：长按标题 3 秒修改 API 地址
+        final Handler longPressHandler = new Handler(Looper.getMainLooper());
+        final Runnable longPressRunnable = () -> {
+            ApiUrlDialog dialog = new ApiUrlDialog(this);
+            dialog.setOnConfirmListener(url -> restartApp());
+            dialog.show();
+        };
+        wkVBinding.loginTitleTv.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    longPressHandler.postDelayed(longPressRunnable, 1500);
+                    break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    longPressHandler.removeCallbacks(longPressRunnable);
+                    break;
+            }
+            return true;
+        });
         wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
         wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
 
@@ -331,6 +351,15 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             wkVBinding.codeTv.setText(String.format("+%s", codeName));
         }
     });
+
+    private void restartApp() {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        }
+        Runtime.getRuntime().exit(0);
+    }
 
     @Override
     public void finish() {

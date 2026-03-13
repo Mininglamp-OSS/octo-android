@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dialog_api_url"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- 标题栏 -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="@string/api_url_dialog_title"
+            android:textColor="#111827"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/closeBtn"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:gravity="center"
+            android:text="\u2715"
+            android:textColor="#9CA3AF"
+            android:textSize="18sp" />
+    </RelativeLayout>
+
+    <!-- 提示文字 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="@string/api_url_dialog_hint"
+        android:textColor="#6B7280"
+        android:textSize="13sp" />
+
+    <!-- 地址标签 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:text="@string/api_url_dialog_label"
+        android:textColor="#374151"
+        android:textSize="14sp" />
+
+    <!-- URL 输入框 -->
+    <EditText
+        android:id="@+id/urlEt"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/bg_dialog_api_input"
+        android:hint="@string/api_url_dialog_input_hint"
+        android:importantForAutofill="no"
+        android:inputType="textUri"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:singleLine="true"
+        android:textColor="#111827"
+        android:textColorHint="#9CA3AF"
+        android:textSize="14sp" />
+
+    <!-- 错误提示 -->
+    <TextView
+        android:id="@+id/errorTv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#EF4444"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- 当前地址显示 -->
+    <TextView
+        android:id="@+id/currentUrlTv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#9CA3AF"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <!-- 按钮栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/cancelBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_dialog_api_btn_cancel"
+            android:gravity="center"
+            android:text="@string/cancel"
+            android:textColor="#374151"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/confirmBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_dialog_api_btn_confirm"
+            android:gravity="center"
+            android:text="@string/api_url_dialog_confirm"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

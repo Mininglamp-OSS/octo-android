@@ -38,6 +38,8 @@ public class WKMsgItemViewManager {
             for (int i = 1000; i <= 2000; i++) {
                 chatItemProviderList.put(i, new WKSystemProvider(i));
             }
+            // 截屏消息（type=20）当作系统提示显示
+            chatItemProviderList.put(WKContentType.screenshot, new WKScreenshotProvider());
         }
         chatItemProviderList.put(type, itemProvider);
         // 置顶消息的itemProvider
@@ -53,6 +55,7 @@ public class WKMsgItemViewManager {
             for (int i = 1000; i <= 2000; i++) {
                 pinnedChatItemProviderList.put(i, new WKSystemProvider(i));
             }
+            pinnedChatItemProviderList.put(WKContentType.screenshot, new WKScreenshotProvider());
         }
         try {
             Object myObject = itemProvider.getClass().newInstance();

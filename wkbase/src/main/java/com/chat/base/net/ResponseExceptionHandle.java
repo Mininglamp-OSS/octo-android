@@ -66,6 +66,25 @@ public class ResponseExceptionHandle {
                 case 404:
                     responeThrowable.setMessage("请求地址不存在");
                     break;
+                case 405:
+                case 403:
+                case 500:
+                case 502:
+                case 503:
+                    // 尝试解析 body 中的 msg
+                    try {
+                        String errBody = Objects.requireNonNull(Objects.requireNonNull(httpException.response()).errorBody()).string();
+                        if (!TextUtils.isEmpty(errBody)) {
+                            JSONObject errObj = new JSONObject(errBody);
+                            String errMsg = errObj.optString("msg");
+                            if (!TextUtils.isEmpty(errMsg)) {
+                                responeThrowable.setMessage(errMsg);
+                                break;
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    responeThrowable.setMessage("请求失败(" + httpException.code() + ")");
+                    break;
                 case 504:
                     responeThrowable.setMessage("网络连接失败");
                     break;

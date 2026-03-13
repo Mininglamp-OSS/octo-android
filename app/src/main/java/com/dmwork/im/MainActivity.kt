@@ -73,7 +73,7 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
         // 没有 currentSpaceId，从服务器获取 Space 列表
         SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
             override fun onResult(list: List<com.chat.uikit.space.SpaceEntity>?) {
-                if (!list.isNullOrEmpty()) {
+                if (!list.isNullOrEmpty() && !list[0].space_id.isNullOrEmpty()) {
                     MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
                     startActivity(Intent(this@MainActivity, TabActivity::class.java))
                 } else {

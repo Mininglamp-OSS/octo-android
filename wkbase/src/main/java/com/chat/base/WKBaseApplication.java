@@ -23,6 +23,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.PlayVideoMenu;
 import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
+import com.chat.base.net.OkHttpUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.CrashHandler;
 import com.chat.base.utils.WKDeviceUtils;

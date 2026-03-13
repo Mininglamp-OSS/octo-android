@@ -128,4 +128,15 @@
     <string name="str_file_not_exist">文件不存在</string>
     <string name="str_file_too_large">文件大小超过100MB，无法发送</string>
     <string name="str_file_type_dangerous">不支持发送该类型的文件</string>
+    <string name="screenshot_tip">%s在聊天中截屏了</string>
+    <string name="str_someone">对方</string>
+    <string name="api_url_dialog_title">服务器配置</string>
+    <string name="api_url_dialog_hint">修改后将重启应用并重新登录，请确认地址正确</string>
+    <string name="api_url_dialog_label">API 地址</string>
+    <string name="api_url_dialog_input_hint">请输入服务器地址</string>
+    <string name="api_url_dialog_confirm">确认并重启</string>
+    <string name="api_url_dialog_current">当前地址：%s</string>
+    <string name="api_url_dialog_empty">请输入地址</string>
+    <string name="api_url_dialog_checking">验证中…</string>
+    <string name="api_url_dialog_unreachable">服务器地址不可达，请检查地址是否正确</string>
 </resources>

@@ -7,10 +7,18 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.ReplacementSpan
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -83,6 +91,50 @@ import kotlin.math.abs
 import kotlin.math.max
 import androidx.core.view.isVisible
 
+
+private class RoundedBotBadgeSpan(
+    private val textSize: Float,
+    private val radius: Float,
+    private val paddingH: Float,
+    private val paddingV: Float
+) : ReplacementSpan() {
+
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        this.textSize = this@RoundedBotBadgeSpan.textSize
+        typeface = Typeface.DEFAULT_BOLD
+    }
+
+    override fun getSize(
+        paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?
+    ): Int {
+        val textWidth = textPaint.measureText(text, start, end)
+        return (textWidth + paddingH * 2).toInt()
+    }
+
+    override fun draw(
+        canvas: android.graphics.Canvas, text: CharSequence, start: Int, end: Int,
+        x: Float, top: Int, y: Int, bottom: Int, paint: Paint
+    ) {
+        val textWidth = textPaint.measureText(text, start, end)
+        val badgeWidth = textWidth + paddingH * 2
+        val badgeHeight = textPaint.textSize + paddingV * 2
+        val badgeTop = y + paint.ascent() + (paint.descent() - paint.ascent() - badgeHeight) / 2
+        val rect = RectF(x, badgeTop, x + badgeWidth, badgeTop + badgeHeight)
+
+        bgPaint.shader = LinearGradient(
+            rect.left, rect.top, rect.right, rect.bottom,
+            0xFF6366F1.toInt(), 0xFF8B5CF6.toInt(),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(rect, radius, radius, bgPaint)
+
+        val textX = x + paddingH
+        val textY = badgeTop + paddingV - textPaint.ascent()
+        canvas.drawText(text, start, end, textX, textY, textPaint)
+    }
+}
 
 abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
@@ -515,10 +567,32 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             }
             val os = getMsgOS(uiChatMsgItemEntity.wkMsg.clientMsgNO)
             if (receivedNameTv.tag is String && receivedNameTv.tag == uiChatMsgItemEntity.wkMsg.fromUID) {
-                if (uiChatMsgItemEntity.wkMsg.type == WKContentType.typing) {
-                    receivedNameTv.text = showName
+                val nameText = if (uiChatMsgItemEntity.wkMsg.type == WKContentType.typing) {
+                    showName ?: ""
                 } else {
-                    receivedNameTv.text = String.format("%s/%s", showName, os)
+                    String.format("%s/%s", showName, os)
+                }
+
+                val isBot = uiChatMsgItemEntity.wkMsg.from != null && uiChatMsgItemEntity.wkMsg.from.robot == 1
+                if (isBot) {
+                    val density = receivedNameTv.resources.displayMetrics.density
+                    val builder = SpannableStringBuilder(nameText)
+                    builder.append("  ")
+                    val badgeText = "Bot"
+                    val badgeStart = builder.length
+                    builder.append(badgeText)
+                    builder.setSpan(
+                        RoundedBotBadgeSpan(
+                            textSize = 9f * density,
+                            radius = 3f * density,
+                            paddingH = 4f * density,
+                            paddingV = 1.5f * density
+                        ),
+                        badgeStart, builder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    receivedNameTv.text = builder
+                } else {
+                    receivedNameTv.text = nameText
                 }
             }
 

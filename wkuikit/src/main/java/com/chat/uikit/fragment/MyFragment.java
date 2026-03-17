@@ -30,6 +30,7 @@ import java.util.List;
  */
 public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
     private PersonalItemAdapter adapter;
+    private boolean isAppConfigLoaded = false;
 
     @Override
     protected FragMyLayoutBinding getViewBinding() {
@@ -117,6 +118,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         if (null != adapter) {
             try {
                 WKCommonModel.getInstance().getAppNewVersion(false, version -> {
+                    if (!isAdded() || adapter == null) return;
                     int index = -1;
                     for (int i = 0; i < adapter.getData().size(); i++) {
                         if (getString(R.string.currency).equals(adapter.getData().get(i).text)) {
@@ -140,23 +142,23 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                 WKLogUtils.w("检查新版本错误");
             }
         }
-        WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
-            if (code == HttpResponseCode.success) {
-                if (adapter == null || WKReader.isEmpty(adapter.getData())) {
+        if (!isAppConfigLoaded) {
+            WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
+                if (!isAdded() || adapter == null || WKReader.isEmpty(adapter.getData())) {
                     return;
                 }
-                if (wkappConfig.register_invite_on == 0) {
-                    for (int i = 0; i < adapter.getData().size(); i++) {
-                        if (!TextUtils.isEmpty(adapter.getData().get(i).sid) && adapter.getData().get(i).sid.equals("invite_code")) {
-                            adapter.removeAt(i);
-                            break;
+                if (code == HttpResponseCode.success) {
+                    isAppConfigLoaded = true;
+                    if (wkappConfig.register_invite_on == 0) {
+                        for (int i = 0; i < adapter.getData().size(); i++) {
+                            if (!TextUtils.isEmpty(adapter.getData().get(i).sid) && adapter.getData().get(i).sid.equals("invite_code")) {
+                                adapter.removeAt(i);
+                                break;
+                            }
                         }
                     }
-                } else {
-                    List<PersonalInfoMenu> endpoints = EndpointManager.getInstance().invokes(EndpointCategory.personalCenter, null);
-                    adapter.setList(endpoints);
                 }
-            }
-        });
+            });
+        }
     }
 }

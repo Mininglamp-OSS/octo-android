@@ -407,12 +407,17 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         wkVBinding.quickSideBarTipsView.setVisibility(touching ? View.VISIBLE : View.INVISIBLE);
     }
 
+    private int lastFriendBadgeNum = -1;
+
     private void resetHeaderData() {
         if (isAdded()) {
+            int badgeNum = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
+            if (badgeNum == lastFriendBadgeNum) return;
+            lastFriendBadgeNum = badgeNum;
             List<ContactsMenu> list = EndpointManager.getInstance().invokes(EndpointCategory.mailList, getActivity());
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (!TextUtils.isEmpty(list.get(i).sid) && list.get(i).sid.equals("friend")) {
-                    list.get(i).badgeNum = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
+                    list.get(i).badgeNum = badgeNum;
                     break;
                 }
             }

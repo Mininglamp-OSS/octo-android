@@ -257,8 +257,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private void initSwipeBackFinish() {
         SwipeBackLayout mSwipeBackLayout = getSwipeBackLayout();
-        mSwipeBackLayout.setEdgeTrackingEnabled(SwipeBackLayout.EDGE_LEFT);
-        mSwipeBackLayout.setEnableGesture(true);
+        if (mSwipeBackLayout != null) {
+            mSwipeBackLayout.setEdgeTrackingEnabled(SwipeBackLayout.EDGE_LEFT);
+            mSwipeBackLayout.setEnableGesture(true);
+        }
     }
 
     @Override
@@ -282,22 +284,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         isUploadReadMsg = true;
         chatPanelManager.initRefreshListener();
         EndpointManager.getInstance().invoke("start_screen_shot", this);
-
-        Object addSecurityModule = EndpointManager.getInstance().invoke("add_security_module", null);
-        if (addSecurityModule instanceof Boolean) {
-            boolean disable_screenshot;
-            String uid = WKConfig.getInstance().getUid();
-            if (!TextUtils.isEmpty(uid)) {
-                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean(uid + "_disable_screenshot", false);
-            } else {
-                disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot", false);
-            }
-            if (disable_screenshot)
-                getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-            else {
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            }
-        }
     }
 
     @Override

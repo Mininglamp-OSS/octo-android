@@ -8,17 +8,25 @@ import androidx.appcompat.app.AppCompatActivity;
 public class SwipeBackActivity extends AppCompatActivity implements SwipeBackActivityBase {
     private SwipeBackActivityHelper mHelper;
 
+    protected boolean supportSlideBack() {
+        return true;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mHelper = new SwipeBackActivityHelper(this);
-        mHelper.onActivityCreate();
+        if (supportSlideBack()) {
+            mHelper = new SwipeBackActivityHelper(this);
+            mHelper.onActivityCreate();
+        }
     }
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        mHelper.onPostCreate();
+        if (mHelper != null) {
+            mHelper.onPostCreate();
+        }
     }
 
     @Override
@@ -31,12 +39,15 @@ public class SwipeBackActivity extends AppCompatActivity implements SwipeBackAct
 
     @Override
     public SwipeBackLayout getSwipeBackLayout() {
-        return mHelper.getSwipeBackLayout();
+        return mHelper != null ? mHelper.getSwipeBackLayout() : null;
     }
 
     @Override
     public void setSwipeBackEnable(boolean enable) {
-        getSwipeBackLayout().setEnableGesture(enable);
+        SwipeBackLayout layout = getSwipeBackLayout();
+        if (layout != null) {
+            layout.setEnableGesture(enable);
+        }
     }
 
 

@@ -103,10 +103,14 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
                 }));
     }
 
+    private boolean isDataLoaded = false;
+
     @Override
     protected void onResume() {
         super.onResume();
-        loadData();
+        if (!isDataLoaded) {
+            loadData();
+        }
     }
 
     private void loadData() {
@@ -148,6 +152,7 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
             wkVBinding.nodataTv.setVisibility(View.VISIBLE);
         }
         groupAdapter.setList(items);
+        isDataLoaded = true;
         countTv.setText(String.format(getString(R.string.contacts_groups_count), items.size()));
     }
 

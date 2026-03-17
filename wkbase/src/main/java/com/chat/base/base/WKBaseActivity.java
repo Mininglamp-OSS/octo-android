@@ -98,13 +98,17 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
      */
     private void initSwipeBackFinish() {
         mSwipeBackLayout = getSwipeBackLayout();
-        mSwipeBackLayout.setEdgeTrackingEnabled(SwipeBackLayout.EDGE_LEFT);
-        mSwipeBackLayout.setEnableGesture(supportSlideBack());
+        if (mSwipeBackLayout != null) {
+            mSwipeBackLayout.setEdgeTrackingEnabled(SwipeBackLayout.EDGE_LEFT);
+            mSwipeBackLayout.setEnableGesture(supportSlideBack());
+        }
     }
 
     protected void resetTheme(boolean isDark) {
 
     }
+
+    private Boolean lastSecureFlag = null;
 
     @Override
     protected void onResume() {
@@ -118,10 +122,13 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
             } else {
                 disable_screenshot = WKSharedPreferencesUtil.getInstance().getBoolean("disable_screenshot",false);
             }
-            if (disable_screenshot)
-                getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-            else {
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            if (lastSecureFlag == null || lastSecureFlag != disable_screenshot) {
+                lastSecureFlag = disable_screenshot;
+                if (disable_screenshot)
+                    getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+                else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                }
             }
         }
     }

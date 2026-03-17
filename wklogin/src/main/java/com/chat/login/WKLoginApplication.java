@@ -16,6 +16,8 @@ import com.chat.login.ui.WKResetLoginPwdActivity;
 import com.chat.login.ui.WKWebLoginActivity;
 import com.chat.login.ui.WKWebLoginConfirmActivity;
 
+import com.chat.base.R;
+
 import org.json.JSONObject;
 
 import java.util.Objects;
@@ -70,8 +72,8 @@ public class WKLoginApplication {
         EndpointManager.getInstance().setMethod("show_pc_login_view", object -> {
             Activity activity = (Activity) object;
             Intent intent = new Intent(activity, PCLoginViewActivity.class);
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(intent);
+            activity.overridePendingTransition(R.anim.bottom_in, R.anim.bottom_silent);
             return null;
         });
         EndpointManager.getInstance().setMethod("show_web_login_desc", object -> {

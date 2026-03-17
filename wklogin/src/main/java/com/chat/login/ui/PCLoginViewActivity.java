@@ -24,8 +24,12 @@ import com.xinbida.wukongim.entity.WKChannelType;
 public class PCLoginViewActivity extends WKBaseActivity<PcLoginViewLayoutBinding> {
     @Override
     protected PcLoginViewLayoutBinding getViewBinding() {
-        overridePendingTransition(R.anim.bottom_in, R.anim.bottom_silent);
         return PcLoginViewLayoutBinding.inflate(getLayoutInflater());
+    }
+
+    @Override
+    protected boolean supportSlideBack() {
+        return false;
     }
 
     @Override

@@ -335,5 +335,15 @@
     <string name="space_invite_code_empty">邀请码不能为空</string>
     <string name="space_create_name_label">名称</string>
     <string name="space_create_desc_label">描述</string>
+
+    <string name="contacts_section_members">组织内联系人</string>
+    <string name="contacts_section_bots">Bot</string>
+    <string name="contacts_section_groups">我的群组</string>
+    <string name="contacts_section_empty">暂无数据</string>
+    <string name="exit_app_title">退出应用</string>
+    <string name="exit_app_msg">确定要退出应用吗？</string>
+    <string name="contacts_members_count">%d位组织内联系人</string>
+    <string name="contacts_bots_count">%d个Bot机器人</string>
+    <string name="contacts_groups_count">%d个群组</string>
 </resources>
 

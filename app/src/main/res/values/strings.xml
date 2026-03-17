@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DMWork</string>
+    <string name="app_name">Octo</string>
     <string name="no_permissions">授权失败,APP部分功能将无法使用，请打开应用权限后重试</string>
     <string name="agree">同意</string>
     <string name="disagree">不同意</string>
@@ -15,7 +15,7 @@
     <string name="main_user_agreement">《用户协议》</string>
     <string name="main_privacy_policy">《隐私政策》</string>
 
-    <string name="space_guide_welcome">欢迎使用 DMWork！</string>
+    <string name="space_guide_welcome">欢迎使用 Octo！</string>
     <string name="space_guide_subtitle">加入团队或创建新的工作空间</string>
     <string name="space_guide_join_team">\uD83D\uDCE9 输入邀请码加入团队</string>
     <string name="space_guide_create_team">✨ 创建新团队</string>

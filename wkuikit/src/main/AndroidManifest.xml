@@ -13,7 +13,8 @@
             android:name=".group.GroupNoticeActivity"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".group.GroupDetailActivity" />
-        <activity android:name=".group.SavedGroupsActivity" />
+        <activity android:name=".group.SavedGroupsActivity"
+            android:launchMode="singleTop" />
         <activity android:name=".group.UpdateGroupNameActivity" />
         <activity
             android:name=".chat.ChooseChatActivity"
@@ -24,7 +25,14 @@
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
 
-        <activity android:name=".contacts.NewFriendsActivity" />
+        <activity android:name=".contacts.NewFriendsActivity"
+            android:launchMode="singleTop" />
+        <activity android:name=".contacts.SpaceMembersListActivity"
+            android:launchMode="singleTop" />
+        <activity android:name=".contacts.SpaceBotsListActivity"
+            android:launchMode="singleTop" />
+        <activity android:name=".contacts.MyGroupsListActivity"
+            android:launchMode="singleTop" />
         <activity android:name=".setting.SettingActivity" />
         <activity android:name=".group.GroupQrActivity" />
         <activity android:name=".search.SearchAllActivity" />
@@ -34,7 +42,7 @@
         <activity android:name=".setting.MsgNoticesSettingActivity" />
         <activity
             android:name=".user.UserDetailActivity"
-            android:launchMode="singleTask" />
+            android:launchMode="singleTop" />
         <activity android:name=".user.UpdateUserInfoActivity" />
         <activity android:name=".user.SetUserRemarkActivity" />
         <activity android:name=".search.AddFriendsActivity" />

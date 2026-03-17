@@ -10,11 +10,19 @@ public class ContactsMenu extends BaseEndpoint {
     public boolean showRedDot;
     public String uid;
     public String sid;
+    public Class<?> targetActivity;
 
     public ContactsMenu(String sid, int imgResourceID, String text, IMenuClick iMenuClick) {
         this.imgResourceID = imgResourceID;
         this.text = text;
         this.sid = sid;
         this.iMenuClick = iMenuClick;
+    }
+
+    public ContactsMenu(String sid, int imgResourceID, String text, Class<?> targetActivity) {
+        this.imgResourceID = imgResourceID;
+        this.text = text;
+        this.sid = sid;
+        this.targetActivity = targetActivity;
     }
 }

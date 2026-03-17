@@ -98,7 +98,10 @@ import com.chat.uikit.chat.provider.WKVoiceProvider;
 import com.chat.uikit.chat.search.date.SearchWithDateActivity;
 import com.chat.uikit.chat.search.image.SearchWithImgActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
+import com.chat.uikit.contacts.MyGroupsListActivity;
 import com.chat.uikit.contacts.NewFriendsActivity;
+import com.chat.uikit.contacts.SpaceBotsListActivity;
+import com.chat.uikit.contacts.SpaceMembersListActivity;
 import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.group.SavedGroupsActivity;
 import com.chat.uikit.group.WKAllMembersActivity;
@@ -137,7 +140,7 @@ public class WKUIKitApplication {
     public SensitiveWords sensitiveWords;
     public boolean isRefreshChatActivityMessage = false;
     // 注册场景设为 true，loginMenus 跳过页面导航
-    public static boolean skipNavigation = false;
+    public static volatile boolean skipNavigation = false;
 
     private WKUIKitApplication() {
     }
@@ -181,6 +184,7 @@ public class WKUIKitApplication {
 
             String imToken = WKConfig.getInstance().getImToken();
             String uid = WKConfig.getInstance().getUid();
+            android.util.Log.d("TokenDebug", "WKIM.init: uid=" + uid + ", imToken=" + imToken + ", token=" + WKConfig.getInstance().getToken());
             WKIM.getInstance().init(mContext.get(), uid, imToken);
 
         }
@@ -260,16 +264,19 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod("personal_center_web_login", EndpointCategory.personalCenter, 1000, object -> new PersonalInfoMenu(R.mipmap.icon_web_login, mContext.get().getString(R.string.web_login), () -> EndpointManager.getInstance().invoke("show_web_login_desc", mContext.get())));
 
         //添加通讯录
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_friends", EndpointCategory.mailList, 100, object -> new ContactsMenu("friend", R.mipmap.icon_new_friend, mContext.get().getString(R.string.new_friends), () -> {
-            Intent intent = new Intent(mContext.get(), NewFriendsActivity.class);
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-            mContext.get().startActivity(intent);
-        }));
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_groups", EndpointCategory.mailList, 90, object -> new ContactsMenu("group", R.mipmap.icon_groups, mContext.get().getString(R.string.saved_groups), () -> {
-            Intent intent = new Intent(mContext.get(), SavedGroupsActivity.class);
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-            mContext.get().startActivity(intent);
-        }));
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_friends", EndpointCategory.mailList, 100,
+                object -> new ContactsMenu("friend", R.mipmap.icon_new_friend, mContext.get().getString(R.string.new_friends), NewFriendsActivity.class));
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_groups", EndpointCategory.mailList, 90,
+                object -> new ContactsMenu("group", R.mipmap.icon_groups, mContext.get().getString(R.string.saved_groups), SavedGroupsActivity.class));
+        // 组织内联系人
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_space_members", EndpointCategory.mailList, 85,
+                object -> new ContactsMenu("space_members", R.mipmap.icon_space_members, mContext.get().getString(R.string.contacts_section_members), SpaceMembersListActivity.class));
+        // Bot
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_space_bots", EndpointCategory.mailList, 80,
+                object -> new ContactsMenu("space_bots", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_bots), SpaceBotsListActivity.class));
+        // 我的群组
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_my_groups", EndpointCategory.mailList, 75,
+                object -> new ContactsMenu("my_groups", R.mipmap.icon_my_groups, mContext.get().getString(R.string.contacts_section_groups), MyGroupsListActivity.class));
 
         // 添加聊天工具栏菜单语音
         EndpointManager.getInstance().setMethod(EndpointCategory.wkChatToolBar + "_voice", EndpointCategory.wkChatToolBar, 97, object -> {

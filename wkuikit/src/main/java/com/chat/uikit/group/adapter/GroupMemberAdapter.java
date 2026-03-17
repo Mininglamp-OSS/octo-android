@@ -54,7 +54,7 @@ public class GroupMemberAdapter extends BaseQuickAdapter<WKChannelMember, BaseVi
                 avatarView.spotView.setVisibility(View.GONE);
                 avatarView.onlineTv.setText(R.string.group_owner);
                 avatarView.onlineTv.setBackgroundResource(R.drawable.radian_normal_layout);
-                avatarView.onlineTv.setTextColor(ContextCompat.getColor(getContext(), R.color.colorFFC107));
+                avatarView.onlineTv.setTextColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
             } else if (item.role == WKChannelMemberRole.manager) {
                 avatarView.onlineTv.setText(R.string.group_manager);
                 avatarView.onlineTv.setTextColor(Theme.colorAccount);

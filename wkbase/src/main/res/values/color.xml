@@ -8,10 +8,10 @@
     <color name="redDisable">#F7A5A5</color>
     <color name="transparent">#00000000</color>
     <color name="colorF5F5F5">#f5f5f5</color>
-    <color name="colorAccent">#f65835</color>
-    <color name="colorAccentUn">#95F65835</color>
+    <color name="colorAccent">#6366f1</color>
+    <color name="colorAccentUn">#956366f1</color>
     <color name="colorAccentDisabled">#7E7E7E</color>
-    <color name="color_text_select_cursor">#95F65835</color>
+    <color name="color_text_select_cursor">#956366f1</color>
     <color name="colorSystemBg">#26000000</color>
     <color name="clrCCC">#ccc</color>
     <color name="blue">#2196F3</color>
@@ -19,8 +19,8 @@
     <color name="borderColor">#ccc</color>
     <color name="chat_received_bg_normal">#ffffff</color>
     <color name="chat_received_bg_selected">#cccccc</color>
-    <color name="chat_send_bg_normal">#FDDED6</color>
-    <color name="chat_send_bg_select">#F8937B</color>
+    <color name="chat_send_bg_normal">#E0E1FC</color>
+    <color name="chat_send_bg_select">#A5A7F0</color>
     <color name="default_shadow_color">#2a000000</color>
     <color name="default_shadowback_color">#fff</color>
     <color name="color999">#999999</color>

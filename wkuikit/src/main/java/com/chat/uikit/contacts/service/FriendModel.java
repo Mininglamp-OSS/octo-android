@@ -99,6 +99,9 @@ public class FriendModel extends WKBaseModel {
     /**
      * 同步好友
      */
+    private int syncFriendsCount = 0;
+    private static final int MAX_SYNC_PAGES = 50;
+
     public void syncFriends(final ICommonListener iCommonListener) {
         String key = String.format("%s_friend_sync_version", WKConfig.getInstance().getUid());
         long version = WKSharedPreferencesUtil.getInstance().getLong(key);
@@ -143,18 +146,21 @@ public class FriendModel extends WKBaseModel {
                         WKIM.getInstance().getChannelManager().saveOrUpdateChannels(channels);
                     });
                     // 返回数量达到 limit 说明可能还有更多数据，继续同步（同 iOS 逻辑）
-                    if (list.size() >= 1000) {
+                    syncFriendsCount++;
+                    if (list.size() >= 1000 && syncFriendsCount < MAX_SYNC_PAGES) {
                         AndroidUtilities.runOnUIThread(() -> {
                             syncFriends(iCommonListener);
                         }, 500);
                     } else {
                         // 数据已全部同步完成
+                        syncFriendsCount = 0;
                         if (iCommonListener != null) {
                             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                             iCommonListener.onResult(HttpResponseCode.success, "");
                         }
                     }
                 } else {
+                    syncFriendsCount = 0;
                     if (iCommonListener != null) {
                         EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                         iCommonListener.onResult(HttpResponseCode.success, "");

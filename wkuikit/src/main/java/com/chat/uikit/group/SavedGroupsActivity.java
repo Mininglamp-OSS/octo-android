@@ -30,6 +30,7 @@ import java.util.List;
 public class SavedGroupsActivity extends WKBaseActivity<ActCommonListLayoutBinding> implements GroupContract.GroupView {
     private SavedGroupAdapter groupAdapter;
     private GroupPresenter presenter;
+    private boolean isGroupsLoaded = false;
 
     @Override
     protected ActCommonListLayoutBinding getViewBinding() {
@@ -67,7 +68,9 @@ public class SavedGroupsActivity extends WKBaseActivity<ActCommonListLayoutBindi
     @Override
     protected void onResume() {
         super.onResume();
-        presenter.getMyGroups();
+        if (!isGroupsLoaded) {
+            presenter.getMyGroups();
+        }
     }
 
     @Override
@@ -120,6 +123,7 @@ public class SavedGroupsActivity extends WKBaseActivity<ActCommonListLayoutBindi
                 }
             }
             groupAdapter.setList(list);
+            isGroupsLoaded = true;
         }
 
     }

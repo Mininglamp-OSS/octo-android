@@ -24,6 +24,8 @@ import com.dmwork.im.databinding.ActivityMainBinding
 
 class MainActivity : WKBaseActivity<ActivityMainBinding>() {
 
+    override fun supportSlideBack(): Boolean = false
+
     override fun getViewBinding(): ActivityMainBinding {
         return ActivityMainBinding.inflate(layoutInflater)
     }

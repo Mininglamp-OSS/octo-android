@@ -480,11 +480,16 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
+        android.util.Log.d("TokenDebug", "login response: token=" + userInfo.token + ", im_token=" + userInfo.im_token + ", uid=" + userInfo.uid);
         WKConfig.getInstance().saveUserInfo(userInfo);
         WKConfig.getInstance().setToken(userInfo.token);
         if (!TextUtils.isEmpty(userInfo.im_token)) {
             WKConfig.getInstance().setImToken(userInfo.im_token);
-        } else WKConfig.getInstance().setImToken(userInfo.token);
+            android.util.Log.d("TokenDebug", "using im_token for IM connection");
+        } else {
+            WKConfig.getInstance().setImToken(userInfo.token);
+            android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
+        }
         WKConfig.getInstance().setUid(userInfo.uid);
         WKConfig.getInstance().setUserName(userInfo.name);
     }

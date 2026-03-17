@@ -36,6 +36,7 @@ import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
 import com.chat.uikit.R;
 import com.chat.uikit.contacts.FriendAdapter;
 import com.chat.uikit.contacts.FriendUIEntity;
+import com.chat.uikit.contacts.StickyHeaderDecoration;
 import com.chat.uikit.databinding.FragContactsLayoutBinding;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.search.SearchAllActivity;
@@ -48,9 +49,6 @@ import com.chat.uikit.utils.PyingUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
-
-import java.util.HashSet;
-import java.util.Set;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -73,6 +71,8 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     private ContactsHeaderAdapter contactsHeaderAdapter;
     private FriendAdapter friendAdapter;
     private TextView allContactsCountTv;
+    private boolean isContactsLoaded = false;
+    private String lastLoadedSpaceId = null;
 
 
     @Override
@@ -91,8 +91,9 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         Typeface face = Typeface.createFromAsset(getResources().getAssets(),
                 "fonts/mw_bold.ttf");
         wkVBinding.textView.setTypeface(face);
-        wkVBinding.quickSideBarView.setTextChooseColor(Theme.colorAccount);
-        wkVBinding.quickSideBarTipsView.setBackgroundColor(Theme.colorAccount);
+        int sidebarColor = android.graphics.Color.parseColor("#6366f1");
+        wkVBinding.quickSideBarView.setTextChooseColor(sidebarColor);
+        wkVBinding.quickSideBarTipsView.setBackgroundColor(sidebarColor);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
@@ -113,10 +114,42 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         }
         friendAdapter.addFooterView(getFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
+        int stickyHeight = AndroidUtilities.dp(30);
+        StickyHeaderDecoration stickyDecoration = StickyHeaderDecoration.forFriendAdapter(
+                stickyHeight,
+                friendAdapter.getHeaderLayoutCount(),
+                dataIndex -> {
+                    List<FriendUIEntity> data = friendAdapter.getData();
+                    if (dataIndex >= 0 && dataIndex < data.size() && data.get(dataIndex).pying != null) {
+                        return data.get(dataIndex).pying;
+                    }
+                    return "#";
+                },
+                () -> friendAdapter.getData().size()
+        );
+        wkVBinding.recyclerView.addItemDecoration(stickyDecoration);
         headerRecyclerView.setNestedScrollingEnabled(false);
         contactsHeaderAdapter = new ContactsHeaderAdapter();
         initAdapter(headerRecyclerView, contactsHeaderAdapter);
         wkVBinding.quickSideBarView.setOnQuickSideBarTouchListener(this);
+        wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NotNull RecyclerView recyclerView, int dx, int dy) {
+                androidx.recyclerview.widget.LinearLayoutManager lm =
+                        (androidx.recyclerview.widget.LinearLayoutManager) recyclerView.getLayoutManager();
+                if (lm == null) return;
+                int firstVisible = lm.findFirstVisibleItemPosition();
+                int dataIndex = firstVisible - friendAdapter.getHeaderLayoutCount();
+                List<FriendUIEntity> list = friendAdapter.getData();
+                if (dataIndex >= 0 && dataIndex < list.size()) {
+                    String pying = list.get(dataIndex).pying;
+                    if (pying != null && !pying.isEmpty()) {
+                        String letter = pying.substring(0, 1).toUpperCase();
+                        wkVBinding.quickSideBarView.setChooseLetter(letter);
+                    }
+                }
+            }
+        });
         friendAdapter.addChildClickViewIds(R.id.contentLayout);
         friendAdapter.setOnItemChildClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
             FriendUIEntity friendEntity = (FriendUIEntity) adapter.getItem(position);
@@ -128,7 +161,12 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         }));
         contactsHeaderAdapter.setOnItemClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, view1 -> {
             ContactsMenu item = (ContactsMenu) adapter.getItem(position);
-            if (item != null && item.iMenuClick != null) {
+            if (item == null) return;
+            if (item.targetActivity != null && getActivity() != null) {
+                Intent intent = new Intent(getActivity(), item.targetActivity);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+            } else if (item.iMenuClick != null) {
                 item.iMenuClick.onClick();
             }
         }));
@@ -196,7 +234,9 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         });
 
         EndpointManager.getInstance().setMethod(WKConstants.refreshContacts, object -> {
-            getContacts();
+            // 好友/群组/机器人变更时强制刷新
+            isContactsLoaded = false;
+            loadContacts(true);
             return null;
         });
     }
@@ -205,23 +245,33 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     protected void initData() {
         wkVBinding.quickSideBarView.setLetters(CharacterParser.getInstance().getList());
         contactsHeaderAdapter.setList(EndpointManager.getInstance().invokes(EndpointCategory.mailList, getActivity()));
-        getContacts();
+        loadContacts(false);
     }
 
     @Override
     public void onResume() {
         super.onResume();
         resetHeaderData();
-        getContacts();
+        // 检查 Space 是否切换了，切换了才重新加载
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        boolean spaceChanged = !TextUtils.equals(currentSpaceId, lastLoadedSpaceId);
+        if (spaceChanged || !isContactsLoaded) {
+            loadContacts(false);
+        }
     }
 
-    private void getContacts() {
+    /**
+     * @param force true=强制刷新（好友/群组变更时），false=有缓存则跳过
+     */
+    private void loadContacts(boolean force) {
+        if (!force && isContactsLoaded) return;
+
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (!TextUtils.isEmpty(spaceId)) {
             getContactsFromSpace(spaceId);
-            return;
+        } else {
+            getContactsLocal();
         }
-        getContactsLocal();
     }
 
     private void getContactsFromSpace(String spaceId) {
@@ -231,17 +281,19 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
             public void onResult(List<SpaceEntity.SpaceMember> members) {
                 List<FriendUIEntity> list = new ArrayList<>();
                 for (SpaceEntity.SpaceMember member : members) {
-                    if (member.uid.equals(myUid)) continue; // 过滤自己
+                    if (member.uid.equals(myUid)) continue;
                     WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
                     channel.channelName = member.name;
+                    channel.robot = member.robot;
                     list.add(new FriendUIEntity(channel));
                 }
                 sortAndDisplay(list);
+                lastLoadedSpaceId = spaceId;
+                isContactsLoaded = true;
             }
 
             @Override
             public void onError(int code, String msg) {
-                // fallback to local
                 getContactsLocal();
             }
         });
@@ -254,6 +306,8 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
             list.add(new FriendUIEntity(allList.get(i)));
         }
         sortAndDisplay(list);
+        lastLoadedSpaceId = null;
+        isContactsLoaded = true;
     }
 
     private void sortAndDisplay(List<FriendUIEntity> list) {
@@ -301,8 +355,16 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         tempList.addAll(numList);
         tempList.addAll(otherList);
         friendAdapter.setList(tempList);
-        if (isAdded())
+        if (isAdded()) {
             allContactsCountTv.setText(String.format(getString(R.string.contacts_num), tempList.size()));
+            // 列表刷新后重置侧边栏选中状态和滚动位置
+            wkVBinding.recyclerView.scrollToPosition(0);
+            if (!tempList.isEmpty() && tempList.get(0).pying != null && !tempList.get(0).pying.isEmpty()) {
+                wkVBinding.quickSideBarView.setChooseLetter(tempList.get(0).pying.substring(0, 1).toUpperCase());
+            } else {
+                wkVBinding.quickSideBarView.setChooseLetter("A");
+            }
+        }
     }
 
     private View getFooterView() {
@@ -325,12 +387,15 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     @Override
     public void onLetterChanged(String letter, int position, float y) {
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
-        //有此key则获取位置并滚动到该位置
         List<FriendUIEntity> list = friendAdapter.getData();
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
-                if (list.get(i).pying.startsWith(letter)) {
-                    wkVBinding.recyclerView.scrollToPosition(i + friendAdapter.getHeaderLayoutCount());
+                if (list.get(i).pying != null && list.get(i).pying.toUpperCase().startsWith(letter.toUpperCase())) {
+                    androidx.recyclerview.widget.LinearLayoutManager lm =
+                            (androidx.recyclerview.widget.LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+                    if (lm != null) {
+                        lm.scrollToPositionWithOffset(i + friendAdapter.getHeaderLayoutCount(), 0);
+                    }
                     break;
                 }
             }

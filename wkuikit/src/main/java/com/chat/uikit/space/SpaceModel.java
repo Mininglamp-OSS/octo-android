@@ -13,6 +13,8 @@ import java.util.List;
 public class SpaceModel extends WKBaseModel {
 
     private List<SpaceEntity> cachedSpaces = null;
+    private String cachedMembersSpaceId = null;
+    private List<SpaceEntity.SpaceMember> cachedMembers = null;
 
     private SpaceModel() {
     }
@@ -25,9 +27,11 @@ public class SpaceModel extends WKBaseModel {
         return Binder.INSTANCE;
     }
 
-    /** 清除缓存，下次 getMySpaces 会重新从网络拉取 */
+    /** 清除缓存，下次会重新从网络拉取 */
     public void invalidateCache() {
         cachedSpaces = null;
+        cachedMembersSpaceId = null;
+        cachedMembers = null;
     }
 
     public interface ISpaceListListener {
@@ -112,9 +116,16 @@ public class SpaceModel extends WKBaseModel {
     }
 
     public void getMembers(String spaceId, IMembersListener listener) {
+        // 有缓存且是同一个 Space，直接返回
+        if (cachedMembers != null && spaceId.equals(cachedMembersSpaceId)) {
+            listener.onResult(cachedMembers);
+            return;
+        }
         request(createService(SpaceService.class).getMembers(spaceId, 1, 10000), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<SpaceEntity.SpaceMember> result) {
+                cachedMembersSpaceId = spaceId;
+                cachedMembers = result;
                 listener.onResult(result);
             }
 
@@ -123,6 +134,12 @@ public class SpaceModel extends WKBaseModel {
                 listener.onError(code, msg);
             }
         });
+    }
+
+    /** 清除成员缓存（新增/删除成员后调用） */
+    public void invalidateMembersCache() {
+        cachedMembersSpaceId = null;
+        cachedMembers = null;
     }
 
     public void createInvite(String spaceId, IInviteListener listener) {

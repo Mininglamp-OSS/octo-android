@@ -1,9 +1,12 @@
 package com.chat.uikit.contacts
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.text.TextUtils
 import android.view.Gravity
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import com.chad.library.adapter.base.BaseQuickAdapter
@@ -14,6 +17,7 @@ import com.chat.base.entity.PopupMenuItem
 import com.chat.base.entity.UserOnlineStatus
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.AvatarView
+import com.chat.base.utils.AndroidUtilities
 import com.chat.base.utils.LayoutHelper
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKTimeUtils
@@ -28,7 +32,7 @@ class FriendAdapter :
             R.id.nameTv,
             if (TextUtils.isEmpty(item.channel.channelRemark)) item.channel.channelName else item.channel.channelRemark
         )
-        val index: Int = holder.bindingAdapterPosition - 1
+        val index: Int = holder.bindingAdapterPosition - headerLayoutCount
         val firstLetter = if (item.pying.isNotEmpty()) item.pying.substring(0, 1) else "#"
         val index1: Int = getPositionForSection(firstLetter)
         holder.setText(R.id.pyTv, firstLetter)
@@ -96,10 +100,10 @@ class FriendAdapter :
                             context, R.color.transparent
                         ),
                         ContextCompat.getColor(
-                            context, R.color.colorFFC107
+                            context, R.color.colorAccent
                         ),
                         ContextCompat.getColor(
-                            context, R.color.colorFFC107
+                            context, R.color.colorAccent
                         )
                     ),
                     LayoutHelper.createLinear(
@@ -115,20 +119,18 @@ class FriendAdapter :
             }
         }
         if (item.channel.robot == 1) {
+            val aiBadge = TextView(context).apply {
+                text = "AI"
+                setTextColor(Color.WHITE)
+                textSize = 10f
+                typeface = Typeface.DEFAULT_BOLD
+                setBackgroundResource(R.drawable.bg_ai_badge)
+                val hPad = AndroidUtilities.dp(5f)
+                val vPad = AndroidUtilities.dp(1f)
+                setPadding(hPad, vPad, hPad, vPad)
+            }
             linearLayout.addView(
-                Theme.getChannelCategoryTV(
-                    context,
-                    context.getString(R.string.bot),
-                    ContextCompat.getColor(
-                        context, R.color.colorFFC107
-                    ),
-                    ContextCompat.getColor(
-                        context, R.color.white
-                    ),
-                    ContextCompat.getColor(
-                        context, R.color.colorFFC107
-                    )
-                ),
+                aiBadge,
                 LayoutHelper.createLinear(
                     LayoutHelper.WRAP_CONTENT,
                     LayoutHelper.WRAP_CONTENT,

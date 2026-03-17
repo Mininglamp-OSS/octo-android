@@ -70,7 +70,7 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
         if (channelMember.role == WKChannelMemberRole.admin) {
             roleTv.setVisibility(View.VISIBLE);
             roleTv.setText(R.string.group_owner);
-            roleTv.setBackGroundColor(ContextCompat.getColor(getContext(), R.color.colorFFC107));
+            roleTv.setBackGroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
         } else if (channelMember.role == WKChannelMemberRole.manager) {
             roleTv.setVisibility(View.VISIBLE);
             roleTv.setText(R.string.group_manager);

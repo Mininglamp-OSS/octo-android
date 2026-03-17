@@ -27,6 +27,7 @@ import com.chat.base.base.WKBaseFragment;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKConstants;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
@@ -178,6 +179,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id);
                 wkVBinding.textSwitcher.setText(space.name);
+                // 清除成员缓存，新 Space 需要重新拉取
+                SpaceModel.getInstance().invalidateMembersCache();
+                // 通知联系人列表刷新
+                EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                 // 清空 Space 会话过滤集合、本地会话数据库，显式触发新 Space 的会话同步
                 spaceConversationKeys.clear();
                 WKIM.getInstance().getConversationManager().clearAll();

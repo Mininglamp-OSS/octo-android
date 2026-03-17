@@ -76,25 +76,36 @@ public class QuickSideBarView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         for (int i = 0; i < mLetters.size(); i++) {
-            mPaint.setColor(mTextColor);
-
             mPaint.setAntiAlias(true);
             mPaint.setTextSize(mTextSize);
-            if (i == mChoose) {
-                mPaint.setColor(mTextColorChoose);
-                mPaint.setFakeBoldText(true);
-                mPaint.setTypeface(Typeface.DEFAULT_BOLD);
-                mPaint.setTextSize(mTextSizeChoose);
-            }
-
+            mPaint.setColor(mTextColor);
+            mPaint.setTypeface(Typeface.DEFAULT);
+            mPaint.setFakeBoldText(false);
 
             //计算位置
             Rect rect = new Rect();
             mPaint.getTextBounds(mLetters.get(i), 0, mLetters.get(i).length(), rect);
-            float xPos = (int) ((mWidth - rect.width()) * 0.5);
-            float yPos = mItemHeight * i + (int) ((mItemHeight - rect.height()) * 0.5) + mItemStartY;
+            float centerX = mWidth * 0.5f;
+            float centerY = mItemHeight * i + mItemHeight * 0.5f + mItemStartY;
 
+            if (i == mChoose) {
+                // 画选中圆圈背景
+                Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                circlePaint.setColor(mTextColorChoose);
+                float radius = Math.min(mItemHeight, mWidth) * 0.45f;
+                canvas.drawCircle(centerX, centerY, radius, circlePaint);
 
+                // 选中文字白色
+                mPaint.setColor(0xFFFFFFFF);
+                mPaint.setFakeBoldText(true);
+                mPaint.setTypeface(Typeface.DEFAULT_BOLD);
+                mPaint.setTextSize(mTextSizeChoose);
+                // 重新测量选中字体大小的文字边界
+                mPaint.getTextBounds(mLetters.get(i), 0, mLetters.get(i).length(), rect);
+            }
+
+            float xPos = centerX - rect.width() * 0.5f;
+            float yPos = centerY + rect.height() * 0.5f;
             canvas.drawText(mLetters.get(i), xPos, yPos, mPaint);
             mPaint.reset();
         }
@@ -109,6 +120,24 @@ public class QuickSideBarView extends View {
         mItemStartY = (mHeight - mLetters.size() * mItemHeight) / 2;
     }
 
+    /**
+     * 根据字母设置选中状态（供滚动联动调用）
+     */
+    public void setChooseLetter(String letter) {
+        if (mLetters == null || letter == null) return;
+        int index = -1;
+        for (int i = 0; i < mLetters.size(); i++) {
+            if (mLetters.get(i).equalsIgnoreCase(letter)) {
+                index = i;
+                break;
+            }
+        }
+        if (index != mChoose) {
+            mChoose = index;
+            invalidate();
+        }
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         final int action = event.getAction();
@@ -117,37 +146,33 @@ public class QuickSideBarView extends View {
         final int newChoose = (int) ((y - mItemStartY) / mItemHeight);
         switch (action) {
             case MotionEvent.ACTION_UP:
-                mChoose = -1;
+                // 松手后保持选中状态，不重置 mChoose
                 if (listener != null) {
                     listener.onLetterTouching(false);
                 }
-                invalidate();
                 break;
             default:
                 if (oldChoose != newChoose) {
                     if (newChoose >= 0 && newChoose < mLetters.size()) {
                         mChoose = newChoose;
+                        invalidate();
                         if (listener != null) {
-                            //计算位置
                             Rect rect = new Rect();
                             mPaint.getTextBounds(mLetters.get(mChoose), 0, mLetters.get(mChoose).length(), rect);
                             float yPos = mItemHeight * mChoose + (int) ((mItemHeight - rect.height()) * 0.5) + mItemStartY;
                             listener.onLetterChanged(mLetters.get(newChoose), mChoose, yPos);
                         }
                     }
-                    invalidate();
                 }
-                //如果是cancel也要调用onLetterUpListener 通知
                 if (event.getAction() == MotionEvent.ACTION_CANCEL) {
                     if (listener != null) {
                         listener.onLetterTouching(false);
                     }
-                } else if (event.getAction() == MotionEvent.ACTION_DOWN) {//按下调用 onLetterDownListener
+                } else if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     if (listener != null) {
                         listener.onLetterTouching(true);
                     }
                 }
-
                 break;
         }
         return true;

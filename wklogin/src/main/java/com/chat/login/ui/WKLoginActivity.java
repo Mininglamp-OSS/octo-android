@@ -52,6 +52,8 @@ import java.util.Objects;
 public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> implements LoginContract.LoginView {
     private WKAPPConfig wkappConfig;
     private String code = "0086";
+    private Handler longPressHandler;
+    private Runnable longPressRunnable;
     private LoginPresenter loginPresenter;
 
     @Override
@@ -105,9 +107,9 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
         }
         wkVBinding.loginTitleTv.setText(String.format(getString(R.string.login_title), getString(R.string.app_name)));
-        // 隐藏入口：长按标题 3 秒修改 API 地址
-        final Handler longPressHandler = new Handler(Looper.getMainLooper());
-        final Runnable longPressRunnable = () -> {
+        // 隐藏入口：长按标题 1.5 秒修改 API 地址
+        longPressHandler = new Handler(Looper.getMainLooper());
+        longPressRunnable = () -> {
             ApiUrlDialog dialog = new ApiUrlDialog(this);
             dialog.setOnConfirmListener(url -> restartApp());
             dialog.show();
@@ -364,6 +366,9 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     @Override
     public void finish() {
         super.finish();
+        if (longPressHandler != null) {
+            longPressHandler.removeCallbacksAndMessages(null);
+        }
         EndpointManager.getInstance().remove("other_login_result");
     }
 }

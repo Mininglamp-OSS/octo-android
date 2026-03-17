@@ -68,6 +68,12 @@
     </LinearLayout>
 
     <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="65dp"
+        android:background="#E5E5E5" />
+
+    <View
         android:id="@+id/endView"
         android:layout_width="match_parent"
         android:layout_height="20dp" />

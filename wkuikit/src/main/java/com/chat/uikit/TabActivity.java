@@ -212,13 +212,8 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
                 } else if (position == 1) {
                     playAnimation(1);
                     wkVBinding.bottomNavigation.setSelectedItemId(R.id.i_contacts);
-                }
-//                else if (position == 2) {
-//                    playAnimation(2);
-//                    wkVBinding.bottomNavigation.setSelectedItemId(R.id.i_workplace);
-//                }
-                else {
-                    playAnimation(3);
+                } else {
+                    playAnimation(2);
                     wkVBinding.bottomNavigation.setSelectedItemId(R.id.i_my);
                 }
             }
@@ -239,14 +234,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             } else if (item.getItemId() == R.id.i_contacts) {
                 wkVBinding.vp.setCurrentItem(1);
                 playAnimation(1);
-            }
-//            else if (item.getItemId() == R.id.i_workplace) {
-//                wkVBinding.vp.setCurrentItem(2);
-//                playAnimation(2);
-//            }
-            else {
-                wkVBinding.vp.setCurrentItem(3);
-                playAnimation(3);
+            } else {
+                wkVBinding.vp.setCurrentItem(2);
+                playAnimation(2);
             }
             return true;
         });
@@ -331,10 +321,33 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            moveTaskToBack(true);
+            showExitDialog();
             return true;
         } else
             return super.onKeyDown(keyCode, event);
+    }
+
+    private void showExitDialog() {
+        WKDialogUtils.getInstance().showDialog(
+                this,
+                getString(R.string.exit_app_title),
+                getString(R.string.exit_app_msg),
+                true,
+                getString(com.chat.base.R.string.cancel),
+                getString(com.chat.base.R.string.sure),
+                0,
+                Theme.colorAccount,
+                index -> {
+                    if (index == 1) {
+                        finishAffinity();
+                    }
+                }
+        );
+    }
+
+    private void tintTab(RLottieImageView iv, boolean selected) {
+        int color = ContextCompat.getColor(this, selected ? R.color.tab_text_selected : R.color.tab_text_normal);
+        iv.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
     }
 
     private void playAnimation(int index) {
@@ -343,7 +356,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             meIV.setImageResource(R.mipmap.ic_mine_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             chatIV.setImageResource(R.mipmap.ic_chat_s);
-//            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            tintTab(chatIV, true);
+            tintTab(contactsIV, false);
+            tintTab(meIV, false);
             if (isShowTabText) {
                 chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_selected));
                 contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
@@ -353,27 +368,21 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             meIV.setImageResource(R.mipmap.ic_mine_n);
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_s);
-//            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            tintTab(chatIV, false);
+            tintTab(contactsIV, true);
+            tintTab(meIV, false);
             if (isShowTabText) {
                 chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
                 contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_selected));
-                meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
-            }
-        } else if (index == 2) {
-            meIV.setImageResource(R.mipmap.ic_mine_n);
-            chatIV.setImageResource(R.mipmap.ic_chat_n);
-            contactsIV.setImageResource(R.mipmap.ic_contacts_n);
-//            workplaceIV.setImageResource(R.mipmap.ic_contacts_s);
-            if (isShowTabText) {
-                chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
-                contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
                 meTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
             }
         } else {
             chatIV.setImageResource(R.mipmap.ic_chat_n);
             contactsIV.setImageResource(R.mipmap.ic_contacts_n);
             meIV.setImageResource(R.mipmap.ic_mine_s);
-//            workplaceIV.setImageResource(R.mipmap.ic_contacts_n);
+            tintTab(chatIV, false);
+            tintTab(contactsIV, false);
+            tintTab(meIV, true);
             if (isShowTabText) {
                 chatTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));
                 contactsTV.setTextColor(ContextCompat.getColor(this, R.color.tab_text_normal));

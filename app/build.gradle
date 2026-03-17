@@ -93,12 +93,17 @@ android {
             signingConfig signingConfigs.release
         }
     }
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "dmwork-${variant.flavorName}-${variant.buildType.name}-v${variant.versionName}.apk"
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = '17'
+    kotlin {
+        jvmToolchain(17)
     }
     buildFeatures {
         viewBinding true

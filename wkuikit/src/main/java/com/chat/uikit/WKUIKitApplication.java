@@ -106,6 +106,7 @@ import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.group.SavedGroupsActivity;
 import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.space.SpaceEntity;
 import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.AddFriendsActivity;
@@ -463,13 +464,36 @@ public class WKUIKitApplication {
                 WKIM.getInstance().getChannelManager().updateAvatarCacheKey(userInfo.uid, WKChannelType.PERSONAL, UUID.randomUUID().toString().replaceAll("-", ""));
             }
             SpaceModel.getInstance().invalidateCache();
-            // 注册场景跳过导航（由注册页面自己跳引导页）；登录场景直接进主页
+            // 注册场景跳过导航（由注册页面自己跳引导页）；登录场景先获取Space再进主页
             if (skipNavigation) {
                 skipNavigation = false;
             } else {
-                Intent intent = new Intent(mContext.get(), TabActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                mContext.get().startActivity(intent);
+                MsgModel.getInstance().loadCurrentSpaceId();
+                String cachedSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+                if (!TextUtils.isEmpty(cachedSpaceId)) {
+                    Intent intent = new Intent(mContext.get(), TabActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    mContext.get().startActivity(intent);
+                } else {
+                    SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
+                        @Override
+                        public void onResult(List<SpaceEntity> list) {
+                            if (list != null && !list.isEmpty() && list.get(0).space_id != null) {
+                                MsgModel.getInstance().setCurrentSpaceId(list.get(0).space_id);
+                            }
+                            Intent intent = new Intent(mContext.get(), TabActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            mContext.get().startActivity(intent);
+                        }
+
+                        @Override
+                        public void onError(int code, String msg) {
+                            Intent intent = new Intent(mContext.get(), TabActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            mContext.get().startActivity(intent);
+                        }
+                    });
+                }
             }
             startChat();
             ProhibitWordModel.Companion.getInstance().sync();

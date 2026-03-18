@@ -3,6 +3,7 @@ package com.chat.base.utils;
 import android.app.Activity;
 import android.app.Dialog;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,10 +11,12 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -33,7 +36,12 @@ import okhttp3.Response;
 
 public class ApiUrlDialog extends Dialog {
 
-    private static final String DEFAULT_URL = "https://api.example.com";
+    private static final String DEFAULT_URL = "https://api-test.example.com";
+
+    private static final String[][] PRESET_SERVERS = {
+            {"国内版", "api-test.example.com"},
+            {"国际版", "api-test.example.com"},
+    };
 
     public interface OnConfirmListener {
         void onConfirm(String url);
@@ -45,6 +53,10 @@ public class ApiUrlDialog extends Dialog {
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
             .build();
+
+    private EditText urlEt;
+    private View[] presetViews;
+    private int selectedPresetIndex = -1;
 
     public ApiUrlDialog(@NonNull Activity activity) {
         super(activity);
@@ -71,12 +83,13 @@ public class ApiUrlDialog extends Dialog {
             getWindow().setAttributes(params);
         }
 
-        EditText urlEt = findViewById(R.id.urlEt);
+        urlEt = findViewById(R.id.urlEt);
         TextView currentUrlTv = findViewById(R.id.currentUrlTv);
         TextView errorTv = findViewById(R.id.errorTv);
         TextView confirmBtn = findViewById(R.id.confirmBtn);
         View closeBtn = findViewById(R.id.closeBtn);
         View cancelBtn = findViewById(R.id.cancelBtn);
+        LinearLayout presetContainer = findViewById(R.id.presetContainer);
 
         // 显示当前地址
         String currentUrl = WKApiConfig.baseUrl;
@@ -85,17 +98,32 @@ public class ApiUrlDialog extends Dialog {
             currentUrlTv.setText(getContext().getString(R.string.api_url_dialog_current, currentUrl));
         }
 
-        // 回填已保存的自定义地址，没有则显示默认地址
+        // 构建预设服务器选项
+        buildPresetItems(presetContainer);
+
+        // 回填已保存的自定义地址
         String savedUrl = WKSharedPreferencesUtil.getInstance().getSP("api_base_url");
         if (!TextUtils.isEmpty(savedUrl)) {
-            urlEt.setText(savedUrl);
-            urlEt.setSelection(savedUrl.length());
+            // 检查是否匹配预设
+            boolean matchedPreset = false;
+            for (int i = 0; i < PRESET_SERVERS.length; i++) {
+                String presetFullUrl = "https://" + PRESET_SERVERS[i][1] + "/api";
+                if (savedUrl.equals(presetFullUrl)) {
+                    selectPreset(i);
+                    matchedPreset = true;
+                    break;
+                }
+            }
+            if (!matchedPreset) {
+                urlEt.setText(savedUrl);
+                urlEt.setSelection(savedUrl.length());
+            }
         } else {
-            urlEt.setText(DEFAULT_URL);
-            urlEt.setSelection(DEFAULT_URL.length());
+            // 默认选中国内版
+            selectPreset(0);
         }
 
-        // 输入时清除错误提示
+        // 输入时清除错误提示并取消预设选中
         urlEt.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -104,6 +132,15 @@ public class ApiUrlDialog extends Dialog {
             @Override
             public void afterTextChanged(Editable s) {
                 errorTv.setVisibility(View.GONE);
+                if (s.length() > 0 && selectedPresetIndex != -1) {
+                    // 用户手动输入，检查是否仍匹配当前选中预设
+                    String inputUrl = s.toString().trim();
+                    String presetDomain = PRESET_SERVERS[selectedPresetIndex][1];
+                    if (!inputUrl.equals(presetDomain) && !inputUrl.equals("https://" + presetDomain)
+                            && !inputUrl.equals("https://" + presetDomain + "/api")) {
+                        clearPresetSelection();
+                    }
+                }
             }
         });
 
@@ -116,12 +153,10 @@ public class ApiUrlDialog extends Dialog {
                 errorTv.setVisibility(View.VISIBLE);
                 return;
             }
-            // 自动补全协议：用户输入了 http:// 则保留（支持本地开发服务器），否则默认 https
             String url = input;
             if (!url.toLowerCase().startsWith("https://") && !url.toLowerCase().startsWith("http://")) {
                 url = "https://" + url;
             }
-            // 去掉末尾斜杠后，自动补全 /api 路径
             if (url.endsWith("/")) url = url.substring(0, url.length() - 1);
             if (!url.endsWith("/api")) {
                 url = url + "/api";
@@ -133,7 +168,6 @@ public class ApiUrlDialog extends Dialog {
             long startTime = System.currentTimeMillis();
             String finalUrl = url;
             checkUrl(url, reachable -> {
-                // 至少显示 1 秒"验证中"，避免一闪而过
                 long elapsed = System.currentTimeMillis() - startTime;
                 long delay = Math.max(0, 1000 - elapsed);
                 mainHandler.postDelayed(() -> {
@@ -152,6 +186,76 @@ public class ApiUrlDialog extends Dialog {
                 }, delay);
             });
         });
+    }
+
+    private void buildPresetItems(LinearLayout container) {
+        float density = getContext().getResources().getDisplayMetrics().density;
+        int itemPadding = (int) (12 * density);
+        int itemMarginBottom = (int) (8 * density);
+        presetViews = new View[PRESET_SERVERS.length];
+
+        for (int i = 0; i < PRESET_SERVERS.length; i++) {
+            String label = PRESET_SERVERS[i][0];
+            String domain = PRESET_SERVERS[i][1];
+
+            LinearLayout itemLayout = new LinearLayout(getContext());
+            itemLayout.setOrientation(LinearLayout.HORIZONTAL);
+            itemLayout.setGravity(Gravity.CENTER_VERTICAL);
+            itemLayout.setPadding(itemPadding, itemPadding, itemPadding, itemPadding);
+            itemLayout.setBackgroundResource(R.drawable.bg_dialog_api_preset_normal);
+
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            if (i < PRESET_SERVERS.length - 1) {
+                itemParams.bottomMargin = itemMarginBottom;
+            }
+
+            // 标签
+            TextView labelTv = new TextView(getContext());
+            labelTv.setText(label);
+            labelTv.setTextSize(14);
+            labelTv.setTextColor(0xFF374151);
+            labelTv.setTypeface(Typeface.DEFAULT_BOLD);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            labelParams.setMarginEnd((int) (8 * density));
+
+            // 域名
+            TextView domainTv = new TextView(getContext());
+            domainTv.setText(domain);
+            domainTv.setTextSize(13);
+            domainTv.setTextColor(0xFF6B7280);
+            domainTv.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            itemLayout.addView(labelTv, labelParams);
+            itemLayout.addView(domainTv);
+            container.addView(itemLayout, itemParams);
+
+            presetViews[i] = itemLayout;
+            int index = i;
+            itemLayout.setOnClickListener(v -> selectPreset(index));
+        }
+    }
+
+    private void selectPreset(int index) {
+        selectedPresetIndex = index;
+        for (int i = 0; i < presetViews.length; i++) {
+            if (i == index) {
+                presetViews[i].setBackgroundResource(R.drawable.bg_dialog_api_preset_selected);
+            } else {
+                presetViews[i].setBackgroundResource(R.drawable.bg_dialog_api_preset_normal);
+            }
+        }
+        urlEt.setText(PRESET_SERVERS[index][1]);
+        urlEt.setSelection(urlEt.getText().length());
+    }
+
+    private void clearPresetSelection() {
+        selectedPresetIndex = -1;
+        for (View v : presetViews) {
+            v.setBackgroundResource(R.drawable.bg_dialog_api_preset_normal);
+        }
     }
 
     private void checkUrl(String baseUrl, OnCheckResult callback) {

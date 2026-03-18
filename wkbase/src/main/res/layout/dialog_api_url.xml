@@ -42,12 +42,29 @@
         android:textColor="#6B7280"
         android:textSize="13sp" />
 
+    <!-- 快速选择标签 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/api_url_dialog_preset_label"
+        android:textColor="#374151"
+        android:textSize="14sp" />
+
+    <!-- 预设服务器选项容器 -->
+    <LinearLayout
+        android:id="@+id/presetContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:orientation="vertical" />
+
     <!-- 地址标签 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="6dp"
-        android:text="@string/api_url_dialog_label"
+        android:text="@string/api_url_dialog_custom_label"
         android:textColor="#374151"
         android:textSize="14sp" />
 

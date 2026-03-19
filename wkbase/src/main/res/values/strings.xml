@@ -132,7 +132,8 @@
     <string name="str_someone">对方</string>
     <string name="api_url_dialog_title">服务器配置</string>
     <string name="api_url_dialog_hint">修改后将重启应用并重新登录，请确认地址正确</string>
-    <string name="api_url_dialog_label">API 地址</string>
+    <string name="api_url_dialog_preset_label">快速选择</string>
+    <string name="api_url_dialog_custom_label">手动输入</string>
     <string name="api_url_dialog_input_hint">请输入服务器地址</string>
     <string name="api_url_dialog_confirm">确认并重启</string>
     <string name="api_url_dialog_current">当前地址：%s</string>

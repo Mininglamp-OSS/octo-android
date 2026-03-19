@@ -79,14 +79,19 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                     MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
                     startActivity(Intent(this@MainActivity, TabActivity::class.java))
                 } else {
-                    startActivity(Intent(this@MainActivity, SpaceGuideActivity::class.java))
+                    // 没有Space，回到登录页让用户登录后再引导
+                    val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
+                    intent.putExtra("from", getIntent().getIntExtra("from", 0))
+                    startActivity(intent)
                 }
                 finish()
             }
 
             override fun onError(code: Int, msg: String?) {
-                // 网络失败时仍然进入 TabActivity
-                startActivity(Intent(this@MainActivity, TabActivity::class.java))
+                // 网络失败回到登录页
+                val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
+                intent.putExtra("from", getIntent().getIntExtra("from", 0))
+                startActivity(intent)
                 finish()
             }
         })

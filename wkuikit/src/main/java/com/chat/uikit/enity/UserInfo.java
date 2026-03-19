@@ -30,6 +30,9 @@ public class UserInfo {
     public long version;
     public int is_deleted;
     public int robot;
+    public String bot_description;
+    public String bot_creator_name;
+    public String bot_commands;  // JSON: [{"cmd":"xxx","remark":"xxx"}]
     public int be_deleted;
     public int be_blacklist;
     public String updated_at;

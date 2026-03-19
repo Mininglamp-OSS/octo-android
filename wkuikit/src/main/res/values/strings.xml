@@ -345,5 +345,10 @@
     <string name="contacts_members_count">%d位组织内联系人</string>
     <string name="contacts_bots_count">%d个Bot机器人</string>
     <string name="contacts_groups_count">%d个群组</string>
+
+    <string name="bot_description_label">简介</string>
+    <string name="bot_creator_label">创建者</string>
+    <string name="bot_commands_label">命令</string>
+    <string name="bot_add_friend">添加好友</string>
 </resources>
 

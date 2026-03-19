@@ -28,6 +28,9 @@ public class SwipeBackActivityHelper {
         mSwipeBackLayout.addSwipeListener(new SwipeBackLayout.SwipeListener() {
             @Override
             public void onScrollStateChange(int state, float scrollPercent) {
+                if (state == SwipeBackLayout.STATE_IDLE && scrollPercent < 0.3f) {
+                    Utils.convertActivityFromTranslucent(mActivity);
+                }
             }
 
             @Override

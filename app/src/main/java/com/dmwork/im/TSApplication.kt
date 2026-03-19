@@ -180,13 +180,13 @@ class TSApplication : MultiDexApplication() {
         }
         EndpointManager.getInstance().setMethod("show_tab_home") {
             val intent = Intent(applicationContext, TabActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             null
         }
         EndpointManager.getInstance().setMethod("show_space_guide") {
             val intent = Intent(applicationContext, SpaceGuideActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             null
         }

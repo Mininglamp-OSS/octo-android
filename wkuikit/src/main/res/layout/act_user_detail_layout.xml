@@ -64,6 +64,23 @@
                                 android:layout_gravity="center_vertical"
                                 android:src="@mipmap/icon_male" />
 
+                            <TextView
+                                android:id="@+id/aiBadgeTv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginStart="5dp"
+                                android:background="@drawable/bg_ai_badge"
+                                android:paddingStart="5dp"
+                                android:paddingTop="1dp"
+                                android:paddingEnd="5dp"
+                                android:paddingBottom="1dp"
+                                android:text="AI"
+                                android:textColor="@color/white"
+                                android:textSize="10sp"
+                                android:textStyle="bold"
+                                android:visibility="gone" />
+
                         </LinearLayout>
 
                         <LinearLayout
@@ -136,6 +153,95 @@
                         </LinearLayout>
                     </LinearLayout>
 
+                </LinearLayout>
+
+                <!-- Bot info section (default GONE) -->
+                <LinearLayout
+                    android:id="@+id/botInfoLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="15dp"
+                    android:background="@color/white"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:id="@+id/botDescLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/layout_bg"
+                        android:orientation="vertical"
+                        android:paddingStart="15dp"
+                        android:paddingTop="15dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="15dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="wrap_content"
+                            android:layout_weight="0"
+                            android:text="@string/bot_description_label" />
+
+                        <TextView
+                            android:id="@+id/botDescTv"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/botCreatorLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/layout_bg"
+                        android:orientation="vertical"
+                        android:paddingStart="15dp"
+                        android:paddingTop="15dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="15dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="wrap_content"
+                            android:layout_weight="0"
+                            android:text="@string/bot_creator_label" />
+
+                        <TextView
+                            android:id="@+id/botCreatorTv"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/botCommandsLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/layout_bg"
+                        android:orientation="vertical"
+                        android:paddingStart="15dp"
+                        android:paddingTop="15dp"
+                        android:paddingEnd="15dp"
+                        android:paddingBottom="15dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="wrap_content"
+                            android:layout_weight="0"
+                            android:text="@string/bot_commands_label" />
+
+                        <LinearLayout
+                            android:id="@+id/botCommandsContainer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:orientation="vertical" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <LinearLayout

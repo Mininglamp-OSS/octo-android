@@ -163,7 +163,9 @@ public class SpaceModel extends WKBaseModel {
             @Override
             public void onSuccess(CommonResponse result) {
                 invalidateCache(); // 加入新 Space 后清除缓存
-                listener.onResult(result.status, result.msg);
+                // HTTP 2xx 即为成功，status 字段可能非 200（某些接口返回 0 或 1）
+                int code = result.status == 0 ? 200 : result.status;
+                listener.onResult(code, result.msg);
             }
 
             @Override

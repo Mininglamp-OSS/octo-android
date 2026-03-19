@@ -236,6 +236,10 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         setonLongClick(wkVBinding.nameTv, wkVBinding.nameTv);
         setonLongClick(wkVBinding.identityLayout, wkVBinding.appIdNumTv);
         setonLongClick(wkVBinding.nickNameLayout, wkVBinding.nickNameTv);
+        // Bot info: enable native text selection
+        wkVBinding.botDescTv.setTextIsSelectable(true);
+        wkVBinding.botCreatorTv.setTextIsSelectable(true);
+        wkVBinding.botIdTv.setTextIsSelectable(true);
 
         //频道资料刷新
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("user_detail_refresh_channel1", (channel, isEnd) -> {
@@ -445,6 +449,10 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         if (hasCreator) {
             wkVBinding.botCreatorTv.setText(userInfo.bot_creator_name);
         }
+
+        // Bot ID
+        wkVBinding.botIdLayout.setVisibility(View.VISIBLE);
+        wkVBinding.botIdTv.setText(uid);
 
         // Bot commands
         if (!TextUtils.isEmpty(userInfo.bot_commands)) {

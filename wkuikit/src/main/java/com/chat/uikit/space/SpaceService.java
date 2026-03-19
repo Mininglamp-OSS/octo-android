@@ -32,7 +32,7 @@ public interface SpaceService {
             @Query("limit") int limit);
 
     @POST("space/{space_id}/invite")
-    Observable<SpaceEntity.InviteResult> createInvite(@Path("space_id") String spaceId);
+    Observable<SpaceEntity.InviteResult> createInvite(@Path("space_id") String spaceId, @Body JSONObject body);
 
     @POST("space/join")
     Observable<CommonResponse> joinSpace(@Body JSONObject body);

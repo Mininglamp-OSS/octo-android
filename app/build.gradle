@@ -12,7 +12,7 @@ if (localPropertiesFile.exists()) {
     localProperties.load(new FileInputStream(localPropertiesFile))
 }
 
-def appId = localProperties.getProperty('applicationId', 'com.dmwork.im')
+def appId = localProperties.getProperty('applicationId', 'com.example-app.octo')
 
 // 自动更新 google-services.json 中的 package_name
 def googleServicesFile = file('google-services.json')
@@ -39,7 +39,7 @@ android {
             keyPassword localProps['RELEASE_KEY_PASSWORD']
         }
     }
-    namespace appId
+    namespace 'com.dmwork.im'
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
     aaptOptions.useNewCruncher = false

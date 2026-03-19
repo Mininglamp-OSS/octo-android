@@ -143,7 +143,7 @@ public class SpaceModel extends WKBaseModel {
     }
 
     public void createInvite(String spaceId, IInviteListener listener) {
-        request(createService(SpaceService.class).createInvite(spaceId), new IRequestResultListener<>() {
+        request(createService(SpaceService.class).createInvite(spaceId, new com.alibaba.fastjson.JSONObject()), new IRequestResultListener<>() {
             @Override
             public void onSuccess(SpaceEntity.InviteResult result) {
                 listener.onResult(result.invite_code);

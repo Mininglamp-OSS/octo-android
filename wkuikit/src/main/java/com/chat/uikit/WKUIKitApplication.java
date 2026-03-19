@@ -472,7 +472,7 @@ public class WKUIKitApplication {
                 String cachedSpaceId = MsgModel.getInstance().getCurrentSpaceId();
                 if (!TextUtils.isEmpty(cachedSpaceId)) {
                     Intent intent = new Intent(mContext.get(), TabActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     mContext.get().startActivity(intent);
                 } else {
                     SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
@@ -480,17 +480,19 @@ public class WKUIKitApplication {
                         public void onResult(List<SpaceEntity> list) {
                             if (list != null && !list.isEmpty() && list.get(0).space_id != null) {
                                 MsgModel.getInstance().setCurrentSpaceId(list.get(0).space_id);
+                                Intent intent = new Intent(mContext.get(), TabActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                mContext.get().startActivity(intent);
+                            } else {
+                                // 用户没有Space，进入引导页
+                                EndpointManager.getInstance().invoke("show_space_guide", null);
                             }
-                            Intent intent = new Intent(mContext.get(), TabActivity.class);
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            mContext.get().startActivity(intent);
                         }
 
                         @Override
                         public void onError(int code, String msg) {
-                            Intent intent = new Intent(mContext.get(), TabActivity.class);
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            mContext.get().startActivity(intent);
+                            // 网络失败也进引导页，让用户重试
+                            EndpointManager.getInstance().invoke("show_space_guide", null);
                         }
                     });
                 }

@@ -51,6 +51,12 @@ import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
 
+import android.os.Handler;
+import android.os.Looper;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -64,6 +70,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     String groupID;
     private String vercode;
     private WKChannel userChannel;
+    private boolean isBot;
 
     @Override
     protected ActUserDetailLayoutBinding getViewBinding() {
@@ -237,13 +244,29 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                 setData();
             }
         });
-        SingleClickUtil.onSingleClick(wkVBinding.applyBtn, v -> WKDialogUtils.getInstance().showInputDialog(UserDetailActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(uid, vercode, text, (code, msg) -> {
-            if (code == HttpResponseCode.success) {
-                wkVBinding.applyBtn.setText(R.string.applyed);
-                wkVBinding.applyBtn.setAlpha(0.2f);
-                wkVBinding.applyBtn.setEnabled(false);
-            } else showToast(msg);
-        })));
+        SingleClickUtil.onSingleClick(wkVBinding.applyBtn, v -> {
+            if (isBot) {
+                // Bot: directly apply without input dialog
+                FriendModel.getInstance().applyAddFriend(uid, vercode, "", (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        wkVBinding.applyBtn.setText(R.string.applyed);
+                        wkVBinding.applyBtn.setAlpha(0.2f);
+                        wkVBinding.applyBtn.setEnabled(false);
+                        // Refresh after 500ms to handle auto_approve
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> getUserInfo(), 500);
+                    } else showToast(msg);
+                });
+            } else {
+                // Normal user: show input dialog for remark
+                WKDialogUtils.getInstance().showInputDialog(UserDetailActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(uid, vercode, text, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        wkVBinding.applyBtn.setText(R.string.applyed);
+                        wkVBinding.applyBtn.setAlpha(0.2f);
+                        wkVBinding.applyBtn.setEnabled(false);
+                    } else showToast(msg);
+                }));
+            }
+        });
         SingleClickUtil.onSingleClick(wkVBinding.sendMsgBtn, v -> {
             WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, uid, WKChannelType.PERSONAL, 0, true));
             finish();
@@ -354,6 +377,32 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.applyBtn.setVisibility(View.GONE);
                     }
 
+                    // Bot-specific UI
+                    isBot = userInfo.robot == 1;
+                    if (isBot) {
+                        // Show AI badge
+                        wkVBinding.aiBadgeTv.setVisibility(View.VISIBLE);
+                        // Hide sex icon for bot
+                        wkVBinding.sexIv.setVisibility(View.GONE);
+                        // Hide non-bot UI elements
+                        wkVBinding.remarkLayout.setVisibility(View.GONE);
+                        wkVBinding.pushBlackLayout.setVisibility(View.GONE);
+                        wkVBinding.deleteLayout.setVisibility(View.GONE);
+
+                        // Show bot info section
+                        showBotInfo(userInfo);
+
+                        // Change apply button text for Bot
+                        if (userInfo.follow == 0) {
+                            wkVBinding.applyBtn.setText(R.string.bot_add_friend);
+                            wkVBinding.applyBtn.setVisibility(View.VISIBLE);
+                        }
+                    } else {
+                        wkVBinding.aiBadgeTv.setVisibility(View.GONE);
+                        wkVBinding.sexIv.setVisibility(View.VISIBLE);
+                        wkVBinding.botInfoLayout.setVisibility(View.GONE);
+                    }
+
                     if (!TextUtils.isEmpty(userInfo.join_group_invite_uid)){
                         wkVBinding.joinGroupWayLayout.setVisibility(View.VISIBLE);
                         String content = String.format("%s %s", userInfo.join_group_time, String.format(getString(R.string.invite_join_group), userInfo.join_group_invite_name));
@@ -379,6 +428,57 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("user_detail_refresh_channel1");
     }
 
+
+    private void showBotInfo(com.chat.uikit.enity.UserInfo userInfo) {
+        boolean hasDesc = !TextUtils.isEmpty(userInfo.bot_description);
+        boolean hasCreator = !TextUtils.isEmpty(userInfo.bot_creator_name);
+        boolean hasCommands = false;
+
+        // Bot description
+        wkVBinding.botDescLayout.setVisibility(hasDesc ? View.VISIBLE : View.GONE);
+        if (hasDesc) {
+            wkVBinding.botDescTv.setText(userInfo.bot_description);
+        }
+
+        // Bot creator
+        wkVBinding.botCreatorLayout.setVisibility(hasCreator ? View.VISIBLE : View.GONE);
+        if (hasCreator) {
+            wkVBinding.botCreatorTv.setText(userInfo.bot_creator_name);
+        }
+
+        // Bot commands
+        if (!TextUtils.isEmpty(userInfo.bot_commands)) {
+            try {
+                JSONArray commands = new JSONArray(userInfo.bot_commands);
+                if (commands.length() > 0) {
+                    wkVBinding.botCommandsLayout.setVisibility(View.VISIBLE);
+                    wkVBinding.botCommandsContainer.removeAllViews();
+                    for (int i = 0; i < commands.length(); i++) {
+                        JSONObject cmdObj = commands.getJSONObject(i);
+                        String cmd = cmdObj.optString("cmd", "");
+                        String remark = cmdObj.optString("remark", "");
+                        if (!TextUtils.isEmpty(cmd)) {
+                            TextView cmdTv = new TextView(this);
+                            cmdTv.setTextSize(14);
+                            cmdTv.setTextColor(ContextCompat.getColor(this, R.color.color999));
+                            String cmdText = TextUtils.isEmpty(remark) ? cmd : cmd + " - " + remark;
+                            cmdTv.setText(cmdText);
+                            cmdTv.setPadding(0, com.chat.base.utils.AndroidUtilities.dp(4), 0, com.chat.base.utils.AndroidUtilities.dp(4));
+                            wkVBinding.botCommandsContainer.addView(cmdTv);
+                        }
+                    }
+                    hasCommands = true;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (!hasCommands) {
+            wkVBinding.botCommandsLayout.setVisibility(View.GONE);
+        }
+
+        boolean hasAnyInfo = hasDesc || hasCreator || hasCommands;
+        wkVBinding.botInfoLayout.setVisibility(hasAnyInfo ? View.VISIBLE : View.GONE);
+    }
 
     private void showImg() {
         String uri = WKApiConfig.getAvatarUrl(uid) + "?key=" + WKTimeUtils.getInstance().getCurrentMills();

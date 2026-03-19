@@ -38,24 +38,16 @@ public class SpaceListAdapter extends BaseQuickAdapter<SpaceEntity, BaseViewHold
         boolean isSelected = entity.space_id != null && entity.space_id.equals(currentSpaceId);
         holder.setVisible(R.id.checkTv, isSelected);
 
-        // 链接图标点击：获取邀请码并复制
+        // 链接图标点击：直接复制 Space 列表返回的邀请码
         ImageView linkIv = holder.getView(R.id.linkIv);
         linkIv.setOnClickListener(v -> {
-            SpaceModel.getInstance().createInvite(entity.space_id, new SpaceModel.IInviteListener() {
-                @Override
-                public void onResult(String inviteCode) {
-                    Context ctx = getContext();
-                    ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-                    cm.setPrimaryClip(ClipData.newPlainText("invite", inviteCode));
-                    WKToastUtils.getInstance().showToastNormal(
-                            ctx.getString(R.string.space_invite_link_copied));
-                }
-
-                @Override
-                public void onError(int code, String msg) {
-                    WKToastUtils.getInstance().showToastNormal(msg);
-                }
-            });
+            Context ctx = getContext();
+            if (entity.invite_code != null && !entity.invite_code.isEmpty()) {
+                ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("invite", entity.invite_code));
+                WKToastUtils.getInstance().showToastNormal(
+                        ctx.getString(R.string.space_invite_code_copied));
+            }
         });
     }
 }

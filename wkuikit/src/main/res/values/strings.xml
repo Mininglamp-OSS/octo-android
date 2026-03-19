@@ -205,7 +205,7 @@
     <string name="unregister_contacts">未注册联系人</string>
     <string name="group_member">%d个成员</string>
     <string name="online_count">%d人在线</string>
-    <string name="bot">机器人</string>
+    <string name="bot">AI</string>
     <string name="no_relation_request">%s开启了朋友验证，你还不是他（她）朋友。请先发送朋友验证请求，对方验证通过后，才能聊天。发送验证请求</string>
     <string name="send_request">发送验证请求</string>
     <string name="update_avatar">修改头像</string>
@@ -337,18 +337,19 @@
     <string name="space_create_desc_label">描述</string>
 
     <string name="contacts_section_members">组织内联系人</string>
-    <string name="contacts_section_bots">Bot</string>
+    <string name="contacts_section_bots">AI</string>
     <string name="contacts_section_groups">我的群组</string>
     <string name="contacts_section_empty">暂无数据</string>
     <string name="exit_app_title">退出应用</string>
     <string name="exit_app_msg">确定要退出应用吗？</string>
     <string name="contacts_members_count">%d位组织内联系人</string>
-    <string name="contacts_bots_count">%d个Bot机器人</string>
+    <string name="contacts_bots_count">%d个AI</string>
     <string name="contacts_groups_count">%d个群组</string>
 
     <string name="bot_description_label">简介</string>
     <string name="bot_creator_label">创建者</string>
     <string name="bot_commands_label">命令</string>
+    <string name="bot_id_label">Bot ID</string>
     <string name="bot_add_friend">添加好友</string>
 </resources>
 

@@ -8,6 +8,7 @@ public class SpaceEntity {
     public String description;
     public String owner_uid;
     public int member_count;
+    public String invite_code;
     public String created_at;
     public String updated_at;
 

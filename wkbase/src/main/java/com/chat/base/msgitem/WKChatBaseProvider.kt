@@ -578,7 +578,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     val density = receivedNameTv.resources.displayMetrics.density
                     val builder = SpannableStringBuilder(nameText)
                     builder.append("  ")
-                    val badgeText = "Bot"
+                    val badgeText = "AI"
                     val badgeStart = builder.length
                     builder.append(badgeText)
                     builder.setSpan(

@@ -15,6 +15,7 @@ public class SwipeBackActivityHelper {
     private final Activity mActivity;
 
     private SwipeBackLayout mSwipeBackLayout;
+    private boolean isTranslucent = false;
 
     public SwipeBackActivityHelper(Activity activity) {
         mActivity = activity;
@@ -28,14 +29,17 @@ public class SwipeBackActivityHelper {
         mSwipeBackLayout.addSwipeListener(new SwipeBackLayout.SwipeListener() {
             @Override
             public void onScrollStateChange(int state, float scrollPercent) {
-                if (state == SwipeBackLayout.STATE_IDLE && scrollPercent < 0.3f) {
-                    Utils.convertActivityFromTranslucent(mActivity);
+                if (state == SwipeBackLayout.STATE_IDLE && isTranslucent) {
+                    restoreOpaque();
                 }
             }
 
             @Override
             public void onEdgeTouch(int edgeFlag) {
-                Utils.convertActivityToTranslucent(mActivity);
+                if (!isTranslucent) {
+                    isTranslucent = true;
+                    Utils.convertActivityToTranslucent(mActivity);
+                }
             }
 
             @Override
@@ -43,6 +47,21 @@ public class SwipeBackActivityHelper {
 
             }
         });
+    }
+
+    private void restoreOpaque() {
+        isTranslucent = false;
+        Utils.convertActivityFromTranslucent(mActivity);
+    }
+
+    /**
+     * 在 onResume 时调用，强制恢复系统级不透明状态
+     * 防止 convertFromTranslucent 反射失败导致的累积透明
+     */
+    public void ensureOpaque() {
+        if (isTranslucent) {
+            restoreOpaque();
+        }
     }
 
     public void onPostCreate() {

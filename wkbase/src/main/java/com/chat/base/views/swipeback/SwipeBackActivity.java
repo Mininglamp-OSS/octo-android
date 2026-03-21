@@ -30,6 +30,15 @@ public class SwipeBackActivity extends AppCompatActivity implements SwipeBackAct
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // 每次回到前台时确保窗口不透明，防止从其他页面返回时透明状态残留
+        if (mHelper != null) {
+            mHelper.ensureOpaque();
+        }
+    }
+
+    @Override
     public <T extends View> T findViewById(int id) {
         T v = super.findViewById(id);
         if (v == null && mHelper != null)

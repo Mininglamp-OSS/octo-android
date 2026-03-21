@@ -461,7 +461,7 @@ public class LoginModel extends WKBaseModel {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("email", email);
         jsonObject.put("code", code);
-        jsonObject.put("password", pwd);
+        jsonObject.put("new_password", pwd);
         request(createService(LoginService.class).emailForgetPwd(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {

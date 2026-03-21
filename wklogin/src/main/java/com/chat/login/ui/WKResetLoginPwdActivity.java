@@ -53,7 +53,7 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
         wkVBinding.backIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.colorDark), PorterDuff.Mode.MULTIPLY));
 
         wkVBinding.nameEt.setEnabled(true);
-        wkVBinding.registerAppTv.setText(R.string.auth_email);
+        wkVBinding.registerAppTv.setText(R.string.reset_pwd_title);
         wkVBinding.resetLoginPwdTv.setText(String.format(getString(R.string.auth_email_tips), getString(R.string.app_name)));
     }
 
@@ -108,6 +108,20 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
                 checkStatus();
             }
         });
+        wkVBinding.confirmPwdEt.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                checkStatus();
+            }
+        });
         wkVBinding.checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
                 wkVBinding.pwdEt.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
@@ -120,6 +134,7 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
             String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().trim();
             String verCode = wkVBinding.verfiEt.getText().toString();
             String pwd = wkVBinding.pwdEt.getText().toString();
+            String confirmPwd = wkVBinding.confirmPwdEt.getText().toString();
             if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                 showToast(R.string.email_format_error);
                 return;
@@ -127,6 +142,8 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
             if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(verCode) && !TextUtils.isEmpty(pwd)) {
                 if (pwd.length() < 6 || pwd.length() > 16) {
                     showToast(R.string.pwd_length_error);
+                } else if (!pwd.equals(confirmPwd)) {
+                    showToast(R.string.pwd_not_match);
                 } else {
                     loadingPopup.show();
                     presenter.emailForgetPwd(email, verCode, pwd);
@@ -140,6 +157,8 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
                     showToast(R.string.email_format_error);
                     return;
                 }
+                wkVBinding.getVerCodeBtn.setEnabled(false);
+                wkVBinding.getVerCodeBtn.setAlpha(0.5f);
                 presenter.emailSendCode(email, 2);
             }
         });
@@ -150,7 +169,8 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
         String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
         String verCode = wkVBinding.verfiEt.getText().toString();
         String pwd = wkVBinding.pwdEt.getText().toString();
-        if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(verCode) && !TextUtils.isEmpty(pwd)) {
+        String confirmPwd = wkVBinding.confirmPwdEt.getText().toString();
+        if (!TextUtils.isEmpty(email) && !TextUtils.isEmpty(verCode) && !TextUtils.isEmpty(pwd) && !TextUtils.isEmpty(confirmPwd)) {
             wkVBinding.sureBtn.setAlpha(1f);
             wkVBinding.sureBtn.setEnabled(true);
         } else {
@@ -185,14 +205,20 @@ public class WKResetLoginPwdActivity extends WKBaseActivity<ActResetLoginPwdLayo
             wkVBinding.nameEt.setEnabled(false);
             presenter.startTimer();
         } else {
+            wkVBinding.getVerCodeBtn.setEnabled(true);
+            wkVBinding.getVerCodeBtn.setAlpha(1f);
             showToast(msg);
         }
     }
 
     @Override
     public void setResetPwdResult(int code, String msg) {
+        loadingPopup.dismiss();
         if (code == HttpResponseCode.success) {
+            showToast(R.string.reset_pwd_success);
             finish();
+        } else {
+            showToast(msg);
         }
     }
 

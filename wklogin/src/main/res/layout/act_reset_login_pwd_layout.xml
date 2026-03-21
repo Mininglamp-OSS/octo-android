@@ -171,7 +171,7 @@
                     android:layout_weight="1"
                     android:background="@color/transparent"
                     android:gravity="center_vertical"
-                    android:hint="@string/hint_pwd"
+                    android:hint="@string/hint_new_pwd"
                     android:inputType="textPassword"
                     android:maxLength="20"
                     android:textColor="@color/colorDark"
@@ -184,6 +184,35 @@
                     android:layout_height="30dp"
                     android:button="@drawable/selector_account_relate_see_password"
                     android:checked="false" />
+
+            </LinearLayout>
+
+            <View
+                style="@style/view_line"
+                android:layout_marginLeft="20dp"
+                android:layout_marginRight="20dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginRight="20dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/confirmPwdEt"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:background="@color/transparent"
+                    android:gravity="center_vertical"
+                    android:hint="@string/hint_confirm_pwd"
+                    android:inputType="textPassword"
+                    android:maxLength="20"
+                    android:textColor="@color/colorDark"
+                    android:textColorHint="@color/color999"
+                    android:textSize="14sp" />
 
             </LinearLayout>
 

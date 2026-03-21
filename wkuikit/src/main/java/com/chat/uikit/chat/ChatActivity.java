@@ -123,6 +123,7 @@ import com.xinbida.wukongim.interfaces.IGetOrSyncHistoryMsgBack;
 import com.xinbida.wukongim.message.type.WKConnectStatus;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
+import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 import com.xinbida.wukongim.msgmodel.WKReply;
@@ -1212,8 +1213,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     }
                 }
                 isSyncLastMsg = false;
+                List<WKMsg> filteredList = filterSystemBotMessages(list);
                 List<WKMsg> tempList = new ArrayList<>();
-                for (WKMsg msg : list) {
+                for (WKMsg msg : filteredList) {
                     if (isSetNewData || !chatAdapter.isExist(msg.clientMsgNO, msg.messageID)){
                         tempList.add(msg);
                     }
@@ -1867,6 +1869,56 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (redDot > 0) {
             wkVBinding.chatUnreadLayout.newMsgLayout.performClick();
         }
+        // DM 消息注入 space_id，让 BotFather 等系统 Bot 知道用户当前 Space
+        // 与 Web 端 ConversationVM.sendMessage 逻辑一致
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId) && channelType == WKChannelType.PERSONAL
+                && !(messageContent instanceof WKMediaMessageContent)) {
+            final WKMessageContent originalContent = messageContent;
+            messageContent = new WKMessageContent() {
+                {
+                    this.type = originalContent.type;
+                    this.reply = originalContent.reply;
+                    this.mentionInfo = originalContent.mentionInfo;
+                    this.mentionAll = originalContent.mentionAll;
+                    this.robotID = originalContent.robotID;
+                    this.flame = originalContent.flame;
+                    this.flameSecond = originalContent.flameSecond;
+                    this.topicID = originalContent.topicID;
+                    this.entities = originalContent.entities;
+                    this.content = originalContent.content;
+                    this.fromUID = originalContent.fromUID;
+                    this.fromName = originalContent.fromName;
+                    this.searchableWord = originalContent.searchableWord;
+                }
+
+                @Override
+                public JSONObject encodeMsg() {
+                    JSONObject json = originalContent.encodeMsg();
+                    if (json == null) json = new JSONObject();
+                    try {
+                        json.put("space_id", spaceId);
+                    } catch (JSONException ignored) {
+                    }
+                    return json;
+                }
+
+                @Override
+                public WKMessageContent decodeMsg(JSONObject jsonObject) {
+                    return originalContent.decodeMsg(jsonObject);
+                }
+
+                @Override
+                public String getDisplayContent() {
+                    return originalContent.getDisplayContent();
+                }
+
+                @Override
+                public String getSearchableWord() {
+                    return originalContent.getSearchableWord();
+                }
+            };
+        }
         WKMsg wkMsg = new WKMsg();
         wkMsg.channelID = channelId;
         wkMsg.channelType = channelType;
@@ -2437,7 +2489,66 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     }
 
+    // 系统 Bot：在所有 Space 可见，但聊天历史需按 Space 过滤
+    private static final java.util.Set<String> SYSTEM_BOTS = new java.util.HashSet<>(java.util.Arrays.asList("botfather"));
+
+    /**
+     * 过滤系统 Bot（如 BotFather）的消息，与 Web 端 filterSystemBotMessages 逻辑一致
+     * 规则：payload 有 space_id 且匹配当前 Space → 显示
+     *       payload 有 space_id 且不匹配 → 隐藏
+     *       payload 无 space_id（历史消息）→ 所有 Space 都显示（向前兼容）
+     */
+    private List<WKMsg> filterSystemBotMessages(List<WKMsg> messages) {
+        if (!SYSTEM_BOTS.contains(channelId)) {
+            return messages;
+        }
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) {
+            return messages;
+        }
+        List<WKMsg> filtered = new ArrayList<>();
+        for (WKMsg msg : messages) {
+            String msgSpaceId = getSpaceIdFromMsg(msg);
+            if (msgSpaceId == null || msgSpaceId.isEmpty()) {
+                filtered.add(msg); // 无 space_id 的历史消息：所有 Space 可见
+            } else if (msgSpaceId.equals(currentSpaceId)) {
+                filtered.add(msg); // 匹配当前 Space
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * 从消息中提取 space_id，尝试多种途径：
+     * 1. msg.content (原始 payload JSON 字符串)
+     * 2. msg.baseContentMsgModel.encodeMsg() (消息内容编码后的 JSON)
+     */
+    private String getSpaceIdFromMsg(WKMsg msg) {
+        // 先尝试从 content 字段解析（可能是原始 payload JSON）
+        if (!TextUtils.isEmpty(msg.content)) {
+            try {
+                org.json.JSONObject json = new org.json.JSONObject(msg.content);
+                String sid = json.optString("space_id", "");
+                if (!sid.isEmpty()) return sid;
+            } catch (Exception ignored) {
+            }
+        }
+        // 再尝试从 baseContentMsgModel 编码结果中获取
+        if (msg.baseContentMsgModel != null) {
+            try {
+                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
+                if (json != null) {
+                    String sid = json.optString("space_id", "");
+                    if (!sid.isEmpty()) return sid;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
     private synchronized void receivedMessages(List<WKMsg> list) {
+        list = filterSystemBotMessages(list);
         if (WKReader.isNotEmpty(list)) {
             for (WKMsg msg : list) {
                 // 命令消息和撤回消息不显示在聊天

@@ -1,5 +1,10 @@
 <resources>
     <string name="hint_pwd">请输入密码</string>
+    <string name="hint_new_pwd">新密码</string>
+    <string name="hint_confirm_pwd">确认新密码</string>
+    <string name="pwd_not_match">两次输入的密码不一致</string>
+    <string name="reset_pwd_title">重置密码</string>
+    <string name="reset_pwd_success">密码重置成功</string>
     <string name="hint_name">请输入手机号</string>
     <string name="hint_email">邮箱地址</string>
     <string name="hint_email_or_username">邮箱 / 用户名</string>

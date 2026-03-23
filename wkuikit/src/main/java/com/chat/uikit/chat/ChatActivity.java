@@ -2595,7 +2595,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             if (msg.orderSeq > maxMsgOrderSeq) {
                                 maxMsgOrderSeq = msg.orderSeq;
                             }
-                            if (previousMsgIndex != -1) {
+                            if (previousMsgIndex != -1 && previousMsgIndex < chatAdapter.getData().size()) {
                                 chatAdapter.notifyBackground(previousMsgIndex);
                             }
                         }

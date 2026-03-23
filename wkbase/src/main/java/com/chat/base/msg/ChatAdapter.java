@@ -344,6 +344,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     private void notify(int position, RefreshType refreshType, List<WKMsgReaction> reactionList) {
+        if (position < 0 || position >= getData().size()) return;
         WKUIChatMsgItemEntity entity = getData().get(position);
         LinearLayoutManager linearLayoutManager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
         if (linearLayoutManager == null) return;

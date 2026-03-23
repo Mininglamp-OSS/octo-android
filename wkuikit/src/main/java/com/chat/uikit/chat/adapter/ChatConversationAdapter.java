@@ -54,9 +54,14 @@ import org.jetbrains.annotations.NotNull;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 
+import org.json.JSONObject;
+
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 2019-11-15 13:46
@@ -325,14 +330,85 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setText(R.id.timeTv, chatTime);
     }
 
+    // 系统 Bot：会话列表预览需按 Space 过滤
+    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+
+    /**
+     * 从消息中提取 space_id
+     */
+    private String getSpaceIdFromMsg(WKMsg msg) {
+        if (msg == null) return null;
+        if (!TextUtils.isEmpty(msg.content)) {
+            try {
+                JSONObject json = new JSONObject(msg.content);
+                String sid = json.optString("space_id", "");
+                if (!sid.isEmpty()) return sid;
+            } catch (Exception ignored) {
+            }
+        }
+        if (msg.baseContentMsgModel != null) {
+            try {
+                JSONObject json = msg.baseContentMsgModel.encodeMsg();
+                if (json != null) {
+                    String sid = json.optString("space_id", "");
+                    if (!sid.isEmpty()) return sid;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 为系统 Bot 查找当前 Space 下的最后一条消息。
+     * 返回 null 表示不需要特殊处理（非系统 Bot 或已匹配当前 Space），
+     * 返回空字符串表示当前 Space 无消息，返回非空字符串为匹配的消息内容。
+     */
+    private String findSystemBotSpaceContent(WKUIConversationMsg item) {
+        if (!SYSTEM_BOTS.contains(item.channelID)) return null;
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return null;
+
+        // 最后一条消息已匹配当前 Space，无需特殊处理
+        String lastMsgSpaceId = getSpaceIdFromMsg(item.getWkMsg());
+        if (lastMsgSpaceId != null && lastMsgSpaceId.equals(currentSpaceId)) return null;
+        if (lastMsgSpaceId == null) return null; // 无 space_id 的历史消息，向前兼容
+
+        // 最后一条消息不属于当前 Space，查本地 DB 找当前 Space 的最后一条
+        try {
+            List<WKMsg> recentMsgs = WKIM.getInstance().getMsgManager()
+                    .searchMsgWithChannelAndContentTypes(
+                            item.channelID, item.channelType,
+                            0, 50,
+                            new int[]{WKContentType.WK_TEXT});
+            if (recentMsgs != null) {
+                for (WKMsg msg : recentMsgs) {
+                    String sid = getSpaceIdFromMsg(msg);
+                    // space_id 匹配当前空间，或无 space_id 的历史消息（向前兼容，视为所有空间可见）
+                    if (sid == null || currentSpaceId.equals(sid)) {
+                        return getContent(msg);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return ""; // 当前 Space 无消息
+    }
+
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
-        String content = getContent(item.getWkMsg());
+        String content;
         androidx.emoji2.widget.EmojiTextView contentTv = helper.getView(R.id.contentTv);
         boolean isSetChatPwd = isSetChatPwd(item.getWkChannel());
-        // 聊天密码
-        if (isSetChatPwd) {
+
+        // 系统 Bot：显示当前 Space 的最后一条消息
+        String spaceContent = findSystemBotSpaceContent(item);
+        if (spaceContent != null) {
+            content = spaceContent;
+        } else if (isSetChatPwd) {
+            // 聊天密码
             content = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         } else {
+            content = getContent(item.getWkMsg());
             String fromName = getFromName(item.channelType, item.getWkMsg());
             if (!TextUtils.isEmpty(fromName)) {
                 content = fromName + "：" + content;

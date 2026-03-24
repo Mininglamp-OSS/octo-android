@@ -25,7 +25,10 @@ object GlobalSearchModel : WKBaseModel() {
         json["start_time"] = req.startTime
         json["end_time"] = req.endTime
         json["content_type"] = req.contentType
-        request(createService(IService::class.java).search(json),
+
+        // Space 过滤：传当前 space_id 作为 query param，让后端 SpaceMiddleware 过滤结果
+        val spaceId = req.spaceId
+        request(createService(IService::class.java).search(json, spaceId),
             object : IRequestResultListener<GlobalSearch> {
                 override fun onSuccess(result: GlobalSearch) {
                     back(HttpResponseCode.success, "", result)

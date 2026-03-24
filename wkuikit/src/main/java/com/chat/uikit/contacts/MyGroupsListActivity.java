@@ -29,6 +29,7 @@ import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.databinding.ActContactsListLayoutBinding;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
+import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -36,6 +37,7 @@ import com.xinbida.wukongim.entity.WKConversationMsg;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 我的群组列表（从本地会话获取所有群聊）
@@ -116,10 +118,18 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
     private void loadData() {
         List<WKConversationMsg> conversations = WKIM.getInstance().getConversationManager()
                 .getWithChannelType(WKChannelType.GROUP);
+        // Space 过滤：当有 spaceId 时，只显示当前 Space 的群组
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        Set<String> spaceKeys = (!spaceId.isEmpty()) ? MsgModel.getInstance().getSpaceConversationKeys() : null;
         List<GroupItem> items = new ArrayList<>();
         if (conversations != null) {
             for (WKConversationMsg conv : conversations) {
                 if (TextUtils.isEmpty(conv.channelID)) continue;
+                // 如果有 Space 白名单，过滤不在白名单中的群组
+                if (spaceKeys != null && !spaceKeys.isEmpty()) {
+                    String key = conv.channelID + "_" + conv.channelType;
+                    if (!spaceKeys.contains(key)) continue;
+                }
                 WKChannel channel = WKIM.getInstance().getChannelManager()
                         .getChannel(conv.channelID, WKChannelType.GROUP);
                 if (channel == null) {

@@ -11,5 +11,6 @@ class GlobalSearchReq(
     val page: Int = 1,
     val limit: Int = 20,
     val startTime: Long,
-    val endTime: Long
+    val endTime: Long,
+    val spaceId: String? = null
 )

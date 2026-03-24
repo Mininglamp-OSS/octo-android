@@ -336,6 +336,8 @@ public class MsgModel extends WKBaseModel {
      * @param version       最大版本号
      */
     private String currentSpaceId = "";
+    // Space 会话白名单：channelId_channelType 集合，由 ChatFragment 同步更新
+    private final Set<String> spaceConversationKeys = new java.util.HashSet<>();
 
     public void setCurrentSpaceId(String spaceId) {
         this.currentSpaceId = spaceId != null ? spaceId : "";
@@ -349,6 +351,44 @@ public class MsgModel extends WKBaseModel {
 
     public String getCurrentSpaceId() {
         return currentSpaceId;
+    }
+
+    /** 清空 Space 会话白名单（Space 切换时调用） */
+    public void clearSpaceConversationKeys() {
+        synchronized (spaceConversationKeys) {
+            spaceConversationKeys.clear();
+        }
+    }
+
+    /** 批量设置 Space 会话白名单（sync 完成后调用） */
+    public void setSpaceConversationKeys(Set<String> keys) {
+        synchronized (spaceConversationKeys) {
+            spaceConversationKeys.clear();
+            if (keys != null) {
+                spaceConversationKeys.addAll(keys);
+            }
+        }
+    }
+
+    /** 添加单个 channel key 到白名单 */
+    public void addSpaceConversationKey(String key) {
+        synchronized (spaceConversationKeys) {
+            spaceConversationKeys.add(key);
+        }
+    }
+
+    /** 检查 channel key 是否在当前 Space 白名单中 */
+    public boolean isInSpaceConversationKeys(String key) {
+        synchronized (spaceConversationKeys) {
+            return spaceConversationKeys.isEmpty() || spaceConversationKeys.contains(key);
+        }
+    }
+
+    /** 获取 Space 白名单副本（供群列表等页面过滤） */
+    public Set<String> getSpaceConversationKeys() {
+        synchronized (spaceConversationKeys) {
+            return new java.util.HashSet<>(spaceConversationKeys);
+        }
     }
 
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {

@@ -19,6 +19,7 @@ import com.chat.uikit.R
 import com.chat.uikit.databinding.ActGlobalLayoutBinding
 import com.chat.base.entity.GlobalSearchReq
 import com.chat.base.search.GlobalSearchModel
+import com.chat.uikit.message.MsgModel
 import com.chat.uikit.search.SearchUserActivity
 import com.scwang.smart.refresh.layout.api.RefreshLayout
 import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
@@ -142,7 +143,8 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         val contentType = ArrayList<Int>()
         contentType.add(WKContentType.WK_TEXT)
         contentType.add(WKContentType.WK_FILE)
-        val req = GlobalSearchReq(onlyMessage, keyword, "", 0, "", "", contentType, page, 20, 0, 0)
+        val spaceId = MsgModel.getInstance().currentSpaceId.ifEmpty { null }
+        val req = GlobalSearchReq(onlyMessage, keyword, "", 0, "", "", contentType, page, 20, 0, 0, spaceId)
         GlobalSearchModel.search(req) { code, msg, resp ->
             wkVBinding.refreshLayout.finishRefresh()
             wkVBinding.refreshLayout.finishLoadMore()

@@ -185,6 +185,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
                 // 清空 Space 会话过滤集合、本地会话数据库，显式触发新 Space 的会话同步
                 spaceConversationKeys.clear();
+                MsgModel.getInstance().clearSpaceConversationKeys();
                 WKIM.getInstance().getConversationManager().clearAll();
                 chatConversationAdapter.setList(new ArrayList<>());
                 WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
@@ -449,6 +450,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     uiList.add(msg);
                     spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
                 }
+                // 同步白名单到 MsgModel，供群列表等页面使用
+                MsgModel.getInstance().setSpaceConversationKeys(spaceConversationKeys);
                 sortMsg(uiList);
                 setAllCount();
                 return;
@@ -503,6 +506,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     if (spaceConversationKeys.isEmpty() || spaceConversationKeys.contains(key)) {
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
+                        MsgModel.getInstance().addSpaceConversationKey(key);
                     } else {
                         // 未知会话（可能属于其他 Space，也可能是当前 Space 的新会话）
                         // 触发延迟 re-sync 让服务端确认
@@ -790,6 +794,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
             spaceConversationKeys.add(key);
+            MsgModel.getInstance().addSpaceConversationKey(key);
             if (!isEnd) {
                 chatConversationAdapter.addData(new ChatConversationMsg(uiConversationMsg));
             } else {
@@ -825,6 +830,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             pendingSpaceResync = false;
             spaceConversationKeys.clear();
+            MsgModel.getInstance().clearSpaceConversationKeys();
             WKIM.getInstance().getConversationManager().clearAll();
             chatConversationAdapter.setList(new ArrayList<>());
             WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {

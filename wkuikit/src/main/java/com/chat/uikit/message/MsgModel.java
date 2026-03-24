@@ -339,7 +339,7 @@ public class MsgModel extends WKBaseModel {
      */
     private String currentSpaceId = "";
     // Space 会话白名单：channelId_channelType 集合，由 ChatFragment 同步更新
-    private final Set<String> spaceConversationKeys = new java.util.HashSet<>();
+    private final Set<String> spaceConversationKeys = new HashSet<>();
 
     public void setCurrentSpaceId(String spaceId) {
         this.currentSpaceId = spaceId != null ? spaceId : "";
@@ -389,7 +389,7 @@ public class MsgModel extends WKBaseModel {
     /** 获取 Space 白名单副本（供群列表等页面过滤） */
     public Set<String> getSpaceConversationKeys() {
         synchronized (spaceConversationKeys) {
-            return new java.util.HashSet<>(spaceConversationKeys);
+            return new HashSet<>(spaceConversationKeys);
         }
     }
 

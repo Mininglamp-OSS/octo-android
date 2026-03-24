@@ -30,6 +30,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     lateinit var adapter: GlobalAdapter
     private var keyword: String = ""
     private var page = 1
+    private var searchSpaceId: String? = null
     override fun getViewBinding(): ActGlobalLayoutBinding {
         return ActGlobalLayoutBinding.inflate(layoutInflater)
     }
@@ -72,6 +73,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 } else {
                     keyword = content
                     page = 1
+                    searchSpaceId = MsgModel.getInstance().currentSpaceId.ifEmpty { null }
                     getData(0)
                 }
             }
@@ -143,8 +145,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         val contentType = ArrayList<Int>()
         contentType.add(WKContentType.WK_TEXT)
         contentType.add(WKContentType.WK_FILE)
-        val spaceId = MsgModel.getInstance().currentSpaceId.ifEmpty { null }
-        val req = GlobalSearchReq(onlyMessage, keyword, "", 0, "", "", contentType, page, 20, 0, 0, spaceId)
+        val req = GlobalSearchReq(onlyMessage, keyword, "", 0, "", "", contentType, page, 20, 0, 0, searchSpaceId)
         GlobalSearchModel.search(req) { code, msg, resp ->
             wkVBinding.refreshLayout.finishRefresh()
             wkVBinding.refreshLayout.finishLoadMore()

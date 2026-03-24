@@ -128,6 +128,7 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
 
     private void loadDataFromApi(String spaceId) {
         GroupModel.getInstance().getMyGroups(spaceId, (code, msg, list) -> {
+            if (isFinishing() || isDestroyed()) return;
             if (code != HttpResponseCode.success || list == null) {
                 showDataList(new ArrayList<>());
                 return;

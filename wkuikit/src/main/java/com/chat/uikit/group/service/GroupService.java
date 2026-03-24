@@ -57,7 +57,7 @@ public interface GroupService {
     Observable<GroupQr> getGroupQr(@Path("groupNo") String groupNo);
 
     @GET("group/my")
-    Observable<List<GroupEntity>> getMyGroups();
+    Observable<List<GroupEntity>> getMyGroups(@Query("space_id") String spaceId);
 
     @POST("groups/{group_no}/exit")
     Observable<CommonResponse> exitGroup(@Path("group_no") String group_no);

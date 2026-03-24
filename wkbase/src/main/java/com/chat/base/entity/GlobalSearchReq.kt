@@ -1,6 +1,6 @@
 package com.chat.base.entity
 
-class GlobalSearchReq(
+class GlobalSearchReq @JvmOverloads constructor(
     val onlyMessage: Int = 0,
     val keyword: String,
     val channelId: String,

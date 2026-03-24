@@ -55,7 +55,7 @@ public class GroupPresenter implements GroupContract.GroupPresenter {
 
     @Override
     public void getMyGroups() {
-        GroupModel.getInstance().getMyGroups((code, msg, list) -> {
+        GroupModel.getInstance().getMyGroups(null, (code, msg, list) -> {
             if (groupView.get() != null) {
                 if (code == HttpResponseCode.success) {
                     groupView.get().setMyGroups(list);

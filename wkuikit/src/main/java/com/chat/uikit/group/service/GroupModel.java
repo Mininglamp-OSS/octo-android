@@ -387,8 +387,8 @@ public class GroupModel extends WKBaseModel {
      *
      * @param iGetMyGroups 返回
      */
-    void getMyGroups(final IGetMyGroups iGetMyGroups) {
-        request(createService(GroupService.class).getMyGroups(), new IRequestResultListener<>() {
+    public void getMyGroups(String spaceId, final IGetMyGroups iGetMyGroups) {
+        request(createService(GroupService.class).getMyGroups(spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupEntity> result) {
                 iGetMyGroups.onResult(HttpResponseCode.success, "", result);

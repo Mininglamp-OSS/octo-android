@@ -100,4 +100,17 @@ dependencies {
     api project(path: ':MyLibs:rlottie')
     api 'com.github.WuKongIM:WuKongIMAndroidSDK:1.4.7'
 
+    // Markwon Markdown 渲染
+    api 'io.noties.markwon:core:4.6.2'
+    api 'io.noties.markwon:ext-strikethrough:4.6.2'
+    api 'io.noties.markwon:ext-tables:4.6.2'
+    api 'io.noties.markwon:ext-tasklist:4.6.2'
+    api 'io.noties.markwon:html:4.6.2'
+    api('io.noties.markwon:syntax-highlight:4.6.2') {
+        exclude group: 'org.jetbrains', module: 'annotations-java5'
+    }
+    api('io.noties:prism4j:2.0.0') {
+        exclude group: 'org.jetbrains', module: 'annotations-java5'
+    }
+    annotationProcessor 'io.noties:prism4j-bundler:2.0.0'
 }

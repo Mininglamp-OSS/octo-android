@@ -22,5 +22,11 @@
 
 #指定代码的压缩级别
 
+# Markwon
+-keep class io.noties.markwon.** { *; }
+-dontwarn io.noties.markwon.**
 
-
+# Prism4j
+-keep class io.noties.prism4j.** { *; }
+-keep class com.chat.base.markdown.WKGrammarLocatorDef { *; }
+-dontwarn io.noties.prism4j.**

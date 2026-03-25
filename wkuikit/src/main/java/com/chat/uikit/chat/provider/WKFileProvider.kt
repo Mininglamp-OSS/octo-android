@@ -54,7 +54,7 @@ class WKFileProvider : WKChatBaseProvider() {
         fileSizeTv.text = formatFileSize(fileContent.size)
         fileExtTv.text = fileContent.extension?.uppercase(Locale.getDefault()) ?: ""
 
-        setFileIcon(fileIconIv, fileContent.extension)
+        setFileIcon(fileIconIv, fileContent.extension, fileContent.name)
         resetCellBackground(parentView, uiChatMsgItemEntity, from)
 
         // Upload progress for sending
@@ -256,18 +256,19 @@ class WKFileProvider : WKChatBaseProvider() {
         }
     }
 
-    private fun setFileIcon(imageView: ImageView, extension: String?) {
-        val ext = extension?.lowercase(Locale.getDefault()) ?: ""
-        val iconRes = when {
-            ext in listOf("doc", "docx") -> R.drawable.ic_file_document
-            ext in listOf("xls", "xlsx") -> R.drawable.ic_file_document
-            ext in listOf("ppt", "pptx") -> R.drawable.ic_file_document
-            ext == "pdf" -> R.drawable.ic_file_document
-            ext in listOf("zip", "rar", "7z", "tar", "gz") -> R.drawable.ic_file_document
-            ext in listOf("mp3", "wav", "aac", "flac", "ogg") -> R.drawable.ic_file_document
-            ext in listOf("mp4", "avi", "mkv", "mov", "wmv") -> R.drawable.ic_file_document
-            ext == "apk" -> R.drawable.ic_file_document
-            ext == "txt" -> R.drawable.ic_file_document
+    private fun setFileIcon(imageView: ImageView, extension: String?, fileName: String?) {
+        // 优先用 extension 字段，去掉可能的点号前缀；为空则从文件名提取
+        var ext = extension?.removePrefix(".")?.lowercase(Locale.getDefault()) ?: ""
+        if (ext.isEmpty() && !fileName.isNullOrEmpty()) {
+            ext = fileName.substringAfterLast('.', "").lowercase(Locale.getDefault())
+        }
+        val iconRes = when (ext) {
+            "pdf" -> R.mipmap.ic_file_pdf
+            "doc", "docx" -> R.mipmap.ic_file_word
+            "xls", "xlsx" -> R.mipmap.ic_file_excel
+            "ppt", "pptx" -> R.mipmap.ic_file_ppt
+            "md", "markdown" -> R.mipmap.ic_file_markdown
+            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> R.mipmap.ic_file_video
             else -> R.drawable.ic_file_document
         }
         imageView.setImageResource(iconRes)

@@ -10,6 +10,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.chat.uikit.R;
+
 /**
  * 2021/7/26 17:42
  */
@@ -34,8 +36,8 @@ public class ChatTextTimeLayout extends FrameLayout {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        textView = (TextView) getChildAt(0);
-        containerView = getChildAt(getChildCount() - 1);
+        textView = findViewById(R.id.contentTv);
+        containerView = findViewById(R.id.msgTimeView);
         LayoutParams viewPartMainLayoutParams = (LayoutParams) textView.getLayoutParams();
         LayoutParams viewPartSlaveLayoutParams = (LayoutParams) containerView.getLayoutParams();
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);

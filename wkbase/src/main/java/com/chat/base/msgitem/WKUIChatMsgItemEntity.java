@@ -25,6 +25,7 @@ import com.chat.base.R;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.emoji.EmojiManager;
 import com.chat.base.emoji.MoonUtil;
+import com.chat.base.markdown.WKMarkwonProvider;
 import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
@@ -95,16 +96,29 @@ public class WKUIChatMsgItemEntity {
             return;
         }
 
-        displaySpans = new SpannableStringBuilder();
-        displaySpans.append(getContent());
+        String rawContent = getContent();
         Activity context = conversationContext.getChatActivity();
+
+        // Markwon 渲染：将 Markdown 语法转为 Android Spans
+        displaySpans = new SpannableStringBuilder(
+                WKMarkwonProvider.toMarkdown(context, rawContent)
+        );
+
+        // 处理 entity spans（使用文本搜索定位，因为 Markwon 渲染后原始 offset 已失效）
         if (WKReader.isNotEmpty(wkMsg.baseContentMsgModel.entities)) {
             for (WKMsgEntity entity : wkMsg.baseContentMsgModel.entities) {
-                if ((entity.offset + entity.length) > displaySpans.length() || entity.offset > displaySpans.length())
+                if ((entity.offset + entity.length) > rawContent.length() || entity.offset > rawContent.length())
                     continue;
 
+                // 从原始文本提取 entity 内容
+                String entityText = rawContent.substring(entity.offset, (entity.offset + entity.length));
+
                 if (entity.type.equals(ChatContentSpanType.getLink())) {
-                    String content = getContent().substring(entity.offset, (entity.offset + entity.length));
+                    // 在渲染后的文本中搜索定位
+                    int startIdx = displaySpans.toString().indexOf(entityText);
+                    if (startIdx < 0) continue;
+                    int endIdx = startIdx + entityText.length();
+                    String content = entityText;
                     NormalClickableContent.NormalClickableTypes types;
                     if (StringUtils.isMobile(content) || StringUtils.isEmail(content)) {
                         types = NormalClickableContent.NormalClickableTypes.Other;
@@ -201,10 +215,13 @@ public class WKUIChatMsgItemEntity {
                         intent.putExtra("url", content);
                         conversationContext.getChatActivity().startActivity(intent);
                     });
-                    displaySpans.setSpan(new StyleSpan(Typeface.BOLD), entity.offset, (entity.offset + entity.length), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    displaySpans.setSpan(clickableSpan, entity.offset, (entity.offset + entity.length), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    displaySpans.setSpan(new StyleSpan(Typeface.BOLD), startIdx, endIdx, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    displaySpans.setSpan(clickableSpan, startIdx, endIdx, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 } else if (entity.type.equals(ChatContentSpanType.getBotCommand())) {
-                    displaySpans.setSpan(new UnderlineSpan(), entity.offset, (entity.offset + entity.length), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    int startIdx = displaySpans.toString().indexOf(entityText);
+                    if (startIdx < 0) continue;
+                    int endIdx = startIdx + entityText.length();
+                    displaySpans.setSpan(new UnderlineSpan(), startIdx, endIdx, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
             }
         } else {
@@ -220,7 +237,7 @@ public class WKUIChatMsgItemEntity {
                     }
                     if (!TextUtils.isEmpty(showName)) {
                         showName = "@" + showName;
-                        int index = getContent().indexOf(showName);
+                        int index = displaySpans.toString().indexOf(showName);
                         if (index >= 0) {
                             String groupNo = "";
                             if (wkMsg.channelType == WKChannelType.GROUP) {
@@ -244,13 +261,13 @@ public class WKUIChatMsgItemEntity {
                     }
                 }
             }
-            // 默认数据
-            String content = getContent();
-            List<String> urls = StringUtils.getStrUrls(content);
+            // 默认数据：URL 在渲染后文本中搜索
+            String displayText = displaySpans.toString();
+            List<String> urls = StringUtils.getStrUrls(displayText);
             for (String url : urls) {
                 int fromIndex = 0;
                 while (fromIndex >= 0) {
-                    fromIndex = content.indexOf(url, fromIndex);
+                    fromIndex = displayText.indexOf(url, fromIndex);
                     if (fromIndex >= 0) {
                         NormalClickableSpan span = new NormalClickableSpan(false, ContextCompat.getColor(context, R.color.blue), new NormalClickableContent(NormalClickableContent.NormalClickableTypes.URL, url), view -> {
                             Intent intent = new Intent(conversationContext.getChatActivity(), WKWebViewActivity.class);
@@ -266,24 +283,26 @@ public class WKUIChatMsgItemEntity {
             if (wkMsg.baseContentMsgModel.mentionAll == 1) {
                 String mentionAll = "@All";
                 String mentionAll1 = "@所有人";
-                int index = getContent().indexOf(mentionAll);
+                String currentText = displaySpans.toString();
+                int index = currentText.indexOf(mentionAll);
                 if (index >= 0) {
                     displaySpans.setSpan(new ForegroundColorSpan(Theme.colorAccount), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
-                int index1 = getContent().indexOf(mentionAll1);
+                int index1 = currentText.indexOf(mentionAll1);
                 if (index1 >= 0) {
-                    displaySpans.setSpan(new ForegroundColorSpan(Theme.colorAccount), index1, (index1 + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    displaySpans.setSpan(new ForegroundColorSpan(Theme.colorAccount), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
             }
         }
-        // emoji
-        Matcher matcher = EmojiManager.getInstance().getPattern().matcher(getContent());
+        // emoji：在渲染后文本中匹配
+        String renderedText = displaySpans.toString();
+        Matcher matcher = EmojiManager.getInstance().getPattern().matcher(renderedText);
         while (matcher.find()) {
             int start = matcher.start();
             int end = matcher.end();
-            String emoji = getContent().substring(start, end);
+            String emoji = renderedText.substring(start, end);
             Drawable d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.DEF_SCALE);
             if (d != null) {
                 AlignImageSpan span = new AlignImageSpan(d, AlignImageSpan.ALIGN_CENTER) {
@@ -295,16 +314,23 @@ public class WKUIChatMsgItemEntity {
                 displaySpans.setSpan(span, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
-        // 单独处理@效果
+        // 单独处理 @mention entity（使用文本搜索定位）
         if (WKReader.isNotEmpty(wkMsg.baseContentMsgModel.entities)) {
-            int allOffset = 0;
             for (WKMsgEntity entity : wkMsg.baseContentMsgModel.entities) {
                 if (entity.type.equals(ChatContentSpanType.getMention())) {
                     String uid = entity.value;
                     String showName = "";
 
-                    int start = entity.offset + allOffset;
-                    int end = entity.offset + entity.length + allOffset;
+                    String displayContent = rawContent;
+                    if (entity.offset > displayContent.length() || (entity.offset + entity.length) > displayContent.length()) {
+                        continue;
+                    }
+                    String oldName = displayContent.substring(entity.offset, (entity.offset + entity.length));
+
+                    // 在渲染后文本中搜索 oldName 的位置
+                    int start = displaySpans.toString().indexOf(oldName);
+                    if (start < 0) continue;
+                    int end = start + oldName.length();
 
                     if (uid.equals("-1")) {
                         showName = displaySpans.subSequence(start, end).toString();
@@ -314,11 +340,6 @@ public class WKUIChatMsgItemEntity {
                         showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
                     }
                     boolean isUserDetail = !TextUtils.isEmpty(uid) && !uid.equals("-1");
-                    String displayContent = getContent();
-                    if (entity.offset > displayContent.length() || (entity.offset + entity.length) > displayContent.length()) {
-                        continue;
-                    }
-                    String oldName = displayContent.substring(entity.offset, (entity.offset + entity.length));
                     if (!TextUtils.isEmpty(showName)) {
                         if (!showName.startsWith("@"))
                             showName = "@" + showName;
@@ -343,11 +364,6 @@ public class WKUIChatMsgItemEntity {
                     }
 
                     displaySpans.replace(start, end, nameSpan);
-
-                    if (!TextUtils.isEmpty(oldName)) {
-                        int diff = showName.length() - oldName.length();
-                        allOffset += diff;
-                    }
                 }
             }
         }

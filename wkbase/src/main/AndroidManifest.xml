@@ -17,6 +17,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".act.WKCropImageActivity" />
+        <activity android:name=".act.WKMarkdownViewActivity" />
 
         <service
             android:name="com.tencent.smtt.export.external.DexClassLoaderProviderService"

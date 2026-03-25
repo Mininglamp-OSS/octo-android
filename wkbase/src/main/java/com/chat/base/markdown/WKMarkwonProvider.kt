@@ -1,0 +1,56 @@
+package com.chat.base.markdown
+
+import android.content.Context
+import android.text.Spanned
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.Markwon
+import io.noties.markwon.MarkwonVisitor
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
+import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.ext.tasklist.TaskListPlugin
+import io.noties.markwon.html.HtmlPlugin
+import io.noties.markwon.syntax.Prism4jThemeDefault
+import io.noties.markwon.syntax.SyntaxHighlightPlugin
+import org.commonmark.node.SoftLineBreak
+
+object WKMarkwonProvider {
+
+    @Volatile
+    private var markwon: Markwon? = null
+
+    private fun getInstance(context: Context): Markwon {
+        return markwon ?: synchronized(this) {
+            markwon ?: createMarkwon(context.applicationContext).also { markwon = it }
+        }
+    }
+
+    private fun createMarkwon(context: Context): Markwon {
+        val prism4j = WKPrism4jFactory.create()
+        val codeBlockPlugin = WKCodeBlockPlugin.create(context)
+        val prism4jTheme = Prism4jThemeDefault.create(codeBlockPlugin.codeBlockBackgroundColor)
+
+        // 将单换行（soft break）渲染为实际换行，而非 CommonMark 默认的空格合并
+        val softBreakPlugin = object : AbstractMarkwonPlugin() {
+            override fun configureVisitor(builder: MarkwonVisitor.Builder) {
+                builder.on(SoftLineBreak::class.java) { visitor, _ ->
+                    visitor.ensureNewLine()
+                }
+            }
+        }
+
+        return Markwon.builder(context)
+            .usePlugin(codeBlockPlugin)
+            .usePlugin(softBreakPlugin)
+            .usePlugin(StrikethroughPlugin.create())
+            .usePlugin(TablePlugin.create(context))
+            .usePlugin(TaskListPlugin.create(context))
+            .usePlugin(HtmlPlugin.create())
+            .usePlugin(SyntaxHighlightPlugin.create(prism4j, prism4jTheme))
+            .build()
+    }
+
+    @JvmStatic
+    fun toMarkdown(context: Context, text: String): Spanned {
+        return getInstance(context).toMarkdown(text)
+    }
+}

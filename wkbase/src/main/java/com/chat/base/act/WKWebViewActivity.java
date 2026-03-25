@@ -159,6 +159,16 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             String wk_theme_pref = Theme.getTheme();
             url = String.format("%s?uid=%s&token=%s&mode=%s", url, WKConfig.getInstance().getUid(), WKConfig.getInstance().getToken(), wk_theme_pref);
         }
+        // .md 文件使用 Markdown 原生渲染
+        String urlPath = Uri.parse(url).getPath();
+        if (urlPath != null && urlPath.toLowerCase().endsWith(".md")) {
+            Intent mdIntent = new Intent(this, WKMarkdownViewActivity.class);
+            mdIntent.putExtra("url", url);
+            startActivity(mdIntent);
+            finish();
+            return;
+        }
+
         Log.e("加载的URL", url);
         wkVBinding.webView.loadUrl(url);
     }

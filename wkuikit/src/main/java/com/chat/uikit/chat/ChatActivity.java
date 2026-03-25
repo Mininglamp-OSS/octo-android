@@ -1183,7 +1183,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             oldestOrderSeq = lastPreviewMsgOrderSeq;
         }
         if (unreadStartMsgOrderSeq != 0) contain = true;
-        WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit, aroundMsgOrderSeq, new IGetOrSyncHistoryMsgBack() {
+        // 系统 Bot 跨 Space 共享：加大加载量，确保过滤后有足够的当前 Space 消息
+        int loadLimit = SYSTEM_BOTS.contains(channelId) ? Math.max(limit, 500) : limit;
+        WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, loadLimit, aroundMsgOrderSeq, new IGetOrSyncHistoryMsgBack() {
             @Override
             public void onSyncing() {
 
@@ -1214,6 +1216,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 }
                 isSyncLastMsg = false;
                 List<WKMsg> filteredList = filterSystemBotMessages(list);
+
                 List<WKMsg> tempList = new ArrayList<>();
                 for (WKMsg msg : filteredList) {
                     if (isSetNewData || !chatAdapter.isExist(msg.clientMsgNO, msg.messageID)){
@@ -2491,6 +2494,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     // 系统 Bot：在所有 Space 可见，但聊天历史需按 Space 过滤
     private static final java.util.Set<String> SYSTEM_BOTS = new java.util.HashSet<>(java.util.Arrays.asList("botfather"));
+
 
     /**
      * 过滤系统 Bot（如 BotFather）的消息，与 Web 端 filterSystemBotMessages 逻辑一致

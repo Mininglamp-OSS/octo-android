@@ -63,6 +63,7 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKReminder;
+import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKConnectReason;
 import com.xinbida.wukongim.message.type.WKConnectStatus;
@@ -459,11 +460,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 boolean isAdd = true;
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                     if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
-//                            if (!isEnd) {
-//                                isAdd = false;
-//                                chatConversationAdapter.getData().get(i).uiConversationMsg = uiConversationMsg;
-//                                break;
-//                            }
+                        // Space 过滤：消息来自其他 Space 时，跳过所有视觉更新
+                        if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
+                            isAdd = false;
+                            break;
+                        }
                         isAdd = false;
                         if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp || (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null && !chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
                             chatConversationAdapter.getData().get(i).isResetTyping = true;
@@ -738,6 +739,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (WKReader.isNotEmpty(chatConversationAdapter.getData())) {
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                 if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
+                    // Space 过滤：实时消息来自其他 Space 时，跳过所有更新
+                    if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
+                        isAdd = false;
+                        break;
+                    }
                     if (!isEnd) {
                         isAdd = false;
                         chatConversationAdapter.getData().get(i).uiConversationMsg = uiConversationMsg;
@@ -812,6 +818,34 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         }
+    }
+
+    /**
+     * 判断消息是否来自其他 Space（非当前 Space）。
+     * 用于过滤跨 Space 的实时消息更新，避免错误的未读计数。
+     */
+    private boolean isMessageFromOtherSpace(WKMsg msg) {
+        if (msg == null) return false;
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return false;
+        String msgSpaceId = null;
+        if (!TextUtils.isEmpty(msg.content)) {
+            try {
+                org.json.JSONObject json = new org.json.JSONObject(msg.content);
+                msgSpaceId = json.optString("space_id", "");
+            } catch (Exception ignored) {
+            }
+        }
+        if (TextUtils.isEmpty(msgSpaceId) && msg.baseContentMsgModel != null) {
+            try {
+                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
+                if (json != null) {
+                    msgSpaceId = json.optString("space_id", "");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return !TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId);
     }
 
     /**

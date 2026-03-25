@@ -36,10 +36,11 @@ import okhttp3.Response;
 
 public class ApiUrlDialog extends Dialog {
 
-    private static final String DEFAULT_URL = "https://api-test.example.com";
+    private static final String DEFAULT_URL = "https://api.example.com";
 
     private static final String[][] PRESET_SERVERS = {
-            {"国内版", "api-test.example.com"},
+            {"国内正式版", "api.example.com"},
+            {"国内测试版", "api-test.example.com"},
             {"国际版", "api-test.example.com"},
     };
 

@@ -93,6 +93,37 @@
             android:layout_marginLeft="20dp"
             android:layout_marginTop="20dp"
             android:layout_marginRight="20dp"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/nicknameEt"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:background="@color/transparent"
+                android:gravity="center_vertical"
+                android:hint="@string/hint_nickname"
+                android:inputType="text"
+                android:maxLength="20"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:textColor="@color/colorDark"
+                android:textColorHint="@color/color999"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <View
+            style="@style/view_line"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp" />
+
+        <LinearLayout
+            android:id="@+id/verCodeLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginRight="20dp"
             android:orientation="horizontal"
             android:visibility="gone">
 
@@ -128,40 +159,11 @@
         </LinearLayout>
 
         <View
+            android:id="@+id/verCodeLineView"
             style="@style/view_line"
             android:layout_marginLeft="20dp"
             android:layout_marginRight="20dp"
             android:visibility="gone" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="20dp"
-            android:layout_marginTop="20dp"
-            android:layout_marginRight="20dp"
-            android:orientation="horizontal">
-
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/nicknameEt"
-                android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:background="@color/transparent"
-                android:gravity="center_vertical"
-                android:hint="@string/hint_nickname"
-                android:inputType="text"
-                android:maxLength="20"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"
-                android:textColor="@color/colorDark"
-                android:textColorHint="@color/color999"
-                android:textSize="14sp" />
-
-        </LinearLayout>
-
-        <View
-            style="@style/view_line"
-            android:layout_marginLeft="20dp"
-            android:layout_marginRight="20dp" />
 
         <LinearLayout
             android:layout_width="match_parent"

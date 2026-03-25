@@ -50,6 +50,12 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     private LoginPresenter presenter;
     private WKAPPConfig appConfig;
 
+    /** 是否为正式服务器（需要邮箱验证码） */
+    private boolean needsVerificationCode() {
+        return WKApiConfig.baseUrl != null && WKApiConfig.baseUrl.contains("api.example.com/api")
+                && !WKApiConfig.baseUrl.contains("im-test.");
+    }
+
     @Override
     protected ActRegisterLayoutBinding getViewBinding() {
         return ActRegisterLayoutBinding.inflate(getLayoutInflater());
@@ -81,6 +87,15 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
         wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
         wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
         wkVBinding.registerAppTv.setText(String.format(getString(R.string.register_app), getString(R.string.app_name)));
+
+        // 正式环境：显示验证码输入区域，账号输入提示改为邮箱
+        if (needsVerificationCode()) {
+            wkVBinding.verCodeLayout.setVisibility(View.VISIBLE);
+            wkVBinding.verCodeLineView.setVisibility(View.VISIBLE);
+            wkVBinding.nameEt.setHint(R.string.input_email);
+            wkVBinding.nameEt.setInputType(android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        }
+
         wkVBinding.nameEt.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
@@ -148,13 +163,16 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
             }
 
             String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString().trim();
-            // TODO: 临时跳过验证码，方便测试
-            String verCode = "";
+            String verCode = needsVerificationCode() ? wkVBinding.verfiEt.getText().toString().trim() : "";
             String nickname = Objects.requireNonNull(wkVBinding.nicknameEt.getText()).toString().trim();
             String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
             String inviteCode = Objects.requireNonNull(wkVBinding.inviteCodeTv.getText()).toString();
-            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            if (needsVerificationCode() && !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                 showSingleBtnDialog(getString(R.string.email_format_error));
+                return;
+            }
+            if (needsVerificationCode() && TextUtils.isEmpty(verCode)) {
+                showSingleBtnDialog(getString(R.string.hint_verfi));
                 return;
             }
             if (TextUtils.isEmpty(nickname)) {
@@ -222,16 +240,16 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     }
 
     private void checkStatus() {
-        String phone = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
-        // TODO: 临时跳过验证码校验，方便测试
+        String email = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
         String pwd = Objects.requireNonNull(wkVBinding.pwdEt.getText()).toString();
-        if (!TextUtils.isEmpty(phone) && !TextUtils.isEmpty(pwd)) {
-            wkVBinding.registerBtn.setAlpha(1f);
-            wkVBinding.registerBtn.setEnabled(true);
-        } else {
-            wkVBinding.registerBtn.setAlpha(0.2f);
-            wkVBinding.registerBtn.setEnabled(false);
+        boolean ready = !TextUtils.isEmpty(email) && !TextUtils.isEmpty(pwd);
+        // 正式环境额外需要验证码
+        if (needsVerificationCode()) {
+            String verCode = wkVBinding.verfiEt.getText().toString();
+            ready = ready && !TextUtils.isEmpty(verCode);
         }
+        wkVBinding.registerBtn.setAlpha(ready ? 1f : 0.2f);
+        wkVBinding.registerBtn.setEnabled(ready);
     }
 
 

@@ -267,6 +267,8 @@ class WKFileProvider : WKChatBaseProvider() {
             "doc", "docx" -> R.mipmap.ic_file_word
             "xls", "xlsx" -> R.mipmap.ic_file_excel
             "ppt", "pptx" -> R.mipmap.ic_file_ppt
+            "md", "markdown" -> R.mipmap.ic_file_markdown
+            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> R.mipmap.ic_file_video
             else -> R.drawable.ic_file_document
         }
         imageView.setImageResource(iconRes)

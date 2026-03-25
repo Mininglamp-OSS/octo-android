@@ -47,6 +47,7 @@ import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 2020-08-05 18:00
@@ -367,7 +368,71 @@ public class WKUIChatMsgItemEntity {
                 }
             }
         }
+        // 自动检测 @mention：对没有 entity 标记的 @xxx 文本，匹配群成员/联系人（与 iOS detectMentionsInText 一致）
+        if (wkMsg.channelType == WKChannelType.GROUP && iLinkClick != null) {
+            detectAndApplyMentions(conversationContext, wkMsg);
+        }
+    }
 
+    /**
+     * 自动检测文本中的 @mention，匹配群成员或联系人，添加可点击 span。
+     * 仅处理没有被 entity mention 覆盖的 @xxx 文本。
+     */
+    private void detectAndApplyMentions(IConversationContext conversationContext, WKMsg wkMsg) {
+        String text = displaySpans.toString();
+        Pattern pattern = Pattern.compile("@(\\S+)");
+        Matcher m = pattern.matcher(text);
+        List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
+                .getMembers(wkMsg.channelID, wkMsg.channelType);
+
+        // 收集已有 mention span 的范围，避免重复
+        NormalClickableSpan[] existingSpans = displaySpans.getSpans(0, displaySpans.length(), NormalClickableSpan.class);
+
+        while (m.find()) {
+            int start = m.start();
+            int end = m.end();
+
+            // 检查此范围是否已有 clickable span（被 entity mention 覆盖）
+            boolean overlaps = false;
+            for (NormalClickableSpan span : existingSpans) {
+                int spanStart = displaySpans.getSpanStart(span);
+                int spanEnd = displaySpans.getSpanEnd(span);
+                if (start < spanEnd && spanStart < end) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps) continue;
+
+            String mentionName = m.group(1);
+            String matchedUID = null;
+
+            // 在群成员中匹配
+            if (WKReader.isNotEmpty(members)) {
+                for (WKChannelMember member : members) {
+                    if (mentionName.equals(member.memberName) || mentionName.equals(member.memberRemark) || mentionName.equals(member.memberUID)) {
+                        matchedUID = member.memberUID;
+                        break;
+                    }
+                    // 尝试匹配联系人备注
+                    WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(member.memberUID, WKChannelType.PERSONAL);
+                    if (ch != null && (mentionName.equals(ch.channelName) || mentionName.equals(ch.channelRemark))) {
+                        matchedUID = member.memberUID;
+                        break;
+                    }
+                }
+            }
+
+            if (matchedUID != null) {
+                String groupNo = wkMsg.channelID;
+                String finalUID = matchedUID;
+                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                String clickContent = matchedUID + "|" + groupNo;
+                displaySpans.setSpan(new NormalClickableSpan(false, Theme.colorAccount,
+                        new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, clickContent),
+                        view -> iLinkClick.onShowUserDetail(finalUID, groupNo)), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
     }
 
     public interface ILinkClick {

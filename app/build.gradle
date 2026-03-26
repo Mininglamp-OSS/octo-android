@@ -33,7 +33,7 @@ android {
         release {
             def localProps = new Properties()
             localProps.load(new FileInputStream(rootProject.file("local.properties")))
-            storeFile rootProject.file('my-app.jks')
+            storeFile file('my-app.jks')
             storePassword localProps['RELEASE_STORE_PASSWORD']
             keyAlias 'dmwork'
             keyPassword localProps['RELEASE_KEY_PASSWORD']

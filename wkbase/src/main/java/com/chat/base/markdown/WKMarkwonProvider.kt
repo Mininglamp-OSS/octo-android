@@ -7,6 +7,7 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.ext.tables.TableTheme
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.syntax.Prism4jThemeDefault
@@ -42,7 +43,12 @@ object WKMarkwonProvider {
             .usePlugin(codeBlockPlugin)
             .usePlugin(softBreakPlugin)
             .usePlugin(StrikethroughPlugin.create())
-            .usePlugin(TablePlugin.create(context))
+            .usePlugin(TablePlugin.create { it
+                .tableCellPadding(dp2px(context, 4f))
+                .tableBorderWidth(dp2px(context, 0.5f))
+                .tableBorderColor(android.graphics.Color.parseColor("#DDDDDD"))
+                .tableHeaderRowBackgroundColor(android.graphics.Color.parseColor("#F5F5F5"))
+            })
             .usePlugin(TaskListPlugin.create(context))
             .usePlugin(HtmlPlugin.create())
             .usePlugin(SyntaxHighlightPlugin.create(prism4j, prism4jTheme))
@@ -52,5 +58,9 @@ object WKMarkwonProvider {
     @JvmStatic
     fun toMarkdown(context: Context, text: String): Spanned {
         return getInstance(context).toMarkdown(text)
+    }
+
+    private fun dp2px(context: Context, dp: Float): Int {
+        return (dp * context.resources.displayMetrics.density + 0.5f).toInt()
     }
 }

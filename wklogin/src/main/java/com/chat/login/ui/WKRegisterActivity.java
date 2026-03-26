@@ -50,10 +50,9 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
     private LoginPresenter presenter;
     private WKAPPConfig appConfig;
 
-    /** 是否为正式服务器（需要邮箱验证码） */
+    /** 是否需要邮箱验证码（国内正式 + 测试环境均需要） */
     private boolean needsVerificationCode() {
-        return WKApiConfig.baseUrl != null && WKApiConfig.baseUrl.contains("api.example.com/api")
-                && !WKApiConfig.baseUrl.contains("im-test.");
+        return WKApiConfig.baseUrl != null && WKApiConfig.baseUrl.contains("deepminer.com.cn/api");
     }
 
     @Override
@@ -199,6 +198,8 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
                     showSingleBtnDialog(getString(R.string.email_format_error));
                     return;
                 }
+                wkVBinding.getVCodeBtn.setEnabled(false);
+                wkVBinding.getVCodeBtn.setAlpha(0.5f);
                 presenter.emailSendCode(email, 0);
             }
         });
@@ -325,6 +326,8 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
             wkVBinding.nameEt.setEnabled(false);
             presenter.startTimer();
         } else {
+            wkVBinding.getVCodeBtn.setEnabled(true);
+            wkVBinding.getVCodeBtn.setAlpha(1f);
             showToast(msg);
         }
     }

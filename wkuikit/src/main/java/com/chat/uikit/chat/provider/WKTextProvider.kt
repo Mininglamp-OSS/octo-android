@@ -125,6 +125,13 @@ open class WKTextProvider : WKChatBaseProvider() {
         contentTv.setTextColor(textColor)
         contentTv.text = uiChatMsgItemEntity.displaySpans
         contentTv.movementMethod = LinkMovementMethod.getInstance()
+        // 表格 Span 首次渲染时宽度尚未确定导致列重叠，延迟重设文本触发二次渲染（仅含表格时）
+        val content = uiChatMsgItemEntity.displaySpans
+        if (content != null && content.getSpans(0, content.length, io.noties.markwon.ext.tables.TableRowSpan::class.java).isNotEmpty()) {
+            contentTv.postDelayed({
+                contentTv.text = android.text.SpannableStringBuilder(content)
+            }, 80)
+        }
 //        val preText =  PrecomputedTextCompat.create(
 //            uiChatMsgItemEntity.displaySpans,
 //            TextViewCompat.getTextMetricsParams(contentTv)

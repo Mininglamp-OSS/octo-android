@@ -16,6 +16,7 @@ import com.chat.base.utils.WKReader;
 import com.chat.uikit.group.GroupEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
+import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
@@ -60,6 +61,11 @@ public class GroupModel extends WKBaseModel {
         jsonArray1.addAll(names);
         jsonObject.put("member_names", jsonArray1);
         jsonObject.put("msg_auto_delete", WKConfig.getInstance().getUserInfo().msg_expire_second);
+        // Space 模式下传递 space_id，让服务端允许非好友成员建群
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject.put("space_id", spaceId);
+        }
         request(createService(GroupService.class).createGroup(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(GroupEntity groupEntity) {
@@ -96,6 +102,11 @@ public class GroupModel extends WKBaseModel {
         JSONArray nameArr = new JSONArray();
         nameArr.addAll(names);
         jsonObject.put("names", nameArr);
+        // Space 模式下传递 space_id，让服务端允许非好友成员加群
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject.put("space_id", spaceId);
+        }
         request(createService(GroupService.class).addGroupMembers(groupNo, jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
@@ -122,6 +133,11 @@ public class GroupModel extends WKBaseModel {
         jsonArray.addAll(ids);
         jsonObject1.put("uids", jsonArray);
         jsonObject1.put("remark", "");
+        // Space 模式下传递 space_id，让服务端允许非好友成员邀请入群
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject1.put("space_id", spaceId);
+        }
         request(createService(GroupService.class).inviteGroupMembers(groupNo, jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {

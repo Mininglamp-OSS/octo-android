@@ -34,6 +34,9 @@ import com.chat.uikit.R;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.databinding.ActChooseContactsLayoutBinding;
 import com.chat.uikit.group.service.GroupModel;
+import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.space.SpaceEntity;
+import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
 import com.xinbida.wukongim.WKIM;
@@ -354,12 +357,58 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     @Override
     protected void initData() {
         super.initData();
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            loadContactsFromSpace(spaceId);
+        } else {
+            loadContactsLocal();
+        }
+    }
+
+    private void loadContactsFromSpace(String spaceId) {
+        String myUid = WKConfig.getInstance().getUid();
+        SpaceModel.getInstance().getMembers(spaceId, new SpaceModel.IMembersListener() {
+            @Override
+            public void onResult(List<SpaceEntity.SpaceMember> members) {
+                List<WKChannel> tempList = new ArrayList<>();
+                for (SpaceEntity.SpaceMember member : members) {
+                    if (member.uid.equals(myUid)) continue;
+                    WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
+                    channel.channelName = member.name;
+                    channel.robot = member.robot;
+                    // 从本地补充备注名、头像等完整信息
+                    WKChannel localChannel = WKIM.getInstance().getChannelManager().getChannel(member.uid, WKChannelType.PERSONAL);
+                    if (localChannel != null) {
+                        channel.channelRemark = localChannel.channelRemark;
+                        channel.avatar = localChannel.avatar;
+                        channel.avatarCacheKey = localChannel.avatarCacheKey;
+                        if (!TextUtils.isEmpty(localChannel.channelName)) {
+                            channel.channelName = localChannel.channelName;
+                        }
+                    }
+                    tempList.add(channel);
+                }
+                buildAndDisplayList(tempList);
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                loadContactsLocal();
+            }
+        });
+    }
+
+    private void loadContactsLocal() {
+        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
+        buildAndDisplayList(tempList);
+    }
+
+    private void buildAndDisplayList(List<WKChannel> tempList) {
         WKAPPConfig wkappConfig = WKConfig.getInstance().getAppConfig();
         int inviteSystemAccountJoinGroupOn = 0;
         if (wkappConfig != null) {
             inviteSystemAccountJoinGroupOn = wkappConfig.invite_system_account_join_group_on;
         }
-        List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = tempList.size(); i < size; i++) {
             if (!TextUtils.isEmpty(unVisibleUIDs) && unVisibleUIDs.contains(tempList.get(i).channelID))

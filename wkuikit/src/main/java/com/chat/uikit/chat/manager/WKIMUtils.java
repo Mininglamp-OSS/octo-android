@@ -171,10 +171,9 @@ public class WKIMUtils {
         });
         //监听聊天附件上传
         WKIM.getInstance().getMsgManager().addOnUploadAttachListener((msg, listener) -> WKSendMsgUtils.getInstance().uploadChatAttachment(msg, listener));
-        //监听同步会话
-        // msg_count 增大到 500：系统 Bot（BotFather）跨 Space 共享，服务端 recents 不按 space_id 过滤，
-        // 默认 msg_count 过小时，某个 Space 大量消息会将其他 Space 消息完全挤出同步范围
-        WKIM.getInstance().getConversationManager().addOnSyncConversationListener((s, i, l, iSyncConvChatBack) -> MsgModel.getInstance().syncChat(s, Math.max(i, 500), l, iSyncConvChatBack));
+        //监听同步会话（msg_count=30，与 iOS 保持一致）
+        // BotFather 跨 Space 可见性问题参考 iOS 用 per-space 标记解决，不再通过加大 msg_count 暴力解决
+        WKIM.getInstance().getConversationManager().addOnSyncConversationListener((s, i, l, iSyncConvChatBack) -> MsgModel.getInstance().syncChat(s, Math.max(i, 30), l, iSyncConvChatBack));
         //监听同步频道会话
         WKIM.getInstance().getMsgManager().addOnSyncChannelMsgListener((channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack) -> MsgModel.getInstance().syncChannelMsg(channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack));
         //新消息监听

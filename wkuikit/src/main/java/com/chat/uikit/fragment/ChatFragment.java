@@ -8,6 +8,7 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -72,6 +73,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -177,19 +179,35 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.spaceHeaderLayout.setOnClickListener(v -> {
             SpacePopupWindow popup = new SpacePopupWindow(requireContext());
             popup.setOnSpaceSelectedListener(space -> {
+                long switchStart = System.currentTimeMillis();
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id);
                 wkVBinding.textSwitcher.setText(space.name);
-                // 清除成员缓存，新 Space 需要重新拉取
+                Log.d("SpaceSwitch", "[1] setCurrentSpaceId: " + (System.currentTimeMillis() - switchStart) + "ms");
+
+                // 清除成员缓存
                 SpaceModel.getInstance().invalidateMembersCache();
-                // 通知联系人列表刷新
-                EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
-                // 清空 Space 会话过滤集合、本地会话数据库，显式触发新 Space 的会话同步
+
+                // 参考 iOS：先立即清空 UI（给用户即时反馈），再异步清 DB
                 spaceConversationKeys.clear();
-                WKIM.getInstance().getConversationManager().clearAll();
                 chatConversationAdapter.setList(new ArrayList<>());
-                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                    // WKIM 内部会将同步结果保存到本地 DB 并通知 RefreshMsgListListener 刷新 UI
+                Log.d("SpaceSwitch", "[2] UI cleared: " + (System.currentTimeMillis() - switchStart) + "ms");
+
+                // DB 清理 + 会话同步放到后台线程（iOS 用 serial DB queue，不阻塞主线程）
+                Schedulers.io().scheduleDirect(() -> {
+                    long dbStart = System.currentTimeMillis();
+                    WKIM.getInstance().getConversationManager().clearAll();
+                    Log.d("SpaceSwitch", "[3] clearAll DB (background): " + (System.currentTimeMillis() - dbStart) + "ms");
+
+                    // 回到主线程触发同步和联系人刷新
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                            // WKIM 内部会将同步结果保存到本地 DB 并通知 RefreshMsgListListener 刷新 UI
+                        });
+                        // 通知联系人列表刷新
+                        EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
+                        Log.d("SpaceSwitch", "[4] sync triggered: " + (System.currentTimeMillis() - switchStart) + "ms total");
+                    });
                 });
             });
             popup.show(wkVBinding.spaceHeaderLayout);
@@ -433,6 +451,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
+            Log.d("SpaceSwitch", "[sync] RefreshMsgList callback, count=" + (list == null ? 0 : list.size()));
             if (WKReader.isEmpty(list)) {
                 return;
             }
@@ -443,15 +462,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             if (chatConversationAdapter.getData().isEmpty()) {
                 // 适配器为空，说明是 Space 切换后的首次同步结果，记录有效会话 key
+                long syncStart = System.currentTimeMillis();
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
+                    // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
+                    adjustSystemBotForSpace(uiConversationMsg);
                     ChatConversationMsg msg = new ChatConversationMsg(uiConversationMsg);
                     uiList.add(msg);
                     spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
                 }
+                Log.d("SpaceSwitch", "[sync] first sync build list: " + (System.currentTimeMillis() - syncStart) + "ms, items=" + uiList.size());
                 sortMsg(uiList);
                 setAllCount();
+                Log.d("SpaceSwitch", "[sync] first sync total: " + (System.currentTimeMillis() - syncStart) + "ms");
                 return;
             }
             List<ChatConversationMsg> uiList = new ArrayList<>();
@@ -527,6 +551,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
+            Log.d("SpaceSwitch", "[conn] status=" + i + " reason=" + reason);
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
                 wkVBinding.spaceArrowTv.setVisibility(View.GONE);
@@ -637,6 +662,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             List<ChatConversationMsg> tempList = new ArrayList<>();
             if (WKReader.isNotEmpty(list)) {
                 for (int i = 0, size = list.size(); i < size; i++) {
+                    // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
+                    adjustSystemBotForSpace(list.get(i));
                     tempList.add(new ChatConversationMsg(list.get(i)));
                 }
             }
@@ -788,6 +815,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (!isEnd) msgCount++;
 
         if (isAdd) {
+            // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
+            adjustSystemBotForSpace(uiConversationMsg);
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
             if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
@@ -848,6 +877,47 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         return !TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId);
     }
 
+    // 系统 Bot（如 BotFather）：跨 Space 共享，需要按消息 space_id 过滤（参考 iOS shouldShowConversation）
+    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+
+    /**
+     * 对系统 Bot（BotFather）的会话进行 Space 适配：
+     * 当最后一条消息不属于当前 Space 时，清零未读数，避免跨 Space 未读数串扰。
+     * BotFather 始终显示在会话列表中（参考 iOS shouldShowConversation），
+     * 显示内容由 ChatConversationAdapter.findSystemBotSpaceContent 处理。
+     */
+    private void adjustSystemBotForSpace(WKUIConversationMsg uiConversationMsg) {
+        if (uiConversationMsg == null) return;
+        if (!SYSTEM_BOTS.contains(uiConversationMsg.channelID)) return;
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return;
+
+        WKMsg msg = uiConversationMsg.getWkMsg();
+        if (msg == null) return;
+
+        String msgSpaceId = null;
+        if (!TextUtils.isEmpty(msg.content)) {
+            try {
+                org.json.JSONObject json = new org.json.JSONObject(msg.content);
+                msgSpaceId = json.optString("space_id", "");
+            } catch (Exception ignored) {
+            }
+        }
+        if (TextUtils.isEmpty(msgSpaceId) && msg.baseContentMsgModel != null) {
+            try {
+                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
+                if (json != null) {
+                    msgSpaceId = json.optString("space_id", "");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        // 最后一条消息属于其他 Space 时，清零未读数
+        if (!TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId)) {
+            uiConversationMsg.unreadCount = 0;
+        }
+    }
+
     /**
      * 延迟触发 Space 会话重新同步。
      * 当收到不属于当前 Space 的实时消息时调用，使用防抖避免频繁请求。
@@ -856,12 +926,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void scheduleSpaceResync() {
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
+        Log.d("SpaceSwitch", "[resync] scheduled");
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             pendingSpaceResync = false;
+            Log.d("SpaceSwitch", "[resync] executing");
             spaceConversationKeys.clear();
-            WKIM.getInstance().getConversationManager().clearAll();
             chatConversationAdapter.setList(new ArrayList<>());
-            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            Schedulers.io().scheduleDirect(() -> {
+                WKIM.getInstance().getConversationManager().clearAll();
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                    });
+                });
             });
         }, 500);
     }

@@ -8,6 +8,7 @@
     <string name="auth_email">Verify your email</string>
     <string name="auth_email_tips">%s will send a verification code to your email, please enter the code you received</string>
     <string name="hint_verfi">Enter verification code</string>
+    <string name="input_email">Enter email</string>
     <string name="name_not_null">Enter name</string>
     <string name="nickname_not_null">Nickname should be filled</string>
     <string name="pwd_not_null">Please enter password</string>

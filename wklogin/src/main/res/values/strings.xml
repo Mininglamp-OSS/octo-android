@@ -13,6 +13,7 @@
     <string name="auth_email">验证您的邮箱</string>
     <string name="auth_email_tips">%s会发送验证码到您的邮箱，请输入您收到的验证码</string>
     <string name="hint_verfi">请输入验证码</string>
+    <string name="input_email">请输入邮箱</string>
     <string name="name_not_null">请输入名称</string>
     <string name="nickname_not_null">昵称不能为空</string>
     <string name="pwd_not_null">请输入密码</string>

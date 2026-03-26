@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
+import android.util.Log;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -55,6 +56,8 @@ import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKMsg;
+
+import org.json.JSONObject;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
@@ -63,8 +66,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -166,7 +172,9 @@ public class WKIMUtils {
         //监听聊天附件上传
         WKIM.getInstance().getMsgManager().addOnUploadAttachListener((msg, listener) -> WKSendMsgUtils.getInstance().uploadChatAttachment(msg, listener));
         //监听同步会话
-        WKIM.getInstance().getConversationManager().addOnSyncConversationListener((s, i, l, iSyncConvChatBack) -> MsgModel.getInstance().syncChat(s, i, l, iSyncConvChatBack));
+        // msg_count 增大到 500：系统 Bot（BotFather）跨 Space 共享，服务端 recents 不按 space_id 过滤，
+        // 默认 msg_count 过小时，某个 Space 大量消息会将其他 Space 消息完全挤出同步范围
+        WKIM.getInstance().getConversationManager().addOnSyncConversationListener((s, i, l, iSyncConvChatBack) -> MsgModel.getInstance().syncChat(s, Math.max(i, 500), l, iSyncConvChatBack));
         //监听同步频道会话
         WKIM.getInstance().getMsgManager().addOnSyncChannelMsgListener((channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack) -> MsgModel.getInstance().syncChannelMsg(channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, iSyncChannelMsgBack));
         //新消息监听
@@ -257,6 +265,16 @@ public class WKIMUtils {
                     }
                 }
             }
+            // Space 过滤：消息不属于当前 Space 时不触发通知
+            String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+            if (isAlertMsg && !TextUtils.isEmpty(currentSpaceId)) {
+                WKMsg lastMsg = msgList.get(msgList.size() - 1);
+                String msgSpaceId = extractSpaceId(lastMsg);
+                if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
+                    isAlertMsg = false;
+                }
+            }
+
             if (newMsgNotice && isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.mute == 0) {
@@ -552,6 +570,21 @@ public class WKIMUtils {
         if (conversationMsg != null) {
             redDot = conversationMsg.unreadCount;
             msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(conversationMsg.lastClientMsgNO);
+            // Space 过滤：系统 Bot 最后一条消息不属于当前 Space 时的处理
+            String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+            if (!TextUtils.isEmpty(currentSpaceId) && msg != null) {
+                String msgSpaceId = extractSpaceId(msg);
+                if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
+                    redDot = 0;
+                    // 系统 Bot（如 BotFather）：找到当前 Space 的最新消息作为起始位置
+                    if (SYSTEM_BOTS.contains(chatViewMenu.channelID)) {
+                        WKMsg spaceMsg = findLatestMsgForSpace(chatViewMenu.channelID, chatViewMenu.channelType, currentSpaceId);
+                        if (spaceMsg != null) {
+                            msg = spaceMsg;
+                        }
+                    }
+                }
+            }
             if (msg != null) {
                 aroundMsgSeq = msg.orderSeq;
             }
@@ -686,5 +719,52 @@ public class WKIMUtils {
         WKIM.getInstance().getMsgManager().removeNewMsgListener("system");
     }
 
+    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
 
+    /**
+     * 在本地 DB 中搜索指定 Space 的最新消息。
+     * 用于系统 Bot（BotFather）跨 Space 共享场景，确保聊天窗口从正确的位置加载。
+     */
+    private WKMsg findLatestMsgForSpace(String channelID, byte channelType, String spaceId) {
+        try {
+            List<WKMsg> msgs = WKIM.getInstance().getMsgManager()
+                    .searchMsgWithChannelAndContentTypes(channelID, channelType, 0, 500, null);
+            if (msgs != null) {
+                for (WKMsg m : msgs) {
+                    String sid = extractSpaceId(m);
+                    if (sid == null || spaceId.equals(sid)) {
+                        return m;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * 从消息中提取 space_id
+     */
+    private String extractSpaceId(WKMsg msg) {
+        if (msg == null) return null;
+        if (!TextUtils.isEmpty(msg.content)) {
+            try {
+                JSONObject json = new JSONObject(msg.content);
+                String sid = json.optString("space_id", "");
+                if (!sid.isEmpty()) return sid;
+            } catch (Exception ignored) {
+            }
+        }
+        if (msg.baseContentMsgModel != null) {
+            try {
+                JSONObject json = msg.baseContentMsgModel.encodeMsg();
+                if (json != null) {
+                    String sid = json.optString("space_id", "");
+                    if (!sid.isEmpty()) return sid;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
 }

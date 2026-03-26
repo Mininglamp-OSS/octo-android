@@ -6,6 +6,7 @@ import com.chat.base.net.HttpResponseCode
 import com.chat.base.net.IRequestResultListener
 import com.chat.base.entity.GlobalSearch
 import com.chat.base.entity.GlobalSearchReq
+import com.chat.base.config.WKSharedPreferencesUtil
 
 object GlobalSearchModel : WKBaseModel() {
 
@@ -25,7 +26,9 @@ object GlobalSearchModel : WKBaseModel() {
         json["start_time"] = req.startTime
         json["end_time"] = req.endTime
         json["content_type"] = req.contentType
-        request(createService(IService::class.java).search(json),
+        // Space 过滤：将 space_id 作为 URL query parameter 传递（与 iOS/Web 一致）
+        val spaceId = WKSharedPreferencesUtil.getInstance().getSPWithUID("current_space_id")?.ifEmpty { null }
+        request(createService(IService::class.java).search(json, spaceId),
             object : IRequestResultListener<GlobalSearch> {
                 override fun onSuccess(result: GlobalSearch) {
                     back(HttpResponseCode.success, "", result)

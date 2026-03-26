@@ -362,7 +362,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 为系统 Bot 查找当前 Space 下的最后一条消息。
      * 返回 null 表示不需要特殊处理（非系统 Bot 或已匹配当前 Space），
-     * 返回空字符串表示当前 Space 无消息，返回非空字符串为匹配的消息内容。
+     * 返回空字符串表示当前 Space 无消息。
+     *
+     * 搜索范围 500 条：服务端 BotFather 跨 Space 共享，sync 返回的 recents 不按 space_id 过滤，
+     * 近期大量其他 Space 消息可能将当前 Space 消息挤出默认搜索范围。
      */
     private String findSystemBotSpaceContent(WKUIConversationMsg item) {
         if (!SYSTEM_BOTS.contains(item.channelID)) return null;
@@ -374,17 +377,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (lastMsgSpaceId != null && lastMsgSpaceId.equals(currentSpaceId)) return null;
         if (lastMsgSpaceId == null) return null; // 无 space_id 的历史消息，向前兼容
 
-        // 最后一条消息不属于当前 Space，查本地 DB 找当前 Space 的最后一条
+        // 最后一条消息不属于当前 Space，查本地 DB 找当前 Space 的最后一条（扩大搜索范围）
         try {
             List<WKMsg> recentMsgs = WKIM.getInstance().getMsgManager()
                     .searchMsgWithChannelAndContentTypes(
                             item.channelID, item.channelType,
-                            0, 50,
+                            0, 500,
                             new int[]{WKContentType.WK_TEXT});
             if (recentMsgs != null) {
                 for (WKMsg msg : recentMsgs) {
                     String sid = getSpaceIdFromMsg(msg);
-                    // space_id 匹配当前空间，或无 space_id 的历史消息（向前兼容，视为所有空间可见）
                     if (sid == null || currentSpaceId.equals(sid)) {
                         return getContent(msg);
                     }
@@ -392,7 +394,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
         } catch (Exception ignored) {
         }
-        return ""; // 当前 Space 无消息
+        return ""; // 当前 Space 确实无消息
     }
 
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {

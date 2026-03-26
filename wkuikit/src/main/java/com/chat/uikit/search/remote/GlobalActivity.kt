@@ -17,12 +17,14 @@ import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.base.utils.WKReader
 import com.chat.uikit.R
 import com.chat.uikit.databinding.ActGlobalLayoutBinding
+import com.chat.base.entity.GlobalChannel
 import com.chat.base.entity.GlobalSearchReq
 import com.chat.base.search.GlobalSearchModel
 import com.chat.uikit.search.SearchUserActivity
 import com.scwang.smart.refresh.layout.api.RefreshLayout
 import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
 import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKChannelType
 import java.util.Objects
 
 class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
@@ -151,44 +153,33 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                     return@search
                 }
                 if (page == 1) {
+                    // 合并本地会话搜索结果（群组和联系人），弥补服务端 space_id 过滤不完整
+                    val localResult = searchLocalConversations(keyword)
+                    val allFriends = mergeChannels(resp.friends, localResult.first)
+                    val allGroups = mergeChannels(resp.groups, localResult.second)
+
                     val list = ArrayList<DataVO>()
-                    if (WKReader.isNotEmpty(resp.friends)) {
-                        val textVO =
-                            DataVO(DataVO.TEXT, null, null, getString(R.string.contacts))
-                        list.add(textVO)
-                        for (channel in resp.friends) {
-                            val friendVO =
-                                DataVO(DataVO.CHANNEL, channel, null, "")
-                            list.add(friendVO)
+                    if (WKReader.isNotEmpty(allFriends)) {
+                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.contacts)))
+                        for (channel in allFriends) {
+                            list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
                         }
-                        val spanVO = DataVO(DataVO.SPAN, null, null, "")
-                        list.add(spanVO)
+                        list.add(DataVO(DataVO.SPAN, null, null, ""))
                     }
-                    if (WKReader.isNotEmpty(resp.groups)) {
-                        val textVO =
-                            DataVO(DataVO.TEXT, null, null, getString(R.string.group_chat))
-                        list.add(textVO)
-                        for (channel in resp.groups) {
-                            val groupVO =
-                                DataVO(DataVO.CHANNEL, channel, null, "")
-                            list.add(groupVO)
+                    if (WKReader.isNotEmpty(allGroups)) {
+                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.group_chat)))
+                        for (channel in allGroups) {
+                            list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
                         }
-                        val spanVO = DataVO(DataVO.SPAN, null, null, "")
-                        list.add(spanVO)
+                        list.add(DataVO(DataVO.SPAN, null, null, ""))
                     }
 
-                    val searchVO = DataVO(DataVO.SEARCH, null, null, keyword)
-                    list.add(searchVO)
-                    val spanVO = DataVO(DataVO.SPAN, null, null, "")
-                    list.add(spanVO)
+                    list.add(DataVO(DataVO.SEARCH, null, null, keyword))
+                    list.add(DataVO(DataVO.SPAN, null, null, ""))
                     if (WKReader.isNotEmpty(resp.messages)) {
-                        val textVO =
-                            DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records))
-                        list.add(textVO)
+                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
                         for (message in resp.messages) {
-                            val messageVO =
-                                DataVO(DataVO.MESSAGE, message.channel, message, "")
-                            list.add(messageVO)
+                            list.add(DataVO(DataVO.MESSAGE, message.channel, message, ""))
                         }
                     }
                     adapter.setList(list)
@@ -209,5 +200,53 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 showToast(msg)
             }
         }
+    }
+
+    /**
+     * 从本地会话列表按关键词搜索联系人和群组（与 iOS searchLocalConversations 一致）。
+     * 服务端 space_id 过滤对群组支持不完整，本地搜索作为补充。
+     * @return Pair<联系人列表, 群组列表>
+     */
+    private fun searchLocalConversations(keyword: String): Pair<List<GlobalChannel>, List<GlobalChannel>> {
+        val friends = mutableListOf<GlobalChannel>()
+        val groups = mutableListOf<GlobalChannel>()
+        val conversations = WKIM.getInstance().conversationManager.all ?: return Pair(friends, groups)
+        val lowerKeyword = keyword.lowercase()
+        for (conv in conversations) {
+            val channel = conv.getWkChannel() ?: continue
+            val displayName = when {
+                !channel.channelRemark.isNullOrEmpty() -> channel.channelRemark
+                !channel.channelName.isNullOrEmpty() -> channel.channelName
+                else -> continue
+            }
+            if (!displayName.lowercase().contains(lowerKeyword)) continue
+            val gc = GlobalChannel().apply {
+                channel_id = conv.channelID ?: ""
+                channel_type = conv.channelType
+                channel_name = displayName
+                channel_remark = channel.channelRemark ?: ""
+            }
+            if (conv.channelType == WKChannelType.GROUP) {
+                groups.add(gc)
+            } else {
+                friends.add(gc)
+            }
+        }
+        return Pair(friends, groups)
+    }
+
+    /**
+     * 合并服务端和本地搜索结果，按 channel_id 去重
+     */
+    private fun mergeChannels(remote: List<GlobalChannel>?, local: List<GlobalChannel>): List<GlobalChannel> {
+        val result = mutableListOf<GlobalChannel>()
+        val ids = mutableSetOf<String>()
+        remote?.forEach {
+            if (ids.add(it.channel_id)) result.add(it)
+        }
+        local.forEach {
+            if (ids.add(it.channel_id)) result.add(it)
+        }
+        return result
     }
 }

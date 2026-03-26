@@ -3,7 +3,6 @@ package com.chat.uikit.fragment;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Typeface;
-import android.util.Log;
 import android.os.Build;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -276,13 +275,10 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     }
 
     private void getContactsFromSpace(String spaceId) {
-        long start = System.currentTimeMillis();
-        Log.d("SpaceSwitch", "[contacts] getContactsFromSpace start, spaceId=" + spaceId);
         String myUid = WKConfig.getInstance().getUid();
         SpaceModel.getInstance().getMembers(spaceId, new SpaceModel.IMembersListener() {
             @Override
             public void onResult(List<SpaceEntity.SpaceMember> members) {
-                Log.d("SpaceSwitch", "[contacts] getMembers returned: " + (System.currentTimeMillis() - start) + "ms, count=" + members.size());
                 List<FriendUIEntity> list = new ArrayList<>();
                 for (SpaceEntity.SpaceMember member : members) {
                     if (member.uid.equals(myUid)) continue;
@@ -294,21 +290,17 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 sortAndDisplay(list);
                 lastLoadedSpaceId = spaceId;
                 isContactsLoaded = true;
-                Log.d("SpaceSwitch", "[contacts] display done: " + (System.currentTimeMillis() - start) + "ms");
             }
 
             @Override
             public void onError(int code, String msg) {
-                Log.d("SpaceSwitch", "[contacts] getMembers error: " + (System.currentTimeMillis() - start) + "ms, code=" + code);
                 getContactsLocal();
             }
         });
     }
 
     private void getContactsLocal() {
-        long start = System.currentTimeMillis();
         List<WKChannel> allList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
-        Log.d("SpaceSwitch", "[contacts] getContactsLocal query: " + (System.currentTimeMillis() - start) + "ms, count=" + allList.size());
         List<FriendUIEntity> list = new ArrayList<>();
         for (int i = 0, size = allList.size(); i < size; i++) {
             list.add(new FriendUIEntity(allList.get(i)));

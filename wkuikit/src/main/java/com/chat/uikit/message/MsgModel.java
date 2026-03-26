@@ -3,7 +3,6 @@ package com.chat.uikit.message;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 
 import androidx.annotation.Nullable;
 
@@ -353,8 +352,6 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {
-        long syncStart = System.currentTimeMillis();
-        Log.d("SpaceSwitch", "[syncChat] API call START, version=" + version + " msg_count=" + msg_count + " spaceId=" + (currentSpaceId.isEmpty() ? "null" : currentSpaceId));
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("last_msg_seqs", last_msg_seqs);
         jsonObject.put("msg_count", msg_count);
@@ -364,7 +361,6 @@ public class MsgModel extends WKBaseModel {
         request(createService(MsgService.class).syncChat(jsonObject, spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(WKSyncChat result) {
-                Log.d("SpaceSwitch", "[syncChat] API call SUCCESS: " + (System.currentTimeMillis() - syncStart) + "ms");
                 if (result != null && !TextUtils.isEmpty(result.uid) && result.uid.equals(WKConfig.getInstance().getUid())) {
                     if (WKReader.isNotEmpty(result.conversations)) {
                         WKUIKitApplication.getInstance().isRefreshChatActivityMessage = true;

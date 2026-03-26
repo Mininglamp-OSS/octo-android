@@ -8,7 +8,6 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -179,11 +178,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.spaceHeaderLayout.setOnClickListener(v -> {
             SpacePopupWindow popup = new SpacePopupWindow(requireContext());
             popup.setOnSpaceSelectedListener(space -> {
-                long switchStart = System.currentTimeMillis();
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id);
                 wkVBinding.textSwitcher.setText(space.name);
-                Log.d("SpaceSwitch", "[1] setCurrentSpaceId: " + (System.currentTimeMillis() - switchStart) + "ms");
 
                 // 清除成员缓存
                 SpaceModel.getInstance().invalidateMembersCache();
@@ -191,13 +188,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 // 参考 iOS：先立即清空 UI（给用户即时反馈），再异步清 DB
                 spaceConversationKeys.clear();
                 chatConversationAdapter.setList(new ArrayList<>());
-                Log.d("SpaceSwitch", "[2] UI cleared: " + (System.currentTimeMillis() - switchStart) + "ms");
 
                 // DB 清理 + 会话同步放到后台线程（iOS 用 serial DB queue，不阻塞主线程）
                 Schedulers.io().scheduleDirect(() -> {
-                    long dbStart = System.currentTimeMillis();
                     WKIM.getInstance().getConversationManager().clearAll();
-                    Log.d("SpaceSwitch", "[3] clearAll DB (background): " + (System.currentTimeMillis() - dbStart) + "ms");
 
                     // 回到主线程触发同步和联系人刷新
                     new Handler(Looper.getMainLooper()).post(() -> {
@@ -206,7 +200,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         });
                         // 通知联系人列表刷新
                         EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
-                        Log.d("SpaceSwitch", "[4] sync triggered: " + (System.currentTimeMillis() - switchStart) + "ms total");
                     });
                 });
             });
@@ -451,7 +444,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
-            Log.d("SpaceSwitch", "[sync] RefreshMsgList callback, count=" + (list == null ? 0 : list.size()));
             if (WKReader.isEmpty(list)) {
                 return;
             }
@@ -462,7 +454,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             if (chatConversationAdapter.getData().isEmpty()) {
                 // 适配器为空，说明是 Space 切换后的首次同步结果，记录有效会话 key
-                long syncStart = System.currentTimeMillis();
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
@@ -472,10 +463,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     uiList.add(msg);
                     spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
                 }
-                Log.d("SpaceSwitch", "[sync] first sync build list: " + (System.currentTimeMillis() - syncStart) + "ms, items=" + uiList.size());
                 sortMsg(uiList);
                 setAllCount();
-                Log.d("SpaceSwitch", "[sync] first sync total: " + (System.currentTimeMillis() - syncStart) + "ms");
                 return;
             }
             List<ChatConversationMsg> uiList = new ArrayList<>();
@@ -551,7 +540,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
-            Log.d("SpaceSwitch", "[conn] status=" + i + " reason=" + reason);
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
                 wkVBinding.spaceArrowTv.setVisibility(View.GONE);
@@ -926,10 +914,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void scheduleSpaceResync() {
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
-        Log.d("SpaceSwitch", "[resync] scheduled");
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             pendingSpaceResync = false;
-            Log.d("SpaceSwitch", "[resync] executing");
             spaceConversationKeys.clear();
             chatConversationAdapter.setList(new ArrayList<>());
             Schedulers.io().scheduleDirect(() -> {

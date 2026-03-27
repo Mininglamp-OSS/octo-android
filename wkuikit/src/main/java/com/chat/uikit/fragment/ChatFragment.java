@@ -528,12 +528,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
                     } else {
-                        // 不在已知 Space 会话列表中，直接跳过（消息已由 SDK 存储，切换 Space 后会正常显示）
-                        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-                        if (!TextUtils.isEmpty(currentSpaceId)) {
+                        // 不在白名单中：检查消息是否真的来自其他 Space
+                        // 新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
+                        if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
                             continue;
                         }
-                        scheduleSpaceResync();
+                        // 消息不属于其他 Space，放行并加入白名单
+                        uiList.add(new ChatConversationMsg(uiConversationMsg));
+                        spaceConversationKeys.add(key);
                     }
                 }
             }
@@ -562,6 +564,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 connectedAtMs = System.currentTimeMillis();
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
                 startPingTimer();
+                // 注册流程补偿：SDK 连接成功时如果列表仍为空（getChatMsg 的 sync 因连接未就绪而未触发），补一次 sync
+                String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+                if (!TextUtils.isEmpty(spaceId) && chatConversationAdapter.getData().isEmpty()) {
+                    spaceConversationKeys.clear();
+                    Schedulers.io().scheduleDirect(() -> {
+                        WKIM.getInstance().getConversationManager().clearAll();
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                            })
+                        );
+                    });
+                }
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
                 wkVBinding.spaceArrowTv.setVisibility(View.GONE);
@@ -854,13 +868,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
             if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
-                // 不在已知 Space 会话列表中，直接丢弃（消息已由 SDK 存储，切换 Space 后会正常显示）
-                String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-                if (!TextUtils.isEmpty(currentSpaceId)) {
+                // 不在白名单中：检查消息是否真的来自其他 Space
+                // 新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
+                if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
                     return;
                 }
-                scheduleSpaceResync();
-                return;
+                // 消息不属于其他 Space（无 space_id 或与当前 Space 匹配），放行并加入白名单
             }
             spaceConversationKeys.add(key);
             if (!isEnd) {

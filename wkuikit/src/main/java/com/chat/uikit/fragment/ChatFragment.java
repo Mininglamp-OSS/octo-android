@@ -9,7 +9,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -63,6 +62,7 @@ import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKConversationMsgExtra;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
@@ -448,7 +448,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (WKReader.isEmpty(list)) {
                 return;
             }
-            Log.d("SpaceFilter", "[RefreshMsgList] count=" + list.size() + " adapterEmpty=" + chatConversationAdapter.getData().isEmpty());
             if (list.size() == 1) {
                 resetData(list.get(0), true);
                 return;
@@ -461,6 +460,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 for (WKUIConversationMsg uiConversationMsg : list) {
                     // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
                     adjustSystemBotForSpace(uiConversationMsg);
+                    // sync 结果不含 conversation_extra（草稿等），从本地 DB 补充
+                    WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                            .getMsgExtraWithChannel(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                    if (extra != null) {
+                        uiConversationMsg.setRemoteMsgExtra(extra);
+                    }
                     ChatConversationMsg msg = new ChatConversationMsg(uiConversationMsg);
                     uiList.add(msg);
                     spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
@@ -504,7 +509,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
                         chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
                         chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                        // 保留已有的 extras（草稿等），sync 结果不含 extras 时不覆盖
+                        if (uiConversationMsg.getRemoteMsgExtra() != null) {
+                            chatConversationAdapter.getData().get(i).uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                        }
 
                         chatConversationAdapter.getData().get(i).uiConversationMsg.setReminderList(uiConversationMsg.getReminderList());
                         chatConversationAdapter.getData().get(i).uiConversationMsg.localExtraMap = null;
@@ -613,6 +621,21 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
             return 1;
+        });
+
+        // syncCoverExtra 完成后刷新草稿等 extra 信息
+        EndpointManager.getInstance().setMethod("refresh_conversation_extras", object -> {
+            for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                WKUIConversationMsg convMsg = chatConversationAdapter.getData().get(i).uiConversationMsg;
+                WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                        .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
+                if (extra != null) {
+                    convMsg.setRemoteMsgExtra(extra);
+                    chatConversationAdapter.getData().get(i).isResetContent = true;
+                    notifyRecycler(i, chatConversationAdapter.getData().get(i));
+                }
+            }
+            return null;
         });
 
         EndpointManager.getInstance().setMethod("refresh_conversation_calling", object -> {
@@ -734,7 +757,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 msg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
                 msg.unreadCount = uiConversationMsg.unreadCount;
                 msg.setReminderList(uiConversationMsg.getReminderList());
-                msg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                if (uiConversationMsg.getRemoteMsgExtra() != null) {
+                    msg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                }
 
                 ChatConversationMsg chatConversationMsg = new ChatConversationMsg(msg);
                 ChatConversationMsg child = new ChatConversationMsg(uiConversationMsg);
@@ -756,11 +781,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg == null) {
             return;
         }
-        Log.d("SpaceFilter", "[resetData] channelID=" + uiConversationMsg.channelID
-                + " type=" + uiConversationMsg.channelType
-                + " isEnd=" + isEnd
-                + " keysEmpty=" + spaceConversationKeys.isEmpty()
-                + " inKeys=" + spaceConversationKeys.contains(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType)));
         // || (uiConversationMsg.getWkChannel() != null && uiConversationMsg.getWkChannel().follow == 0 && uiConversationMsg.channelType == WKChannelType.PERSONAL)
         if (uiConversationMsg.isDeleted == 1 || TextUtils.equals(uiConversationMsg.channelID, "0")) {
             if (isEnd) {
@@ -813,7 +833,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
                     chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
                     chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
-                    chatConversationAdapter.getData().get(i).uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                    if (uiConversationMsg.getRemoteMsgExtra() != null) {
+                        chatConversationAdapter.getData().get(i).uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                    }
 
                     chatConversationAdapter.getData().get(i).uiConversationMsg.setReminderList(uiConversationMsg.getReminderList());
                     chatConversationAdapter.getData().get(i).uiConversationMsg.localExtraMap = null;
@@ -835,13 +857,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 // 不在已知 Space 会话列表中，直接丢弃（消息已由 SDK 存储，切换 Space 后会正常显示）
                 String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
                 if (!TextUtils.isEmpty(currentSpaceId)) {
-                    Log.d("SpaceFilter", "[resetData] DROPPED (not in spaceKeys), channelID=" + uiConversationMsg.channelID + " type=" + uiConversationMsg.channelType);
                     return;
                 }
                 scheduleSpaceResync();
                 return;
             }
-            Log.d("SpaceFilter", "[resetData] ADDED to list, key=" + key);
             spaceConversationKeys.add(key);
             if (!isEnd) {
                 chatConversationAdapter.addData(new ChatConversationMsg(uiConversationMsg));
@@ -937,12 +957,31 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
+     * 检查并补充会话列表中缺失的 extras（草稿等）。
+     * 在 onResume 中调用，确保无论 syncCoverExtra 何时完成都能显示草稿。
+     */
+    private void refreshExtrasIfNeeded() {
+        if (chatConversationAdapter.getData().isEmpty()) return;
+        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            WKUIConversationMsg convMsg = chatConversationAdapter.getData().get(i).uiConversationMsg;
+            if (convMsg.getRemoteMsgExtra() == null || TextUtils.isEmpty(convMsg.getRemoteMsgExtra().draft)) {
+                WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                        .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
+                if (extra != null && !TextUtils.isEmpty(extra.draft)) {
+                    convMsg.setRemoteMsgExtra(extra);
+                    chatConversationAdapter.getData().get(i).isResetContent = true;
+                    notifyRecycler(i, chatConversationAdapter.getData().get(i));
+                }
+            }
+        }
+    }
+
+    /**
      * 延迟触发 Space 会话重新同步。
      * 当收到不属于当前 Space 的实时消息时调用，使用防抖避免频繁请求。
      * 同步结果由 RefreshMsgListListener 处理，会重新校准 spaceConversationKeys。
      */
     private void scheduleSpaceResync() {
-        Log.d("SpaceFilter", "[scheduleSpaceResync] pending=" + pendingSpaceResync);
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
@@ -1045,6 +1084,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
+        // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
+        refreshExtrasIfNeeded();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
         wkVBinding.deviceIv.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
 //        String appLoginType = String.format(getString(R.string.pc_login), getString(R.string.app_name));

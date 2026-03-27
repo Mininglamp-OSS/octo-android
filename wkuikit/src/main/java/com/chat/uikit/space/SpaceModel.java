@@ -142,6 +142,20 @@ public class SpaceModel extends WKBaseModel {
         cachedMembers = null;
     }
 
+    /**
+     * 检查 uid 是否为指定 Space 的成员（仅查缓存，不发网络请求）。
+     * 缓存未命中时返回 null（表示不确定），调用方自行决定降级策略。
+     */
+    public Boolean isMemberCached(String spaceId, String uid) {
+        if (cachedMembers == null || !spaceId.equals(cachedMembersSpaceId)) {
+            return null; // 缓存未命中，无法判断
+        }
+        for (SpaceEntity.SpaceMember member : cachedMembers) {
+            if (member.uid.equals(uid)) return true;
+        }
+        return false;
+    }
+
     public void createInvite(String spaceId, IInviteListener listener) {
         request(createService(SpaceService.class).createInvite(spaceId, new com.alibaba.fastjson.JSONObject()), new IRequestResultListener<>() {
             @Override

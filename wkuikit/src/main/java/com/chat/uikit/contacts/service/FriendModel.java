@@ -13,6 +13,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.NewFriendEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
+import com.chat.uikit.message.MsgModel;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.utils.AndroidUtilities;
@@ -60,6 +61,10 @@ public class FriendModel extends WKBaseModel {
         jsonObject1.put("to_uid", uid);
         jsonObject1.put("remark", remark);
         jsonObject1.put("vercode", vercode);
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject1.put("space_id", spaceId);
+        }
         request(createService(FriendService.class).applyAddFriend(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
@@ -83,6 +88,10 @@ public class FriendModel extends WKBaseModel {
 
         JSONObject jsonObject1 = new JSONObject();
         jsonObject1.put("token", token);
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject1.put("space_id", spaceId);
+        }
         request(createService(FriendService.class).agreeFriendApply(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {

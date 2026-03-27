@@ -371,6 +371,7 @@ public class MsgModel extends WKBaseModel {
                     syncCmdMsgs(0);
                     ackDeviceUUID();
                     syncReminder();
+                    syncCoverExtra();
                     new Handler(Looper.getMainLooper()).postDelayed(() -> EndpointManager.getInstance().invoke("refresh_conversation_calling",null),300);
                 } else {
                     iSyncConversationChatBack.onBack(null);
@@ -682,6 +683,9 @@ public class MsgModel extends WKBaseModel {
             @Override
             public void onSuccess(List<WKSyncConvMsgExtra> result) {
                 WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
+                if (WKReader.isNotEmpty(result)) {
+                    EndpointManager.getInstance().invoke("refresh_conversation_extras", null);
+                }
             }
 
             @Override

@@ -23,16 +23,15 @@ class FileRequestBody(private val requestBody: RequestBody, private val tag: Any
     }
 
     override fun isOneShot(): Boolean {
-        WKLogUtils.e("是否执行一次")
-        return true
+        return false
     }
     override fun contentType(): MediaType? {
         return requestBody.contentType()
     }
 
     override fun writeTo(sink: BufferedSink) {
+        mCurrentLength = 0
         val contentLength = contentLength()
-        WKLogUtils.e("上传总长度$contentLength")
         val forwardingSink: ForwardingSink = object : ForwardingSink(sink) {
             @Throws(IOException::class)
             override fun write(source: Buffer, byteCount: Long) {
@@ -40,7 +39,6 @@ class FileRequestBody(private val requestBody: RequestBody, private val tag: Any
                 val f1 = mCurrentLength / contentLength.toFloat()
                 handler.post {
                     var p = (f1 * 100).toInt()
-                    WKLogUtils.e("当前总长度$p")
                     if (p > 100) {
                         p = 100
                     }

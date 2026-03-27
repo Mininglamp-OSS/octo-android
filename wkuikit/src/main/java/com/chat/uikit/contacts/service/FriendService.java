@@ -28,6 +28,9 @@ public interface FriendService {
     @GET("friend/sync")
     Observable<List<UserInfo>> syncFriends(@Query("version") long version, @Query("limit") int limit, @Query("api_version") int api_version);
 
+    @GET("friend/sync")
+    Observable<List<UserInfo>> syncFriendsWithSpace(@Query("version") long version, @Query("limit") int limit, @Query("api_version") int api_version, @Query("space_id") String spaceId);
+
     @PUT("users/{uid}/setting")
     Observable<CommonResponse> updateUserSetting(@Path("uid") String uid, @Body JSONObject jsonObject);
 

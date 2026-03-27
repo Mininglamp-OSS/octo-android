@@ -26,6 +26,8 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
 
+import io.reactivex.rxjava3.core.Observable;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -114,7 +116,14 @@ public class FriendModel extends WKBaseModel {
     public void syncFriends(final ICommonListener iCommonListener) {
         String key = String.format("%s_friend_sync_version", WKConfig.getInstance().getUid());
         long version = WKSharedPreferencesUtil.getInstance().getLong(key);
-        request(createService(FriendService.class).syncFriends(version, 1000, 1), new IRequestResultListener<>() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        Observable<List<UserInfo>> syncCall;
+        if (!TextUtils.isEmpty(spaceId)) {
+            syncCall = createService(FriendService.class).syncFriendsWithSpace(version, 1000, 1, spaceId);
+        } else {
+            syncCall = createService(FriendService.class).syncFriends(version, 1000, 1);
+        }
+        request(syncCall, new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<UserInfo> list) {
                 if (WKReader.isNotEmpty(list)) {

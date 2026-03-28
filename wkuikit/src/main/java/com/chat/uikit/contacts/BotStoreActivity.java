@@ -15,18 +15,17 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.base.WKBaseActivity;
-import com.chat.base.config.WKConfig;
 import com.chat.base.utils.AndroidUtilities;
-import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.HanziToPinyin;
+import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActContactsListLayoutBinding;
 import com.chat.uikit.message.MsgModel;
-import com.chat.uikit.space.SpaceEntity;
-import com.chat.uikit.space.SpaceModel;
+import com.chat.uikit.robot.entity.BotStoreEntity;
+import com.chat.uikit.robot.service.WKRobotModel;
 import com.chat.uikit.user.UserDetailActivity;
 import com.chat.uikit.utils.CharacterParser;
 import com.chat.uikit.utils.PyingUtils;
@@ -37,11 +36,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Bot 列表（只显示 Space 内的机器人）
+ * AI 广场 — 展示 Space 内所有可用 Bot（含未添加/审批中/已添加三种状态）
  */
-public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutBinding> implements OnQuickSideBarTouchListener {
+public class BotStoreActivity extends WKBaseActivity<ActContactsListLayoutBinding> implements OnQuickSideBarTouchListener {
 
-    private FriendAdapter friendAdapter;
+    private BotStoreAdapter adapter;
     private TextView countTv;
 
     @Override
@@ -51,24 +50,23 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
 
     @Override
     protected void setTitle(TextView titleTv) {
-        titleTv.setText(R.string.contacts_section_bots);
+        titleTv.setText(R.string.contacts_section_bot_store);
     }
 
     @Override
     protected void initView() {
-        friendAdapter = new FriendAdapter();
-        friendAdapter.addFooterView(createFooterView());
-        initAdapter(wkVBinding.recyclerView, friendAdapter);
+        adapter = new BotStoreAdapter();
+        adapter.addFooterView(createFooterView());
+        initAdapter(wkVBinding.recyclerView, adapter);
         wkVBinding.recyclerView.setItemAnimator(null);
-        friendAdapter.setAnimationEnable(false);
-        int stickyHeight = com.chat.base.utils.AndroidUtilities.dp(30);
+        int stickyHeight = AndroidUtilities.dp(30);
         wkVBinding.recyclerView.addItemDecoration(StickyHeaderDecoration.forFriendAdapter(
                 stickyHeight, 0,
                 i -> {
-                    List<FriendUIEntity> data = friendAdapter.getData();
+                    List<BotStoreUIEntity> data = adapter.getData();
                     return (i >= 0 && i < data.size() && data.get(i).pying != null) ? data.get(i).pying : "#";
                 },
-                () -> friendAdapter.getData().size()
+                () -> adapter.getData().size()
         ));
         int themeColor = Color.parseColor("#6366f1");
         wkVBinding.quickSideBarView.setLetters(CharacterParser.getInstance().getList());
@@ -85,18 +83,18 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
                 LinearLayoutManager lm = (LinearLayoutManager) recyclerView.getLayoutManager();
                 if (lm == null) return;
                 int first = lm.findFirstVisibleItemPosition();
-                if (first >= 0 && first < friendAdapter.getData().size()) {
-                    String pying = friendAdapter.getData().get(first).pying;
+                if (first >= 0 && first < adapter.getData().size()) {
+                    String pying = adapter.getData().get(first).pying;
                     if (pying != null && !pying.isEmpty()) {
                         wkVBinding.quickSideBarView.setChooseLetter(pying.substring(0, 1).toUpperCase());
                     }
                 }
             }
         });
-        friendAdapter.addChildClickViewIds(R.id.contentLayout);
-        friendAdapter.setOnItemChildClickListener((adapter, view, position) ->
+        adapter.addChildClickViewIds(R.id.contentLayout);
+        adapter.setOnItemChildClickListener((a, view, position) ->
                 SingleClickUtil.determineTriggerSingleClick(view, v -> {
-                    FriendUIEntity entity = friendAdapter.getItem(position);
+                    BotStoreUIEntity entity = adapter.getItem(position);
                     if (entity != null) {
                         Intent intent = new Intent(this, UserDetailActivity.class);
                         intent.putExtra("uid", entity.channel.channelID);
@@ -117,34 +115,31 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
             wkVBinding.nodataTv.setVisibility(View.VISIBLE);
             return;
         }
-        String myUid = WKConfig.getInstance().getUid();
-        SpaceModel.getInstance().getMembers(spaceId, new SpaceModel.IMembersListener() {
+        WKRobotModel.getInstance().getSpaceBots(spaceId, new WKRobotModel.ISpaceBotsListener() {
             @Override
-            public void onResult(List<SpaceEntity.SpaceMember> members) {
-                List<FriendUIEntity> list = new ArrayList<>();
-                for (SpaceEntity.SpaceMember member : members) {
-                    if (member.uid.equals(myUid)) continue;
-                    if (member.robot != 1) continue;
-                    WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
-                    channel.channelName = member.name;
-                    channel.robot = 1;
-                    FriendUIEntity entity = new FriendUIEntity(channel);
-                    String showName = member.name;
-                    if (!TextUtils.isEmpty(showName)) {
-                        entity.pying = PyingUtils.getInstance().isStartNum(showName)
-                                ? "#" : HanziToPinyin.getInstance().getPY(showName);
-                    } else {
-                        entity.pying = "#";
+            public void onResult(List<BotStoreEntity> result) {
+                List<BotStoreUIEntity> list = new ArrayList<>();
+                if (WKReader.isNotEmpty(result)) {
+                    for (BotStoreEntity bot : result) {
+                        WKChannel channel = new WKChannel(bot.uid, WKChannelType.PERSONAL);
+                        channel.channelName = bot.name;
+                        channel.robot = 1;
+                        BotStoreUIEntity entity = new BotStoreUIEntity(channel, bot.status, bot.description);
+                        String showName = bot.name;
+                        if (!TextUtils.isEmpty(showName)) {
+                            entity.pying = PyingUtils.getInstance().isStartNum(showName)
+                                    ? "#" : HanziToPinyin.getInstance().getPY(showName);
+                        } else {
+                            entity.pying = "#";
+                        }
+                        list.add(entity);
                     }
-                    list.add(entity);
                 }
-                PyingUtils.getInstance().sortListBasic(list);
+                PyingUtils.getInstance().sortBotStoreList(list);
                 list = sortLettersFirst(list);
-                if (WKReader.isEmpty(list)) {
-                    wkVBinding.nodataTv.setVisibility(View.VISIBLE);
-                }
-                friendAdapter.setList(list);
-                countTv.setText(String.format(getString(R.string.contacts_bots_count), list.size()));
+                wkVBinding.nodataTv.setVisibility(WKReader.isEmpty(list) ? View.VISIBLE : View.GONE);
+                adapter.setList(list);
+                countTv.setText(String.format(getString(R.string.contacts_bots_store_count), list.size()));
             }
 
             @Override
@@ -173,7 +168,7 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
     @Override
     public void onLetterChanged(String letter, int position, float y) {
         wkVBinding.quickSideBarTipsView.setText(letter, position, y);
-        List<FriendUIEntity> list = friendAdapter.getData();
+        List<BotStoreUIEntity> list = adapter.getData();
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying != null && list.get(i).pying.toUpperCase().startsWith(letter.toUpperCase())) {
@@ -192,10 +187,10 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
         wkVBinding.quickSideBarTipsView.setVisibility(touching ? View.VISIBLE : View.INVISIBLE);
     }
 
-    private List<FriendUIEntity> sortLettersFirst(List<FriendUIEntity> list) {
-        List<FriendUIEntity> letterList = new ArrayList<>();
-        List<FriendUIEntity> otherList = new ArrayList<>();
-        for (FriendUIEntity item : list) {
+    private List<BotStoreUIEntity> sortLettersFirst(List<BotStoreUIEntity> list) {
+        List<BotStoreUIEntity> letterList = new ArrayList<>();
+        List<BotStoreUIEntity> otherList = new ArrayList<>();
+        for (BotStoreUIEntity item : list) {
             if (item.pying != null && PyingUtils.getInstance().isStartLetter(item.pying)) {
                 letterList.add(item);
             } else {

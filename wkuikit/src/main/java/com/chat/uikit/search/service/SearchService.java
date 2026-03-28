@@ -12,5 +12,5 @@ import retrofit2.http.Query;
  */
 public interface SearchService {
     @GET("user/search")
-    Observable<SearchUserEntity> searchUser(@Query("keyword") String keyword);
+    Observable<SearchUserEntity> searchUser(@Query("keyword") String keyword, @Query("space_id") String spaceId);
 }

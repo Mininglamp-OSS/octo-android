@@ -1,8 +1,11 @@
 package com.chat.uikit.search.service;
 
+import android.text.TextUtils;
+
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
+import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.search.SearchUserEntity;
 
 /**
@@ -28,7 +31,8 @@ public class SearchModel extends WKBaseModel {
      * @param isearchLisenter
      */
     public void searchUser(String keyword, final IsearchLisenter isearchLisenter) {
-        request(createService(SearchService.class).searchUser(keyword), new IRequestResultListener<SearchUserEntity>() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        request(createService(SearchService.class).searchUser(keyword, TextUtils.isEmpty(spaceId) ? null : spaceId), new IRequestResultListener<SearchUserEntity>() {
             @Override
             public void onSuccess(SearchUserEntity result) {
                 isearchLisenter.onResult(HttpResponseCode.success, "", result);

@@ -31,6 +31,8 @@
             android:launchMode="singleTop" />
         <activity android:name=".contacts.SpaceBotsListActivity"
             android:launchMode="singleTop" />
+        <activity android:name=".contacts.BotStoreActivity"
+            android:launchMode="singleTop" />
         <activity android:name=".contacts.MyGroupsListActivity"
             android:launchMode="singleTop" />
         <activity android:name=".setting.SettingActivity" />

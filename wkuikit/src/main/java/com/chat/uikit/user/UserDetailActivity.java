@@ -5,11 +5,14 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.text.InputFilter;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -29,10 +32,14 @@ import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.UserDetailViewMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.ui.components.AlertDialog;
+import com.chat.base.utils.StringUtils;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.NormalClickableContent;
 import com.chat.base.ui.components.NormalClickableSpan;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
+import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
@@ -71,6 +78,8 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     private String vercode;
     private WKChannel userChannel;
     private boolean isBot;
+    private String botDescription;
+    private String botCreatorName;
 
     @Override
     protected ActUserDetailLayoutBinding getViewBinding() {
@@ -250,16 +259,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         });
         SingleClickUtil.onSingleClick(wkVBinding.applyBtn, v -> {
             if (isBot) {
-                // Bot: directly apply without input dialog
-                FriendModel.getInstance().applyAddFriend(uid, vercode, "", (code, msg) -> {
-                    if (code == HttpResponseCode.success) {
-                        wkVBinding.applyBtn.setText(R.string.applyed);
-                        wkVBinding.applyBtn.setAlpha(0.2f);
-                        wkVBinding.applyBtn.setEnabled(false);
-                        // Refresh after 500ms to handle auto_approve
-                        new Handler(Looper.getMainLooper()).postDelayed(() -> getUserInfo(), 500);
-                    } else showToast(msg);
-                });
+                showBotApplyDialog();
             } else {
                 // Normal user: show input dialog for remark
                 WKDialogUtils.getInstance().showInputDialog(UserDetailActivity.this, getString(R.string.apply), getString(R.string.input_remark), "", getString(R.string.input_remark), 20, text -> FriendModel.getInstance().applyAddFriend(uid, vercode, text, (code, msg) -> {
@@ -383,6 +383,8 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
 
                     // Bot-specific UI
                     isBot = userInfo.robot == 1;
+                    botDescription = userInfo.bot_description;
+                    botCreatorName = userInfo.bot_creator_name;
                     if (isBot) {
                         // Show AI badge
                         wkVBinding.aiBadgeTv.setVisibility(View.VISIBLE);
@@ -486,6 +488,91 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
 
         boolean hasAnyInfo = hasDesc || hasCreator || hasCommands;
         wkVBinding.botInfoLayout.setVisibility(hasAnyInfo ? View.VISIBLE : View.GONE);
+    }
+
+    private void showBotApplyDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(getString(R.string.bot_add_friend));
+
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int hPadding = AndroidUtilities.dp(24);
+
+        // 简介
+        addInfoRow(container, getString(R.string.bot_description_label),
+                TextUtils.isEmpty(botDescription) ? getString(R.string.bot_no_description) : botDescription,
+                hPadding);
+
+        // 创建者
+        if (!TextUtils.isEmpty(botCreatorName)) {
+            addInfoRow(container, getString(R.string.bot_creator_label), botCreatorName, hPadding);
+        }
+
+        // 申请消息标签
+        TextView applyLabel = new TextView(this);
+        applyLabel.setText(R.string.bot_apply_message);
+        applyLabel.setTextSize(14);
+        applyLabel.setTextColor(ContextCompat.getColor(this, R.color.color999));
+        container.addView(applyLabel, LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
+                Gravity.START, 24, 12, 24, 4));
+
+        // 申请消息输入框
+        EditText editText = new EditText(this);
+        editText.setHint(R.string.bot_apply_message_hint);
+        editText.setFilters(new InputFilter[]{StringUtils.getInputFilter(50)});
+        editText.setTextSize(15);
+        editText.setMinLines(1);
+        editText.setMaxLines(3);
+        container.addView(editText, LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
+                Gravity.START, 24, 0, 24, 0));
+
+        builder.setView(container);
+        builder.setPositiveButton(getString(R.string.sure), (dialog, which) -> {
+            String remark = editText.getText().toString().trim();
+            FriendModel.getInstance().applyAddFriend(uid, vercode, remark, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    wkVBinding.applyBtn.setText(R.string.applyed);
+                    wkVBinding.applyBtn.setAlpha(0.2f);
+                    wkVBinding.applyBtn.setEnabled(false);
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> getUserInfo(), 500);
+                } else showToast(msg);
+            });
+        });
+        builder.setNegativeButton(getString(R.string.cancel), null);
+
+        AlertDialog dialog = builder.create();
+        builder.setOnPreDismissListener(d -> SoftKeyboardUtils.getInstance().hideInput(this, editText));
+        dialog.setBlurParams(1f, true, true);
+        dialog.show();
+
+        TextView sureTv = (TextView) dialog.getButton(android.app.Dialog.BUTTON_POSITIVE);
+        sureTv.setTextColor(ContextCompat.getColor(this, R.color.colorAccent));
+        TextView cancelTv = (TextView) dialog.getButton(android.app.Dialog.BUTTON_NEGATIVE);
+        cancelTv.setTextColor(ContextCompat.getColor(this, R.color.colorAccentUn));
+
+        SoftKeyboardUtils.getInstance().showSoftKeyBoard(this, editText);
+    }
+
+    private void addInfoRow(LinearLayout container, String label, String value, int hPadding) {
+        // 标签
+        TextView labelTv = new TextView(this);
+        labelTv.setText(label);
+        labelTv.setTextSize(14);
+        labelTv.setTextColor(ContextCompat.getColor(this, R.color.color999));
+        container.addView(labelTv, LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
+                Gravity.START, 24, 12, 24, 2));
+
+        // 值
+        TextView valueTv = new TextView(this);
+        valueTv.setText(value);
+        valueTv.setTextSize(15);
+        valueTv.setTextColor(ContextCompat.getColor(this, R.color.colorDark));
+        container.addView(valueTv, LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
+                Gravity.START, 24, 0, 24, 0));
     }
 
     private void showImg() {

@@ -100,6 +100,7 @@ import com.chat.uikit.chat.search.image.SearchWithImgActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.MyGroupsListActivity;
 import com.chat.uikit.contacts.NewFriendsActivity;
+import com.chat.uikit.contacts.BotStoreActivity;
 import com.chat.uikit.contacts.SpaceBotsListActivity;
 import com.chat.uikit.contacts.SpaceMembersListActivity;
 import com.chat.uikit.enity.SensitiveWords;
@@ -142,6 +143,19 @@ public class WKUIKitApplication {
     public boolean isRefreshChatActivityMessage = false;
     // 注册场景设为 true，loginMenus 跳过页面导航
     public static volatile boolean skipNavigation = false;
+
+    // 当前 Space 的会话白名单（channelID_channelType），由 ChatFragment 维护
+    private final java.util.Set<String> spaceConversationKeys = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    public void setSpaceConversationKeys(java.util.Set<String> keys) {
+        spaceConversationKeys.clear();
+        spaceConversationKeys.addAll(keys);
+    }
+
+    public boolean isInCurrentSpace(String channelID, byte channelType) {
+        if (spaceConversationKeys.isEmpty()) return true;
+        return spaceConversationKeys.contains(channelID + "_" + channelType);
+    }
 
     private WKUIKitApplication() {
     }
@@ -275,6 +289,9 @@ public class WKUIKitApplication {
         // Bot
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_space_bots", EndpointCategory.mailList, 80,
                 object -> new ContactsMenu("space_bots", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_bots), SpaceBotsListActivity.class));
+        // AI 广场
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_bot_store", EndpointCategory.mailList, 77,
+                object -> new ContactsMenu("bot_store", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_bot_store), BotStoreActivity.class));
         // 我的群组
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_my_groups", EndpointCategory.mailList, 75,
                 object -> new ContactsMenu("my_groups", R.mipmap.icon_my_groups, mContext.get().getString(R.string.contacts_section_groups), MyGroupsListActivity.class));

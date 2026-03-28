@@ -80,7 +80,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         setUnreadCount(helper, conversationMsg, false);
         showTime(helper, item);
         showChannel(helper, item);
-        showContent(helper, item);
+        // showReminders 统一处理内容显示：有草稿显示草稿，否则显示最后一条消息
         showReminders(helper, conversationMsg);
         setStatus(helper, item, false);
         showTyping(helper, conversationMsg);
@@ -113,17 +113,15 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 showChannel(baseViewHolder, item);
                 chatConversationMsg.isRefreshChannelInfo = false;
             }
-            if (chatConversationMsg.isResetReminders) {
-                showReminders(baseViewHolder, chatConversationMsg);
-                chatConversationMsg.isResetReminders = false;
-            }
             if (chatConversationMsg.isRefreshStatus) {
                 setStatus(baseViewHolder, item, true);
                 chatConversationMsg.isRefreshStatus = false;
             }
-            if (chatConversationMsg.isResetContent) {
-                showContent(baseViewHolder, item);
+            // 内容或提醒变化时统一走 showReminders：有草稿显示草稿，否则显示最后一条消息
+            if (chatConversationMsg.isResetContent || chatConversationMsg.isResetReminders) {
+                showReminders(baseViewHolder, chatConversationMsg);
                 chatConversationMsg.isResetContent = false;
+                chatConversationMsg.isResetReminders = false;
             }
             showCalling(baseViewHolder, chatConversationMsg);
         }

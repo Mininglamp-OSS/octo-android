@@ -13,6 +13,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.NewFriendEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
+import com.chat.uikit.message.MsgModel;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.utils.AndroidUtilities;
@@ -24,6 +25,8 @@ import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
+
+import io.reactivex.rxjava3.core.Observable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,6 +63,10 @@ public class FriendModel extends WKBaseModel {
         jsonObject1.put("to_uid", uid);
         jsonObject1.put("remark", remark);
         jsonObject1.put("vercode", vercode);
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject1.put("space_id", spaceId);
+        }
         request(createService(FriendService.class).applyAddFriend(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
@@ -83,6 +90,10 @@ public class FriendModel extends WKBaseModel {
 
         JSONObject jsonObject1 = new JSONObject();
         jsonObject1.put("token", token);
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            jsonObject1.put("space_id", spaceId);
+        }
         request(createService(FriendService.class).agreeFriendApply(jsonObject1), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
@@ -105,7 +116,14 @@ public class FriendModel extends WKBaseModel {
     public void syncFriends(final ICommonListener iCommonListener) {
         String key = String.format("%s_friend_sync_version", WKConfig.getInstance().getUid());
         long version = WKSharedPreferencesUtil.getInstance().getLong(key);
-        request(createService(FriendService.class).syncFriends(version, 1000, 1), new IRequestResultListener<>() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        Observable<List<UserInfo>> syncCall;
+        if (!TextUtils.isEmpty(spaceId)) {
+            syncCall = createService(FriendService.class).syncFriendsWithSpace(version, 1000, 1, spaceId);
+        } else {
+            syncCall = createService(FriendService.class).syncFriends(version, 1000, 1);
+        }
+        request(syncCall, new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<UserInfo> list) {
                 if (WKReader.isNotEmpty(list)) {

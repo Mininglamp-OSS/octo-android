@@ -125,6 +125,7 @@ import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKVideoContent;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 import com.xinbida.wukongim.msgmodel.WKReply;
 import com.chat.base.msgcontent.WKFileContent;
@@ -1875,52 +1876,166 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // DM 消息注入 space_id，让 BotFather 等系统 Bot 知道用户当前 Space
         // 与 Web 端 ConversationVM.sendMessage 逻辑一致
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
-        if (!TextUtils.isEmpty(spaceId) && channelType == WKChannelType.PERSONAL
-                && !(messageContent instanceof WKMediaMessageContent)) {
+        if (!TextUtils.isEmpty(spaceId) && channelType == WKChannelType.PERSONAL) {
             final WKMessageContent originalContent = messageContent;
-            messageContent = new WKMessageContent() {
-                {
-                    this.type = originalContent.type;
-                    this.reply = originalContent.reply;
-                    this.mentionInfo = originalContent.mentionInfo;
-                    this.mentionAll = originalContent.mentionAll;
-                    this.robotID = originalContent.robotID;
-                    this.flame = originalContent.flame;
-                    this.flameSecond = originalContent.flameSecond;
-                    this.topicID = originalContent.topicID;
-                    this.entities = originalContent.entities;
-                    this.content = originalContent.content;
-                    this.fromUID = originalContent.fromUID;
-                    this.fromName = originalContent.fromName;
-                    this.searchableWord = originalContent.searchableWord;
-                }
-
-                @Override
-                public JSONObject encodeMsg() {
-                    JSONObject json = originalContent.encodeMsg();
-                    if (json == null) json = new JSONObject();
-                    try {
-                        json.put("space_id", spaceId);
-                    } catch (JSONException ignored) {
+            if (messageContent instanceof WKVideoContent) {
+                // Video 消息：需要 WKVideoContent wrapper 以保持 upload handler 类型兼容
+                final WKVideoContent originalVideo = (WKVideoContent) messageContent;
+                messageContent = new WKVideoContent() {
+                    {
+                        this.cover = originalVideo.cover;
+                        this.coverLocalPath = originalVideo.coverLocalPath;
+                        this.size = originalVideo.size;
+                        this.width = originalVideo.width;
+                        this.height = originalVideo.height;
+                        this.second = originalVideo.second;
+                        this.localPath = originalVideo.localPath;
+                        this.url = originalVideo.url;
+                        this.type = originalVideo.type;
+                        this.reply = originalVideo.reply;
+                        this.mentionInfo = originalVideo.mentionInfo;
+                        this.mentionAll = originalVideo.mentionAll;
+                        this.robotID = originalVideo.robotID;
+                        this.flame = originalVideo.flame;
+                        this.flameSecond = originalVideo.flameSecond;
+                        this.topicID = originalVideo.topicID;
+                        this.entities = originalVideo.entities;
+                        this.content = originalVideo.content;
+                        this.fromUID = originalVideo.fromUID;
+                        this.fromName = originalVideo.fromName;
+                        this.searchableWord = originalVideo.searchableWord;
                     }
-                    return json;
-                }
 
-                @Override
-                public WKMessageContent decodeMsg(JSONObject jsonObject) {
-                    return originalContent.decodeMsg(jsonObject);
-                }
+                    @Override
+                    public JSONObject encodeMsg() {
+                        originalVideo.url = this.url;
+                        originalVideo.localPath = this.localPath;
+                        originalVideo.cover = this.cover;
+                        originalVideo.coverLocalPath = this.coverLocalPath;
+                        originalVideo.size = this.size;
+                        originalVideo.width = this.width;
+                        originalVideo.height = this.height;
+                        originalVideo.second = this.second;
+                        JSONObject json = originalVideo.encodeMsg();
+                        if (json == null) json = new JSONObject();
+                        try {
+                            json.put("space_id", spaceId);
+                        } catch (JSONException ignored) {
+                        }
+                        return json;
+                    }
 
-                @Override
-                public String getDisplayContent() {
-                    return originalContent.getDisplayContent();
-                }
+                    @Override
+                    public WKMessageContent decodeMsg(JSONObject jsonObject) {
+                        return originalVideo.decodeMsg(jsonObject);
+                    }
 
-                @Override
-                public String getSearchableWord() {
-                    return originalContent.getSearchableWord();
-                }
-            };
+                    @Override
+                    public String getDisplayContent() {
+                        return originalVideo.getDisplayContent();
+                    }
+
+                    @Override
+                    public String getSearchableWord() {
+                        return originalVideo.getSearchableWord();
+                    }
+                };
+            } else if (messageContent instanceof WKMediaMessageContent) {
+                // 其他 Media 消息（图片、语音、文件、GIF 等）
+                final WKMediaMessageContent originalMedia = (WKMediaMessageContent) messageContent;
+                messageContent = new WKMediaMessageContent() {
+                    {
+                        this.localPath = originalMedia.localPath;
+                        this.url = originalMedia.url;
+                        this.type = originalMedia.type;
+                        this.reply = originalMedia.reply;
+                        this.mentionInfo = originalMedia.mentionInfo;
+                        this.mentionAll = originalMedia.mentionAll;
+                        this.robotID = originalMedia.robotID;
+                        this.flame = originalMedia.flame;
+                        this.flameSecond = originalMedia.flameSecond;
+                        this.topicID = originalMedia.topicID;
+                        this.entities = originalMedia.entities;
+                        this.content = originalMedia.content;
+                        this.fromUID = originalMedia.fromUID;
+                        this.fromName = originalMedia.fromName;
+                        this.searchableWord = originalMedia.searchableWord;
+                    }
+
+                    @Override
+                    public JSONObject encodeMsg() {
+                        originalMedia.url = this.url;
+                        originalMedia.localPath = this.localPath;
+                        JSONObject json = originalMedia.encodeMsg();
+                        if (json == null) json = new JSONObject();
+                        try {
+                            json.put("space_id", spaceId);
+                        } catch (JSONException ignored) {
+                        }
+                        return json;
+                    }
+
+                    @Override
+                    public WKMessageContent decodeMsg(JSONObject jsonObject) {
+                        return originalMedia.decodeMsg(jsonObject);
+                    }
+
+                    @Override
+                    public String getDisplayContent() {
+                        return originalMedia.getDisplayContent();
+                    }
+
+                    @Override
+                    public String getSearchableWord() {
+                        return originalMedia.getSearchableWord();
+                    }
+                };
+            } else {
+                // 非 Media 消息（文本等）
+                messageContent = new WKMessageContent() {
+                    {
+                        this.type = originalContent.type;
+                        this.reply = originalContent.reply;
+                        this.mentionInfo = originalContent.mentionInfo;
+                        this.mentionAll = originalContent.mentionAll;
+                        this.robotID = originalContent.robotID;
+                        this.flame = originalContent.flame;
+                        this.flameSecond = originalContent.flameSecond;
+                        this.topicID = originalContent.topicID;
+                        this.entities = originalContent.entities;
+                        this.content = originalContent.content;
+                        this.fromUID = originalContent.fromUID;
+                        this.fromName = originalContent.fromName;
+                        this.searchableWord = originalContent.searchableWord;
+                    }
+
+                    @Override
+                    public JSONObject encodeMsg() {
+                        JSONObject json = originalContent.encodeMsg();
+                        if (json == null) json = new JSONObject();
+                        try {
+                            json.put("space_id", spaceId);
+                        } catch (JSONException ignored) {
+                        }
+                        return json;
+                    }
+
+                    @Override
+                    public WKMessageContent decodeMsg(JSONObject jsonObject) {
+                        return originalContent.decodeMsg(jsonObject);
+                    }
+
+                    @Override
+                    public String getDisplayContent() {
+                        return originalContent.getDisplayContent();
+                    }
+
+                    @Override
+                    public String getSearchableWord() {
+                        return originalContent.getSearchableWord();
+                    }
+                };
+            }
         }
         WKMsg wkMsg = new WKMsg();
         wkMsg.channelID = channelId;

@@ -267,10 +267,18 @@ public class WKIMUtils {
             // Space 过滤：消息不属于当前 Space 时不触发通知
             String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
             if (isAlertMsg && !TextUtils.isEmpty(currentSpaceId)) {
-                WKMsg lastMsg = msgList.get(msgList.size() - 1);
-                String msgSpaceId = extractSpaceId(lastMsg);
-                if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
+                // 群聊：通过 Space 会话白名单判断（群消息通常不携带 space_id）
+                if (channelType == WKChannelType.GROUP
+                        && !WKUIKitApplication.getInstance().isInCurrentSpace(channelID, channelType)) {
                     isAlertMsg = false;
+                }
+                // 私聊：通过消息内容中的 space_id 判断
+                if (isAlertMsg && channelType == WKChannelType.PERSONAL) {
+                    WKMsg lastMsg = msgList.get(msgList.size() - 1);
+                    String msgSpaceId = extractSpaceId(lastMsg);
+                    if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
+                        isAlertMsg = false;
+                    }
                 }
             }
 

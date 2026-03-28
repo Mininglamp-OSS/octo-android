@@ -43,8 +43,6 @@ public class SpaceMembersListActivity extends WKBaseActivity<ActContactsListLayo
 
     private FriendAdapter friendAdapter;
     private TextView countTv;
-    private boolean isDataLoaded = false;
-    private String loadedSpaceId = null;
 
     @Override
     protected ActContactsListLayoutBinding getViewBinding() {
@@ -61,6 +59,8 @@ public class SpaceMembersListActivity extends WKBaseActivity<ActContactsListLayo
         friendAdapter = new FriendAdapter();
         friendAdapter.addFooterView(createFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
+        wkVBinding.recyclerView.setItemAnimator(null);
+        friendAdapter.setAnimationEnable(false);
         int stickyHeight = com.chat.base.utils.AndroidUtilities.dp(30);
         wkVBinding.recyclerView.addItemDecoration(StickyHeaderDecoration.forFriendAdapter(
                 stickyHeight, 0,
@@ -108,11 +108,7 @@ public class SpaceMembersListActivity extends WKBaseActivity<ActContactsListLayo
     @Override
     protected void onResume() {
         super.onResume();
-        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        boolean spaceChanged = !TextUtils.equals(currentSpaceId, loadedSpaceId);
-        if (!isDataLoaded || spaceChanged) {
-            loadData();
-        }
+        loadData();
     }
 
     private void loadData() {
@@ -148,8 +144,6 @@ public class SpaceMembersListActivity extends WKBaseActivity<ActContactsListLayo
                 }
                 friendAdapter.setList(list);
                 countTv.setText(String.format(getString(R.string.contacts_members_count), list.size()));
-                isDataLoaded = true;
-                loadedSpaceId = spaceId;
             }
 
             @Override

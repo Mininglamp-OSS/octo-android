@@ -113,6 +113,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         return channelID + "_" + channelType;
     }
 
+    /**
+     * 将本地 spaceConversationKeys 同步到 WKUIKitApplication，
+     * 供 WKIMUtils 在消息通知过滤时使用。
+     */
+    private void syncSpaceKeysToGlobal() {
+        WKUIKitApplication.getInstance().setSpaceConversationKeys(spaceConversationKeys);
+    }
+
     // 网络状态指示器
     private long connectedAtMs = 0;
     private long currentLatencyMs = -1;
@@ -528,8 +536,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
                     } else {
-                        // 不在白名单中：检查消息是否真的来自其他 Space
-                        // 新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
+                        // 不在白名单中：群聊一定属于某个 Space，不在白名单则直接丢弃
+                        if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                            continue;
+                        }
+                        // 私聊：新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
+                        // 检查消息是否真的来自其他 Space
                         if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
                             continue;
                         }
@@ -868,19 +880,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
             if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
-                // 不在白名单中：检查消息是否真的来自其他 Space
-                // 新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
+                // 不在白名单中：群聊一定属于某个 Space，不在白名单则直接丢弃
+                if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                    return;
+                }
+                // 私聊：新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
                 if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
                     return;
                 }
-                // 消息不属于其他 Space（无 space_id 或与当前 Space 匹配），放行并加入白名单
+                // 私聊消息不属于其他 Space（无 space_id 或与当前 Space 匹配），放行并加入白名单
             }
             spaceConversationKeys.add(key);
+            syncSpaceKeysToGlobal();
             if (!isEnd) {
                 chatConversationAdapter.addData(new ChatConversationMsg(uiConversationMsg));
             } else {
                 int insertIndex = getInsertIndex(uiConversationMsg);
                 chatConversationAdapter.addData(insertIndex, new ChatConversationMsg(uiConversationMsg));
+                scrollToPositionIfNearTop(insertIndex);
             }
             setAllCount();
         }
@@ -890,6 +907,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (insertIndex != index) {
                     if (index != -1) chatConversationAdapter.removeAt(index);
                     chatConversationAdapter.addData(insertIndex, new ChatConversationMsg(uiConversationMsg));
+                    scrollToPositionIfNearTop(insertIndex);
                 }
             } else {
                 if (msgCount > 0) {
@@ -1032,6 +1050,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         AndroidUtilities.runOnUIThread(() -> {
             chatConversationAdapter.setList(tempList);
             setAllCount();
+            scrollToPositionIfNearTop(0);
+            syncSpaceKeysToGlobal();
         });
     }
 
@@ -1231,6 +1251,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int getInsertIndex(WKUIConversationMsg msg) {
         if (msg.getWkChannel() != null && msg.getWkChannel().top == 1) return 0;
         return getTopChatCount();
+    }
+
+    /**
+     * 新会话插入到列表顶部附近时，自动滚动使其可见。
+     * 仅当用户当前已处于列表顶部附近时才滚动，避免打断用户浏览。
+     */
+    private void scrollToPositionIfNearTop(int insertIndex) {
+        LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+        if (lm == null) return;
+        int firstVisible = lm.findFirstVisibleItemPosition();
+        // 用户在列表顶部附近（前 3 项之内），滚动到插入位置
+        if (firstVisible <= insertIndex + 3) {
+            wkVBinding.recyclerView.post(() -> lm.scrollToPositionWithOffset(insertIndex, 0));
+        }
     }
 
     private void notifyRecycler(int index, ChatConversationMsg msg) {

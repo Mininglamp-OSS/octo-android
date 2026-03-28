@@ -14,6 +14,7 @@ import android.widget.TextView;
 import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.base.WKBaseFragment;
@@ -114,6 +115,9 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         }
         friendAdapter.addFooterView(getFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
+        // 关闭 item 动画，避免滑动/刷新时的闪烁
+        wkVBinding.recyclerView.setItemAnimator(null);
+        friendAdapter.setAnimationEnable(false);
         int stickyHeight = AndroidUtilities.dp(30);
         StickyHeaderDecoration stickyDecoration = StickyHeaderDecoration.forFriendAdapter(
                 stickyHeight,
@@ -135,8 +139,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NotNull RecyclerView recyclerView, int dx, int dy) {
-                androidx.recyclerview.widget.LinearLayoutManager lm =
-                        (androidx.recyclerview.widget.LinearLayoutManager) recyclerView.getLayoutManager();
+                LinearLayoutManager lm = (LinearLayoutManager) recyclerView.getLayoutManager();
                 if (lm == null) return;
                 int firstVisible = lm.findFirstVisibleItemPosition();
                 int dataIndex = firstVisible - friendAdapter.getHeaderLayoutCount();
@@ -343,10 +346,8 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 continue;
             }
             if (PyingUtils.getInstance().isStartLetter(list.get(i).pying)) {
-                //字母
                 letterList.add(list.get(i));
             } else if (PyingUtils.getInstance().isStartNum(list.get(i).pying)) {
-                //数字
                 numList.add(list.get(i));
             } else otherList.add(list.get(i));
         }
@@ -354,17 +355,27 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         tempList.addAll(letterList);
         tempList.addAll(numList);
         tempList.addAll(otherList);
+
+        // 数据未变化时跳过刷新，保持滚动位置
+        if (isDataSame(friendAdapter.getData(), tempList)) return;
+
         friendAdapter.setList(tempList);
         if (isAdded()) {
             allContactsCountTv.setText(String.format(getString(R.string.contacts_num), tempList.size()));
-            // 列表刷新后重置侧边栏选中状态和滚动位置
-            wkVBinding.recyclerView.scrollToPosition(0);
-            if (!tempList.isEmpty() && tempList.get(0).pying != null && !tempList.get(0).pying.isEmpty()) {
-                wkVBinding.quickSideBarView.setChooseLetter(tempList.get(0).pying.substring(0, 1).toUpperCase());
-            } else {
-                wkVBinding.quickSideBarView.setChooseLetter("A");
+        }
+    }
+
+    /**
+     * 比较两个列表的 channelID 序列是否一致，避免相同数据的重复刷新。
+     */
+    private boolean isDataSame(List<FriendUIEntity> oldList, List<FriendUIEntity> newList) {
+        if (oldList.size() != newList.size()) return false;
+        for (int i = 0, size = oldList.size(); i < size; i++) {
+            if (!oldList.get(i).channel.channelID.equals(newList.get(i).channel.channelID)) {
+                return false;
             }
         }
+        return true;
     }
 
     private View getFooterView() {
@@ -391,12 +402,12 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying != null && list.get(i).pying.toUpperCase().startsWith(letter.toUpperCase())) {
-                    androidx.recyclerview.widget.LinearLayoutManager lm =
-                            (androidx.recyclerview.widget.LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+                    LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
                     if (lm != null) {
+                        // 直接定位，不走动画，和微信一样瞬间跳转
                         lm.scrollToPositionWithOffset(i + friendAdapter.getHeaderLayoutCount(), 0);
                     }
-                    break;
+                    return;
                 }
             }
         }

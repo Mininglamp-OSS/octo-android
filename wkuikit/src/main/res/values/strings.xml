@@ -346,6 +346,15 @@
     <string name="contacts_bots_count">%d个AI</string>
     <string name="contacts_groups_count">%d个群组</string>
 
+    <string name="contacts_section_bot_store">AI 广场</string>
+    <string name="bot_status_pending">审批中</string>
+    <string name="bot_status_add">添加</string>
+    <string name="contacts_bots_store_count">%d个可用AI</string>
+
+    <string name="bot_no_description">暂无简介</string>
+    <string name="bot_apply_message">申请消息</string>
+    <string name="bot_apply_message_hint">请输入申请消息</string>
+
     <string name="bot_description_label">简介</string>
     <string name="bot_creator_label">创建者</string>
     <string name="bot_commands_label">命令</string>

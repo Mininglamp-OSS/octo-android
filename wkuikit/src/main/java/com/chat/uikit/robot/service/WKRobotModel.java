@@ -8,6 +8,7 @@ import com.chat.base.base.WKBaseModel;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.utils.WKReader;
+import com.chat.uikit.robot.entity.BotStoreEntity;
 import com.chat.uikit.robot.entity.WKRobotEntity;
 import com.chat.uikit.robot.entity.WKRobotInlineQueryResult;
 import com.chat.uikit.robot.entity.WKRobotMenuEntity;
@@ -225,6 +226,25 @@ public class WKRobotModel extends WKBaseModel {
                 inlineQueryListener.onResult(code, msg, null);
             }
         });
+    }
+
+    public void getSpaceBots(String spaceId, ISpaceBotsListener listener) {
+        request(createService(BotStoreService.class).getSpaceBots(spaceId), new IRequestResultListener<List<BotStoreEntity>>() {
+            @Override
+            public void onSuccess(List<BotStoreEntity> result) {
+                listener.onResult(result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onError(code, msg);
+            }
+        });
+    }
+
+    public interface ISpaceBotsListener {
+        void onResult(List<BotStoreEntity> list);
+        void onError(int code, String msg);
     }
 
     public interface InlineQueryListener {

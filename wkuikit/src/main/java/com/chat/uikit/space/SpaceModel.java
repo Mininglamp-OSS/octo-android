@@ -116,22 +116,30 @@ public class SpaceModel extends WKBaseModel {
     }
 
     public void getMembers(String spaceId, IMembersListener listener) {
-        // 有缓存且是同一个 Space，直接返回
+        // 有缓存且是同一个 Space，先立即返回缓存，再后台刷新
         if (cachedMembers != null && spaceId.equals(cachedMembersSpaceId)) {
-            listener.onResult(cachedMembers);
-            return;
+            listener.onResult(new ArrayList<>(cachedMembers));
         }
         request(createService(SpaceService.class).getMembers(spaceId, 1, 10000), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<SpaceEntity.SpaceMember> result) {
+                boolean changed = !spaceId.equals(cachedMembersSpaceId)
+                        || cachedMembers == null
+                        || cachedMembers.size() != result.size();
                 cachedMembersSpaceId = spaceId;
                 cachedMembers = result;
-                listener.onResult(result);
+                // 首次加载或数据有变化时回调
+                if (changed) {
+                    listener.onResult(result);
+                }
             }
 
             @Override
             public void onFail(int code, String msg) {
-                listener.onError(code, msg);
+                if (cachedMembers == null || !spaceId.equals(cachedMembersSpaceId)) {
+                    listener.onError(code, msg);
+                }
+                // 有缓存时网络失败不报错，静默降级
             }
         });
     }

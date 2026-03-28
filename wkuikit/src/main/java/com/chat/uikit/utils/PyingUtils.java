@@ -1,6 +1,7 @@
 package com.chat.uikit.utils;
 
 
+import com.chat.uikit.contacts.BotStoreUIEntity;
 import com.chat.uikit.contacts.FriendUIEntity;
 import com.chat.uikit.enity.MailListEntity;
 import com.chat.uikit.group.GroupMemberEntity;
@@ -156,6 +157,27 @@ public class PyingUtils {
                 break;
             }
             //如果AB一样就继续比较后面的字母
+        }
+    }
+
+    public void sortBotStoreList(List<BotStoreUIEntity> list) {
+        for (int i = 0; i < list.size() - 1; i++) {
+            for (int j = 0; j < list.size() - 1 - i; j++) {
+                String namePinYin1 = list.get(j).pying;
+                String namePinYin2 = list.get(j + 1).pying;
+                int size = Math.min(namePinYin1.length(), namePinYin2.length());
+                for (int k = 0; k < size; k++) {
+                    char jc = namePinYin1.charAt(k);
+                    char jcNext = namePinYin2.charAt(k);
+                    if (jc < jcNext) break;
+                    if (jc > jcNext) {
+                        BotStoreUIEntity temp = list.get(j);
+                        list.set(j, list.get(j + 1));
+                        list.set(j + 1, temp);
+                        break;
+                    }
+                }
+            }
         }
     }
 

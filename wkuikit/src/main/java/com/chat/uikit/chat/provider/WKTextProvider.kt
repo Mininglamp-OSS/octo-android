@@ -75,6 +75,7 @@ import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKTextContent
 import java.io.File
 import java.util.Objects
+import java.util.regex.Pattern
 import kotlin.math.abs
 
 
@@ -164,6 +165,137 @@ open class WKTextProvider : WKChatBaseProvider() {
         if (uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply != null && uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply.payload != null) {
             replyView(contentTvLayout, from, uiChatMsgItemEntity)
         }
+
+        // Bot 命令按钮：检测消息中的 /approve 和 /reject 命令，渲染为可点击按钮
+        setupBotCommandButtons(contentTv, contentTvLayout, uiChatMsgItemEntity)
+    }
+
+    companion object {
+        private val CMD_PATTERN: Pattern = Pattern.compile("/(approve|reject)\\s+\\S+(?:\\s+\\S+)?")
+        private const val BOT_BUTTONS_TAG = "bot_cmd_buttons"
+        // 记录已操作的消息，防止 RecyclerView 复用时按钮状态丢失
+        private val handledMsgIds = HashSet<String>()
+    }
+
+    private fun setupBotCommandButtons(
+        contentTv: EmojiTextView,
+        contentTvLayout: BubbleLayout,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity
+    ) {
+        // 清除旧的按钮容器（RecyclerView 复用）
+        val oldButtons = contentTvLayout.findViewWithTag<View>(BOT_BUTTONS_TAG)
+        if (oldButtons != null) {
+            contentTvLayout.removeView(oldButtons)
+        }
+
+        val msg = uiChatMsgItemEntity.wkMsg
+        if (msg.baseContentMsgModel !is WKTextContent) return
+        val rawText = (msg.baseContentMsgModel as WKTextContent).content ?: return
+
+        val matcher = CMD_PATTERN.matcher(rawText)
+        val commands = mutableListOf<Pair<String, String>>() // label, full command
+        while (matcher.find()) {
+            val cmd = matcher.group() ?: continue
+            val label = if (cmd.startsWith("/approve")) context.getString(R.string.bot_cmd_approve)
+            else context.getString(R.string.bot_cmd_reject)
+            commands.add(Pair(label, cmd))
+        }
+        if (commands.isEmpty()) return
+
+        // 将命令文本从显示内容中移除，只显示正文部分
+        var displayText = rawText
+        for ((_, cmd) in commands) {
+            displayText = displayText.replace(cmd, "")
+        }
+        displayText = displayText.trimEnd()
+        if (displayText != rawText) {
+            contentTv.text = displayText
+        }
+
+        val msgKey = msg.clientMsgNO ?: return
+        val alreadyHandled = handledMsgIds.contains(msgKey)
+
+        // 创建按钮容器
+        val buttonContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            tag = BOT_BUTTONS_TAG
+        }
+
+        val dp6 = com.chat.base.utils.AndroidUtilities.dp(6f)
+        val dp4 = com.chat.base.utils.AndroidUtilities.dp(4f)
+        val dp16 = com.chat.base.utils.AndroidUtilities.dp(16f)
+        val cornerRadius = com.chat.base.utils.AndroidUtilities.dp(14f).toFloat()
+
+        for ((label, cmd) in commands) {
+            val isApprove = cmd.startsWith("/approve")
+            val btn = TextView(context).apply {
+                text = label
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(dp16, dp6, dp16, dp6)
+                gravity = Gravity.CENTER
+                isSingleLine = true
+
+                if (isApprove) {
+                    setTextColor(android.graphics.Color.WHITE)
+                    background = GradientDrawable().apply {
+                        setColor(android.graphics.Color.parseColor("#6366f1"))
+                        this.cornerRadius = cornerRadius
+                    }
+                } else {
+                    setTextColor(ContextCompat.getColor(context, R.color.color999))
+                    background = GradientDrawable().apply {
+                        setColor(ContextCompat.getColor(context, R.color.screen_bg))
+                        setStroke(1, ContextCompat.getColor(context, R.color.color999))
+                        this.cornerRadius = cornerRadius
+                    }
+                }
+
+                if (alreadyHandled) {
+                    isEnabled = false
+                    alpha = 0.4f
+                } else {
+                    isEnabled = true
+                    alpha = 1f
+                    setOnClickListener {
+                        val chatAdapter = getAdapter() as? ChatAdapter ?: return@setOnClickListener
+                        val textContent = WKTextContent()
+                        textContent.content = cmd
+                        chatAdapter.conversationContext.sendMessage(textContent)
+                        // 记录已操作，防止复用时状态丢失
+                        handledMsgIds.add(msgKey)
+                        // 禁用同组所有按钮
+                        val p = parent as? LinearLayout ?: return@setOnClickListener
+                        for (i in 0 until p.childCount) {
+                            p.getChildAt(i).isEnabled = false
+                            p.getChildAt(i).alpha = 0.4f
+                        }
+                    }
+                }
+            }
+
+            buttonContainer.addView(
+                btn,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginStart = dp4
+                }
+            )
+        }
+
+        contentTvLayout.addView(
+            buttonContainer,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = com.chat.base.utils.AndroidUtilities.dp(8f)
+                gravity = Gravity.END
+            }
+        )
     }
 
     private var mSelectableTextHelper: SelectTextHelper? = null

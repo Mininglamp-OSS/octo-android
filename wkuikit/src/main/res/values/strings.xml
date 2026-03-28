@@ -355,6 +355,9 @@
     <string name="bot_apply_message">申请消息</string>
     <string name="bot_apply_message_hint">请输入申请消息</string>
 
+    <string name="bot_cmd_approve">通过</string>
+    <string name="bot_cmd_reject">拒绝</string>
+
     <string name="bot_description_label">简介</string>
     <string name="bot_creator_label">创建者</string>
     <string name="bot_commands_label">命令</string>

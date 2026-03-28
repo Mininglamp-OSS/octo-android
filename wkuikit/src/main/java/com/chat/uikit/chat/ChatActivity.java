@@ -2607,18 +2607,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     }
 
-    // 系统 Bot：在所有 Space 可见，但聊天历史需按 Space 过滤
-    private static final java.util.Set<String> SYSTEM_BOTS = new java.util.HashSet<>(java.util.Arrays.asList("botfather"));
-
-
     /**
-     * 过滤系统 Bot（如 BotFather）的消息，与 Web 端 filterSystemBotMessages 逻辑一致
+     * 过滤 1:1 私聊消息的 Space 隔离
+     * 对所有 Person 类型频道（包括系统 Bot 和普通用户）按 space_id 过滤
      * 规则：payload 有 space_id 且匹配当前 Space → 显示
      *       payload 有 space_id 且不匹配 → 隐藏
      *       payload 无 space_id（历史消息）→ 所有 Space 都显示（向前兼容）
      */
     private List<WKMsg> filterSystemBotMessages(List<WKMsg> messages) {
-        if (!SYSTEM_BOTS.contains(channelId)) {
+        if (channelType != WKChannelType.PERSONAL) {
             return messages;
         }
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();

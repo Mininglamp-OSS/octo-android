@@ -135,8 +135,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -146,6 +149,8 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
+    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+
     private String channelId = "";
     private byte channelType = WKChannelType.PERSONAL;
     private ChatAdapter chatAdapter;

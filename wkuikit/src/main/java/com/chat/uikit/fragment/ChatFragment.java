@@ -582,10 +582,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     spaceConversationKeys.clear();
                     Schedulers.io().scheduleDirect(() -> {
                         WKIM.getInstance().getConversationManager().clearAll();
-                        new Handler(Looper.getMainLooper()).post(() ->
-                            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                            })
-                        );
+                        // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+                        // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                        WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                        });
                     });
                 }
             } else if (i == WKConnectStatus.connecting) {

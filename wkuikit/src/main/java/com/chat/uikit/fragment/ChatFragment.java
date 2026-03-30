@@ -690,8 +690,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void setAllCount() {
         int allCount = 0;
         for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-            if (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel().mute == 0)
-                allCount = allCount + chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount;
+            ChatConversationMsg item = chatConversationAdapter.getData().get(i);
+            if (item.uiConversationMsg.getWkChannel() != null && item.uiConversationMsg.getWkChannel().mute == 0) {
+                if (item.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
+                    allCount += chatConversationAdapter.getEffectiveUnreadCount(item);
+                } else {
+                    allCount += item.uiConversationMsg.unreadCount;
+                }
+            }
         }
         if (tabActivity != null) {
             tabActivity.setMsgCount(allCount);

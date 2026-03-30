@@ -397,6 +397,23 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         return ""; // 当前 Space 确实无消息
     }
 
+    /**
+     * 返回 Space 感知的未读数。
+     * Person 频道在 Space 模式下，若最后一条消息不属于当前 Space，返回 0。
+     */
+    public int getEffectiveUnreadCount(ChatConversationMsg item) {
+        if (item.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
+            String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+            if (!TextUtils.isEmpty(currentSpaceId)) {
+                String msgSpaceId = getSpaceIdFromMsg(item.uiConversationMsg.getWkMsg());
+                if (!TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId)) {
+                    return 0;
+                }
+            }
+        }
+        return item.uiConversationMsg.unreadCount;
+    }
+
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         String content;
         androidx.emoji2.widget.EmojiTextView contentTv = helper.getView(R.id.contentTv);

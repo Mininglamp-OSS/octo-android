@@ -244,7 +244,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         }
                         MsgModel.getInstance().offsetMsg(item.channelID, item.channelType, null);
                         WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list);
-                        MsgModel.getInstance().clearUnread(item.channelID, item.channelType, 0, null);
+                        // 先删除会话和消息，再清未读
+                        // clearUnread 中的 updateRedDot 是异步的，如果在 delete 之前执行，
+                        // 异步回调可能触发 SDK 刷新事件导致已删除的会话重新出现
                         boolean result = WKIM.getInstance().getConversationManager().deleteWitchChannel(item.channelID, item.channelType);
                         if (result) {
                             if (item.getWkChannel() != null && item.getWkChannel().top == 1) {
@@ -252,6 +254,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             }
                             WKIM.getInstance().getMsgManager().clearWithChannel(item.channelID, item.channelType);
                         }
+                        MsgModel.getInstance().clearUnread(item.channelID, item.channelType, 0, null);
                     }
                 });
             } else if (menu == ChatConversationAdapter.ItemMenu.top) {
@@ -554,8 +557,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
-            uiList.addAll(chatConversationAdapter.getData());
-            sortMsg(uiList);
+            if (WKReader.isNotEmpty(uiList)) {
+                // 有新会话加入，需要合并排序
+                uiList.addAll(chatConversationAdapter.getData());
+                sortMsg(uiList);
+            }
+            // 仅已有会话更新时，notifyRecycler 已处理局部刷新，不需要 sortMsg 全量重绘
             setAllCount();
         });
 //        WKIM.getInstance().getConversationManager().addOnRefreshMsgListener("chat_fragment", this::resetData);

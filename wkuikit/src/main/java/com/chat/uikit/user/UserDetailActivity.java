@@ -576,15 +576,17 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     private void showImg() {
-        String uri = WKApiConfig.getAvatarUrl(uid) + "?key=" + WKTimeUtils.getInstance().getCurrentMills();
-        //查看大图
+        // 参考 iOS：先刷新 cacheKey 再打开弹窗，确保全屏显示最新头像
+        String newCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
+        WKIM.getInstance().getChannelManager().updateAvatarCacheKey(uid, WKChannelType.PERSONAL, newCacheKey);
+        // 必须用 ?v= 参数（服务端只转发 v 参数到 CDN，?key= 会被忽略导致 CDN 返回旧缓存）
+        String uri = WKApiConfig.getAvatarUrl(uid) + "?v=" + newCacheKey;
         List<Object> tempImgList = new ArrayList<>();
         List<ImageView> imageViewList = new ArrayList<>();
         imageViewList.add(wkVBinding.avatarView.imageView);
         tempImgList.add(WKApiConfig.getShowUrl(uri));
         int index = 0;
         WKDialogUtils.getInstance().showImagePopup(this, tempImgList, imageViewList, wkVBinding.avatarView.imageView, index, new ArrayList<>(), null, null);
-        WKIM.getInstance().getChannelManager().updateAvatarCacheKey(uid, WKChannelType.PERSONAL, UUID.randomUUID().toString().replaceAll("-", ""));
     }
 
     ActivityResultLauncher<Intent> chooseResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {

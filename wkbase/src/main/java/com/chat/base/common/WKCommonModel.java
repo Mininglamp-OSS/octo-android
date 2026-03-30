@@ -31,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 4/21/21 6:23 PM
@@ -141,11 +142,21 @@ public class WKCommonModel extends WKBaseModel {
         WKChannel localChannel = WKIM.getInstance().getChannelManager().getChannel(entity.channel.channel_id, entity.channel.channel_type);
         boolean isRefreshContacts = false;
         if (localChannel != null && !TextUtils.isEmpty(localChannel.channelID)) {
-            wkChannel.avatarCacheKey = localChannel.avatarCacheKey;
+            // 复用已有的 avatarCacheKey；若为空则首次生成，确保走 MyGlideUrlWithId 缓存破坏路径。
+            // 不能每次都生成新 key：saveChannel 触发 refreshChannelInfo → adapter 重绘 →
+            // fetchChannelInfo → saveChannel → 无限循环。只在首次为空时生成一次即可打破。
+            if (!TextUtils.isEmpty(localChannel.avatarCacheKey)) {
+                wkChannel.avatarCacheKey = localChannel.avatarCacheKey;
+            } else {
+                wkChannel.avatarCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
+            }
             hashMap = localChannel.localExtra;
 
             if (wkChannel.follow != entity.follow || wkChannel.status != entity.status)
                 isRefreshContacts = true;
+        } else {
+            // 全新 channel，生成初始 avatarCacheKey
+            wkChannel.avatarCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
         }
         if (hashMap == null)
             hashMap = new HashMap<>();
@@ -174,6 +185,13 @@ public class WKCommonModel extends WKBaseModel {
             wkChannel.parentChannelType = entity.parent_channel.channel_type;
         }
         wkChannel.remoteExtraMap = (HashMap) entity.extra;
+        // 服务端返回的 space_id 是顶层字段（不在 extra 中），手动存入 remoteExtraMap
+        if (!TextUtils.isEmpty(entity.space_id)) {
+            if (wkChannel.remoteExtraMap == null) {
+                wkChannel.remoteExtraMap = new HashMap<>();
+            }
+            wkChannel.remoteExtraMap.put("space_id", entity.space_id);
+        }
         hashMap.put(WKChannelExtras.beDeleted, entity.be_deleted);
         hashMap.put(WKChannelExtras.beBlacklist, entity.be_blacklist);
         hashMap.put(WKChannelExtras.notice, entity.notice);

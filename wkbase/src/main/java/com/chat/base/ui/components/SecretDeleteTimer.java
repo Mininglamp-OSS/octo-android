@@ -15,6 +15,8 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.utils.AndroidUtilities;
 import com.xinbida.wukongim.WKIM;
 
+import com.chat.base.utils.WKDbScheduler;
+
 public class SecretDeleteTimer extends FrameLayout {
 
     private final Paint afterDeleteProgressPaint;
@@ -25,6 +27,7 @@ public class SecretDeleteTimer extends FrameLayout {
 
     private long destroyTtl;
     private boolean useVideoProgress;
+    private boolean deleted; // 防止 onDraw 重复触发删除
 
     private final Drawable drawable;
     private int size = 64;
@@ -62,6 +65,7 @@ public class SecretDeleteTimer extends FrameLayout {
     }
 
     public void setDestroyTime(String clientMsgNo, int flameSecond, long viewedTime, boolean videoProgress) {
+        this.deleted = false;
         this.clientMsgNo = clientMsgNo;
         destroyTtl = flameSecond * 1000L;
         useVideoProgress = videoProgress;
@@ -119,9 +123,14 @@ public class SecretDeleteTimer extends FrameLayout {
         drawable.setBounds(x, y, x + AndroidUtilities.dp(10), y + AndroidUtilities.dp(14));
         drawable.draw(canvas);
 
-        if (progress == 0 && viewedTime > 0) {
+        if (progress == 0 && viewedTime > 0 && !deleted) {
+            deleted = true;
             EndpointManager.getInstance().invoke("deleteRemoteMsg", clientMsgNo);
-            WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(clientMsgNo);
+            // DB 删除操作放 IO 线程，onDraw 中做 DB 操作会导致 ANR
+            final String msgNo = clientMsgNo;
+            WKDbScheduler.get().scheduleDirect(() ->
+                WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(msgNo)
+            );
             return;
         }
         if (viewedTime != 0) {

@@ -28,6 +28,8 @@ import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
+
+import com.chat.base.utils.WKDbScheduler;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.enity.WKSyncReminder;
@@ -99,28 +101,31 @@ public class MsgModel extends WKBaseModel {
 
     public void deleteFlameMsg() {
         if (!WKConstants.isLogin()) return;
-        List<WKMsg> list = WKIM.getInstance().getMsgManager().getWithFlame();
-        if (WKReader.isEmpty(list)) return;
-        List<String> deleteClientMsgNoList = new ArrayList<>();
-        List<WKMsg> deleteMsgList = new ArrayList<>();
-        boolean isStopTimer = true;
-        for (WKMsg msg : list) {
-            if (msg.flame == 1 && msg.viewed == 1) {
-                long time = WKTimeUtils.getInstance().getCurrentMills() - msg.viewedAt;
-                if (time / 1000 > msg.flameSecond || msg.flameSecond == 0) {
-                    deleteClientMsgNoList.add(msg.clientMsgNO);
-                    deleteMsgList.add(msg);
+        // getWithFlame + deleteWithClientMsgNos 有 DB 操作，放 IO 线程避免 ANR（onPause 等主线程调用场景）
+        WKDbScheduler.get().scheduleDirect(() -> {
+            List<WKMsg> list = WKIM.getInstance().getMsgManager().getWithFlame();
+            if (WKReader.isEmpty(list)) return;
+            List<String> deleteClientMsgNoList = new ArrayList<>();
+            List<WKMsg> deleteMsgList = new ArrayList<>();
+            boolean isStopTimer = true;
+            for (WKMsg msg : list) {
+                if (msg.flame == 1 && msg.viewed == 1) {
+                    long time = WKTimeUtils.getInstance().getCurrentMills() - msg.viewedAt;
+                    if (time / 1000 > msg.flameSecond || msg.flameSecond == 0) {
+                        deleteClientMsgNoList.add(msg.clientMsgNO);
+                        deleteMsgList.add(msg);
+                    }
+                    isStopTimer = false;
                 }
-                isStopTimer = false;
             }
-        }
-        if (isStopTimer && timer != null) {
-            timer.cancel();
-            timer.purge();
-            timer = null;
-        }
-        deleteMsg(deleteMsgList, null);
-        WKIM.getInstance().getMsgManager().deleteWithClientMsgNos(deleteClientMsgNoList);
+            if (isStopTimer && timer != null) {
+                timer.cancel();
+                timer.purge();
+                timer = null;
+            }
+            deleteMsg(deleteMsgList, null);
+            WKIM.getInstance().getMsgManager().deleteWithClientMsgNos(deleteClientMsgNoList);
+        });
     }
 
     private void ackMsg() {
@@ -216,12 +221,15 @@ public class MsgModel extends WKBaseModel {
      * @param channelType 频道类型
      */
     public void clearUnread(String channelId, byte channelType, int unreadCount, ICommonListener iCommonListener) {
-        if (unreadCount < 0) unreadCount = 0;
-        WKIM.getInstance().getConversationManager().updateRedDot(channelId, channelType, unreadCount);
+        final int count = Math.max(unreadCount, 0);
+        // updateRedDot 内部有 DB 操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
+        WKDbScheduler.get().scheduleDirect(() ->
+            WKIM.getInstance().getConversationManager().updateRedDot(channelId, channelType, count)
+        );
         com.alibaba.fastjson.JSONObject jsonObject = new com.alibaba.fastjson.JSONObject();
         jsonObject.put("channel_id", channelId);
         jsonObject.put("channel_type", channelType);
-        jsonObject.put("unread", unreadCount);
+        jsonObject.put("unread", count);
         request(createService(MsgService.class).clearUnread(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
@@ -489,19 +497,21 @@ public class MsgModel extends WKBaseModel {
                             last_message_seq = WKSyncMsg.wkMsg.messageSeq;
                         }
                     }
-                    //保存cmd
-                    WKBaseCMDManager.getInstance().addCmd(cmdList);
-                    if (last_message_seq != 0) {
-                        ackMsg();
-                    }
-                    AndroidUtilities.runOnUIThread(() -> syncCmdMsgs(last_message_seq),1000);
+                    // addCmd 内部有 DB 事务操作，放 IO 线程避免 ANR
+                    WKDbScheduler.get().scheduleDirect(() -> {
+                        WKBaseCMDManager.getInstance().addCmd(cmdList);
+                        if (last_message_seq != 0) {
+                            ackMsg();
+                        }
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> syncCmdMsgs(last_message_seq), 1000);
+                    });
 
                 } else {
                     if (last_message_seq != 0) {
                         ackMsg();
                     }
-                    //处理cmd
-                    WKBaseCMDManager.getInstance().handleCmd();
+                    // handleCmd 内部有大量 DB 读写操作，放 IO 线程避免 ANR
+                    WKDbScheduler.get().scheduleDirect(() -> WKBaseCMDManager.getInstance().handleCmd());
                 }
             }
 
@@ -522,21 +532,26 @@ public class MsgModel extends WKBaseModel {
      * @param channelType 频道类型
      */
     public void syncExtraMsg(String channelID, byte channelType) {
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("channel_id", channelID);
-        jsonObject.put("channel_type", channelType);
-        long maxExtraVersion = WKIM.getInstance().getMsgManager().getMsgExtraMaxVersionWithChannel(channelID, channelType);
-        jsonObject.put("extra_version", maxExtraVersion);
-        jsonObject.put("limit", 100);
-        String deviceUUID = WKConstants.getDeviceUUID();
-        jsonObject.put("source", deviceUUID);
-        request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
+        // getMsgExtraMaxVersionWithChannel 有 DB 查询，整体放 IO 线程避免 ANR
+        WKDbScheduler.get().scheduleDirect(() -> {
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("channel_id", channelID);
+            jsonObject.put("channel_type", channelType);
+            long maxExtraVersion = WKIM.getInstance().getMsgManager().getMsgExtraMaxVersionWithChannel(channelID, channelType);
+            jsonObject.put("extra_version", maxExtraVersion);
+            jsonObject.put("limit", 100);
+            String deviceUUID = WKConstants.getDeviceUUID();
+            jsonObject.put("source", deviceUUID);
+            request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncExtraMsg> result) {
                 if (WKReader.isNotEmpty(result)) {
-                    // 更改扩展消息
-                    WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
+                    // saveRemoteExtraMsg 内部有 DB 操作，必须在 IO 线程执行，
+                    // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                    WKDbScheduler.get().scheduleDirect(() -> {
+                        WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
+                    });
                 }
             }
 
@@ -545,6 +560,7 @@ public class MsgModel extends WKBaseModel {
 
             }
         });
+        }); // end Schedulers.io
     }
 
 
@@ -593,17 +609,19 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void syncReminder() {
-        long version = WKIM.getInstance().getReminderManager().getMaxVersion();
-        List<String> channelIDs = new ArrayList<>();
-        List<WKConversationMsg> list = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP);
-        for (WKConversationMsg mConversationMsg : list) {
-            channelIDs.add(mConversationMsg.channelID);
-        }
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("version", version);
-        jsonObject.put("limit", 200);
-        jsonObject.put("channel_ids", channelIDs);
-        request(createService(MsgService.class).syncReminder(jsonObject), new IRequestResultListener<>() {
+        // getMaxVersion / getWithChannelType 有 DB 查询，整体放 IO 线程避免 ANR
+        WKDbScheduler.get().scheduleDirect(() -> {
+            long version = WKIM.getInstance().getReminderManager().getMaxVersion();
+            List<String> channelIDs = new ArrayList<>();
+            List<WKConversationMsg> list = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP);
+            for (WKConversationMsg mConversationMsg : list) {
+                channelIDs.add(mConversationMsg.channelID);
+            }
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("version", version);
+            jsonObject.put("limit", 200);
+            jsonObject.put("channel_ids", channelIDs);
+            request(createService(MsgService.class).syncReminder(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncReminder> result) {
                 if (WKReader.isNotEmpty(result)) {
@@ -616,8 +634,11 @@ public class MsgModel extends WKBaseModel {
                         }
                         list.add(WKReminder);
                     }
-                    WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list);
-
+                    // saveOrUpdateReminders 内部有 DB 操作，必须在 IO 线程执行，
+                    // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                    WKDbScheduler.get().scheduleDirect(() ->
+                        WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list)
+                    );
                 }
 
             }
@@ -627,6 +648,7 @@ public class MsgModel extends WKBaseModel {
 
             }
         });
+        }); // end Schedulers.io
     }
 
     public void doneReminder(List<Long> list) {
@@ -655,7 +677,10 @@ public class MsgModel extends WKBaseModel {
         if (!TextUtils.isEmpty(draft)) {
             extra.draftUpdatedAt = WKTimeUtils.getInstance().getCurrentSeconds();
         }
-        WKIM.getInstance().getConversationManager().updateMsgExtra(extra);
+        // updateMsgExtra 内部有 DB 操作，放 IO 线程避免 onPause 时和 sync 争抢数据库锁导致 ANR
+        WKDbScheduler.get().scheduleDirect(() ->
+            WKIM.getInstance().getConversationManager().updateMsgExtra(extra)
+        );
 
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("browse_to", browseTo);
@@ -676,16 +701,24 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void syncCoverExtra() {
-        long version = WKIM.getInstance().getConversationManager().getMsgExtraMaxVersion();
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("version", version);
-        request(createService(MsgService.class).syncCoverExtra(jsonObject), new IRequestResultListener<>() {
+        // getMsgExtraMaxVersion 有 DB 查询，整体放 IO 线程避免 ANR
+        WKDbScheduler.get().scheduleDirect(() -> {
+            long version = WKIM.getInstance().getConversationManager().getMsgExtraMaxVersion();
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("version", version);
+            request(createService(MsgService.class).syncCoverExtra(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncConvMsgExtra> result) {
-                WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
-                if (WKReader.isNotEmpty(result)) {
-                    EndpointManager.getInstance().invoke("refresh_conversation_extras", null);
-                }
+                // saveSyncMsgExtras 内部有 DB 操作，必须在 IO 线程执行，
+                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                WKDbScheduler.get().scheduleDirect(() -> {
+                    WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
+                    if (WKReader.isNotEmpty(result)) {
+                        new Handler(Looper.getMainLooper()).post(() ->
+                            EndpointManager.getInstance().invoke("refresh_conversation_extras", null)
+                        );
+                    }
+                });
             }
 
             @Override
@@ -693,6 +726,7 @@ public class MsgModel extends WKBaseModel {
 
             }
         });
+        }); // end Schedulers.io
     }
 
     private WKReminder syncReminderToReminder(WKSyncReminder syncReminder) {

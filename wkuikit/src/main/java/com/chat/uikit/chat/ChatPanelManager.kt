@@ -108,6 +108,7 @@ import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import com.xinbida.wukongim.msgmodel.WKTextContent
+import com.chat.base.msg.WKMentionTextContent
 import org.json.JSONObject
 import java.util.Locale
 import java.util.Objects
@@ -1383,14 +1384,19 @@ class ChatPanelManager(
                         }
                     }
                 }
-                val textMsgModel = WKTextContent(content)
-
+                val allEntities = editText.allEntity
                 val list = editText.allUIDs
-                if (list != null && list.isNotEmpty()) {
+                val hasMentions = list != null && list.isNotEmpty()
+
+                // 有 mention 时使用 WKMentionTextContent，将 entities 写入 mention 对象
+                val textMsgModel = if (hasMentions)
+                    WKMentionTextContent(content) else WKTextContent(content)
+
+                if (hasMentions) {
                     val mMentionInfo = WKMentionInfo()
                     val uidList: MutableList<String> = ArrayList()
                     var i = 0
-                    val size = list.size
+                    val size = list!!.size
                     while (i < size) {
                         if (list[i].equals("-1", ignoreCase = true)) {
                             textMsgModel.mentionAll = 1 //remind all
@@ -1402,7 +1408,7 @@ class ChatPanelManager(
                     mMentionInfo.uids = uidList
                     textMsgModel.mentionInfo = mMentionInfo
                 }
-                textMsgModel.entities = editText.allEntity
+                textMsgModel.entities = allEntities
 
                 iConversationContext.sendMessage(textMsgModel)
                 editText.text = null

@@ -73,6 +73,11 @@ public class GroupModel extends WKBaseModel {
                 channel.channelID = groupEntity.group_no;
                 channel.channelType = WKChannelType.GROUP;
                 channel.channelName = groupEntity.name;
+                // 保存 space_id 到 remoteExtraMap，供 Space 过滤使用
+                if (!TextUtils.isEmpty(groupEntity.space_id)) {
+                    channel.remoteExtraMap = new HashMap<>();
+                    channel.remoteExtraMap.put("space_id", groupEntity.space_id);
+                }
                 WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                 iGroupInfo.onResult(HttpResponseCode.success, "", groupEntity);
             }

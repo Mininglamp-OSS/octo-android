@@ -496,43 +496,40 @@ public class WKIMUtils {
         if (jsonObject != null) {
             if (jsonObject.has("message_id")) {
                 String messageId = jsonObject.optString("message_id");
-                //  String client_msg_no = jsonObject.optString("client_msg_no");
                 String channelID = jsonObject.optString("channel_id");
                 byte channelType = (byte) jsonObject.optInt("channel_type");
-                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
-                //是否撤回提醒
-                int revokeRemind = 1;
-                if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.revokeRemind)) {
-                    Object object = channel.remoteExtraMap.get(WKChannelExtras.revokeRemind);
-                    if (object != null) {
-                        revokeRemind = (int) object;
-                    }
-                }
-                if (revokeRemind == 1) {
-                    // todo 同步消息接口
-                    MsgModel.getInstance().syncExtraMsg(channelID, channelType);
-//                    WKIM.getInstance().getMsgManager().updateMsgRevokeWithMessageID(messageId, 1);
-                } else {
-                    // todo 删除服务器消息
-                    WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);
-                    if (wkMsg != null) {
-                        List<WKMsg> list = new ArrayList<>();
-                        list.add(wkMsg);
-                        MsgModel.getInstance().deleteMsg(list, null);
-                    }
-
-                    int rowNo = WKIM.getInstance().getMsgManager().getRowNoWithMessageID(channelID, channelType, messageId);
-                    //要先删除
-                    WKIM.getInstance().getMsgManager().deleteWithMessageID(messageId);
-                    WKConversationMsg msg = WKIM.getInstance().getConversationManager().getWithChannel(channelID, channelType);
-                    if (msg != null) {
-                        if (rowNo < msg.unreadCount) {
-                            msg.unreadCount--;
+                // 撤回消息涉及多次 DB 读写操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
+                com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+                    WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
+                    //是否撤回提醒
+                    int revokeRemind = 1;
+                    if (channel != null && channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey(WKChannelExtras.revokeRemind)) {
+                        Object object = channel.remoteExtraMap.get(WKChannelExtras.revokeRemind);
+                        if (object != null) {
+                            revokeRemind = (int) object;
                         }
-                        WKIM.getInstance().getConversationManager().updateWithMsg(msg);
                     }
-                }
+                    if (revokeRemind == 1) {
+                        MsgModel.getInstance().syncExtraMsg(channelID, channelType);
+                    } else {
+                        WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);
+                        if (wkMsg != null) {
+                            List<WKMsg> list = new ArrayList<>();
+                            list.add(wkMsg);
+                            MsgModel.getInstance().deleteMsg(list, null);
+                        }
 
+                        int rowNo = WKIM.getInstance().getMsgManager().getRowNoWithMessageID(channelID, channelType, messageId);
+                        WKIM.getInstance().getMsgManager().deleteWithMessageID(messageId);
+                        WKConversationMsg msg = WKIM.getInstance().getConversationManager().getWithChannel(channelID, channelType);
+                        if (msg != null) {
+                            if (rowNo < msg.unreadCount) {
+                                msg.unreadCount--;
+                            }
+                            WKIM.getInstance().getConversationManager().updateWithMsg(msg);
+                        }
+                    }
+                });
             }
         }
     }

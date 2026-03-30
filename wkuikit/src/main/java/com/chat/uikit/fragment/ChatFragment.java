@@ -469,8 +469,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
-                    // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
-                    adjustSystemBotForSpace(uiConversationMsg);
+                    // 私聊 Space 未读数适配：跨 Space 消息不计入未读（参考 iOS）
+                    adjustPersonalForSpace(uiConversationMsg);
                     // sync 结果不含 conversation_extra（草稿等），从本地 DB 补充
                     WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
                             .getMsgExtraWithChannel(uiConversationMsg.channelID, uiConversationMsg.channelType);
@@ -533,6 +533,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
                 if (isAdd) {
+                    // 私聊 Space 未读数适配（参考 iOS WKConversationWrapModel.unreadCount）
+                    adjustPersonalForSpace(uiConversationMsg);
                     // Space 过滤：只添加属于当前 Space 的会话
                     String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
                     if (spaceConversationKeys.isEmpty() || spaceConversationKeys.contains(key)) {
@@ -885,8 +887,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (!isEnd) msgCount++;
 
         if (isAdd) {
-            // 系统 Bot（BotFather）：跨 Space 未读数清零（参考 iOS）
-            adjustSystemBotForSpace(uiConversationMsg);
+            // 私聊 Space 未读数适配：跨 Space 消息不计入未读（参考 iOS）
+            adjustPersonalForSpace(uiConversationMsg);
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
             if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
@@ -932,13 +934,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * 判断消息是否来自其他 Space（非当前 Space）。
-     * 用于过滤跨 Space 的实时消息更新，避免错误的未读计数。
+     * 从消息中提取 space_id（优先从 content JSON，其次从 baseContentMsgModel）。
+     * 返回 space_id 字符串，未找到时返回 null。
      */
-    private boolean isMessageFromOtherSpace(WKMsg msg) {
-        if (msg == null) return false;
-        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        if (TextUtils.isEmpty(currentSpaceId)) return false;
+    private String extractSpaceId(WKMsg msg) {
+        if (msg == null) return null;
         String msgSpaceId = null;
         if (!TextUtils.isEmpty(msg.content)) {
             try {
@@ -956,7 +956,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             } catch (Exception ignored) {
             }
         }
-        return !TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId);
+        return TextUtils.isEmpty(msgSpaceId) ? null : msgSpaceId;
+    }
+
+    /**
+     * 判断消息是否来自其他 Space（非当前 Space）。
+     * 用于过滤跨 Space 的实时消息更新，避免错误的未读计数。
+     */
+    private boolean isMessageFromOtherSpace(WKMsg msg) {
+        if (msg == null) return false;
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return false;
+        String msgSpaceId = extractSpaceId(msg);
+        return msgSpaceId != null && !msgSpaceId.equals(currentSpaceId);
     }
 
     /**
@@ -983,39 +995,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
 
     /**
-     * 对系统 Bot（BotFather）的会话进行 Space 适配：
+     * 对所有 PERSONAL 类型会话（包括系统 Bot）进行 Space 适配：
      * 当最后一条消息不属于当前 Space 时，清零未读数，避免跨 Space 未读数串扰。
-     * BotFather 始终显示在会话列表中（参考 iOS shouldShowConversation），
-     * 显示内容由 ChatConversationAdapter.findSystemBotSpaceContent 处理。
+     * 参考 iOS WKConversationWrapModel.unreadCount 中对 Person 频道使用 space_unread 的逻辑。
      */
-    private void adjustSystemBotForSpace(WKUIConversationMsg uiConversationMsg) {
+    private void adjustPersonalForSpace(WKUIConversationMsg uiConversationMsg) {
         if (uiConversationMsg == null) return;
-        if (!SYSTEM_BOTS.contains(uiConversationMsg.channelID)) return;
+        if (uiConversationMsg.channelType != WKChannelType.PERSONAL) return;
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (TextUtils.isEmpty(currentSpaceId)) return;
 
         WKMsg msg = uiConversationMsg.getWkMsg();
         if (msg == null) return;
 
-        String msgSpaceId = null;
-        if (!TextUtils.isEmpty(msg.content)) {
-            try {
-                org.json.JSONObject json = new org.json.JSONObject(msg.content);
-                msgSpaceId = json.optString("space_id", "");
-            } catch (Exception ignored) {
-            }
-        }
-        if (TextUtils.isEmpty(msgSpaceId) && msg.baseContentMsgModel != null) {
-            try {
-                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
-                if (json != null) {
-                    msgSpaceId = json.optString("space_id", "");
-                }
-            } catch (Exception ignored) {
-            }
-        }
+        String msgSpaceId = extractSpaceId(msg);
         // 最后一条消息属于其他 Space 时，清零未读数
-        if (!TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId)) {
+        if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
             uiConversationMsg.unreadCount = 0;
         }
     }

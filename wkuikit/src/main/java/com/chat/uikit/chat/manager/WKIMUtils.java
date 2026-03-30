@@ -499,7 +499,7 @@ public class WKIMUtils {
                 String channelID = jsonObject.optString("channel_id");
                 byte channelType = (byte) jsonObject.optInt("channel_type");
                 // 撤回消息涉及多次 DB 读写操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
-                io.reactivex.rxjava3.schedulers.Schedulers.io().scheduleDirect(() -> {
+                com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
                     WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                     //是否撤回提醒
                     int revokeRemind = 1;

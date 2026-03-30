@@ -15,7 +15,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.utils.AndroidUtilities;
 import com.xinbida.wukongim.WKIM;
 
-import io.reactivex.rxjava3.schedulers.Schedulers;
+import com.chat.base.utils.WKDbScheduler;
 
 public class SecretDeleteTimer extends FrameLayout {
 
@@ -128,7 +128,7 @@ public class SecretDeleteTimer extends FrameLayout {
             EndpointManager.getInstance().invoke("deleteRemoteMsg", clientMsgNo);
             // DB 删除操作放 IO 线程，onDraw 中做 DB 操作会导致 ANR
             final String msgNo = clientMsgNo;
-            Schedulers.io().scheduleDirect(() ->
+            WKDbScheduler.get().scheduleDirect(() ->
                 WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(msgNo)
             );
             return;

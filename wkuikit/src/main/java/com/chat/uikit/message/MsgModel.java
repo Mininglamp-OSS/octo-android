@@ -29,7 +29,7 @@ import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 
-import io.reactivex.rxjava3.schedulers.Schedulers;
+import com.chat.base.utils.WKDbScheduler;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.enity.WKSyncReminder;
@@ -102,7 +102,7 @@ public class MsgModel extends WKBaseModel {
     public void deleteFlameMsg() {
         if (!WKConstants.isLogin()) return;
         // getWithFlame + deleteWithClientMsgNos 有 DB 操作，放 IO 线程避免 ANR（onPause 等主线程调用场景）
-        Schedulers.io().scheduleDirect(() -> {
+        WKDbScheduler.get().scheduleDirect(() -> {
             List<WKMsg> list = WKIM.getInstance().getMsgManager().getWithFlame();
             if (WKReader.isEmpty(list)) return;
             List<String> deleteClientMsgNoList = new ArrayList<>();
@@ -223,7 +223,7 @@ public class MsgModel extends WKBaseModel {
     public void clearUnread(String channelId, byte channelType, int unreadCount, ICommonListener iCommonListener) {
         final int count = Math.max(unreadCount, 0);
         // updateRedDot 内部有 DB 操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
-        Schedulers.io().scheduleDirect(() ->
+        WKDbScheduler.get().scheduleDirect(() ->
             WKIM.getInstance().getConversationManager().updateRedDot(channelId, channelType, count)
         );
         com.alibaba.fastjson.JSONObject jsonObject = new com.alibaba.fastjson.JSONObject();
@@ -498,7 +498,7 @@ public class MsgModel extends WKBaseModel {
                         }
                     }
                     // addCmd 内部有 DB 事务操作，放 IO 线程避免 ANR
-                    Schedulers.io().scheduleDirect(() -> {
+                    WKDbScheduler.get().scheduleDirect(() -> {
                         WKBaseCMDManager.getInstance().addCmd(cmdList);
                         if (last_message_seq != 0) {
                             ackMsg();
@@ -511,7 +511,7 @@ public class MsgModel extends WKBaseModel {
                         ackMsg();
                     }
                     // handleCmd 内部有大量 DB 读写操作，放 IO 线程避免 ANR
-                    Schedulers.io().scheduleDirect(() -> WKBaseCMDManager.getInstance().handleCmd());
+                    WKDbScheduler.get().scheduleDirect(() -> WKBaseCMDManager.getInstance().handleCmd());
                 }
             }
 
@@ -533,7 +533,7 @@ public class MsgModel extends WKBaseModel {
      */
     public void syncExtraMsg(String channelID, byte channelType) {
         // getMsgExtraMaxVersionWithChannel 有 DB 查询，整体放 IO 线程避免 ANR
-        Schedulers.io().scheduleDirect(() -> {
+        WKDbScheduler.get().scheduleDirect(() -> {
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("channel_id", channelID);
             jsonObject.put("channel_type", channelType);
@@ -548,7 +548,7 @@ public class MsgModel extends WKBaseModel {
                 if (WKReader.isNotEmpty(result)) {
                     // saveRemoteExtraMsg 内部有 DB 操作，必须在 IO 线程执行，
                     // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                    Schedulers.io().scheduleDirect(() -> {
+                    WKDbScheduler.get().scheduleDirect(() -> {
                         WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
                         new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
                     });
@@ -610,7 +610,7 @@ public class MsgModel extends WKBaseModel {
 
     public void syncReminder() {
         // getMaxVersion / getWithChannelType 有 DB 查询，整体放 IO 线程避免 ANR
-        Schedulers.io().scheduleDirect(() -> {
+        WKDbScheduler.get().scheduleDirect(() -> {
             long version = WKIM.getInstance().getReminderManager().getMaxVersion();
             List<String> channelIDs = new ArrayList<>();
             List<WKConversationMsg> list = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP);
@@ -636,7 +636,7 @@ public class MsgModel extends WKBaseModel {
                     }
                     // saveOrUpdateReminders 内部有 DB 操作，必须在 IO 线程执行，
                     // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                    Schedulers.io().scheduleDirect(() ->
+                    WKDbScheduler.get().scheduleDirect(() ->
                         WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list)
                     );
                 }
@@ -678,7 +678,7 @@ public class MsgModel extends WKBaseModel {
             extra.draftUpdatedAt = WKTimeUtils.getInstance().getCurrentSeconds();
         }
         // updateMsgExtra 内部有 DB 操作，放 IO 线程避免 onPause 时和 sync 争抢数据库锁导致 ANR
-        Schedulers.io().scheduleDirect(() ->
+        WKDbScheduler.get().scheduleDirect(() ->
             WKIM.getInstance().getConversationManager().updateMsgExtra(extra)
         );
 
@@ -702,7 +702,7 @@ public class MsgModel extends WKBaseModel {
 
     public void syncCoverExtra() {
         // getMsgExtraMaxVersion 有 DB 查询，整体放 IO 线程避免 ANR
-        Schedulers.io().scheduleDirect(() -> {
+        WKDbScheduler.get().scheduleDirect(() -> {
             long version = WKIM.getInstance().getConversationManager().getMsgExtraMaxVersion();
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("version", version);
@@ -711,7 +711,7 @@ public class MsgModel extends WKBaseModel {
             public void onSuccess(List<WKSyncConvMsgExtra> result) {
                 // saveSyncMsgExtras 内部有 DB 操作，必须在 IO 线程执行，
                 // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                Schedulers.io().scheduleDirect(() -> {
+                WKDbScheduler.get().scheduleDirect(() -> {
                     WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
                     if (WKReader.isNotEmpty(result)) {
                         new Handler(Looper.getMainLooper()).post(() ->

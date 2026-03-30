@@ -29,6 +29,7 @@ import com.chat.base.markdown.WKMarkwonProvider;
 import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
+import com.chat.base.msg.MentionEntityHelper;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AlignImageSpan;
 import com.chat.base.ui.components.NormalClickableContent;
@@ -76,6 +77,8 @@ public class WKUIChatMsgItemEntity {
         this.iLinkClick = iLinkClick;
         if (wkMsg != null) {
             try {
+                // 从 mention.entities 补充 SDK 未解析的 mention entity
+                MentionEntityHelper.mergeMentionEntities(wkMsg);
                 formatSpans(conversationContext, wkMsg);
             } catch (Exception ignored) {
             }

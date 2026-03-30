@@ -174,6 +174,13 @@ public class WKCommonModel extends WKBaseModel {
             wkChannel.parentChannelType = entity.parent_channel.channel_type;
         }
         wkChannel.remoteExtraMap = (HashMap) entity.extra;
+        // 服务端返回的 space_id 是顶层字段（不在 extra 中），手动存入 remoteExtraMap
+        if (!TextUtils.isEmpty(entity.space_id)) {
+            if (wkChannel.remoteExtraMap == null) {
+                wkChannel.remoteExtraMap = new HashMap<>();
+            }
+            wkChannel.remoteExtraMap.put("space_id", entity.space_id);
+        }
         hashMap.put(WKChannelExtras.beDeleted, entity.be_deleted);
         hashMap.put(WKChannelExtras.beBlacklist, entity.be_blacklist);
         hashMap.put(WKChannelExtras.notice, entity.notice);

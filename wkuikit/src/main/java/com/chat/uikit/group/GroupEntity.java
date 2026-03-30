@@ -27,6 +27,7 @@ public class GroupEntity implements Parcelable {
     public int revoke_remind;
     public String notice;
     public String avatar;
+    public String space_id;
     public String created_at;
     public String updated_at;
 

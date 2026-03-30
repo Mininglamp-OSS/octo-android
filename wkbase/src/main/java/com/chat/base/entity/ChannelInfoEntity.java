@@ -28,6 +28,7 @@ public class ChannelInfoEntity {
     public int flame;
     public int flame_second;
     public int device_flag;
+    public String space_id;
     public Map extra;
 
 

@@ -202,14 +202,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 Schedulers.io().scheduleDirect(() -> {
                     WKIM.getInstance().getConversationManager().clearAll();
 
-                    // 回到主线程触发同步和联系人刷新
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                            // WKIM 内部会将同步结果保存到本地 DB 并通知 RefreshMsgListListener 刷新 UI
-                        });
-                        // 通知联系人列表刷新
-                        EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
+                    // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+                    // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
                     });
+                    // 通知联系人列表刷新
+                    new Handler(Looper.getMainLooper()).post(() ->
+                        EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
+                    );
                 });
             });
             popup.show(wkVBinding.spaceHeaderLayout);
@@ -536,16 +536,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
                     } else {
-                        // 不在白名单中：群聊一定属于某个 Space，不在白名单则直接丢弃
+                        // 不在白名单中：精确判断是否属于当前 Space
+                        boolean reject;
                         if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                            // 群聊：用 channel 级别的 space_id 判断
+                            reject = !isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                        } else {
+                            // 私聊：用消息 payload 中的 space_id 判断
+                            reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg());
+                        }
+                        if (reject) {
                             continue;
                         }
-                        // 私聊：新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
-                        // 检查消息是否真的来自其他 Space
-                        if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
-                            continue;
-                        }
-                        // 消息不属于其他 Space，放行并加入白名单
+                        // 属于当前 Space，放行并加入白名单
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
                     }
@@ -707,11 +710,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             spaceConversationKeys.clear();
             Schedulers.io().scheduleDirect(() -> {
                 WKIM.getInstance().getConversationManager().clearAll();
-                new Handler(Looper.getMainLooper()).post(() ->
-                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                        // sync 结果由 RefreshMsgListListener 处理，会填充 spaceConversationKeys
-                    })
-                );
+                // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                    // sync 结果由 RefreshMsgListListener 处理，会填充 spaceConversationKeys
+                });
             });
             return;
         }
@@ -880,15 +883,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
             if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
-                // 不在白名单中：群聊一定属于某个 Space，不在白名单则直接丢弃
+                // 不在白名单中：精确判断是否属于当前 Space
                 if (uiConversationMsg.channelType == WKChannelType.GROUP) {
-                    return;
+                    // 群聊：用 channel 级别的 space_id 判断（群消息 payload 不含 space_id）
+                    if (!isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType)) {
+                        return;
+                    }
+                } else {
+                    // 私聊：用消息 payload 中的 space_id 判断
+                    if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
+                        return;
+                    }
                 }
-                // 私聊：新好友的首条消息不会出现在 sync 结果中，不能仅凭白名单丢弃
-                if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
-                    return;
-                }
-                // 私聊消息不属于其他 Space（无 space_id 或与当前 Space 匹配），放行并加入白名单
             }
             spaceConversationKeys.add(key);
             syncSpaceKeysToGlobal();
@@ -944,6 +950,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         return !TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId);
+    }
+
+    /**
+     * 判断频道是否属于当前 Space。
+     * 通过 channel 的 remoteExtraMap 中存储的 space_id 精确判断（服务端提供）。
+     * 用于群聊过滤：群消息 payload 不含 space_id，无法用 isMessageFromOtherSpace 判断。
+     */
+    private boolean isChannelInCurrentSpace(String channelID, byte channelType) {
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return true; // 非 Space 模式，不过滤
+
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
+        if (channel != null && channel.remoteExtraMap != null) {
+            Object spaceIdObj = channel.remoteExtraMap.get("space_id");
+            if (spaceIdObj != null) {
+                return currentSpaceId.equals(spaceIdObj.toString());
+            }
+        }
+        // channel 信息未加载或旧数据无 space_id，无法判断，放行让下次 sync 校准
+        return true;
     }
 
     // 系统 Bot（如 BotFather）：跨 Space 共享，需要按消息 space_id 过滤（参考 iOS shouldShowConversation）
@@ -1021,9 +1047,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             chatConversationAdapter.setList(new ArrayList<>());
             Schedulers.io().scheduleDirect(() -> {
                 WKIM.getInstance().getConversationManager().clearAll();
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                    });
+                // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
                 });
             });
         }, 500);

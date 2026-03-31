@@ -134,7 +134,7 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
 
     //添加一个Span
     public void addSpan(String showText, String uid) {
-        if (!TextUtils.isEmpty(getText().toString()) && getText().toString().length() + showText.length() > maxLength) {
+        if (maxLength > 0 && !TextUtils.isEmpty(getText().toString()) && getText().toString().length() + showText.length() > maxLength) {
             WKToastUtils.getInstance()
                     .showToast(getContext().getString(R.string.content_too_long));
             return;

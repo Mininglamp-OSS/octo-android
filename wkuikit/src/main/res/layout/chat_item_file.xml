@@ -18,7 +18,7 @@
         app:shadowRadius="0dp">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
@@ -47,13 +47,23 @@
                     android:textColor="@color/colorDark"
                     android:textSize="14sp" />
 
-                <TextView
-                    android:id="@+id/fileSizeTv"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:textColor="@color/color999"
-                    android:textSize="12sp" />
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/fileSizeTv"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:singleLine="true"
+                        android:textColor="@color/color999"
+                        android:textSize="12sp" />
+
+                    <include layout="@layout/wk_msg_status_layout" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
@@ -65,27 +75,6 @@
             android:layout_marginTop="8dp"
             android:max="100"
             android:visibility="gone" />
-
-        <View
-            style="@style/view_line"
-            android:layout_marginTop="10dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp">
-
-            <TextView
-                android:id="@+id/fileExtTv"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:layout_weight="1"
-                android:textColor="@color/color999"
-                android:textSize="12sp" />
-
-            <include layout="@layout/wk_msg_status_layout" />
-        </LinearLayout>
 
     </com.chat.base.views.BubbleLayout>
 

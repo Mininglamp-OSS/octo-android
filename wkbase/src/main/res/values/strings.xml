@@ -128,6 +128,9 @@
     <string name="str_file_not_exist">文件不存在</string>
     <string name="str_file_too_large">文件大小超过100MB，无法发送</string>
     <string name="str_file_type_dangerous">不支持发送该类型的文件</string>
+    <string name="str_text_exceed_limit_tip">字数超出限制无法发送，是否需将消息转为文档发出？</string>
+    <string name="str_confirm_send">确认发送</string>
+    <string name="str_default_text_file_name">消息</string>
     <string name="screenshot_tip">%s在聊天中截屏了</string>
     <string name="str_someone">对方</string>
     <string name="api_url_dialog_title">服务器配置</string>

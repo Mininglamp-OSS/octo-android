@@ -2492,10 +2492,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     /**
      * 从消息中提取 space_id，尝试多种途径：
      * 1. msg.content (原始 payload JSON 字符串)
-     * 2. msg.baseContentMsgModel.encodeMsg() (消息内容编码后的 JSON)
+     * 2. msg.baseContentMsgModel.spaceId (SDK 解码时已填充)
      */
     private String getSpaceIdFromMsg(WKMsg msg) {
-        // 先尝试从 content 字段解析（可能是原始 payload JSON）
+        // 1. 从 content 原始 JSON 解析
         if (!TextUtils.isEmpty(msg.content)) {
             try {
                 org.json.JSONObject json = new org.json.JSONObject(msg.content);
@@ -2504,16 +2504,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             } catch (Exception ignored) {
             }
         }
-        // 再尝试从 baseContentMsgModel 编码结果中获取
-        if (msg.baseContentMsgModel != null) {
-            try {
-                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
-                if (json != null) {
-                    String sid = json.optString("space_id", "");
-                    if (!sid.isEmpty()) return sid;
-                }
-            } catch (Exception ignored) {
-            }
+        // 2. 从 SDK 解码后的 spaceId 字段读取
+        if (msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.spaceId)) {
+            return msg.baseContentMsgModel.spaceId;
         }
         return null;
     }

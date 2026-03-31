@@ -43,7 +43,6 @@ class WKFileProvider : WKChatBaseProvider() {
 
         val fileNameTv = parentView.findViewById<TextView>(R.id.fileNameTv)
         val fileSizeTv = parentView.findViewById<TextView>(R.id.fileSizeTv)
-        val fileExtTv = parentView.findViewById<TextView>(R.id.fileExtTv)
         val fileIconIv = parentView.findViewById<ImageView>(R.id.fileIconIv)
         val progressBar = parentView.findViewById<ProgressBar>(R.id.fileProgressBar)
         val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
@@ -52,7 +51,6 @@ class WKFileProvider : WKChatBaseProvider() {
 
         fileNameTv.text = fileContent.name ?: ""
         fileSizeTv.text = formatFileSize(fileContent.size)
-        fileExtTv.text = fileContent.extension?.uppercase(Locale.getDefault()) ?: ""
 
         setFileIcon(fileIconIv, fileContent.extension, fileContent.name)
         resetCellBackground(parentView, uiChatMsgItemEntity, from)

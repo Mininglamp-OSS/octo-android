@@ -8,7 +8,6 @@ import android.graphics.PorterDuffColorFilter
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
-import android.text.InputFilter
 import android.text.TextPaint
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -109,7 +108,10 @@ import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKMsgEntity
 import com.xinbida.wukongim.msgmodel.WKTextContent
 import com.chat.base.msg.WKMentionTextContent
+import android.app.AlertDialog
+import com.chat.base.msgcontent.WKFileContent
 import org.json.JSONObject
+import java.io.File
 import java.util.Locale
 import java.util.Objects
 import java.util.Timer
@@ -135,7 +137,7 @@ class ChatPanelManager(
     private var inlineQueryOffset: String = ""
     private var searchKey: String = ""
     private var username: String = ""
-    private val maxLength = 300
+    private val messageTextMaxBytes = 10 * 1024 // 10KB
 
     private val menuView: View = parentView.findViewById(R.id.menuView)
     private val menuLayout: View = parentView.findViewById(R.id.menuLayout)
@@ -194,8 +196,6 @@ class ChatPanelManager(
 
     init {
         this.menuView.background = Theme.getBackground(Theme.colorAccount, 30f)
-        editText.filters = arrayOf<InputFilter>(StringUtils.getInputFilter(maxLength))
-        editText.setMaxLength(maxLength)
         // 设置输入框的初始行数
         editText.setMinLines(1)
         editText.setMaxLines(maxLines)
@@ -723,6 +723,57 @@ class ChatPanelManager(
                 iConversationContext.chatActivity.startActivity(intent)
             }
 
+        }
+    }
+
+    /**
+     * 文本超出字节限制时弹窗提示，确认后转为 .txt 文件发送
+     */
+    private fun showTextToFileAlert(text: String) {
+        val context = iConversationContext.chatActivity
+        AlertDialog.Builder(context)
+            .setMessage(context.getString(com.chat.base.R.string.str_text_exceed_limit_tip))
+            .setNegativeButton(context.getString(com.chat.base.R.string.cancel), null)
+            .setPositiveButton(context.getString(com.chat.base.R.string.str_confirm_send)) { _, _ ->
+                sendTextAsFile(text)
+            }
+            .show()
+    }
+
+    /**
+     * 将文本内容生成 .txt 文件并以文件消息发送
+     */
+    private fun sendTextAsFile(text: String) {
+        val context = iConversationContext.chatActivity
+        // 用前10个字符作为文件名
+        var namePrefix = if (text.length > 10) text.substring(0, 10) else text
+        // 移除文件名中的非法字符
+        namePrefix = namePrefix.replace(Regex("[/\\\\:*?\"<>|\\n\\r\\t]"), "")
+        if (namePrefix.isEmpty()) {
+            namePrefix = context.getString(com.chat.base.R.string.str_default_text_file_name)
+        }
+        val fileName = "$namePrefix.txt"
+
+        // 写入临时文件
+        val tmpDir = File(context.cacheDir, "WKTextToFile")
+        tmpDir.mkdirs()
+        val file = File(tmpDir, fileName)
+        file.writeText(text, Charsets.UTF_8)
+
+        // 创建文件消息并发送
+        val fileContent = WKFileContent()
+        fileContent.localPath = file.absolutePath
+        fileContent.name = fileName
+        fileContent.extension = ".txt"
+        fileContent.size = file.length()
+
+        iConversationContext.sendMessage(fileContent)
+
+        // 清空输入框
+        editText.text = null
+        lastInputTime = 0
+        if (chatTopView?.visibility == View.VISIBLE) {
+            CommonAnim.getInstance().animateClose(chatTopView)
         }
     }
 
@@ -1358,6 +1409,14 @@ class ChatPanelManager(
             var content = StringUtils.replaceBlank(editText.text.toString())
             if (!TextUtils.isEmpty(content)) {
                 content = editText.text.toString()
+
+                // 检查文本字节大小是否超过限制
+                val textBytes = content.toByteArray(Charsets.UTF_8)
+                if (messageTextMaxBytes > 0 && textBytes.size > messageTextMaxBytes) {
+                    showTextToFileAlert(content)
+                    return@setOnClickListener
+                }
+
                 sendIV.colorFilter = PorterDuffColorFilter(
                     ContextCompat.getColor(
                         iConversationContext.chatActivity, R.color.popupTextColor

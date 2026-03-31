@@ -97,46 +97,61 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:background="@drawable/send_chat_text_bg"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:paddingStart="12dp"
             android:paddingTop="10dp"
             android:paddingEnd="12dp"
             android:paddingBottom="10dp"
             android:visibility="gone">
 
-            <ImageView
-                android:id="@+id/fileIconIv"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:contentDescription="@string/str_file"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_file_document" />
-
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/fileNameTv"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="middle"
-                    android:maxLines="2"
-                    android:textColor="@color/colorDark"
-                    android:textSize="14sp" />
+                <ImageView
+                    android:id="@+id/fileIconIv"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="@string/str_file"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_file_document" />
 
-                <TextView
-                    android:id="@+id/fileSizeTv"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textColor="@color/color999"
-                    android:textSize="12sp" />
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/fileNameTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="middle"
+                        android:maxLines="2"
+                        android:textColor="@color/colorDark"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/fileSizeTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/color999"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/fileProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:layout_marginTop="8dp"
+                android:max="100"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View

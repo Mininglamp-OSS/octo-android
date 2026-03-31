@@ -239,8 +239,10 @@ class ChatMultiForwardDetailAdapter(
                         )
                         holder.setText(R.id.fileNameTv, fileContent.name ?: "")
                         holder.setText(R.id.fileSizeTv, WKFileProvider.formatFileSize(fileContent.size))
+                        val progressBar = holder.getView<android.widget.ProgressBar>(R.id.fileProgressBar)
+                        progressBar.visibility = View.GONE
                         holder.getView<View>(R.id.fileLayout).setOnClickListener {
-                            handleForwardFileClick(fileContent)
+                            handleForwardFileClick(fileContent, progressBar)
                         }
                     }
 
@@ -358,7 +360,7 @@ class ChatMultiForwardDetailAdapter(
         )
     }
 
-    private fun handleForwardFileClick(fileContent: WKFileContent) {
+    private fun handleForwardFileClick(fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
         // Check download directory
         val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
@@ -378,12 +380,16 @@ class ChatMultiForwardDetailAdapter(
         }
 
         val downloadUrl = WKApiConfig.getShowUrl(fileContent.url)
-        WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_download))
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
         WKDownloader.instance.download(downloadUrl, filePath,
             object : WKProgressManager.IProgress {
-                override fun onProgress(tag: Any?, progress: Int) {}
+                override fun onProgress(tag: Any?, progress: Int) {
+                    progressBar.progress = progress
+                }
 
                 override fun onSuccess(tag: Any?, path: String?) {
+                    progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
                         openForwardFile(downloadedFile)
@@ -391,6 +397,7 @@ class ChatMultiForwardDetailAdapter(
                 }
 
                 override fun onFail(tag: Any?, msg: String?) {
+                    progressBar.visibility = View.GONE
                     WKToastUtils.getInstance()
                         .showToastNormal(context.getString(R.string.str_file_download_fail))
                 }

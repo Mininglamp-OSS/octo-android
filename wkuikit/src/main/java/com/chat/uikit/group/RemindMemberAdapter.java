@@ -8,7 +8,6 @@ import androidx.annotation.NonNull;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.config.WKConfig;
-import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.StringUtils;
@@ -77,11 +76,9 @@ public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, Bas
 
     private void resort(List<WKChannelMember> list, boolean isNormal) {
         List<GroupMemberEntity> memberList = new ArrayList<>();
+        // @所有人 对所有群成员可见，对齐 Web 端行为（移除管理员角色限制）
         if (page == 1 && isNormal) {
-            WKChannelMember channelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelID, channelType, loginUID);
-            if (channelMember != null && channelMember.role != WKChannelMemberRole.normal) {
-                memberList.add(new GroupMemberEntity());
-            }
+            memberList.add(new GroupMemberEntity());
         }
         for (WKChannelMember member : list) {
             if (member != null && member.isDeleted == 0 && !member.memberUID.equals(loginUID)) {

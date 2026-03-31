@@ -1,0 +1,109 @@
+plugins {
+    id 'com.android.library'
+    id 'kotlin-android'
+    id 'maven-publish'
+}
+
+android {
+    compileSdk 34
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 34
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    // 添加以下配置来忽略原生库对齐警告
+//    packagingOptions {
+//        jniLibs {
+//            useLegacyPackaging = true
+//        }
+//    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures.buildConfig = true
+    namespace 'com.xinbida.wukongim'
+}
+
+configurations {
+    // 创建一个新的配置用于嵌入依赖
+    embedded
+    implementation.extendsFrom(embedded)
+}
+
+dependencies {
+    implementation platform("org.jetbrains.kotlin:kotlin-bom:$kotlin_version")
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    
+    // 使用 embedded 配置来包含需要打包进 AAR 的依赖
+    embedded files('libs/xSocket-2.8.15.jar')
+    embedded "net.zetetic:sqlcipher-android:4.9.0"
+//    embedded "net.zetetic:android-database-sqlcipher:4.5.4"
+    embedded "androidx.sqlite:sqlite-ktx:2.5.1"
+    embedded 'org.whispersystems:curve25519-android:0.5.0'
+    embedded 'org.whispersystems:signal-protocol-android:2.8.1'
+    
+    // multidex 通常不需要打包进去，保持 implementation
+    implementation 'com.android.support:multidex:1.0.3'
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                
+                // 配置 pom 以包含传递依赖
+                pom {
+                    name = 'WKIMLib'
+                    description = 'WuKong IM Android Library'
+                    
+                    licenses {
+                        license {
+                            name = 'The Apache License, Version 2.0'
+                            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        }
+                    }
+                }
+                
+                groupId = 'com.xinbida.wukongim'
+                artifactId = 'WKIMLib_local'
+                version = '1.0.7'
+            }
+        }
+        repositories {
+            maven {
+                name = 'localRepo'
+                url = uri("${project.rootDir}/repository")
+            }
+        }
+    }
+}
+
+android.libraryVariants.all { variant ->
+    def name = variant.name.capitalize()
+    task("generate${name}Javadoc", type: Javadoc) {
+        description "Generates Javadoc for $variant.name."
+        source = variant.sourceSets.collect { it.java.sourceFiles }.inject { m, i -> m + i }
+        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+        classpath += configurations.implementation
+        options.addStringOption('Xdoclint:none', '-quiet')
+        options.addStringOption('encoding', 'UTF-8')
+        options.addStringOption('charSet', 'UTF-8')
+    }
+}
+

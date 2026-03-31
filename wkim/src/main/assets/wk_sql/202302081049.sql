@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS version_reminders ON reminders (version);

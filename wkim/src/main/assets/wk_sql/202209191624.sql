@@ -1,0 +1,1 @@
+ALTER TABLE 'channel' add column 'device_flag' integer not null default 0;

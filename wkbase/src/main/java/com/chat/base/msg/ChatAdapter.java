@@ -225,7 +225,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
 
     public int getFirstVisibleItemIndex(int startIndex) {
         int index = startIndex;
-        if (startIndex <= getData().size() - 1) {
+        if (startIndex >= 0 && startIndex <= getData().size() - 1) {
             if (getData().get(startIndex).wkMsg == null || getData().get(startIndex).wkMsg.orderSeq == 0) {
                 for (int i = startIndex; i < getData().size(); i++) {
                     if (getData().get(i).wkMsg != null && getData().get(i).wkMsg.orderSeq != 0) {
@@ -240,7 +240,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
 
     public WKMsg getFirstVisibleItem(int startIndex) {
         WKMsg wkMsg = null;
-        if (startIndex <= getData().size() - 1) {
+        if (startIndex >= 0 && startIndex <= getData().size() - 1) {
             if (getData().get(startIndex).wkMsg == null || getData().get(startIndex).wkMsg.orderSeq == 0) {
                 for (int i = startIndex; i < getData().size(); i++) {
                     if (getData().get(i).wkMsg != null && getData().get(i).wkMsg.orderSeq != 0) {

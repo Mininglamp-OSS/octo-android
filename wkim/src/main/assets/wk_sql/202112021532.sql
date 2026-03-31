@@ -1,0 +1,1 @@
+ALTER TABLE 'channel_members' ADD 'forbidden_expiration_time' BIGINT DEFAULT 0;

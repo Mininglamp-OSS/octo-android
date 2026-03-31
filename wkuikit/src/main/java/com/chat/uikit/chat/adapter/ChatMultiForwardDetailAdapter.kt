@@ -246,6 +246,47 @@ class ChatMultiForwardDetailAdapter(
                         }
                     }
 
+                    WKContentType.WK_MULTIPLE_FORWARD -> {
+                        holder.setGone(R.id.contentLayout, true)
+                        holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.fileLayout, true)
+                        holder.setGone(R.id.contentTv, false)
+                        val forwardContent =
+                            item.msg.baseContentMsgModel as com.chat.uikit.chat.msgmodel.WKMultiForwardContent
+                        // 显示预览内容
+                        val previewBuilder = StringBuilder()
+                        if (forwardContent.msgList != null) {
+                            val size = kotlin.math.min(forwardContent.msgList.size, 3)
+                            for (i in 0 until size) {
+                                val innerMsg = forwardContent.msgList[i]
+                                var name = ""
+                                if (!TextUtils.isEmpty(innerMsg.fromUID)) {
+                                    val ch = WKIM.getInstance().channelManager.getChannel(
+                                        innerMsg.fromUID, WKChannelType.PERSONAL
+                                    )
+                                    if (ch != null) name = ch.channelName
+                                }
+                                val msgContent = innerMsg.baseContentMsgModel?.displayContent
+                                    ?: context.getString(R.string.base_unknow_msg)
+                                if (previewBuilder.isNotEmpty()) previewBuilder.append("\n")
+                                previewBuilder.append(name).append(":").append(msgContent)
+                            }
+                        }
+                        val displayText = context.getString(R.string.last_msg_chat_record) +
+                            "\n" + previewBuilder.toString()
+                        holder.setText(R.id.contentTv, displayText)
+                        // 点击打开嵌套合并转发详情
+                        holder.getView<TextView>(R.id.contentTv).setOnClickListener {
+                            val contentJson = forwardContent.encodeMsg().toString()
+                            val intent = android.content.Intent(
+                                context,
+                                com.chat.uikit.chat.ChatMultiForwardDetailActivity::class.java
+                            )
+                            intent.putExtra("forward_content_json", contentJson)
+                            context.startActivity(intent)
+                        }
+                    }
+
                     else -> {
                         var content = item.msg.baseContentMsgModel.displayContent
                         if (TextUtils.isEmpty(content)) {

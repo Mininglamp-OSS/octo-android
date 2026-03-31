@@ -1,0 +1,1 @@
+ALTER TABLE 'reminders' add column 'publisher' text DEFAULT '';

@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_channel_member_version ON channel_members (channel_id, channel_type,version);
+CREATE INDEX IF NOT EXISTS channel_members_channel_index ON channel_members (channel_id,channel_type);

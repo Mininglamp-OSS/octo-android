@@ -31,8 +31,14 @@ import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.ImageUtils
 import com.chat.base.utils.WKDialogUtils
 import com.chat.base.utils.WKTimeUtils
+import com.chat.base.utils.WKFileUtils
 import com.chat.base.utils.WKToastUtils
+import com.chat.base.config.WKConstants
+import com.chat.base.msgcontent.WKFileContent
+import com.chat.base.net.ud.WKDownloader
+import com.chat.base.net.ud.WKProgressManager
 import com.chat.uikit.R
+import com.chat.uikit.chat.provider.WKFileProvider
 import com.chat.uikit.enity.ChatMultiForwardEntity
 import com.google.android.material.snackbar.Snackbar
 import com.xinbida.wukongim.WKIM
@@ -109,6 +115,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentTv, true)
                         holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.imageView, false)
                         val imgMsgModel = item.msg.baseContentMsgModel as WKImageContent
                         var showUrl: String
@@ -154,6 +161,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentLayout, false)
                         holder.setGone(R.id.imageView, false)
                         holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.progressView, false)
                         holder.setGone(R.id.playIv, false)
                         val videoModel = item.msg.baseContentMsgModel as WKVideoContent
@@ -209,6 +217,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.imageView, true)
                         holder.setGone(R.id.gifIv, false)
                         holder.setGone(R.id.contentLayout, true)
+                        holder.setGone(R.id.fileLayout, true)
                         val wkGifContent =
                             item.msg.baseContentMsgModel as WKGifContent
                         GlideUtils.getInstance().showImg(
@@ -216,6 +225,66 @@ class ChatMultiForwardDetailAdapter(
                             WKApiConfig.getShowUrl(wkGifContent.url),
                             holder.getView(R.id.gifIv)
                         )
+                    }
+
+                    WKContentType.WK_FILE -> {
+                        holder.setGone(R.id.contentTv, true)
+                        holder.setGone(R.id.contentLayout, true)
+                        holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.fileLayout, false)
+                        val fileContent = item.msg.baseContentMsgModel as WKFileContent
+                        WKFileProvider.setFileIcon(
+                            holder.getView(R.id.fileIconIv),
+                            fileContent.extension, fileContent.name
+                        )
+                        holder.setText(R.id.fileNameTv, fileContent.name ?: "")
+                        holder.setText(R.id.fileSizeTv, WKFileProvider.formatFileSize(fileContent.size))
+                        val progressBar = holder.getView<android.widget.ProgressBar>(R.id.fileProgressBar)
+                        progressBar.visibility = View.GONE
+                        holder.getView<View>(R.id.fileLayout).setOnClickListener {
+                            handleForwardFileClick(fileContent, progressBar)
+                        }
+                    }
+
+                    WKContentType.WK_MULTIPLE_FORWARD -> {
+                        holder.setGone(R.id.contentLayout, true)
+                        holder.setGone(R.id.gifIv, true)
+                        holder.setGone(R.id.fileLayout, true)
+                        holder.setGone(R.id.contentTv, false)
+                        val forwardContent =
+                            item.msg.baseContentMsgModel as com.chat.uikit.chat.msgmodel.WKMultiForwardContent
+                        // 显示预览内容
+                        val previewBuilder = StringBuilder()
+                        if (forwardContent.msgList != null) {
+                            val size = kotlin.math.min(forwardContent.msgList.size, 3)
+                            for (i in 0 until size) {
+                                val innerMsg = forwardContent.msgList[i]
+                                var name = ""
+                                if (!TextUtils.isEmpty(innerMsg.fromUID)) {
+                                    val ch = WKIM.getInstance().channelManager.getChannel(
+                                        innerMsg.fromUID, WKChannelType.PERSONAL
+                                    )
+                                    if (ch != null) name = ch.channelName
+                                }
+                                val msgContent = innerMsg.baseContentMsgModel?.displayContent
+                                    ?: context.getString(R.string.base_unknow_msg)
+                                if (previewBuilder.isNotEmpty()) previewBuilder.append("\n")
+                                previewBuilder.append(name).append(":").append(msgContent)
+                            }
+                        }
+                        val displayText = context.getString(R.string.last_msg_chat_record) +
+                            "\n" + previewBuilder.toString()
+                        holder.setText(R.id.contentTv, displayText)
+                        // 点击打开嵌套合并转发详情
+                        holder.getView<TextView>(R.id.contentTv).setOnClickListener {
+                            val contentJson = forwardContent.encodeMsg().toString()
+                            val intent = android.content.Intent(
+                                context,
+                                com.chat.uikit.chat.ChatMultiForwardDetailActivity::class.java
+                            )
+                            intent.putExtra("forward_content_json", contentJson)
+                            context.startActivity(intent)
+                        }
                     }
 
                     else -> {
@@ -232,6 +301,7 @@ class ChatMultiForwardDetailAdapter(
                         (holder.getView<View>(R.id.contentTv) as TextView).movementMethod =
                             LinkMovementMethod.getInstance()
                         holder.setGone(R.id.contentTv, false)
+                        holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.contentLayout, true)
                         holder.setGone(R.id.gifIv, true)
                         holder.setGone(R.id.imageView, true)
@@ -329,5 +399,67 @@ class ChatMultiForwardDetailAdapter(
             bottomEntityList, null,
             null
         )
+    }
+
+    private fun handleForwardFileClick(fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
+        // Check download directory
+        val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
+        WKFileUtils.getInstance().createFileDir(downloadDir)
+        val rawName = fileContent.name ?: ("file." + (fileContent.extension ?: "dat"))
+        val fileName = File(rawName).name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val filePath = downloadDir + fileName
+        val file = File(filePath)
+        if (file.exists()) {
+            openForwardFile(file)
+            return
+        }
+
+        if (TextUtils.isEmpty(fileContent.url)) {
+            WKToastUtils.getInstance()
+                .showToastNormal(context.getString(R.string.str_file_not_exist))
+            return
+        }
+
+        val downloadUrl = WKApiConfig.getShowUrl(fileContent.url)
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
+        WKDownloader.instance.download(downloadUrl, filePath,
+            object : WKProgressManager.IProgress {
+                override fun onProgress(tag: Any?, progress: Int) {
+                    progressBar.progress = progress
+                }
+
+                override fun onSuccess(tag: Any?, path: String?) {
+                    progressBar.visibility = View.GONE
+                    val downloadedFile = File(filePath)
+                    if (downloadedFile.exists()) {
+                        openForwardFile(downloadedFile)
+                    }
+                }
+
+                override fun onFail(tag: Any?, msg: String?) {
+                    progressBar.visibility = View.GONE
+                    WKToastUtils.getInstance()
+                        .showToastNormal(context.getString(R.string.str_file_download_fail))
+                }
+            })
+    }
+
+    private fun openForwardFile(file: File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileProvider",
+                file
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
+            intent.setDataAndType(uri, WKFileProvider.getMimeType(file.name))
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            WKToastUtils.getInstance()
+                .showToastNormal(context.getString(R.string.str_file_not_exist))
+        }
     }
 }

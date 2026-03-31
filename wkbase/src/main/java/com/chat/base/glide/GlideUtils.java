@@ -165,10 +165,9 @@ public class GlideUtils {
             Context context = weakReference.get();
             if (context instanceof Activity activity) {
                 if (!activity.isDestroyed()) {
-                    // 始终使用 MyGlideUrlWithId，key 为空时用 "0" 作为默认值。
-                    // MyGlideUrlWithId 的 cache key 包含 APP_LAUNCH_ID，确保冷启动时磁盘缓存失效。
-                    // 旧逻辑：key 为空时走纯 Glide + DiskCacheStrategy.ALL，URL 不变导致磁盘缓存永不失效。
-                    String cacheKey = TextUtils.isEmpty(key) ? "0" : key;
+                    // 始终使用 MyGlideUrlWithId，cache key 包含 APP_LAUNCH_ID，确保冷启动时磁盘缓存失效。
+                    // key 为空时用 url 本身作为唯一标识，避免所有无 cacheKey 的头像共享同一缓存。
+                    String cacheKey = TextUtils.isEmpty(key) ? url : key;
                     Glide.with(context).load(new MyGlideUrlWithId(url, cacheKey)).dontAnimate()
                             .apply(GlideRequestOptions.getInstance().normalRequestOption())
                             .into(imageView);

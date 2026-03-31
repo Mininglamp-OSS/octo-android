@@ -396,7 +396,7 @@ class ChatPanelManager(
             if (mMsg.remoteExtra != null && mMsg.remoteExtra.contentEditMsgModel != null) {
                 mMsg.remoteExtra.contentEditMsgModel.displayContent
             } else {
-                mMsg.baseContentMsgModel.displayContent
+                mMsg.baseContentMsgModel?.displayContent ?: ""
             }
         contentTv?.text = content
 //        MoonUtil.identifyFaceExpression(

@@ -1,0 +1,1 @@
+ALTER TABLE message_extra ADD COLUMN is_pinned int DEFAULT 0;

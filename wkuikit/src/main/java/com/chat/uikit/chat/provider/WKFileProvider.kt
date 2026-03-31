@@ -256,25 +256,25 @@ class WKFileProvider : WKChatBaseProvider() {
         }
     }
 
-    private fun setFileIcon(imageView: ImageView, extension: String?, fileName: String?) {
-        // 优先用 extension 字段，去掉可能的点号前缀；为空则从文件名提取
-        var ext = extension?.removePrefix(".")?.lowercase(Locale.getDefault()) ?: ""
-        if (ext.isEmpty() && !fileName.isNullOrEmpty()) {
-            ext = fileName.substringAfterLast('.', "").lowercase(Locale.getDefault())
-        }
-        val iconRes = when (ext) {
-            "pdf" -> R.mipmap.ic_file_pdf
-            "doc", "docx" -> R.mipmap.ic_file_word
-            "xls", "xlsx" -> R.mipmap.ic_file_excel
-            "ppt", "pptx" -> R.mipmap.ic_file_ppt
-            "md", "markdown" -> R.mipmap.ic_file_markdown
-            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> R.mipmap.ic_file_video
-            else -> R.drawable.ic_file_document
-        }
-        imageView.setImageResource(iconRes)
-    }
-
     companion object {
+
+        @JvmStatic
+        fun setFileIcon(imageView: ImageView, extension: String?, fileName: String?) {
+            var ext = extension?.removePrefix(".")?.lowercase(Locale.getDefault()) ?: ""
+            if (ext.isEmpty() && !fileName.isNullOrEmpty()) {
+                ext = fileName.substringAfterLast('.', "").lowercase(Locale.getDefault())
+            }
+            val iconRes = when (ext) {
+                "pdf" -> R.mipmap.ic_file_pdf
+                "doc", "docx" -> R.mipmap.ic_file_word
+                "xls", "xlsx" -> R.mipmap.ic_file_excel
+                "ppt", "pptx" -> R.mipmap.ic_file_ppt
+                "md", "markdown" -> R.mipmap.ic_file_markdown
+                "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> R.mipmap.ic_file_video
+                else -> R.drawable.ic_file_document
+            }
+            imageView.setImageResource(iconRes)
+        }
         fun formatFileSize(size: Long): String {
             return when {
                 size < 1024 -> "$size B"

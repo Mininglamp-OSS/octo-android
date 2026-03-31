@@ -53,12 +53,29 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
 
     @Override
     protected void initPresenter() {
-        clientMsgNo = getIntent().getStringExtra("client_msg_no");
-        WKMsg msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
-        WKMultiForwardContent = (WKMultiForwardContent) msg.baseContentMsgModel;
+        // 支持两种打开方式：
+        // 1. client_msg_no — 从数据库查消息（一级合并转发）
+        // 2. forward_content_json — 直接传入内容JSON（嵌套合并转发）
+        String contentJson = getIntent().getStringExtra("forward_content_json");
+        if (!TextUtils.isEmpty(contentJson)) {
+            try {
+                org.json.JSONObject json = new org.json.JSONObject(contentJson);
+                WKMultiForwardContent = new WKMultiForwardContent();
+                WKMultiForwardContent.decodeMsg(json);
+            } catch (Exception e) {
+                Log.e("MultiForwardDetail", "解析嵌套合并转发内容失败", e);
+            }
+        } else {
+            clientMsgNo = getIntent().getStringExtra("client_msg_no");
+            WKMsg msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
+            if (msg != null) {
+                WKMultiForwardContent = (WKMultiForwardContent) msg.baseContentMsgModel;
+            }
+        }
         if (WKMultiForwardContent == null) {
             showToast("传入数据有误！");
             finish();
+            return;
         }
         long minTime = 0;
         long maxTime = 0;

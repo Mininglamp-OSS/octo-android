@@ -336,6 +336,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      */
     private String getSpaceIdFromMsg(WKMsg msg) {
         if (msg == null) return null;
+        // 1. 从 content 原始 JSON 解析
         if (!TextUtils.isEmpty(msg.content)) {
             try {
                 JSONObject json = new JSONObject(msg.content);
@@ -344,15 +345,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } catch (Exception ignored) {
             }
         }
-        if (msg.baseContentMsgModel != null) {
-            try {
-                JSONObject json = msg.baseContentMsgModel.encodeMsg();
-                if (json != null) {
-                    String sid = json.optString("space_id", "");
-                    if (!sid.isEmpty()) return sid;
-                }
-            } catch (Exception ignored) {
-            }
+        // 2. 从 SDK 解码后的 spaceId 字段读取
+        if (msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.spaceId)) {
+            return msg.baseContentMsgModel.spaceId;
         }
         return null;
     }

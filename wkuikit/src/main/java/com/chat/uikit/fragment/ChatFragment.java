@@ -946,6 +946,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private String extractSpaceId(WKMsg msg) {
         if (msg == null) return null;
         String msgSpaceId = null;
+        // 1. 从 msg.content 原始 JSON 解析
         if (!TextUtils.isEmpty(msg.content)) {
             try {
                 org.json.JSONObject json = new org.json.JSONObject(msg.content);
@@ -953,14 +954,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             } catch (Exception ignored) {
             }
         }
-        if (TextUtils.isEmpty(msgSpaceId) && msg.baseContentMsgModel != null) {
-            try {
-                org.json.JSONObject json = msg.baseContentMsgModel.encodeMsg();
-                if (json != null) {
-                    msgSpaceId = json.optString("space_id", "");
-                }
-            } catch (Exception ignored) {
-            }
+        // 2. 从 SDK 解码后的 spaceId 字段读取
+        if (TextUtils.isEmpty(msgSpaceId) && msg.baseContentMsgModel != null
+                && !TextUtils.isEmpty(msg.baseContentMsgModel.spaceId)) {
+            msgSpaceId = msg.baseContentMsgModel.spaceId;
         }
         return TextUtils.isEmpty(msgSpaceId) ? null : msgSpaceId;
     }

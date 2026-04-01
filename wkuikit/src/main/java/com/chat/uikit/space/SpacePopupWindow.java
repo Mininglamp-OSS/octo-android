@@ -54,7 +54,7 @@ public class SpacePopupWindow {
         popupWindow.setOutsideTouchable(true);
         popupWindow.setElevation(8f);
 
-        RecyclerView recyclerView = contentView.findViewById(R.id.spaceRecyclerView);
+        recyclerView = contentView.findViewById(R.id.spaceRecyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(context));
         adapter = new SpaceListAdapter();
         adapter.setCurrentSpaceId(MsgModel.getInstance().getCurrentSpaceId());
@@ -104,11 +104,14 @@ public class SpacePopupWindow {
                 anchorView.getLeft() + 15, anchorView.getBottom() + 20);
     }
 
+    private RecyclerView recyclerView;
+
     private void loadSpaces() {
         SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
             @Override
             public void onResult(List<SpaceEntity> list) {
                 adapter.setList(list);
+                constrainRecyclerViewHeight(list == null ? 0 : list.size());
             }
 
             @Override
@@ -116,6 +119,25 @@ public class SpacePopupWindow {
                 WKToastUtils.getInstance().showToastNormal(msg);
             }
         });
+    }
+
+    /**
+     * Space 列表超过 MAX_VISIBLE_ITEMS 条时限制高度并启用滚动，
+     * 保证底部「创建 / 加入」按钮始终可见。
+     */
+    private static final int MAX_VISIBLE_ITEMS = 6;
+    private static final int ITEM_HEIGHT_DP = 48;
+
+    private void constrainRecyclerViewHeight(int itemCount) {
+        if (recyclerView == null) return;
+        ViewGroup.LayoutParams lp = recyclerView.getLayoutParams();
+        if (itemCount > MAX_VISIBLE_ITEMS) {
+            float density = context.getResources().getDisplayMetrics().density;
+            lp.height = (int) (MAX_VISIBLE_ITEMS * ITEM_HEIGHT_DP * density);
+        } else {
+            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        }
+        recyclerView.setLayoutParams(lp);
     }
 
     private void showJoinDialog() {

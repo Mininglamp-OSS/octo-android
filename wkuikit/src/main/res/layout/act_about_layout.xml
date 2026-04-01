@@ -9,12 +9,16 @@
 
     <include layout="@layout/wk_title_bar_layout" />
 
-    <com.chat.base.ui.components.AvatarView
-        android:id="@+id/avatarView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <ImageView
+        android:id="@+id/aboutIconIv"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
         android:layout_gravity="center"
-        android:layout_marginTop="50dp" />
+        android:layout_marginTop="50dp"
+        android:src="@mipmap/ic_launcher"
+        android:background="@drawable/bg_about_icon"
+        android:clipToOutline="true"
+        android:contentDescription="@string/app_name" />
 
     <TextView
         android:id="@+id/appNameTv"

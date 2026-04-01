@@ -1528,6 +1528,9 @@ class SelectTextHelper(builder: Builder) {
                             } else {
                                 links[0].onClick(widget)
                             }
+                        } else {
+                            // Markwon 渲染的 Markdown 链接（LinkSpan 等非 NormalClickableSpan）
+                            links[0].onClick(widget)
                         }
                     } else {
                         downLinkTime = System.currentTimeMillis()

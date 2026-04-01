@@ -26,6 +26,7 @@ import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.emoji.EmojiManager;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.markdown.WKMarkwonProvider;
+import com.chat.base.markdown.WKTableData;
 import com.chat.base.entity.BottomSheetItem;
 import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
@@ -45,7 +46,10 @@ import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
+import kotlin.Pair;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,6 +75,7 @@ public class WKUIChatMsgItemEntity {
     //=========本地数据========
     public ILinkClick iLinkClick;
     public SpannableStringBuilder displaySpans;
+    public List<WKTableData> tableDataList = Collections.emptyList();
 
     public WKUIChatMsgItemEntity(IConversationContext conversationContext, WKMsg wkMsg, ILinkClick iLinkClick) {
         this.wkMsg = wkMsg;
@@ -103,10 +108,10 @@ public class WKUIChatMsgItemEntity {
         String rawContent = getContent();
         Activity context = conversationContext.getChatActivity();
 
-        // Markwon 渲染：将 Markdown 语法转为 Android Spans
-        displaySpans = new SpannableStringBuilder(
-                WKMarkwonProvider.toMarkdown(context, rawContent)
-        );
+        // Markwon 渲染：将 Markdown 语法转为 Android Spans，同时提取表格数据
+        Pair<Spanned, List<WKTableData>> result = WKMarkwonProvider.toMarkdownWithTables(context, rawContent);
+        displaySpans = new SpannableStringBuilder(result.getFirst());
+        tableDataList = result.getSecond();
 
         // 处理 entity spans（link、bot_command，使用文本搜索定位，因为 Markwon 渲染后原始 offset 已失效）
         if (WKReader.isNotEmpty(wkMsg.baseContentMsgModel.entities)) {

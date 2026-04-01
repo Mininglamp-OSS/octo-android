@@ -1,9 +1,5 @@
 package com.chat.base.markdown
 
-import android.graphics.Typeface
-import android.text.Spanned
-import android.text.style.StyleSpan
-import android.text.style.TypefaceSpan
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.MarkwonVisitor
 import org.commonmark.ext.gfm.tables.TableBody
@@ -15,14 +11,40 @@ import org.commonmark.node.Node
 import org.commonmark.parser.Parser
 
 /**
- * 自定义表格渲染插件：将 Markdown 表格转为简洁的文本格式 + 等宽字体。
- * 替代 Markwon 默认的 TablePlugin（Span 方式在聊天气泡中会出现文字重叠）。
+ * 自定义表格插件：拦截 Markdown 表格 AST 节点，提取结构化数据（WKTableData），
+ * 不在文本中渲染表格内容。表格数据由外部消费后渲染为原生卡片组件。
  */
 class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
 
     companion object {
+        /** 线程安全的表格数据缓冲区，供单次 toMarkdown 调用后消费 */
+        private val pendingTables = mutableListOf<WKTableData>()
+
         @JvmStatic
         fun create(): WKTablePlugin = WKTablePlugin()
+
+        /**
+         * 获取并清空上一次 Markwon 渲染过程中提取的所有表格数据。
+         * 必须在 toMarkdown() 之后立即调用，否则数据会在下次渲染时被覆盖。
+         */
+        @JvmStatic
+        @Synchronized
+        fun consumeTableData(): List<WKTableData> {
+            val result = ArrayList(pendingTables)
+            pendingTables.clear()
+            return result
+        }
+
+        @Synchronized
+        private fun addTableData(data: WKTableData) {
+            pendingTables.add(data)
+        }
+
+        /** 渲染开始前清空缓冲区，防止残留 */
+        @Synchronized
+        internal fun clearPending() {
+            pendingTables.clear()
+        }
     }
 
     override fun configureParser(builder: Parser.Builder) {
@@ -31,7 +53,8 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
 
     override fun configureVisitor(builder: MarkwonVisitor.Builder) {
         builder.on(org.commonmark.ext.gfm.tables.TableBlock::class.java) { visitor, tableBlock ->
-            val headerRows = mutableListOf<List<String>>()
+            val headers = mutableListOf<String>()
+            val alignments = mutableListOf<TableCell.Alignment?>()
             val bodyRows = mutableListOf<List<String>>()
 
             var child: Node? = tableBlock.firstChild
@@ -40,14 +63,20 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
                     is TableHead -> {
                         var row: Node? = child.firstChild
                         while (row != null) {
-                            if (row is TableRow) headerRows.add(extractCells(row))
+                            if (row is TableRow) {
+                                val (cells, aligns) = extractCellsWithAlignment(row)
+                                headers.addAll(cells)
+                                alignments.addAll(aligns)
+                            }
                             row = row.next
                         }
                     }
                     is TableBody -> {
                         var row: Node? = child.firstChild
                         while (row != null) {
-                            if (row is TableRow) bodyRows.add(extractCells(row))
+                            if (row is TableRow) {
+                                bodyRows.add(extractCells(row))
+                            }
                             row = row.next
                         }
                     }
@@ -55,38 +84,11 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
                 child = child.next
             }
 
-            val allRows = headerRows + bodyRows
-            if (allRows.isEmpty()) return@on
+            if (headers.isEmpty() && bodyRows.isEmpty()) return@on
 
-            visitor.ensureNewLine()
-            val tableStart = visitor.length()
+            addTableData(WKTableData(headers, bodyRows, alignments))
 
-            // 渲染表头
-            for (row in headerRows) {
-                val headerStart = visitor.length()
-                visitor.builder().append(row.joinToString(" | "))
-                visitor.builder().setSpan(
-                    StyleSpan(Typeface.BOLD), headerStart, visitor.length(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-                visitor.ensureNewLine()
-                // 分隔线
-                visitor.builder().append("─".repeat(row.joinToString(" | ").length.coerceAtMost(30)))
-                visitor.ensureNewLine()
-            }
-
-            // 渲染表体
-            for (row in bodyRows) {
-                visitor.builder().append(row.joinToString(" | "))
-                visitor.ensureNewLine()
-            }
-
-            // 整个表格使用等宽字体，确保对齐
-            visitor.builder().setSpan(
-                TypefaceSpan("monospace"), tableStart, visitor.length(),
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-
+            // 在文本中插入一个占位换行，避免前后文本粘连
             visitor.ensureNewLine()
         }
 
@@ -95,6 +97,20 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
         builder.on(TableBody::class.java) { _, _ -> }
         builder.on(TableRow::class.java) { _, _ -> }
         builder.on(TableCell::class.java) { _, _ -> }
+    }
+
+    private fun extractCellsWithAlignment(row: TableRow): Pair<List<String>, List<TableCell.Alignment?>> {
+        val cells = mutableListOf<String>()
+        val alignments = mutableListOf<TableCell.Alignment?>()
+        var cell: Node? = row.firstChild
+        while (cell != null) {
+            if (cell is TableCell) {
+                cells.add(extractText(cell).trim())
+                alignments.add(cell.alignment)
+            }
+            cell = cell.next
+        }
+        return Pair(cells, alignments)
     }
 
     private fun extractCells(row: TableRow): List<String> {

@@ -6,8 +6,6 @@ import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
-import io.noties.markwon.ext.tables.TablePlugin
-import io.noties.markwon.ext.tables.TableTheme
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.syntax.Prism4jThemeDefault
@@ -43,16 +41,23 @@ object WKMarkwonProvider {
             .usePlugin(codeBlockPlugin)
             .usePlugin(softBreakPlugin)
             .usePlugin(StrikethroughPlugin.create())
-            .usePlugin(TablePlugin.create { it
-                .tableCellPadding(dp2px(context, 4f))
-                .tableBorderWidth(dp2px(context, 0.5f))
-                .tableBorderColor(android.graphics.Color.parseColor("#DDDDDD"))
-                .tableHeaderRowBackgroundColor(android.graphics.Color.parseColor("#F5F5F5"))
-            })
+            .usePlugin(WKTablePlugin.create())
             .usePlugin(TaskListPlugin.create(context))
             .usePlugin(HtmlPlugin.create())
             .usePlugin(SyntaxHighlightPlugin.create(prism4j, prism4jTheme))
             .build()
+    }
+
+    /**
+     * 渲染 Markdown 文本，同时提取表格数据。
+     * @return Pair<Spanned, List<WKTableData>> - 渲染后的文本（不含表格）和表格数据列表
+     */
+    @JvmStatic
+    fun toMarkdownWithTables(context: Context, text: String): Pair<Spanned, List<WKTableData>> {
+        WKTablePlugin.clearPending()
+        val spanned = getInstance(context).toMarkdown(text)
+        val tables = WKTablePlugin.consumeTableData()
+        return Pair(spanned, tables)
     }
 
     @JvmStatic

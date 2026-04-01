@@ -143,4 +143,6 @@
     <string name="api_url_dialog_empty">请输入地址</string>
     <string name="api_url_dialog_checking">验证中…</string>
     <string name="api_url_dialog_unreachable">服务器地址不可达，请检查地址是否正确</string>
+    <string name="str_table">表格</string>
+    <string name="str_table_copied">表格内容已复制</string>
 </resources>

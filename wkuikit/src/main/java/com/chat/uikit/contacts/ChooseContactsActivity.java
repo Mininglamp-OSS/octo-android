@@ -495,7 +495,11 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying.startsWith(letter)) {
-                    wkVBinding.recyclerView.smoothScrollToPosition(i);
+                    wkVBinding.recyclerView.stopScroll();
+                    LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+                    if (lm != null) {
+                        lm.scrollToPositionWithOffset(i, 0);
+                    }
                     break;
                 }
             }

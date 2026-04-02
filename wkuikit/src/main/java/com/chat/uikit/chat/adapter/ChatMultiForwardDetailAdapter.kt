@@ -15,8 +15,22 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.chad.library.adapter.base.BaseMultiItemQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
+import android.graphics.Color
+import android.graphics.Typeface
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.TableLayout
+import android.widget.TableRow
+import android.graphics.drawable.GradientDrawable
 import com.chat.base.config.WKApiConfig
 import com.chat.base.emoji.MoonUtil
+import com.chat.base.markdown.WKMarkwonProvider
+import com.chat.base.markdown.WKTableData
+import com.chat.base.markdown.WKTablePlugin
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatChooseContacts
@@ -292,14 +306,6 @@ class ChatMultiForwardDetailAdapter(
                         if (TextUtils.isEmpty(content)) {
                             content = context.getString(R.string.base_unknow_msg)
                         }
-                        MoonUtil.identifyFaceExpression(
-                            context,
-                            holder.getView(R.id.contentTv),
-                            content,
-                            MoonUtil.DEF_SCALE
-                        )
-                        (holder.getView<View>(R.id.contentTv) as TextView).movementMethod =
-                            LinkMovementMethod.getInstance()
                         holder.setGone(R.id.contentTv, false)
                         holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.contentLayout, true)
@@ -308,8 +314,62 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.progressView, true)
                         holder.setGone(R.id.playIv, true)
 
-                        val list: MutableList<PopupMenuItem> = java.util.ArrayList()
-                        list.add(
+                        // Markwon 渲染 + 表格卡片
+                        val contentTv = holder.getView<TextView>(R.id.contentTv)
+                        val tableContainer = holder.getView<LinearLayout>(R.id.tableCardContainer)
+                        tableContainer.removeAllViews()
+
+                        val (spanned, tables) = WKMarkwonProvider.toMarkdownWithTables(context, content)
+                        if (tables.isEmpty()) {
+                            contentTv.text = spanned
+                        } else {
+                            val fullText = spanned.toString()
+                            val positions = mutableListOf<Int>()
+                            var idx = 0
+                            while (idx < fullText.length) {
+                                val pos = fullText.indexOf(WKTablePlugin.TABLE_PLACEHOLDER, idx)
+                                if (pos < 0) break
+                                positions.add(pos)
+                                idx = pos + 1
+                            }
+                            if (positions.size == tables.size) {
+                                val segments = mutableListOf<CharSequence>()
+                                var start = 0
+                                for (pos in positions) {
+                                    segments.add(spanned.subSequence(start, pos))
+                                    start = pos + WKTablePlugin.TABLE_PLACEHOLDER.length
+                                }
+                                segments.add(spanned.subSequence(start, spanned.length))
+                                contentTv.text = trimNewlines(segments[0])
+                                if (segments[0].toString().isBlank()) {
+                                    contentTv.visibility = View.GONE
+                                } else {
+                                    contentTv.visibility = View.VISIBLE
+                                }
+                                for (i in tables.indices) {
+                                    tableContainer.addView(buildForwardTableCard(tables[i]))
+                                    val next = segments.getOrNull(i + 1) ?: continue
+                                    val trimmed = trimNewlines(next)
+                                    if (trimmed.isBlank()) continue
+                                    val extraTv = TextView(context).apply {
+                                        text = trimmed
+                                        setTextColor(contentTv.currentTextColor)
+                                        setTextSize(TypedValue.COMPLEX_UNIT_PX, contentTv.textSize)
+                                        movementMethod = LinkMovementMethod.getInstance()
+                                    }
+                                    tableContainer.addView(extraTv)
+                                }
+                            } else {
+                                contentTv.text = spanned
+                                for (table in tables) {
+                                    tableContainer.addView(buildForwardTableCard(table))
+                                }
+                            }
+                        }
+                        contentTv.movementMethod = LinkMovementMethod.getInstance()
+
+                        val popList: MutableList<PopupMenuItem> = java.util.ArrayList()
+                        popList.add(
                             PopupMenuItem(
                                 context.getString(R.string.copy),
                                 R.mipmap.msg_copy, object : PopupMenuItem.IClick {
@@ -319,7 +379,7 @@ class ChatMultiForwardDetailAdapter(
                                         val mClipData =
                                             ClipData.newPlainText(
                                                 "Label",
-                                                holder.getView<TextView>(R.id.contentTv).text.toString()
+                                                contentTv.text.toString()
                                             )
                                         assert(cm != null)
                                         cm!!.setPrimaryClip(mClipData)
@@ -329,7 +389,7 @@ class ChatMultiForwardDetailAdapter(
                                 })
                         )
                         WKDialogUtils.getInstance()
-                            .setViewLongClickPopup(holder.getView<TextView>(R.id.contentTv), list)
+                            .setViewLongClickPopup(contentTv, popList)
 
                     }
                 }
@@ -443,6 +503,95 @@ class ChatMultiForwardDetailAdapter(
                         .showToastNormal(context.getString(R.string.str_file_download_fail))
                 }
             })
+    }
+
+    private fun trimNewlines(cs: CharSequence): CharSequence {
+        var s = 0
+        var e = cs.length
+        while (s < e && cs[s] == '\n') s++
+        while (e > s && cs[e - 1] == '\n') e--
+        return if (s == 0 && e == cs.length) cs else cs.subSequence(s, e)
+    }
+
+    private fun buildForwardTableCard(tableData: WKTableData): View {
+        val cardView = LayoutInflater.from(context)
+            .inflate(com.chat.base.R.layout.layout_markdown_table_card, null)
+
+        val tableContent = cardView.findViewById<TableLayout>(com.chat.base.R.id.tableContent)
+        val tableScrollView = cardView.findViewById<HorizontalScrollView>(com.chat.base.R.id.tableScrollView)
+        val copyBtn = cardView.findViewById<ImageView>(com.chat.base.R.id.tableCopyBtn)
+
+        tableScrollView.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE ->
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.parent.requestDisallowInterceptTouchEvent(false)
+            }
+            false
+        }
+
+        val dp = context.resources.displayMetrics.density
+        val cellPaddingH = (10 * dp).toInt()
+        val cellPaddingV = (8 * dp).toInt()
+        val textSize = 13f
+        val headerBgColor = Color.parseColor("#F0F0F0")
+        val evenRowBgColor = Color.parseColor("#FAFAFA")
+        val borderColor = Color.parseColor("#E8E8E8")
+
+        if (tableData.headers.isNotEmpty()) {
+            val headerRow = TableRow(context)
+            headerRow.setBackgroundColor(headerBgColor)
+            for ((colIdx, header) in tableData.headers.withIndex()) {
+                headerRow.addView(createCell(header, textSize, cellPaddingH, cellPaddingV,
+                    Color.parseColor("#333333"), true, tableData, colIdx, borderColor))
+            }
+            tableContent.addView(headerRow)
+        }
+        for ((rowIdx, row) in tableData.rows.withIndex()) {
+            val tableRow = TableRow(context)
+            if (rowIdx % 2 == 1) tableRow.setBackgroundColor(evenRowBgColor)
+            for ((colIdx, cell) in row.withIndex()) {
+                tableRow.addView(createCell(cell, textSize, cellPaddingH, cellPaddingV,
+                    Color.parseColor("#555555"), false, tableData, colIdx, borderColor))
+            }
+            tableContent.addView(tableRow)
+        }
+        copyBtn.setOnClickListener {
+            val sb = StringBuilder()
+            if (tableData.headers.isNotEmpty()) sb.appendLine(tableData.headers.joinToString("\t"))
+            for (row in tableData.rows) sb.appendLine(row.joinToString("\t"))
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("table", sb.toString().trimEnd()))
+            WKToastUtils.getInstance().showToastNormal(context.getString(com.chat.base.R.string.str_table_copied))
+        }
+        return cardView
+    }
+
+    private fun createCell(
+        text: String, textSize: Float, paddingH: Int, paddingV: Int,
+        textColor: Int, isBold: Boolean, tableData: WKTableData, colIdx: Int, borderColor: Int
+    ): TextView {
+        return TextView(context).apply {
+            this.text = text
+            this.textSize = textSize
+            setTextColor(textColor)
+            setPadding(paddingH, paddingV, paddingH, paddingV)
+            isSingleLine = true
+            if (isBold) typeface = Typeface.DEFAULT_BOLD
+            if (colIdx < tableData.alignments.size) {
+                gravity = when (tableData.alignments[colIdx]) {
+                    org.commonmark.ext.gfm.tables.TableCell.Alignment.CENTER -> Gravity.CENTER
+                    org.commonmark.ext.gfm.tables.TableCell.Alignment.RIGHT -> Gravity.CENTER_VERTICAL or Gravity.END
+                    else -> Gravity.CENTER_VERTICAL or Gravity.START
+                }
+            }
+            layoutParams = TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT, TableRow.LayoutParams.WRAP_CONTENT)
+            val gd = GradientDrawable()
+            gd.setStroke(1, borderColor)
+            gd.setColor(Color.TRANSPARENT)
+            background = gd
+        }
     }
 
     private fun openForwardFile(file: File) {

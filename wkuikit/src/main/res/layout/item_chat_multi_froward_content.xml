@@ -50,6 +50,12 @@
             android:textColor="@color/colorDark"
             android:textSize="16sp" />
 
+        <LinearLayout
+            android:id="@+id/tableCardContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
         <FrameLayout
             android:id="@+id/contentLayout"
             android:layout_width="match_parent"

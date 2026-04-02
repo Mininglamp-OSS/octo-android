@@ -17,6 +17,9 @@ import org.commonmark.parser.Parser
 class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
 
     companion object {
+        /** 表格占位符：标记表格在渲染文本中的原始位置 */
+        const val TABLE_PLACEHOLDER = "\uFFFC"
+
         /** 线程安全的表格数据缓冲区，供单次 toMarkdown 调用后消费 */
         private val pendingTables = mutableListOf<WKTableData>()
 
@@ -88,7 +91,9 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
 
             addTableData(WKTableData(headers, bodyRows, alignments))
 
-            // 在文本中插入一个占位换行，避免前后文本粘连
+            // 插入占位符标记表格在文本中的位置，供 UI 层按顺序交叉渲染
+            visitor.ensureNewLine()
+            visitor.builder().append(TABLE_PLACEHOLDER)
             visitor.ensureNewLine()
         }
 

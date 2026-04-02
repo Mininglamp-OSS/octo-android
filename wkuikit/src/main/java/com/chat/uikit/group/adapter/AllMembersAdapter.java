@@ -1,8 +1,13 @@
 package com.chat.uikit.group.adapter;
 
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.text.SpannableString;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
 
@@ -12,6 +17,8 @@ import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.RoundTextView;
+import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.enity.AllGroupMemberEntity;
@@ -66,7 +73,7 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
         }
         //   baseViewHolder.setText(R.id.nameTv, showName);
         RoundTextView roleTv = baseViewHolder.getView(R.id.roleTv);
-        avatarView.showAvatar(channelMember.memberUID, WKChannelType.PERSONAL, channelMember.memberAvatar);
+        avatarView.showAvatar(channelMember.memberUID, WKChannelType.PERSONAL, channelMember.memberAvatarCacheKey);
         if (channelMember.role == WKChannelMemberRole.admin) {
             roleTv.setVisibility(View.VISIBLE);
             roleTv.setText(R.string.group_owner);
@@ -77,6 +84,26 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
             roleTv.setBackGroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
         } else {
             roleTv.setVisibility(View.GONE);
+        }
+
+        // AI 标识
+        LinearLayout nameRow = (LinearLayout) baseViewHolder.getView(R.id.nameTv).getParent();
+        View oldBadge = nameRow.findViewWithTag("ai_badge");
+        if (oldBadge != null) nameRow.removeView(oldBadge);
+        if (channelMember.robot == 1) {
+            TextView aiBadge = new TextView(getContext());
+            aiBadge.setTag("ai_badge");
+            aiBadge.setText("AI");
+            aiBadge.setTextColor(Color.WHITE);
+            aiBadge.setTextSize(10f);
+            aiBadge.setTypeface(Typeface.DEFAULT_BOLD);
+            aiBadge.setBackgroundResource(R.drawable.bg_ai_badge);
+            int hPad = AndroidUtilities.dp(5f);
+            int vPad = AndroidUtilities.dp(1f);
+            aiBadge.setPadding(hPad, vPad, hPad, vPad);
+            nameRow.addView(aiBadge, LayoutHelper.createLinear(
+                    LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
+                    Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
         }
     }
 

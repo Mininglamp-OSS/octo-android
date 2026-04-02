@@ -7,13 +7,11 @@ import android.widget.TextView;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKSystemAccount;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActAboutLayoutBinding;
-import com.xinbida.wukongim.entity.WKChannelType;
 
 /**
  * 5/26/21 3:03 PM
@@ -55,8 +53,6 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
 
     @Override
     protected void initListener() {
-        wkVBinding.avatarView.setSize(80);
-        wkVBinding.avatarView.showAvatar(WKSystemAccount.system_team, WKChannelType.PERSONAL);
     }
 
     private void checkNewVersion(boolean isShowDialog) {

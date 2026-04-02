@@ -49,6 +49,7 @@ import com.chat.base.endpoint.entity.ChooseChatMenu
 import com.chat.base.endpoint.entity.MsgConfig
 import com.chat.base.entity.BottomSheetItem
 import com.chat.base.markdown.WKTableData
+import com.chat.base.markdown.WKTablePlugin
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.ChatAdapter
 import com.chat.base.msg.model.WKGifContent
@@ -130,11 +131,10 @@ open class WKTextProvider : WKChatBaseProvider() {
             textColor = ContextCompat.getColor(context, R.color.receive_text_color)
         }
         contentTv.setTextColor(textColor)
-        contentTv.text = uiChatMsgItemEntity.displaySpans
         contentTv.movementMethod = LinkMovementMethod.getInstance()
 
-        // 渲染表格卡片
-        renderTableCards(contentTvLayout, uiChatMsgItemEntity)
+        // 渲染文本和表格卡片（按原始顺序交叉排列）
+        renderTableCards(contentTvLayout, contentTv, textColor, uiChatMsgItemEntity)
 //        val preText =  PrecomputedTextCompat.create(
 //            uiChatMsgItemEntity.displaySpans,
 //            TextViewCompat.getTextMetricsParams(contentTv)
@@ -182,9 +182,11 @@ open class WKTextProvider : WKChatBaseProvider() {
 
     private fun renderTableCards(
         contentTvLayout: BubbleLayout,
+        contentTv: EmojiTextView,
+        textColor: Int,
         uiChatMsgItemEntity: WKUIChatMsgItemEntity
     ) {
-        // 清除旧的表格卡片（RecyclerView 复用）
+        // 清除旧的动态 View（表格卡片 + 额外文本段，RecyclerView 复用）
         val toRemove = mutableListOf<View>()
         for (i in 0 until contentTvLayout.childCount) {
             val child = contentTvLayout.getChildAt(i)
@@ -194,97 +196,176 @@ open class WKTextProvider : WKChatBaseProvider() {
         }
         toRemove.forEach { contentTvLayout.removeView(it) }
 
+        val displaySpans = uiChatMsgItemEntity.displaySpans
         val tableDataList = uiChatMsgItemEntity.tableDataList
-        if (tableDataList.isNullOrEmpty()) return
 
-        val dp = context.resources.displayMetrics.density
+        // 无表格：直接设置全部文本
+        if (tableDataList.isNullOrEmpty()) {
+            contentTv.text = displaySpans
+            return
+        }
 
-        for (tableData in tableDataList) {
-            val cardView = LayoutInflater.from(context)
-                .inflate(com.chat.base.R.layout.layout_markdown_table_card, contentTvLayout, false)
-            cardView.tag = TABLE_CARD_TAG
+        // 按占位符 \uFFFC 拆分文本为多段
+        val fullText = displaySpans.toString()
+        val placeholderPositions = mutableListOf<Int>()
+        var searchIdx = 0
+        while (searchIdx < fullText.length) {
+            val pos = fullText.indexOf(WKTablePlugin.TABLE_PLACEHOLDER, searchIdx)
+            if (pos < 0) break
+            placeholderPositions.add(pos)
+            searchIdx = pos + 1
+        }
 
-            val tableContent = cardView.findViewById<TableLayout>(com.chat.base.R.id.tableContent)
-            val tableScrollView = cardView.findViewById<HorizontalScrollView>(com.chat.base.R.id.tableScrollView)
-            val copyBtn = cardView.findViewById<ImageView>(com.chat.base.R.id.tableCopyBtn)
-
-            // 水平滑动表格时禁止 RecyclerView / ItemTouchHelper 拦截，避免误触回复手势
-            tableScrollView.setOnTouchListener { v, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                        v.parent.requestDisallowInterceptTouchEvent(true)
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        v.parent.requestDisallowInterceptTouchEvent(false)
-                    }
-                }
-                false
-            }
-
-            // 表格单元格样式参数
-            val cellPaddingH = (10 * dp).toInt()
-            val cellPaddingV = (8 * dp).toInt()
-            val textSize = 13f
-            val headerBgColor = Color.parseColor("#F0F0F0")
-            val evenRowBgColor = Color.parseColor("#FAFAFA")
-            val borderColor = Color.parseColor("#E8E8E8")
-            val headerTextColor = Color.parseColor("#333333")
-            val cellTextColor = Color.parseColor("#555555")
-
-            // 渲染表头
-            if (tableData.headers.isNotEmpty()) {
-                val headerRow = TableRow(context)
-                headerRow.setBackgroundColor(headerBgColor)
-                for ((colIdx, header) in tableData.headers.withIndex()) {
-                    val tv = createCellTextView(
-                        header, textSize, cellPaddingH, cellPaddingV,
-                        headerTextColor, true, tableData, colIdx, borderColor
+        // 占位符数量与表格数量不匹配时回退：全部文本 + 表格追加到末尾
+        if (placeholderPositions.size != tableDataList.size) {
+            contentTv.text = displaySpans
+            for (tableData in tableDataList) {
+                contentTvLayout.addView(
+                    buildTableCardView(contentTvLayout, tableData),
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
                     )
-                    headerRow.addView(tv)
-                }
-                tableContent.addView(headerRow)
-            }
-
-            // 渲染数据行（斑马纹）
-            for ((rowIdx, row) in tableData.rows.withIndex()) {
-                val tableRow = TableRow(context)
-                if (rowIdx % 2 == 1) {
-                    tableRow.setBackgroundColor(evenRowBgColor)
-                }
-                for ((colIdx, cell) in row.withIndex()) {
-                    val tv = createCellTextView(
-                        cell, textSize, cellPaddingH, cellPaddingV,
-                        cellTextColor, false, tableData, colIdx, borderColor
-                    )
-                    tableRow.addView(tv)
-                }
-                tableContent.addView(tableRow)
-            }
-
-            // 复制按钮
-            copyBtn.setOnClickListener {
-                val sb = StringBuilder()
-                if (tableData.headers.isNotEmpty()) {
-                    sb.appendLine(tableData.headers.joinToString("\t"))
-                }
-                for (row in tableData.rows) {
-                    sb.appendLine(row.joinToString("\t"))
-                }
-                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("table", sb.toString().trimEnd()))
-                WKToastUtils.getInstance().showToastNormal(
-                    context.getString(com.chat.base.R.string.str_table_copied)
                 )
             }
+            return
+        }
 
+        // 拆分出文本段：段0, 表格0, 段1, 表格1, ..., 段N
+        val segments = mutableListOf<CharSequence>()
+        var start = 0
+        for (pos in placeholderPositions) {
+            segments.add(displaySpans.subSequence(start, pos))
+            start = pos + WKTablePlugin.TABLE_PLACEHOLDER.length
+        }
+        segments.add(displaySpans.subSequence(start, displaySpans.length))
+
+        // 第一段文本设置到原有的 contentTv（保持 ChatTextTimeLayout 中的时间/状态布局）
+        contentTv.text = trimEdgeNewlines(segments[0])
+
+        // 如果第一段为空（消息以表格开头），隐藏 contentTv 避免留空白
+        if (segments[0].toString().isBlank()) {
+            contentTv.visibility = View.GONE
+        } else {
+            contentTv.visibility = View.VISIBLE
+        }
+
+        // 交叉添加：表格卡片 + 后续文本段
+        for (i in tableDataList.indices) {
+            // 表格卡片
             contentTvLayout.addView(
-                cardView,
+                buildTableCardView(contentTvLayout, tableDataList[i]),
                 LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
             )
+
+            // 后续文本段（i+1）
+            val nextSegment = segments.getOrNull(i + 1) ?: continue
+            val trimmed = trimEdgeNewlines(nextSegment)
+            if (trimmed.isBlank()) continue
+
+            val extraTv = EmojiTextView(context).apply {
+                text = trimmed
+                setTextColor(textColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, contentTv.textSize)
+                movementMethod = LinkMovementMethod.getInstance()
+                setLineSpacing(2f * context.resources.displayMetrics.density, 1f)
+                tag = TABLE_CARD_TAG
+            }
+            contentTvLayout.addView(
+                extraTv,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
         }
+    }
+
+    /** 去除 CharSequence 首尾的换行符，保留中间内容和 Span */
+    private fun trimEdgeNewlines(cs: CharSequence): CharSequence {
+        var s = 0
+        var e = cs.length
+        while (s < e && cs[s] == '\n') s++
+        while (e > s && cs[e - 1] == '\n') e--
+        return if (s == 0 && e == cs.length) cs else cs.subSequence(s, e)
+    }
+
+    /** 构建单个表格卡片 View */
+    private fun buildTableCardView(parent: ViewGroup, tableData: WKTableData): View {
+        val cardView = LayoutInflater.from(context)
+            .inflate(com.chat.base.R.layout.layout_markdown_table_card, parent, false)
+        cardView.tag = TABLE_CARD_TAG
+
+        val tableContent = cardView.findViewById<TableLayout>(com.chat.base.R.id.tableContent)
+        val tableScrollView = cardView.findViewById<HorizontalScrollView>(com.chat.base.R.id.tableScrollView)
+        val copyBtn = cardView.findViewById<ImageView>(com.chat.base.R.id.tableCopyBtn)
+
+        // 水平滑动表格时禁止 RecyclerView / ItemTouchHelper 拦截，避免误触回复手势
+        tableScrollView.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    v.parent.requestDisallowInterceptTouchEvent(true)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.parent.requestDisallowInterceptTouchEvent(false)
+                }
+            }
+            false
+        }
+
+        val dp = context.resources.displayMetrics.density
+        val cellPaddingH = (10 * dp).toInt()
+        val cellPaddingV = (8 * dp).toInt()
+        val textSize = 13f
+        val headerBgColor = Color.parseColor("#F0F0F0")
+        val evenRowBgColor = Color.parseColor("#FAFAFA")
+        val borderColor = Color.parseColor("#E8E8E8")
+        val headerTextColor = Color.parseColor("#333333")
+        val cellTextColor = Color.parseColor("#555555")
+
+        if (tableData.headers.isNotEmpty()) {
+            val headerRow = TableRow(context)
+            headerRow.setBackgroundColor(headerBgColor)
+            for ((colIdx, header) in tableData.headers.withIndex()) {
+                headerRow.addView(
+                    createCellTextView(header, textSize, cellPaddingH, cellPaddingV,
+                        headerTextColor, true, tableData, colIdx, borderColor)
+                )
+            }
+            tableContent.addView(headerRow)
+        }
+
+        for ((rowIdx, row) in tableData.rows.withIndex()) {
+            val tableRow = TableRow(context)
+            if (rowIdx % 2 == 1) tableRow.setBackgroundColor(evenRowBgColor)
+            for ((colIdx, cell) in row.withIndex()) {
+                tableRow.addView(
+                    createCellTextView(cell, textSize, cellPaddingH, cellPaddingV,
+                        cellTextColor, false, tableData, colIdx, borderColor)
+                )
+            }
+            tableContent.addView(tableRow)
+        }
+
+        copyBtn.setOnClickListener {
+            val sb = StringBuilder()
+            if (tableData.headers.isNotEmpty()) {
+                sb.appendLine(tableData.headers.joinToString("\t"))
+            }
+            for (row in tableData.rows) {
+                sb.appendLine(row.joinToString("\t"))
+            }
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("table", sb.toString().trimEnd()))
+            WKToastUtils.getInstance().showToastNormal(
+                context.getString(com.chat.base.R.string.str_table_copied)
+            )
+        }
+
+        return cardView
     }
 
     private fun createCellTextView(

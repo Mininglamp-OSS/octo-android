@@ -402,9 +402,10 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying != null && list.get(i).pying.toUpperCase().startsWith(letter.toUpperCase())) {
+                    // 先停止正在进行的惯性滚动，再瞬间定位
+                    wkVBinding.recyclerView.stopScroll();
                     LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
                     if (lm != null) {
-                        // 直接定位，不走动画，和微信一样瞬间跳转
                         lm.scrollToPositionWithOffset(i + friendAdapter.getHeaderLayoutCount(), 0);
                     }
                     return;

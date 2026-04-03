@@ -36,6 +36,16 @@
                 android:textColor="@color/colorDark"
                 android:textSize="16sp" />
 
+            <TextView
+                android:id="@+id/countValueTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="4dp"
+                android:textColor="#999999"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
             <com.chat.base.ui.components.CounterView
                 android:id="@+id/msgCountTv"
                 android:layout_width="50dp"

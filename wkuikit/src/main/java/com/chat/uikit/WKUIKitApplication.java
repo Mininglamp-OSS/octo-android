@@ -100,11 +100,8 @@ import com.chat.uikit.chat.search.image.SearchWithImgActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.MyGroupsListActivity;
 import com.chat.uikit.contacts.NewFriendsActivity;
-import com.chat.uikit.contacts.BotStoreActivity;
 import com.chat.uikit.contacts.SpaceBotsListActivity;
-import com.chat.uikit.contacts.SpaceMembersListActivity;
 import com.chat.uikit.enity.SensitiveWords;
-import com.chat.uikit.group.SavedGroupsActivity;
 import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.space.SpaceEntity;
@@ -282,20 +279,12 @@ public class WKUIKitApplication {
         //添加通讯录
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_friends", EndpointCategory.mailList, 100,
                 object -> new ContactsMenu("friend", R.mipmap.icon_new_friend, mContext.get().getString(R.string.new_friends), NewFriendsActivity.class));
+        // 群聊
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_groups", EndpointCategory.mailList, 90,
-                object -> new ContactsMenu("group", R.mipmap.icon_groups, mContext.get().getString(R.string.saved_groups), SavedGroupsActivity.class));
-        // 组织内联系人
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_space_members", EndpointCategory.mailList, 85,
-                object -> new ContactsMenu("space_members", R.mipmap.icon_space_members, mContext.get().getString(R.string.contacts_section_members), SpaceMembersListActivity.class));
-        // Bot
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_space_bots", EndpointCategory.mailList, 80,
-                object -> new ContactsMenu("space_bots", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_bots), SpaceBotsListActivity.class));
-        // AI 广场
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_bot_store", EndpointCategory.mailList, 77,
-                object -> new ContactsMenu("bot_store", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_bot_store), BotStoreActivity.class));
-        // 我的群组
-        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_my_groups", EndpointCategory.mailList, 75,
-                object -> new ContactsMenu("my_groups", R.mipmap.icon_my_groups, mContext.get().getString(R.string.contacts_section_groups), MyGroupsListActivity.class));
+                object -> new ContactsMenu("group_chat", R.mipmap.icon_my_groups, mContext.get().getString(R.string.contacts_section_group_chat), MyGroupsListActivity.class));
+        // 已添加AI
+        EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_added_ai", EndpointCategory.mailList, 80,
+                object -> new ContactsMenu("added_ai", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_added_ai), SpaceBotsListActivity.class));
 
         // 添加聊天工具栏菜单语音
         EndpointManager.getInstance().setMethod(EndpointCategory.wkChatToolBar + "_voice", EndpointCategory.wkChatToolBar, 97, object -> {

@@ -1,6 +1,7 @@
 package com.chat.scan;
 
 import android.content.Intent;
+import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -8,7 +9,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKApiConfig;
-import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
@@ -18,8 +18,6 @@ import com.chat.base.net.IRequestResultListener;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.scan.entity.ScanResult;
-import com.xinbida.wukongim.WKIM;
-import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import org.json.JSONObject;
@@ -106,18 +104,18 @@ class ScanUtils extends WKBaseModel {
             if (type.equals("group")) {
                 if (dataJson.has("group_no")) {
                     String group_no = dataJson.optString("group_no");
-                    WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(group_no, WKChannelType.GROUP, WKConfig.getInstance().getUid());
-                    if (mChannelMember != null) {
-                        if (mChannelMember.isDeleted == 0) {
-                            ChatViewMenu chatViewMenu = new ChatViewMenu(activity, group_no, WKChannelType.GROUP, 0, true);
-                            EndpointManager.getInstance().invoke(EndpointSID.chatView, chatViewMenu);
-                            iHandleScanResult.dismissView();
-                        } else {
-                            WKToastUtils.getInstance().showToast(activity
-                                    .getString(R.string.scan_remove_group));
-                        }
+                    String authCode = dataJson.optString("auth_code");
+                    if (!TextUtils.isEmpty(authCode)) {
+                        // 后端返回了 auth_code，说明用户不在群内，走加群流程
+                        String groupName = dataJson.optString("name", "");
+                        String avatar = dataJson.optString("avatar", "");
+                        int memberCount = dataJson.optInt("member_count", 0);
+                        openJoinGroupPage(activity, group_no, authCode, groupName, avatar, memberCount);
                     } else {
-                        // TODO: 2020-04-19  加入群聊
+                        // 没有 auth_code，用户已在群内，直接打开群聊
+                        ChatViewMenu chatViewMenu = new ChatViewMenu(activity, group_no, WKChannelType.GROUP, 0, true);
+                        EndpointManager.getInstance().invoke(EndpointSID.chatView, chatViewMenu);
+                        iHandleScanResult.dismissView();
                     }
                 }
 
@@ -137,5 +135,16 @@ class ScanUtils extends WKBaseModel {
                 }
             }
         }
+    }
+
+    private void openJoinGroupPage(AppCompatActivity activity, String groupNo, String authCode, String groupName, String avatar, int memberCount) {
+        Intent intent = new Intent(activity, ScanJoinGroupActivity.class);
+        intent.putExtra("group_no", groupNo);
+        intent.putExtra("auth_code", authCode);
+        intent.putExtra("group_name", groupName);
+        intent.putExtra("avatar", avatar);
+        intent.putExtra("member_count", memberCount);
+        activity.startActivity(intent);
+        iHandleScanResult.dismissView();
     }
 }

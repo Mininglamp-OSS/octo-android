@@ -22,4 +22,8 @@
     <color name="titleBarIcon">#FFFFFF</color>
     <color name="dialogText">#fbf9fe</color>
     <color name="tip_message_cell_bg">#CC49494A</color>
+    <!--markdown code block colors-->
+    <color name="code_block_bg">#1AFFFFFF</color>
+    <color name="code_text_color">#E0E0E0</color>
+    <color name="blockquote_color">#555555</color>
 </resources>

@@ -10,6 +10,7 @@ public class ContactsMenu extends BaseEndpoint {
     public boolean showRedDot;
     public String uid;
     public String sid;
+    public String countValue;
     public Class<?> targetActivity;
 
     public ContactsMenu(String sid, int imgResourceID, String text, IMenuClick iMenuClick) {

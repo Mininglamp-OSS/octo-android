@@ -176,6 +176,7 @@ public class SpaceMembersListActivity extends WKBaseActivity<ActContactsListLayo
         if (WKReader.isNotEmpty(list)) {
             for (int i = 0, size = list.size(); i < size; i++) {
                 if (list.get(i).pying != null && list.get(i).pying.toUpperCase().startsWith(letter.toUpperCase())) {
+                    wkVBinding.recyclerView.stopScroll();
                     LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
                     if (lm != null) {
                         lm.scrollToPositionWithOffset(i, 0);

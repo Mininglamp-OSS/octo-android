@@ -15,6 +15,13 @@ class ContactsHeaderAdapter :
     override fun convert(holder: BaseViewHolder, item: ContactsMenu) {
         holder.setImageResource(R.id.imageView, item.imgResourceID)
         holder.setText(R.id.nameTv, item.text)
+        val countValueTv = holder.getView<android.widget.TextView>(R.id.countValueTv)
+        if (!item.countValue.isNullOrEmpty()) {
+            countValueTv.text = item.countValue
+            countValueTv.visibility = View.VISIBLE
+        } else {
+            countValueTv.visibility = View.GONE
+        }
         val msgCountTv: CounterView = holder.getView(R.id.msgCountTv)
         msgCountTv.setColors(R.color.white, R.color.reminderColor)
         msgCountTv.setCount(item.badgeNum, true)

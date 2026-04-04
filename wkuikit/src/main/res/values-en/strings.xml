@@ -298,5 +298,11 @@
     <string name="uikit_search_for_date">Date</string>
     <string name="uikit_go_to_chat_item">Go to chat</string>
     <string name="uikit_search_for_image">Image</string>
+    <string name="contacts_section_group_chat">Groups</string>
+    <string name="contacts_section_added_ai">Added AI</string>
+    <string name="contacts_all">All</string>
+    <string name="contacts_ai">AI</string>
+    <string name="contacts_human">Human</string>
+    <string name="contacts_all_contacts">All Contacts</string>
 </resources>
 

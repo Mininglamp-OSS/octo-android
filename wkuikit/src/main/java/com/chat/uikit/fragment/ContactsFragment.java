@@ -2,7 +2,9 @@ package com.chat.uikit.fragment;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -40,7 +42,8 @@ import com.chat.uikit.contacts.FriendUIEntity;
 import com.chat.uikit.contacts.StickyHeaderDecoration;
 import com.chat.uikit.databinding.FragContactsLayoutBinding;
 import com.chat.uikit.message.MsgModel;
-import com.chat.uikit.search.SearchAllActivity;
+import com.chat.uikit.robot.entity.BotStoreEntity;
+import com.chat.uikit.robot.service.WKRobotModel;
 import com.chat.uikit.search.remote.GlobalActivity;
 import com.chat.uikit.space.SpaceEntity;
 import com.chat.uikit.space.SpaceModel;
@@ -54,7 +57,9 @@ import com.xinbida.wukongim.entity.WKChannelType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Observable;
@@ -75,6 +80,19 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     private boolean isContactsLoaded = false;
     private String lastLoadedSpaceId = null;
 
+    // 筛选相关
+    private static final int FILTER_ALL = 0;
+    private static final int FILTER_AI = 1;
+    private static final int FILTER_HUMAN = 2;
+    private int contactsFilter = FILTER_ALL;
+    // 人类联系人（排序后）
+    private List<FriendUIEntity> humanContactsList = new ArrayList<>();
+    // AI 广场全部机器人（排序后）
+    private List<FriendUIEntity> allBotsList = new ArrayList<>();
+    // 已添加AI数量（Space成员中 robot==1 的数量）
+    private int addedAiCount = 0;
+    private TextView filterTitleTv;
+    private final TextView[] filterBtns = new TextView[3];
 
     @Override
     protected boolean isShowBackLayout() {
@@ -113,6 +131,8 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
             View orgView = (View) orgViewObject;
             friendAdapter.addHeaderView(orgView);
         }
+        // 添加筛选区域 header
+        friendAdapter.addHeaderView(buildFilterHeaderView());
         friendAdapter.addFooterView(getFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
         // 关闭 item 动画，避免滑动/刷新时的闪烁
@@ -201,7 +221,6 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 }).observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io()).subscribe(new Observer<>() {
                     @Override
                     public void onSubscribe(@NotNull Disposable d) {
-
                     }
 
                     @Override
@@ -211,15 +230,12 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
 
                     @Override
                     public void onError(@NotNull Throwable e) {
-
                     }
 
                     @Override
                     public void onComplete() {
-
                     }
                 });
-
             }
         });
         wkVBinding.searchIv.setOnClickListener(view -> {
@@ -290,9 +306,11 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                     channel.robot = member.robot;
                     list.add(new FriendUIEntity(channel));
                 }
-                sortAndDisplay(list);
+                onContactsLoaded(list);
                 lastLoadedSpaceId = spaceId;
                 isContactsLoaded = true;
+                // 同时加载 AI 广场全部机器人
+                loadAllBots(spaceId);
             }
 
             @Override
@@ -308,15 +326,72 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         for (int i = 0, size = allList.size(); i < size; i++) {
             list.add(new FriendUIEntity(allList.get(i)));
         }
-        sortAndDisplay(list);
+        onContactsLoaded(list);
         lastLoadedSpaceId = null;
         isContactsLoaded = true;
+        // 加载 AI 广场全部机器人
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId)) {
+            loadAllBots(spaceId);
+        }
     }
 
-    private void sortAndDisplay(List<FriendUIEntity> list) {
-        List<FriendUIEntity> otherList = new ArrayList<>();
-        List<FriendUIEntity> letterList = new ArrayList<>();
-        List<FriendUIEntity> numList = new ArrayList<>();
+    /**
+     * 联系人数据加载完成后，排序并拆分为人类列表
+     */
+    private void onContactsLoaded(List<FriendUIEntity> list) {
+        assignPying(list);
+        PyingUtils.getInstance().sortListBasic(list);
+
+        humanContactsList = new ArrayList<>();
+        addedAiCount = 0;
+        for (FriendUIEntity entity : sortByCategory(list)) {
+            if (entity.channel.robot == 1) {
+                addedAiCount++;
+            } else {
+                humanContactsList.add(entity);
+            }
+        }
+
+        updateHeaderCounts();
+        applyFilterAndDisplay();
+    }
+
+    /**
+     * 从 AI 广场加载全部机器人
+     */
+    private void loadAllBots(String spaceId) {
+        WKRobotModel.getInstance().getSpaceBots(spaceId, new WKRobotModel.ISpaceBotsListener() {
+            @Override
+            public void onResult(List<BotStoreEntity> result) {
+                List<FriendUIEntity> botList = new ArrayList<>();
+                if (WKReader.isNotEmpty(result)) {
+                    for (BotStoreEntity bot : result) {
+                        WKChannel channel = new WKChannel(bot.uid, WKChannelType.PERSONAL);
+                        channel.channelName = bot.name;
+                        channel.robot = 1;
+                        botList.add(new FriendUIEntity(channel));
+                    }
+                }
+                assignPying(botList);
+                PyingUtils.getInstance().sortListBasic(botList);
+                allBotsList = sortByCategory(botList);
+
+                updateHeaderCounts();
+                applyFilterAndDisplay();
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                // 加载失败保持空列表
+            }
+        });
+    }
+
+    /**
+     * 为列表中每个 entity 计算拼音
+     */
+    private void assignPying(List<FriendUIEntity> list) {
         for (int i = 0, size = list.size(); i < size; i++) {
             String showName = list.get(i).channel.channelRemark;
             if (TextUtils.isEmpty(showName))
@@ -338,10 +413,17 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                     list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
         }
-        PyingUtils.getInstance().sortListBasic(list);
+    }
 
+    /**
+     * 将列表按 字母 -> 数字 -> 其他 顺序排列
+     */
+    private List<FriendUIEntity> sortByCategory(List<FriendUIEntity> list) {
+        List<FriendUIEntity> letterList = new ArrayList<>();
+        List<FriendUIEntity> numList = new ArrayList<>();
+        List<FriendUIEntity> otherList = new ArrayList<>();
         for (int i = 0, size = list.size(); i < size; i++) {
-            if (TextUtils.isEmpty(list.get(i).pying)){
+            if (TextUtils.isEmpty(list.get(i).pying)) {
                 otherList.add(list.get(i));
                 continue;
             }
@@ -351,17 +433,161 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 numList.add(list.get(i));
             } else otherList.add(list.get(i));
         }
-        List<FriendUIEntity> tempList = new ArrayList<>();
-        tempList.addAll(letterList);
-        tempList.addAll(numList);
-        tempList.addAll(otherList);
+        List<FriendUIEntity> result = new ArrayList<>();
+        result.addAll(letterList);
+        result.addAll(numList);
+        result.addAll(otherList);
+        return result;
+    }
 
-        // 数据未变化时跳过刷新，保持滚动位置
-        if (isDataSame(friendAdapter.getData(), tempList)) return;
+    /**
+     * 根据当前 contactsFilter 选择对应数据源并显示
+     */
+    private void applyFilterAndDisplay() {
+        List<FriendUIEntity> displayed;
+        if (contactsFilter == FILTER_AI) {
+            displayed = allBotsList;
+        } else if (contactsFilter == FILTER_HUMAN) {
+            displayed = humanContactsList;
+        } else {
+            // 全部 = 人类 + AI（去重）
+            displayed = mergeAllContacts();
+        }
 
-        friendAdapter.setList(tempList);
+        if (!isDataSame(friendAdapter.getData(), displayed)) {
+            friendAdapter.setList(displayed);
+        }
         if (isAdded()) {
-            allContactsCountTv.setText(String.format(getString(R.string.contacts_num), tempList.size()));
+            allContactsCountTv.setText(String.format(getString(R.string.contacts_num), displayed.size()));
+            updateFilterUI();
+        }
+    }
+
+    /**
+     * 合并人类联系人和全部机器人，按 channelID 去重后重新排序
+     */
+    private List<FriendUIEntity> mergeAllContacts() {
+        Set<String> seen = new HashSet<>();
+        List<FriendUIEntity> merged = new ArrayList<>();
+        for (FriendUIEntity entity : humanContactsList) {
+            if (seen.add(entity.channel.channelID)) {
+                merged.add(entity);
+            }
+        }
+        for (FriendUIEntity entity : allBotsList) {
+            if (seen.add(entity.channel.channelID)) {
+                merged.add(entity);
+            }
+        }
+        PyingUtils.getInstance().sortListBasic(merged);
+        return sortByCategory(merged);
+    }
+
+    /**
+     * 更新 header 中群聊和已添加AI的数量
+     */
+    private void updateHeaderCounts() {
+        if (!isAdded()) return;
+
+        int groupCount = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP).size();
+
+        List<ContactsMenu> menuList = EndpointManager.getInstance().invokes(EndpointCategory.mailList, getActivity());
+        for (ContactsMenu menu : menuList) {
+            if ("group_chat".equals(menu.sid)) {
+                menu.countValue = "(" + groupCount + ")";
+            } else if ("added_ai".equals(menu.sid)) {
+                menu.countValue = "(" + addedAiCount + ")";
+            } else if ("friend".equals(menu.sid)) {
+                menu.badgeNum = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
+            }
+        }
+        contactsHeaderAdapter.setList(menuList);
+        lastFriendBadgeNum = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
+    }
+
+    /**
+     * 构建筛选区域 View：标题 + 3个筛选按钮
+     */
+    private View buildFilterHeaderView() {
+        LinearLayout container = new LinearLayout(requireContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.homeColor));
+        int hPadding = AndroidUtilities.dp(15);
+        container.setPadding(hPadding, AndroidUtilities.dp(16), hPadding, AndroidUtilities.dp(8));
+
+        // 标题行: "全部联系人  (N)"
+        filterTitleTv = new TextView(requireContext());
+        filterTitleTv.setTextSize(15);
+        filterTitleTv.setTextColor(Color.parseColor("#999999"));
+        filterTitleTv.setTypeface(Typeface.DEFAULT_BOLD);
+        container.addView(filterTitleTv, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        // 筛选按钮行
+        LinearLayout btnRow = new LinearLayout(requireContext());
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams btnRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnRowParams.topMargin = AndroidUtilities.dp(10);
+        container.addView(btnRow, btnRowParams);
+
+        for (int i = 0; i < 3; i++) {
+            TextView btn = new TextView(requireContext());
+            btn.setTextSize(13);
+            btn.setTypeface(Typeface.DEFAULT_BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(6),
+                    AndroidUtilities.dp(14), AndroidUtilities.dp(6));
+            final int filterIndex = i;
+            btn.setOnClickListener(v -> {
+                if (contactsFilter != filterIndex) {
+                    contactsFilter = filterIndex;
+                    applyFilterAndDisplay();
+                }
+            });
+            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            if (i > 0) btnParams.leftMargin = AndroidUtilities.dp(8);
+            btnRow.addView(btn, btnParams);
+            filterBtns[i] = btn;
+        }
+
+        return container;
+    }
+
+    /**
+     * 更新筛选按钮的文案和选中状态
+     */
+    private void updateFilterUI() {
+        int aiCount = allBotsList.size();
+        int humanCount = humanContactsList.size();
+        int totalCount = mergeAllContacts().size();
+
+        if (filterTitleTv != null) {
+            filterTitleTv.setText(getString(R.string.contacts_all_contacts) + "  (" + totalCount + ")");
+        }
+
+        String[] labels = {
+                getString(R.string.contacts_all) + " " + totalCount,
+                getString(R.string.contacts_ai) + " " + aiCount,
+                getString(R.string.contacts_human) + " " + humanCount
+        };
+
+        int themeColor = Theme.colorAccount;
+        for (int i = 0; i < 3; i++) {
+            if (filterBtns[i] == null) continue;
+            filterBtns[i].setText(labels[i]);
+
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(AndroidUtilities.dp(15));
+            bg.setStroke(AndroidUtilities.dp(1), contactsFilter == i ? themeColor : Color.parseColor("#D9D9D9"));
+            if (contactsFilter == i) {
+                bg.setColor(Color.argb(25, Color.red(themeColor), Color.green(themeColor), Color.blue(themeColor)));
+                filterBtns[i].setTextColor(themeColor);
+            } else {
+                bg.setColor(Color.TRANSPARENT);
+                filterBtns[i].setTextColor(Color.parseColor("#999999"));
+            }
+            filterBtns[i].setBackground(bg);
         }
     }
 

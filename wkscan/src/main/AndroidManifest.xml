@@ -4,5 +4,6 @@
     <application>
         <activity android:name=".WKScanActivity" />
         <activity android:name=".WKScanOtherResultActivity" />
+        <activity android:name=".ScanJoinGroupActivity" />
     </application>
 </manifest>

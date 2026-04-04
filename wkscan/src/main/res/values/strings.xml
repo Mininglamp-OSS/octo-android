@@ -5,4 +5,11 @@
     <string name="album">相册</string>
     <string name="tips_scan_code">扫二维码 / 条形码</string>
     <string name="scan_remove_group">您已被移除该群</string>
+    <string name="scan_join_group_title">加入群聊</string>
+    <string name="scan_join_group_msg">是否加入该群聊？</string>
+    <string name="scan_join_group_confirm">加入</string>
+    <string name="scan_join_group_success">已成功加入群聊</string>
+    <string name="scan_join_group_confirm_full">加入群聊</string>
+    <string name="scan_join_group_member_count">%d位成员</string>
+    <string name="scan_join_group_info">群聊信息</string>
 </resources>

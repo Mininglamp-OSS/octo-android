@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor">
+
+    <!-- ViewPager for pages -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="45dp" />
+
+    <!-- Bottom tab bar -->
+    <LinearLayout
+        android:id="@+id/tabContainer"
+        android:layout_width="match_parent"
+        android:layout_height="25dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="20dp"
+        android:gravity="center"
+        android:orientation="horizontal" />
+
+    <!-- Dot indicator -->
+    <View
+        android:id="@+id/dotIndicator"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="12dp" />
+
+</FrameLayout>

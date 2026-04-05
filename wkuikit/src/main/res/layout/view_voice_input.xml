@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Waveform container (visible during recording) -->
+    <LinearLayout
+        android:id="@+id/waveContainer"
+        android:layout_width="180dp"
+        android:layout_height="36dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone" />
+
+    <!-- Loading spinner (visible during transcribing) -->
+    <ProgressBar
+        android:id="@+id/spinner"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="14dp"
+        android:visibility="gone" />
+
+    <!-- Status label -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="50dp"
+        android:gravity="center"
+        android:text="@string/click_to_speak"
+        android:textColor="#999999"
+        android:textSize="15sp" />
+
+    <!-- Mic button -->
+    <ImageView
+        android:id="@+id/btnMic"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:layout_below="@id/tvStatus"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="6dp"
+        android:padding="15dp"
+        android:scaleType="fitCenter"
+        android:src="@mipmap/ic_mic_idle" />
+
+    <!-- Cancel button (below mic, visible during recording) -->
+    <TextView
+        android:id="@+id/btnCancel"
+        android:layout_width="80dp"
+        android:layout_height="32dp"
+        android:layout_below="@id/btnMic"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/voice_cancel"
+        android:textColor="#FF6B6B"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+</RelativeLayout>

@@ -1,6 +1,7 @@
 package com.chat.base.markdown
 
 import android.content.Context
+import android.content.res.Configuration
 import android.text.Spanned
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
@@ -8,6 +9,7 @@ import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
+import io.noties.markwon.syntax.Prism4jThemeDarkula
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
 import org.commonmark.node.SoftLineBreak
@@ -17,16 +19,41 @@ object WKMarkwonProvider {
     @Volatile
     private var markwon: Markwon? = null
 
+    @Volatile
+    private var cachedIsDarkMode: Boolean? = null
+
+    private fun isDarkMode(context: Context): Boolean {
+        val nightMode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return nightMode == Configuration.UI_MODE_NIGHT_YES
+    }
+
     private fun getInstance(context: Context): Markwon {
-        return markwon ?: synchronized(this) {
-            markwon ?: createMarkwon(context.applicationContext).also { markwon = it }
+        val currentDarkMode = isDarkMode(context)
+        val cached = markwon
+        if (cached != null && cachedIsDarkMode == currentDarkMode) {
+            return cached
+        }
+        synchronized(this) {
+            val currentDarkModeSync = isDarkMode(context)
+            val cachedSync = markwon
+            if (cachedSync != null && cachedIsDarkMode == currentDarkModeSync) {
+                return cachedSync
+            }
+            return createMarkwon(context.applicationContext, currentDarkModeSync).also {
+                markwon = it
+                cachedIsDarkMode = currentDarkModeSync
+            }
         }
     }
 
-    private fun createMarkwon(context: Context): Markwon {
+    private fun createMarkwon(context: Context, isDark: Boolean): Markwon {
         val prism4j = WKPrism4jFactory.create()
         val codeBlockPlugin = WKCodeBlockPlugin.create(context)
-        val prism4jTheme = Prism4jThemeDefault.create(codeBlockPlugin.codeBlockBackgroundColor)
+        val prism4jTheme = if (isDark) {
+            Prism4jThemeDarkula.create(codeBlockPlugin.codeBlockBackgroundColor)
+        } else {
+            Prism4jThemeDefault.create(codeBlockPlugin.codeBlockBackgroundColor)
+        }
 
         // 将单换行（soft break）渲染为实际换行，而非 CommonMark 默认的空格合并
         val softBreakPlugin = object : AbstractMarkwonPlugin() {

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Waveform + timer area -->
+    <LinearLayout
+        android:id="@+id/levelContentView"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="5dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0:00"
+            android:textColor="#777777"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:id="@+id/waveBarContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="30dp"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
+    </LinearLayout>
+
+    <!-- Status text -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:text="@string/speech_to_text"
+        android:textColor="#777777"
+        android:textSize="16sp" />
+
+    <!-- Mic button: background + icon layered -->
+    <FrameLayout
+        android:id="@+id/micButtonContainer"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_below="@id/tvStatus"
+        android:layout_centerHorizontal="true">
+
+        <!-- Background circle (normal/pressed) -->
+        <ImageView
+            android:id="@+id/btnMicBg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:src="@mipmap/aio_voice_button_nor" />
+
+        <!-- Voice line overlay (visible during recording) -->
+        <ImageView
+            android:id="@+id/ivVoiceLine"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:src="@mipmap/aio_voice_line"
+            android:visibility="gone" />
+
+        <!-- Mic icon on top -->
+        <ImageView
+            android:id="@+id/btnMicIcon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center"
+            android:scaleType="fitCenter"
+            android:src="@mipmap/aio_voice_button_icon" />
+    </FrameLayout>
+
+    <!-- Cancel button (right side) -->
+    <ImageView
+        android:id="@+id/btnCancel"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_alignTop="@id/micButtonContainer"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="35dp"
+        android:scaleType="fitCenter"
+        android:src="@mipmap/aio_voice_operate_nor"
+        android:visibility="gone" />
+
+</RelativeLayout>

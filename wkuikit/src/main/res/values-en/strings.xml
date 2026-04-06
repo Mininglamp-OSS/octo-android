@@ -304,5 +304,19 @@
     <string name="contacts_ai">AI</string>
     <string name="contacts_human">Human</string>
     <string name="contacts_all_contacts">All Contacts</string>
+
+    <string name="voice_input">Voice Input</string>
+    <string name="speech_to_text">Speech to Text</string>
+    <string name="talk_back">Talk Back</string>
+    <string name="click_to_speak">Tap to speak</string>
+    <string name="click_to_end">Tap to end</string>
+    <string name="recognizing">Auto input after recognition</string>
+    <string name="speech_too_short">Too short</string>
+    <string name="speech_recognize_failed">Recognition failed, please retry</string>
+    <string name="speech_not_recognized">No speech detected</string>
+    <string name="mic_permission_required">Microphone permission required</string>
+    <string name="speech_permission_required">Please allow speech recognition in Settings</string>
+    <string name="speech_not_available">Speech recognition unavailable</string>
+    <string name="voice_cancel">Cancel</string>
 </resources>
 

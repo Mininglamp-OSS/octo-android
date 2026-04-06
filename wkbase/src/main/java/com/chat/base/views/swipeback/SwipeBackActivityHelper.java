@@ -1,6 +1,7 @@
 package com.chat.base.views.swipeback;
 
 import android.app.Activity;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
@@ -29,17 +30,10 @@ public class SwipeBackActivityHelper {
         mSwipeBackLayout.addSwipeListener(new SwipeBackLayout.SwipeListener() {
             @Override
             public void onScrollStateChange(int state, float scrollPercent) {
-                if (state == SwipeBackLayout.STATE_IDLE && isTranslucent) {
-                    restoreOpaque();
-                }
             }
 
             @Override
             public void onEdgeTouch(int edgeFlag) {
-                if (!isTranslucent) {
-                    isTranslucent = true;
-                    Utils.convertActivityToTranslucent(mActivity);
-                }
             }
 
             @Override
@@ -49,23 +43,22 @@ public class SwipeBackActivityHelper {
         });
     }
 
-    private void restoreOpaque() {
-        isTranslucent = false;
-        Utils.convertActivityFromTranslucent(mActivity);
-    }
-
-    /**
-     * 在 onResume 时调用，强制恢复系统级不透明状态
-     * 防止 convertFromTranslucent 反射失败导致的累积透明
-     */
     public void ensureOpaque() {
-        if (isTranslucent) {
-            restoreOpaque();
-        }
     }
 
     public void onPostCreate() {
         mSwipeBackLayout.attachToActivity(mActivity);
+
+        // Set background AFTER attachToActivity so it's applied inside decor.post(),
+        // after decorChild is moved into SwipeBackLayout (avoids one-frame cover on enter)
+        mSwipeBackLayout.post(() -> {
+            int bgColor = 0xFFFFFFFF;
+            TypedArray a = mActivity.getTheme().obtainStyledAttributes(
+                    new int[]{android.R.attr.colorBackground});
+            bgColor = a.getColor(0, bgColor);
+            a.recycle();
+            mSwipeBackLayout.setBackgroundColor(bgColor);
+        });
     }
 
     public <T extends View> T findViewById(int id) {

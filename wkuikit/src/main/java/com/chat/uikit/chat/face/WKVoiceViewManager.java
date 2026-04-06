@@ -1,37 +1,26 @@
 package com.chat.uikit.chat.face;
 
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.EditText;
 
 import com.chat.base.msg.IConversationContext;
-import com.chat.base.ui.Theme;
+import com.chat.base.net.voice.WKVoiceInputService;
 import com.chat.base.utils.WKCommonUtils;
-import com.chat.base.utils.StringUtils;
-import com.chat.uikit.WKUIKitApplication;
-import com.chat.uikit.R;
 import com.chat.uikit.view.voice.AudioRecordManager;
-import com.chat.uikit.view.voice.LineWaveVoiceView;
-import com.chat.uikit.view.voice.RecordAudioView;
+import com.chat.uikit.view.voice.SpeechToTextView;
+import com.chat.uikit.view.voice.TalkBackView;
+import com.chat.uikit.view.voice.VoiceInputView;
+import com.chat.uikit.view.voice.WKVoicePanelView;
 import com.xinbida.wukongim.msgmodel.WKVoiceContent;
 
-import java.io.File;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.UUID;
+import org.jetbrains.annotations.NotNull;
 
 /**
- * 1/1/21 9:39 PM
- * 语音管理类
+ * 语音管理类 - 三 Tab 语音面板
  */
 public class WKVoiceViewManager {
 
     private WKVoiceViewManager() {
-
     }
 
     private static class VoiceViewManagerBinder {
@@ -42,144 +31,130 @@ public class WKVoiceViewManager {
         return VoiceViewManagerBinder.manager;
     }
 
-    private String[] recordStatusDescription;
-    private Handler mainHandler;
-    private long recordTotalTime = 0;
-    private final long maxRecordTime = 60000;
-    private final long minRecordTime = 1000;
-    private Timer timer;
-    private TimerTask timerTask;
-    private String audioFileName;
-    private RecordAudioView recordAudioView;
-    private TextView tvRecordTips;
-    private LinearLayout layoutCancelView;
-    private LineWaveVoiceView mHorVoiceView;
+    private WKVoicePanelView panelView;
 
     public View getVoiceView(IConversationContext iConversationContext) {
+        panelView = new WKVoicePanelView(iConversationContext.getChatActivity());
 
-        View view = LayoutInflater.from(iConversationContext.getChatActivity()).inflate(R.layout.frag_recording_voice_layout, null);
-        recordAudioView = view.findViewById(R.id.ivRecording);
-        tvRecordTips = view.findViewById(R.id.record_tips);
-        layoutCancelView = view.findViewById(R.id.pp_layout_cancel);
-        mHorVoiceView = view.findViewById(R.id.waveVoiceView);
-        mHorVoiceView.setTextColor(Theme.colorAccount);
-        mHorVoiceView.setLineColor(Theme.colorAccount);
-        recordAudioView.setRecordAudioListener(new RecordAudioView.IRecordAudioListener() {
-            @Override
-            public boolean onRecordPrepare() {
-                return true;
+        // Fetch voice config to determine if voice input tab should be shown
+        WKVoiceInputService.getInstance().fetchConfig((config, error) -> {
+            if (config != null && config.getEnabled()) {
+                panelView.setVoiceInputEnabled(true);
+            } else {
+                panelView.setVoiceInputEnabled(false);
             }
-
-            @Override
-            public String onRecordStart() {
-                recordTotalTime = 0;
-                initTimer();
-                timer.schedule(timerTask, 0, 1000);
-                audioFileName = WKUIKitApplication.getInstance().getContext().getExternalCacheDir() + File.separator + createAudioName();
-                mHorVoiceView.startRecord();
-                return audioFileName;
-            }
-
-            @Override
-            public boolean onRecordStop() {
-                Log.e("录制的总时长：", recordTotalTime + "");
-                if (recordTotalTime >= minRecordTime) {
-                    timer.cancel();
-                    // TODO: 2020-06-15  录制完成
-//                    int duration = AudioPlaybackManager.getDuration(audioFileName);
-                    int time = (int) recordTotalTime / 1000;
-                    if (time <= 0) return false;
-                    WKVoiceContent audioMsgModel = new WKVoiceContent(audioFileName, time);
-                    byte[] dbs = AudioRecordManager.getInstance().getDbs();
-                    audioMsgModel.waveform = WKCommonUtils.getInstance().base64Encode(dbs);
-                    iConversationContext.sendMessage(audioMsgModel);
-                }
-                onRecordCancel();
-                return false;
-            }
-
-            @Override
-            public boolean onRecordCancel() {
-                if (timer != null) {
-                    timer.cancel();
-                }
-                updateCancelUi();
-                return false;
-            }
-
-            @Override
-            public void onSlideTop() {
-                mHorVoiceView.setVisibility(View.INVISIBLE);
-                tvRecordTips.setVisibility(View.INVISIBLE);
-                layoutCancelView.setVisibility(View.VISIBLE);
-            }
-
-            @Override
-            public void onFingerPress() {
-                mHorVoiceView.setVisibility(View.VISIBLE);
-                tvRecordTips.setVisibility(View.VISIBLE);
-                tvRecordTips.setText(recordStatusDescription[1]);
-                layoutCancelView.setVisibility(View.INVISIBLE);
-            }
+            panelView.setup();
+            connectCallbacks(iConversationContext);
         });
-        recordStatusDescription = new String[]{
-                iConversationContext.getChatActivity().getString(R.string.press_talk),
-                iConversationContext.getChatActivity().getString(R.string.hold_to_record)
-        };
-        mainHandler = new Handler(Looper.myLooper());
-        return view;
+
+        // Default: setup without voice input, will be reconfigured after config fetch
+        panelView.setVoiceInputEnabled(false);
+        panelView.setup();
+        connectCallbacks(iConversationContext);
+
+        return panelView;
+    }
+
+    private void connectCallbacks(IConversationContext iConversationContext) {
+        // TalkBack: send voice message (same as original)
+        TalkBackView talkBack = panelView.getTalkBackView();
+        if (talkBack != null) {
+            talkBack.setListener(new TalkBackView.TalkBackViewListener() {
+                @Override
+                public void onSendRecord(int seconds, @NotNull String audioPath, @NotNull String waveform) {
+                    WKVoiceContent voiceContent = new WKVoiceContent(audioPath, seconds);
+                    voiceContent.waveform = waveform;
+                    iConversationContext.sendMessage(voiceContent);
+                }
+            });
+        }
+
+        // Speech-to-Text: insert recognized text into EditText
+        SpeechToTextView sttView = panelView.getSpeechToTextView();
+        if (sttView != null) {
+            sttView.setListener(new SpeechToTextView.SpeechToTextListener() {
+                @Override
+                public void onRecognizedText(@NotNull String text) {
+                    insertTextToEditText(iConversationContext, text);
+                }
+
+                @Override
+                public void onRecordingStarted() {
+                    // Can be used to pause audio playback
+                }
+            });
+        }
+
+        // Voice Input: insert transcribed text into EditText
+        VoiceInputView voiceInput = panelView.getVoiceInputView();
+        if (voiceInput != null) {
+            voiceInput.setListener(new VoiceInputView.VoiceInputListener() {
+                @Override
+                public void onTranscribed(@NotNull String text, boolean shouldReplace) {
+                    if (shouldReplace) {
+                        setEditTextContent(iConversationContext, text);
+                    } else {
+                        insertTextToEditText(iConversationContext, text);
+                    }
+                }
+
+                @Override
+                public void onRecordingStarted() {
+                }
+
+                @Override
+                public void onRecordingStopped() {
+                }
+
+                @Override
+                public String getCurrentInputText() {
+                    EditText editText = getEditText(iConversationContext);
+                    return editText != null ? editText.getText().toString() : null;
+                }
+            });
+        }
+    }
+
+    private void insertTextToEditText(IConversationContext context, String text) {
+        EditText editText = getEditText(context);
+        if (editText != null) {
+            int start = editText.getSelectionStart();
+            if (start < 0) start = editText.getText().length();
+            editText.getText().insert(start, text);
+        }
+    }
+
+    private void setEditTextContent(IConversationContext context, String text) {
+        EditText editText = getEditText(context);
+        if (editText != null) {
+            editText.setText(text);
+            editText.setSelection(text.length());
+        }
+    }
+
+    private EditText getEditText(IConversationContext context) {
+        try {
+            View chatView = context.getChatActivity().getWindow().getDecorView();
+            // The editText ID is defined in the chat layout
+            return chatView.findViewById(com.chat.uikit.R.id.editText);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
-     * 初始化计时器用来更新倒计时
+     * Prefetch voice config when entering a conversation
      */
-    private void initTimer() {
-        timer = new Timer();
-        timerTask = new TimerTask() {
-            @Override
-            public void run() {
-                mainHandler.post(() -> {
-                    //每隔1000毫秒更新一次ui
-                    recordTotalTime = recordTotalTime + 1000;
-                    updateTimerUI();
-                });
-            }
-        };
+    public void prefetchConfig() {
+        WKVoiceInputService.getInstance().prefetchConfig();
     }
 
-    private void updateTimerUI() {
-        if (recordTotalTime >= maxRecordTime) {
-            recordAudioView.invokeStop();
-        } else {
-            String content = recordAudioView.getContext().getString(R.string.time_remaining);
-            String string = String.format(" %s %s ", content, StringUtils.formatRecordTime(recordTotalTime, maxRecordTime));
-            mHorVoiceView.setText(string);
+    /**
+     * Cancel all recordings when leaving conversation
+     */
+    public void cancelAll() {
+        if (panelView != null) {
+            panelView.cancelAllRecording();
         }
     }
-
-    private void updateCancelUi() {
-        mHorVoiceView.setVisibility(View.INVISIBLE);
-        tvRecordTips.setVisibility(View.VISIBLE);
-        layoutCancelView.setVisibility(View.INVISIBLE);
-        tvRecordTips.setText(recordStatusDescription[0]);
-        mHorVoiceView.stopRecord();
-        //   deleteTempFile();
-    }
-
-
-    private void deleteTempFile() {
-        //取消录制后删除文件
-        if (audioFileName != null) {
-            File tempFile = new File(audioFileName);
-            if (tempFile.exists()) {
-                tempFile.delete();
-            }
-        }
-    }
-
-    private String createAudioName() {
-        long time = System.currentTimeMillis();
-        return UUID.randomUUID().toString().replaceAll("-", "") + "_" + time + ".amr";
-    }
-
 }

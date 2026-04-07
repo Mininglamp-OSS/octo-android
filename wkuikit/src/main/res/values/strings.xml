@@ -383,5 +383,8 @@
     <string name="speech_permission_required">请在设置中允许语音识别</string>
     <string name="speech_not_available">语音识别不可用</string>
     <string name="voice_cancel">取消</string>
+    <string name="voice_newline">换行</string>
+    <string name="click_again_to_finish">再次点击以完成</string>
+    <string name="thinking_text">Thinking</string>
 </resources>
 

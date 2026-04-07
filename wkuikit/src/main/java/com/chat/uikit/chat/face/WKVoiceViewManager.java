@@ -1,19 +1,29 @@
 package com.chat.uikit.chat.face;
 
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.EditText;
 
+import com.chat.base.config.WKConfig;
+import com.chat.base.msg.ChatAdapter;
 import com.chat.base.msg.IConversationContext;
+import com.chat.base.msgitem.WKContentType;
+import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.voice.WKVoiceInputService;
-import com.chat.base.utils.WKCommonUtils;
-import com.chat.uikit.view.voice.AudioRecordManager;
 import com.chat.uikit.view.voice.SpeechToTextView;
 import com.chat.uikit.view.voice.TalkBackView;
 import com.chat.uikit.view.voice.VoiceInputView;
 import com.chat.uikit.view.voice.WKVoicePanelView;
+import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKVoiceContent;
 
 import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 语音管理类 - 三 Tab 语音面板
@@ -111,7 +121,90 @@ public class WKVoiceViewManager {
                     EditText editText = getEditText(iConversationContext);
                     return editText != null ? editText.getText().toString() : null;
                 }
+
+                @Override
+                public String getChatContext() {
+                    return buildChatContext(iConversationContext);
+                }
+
+                @Override
+                public void onInsertText(@NotNull String text) {
+                    insertTextToEditText(iConversationContext, text);
+                }
+
+                @Override
+                public void onDeleteBackward() {
+                    deleteBackwardInEditText(iConversationContext);
+                }
             });
+        }
+    }
+
+    /**
+     * 构建 chat_context：取最近 10 条文本消息，格式为 [displayName]:content
+     */
+    private String buildChatContext(IConversationContext context) {
+        ChatAdapter adapter = context.getChatAdapter();
+        if (adapter == null) return null;
+
+        List<WKUIChatMsgItemEntity> allData = adapter.getData();
+        if (allData == null || allData.isEmpty()) return null;
+
+        // Filter text messages
+        List<WKMsg> textMessages = new ArrayList<>();
+        for (WKUIChatMsgItemEntity item : allData) {
+            if (item.wkMsg == null) continue;
+            if (item.wkMsg.type != WKContentType.WK_TEXT) continue;
+            if (item.wkMsg.baseContentMsgModel == null) continue;
+            String displayContent = item.wkMsg.baseContentMsgModel.getDisplayContent();
+            if (TextUtils.isEmpty(displayContent)) continue;
+            textMessages.add(item.wkMsg);
+        }
+
+        if (textMessages.isEmpty()) return null;
+
+        // Take last 10
+        int count = Math.min(textMessages.size(), 10);
+        List<WKMsg> recent = textMessages.subList(textMessages.size() - count, textMessages.size());
+
+        // Format as [displayName]:content
+        StringBuilder sb = new StringBuilder();
+        String loginUID = WKConfig.getInstance().getUid();
+        for (int i = 0; i < recent.size(); i++) {
+            WKMsg msg = recent.get(i);
+            String senderName = resolveSenderName(msg, loginUID);
+            String content = msg.baseContentMsgModel.getDisplayContent();
+
+            if (i > 0) sb.append("\n");
+            sb.append("[").append(senderName).append("]:").append(content);
+        }
+
+        return sb.toString();
+    }
+
+    private String resolveSenderName(WKMsg msg, String loginUID) {
+        if (msg.fromUID == null) return "Unknown";
+        if (msg.fromUID.equals(loginUID)) return "Me";
+
+        WKChannel channel = WKIM.getInstance().getChannelManager()
+                .getChannel(msg.fromUID, WKChannelType.PERSONAL);
+        if (channel != null) {
+            if (!TextUtils.isEmpty(channel.channelRemark)) {
+                return channel.channelRemark;
+            }
+            if (!TextUtils.isEmpty(channel.channelName)) {
+                return channel.channelName;
+            }
+        }
+        return msg.fromUID;
+    }
+
+    private void deleteBackwardInEditText(IConversationContext context) {
+        EditText editText = getEditText(context);
+        if (editText == null) return;
+        int start = editText.getSelectionStart();
+        if (start > 0) {
+            editText.getText().delete(start - 1, start);
         }
     }
 

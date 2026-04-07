@@ -187,6 +187,7 @@ public class WKIMUtils {
                 channelID = msgList.get(msgList.size() - 1).channelID;
                 channelType = msgList.get(msgList.size() - 1).channelType;
                 for (int i = 0, size = msgList.size(); i < size; i++) {
+                    inferSpaceIdForBotMessage(msgList.get(i));
                     if (msgList.get(i).type == WKContentType.setNewGroupAdmin) {
                         GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
                     } else if (msgList.get(i).type == WKContentType.groupSystemInfo) {
@@ -744,6 +745,42 @@ public class WKIMUtils {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    /**
+     * 为缺少 space_id 的系统 Bot 回复消息推断并填充当前 Space ID。
+     * 对齐 iOS WKSystemMessageHandler.inferSpaceIdForBotMessage:
+     * Bot 回复不带 space_id → 后向兼容逻辑导致所有 Space 可见 → 新 Space 看到旧消息。
+     */
+    private void inferSpaceIdForBotMessage(WKMsg msg) {
+        if (msg == null) return;
+        // 仅处理个人频道中的系统 Bot
+        if (msg.channelType != WKChannelType.PERSONAL) return;
+        if (!SYSTEM_BOTS.contains(msg.channelID)) return;
+        // 仅处理非自己发送的消息（Bot 回复）
+        String loginUID = WKConfig.getInstance().getUid();
+        if (!TextUtils.isEmpty(loginUID) && loginUID.equals(msg.fromUID)) return;
+        // 已有 space_id 不覆盖
+        if (extractSpaceId(msg) != null) return;
+        // 用当前 Space ID 填充
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return;
+        try {
+            // 填充到 msg.content JSON
+            JSONObject json;
+            if (!TextUtils.isEmpty(msg.content)) {
+                json = new JSONObject(msg.content);
+            } else {
+                json = new JSONObject();
+            }
+            json.put("space_id", currentSpaceId);
+            msg.content = json.toString();
+            // 填充到 baseContentMsgModel
+            if (msg.baseContentMsgModel != null) {
+                msg.baseContentMsgModel.spaceId = currentSpaceId;
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     /**

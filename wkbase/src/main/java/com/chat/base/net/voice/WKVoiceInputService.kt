@@ -92,6 +92,7 @@ class WKVoiceInputService private constructor() {
     fun transcribeAudio(
         audioFile: File,
         contextText: String?,
+        chatContext: String? = null,
         completion: TranscribeCallback
     ) {
         if (audioFile.length() > MAX_FILE_SIZE) {
@@ -113,6 +114,9 @@ class WKVoiceInputService private constructor() {
 
         if (!contextText.isNullOrEmpty()) {
             bodyBuilder.addFormDataPart("context_text", contextText)
+        }
+        if (!chatContext.isNullOrEmpty()) {
+            bodyBuilder.addFormDataPart("chat_context", chatContext)
         }
 
         val request = Request.Builder()

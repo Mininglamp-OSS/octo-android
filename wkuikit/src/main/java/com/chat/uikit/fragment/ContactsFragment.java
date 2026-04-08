@@ -407,10 +407,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 list.get(i).channel.channelName = showName;
             }
             if (!TextUtils.isEmpty(showName)) {
-                if (PyingUtils.getInstance().isStartNum(showName)) {
-                    list.get(i).pying = "#";
-                } else
-                    list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
+                list.get(i).pying = HanziToPinyin.getInstance().getPY(showName);
             } else list.get(i).pying = "#";
         }
     }

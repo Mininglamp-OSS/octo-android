@@ -486,7 +486,7 @@ public class WKUIKitApplication {
                         @Override
                         public void onResult(List<SpaceEntity> list) {
                             if (list != null && !list.isEmpty() && list.get(0).space_id != null) {
-                                MsgModel.getInstance().setCurrentSpaceId(list.get(0).space_id);
+                                MsgModel.getInstance().setCurrentSpaceId(list.get(0).space_id, list.get(0).name);
                                 Intent intent = new Intent(mContext.get(), TabActivity.class);
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                                 mContext.get().startActivity(intent);

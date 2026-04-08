@@ -10,6 +10,7 @@
     <string name="scan_join_group_confirm">加入</string>
     <string name="scan_join_group_success">已成功加入群聊</string>
     <string name="scan_join_group_confirm_full">加入群聊</string>
+    <string name="scan_enter_group">进入群聊</string>
     <string name="scan_join_group_member_count">%d位成员</string>
     <string name="scan_join_group_info">群聊信息</string>
 </resources>

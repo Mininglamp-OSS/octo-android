@@ -98,6 +98,7 @@ import com.chat.uikit.group.GroupDetailActivity;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.robot.service.WKRobotModel;
+import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.user.service.UserModel;
 import com.chat.uikit.view.WKPlayVoiceUtils;
 import com.effective.android.panel.PanelSwitchHelper;
@@ -2245,6 +2246,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void finish() {
+        if (SYSTEM_BOTS.contains(channelId)) {
+            SpaceModel.getInstance().invalidateMembersCache();
+            EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
+        }
         super.finish();
         SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
         EndpointManager.getInstance().remove(channelId);

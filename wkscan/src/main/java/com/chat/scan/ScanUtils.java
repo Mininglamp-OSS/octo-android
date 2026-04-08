@@ -77,7 +77,9 @@ class ScanUtils extends WKBaseModel {
 
             @Override
             public void onFail(int code, String msg) {
-                WKToastUtils.getInstance().showToast(msg);
+                if (!TextUtils.isEmpty(msg)) {
+                    WKToastUtils.getInstance().showToast(msg);
+                }
             }
         });
     }
@@ -103,20 +105,13 @@ class ScanUtils extends WKBaseModel {
             JSONObject dataJson = new JSONObject(result.data);
             if (type.equals("group")) {
                 if (dataJson.has("group_no")) {
-                    String group_no = dataJson.optString("group_no");
+                    String groupNo = dataJson.optString("group_no");
                     String authCode = dataJson.optString("auth_code");
-                    if (!TextUtils.isEmpty(authCode)) {
-                        // 后端返回了 auth_code，说明用户不在群内，走加群流程
-                        String groupName = dataJson.optString("name", "");
-                        String avatar = dataJson.optString("avatar", "");
-                        int memberCount = dataJson.optInt("member_count", 0);
-                        openJoinGroupPage(activity, group_no, authCode, groupName, avatar, memberCount);
-                    } else {
-                        // 没有 auth_code，用户已在群内，直接打开群聊
-                        ChatViewMenu chatViewMenu = new ChatViewMenu(activity, group_no, WKChannelType.GROUP, 0, true);
-                        EndpointManager.getInstance().invoke(EndpointSID.chatView, chatViewMenu);
-                        iHandleScanResult.dismissView();
-                    }
+                    String groupName = dataJson.optString("name", "");
+                    String avatar = dataJson.optString("avatar", "");
+                    int memberCount = dataJson.optInt("member_count", 0);
+                    boolean isMember = dataJson.optBoolean("is_member", false);
+                    openJoinGroupPage(activity, groupNo, authCode, groupName, avatar, memberCount, isMember);
                 }
 
             } else {
@@ -137,13 +132,14 @@ class ScanUtils extends WKBaseModel {
         }
     }
 
-    private void openJoinGroupPage(AppCompatActivity activity, String groupNo, String authCode, String groupName, String avatar, int memberCount) {
+    private void openJoinGroupPage(AppCompatActivity activity, String groupNo, String authCode, String groupName, String avatar, int memberCount, boolean isMember) {
         Intent intent = new Intent(activity, ScanJoinGroupActivity.class);
         intent.putExtra("group_no", groupNo);
         intent.putExtra("auth_code", authCode);
         intent.putExtra("group_name", groupName);
         intent.putExtra("avatar", avatar);
         intent.putExtra("member_count", memberCount);
+        intent.putExtra("is_member", isMember);
         activity.startActivity(intent);
         iHandleScanResult.dismissView();
     }

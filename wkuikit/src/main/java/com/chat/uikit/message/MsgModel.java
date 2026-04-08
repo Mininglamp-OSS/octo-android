@@ -346,8 +346,13 @@ public class MsgModel extends WKBaseModel {
     private String currentSpaceId = "";
 
     public void setCurrentSpaceId(String spaceId) {
+        setCurrentSpaceId(spaceId, "");
+    }
+
+    public void setCurrentSpaceId(String spaceId, String spaceName) {
         this.currentSpaceId = spaceId != null ? spaceId : "";
         WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_id", this.currentSpaceId);
+        WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_name", spaceName != null ? spaceName : "");
     }
 
     public void loadCurrentSpaceId() {

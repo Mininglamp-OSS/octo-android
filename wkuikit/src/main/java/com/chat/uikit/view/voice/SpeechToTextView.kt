@@ -3,6 +3,7 @@ package com.chat.uikit.view.voice
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.chat.base.ui.Theme
 import com.chat.uikit.R
 import java.util.Timer
 import java.util.TimerTask
@@ -82,6 +84,9 @@ class SpeechToTextView @JvmOverloads constructor(
 
         setupWaveBars()
         setupTouchListeners()
+
+        // 按钮颜色改为主题色（对齐语音输入 Tab）
+        btnMicBg.setColorFilter(Theme.colorAccount, PorterDuff.Mode.SRC_IN)
     }
 
     private fun setupWaveBars() {
@@ -177,6 +182,7 @@ class SpeechToTextView @JvmOverloads constructor(
 
         // UI updates
         btnMicBg.setImageResource(R.mipmap.aio_voice_button_press)
+        btnMicBg.setColorFilter(Theme.colorAccount, PorterDuff.Mode.SRC_IN)
         tvStatus.visibility = GONE
         levelContentView.visibility = VISIBLE
         ivVoiceLine.visibility = VISIBLE
@@ -287,6 +293,7 @@ class SpeechToTextView @JvmOverloads constructor(
         stopRecording()
 
         btnMicBg.setImageResource(R.mipmap.aio_voice_button_nor)
+        btnMicBg.setColorFilter(Theme.colorAccount, PorterDuff.Mode.SRC_IN)
         ivVoiceLine.visibility = GONE
         btnCancel.visibility = GONE
 

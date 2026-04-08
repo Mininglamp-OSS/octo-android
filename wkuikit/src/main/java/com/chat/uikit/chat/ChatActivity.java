@@ -2463,11 +2463,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * 过滤 1:1 私聊消息的 Space 隔离
-     * 对所有 Person 类型频道（包括系统 Bot 和普通用户）按 space_id 过滤
+     * 过滤 1:1 私聊消息的 Space 隔离（对齐 iOS filterMessagesBySpace:）
      * 规则：payload 有 space_id 且匹配当前 Space → 显示
      *       payload 有 space_id 且不匹配 → 隐藏
-     *       payload 无 space_id（历史消息）→ 所有 Space 都显示（向前兼容）
+     *       payload 无 space_id + 系统 Bot（BotFather）→ 隐藏（避免旧消息跨 Space 可见）
+     *       payload 无 space_id + 普通用户 → 显示（向前兼容）
      */
     private List<WKMsg> filterSystemBotMessages(List<WKMsg> messages) {
         if (channelType != WKChannelType.PERSONAL) {
@@ -2477,11 +2477,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (TextUtils.isEmpty(currentSpaceId)) {
             return messages;
         }
+        boolean isSystemBot = SYSTEM_BOTS.contains(channelId);
         List<WKMsg> filtered = new ArrayList<>();
         for (WKMsg msg : messages) {
             String msgSpaceId = getSpaceIdFromMsg(msg);
             if (msgSpaceId == null || msgSpaceId.isEmpty()) {
-                filtered.add(msg); // 无 space_id 的历史消息：所有 Space 可见
+                // 无 space_id：系统 Bot 在空间模式下隐藏，普通聊天向前兼容显示
+                if (!isSystemBot) {
+                    filtered.add(msg);
+                }
             } else if (msgSpaceId.equals(currentSpaceId)) {
                 filtered.add(msg); // 匹配当前 Space
             }

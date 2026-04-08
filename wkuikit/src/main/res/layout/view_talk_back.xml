@@ -2,7 +2,8 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#EAEAED">
 
     <LinearLayout
         android:id="@+id/layout_record_audio"
@@ -28,7 +29,10 @@
             android:layout_height="100dp"
             android:layout_gravity="center"
             android:layout_marginBottom="10dp"
-            android:background="@drawable/ar_record_audio_btn_selector" />
+            android:background="@mipmap/aio_voice_button_nor"
+            android:foreground="@mipmap/aio_voice_button_icon"
+            android:foregroundGravity="center"
+            android:stateListAnimator="@null" />
 
         <TextView
             android:id="@+id/record_tips"

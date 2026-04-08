@@ -188,7 +188,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             SpacePopupWindow popup = new SpacePopupWindow(requireContext());
             popup.setOnSpaceSelectedListener(space -> {
                 currentSpaceName = space.name;
-                MsgModel.getInstance().setCurrentSpaceId(space.space_id);
+                MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
                 wkVBinding.textSwitcher.setText(space.name);
 
                 // 清除成员缓存

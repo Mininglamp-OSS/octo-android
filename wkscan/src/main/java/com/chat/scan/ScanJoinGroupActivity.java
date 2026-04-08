@@ -27,6 +27,7 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
 
     private String groupNo;
     private String authCode;
+    private boolean isMember;
 
     @Override
     protected ActScanJoinGroupLayoutBinding getViewBinding() {
@@ -42,6 +43,7 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
     protected void initView() {
         groupNo = getIntent().getStringExtra("group_no");
         authCode = getIntent().getStringExtra("auth_code");
+        isMember = getIntent().getBooleanExtra("is_member", false);
         String groupName = getIntent().getStringExtra("group_name");
         String avatar = getIntent().getStringExtra("avatar");
         int memberCount = getIntent().getIntExtra("member_count", 0);
@@ -67,11 +69,26 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
         if (memberCount > 0) {
             wkVBinding.memberCountTv.setText(String.format(getString(R.string.scan_join_group_member_count), memberCount));
         }
+
+        // 根据是否已是群成员切换按钮文案
+        if (isMember) {
+            wkVBinding.joinBtn.setText(R.string.scan_enter_group);
+        } else {
+            wkVBinding.joinBtn.setText(R.string.scan_join_group_confirm_full);
+        }
     }
 
     @Override
     protected void initListener() {
         wkVBinding.joinBtn.setOnClickListener(v -> {
+            if (isMember) {
+                // 已是群成员，直接进入群聊
+                ChatViewMenu chatViewMenu = new ChatViewMenu(ScanJoinGroupActivity.this, groupNo, WKChannelType.GROUP, 0, true);
+                EndpointManager.getInstance().invoke(EndpointSID.chatView, chatViewMenu);
+                finish();
+                return;
+            }
+            // 非群成员，调用加群 API
             wkVBinding.joinBtn.setEnabled(false);
             ScanService service = RetrofitUtils.getInstance().createService(ScanService.class);
             service.scanJoinGroup(groupNo, authCode)
@@ -89,7 +106,9 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                         @Override
                         protected void onFail(int code, String msg, String errJson) {
                             wkVBinding.joinBtn.setEnabled(true);
-                            WKToastUtils.getInstance().showToast(msg);
+                            if (!TextUtils.isEmpty(msg)) {
+                                WKToastUtils.getInstance().showToast(msg);
+                            }
                         }
                     });
         });

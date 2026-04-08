@@ -1,6 +1,7 @@
 package com.chat.uikit.view.voice
 
 import android.content.Context
+import android.graphics.PorterDuff
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -8,6 +9,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.chat.base.ui.Theme
@@ -60,6 +62,15 @@ class TalkBackView @JvmOverloads constructor(
             context.getString(R.string.press_talk),
             context.getString(R.string.hold_to_record)
         )
+
+        // 按钮颜色改为主题色 + 图标居中（对齐语音转文字 Tab）
+        recordAudioView.background.mutate().setColorFilter(Theme.colorAccount, PorterDuff.Mode.SRC_IN)
+        // foreground 图标加 padding 使其居中（40dp icon in 100dp button → 30dp padding）
+        val iconPad = (30 * resources.displayMetrics.density).toInt()
+        recordAudioView.foreground?.let {
+            it.setBounds(0, 0, it.intrinsicWidth, it.intrinsicHeight)
+        }
+        recordAudioView.setPadding(iconPad, iconPad, iconPad, iconPad)
 
         recordAudioView.setRecordAudioListener(object : RecordAudioView.IRecordAudioListener {
             override fun onRecordPrepare(): Boolean = true

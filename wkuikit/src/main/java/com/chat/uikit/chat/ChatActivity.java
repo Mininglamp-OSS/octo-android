@@ -194,6 +194,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long browseTo = 0;
     private boolean isUpdateRedDot = true;
     private ImageView callIV;
+    private ImageView moreIV;
     //查询聊天数据偏移量
     private final int limit = 30;
     private boolean isShowPinnedView = false;
@@ -390,6 +391,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 numberTextView.setNumber(0, true);
                 CommonAnim.getInstance().showOrHide(numberTextView, false, true);
                 CommonAnim.getInstance().showOrHide(callIV, true, true);
+                CommonAnim.getInstance().showOrHide(moreIV, true, true);
                 return null;
             }, path -> {
                 Intent intent = new Intent(ChatActivity.this, PreviewNewImgActivity.class);
@@ -426,6 +428,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.topLayout.rightView.addView(numberTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.END, 0, 0, 15, 0));
 
         Object isRegisterRTC = EndpointManager.getInstance().invoke("is_register_rtc", null);
+
+        moreIV = wkVBinding.topLayout.moreIv;
+        moreIV.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.colorDark), PorterDuff.Mode.MULTIPLY));
+        moreIV.setBackground(Theme.createSelectorDrawable(Theme.getPressedColor()));
+        moreIV.setVisibility(View.VISIBLE);
 
         callIV = new AppCompatImageView(this);
         callIV.setImageResource(R.mipmap.ic_call);
@@ -514,6 +521,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 public void clickResult(boolean isCancel) {
                 }
             }, this, desc, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO);
+        });
+
+        moreIV.setOnClickListener(view -> {
+            WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);
+            if ((member != null && member.isDeleted == 1) || channelType == WKChannelType.CUSTOMER_SERVICE)
+                return;
+            Intent intent = new Intent(ChatActivity.this, channelType == WKChannelType.GROUP ? GroupDetailActivity.class : ChatPersonalActivity.class);
+            intent.putExtra("channelId", channelId);
+            startActivity(intent);
         });
 
         WKDialogUtils.getInstance().setViewLongClickPopup(wkVBinding.chatUnreadLayout.groupApproveLayout, getGroupApprovePopupItems());
@@ -1949,6 +1965,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         CommonAnim.getInstance().rotateImage(wkVBinding.topLayout.backIv, 180f, 360f, R.mipmap.ic_close_white);
         CommonAnim.getInstance().showOrHide(numberTextView, true, true);
         CommonAnim.getInstance().showOrHide(callIV, false, false);
+        CommonAnim.getInstance().showOrHide(moreIV, false, false);
         EndpointManager.getInstance().invoke("hide_pinned_view", null);
     }
 
@@ -1959,6 +1976,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         numberTextView.setNumber(num, true);
         CommonAnim.getInstance().showOrHide(numberTextView, true, true);
         CommonAnim.getInstance().showOrHide(callIV, false, false);
+        CommonAnim.getInstance().showOrHide(moreIV, false, false);
     }
 
     @Override

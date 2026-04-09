@@ -20,10 +20,13 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -376,20 +379,23 @@ public class WKDialogUtils {
      * @param versionEntity
      */
     public void showNewVersionDialog(Context context, AppVersion versionEntity) {
-        versionEntity.update_desc = versionEntity.update_desc.replaceAll("\\n", " \n ");
+        versionEntity.notes = versionEntity.notes.replaceAll("\\n", "\n");
         View view = LayoutInflater.from(context).inflate(R.layout.act_new_version_layout, null);
         TextView contentTv = view.findViewById(R.id.contentTv);
         TextView versionTv = view.findViewById(R.id.versionTv);
-        contentTv.setText(versionEntity.update_desc);
-        versionTv.setText(String.format("%s：%s", context.getString(R.string.new_version), versionEntity.app_version));
+        contentTv.setText(versionEntity.notes);
+        versionTv.setText(String.format("%s：%s", context.getString(R.string.new_version), versionEntity.version));
         TextView cancelTv = view.findViewById(R.id.cancelTv);
         Button sureBtn = view.findViewById(R.id.sureBtn);
-        //ProgressBar progressBar = view.findViewById(R.id.progressBar);
+        ProgressBar progressBar = view.findViewById(R.id.progressBar);
+        TextView progressTv = view.findViewById(R.id.progressTv);
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(context, R.style.AlertDialog);
         view.setBackgroundColor(ContextCompat.getColor(context, R.color.transparent));
-//        builder.setCancelable(versionEntity.is_force == 0);
         android.app.AlertDialog alertDialog = builder.create();
         alertDialog.setCanceledOnTouchOutside(versionEntity.is_force == 0);
+        if (versionEntity.is_force == 1) {
+            alertDialog.setCancelable(false);
+        }
         alertDialog.show();
         alertDialog.setContentView(view);
         Window window = alertDialog.getWindow();
@@ -399,24 +405,85 @@ public class WKDialogUtils {
         if (versionEntity.is_force == 1) {
             cancelTv.setVisibility(GONE);
         }
-//        param.height = WindowUtil.getInstance().getScreenHeight()/3;
         window.setAttributes(param);
-//            window.decorView.setPadding(0,0,0,0)
-//            window.decorView.setBackgroundColor(Color.RED)
 
+        Handler handler = new Handler(Looper.getMainLooper());
+        Runnable[] progressPoller = new Runnable[1];
+        progressPoller[0] = () -> {
+            int progress = DownloadApkUtils.getInstance().getDownloadProgress();
+            if (progress < 0) {
+                // 下载失败，恢复按钮，允许重试
+                sureBtn.setVisibility(VISIBLE);
+                if (versionEntity.is_force == 0) {
+                    cancelTv.setVisibility(VISIBLE);
+                    alertDialog.setCanceledOnTouchOutside(true);
+                    alertDialog.setCancelable(true);
+                }
+                progressBar.setVisibility(GONE);
+                progressTv.setVisibility(GONE);
+                WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_download_fail));
+                return;
+            }
+            progressBar.setProgress(progress);
+            progressTv.setText(String.format("%d%%", progress));
+            if (progress >= 100) {
+                alertDialog.dismiss();
+                return;
+            }
+            handler.postDelayed(progressPoller[0], 500);
+        };
+
+        alertDialog.setOnDismissListener(d -> handler.removeCallbacks(progressPoller[0]));
 
         cancelTv.setOnClickListener(view1 -> {
             if (versionEntity.is_force == 0) {
-                //非强制更新
                 alertDialog.dismiss();
             }
         });
         sureBtn.setOnClickListener(view1 -> {
             DownloadApkUtils.getInstance().downloadAPK(WKBaseApplication.getInstance().getContext(),
-                    versionEntity.app_version,
-                    WKApiConfig.getShowUrl(versionEntity.download_url));
-            alertDialog.dismiss();
+                    versionEntity.version,
+                    WKApiConfig.getShowUrl(versionEntity.url),
+                    new DownloadApkUtils.IDownloadCallback() {
+                        @Override
+                        public void onInstallDirectly() {
+                            // APK 已存在，直接安装，关闭弹框
+                            alertDialog.dismiss();
+                        }
 
+                        @Override
+                        public void onDownloadStarted() {
+                            // 开始下载，禁止点击外部关闭
+                            alertDialog.setCanceledOnTouchOutside(false);
+                            alertDialog.setCancelable(false);
+                            sureBtn.setVisibility(GONE);
+                            cancelTv.setVisibility(GONE);
+                            progressBar.setProgress(0);
+                            progressBar.setVisibility(VISIBLE);
+                            progressTv.setText("0%");
+                            progressTv.setVisibility(VISIBLE);
+                            handler.postDelayed(progressPoller[0], 500);
+                        }
+
+                        @Override
+                        public void onDownloadAlreadyRunning() {
+                            // 下载已在进行中，禁止点击外部关闭
+                            alertDialog.setCanceledOnTouchOutside(false);
+                            alertDialog.setCancelable(false);
+                            sureBtn.setVisibility(GONE);
+                            cancelTv.setVisibility(GONE);
+                            progressBar.setProgress(0);
+                            progressBar.setVisibility(VISIBLE);
+                            progressTv.setText("0%");
+                            progressTv.setVisibility(VISIBLE);
+                            handler.postDelayed(progressPoller[0], 500);
+                        }
+
+                        @Override
+                        public void onError(String msg) {
+                            WKToastUtils.getInstance().showToastNormal(msg);
+                        }
+                    });
         });
 
     }

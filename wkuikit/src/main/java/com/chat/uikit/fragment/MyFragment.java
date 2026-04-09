@@ -127,7 +127,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                         }
                     }
                     if (index != -1) {
-                        if (version != null && !TextUtils.isEmpty(version.download_url)) {
+                        if (version != null && !TextUtils.isEmpty(version.url)) {
                             if (!adapter.getData().get(index).isNewVersionIv) {
                                 adapter.getData().get(index).setIsNewVersionIv(true);
                                 adapter.notifyItemChanged(index);

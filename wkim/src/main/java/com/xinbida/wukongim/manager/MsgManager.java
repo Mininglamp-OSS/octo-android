@@ -479,6 +479,11 @@ public class MsgManager extends BaseManager {
         int isDelete = 0;
         //消息可见数组
         if (jsonObject != null && jsonObject.has("visibles")) {
+            // 系统消息(1000-2000)不受 visibles 限制，确保退群等提示对所有群成员可见
+            int type = jsonObject.optInt("type", 0);
+            if (type >= 1000 && type <= 2000) {
+                return 0;
+            }
             boolean isIncludeLoginUser = false;
             JSONArray jsonArray = jsonObject.optJSONArray("visibles");
             if (jsonArray != null && jsonArray.length() > 0) {

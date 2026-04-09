@@ -17,8 +17,8 @@ import retrofit2.http.Query;
  * 4/21/21 6:25 PM
  */
 interface WKCommonService {
-    @GET("common/appversion/android/{version}")
-    Observable<AppVersion> getAppNewVersion(@Path("version") String version);
+    @GET("common/updater/{os}/{version}")
+    Observable<AppVersion> getAppNewVersion(@Path("os") String os, @Path("version") String version);
 
     @GET("common/appconfig")
     Observable<WKAPPConfig> getAppConfig();

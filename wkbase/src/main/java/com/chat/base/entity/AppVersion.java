@@ -6,9 +6,9 @@ package com.chat.base.entity;
  */
 public class AppVersion {
     public String os;
-    public String app_version;
+    public String version;
     public int is_force;
-    public String update_desc;
-    public String download_url;
-    public String created_at;
+    public String notes;
+    public String url;
+    public String pub_date;
 }

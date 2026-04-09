@@ -386,5 +386,7 @@
     <string name="voice_newline">换行</string>
     <string name="click_again_to_finish">再次点击以完成</string>
     <string name="thinking_text">Thinking</string>
+    <string name="release_to_send_slide_to_cancel">松手发送，上移取消</string>
+    <string name="release_to_cancel">松手取消</string>
 </resources>
 

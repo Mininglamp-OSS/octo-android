@@ -87,7 +87,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         SingleClickUtil.onSingleClick(wkVBinding.aboutLayout, view1 -> startActivity(new Intent(this, WKAboutActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.fontSizeLayout, view1 -> startActivity(new Intent(this, WKSetFontSizeActivity.class)));
         WKCommonModel.getInstance().getAppNewVersion(false, version -> {
-            if (version != null && !TextUtils.isEmpty(version.download_url)) {
+            if (version != null && !TextUtils.isEmpty(version.url)) {
                 wkVBinding.newVersionIv.setVisibility(View.VISIBLE);
             } else {
                 wkVBinding.newVersionIv.setVisibility(View.GONE);

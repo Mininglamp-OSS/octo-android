@@ -9,6 +9,7 @@ import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActAboutLayoutBinding;
@@ -57,7 +58,8 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
 
     private void checkNewVersion(boolean isShowDialog) {
         WKCommonModel.getInstance().getAppNewVersion(isShowDialog, version -> {
-            if (version != null && !TextUtils.isEmpty(version.download_url)) {
+            String v = WKDeviceUtils.getInstance().getVersionName(WKAboutActivity.this);
+            if (version != null && !TextUtils.isEmpty(version.url) && !version.version.equals(v)) {
                 if (isShowDialog) {
                     WKDialogUtils.getInstance().showNewVersionDialog(WKAboutActivity.this, version);
                 } else {
@@ -65,6 +67,9 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
                 }
             } else {
                 wkVBinding.newVersionIv.setVisibility(View.GONE);
+                if (isShowDialog) {
+                    WKToastUtils.getInstance().showToastNormal(getString(R.string.is_new_version));
+                }
             }
         });
     }

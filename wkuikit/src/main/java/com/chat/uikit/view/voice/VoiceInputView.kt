@@ -100,6 +100,13 @@ class VoiceInputView @JvmOverloads constructor(
     private var hasReceivedAudio = false
     private var currentPower = 0f
 
+    // ───────── 覆盖层 & 按住录音 ─────────
+    private var overlayView: RecordingOverlayView? = null
+    private var amplitudeTimer: Timer? = null
+    private var touchDownY = 0f
+    private var isTouchCancelled = false
+    private val cancelSlideThreshold = 100f * resources.displayMetrics.density
+
     // ───────── AudioRecord 振幅计量（兼容 getMaxAmplitude 失效的设备） ─────────
     private var audioRecord: AudioRecord? = null
     private var meteringThread: Thread? = null
@@ -141,7 +148,7 @@ class VoiceInputView @JvmOverloads constructor(
         tvStatus = TextView(context).apply {
             textSize = 14f
             setTextColor(statusIdleColor)
-            text = context.getString(R.string.click_to_speak)
+            text = context.getString(R.string.press_talk)
             gravity = Gravity.CENTER
         }
         addView(tvStatus)
@@ -229,7 +236,54 @@ class VoiceInputView @JvmOverloads constructor(
             LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT
         ))
 
-        micButton.setOnClickListener { onMicTapped() }
+        micButton.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (state == State.IDLE) {
+                        touchDownY = event.rawY
+                        isTouchCancelled = false
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        startRecording()
+                        showOverlay()
+                        overlayView?.updateTouchPosition(event.rawX, event.rawY)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (state == State.RECORDING) {
+                        val deltaY = touchDownY - event.rawY
+                        val wasCancelled = isTouchCancelled
+                        isTouchCancelled = deltaY >= cancelSlideThreshold
+                        if (isTouchCancelled != wasCancelled) {
+                            overlayView?.updateState(isTouchCancelled)
+                        }
+                        overlayView?.updateTouchPosition(event.rawX, event.rawY)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    if (state == State.RECORDING) {
+                        dismissOverlay()
+                        if (isTouchCancelled) {
+                            cancelRecording()
+                        } else {
+                            stopRecordingAndTranscribe()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    if (state == State.RECORDING) {
+                        dismissOverlay()
+                        cancelRecording()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
         addView(micButton)
 
         // 底部按钮
@@ -467,7 +521,7 @@ class VoiceInputView @JvmOverloads constructor(
         micButton.isEnabled = true
         micButton.alpha = 1f
 
-        tvStatus.text = context.getString(R.string.click_to_speak)
+        tvStatus.text = context.getString(R.string.press_talk)
         tvStatus.setTextColor(statusIdleColor)
         tvStatus.paint.isFakeBoldText = false
         tvStatus.visibility = VISIBLE
@@ -496,10 +550,7 @@ class VoiceInputView @JvmOverloads constructor(
         micButton.isEnabled = true
         micButton.alpha = 1f
 
-        tvStatus.text = context.getString(R.string.click_again_to_finish)
-        tvStatus.setTextColor(statusRecordColor)
-        tvStatus.paint.isFakeBoldText = true
-        tvStatus.visibility = VISIBLE
+        tvStatus.visibility = GONE
 
         btnAt.visibility = GONE; btnSpace.visibility = GONE; btnDelete.visibility = GONE
         bottomButton.visibility = GONE
@@ -531,20 +582,54 @@ class VoiceInputView @JvmOverloads constructor(
     }
 
     // ───────── 按钮事件 ─────────
-    private fun onMicTapped() {
-        when (state) {
-            State.IDLE -> startRecording()
-            State.RECORDING -> stopRecordingAndTranscribe()
-            State.TRANSCRIBING -> { /* ignore */ }
-        }
-    }
-
     private fun onBottomButtonTapped() {
         when (state) {
             State.RECORDING -> cancelRecording()
             State.IDLE -> listener?.onInsertText("\n")
             State.TRANSCRIBING -> { /* ignore */ }
         }
+    }
+
+    // ───────── 覆盖层管理 ─────────
+    private fun showOverlay() {
+        // 隐藏原有录音态 UI（micButton 的圆形动画、光晕、圆点、波形）
+        micButton.visibility = INVISIBLE
+        glowView.visibility = GONE
+        dotsContainer.visibility = GONE
+        waveContainer.visibility = GONE
+        tvStatus.visibility = GONE
+
+        val overlay = RecordingOverlayView(context)
+        overlayView = overlay
+        overlay.show()
+        startAmplitudePolling()
+    }
+
+    private fun dismissOverlay() {
+        stopAmplitudePolling()
+        overlayView?.dismiss()
+        overlayView = null
+
+        // 恢复 micButton 可见（后续 setState 会设置正确的子元素状态）
+        micButton.visibility = VISIBLE
+    }
+
+    private fun startAmplitudePolling() {
+        amplitudeTimer = Timer().also { t ->
+            t.schedule(object : TimerTask() {
+                override fun run() {
+                    // 直接使用 updateWaveform() 已计算的 currentPower（含 AudioRecord 降级方案）
+                    mainHandler.post {
+                        overlayView?.updateAmplitude(currentPower)
+                    }
+                }
+            }, 0, 80)
+        }
+    }
+
+    private fun stopAmplitudePolling() {
+        amplitudeTimer?.cancel()
+        amplitudeTimer = null
     }
 
     // ───────── 录音 ─────────
@@ -649,6 +734,7 @@ class VoiceInputView @JvmOverloads constructor(
     }
 
     private fun stopRecordingAndTranscribe() {
+        dismissOverlay()
         invalidateTimers()
         stopAudioRecordMetering()
         val recorder = mediaRecorder ?: return
@@ -685,6 +771,7 @@ class VoiceInputView @JvmOverloads constructor(
     }
 
     fun cancelRecording() {
+        dismissOverlay()
         invalidateTimers()
         stopAudioRecordMetering()
         try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (_: Exception) {}
@@ -749,17 +836,17 @@ class VoiceInputView @JvmOverloads constructor(
 
             currentPower = smoothedPower
 
-            // 有声音时从圆点→波形（用 smoothed 值判断，避免噪声误触发）
-            if (!hasReceivedAudio && smoothedPower > 0.15f) {
+            // 有声音时从圆点→波形（覆盖层显示时跳过，不修改原有 UI）
+            if (overlayView == null && !hasReceivedAudio && smoothedPower > 0.15f) {
                 hasReceivedAudio = true
                 dotsContainer.visibility = GONE
                 waveContainer.visibility = VISIBLE
             }
 
-            // 只在 power 真正变化时才 requestLayout
+            // 只在 power 真正变化时才 requestLayout（覆盖层显示时不需要）
             val powerChanged = Math.abs(smoothedPower - prevPower) > 0.01f
             prevPower = smoothedPower
-            if (powerChanged) requestLayout()
+            if (powerChanged && overlayView == null) requestLayout()
 
             // 更新波形柱体高度（带平滑过渡，对齐 iOS animateWithDuration:0.1）
             if (waveContainer.visibility == VISIBLE) {

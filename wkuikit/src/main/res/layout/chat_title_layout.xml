@@ -139,5 +139,14 @@
             android:layout_marginStart="10dp"
             android:visibility="visible" />
 
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/moreIv"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical"
+            android:scaleType="center"
+            android:src="@drawable/ic_more_vert"
+            android:visibility="gone" />
+
     </LinearLayout>
 </LinearLayout>

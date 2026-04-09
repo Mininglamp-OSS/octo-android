@@ -2,11 +2,15 @@ package com.chat.uikit.view.voice
 
 import android.content.Context
 import android.graphics.PorterDuff
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -49,6 +53,17 @@ class TalkBackView @JvmOverloads constructor(
 
     private val recordStatusDescription: Array<String>
 
+    // -- overlay --
+    private var overlayView: RecordingOverlayView? = null
+    private var amplitudeTimer: Timer? = null
+
+    // -- AudioRecord 振幅降级（兼容 getMaxAmplitude 失效的设备/系统） --
+    private var audioRecord: AudioRecord? = null
+    private var meteringThread: Thread? = null
+    @Volatile private var meteringAmplitude = 0
+    private var useAudioRecordMetering = false
+    private var maxAmpZeroCount = 0
+
     init {
         val view = LayoutInflater.from(context).inflate(R.layout.view_talk_back, this, true)
         recordAudioView = view.findViewById(R.id.ivRecording)
@@ -72,6 +87,15 @@ class TalkBackView @JvmOverloads constructor(
         }
         recordAudioView.setPadding(iconPad, iconPad, iconPad, iconPad)
 
+        // 转发触摸坐标到覆盖层（驱动光圈跟随手指）
+        recordAudioView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE ->
+                    overlayView?.updateTouchPosition(event.rawX, event.rawY)
+            }
+            false // 不消费，让 RecordAudioView 继续处理
+        }
+
         recordAudioView.setRecordAudioListener(object : RecordAudioView.IRecordAudioListener {
             override fun onRecordPrepare(): Boolean = true
 
@@ -82,6 +106,7 @@ class TalkBackView @JvmOverloads constructor(
                 audioFileName = WKUIKitApplication.getInstance().context.externalCacheDir.toString() +
                         File.separator + createAudioName()
                 mHorVoiceView.startRecord()
+                showOverlay()
                 return audioFileName!!
             }
 
@@ -101,24 +126,141 @@ class TalkBackView @JvmOverloads constructor(
 
             override fun onRecordCancel(): Boolean {
                 timer?.cancel()
+                dismissOverlay()
                 updateCancelUi()
                 return false
             }
 
             override fun onSlideTop() {
-                mHorVoiceView.visibility = INVISIBLE
-                tvRecordTips.visibility = INVISIBLE
-                layoutCancelView.visibility = VISIBLE
+                if (overlayView != null) {
+                    // 覆盖层显示时，由覆盖层展示取消状态，隐藏原有 UI
+                    overlayView?.updateState(true)
+                } else {
+                    mHorVoiceView.visibility = INVISIBLE
+                    tvRecordTips.visibility = INVISIBLE
+                    layoutCancelView.visibility = VISIBLE
+                }
             }
 
             override fun onFingerPress() {
-                mHorVoiceView.visibility = VISIBLE
-                tvRecordTips.visibility = VISIBLE
-                tvRecordTips.text = recordStatusDescription[1]
-                layoutCancelView.visibility = INVISIBLE
+                if (overlayView != null) {
+                    // 覆盖层显示时，由覆盖层展示录音状态，隐藏原有 UI
+                    overlayView?.updateState(false)
+                } else {
+                    mHorVoiceView.visibility = VISIBLE
+                    tvRecordTips.visibility = VISIBLE
+                    tvRecordTips.text = recordStatusDescription[1]
+                    layoutCancelView.visibility = INVISIBLE
+                }
             }
         })
     }
+
+    // ========== overlay management ==========
+
+    private fun showOverlay() {
+        // 录音中禁止 ViewPager2 拦截触摸（防止水平滑动导致 ACTION_CANCEL 中断录音）
+        recordAudioView.parent?.requestDisallowInterceptTouchEvent(true)
+
+        // 隐藏原有录音 UI（按钮 INVISIBLE 保留触摸能力）
+        recordAudioView.visibility = INVISIBLE
+        mHorVoiceView.visibility = INVISIBLE
+        tvRecordTips.visibility = INVISIBLE
+        layoutCancelView.visibility = INVISIBLE
+
+        val overlay = RecordingOverlayView(context)
+        overlayView = overlay
+        overlay.show()
+        startAmplitudePolling()
+    }
+
+    private fun dismissOverlay() {
+        stopAmplitudePolling()
+        overlayView?.dismiss()
+        overlayView = null
+
+        // 恢复触摸拦截和按钮可见
+        recordAudioView.parent?.requestDisallowInterceptTouchEvent(false)
+        recordAudioView.visibility = VISIBLE
+    }
+
+    private fun startAmplitudePolling() {
+        maxAmpZeroCount = 0
+        useAudioRecordMetering = false
+        amplitudeTimer = Timer().also { t ->
+            t.schedule(object : TimerTask() {
+                override fun run() {
+                    val amp: Float
+                    if (!useAudioRecordMetering) {
+                        val raw = AudioRecordManager.getInstance().maxAmplitude
+                        if (raw == 0f) {
+                            maxAmpZeroCount++
+                            if (maxAmpZeroCount >= 10) {
+                                useAudioRecordMetering = true
+                                startAudioRecordMetering()
+                            }
+                        } else {
+                            maxAmpZeroCount = 0
+                        }
+                        amp = raw
+                    } else {
+                        amp = meteringAmplitude / 32768f
+                    }
+                    mainHandler.post {
+                        overlayView?.updateAmplitude(amp)
+                    }
+                }
+            }, 0, 80)
+        }
+    }
+
+    private fun stopAmplitudePolling() {
+        amplitudeTimer?.cancel()
+        amplitudeTimer = null
+        stopAudioRecordMetering()
+    }
+
+    @Suppress("MissingPermission")
+    private fun startAudioRecordMetering() {
+        try {
+            val sampleRate = 16000
+            val bufSize = AudioRecord.getMinBufferSize(
+                sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (bufSize <= 0) return
+            val ar = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                sampleRate, AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, bufSize
+            )
+            if (ar.state != AudioRecord.STATE_INITIALIZED) { ar.release(); return }
+            ar.startRecording()
+            audioRecord = ar
+            meteringThread = Thread {
+                val buf = ShortArray(bufSize / 2)
+                while (!Thread.currentThread().isInterrupted) {
+                    val read = try { ar.read(buf, 0, buf.size) } catch (_: Exception) { break }
+                    if (read > 0) {
+                        var maxVal = 0
+                        for (j in 0 until read) {
+                            val v = kotlin.math.abs(buf[j].toInt())
+                            if (v > maxVal) maxVal = v
+                        }
+                        meteringAmplitude = maxVal
+                    }
+                }
+            }.apply { isDaemon = true; name = "TalkBackMetering"; start() }
+        } catch (_: Exception) {}
+    }
+
+    private fun stopAudioRecordMetering() {
+        meteringThread?.interrupt(); meteringThread = null
+        try { audioRecord?.stop() } catch (_: Exception) {}
+        try { audioRecord?.release() } catch (_: Exception) {}
+        audioRecord = null; meteringAmplitude = 0
+    }
+
+    // ========== existing helpers ==========
 
     private fun initTimer() {
         timer = Timer()
@@ -153,6 +295,7 @@ class TalkBackView @JvmOverloads constructor(
     fun cancelRecording() {
         timer?.cancel()
         AudioRecordManager.getInstance().cancelRecord()
+        dismissOverlay()
         updateCancelUi()
     }
 

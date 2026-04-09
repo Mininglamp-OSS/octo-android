@@ -52,10 +52,10 @@ public class WKCommonModel extends WKBaseModel {
 
     public void getAppNewVersion(boolean isShowToast, final IAppNewVersion iAppNewVersion) {
         String v = WKDeviceUtils.getInstance().getVersionName(WKBaseApplication.getInstance().getContext());
-        request(createService(WKCommonService.class).getAppNewVersion(v), new IRequestResultListener<AppVersion>() {
+        request(createService(WKCommonService.class).getAppNewVersion("android", v), new IRequestResultListener<AppVersion>() {
             @Override
             public void onSuccess(AppVersion result) {
-                if ((result == null || TextUtils.isEmpty(result.download_url)) && isShowToast) {
+                if ((result == null || TextUtils.isEmpty(result.url)) && isShowToast) {
                     WKToastUtils.getInstance().showToastNormal(WKBaseApplication.getInstance().getContext().getString(R.string.is_new_version));
                 } else {
                     iAppNewVersion.onNewVersion(result);
@@ -64,7 +64,9 @@ public class WKCommonModel extends WKBaseModel {
 
             @Override
             public void onFail(int code, String msg) {
-
+                if (isShowToast) {
+                    WKToastUtils.getInstance().showToastNormal(WKBaseApplication.getInstance().getContext().getString(R.string.is_new_version));
+                }
             }
         });
     }

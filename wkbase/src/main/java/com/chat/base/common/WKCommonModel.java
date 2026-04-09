@@ -64,7 +64,9 @@ public class WKCommonModel extends WKBaseModel {
 
             @Override
             public void onFail(int code, String msg) {
-
+                if (isShowToast) {
+                    WKToastUtils.getInstance().showToastNormal(WKBaseApplication.getInstance().getContext().getString(R.string.is_new_version));
+                }
             }
         });
     }

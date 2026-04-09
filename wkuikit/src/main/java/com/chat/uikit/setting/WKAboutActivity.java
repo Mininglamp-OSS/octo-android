@@ -9,6 +9,7 @@ import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActAboutLayoutBinding;
@@ -66,6 +67,9 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
                 }
             } else {
                 wkVBinding.newVersionIv.setVisibility(View.GONE);
+                if (isShowDialog) {
+                    WKToastUtils.getInstance().showToastNormal(getString(R.string.is_new_version));
+                }
             }
         });
     }

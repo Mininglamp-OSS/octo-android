@@ -16,6 +16,7 @@ import com.chat.uikit.view.voice.VoiceInputView;
 import com.chat.uikit.view.voice.WKVoicePanelView;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKVoiceContent;
@@ -23,7 +24,9 @@ import com.xinbida.wukongim.msgmodel.WKVoiceContent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 语音管理类 - 三 Tab 语音面板
@@ -141,16 +144,104 @@ public class WKVoiceViewManager {
     }
 
     /**
-     * 构建 chat_context：取最近 10 条文本消息，格式为 [displayName]:content
+     * 构建 chat_context：注入聊天成员名称 + 最近 10 条文本消息
+     * 格式：聊天成员：张三,李四,王五\n[张三]: 消息内容
      */
     private String buildChatContext(IConversationContext context) {
+        WKChannel channel = context.getChatChannelInfo();
+        String loginUID = WKConfig.getInstance().getUid();
+
+        // 1. 收集成员名称
+        Set<String> names = new LinkedHashSet<>();
+        if (channel != null && channel.channelType == WKChannelType.GROUP) {
+            int memberCount = WKIM.getInstance().getChannelMembersManager()
+                    .getMemberCount(channel.channelID, channel.channelType);
+            if (memberCount <= 100) {
+                // 策略1：≤100人，收集全部成员名称
+                List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
+                        .getMembers(channel.channelID, channel.channelType);
+                for (WKChannelMember member : members) {
+                    if (loginUID.equals(member.memberUID)) continue;
+                    if (member.isDeleted == 1) continue;
+                    addNameIfValid(names, member.memberName);
+                    if (!TextUtils.equals(member.remark, member.memberName)) {
+                        addNameIfValid(names, member.remark);
+                    }
+                }
+            } else {
+                // 策略2：>100人，只收集最近消息中活跃发言者的名称
+                Set<String> activeUIDs = collectActiveUIDs(context, loginUID);
+                List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
+                        .getMembers(channel.channelID, channel.channelType);
+                for (WKChannelMember member : members) {
+                    if (!activeUIDs.contains(member.memberUID)) continue;
+                    if (member.isDeleted == 1) continue;
+                    addNameIfValid(names, member.memberName);
+                    if (!TextUtils.equals(member.remark, member.memberName)) {
+                        addNameIfValid(names, member.remark);
+                    }
+                }
+            }
+        } else if (channel != null && channel.channelType == WKChannelType.PERSONAL) {
+            // 私聊：收集对方的名称和备注
+            addNameIfValid(names, channel.channelName);
+            if (!TextUtils.equals(channel.channelRemark, channel.channelName)) {
+                addNameIfValid(names, channel.channelRemark);
+            }
+        }
+
+        // 2. 收集最近 10 条文本消息
+        List<String> msgLines = buildMessageLines(context, loginUID);
+
+        // 3. 拼接结果
+        List<String> parts = new ArrayList<>();
+        if (!names.isEmpty()) {
+            parts.add("聊天成员：" + TextUtils.join(",", names));
+        }
+        if (!msgLines.isEmpty()) {
+            parts.add(TextUtils.join("\n", msgLines));
+        }
+
+        return parts.isEmpty() ? null : TextUtils.join("\n", parts);
+    }
+
+    private void addNameIfValid(Set<String> names, String name) {
+        if (!TextUtils.isEmpty(name) && !TextUtils.isEmpty(name.trim())) {
+            names.add(name);
+        }
+    }
+
+    /**
+     * 从最近消息中提取活跃发言者 UID，最多 100 个
+     */
+    private Set<String> collectActiveUIDs(IConversationContext context, String loginUID) {
+        Set<String> activeUIDs = new LinkedHashSet<>();
         ChatAdapter adapter = context.getChatAdapter();
-        if (adapter == null) return null;
+        if (adapter == null) return activeUIDs;
 
         List<WKUIChatMsgItemEntity> allData = adapter.getData();
-        if (allData == null || allData.isEmpty()) return null;
+        if (allData == null) return activeUIDs;
 
-        // Filter text messages
+        for (int i = allData.size() - 1; i >= 0 && activeUIDs.size() < 100; i--) {
+            WKMsg msg = allData.get(i).wkMsg;
+            if (msg != null && msg.fromUID != null && !msg.fromUID.equals(loginUID)) {
+                activeUIDs.add(msg.fromUID);
+            }
+        }
+        return activeUIDs;
+    }
+
+    /**
+     * 取最近 10 条文本消息，格式化为 [displayName]: content
+     */
+    private List<String> buildMessageLines(IConversationContext context, String loginUID) {
+        List<String> lines = new ArrayList<>();
+        ChatAdapter adapter = context.getChatAdapter();
+        if (adapter == null) return lines;
+
+        List<WKUIChatMsgItemEntity> allData = adapter.getData();
+        if (allData == null || allData.isEmpty()) return lines;
+
         List<WKMsg> textMessages = new ArrayList<>();
         for (WKUIChatMsgItemEntity item : allData) {
             if (item.wkMsg == null) continue;
@@ -161,25 +252,14 @@ public class WKVoiceViewManager {
             textMessages.add(item.wkMsg);
         }
 
-        if (textMessages.isEmpty()) return null;
-
-        // Take last 10
         int count = Math.min(textMessages.size(), 10);
         List<WKMsg> recent = textMessages.subList(textMessages.size() - count, textMessages.size());
-
-        // Format as [displayName]:content
-        StringBuilder sb = new StringBuilder();
-        String loginUID = WKConfig.getInstance().getUid();
-        for (int i = 0; i < recent.size(); i++) {
-            WKMsg msg = recent.get(i);
+        for (WKMsg msg : recent) {
             String senderName = resolveSenderName(msg, loginUID);
             String content = msg.baseContentMsgModel.getDisplayContent();
-
-            if (i > 0) sb.append("\n");
-            sb.append("[").append(senderName).append("]:").append(content);
+            lines.add("[" + senderName + "]: " + content);
         }
-
-        return sb.toString();
+        return lines;
     }
 
     private String resolveSenderName(WKMsg msg, String loginUID) {

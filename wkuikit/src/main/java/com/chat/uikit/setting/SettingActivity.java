@@ -14,6 +14,7 @@ import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.DataCleanManager;
+import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
@@ -87,7 +88,8 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         SingleClickUtil.onSingleClick(wkVBinding.aboutLayout, view1 -> startActivity(new Intent(this, WKAboutActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.fontSizeLayout, view1 -> startActivity(new Intent(this, WKSetFontSizeActivity.class)));
         WKCommonModel.getInstance().getAppNewVersion(false, version -> {
-            if (version != null && !TextUtils.isEmpty(version.url)) {
+            String v = WKDeviceUtils.getInstance().getVersionName(this);
+            if (version != null && !TextUtils.isEmpty(version.url) && WKDeviceUtils.getInstance().isNewerVersion(version.version, v)) {
                 wkVBinding.newVersionIv.setVisibility(View.VISIBLE);
             } else {
                 wkVBinding.newVersionIv.setVisibility(View.GONE);

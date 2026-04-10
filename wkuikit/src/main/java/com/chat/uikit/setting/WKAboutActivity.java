@@ -59,7 +59,7 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
     private void checkNewVersion(boolean isShowDialog) {
         WKCommonModel.getInstance().getAppNewVersion(isShowDialog, version -> {
             String v = WKDeviceUtils.getInstance().getVersionName(WKAboutActivity.this);
-            if (version != null && !TextUtils.isEmpty(version.url) && !version.version.equals(v)) {
+            if (version != null && !TextUtils.isEmpty(version.url) && WKDeviceUtils.getInstance().isNewerVersion(version.version, v)) {
                 if (isShowDialog) {
                     WKDialogUtils.getInstance().showNewVersionDialog(WKAboutActivity.this, version);
                 } else {

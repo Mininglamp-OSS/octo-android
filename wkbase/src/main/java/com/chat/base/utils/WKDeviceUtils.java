@@ -380,6 +380,33 @@ public class WKDeviceUtils {
         return "";
     }
 
+    /**
+     * 比较两个语义化版本号，仅当 remoteVersion > localVersion 时返回 true
+     */
+    public boolean isNewerVersion(String remoteVersion, String localVersion) {
+        if (TextUtils.isEmpty(remoteVersion) || TextUtils.isEmpty(localVersion)) {
+            return false;
+        }
+        String[] remote = remoteVersion.split("\\.");
+        String[] local = localVersion.split("\\.");
+        int length = Math.max(remote.length, local.length);
+        for (int i = 0; i < length; i++) {
+            int r = i < remote.length ? parseIntSafe(remote[i]) : 0;
+            int l = i < local.length ? parseIntSafe(local[i]) : 0;
+            if (r > l) return true;
+            if (r < l) return false;
+        }
+        return false;
+    }
+
+    private int parseIntSafe(String s) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     public void installApk(Context context, String downloadApk) {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         File file = new File(downloadApk);

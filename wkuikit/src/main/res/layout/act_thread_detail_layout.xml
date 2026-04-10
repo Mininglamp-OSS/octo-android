@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/threadNameLayout"
+                style="@style/layoutBg">
+
+                <TextView
+                    style="@style/leftTextView"
+                    android:layout_weight="1"
+                    android:text="@string/str_thread_name" />
+
+                <TextView
+                    android:id="@+id/threadNameTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="10dp"
+                    android:textColor="@color/color999"
+                    android:textSize="15sp" />
+
+                <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/threadMembersLayout"
+                style="@style/layoutBg">
+
+                <TextView
+                    style="@style/leftTextView"
+                    android:layout_weight="1"
+                    android:text="@string/str_thread_members" />
+
+                <TextView
+                    android:id="@+id/memberCountTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="10dp"
+                    android:textColor="@color/color999"
+                    android:textSize="15sp" />
+
+                <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/creatorLayout"
+                style="@style/layoutBg">
+
+                <TextView
+                    style="@style/leftTextView"
+                    android:layout_weight="1"
+                    android:text="@string/str_creator" />
+
+                <TextView
+                    android:id="@+id/creatorNameTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="10dp"
+                    android:textColor="@color/color999"
+                    android:textSize="15sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/archiveBtn"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginHorizontal="15dp"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/radian_normal_layout"
+                android:gravity="center"
+                android:text="@string/str_archive_thread"
+                android:textColor="@color/colorAccent"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/leaveBtn"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginHorizontal="15dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/radian_normal_layout"
+                android:gravity="center"
+                android:text="@string/str_leave_thread"
+                android:textColor="@color/red"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

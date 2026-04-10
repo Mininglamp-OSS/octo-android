@@ -95,6 +95,9 @@ import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
+import com.chat.uikit.thread.CreateThreadActivity;
+import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
+import com.chat.uikit.thread.provider.WKThreadCreatedProvider;
 import com.chat.uikit.chat.search.date.SearchWithDateActivity;
 import com.chat.uikit.chat.search.image.SearchWithImgActivity;
 import com.chat.uikit.contacts.ChooseContactsActivity;
@@ -220,6 +223,7 @@ public class WKUIKitApplication {
         WKIM.getInstance().getMsgManager().registerContentMsg(WKFileContent.class);
 
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKThreadCreatedContent.class);
         //添加消息item
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider());
@@ -233,6 +237,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_FILE, new WKFileProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
@@ -258,6 +263,29 @@ public class WKUIKitApplication {
                     assert cm != null;
                     cm.setPrimaryClip(mClipData);
                     WKToastUtils.getInstance().showToastNormal(iConversationContext.getChatActivity().getString(R.string.copyed));
+                });
+            }
+            return null;
+        });
+        // 创建子区长按菜单
+        EndpointManager.getInstance().setMethod("create_thread", EndpointCategory.wkChatPopupItem, 10, object -> {
+            WKMsg wkMsg = (WKMsg) object;
+            // 仅在群聊中、thread_on开启、非系统消息时显示
+            if (wkMsg.channelType == WKChannelType.GROUP
+                    && WKConfig.getInstance().getAppConfig().thread_on == 1
+                    && !WKContentType.isSystemMsg(wkMsg.type)) {
+                return new ChatItemPopupMenu(R.mipmap.msg_forward, getContext().getString(R.string.str_create_thread), (msg, iConversationContext) -> {
+                    Intent intent = new Intent(iConversationContext.getChatActivity(), CreateThreadActivity.class);
+                    intent.putExtra("groupNo", msg.channelID);
+                    intent.putExtra("sourceMessageId", msg.messageID);
+                    if (msg.baseContentMsgModel != null) {
+                        intent.putExtra("sourceContent", msg.baseContentMsgModel.getDisplayContent());
+                    }
+                    if (msg.getFrom() != null) {
+                        intent.putExtra("sourceFromName", msg.getFrom().channelName);
+                    }
+                    intent.putExtra("sourceFromUid", msg.fromUID);
+                    iConversationContext.getChatActivity().startActivity(intent);
                 });
             }
             return null;

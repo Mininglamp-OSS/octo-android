@@ -1641,16 +1641,19 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     fun setItemPadding(position: Int, viewGroupLayout: ChatItemView) {
+        val adapter = getAdapter() ?: return
+        val dataIndex = position - adapter.headerLayoutCount
+        if (dataIndex < 0 || dataIndex >= adapter.data.size) return
         var top: Int
         var bottom: Int
-        val currentFromUID: String? = getAdapter()!!.data[position].wkMsg.fromUID
+        val currentFromUID: String? = adapter.data[dataIndex].wkMsg.fromUID
         var nextFromUID: String? = ""
         var previousFromUID: String? = ""
-        if (position + 1 <= getAdapter()!!.data.size - 1) {
-            nextFromUID = getAdapter()!!.data[position + 1].wkMsg.fromUID
+        if (dataIndex + 1 <= adapter.data.size - 1) {
+            nextFromUID = adapter.data[dataIndex + 1].wkMsg.fromUID
         }
-        if (position - 1 > 0) {
-            previousFromUID = getAdapter()!!.data[position - 1].wkMsg.fromUID
+        if (dataIndex - 1 >= 0) {
+            previousFromUID = adapter.data[dataIndex - 1].wkMsg.fromUID
         }
         if (TextUtils.isEmpty(currentFromUID)) {
             top = AndroidUtilities.dp(4f)
@@ -1667,10 +1670,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 AndroidUtilities.dp(4f)
             }
         }
-        if (position == getAdapter()!!.data.size - 1) {
+        if (dataIndex == adapter.data.size - 1) {
             bottom = AndroidUtilities.dp(10f)
         }
-        if (position == 0) {
+        if (dataIndex == 0) {
             top = AndroidUtilities.dp(10f)
         }
         viewGroupLayout.setPadding(0, top, 0, bottom)
@@ -1692,10 +1695,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
     override fun onViewAttachedToWindow(holder: BaseViewHolder) {
         super.onViewAttachedToWindow(holder)
-        val chatAdapter = getAdapter() as ChatAdapter
+        val chatAdapter = getAdapter() as? ChatAdapter ?: return
+        val dataIndex = holder.bindingAdapterPosition - chatAdapter.headerLayoutCount
+        if (dataIndex < 0 || dataIndex >= chatAdapter.data.size) return
         chatAdapter.conversationContext.onMsgViewed(
-            chatAdapter.data[holder.bindingAdapterPosition - chatAdapter.headerLayoutCount].wkMsg,
-            holder.bindingAdapterPosition - chatAdapter.headerLayoutCount
+            chatAdapter.data[dataIndex].wkMsg,
+            dataIndex
         )
     }
 

@@ -47,6 +47,8 @@ public class WKContentType extends WKMsgContentType {
     public final static int approveGroupMember = 1009;
     //截屏消息
     public final static int screenshot = 20;
+    //子区创建通知
+    public final static int threadCreated = 1100;
 
     public static boolean isSystemMsg(int type) {
         return type >= 1000 && type <= 2000;

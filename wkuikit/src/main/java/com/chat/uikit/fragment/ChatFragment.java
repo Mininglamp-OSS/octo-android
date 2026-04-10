@@ -464,6 +464,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
 
+            // 过滤子区会话
+            List<WKUIConversationMsg> filteredList = new ArrayList<>();
+            for (WKUIConversationMsg msg : list) {
+                if (msg.channelType != WKChannelType.COMMUNITY_TOPIC) {
+                    filteredList.add(msg);
+                }
+            }
+            list = filteredList;
+            if (WKReader.isEmpty(list)) {
+                return;
+            }
+
             if (chatConversationAdapter.getData().isEmpty()) {
                 // 适配器为空，说明是 Space 切换后的首次同步结果，记录有效会话 key
                 spaceConversationKeys.clear();
@@ -732,6 +744,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             List<ChatConversationMsg> tempList = new ArrayList<>();
             if (WKReader.isNotEmpty(list)) {
                 for (int i = 0, size = list.size(); i < size; i++) {
+                    // 子区会话不在主聊天列表显示
+                    if (list.get(i).channelType == WKChannelType.COMMUNITY_TOPIC) {
+                        continue;
+                    }
                     tempList.add(new ChatConversationMsg(list.get(i)));
                 }
             }
@@ -823,6 +839,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     private void resetData(WKUIConversationMsg uiConversationMsg, boolean isEnd) {
         if (uiConversationMsg == null) {
+            return;
+        }
+        // 子区会话不在主聊天列表显示
+        if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            if (isEnd) {
+                sortMsg(chatConversationAdapter.getData());
+            }
             return;
         }
         // || (uiConversationMsg.getWkChannel() != null && uiConversationMsg.getWkChannel().follow == 0 && uiConversationMsg.channelType == WKChannelType.PERSONAL)
@@ -1148,6 +1171,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
+        // 子区数量缓存清除，返回时重新获取
+        chatConversationAdapter.clearThreadCountCache();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
         refreshExtrasIfNeeded();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");

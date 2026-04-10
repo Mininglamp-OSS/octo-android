@@ -56,12 +56,16 @@ import org.telegram.ui.Components.RLottieImageView;
 
 import org.json.JSONObject;
 
+import com.chat.uikit.thread.service.ThreadModel;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 2019-11-15 13:46
@@ -69,6 +73,8 @@ import java.util.Set;
  */
 public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMsg, BaseViewHolder> {
     private IListener iListener;
+    // 缓存：groupNo → 子区数量，-1 表示正在加载
+    private final Map<String, Integer> threadCountCache = new ConcurrentHashMap<>();
 
     public ChatConversationAdapter(@Nullable List<ChatConversationMsg> data) {
         super(R.layout.item_chat_conv_layout, data);
@@ -577,6 +583,47 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
         }
         helper.setText(R.id.nameTv, showName);
+        // 群聊且 thread_on 开启时，在 categoryLayout 中显示子区数量标签
+        if (item.channelType == WKChannelType.GROUP
+                && WKConfig.getInstance().getAppConfig().thread_on == 1) {
+            String groupNo = item.channelID;
+            Integer cachedCount = threadCountCache.get(groupNo);
+            if (cachedCount != null && cachedCount > 0) {
+                LinearLayout categoryLayout = helper.getView(R.id.categoryLayout);
+                TextView threadCountTv = new TextView(getContext());
+                threadCountTv.setText("+" + cachedCount + "个子区");
+                threadCountTv.setTextSize(11);
+                threadCountTv.setTextColor(0xFFFF8C00);
+                categoryLayout.addView(threadCountTv, LayoutHelper.createLinear(
+                        LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
+                        Gravity.CENTER, 5, 0, 0, 0));
+            } else if (cachedCount == null) {
+                loadThreadCount(groupNo, helper.getBindingAdapterPosition());
+            }
+        }
+    }
+
+    private void loadThreadCount(String groupNo, int position) {
+        threadCountCache.put(groupNo, -1); // 标记加载中
+        ThreadModel.getInstance().listThreads(groupNo, (code, msg, list) -> {
+            int count = (list != null) ? list.size() : 0;
+            threadCountCache.put(groupNo, count);
+            if (count > 0) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    // 找到对应 position 刷新
+                    for (int i = 0; i < getData().size(); i++) {
+                        if (getData().get(i).uiConversationMsg.channelID.equals(groupNo)) {
+                            notifyItemChanged(i + getHeaderLayoutCount());
+                            break;
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    public void clearThreadCountCache() {
+        threadCountCache.clear();
     }
 
     private boolean isSetChatPwd(WKChannel channel) {

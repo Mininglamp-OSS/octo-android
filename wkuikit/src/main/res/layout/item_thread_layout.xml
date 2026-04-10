@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/layout_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="15dp"
+    android:paddingVertical="10dp">
+
+    <!-- # 图标 -->
+    <TextView
+        android:id="@+id/iconTv"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_dialog_api_btn_confirm"
+        android:gravity="center"
+        android:text="#"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- 子区名称 -->
+        <TextView
+            android:id="@+id/threadNameTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/colorDark"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="子区名称" />
+
+        <!-- 统计行：N条消息 · N位成员 · 时间 -->
+        <TextView
+            android:id="@+id/threadStatsTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/color999"
+            android:textSize="12sp"
+            tools:text="10条消息 · 5位成员 · 1小时前" />
+
+        <!-- 最后消息预览 -->
+        <TextView
+            android:id="@+id/lastMessageTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/color999"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="张三: 最后一条消息" />
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatImageView
+        style="@style/arrow_right_iv"
+        android:layout_marginStart="8dp" />
+</LinearLayout>

@@ -670,6 +670,9 @@ class SelectTextHelper(builder: Builder) {
                 if (mIsShowPinnedMessage == 1) {
                     return true
                 }
+                // 先清除其他消息的选中状态
+                EndpointManager.getInstance().invoke("chat_activity_touch", null)
+
                 coordinate = fullLayoutLocation[0]
                 mTouchX = fullLayoutLocation[0][0].toInt()
                 mTouchY = fullLayoutLocation[0][1].toInt()
@@ -763,6 +766,9 @@ class SelectTextHelper(builder: Builder) {
                 if (mIsShowPinnedMessage == 1) {
                     return true
                 }
+                // 先清除其他消息的选中状态
+                EndpointManager.getInstance().invoke("chat_activity_touch", null)
+
                 coordinate = textViewLocation[0]
                 mTouchX = textViewLocation[0][0].toInt()
                 mTouchY = textViewLocation[0][1].toInt()

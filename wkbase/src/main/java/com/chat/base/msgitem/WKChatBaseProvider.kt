@@ -1565,10 +1565,6 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             if (scrimPopupWindow == null) {
                 return@Runnable
             }
-            val activity = getActivityFromContext(context)
-            if (activity == null || activity.isFinishing || activity.isDestroyed) {
-                return@Runnable
-            }
             scrimPopupWindow!!.showAtLocation(
                 recyclerViewLayout, Gravity.START or Gravity.TOP, finalPopupX, finalPopupY
             )
@@ -1706,15 +1702,6 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             chatAdapter.data[dataIndex].wkMsg,
             dataIndex
         )
-    }
-
-    private fun getActivityFromContext(ctx: android.content.Context): android.app.Activity? {
-        var context = ctx
-        while (context is android.content.ContextWrapper) {
-            if (context is android.app.Activity) return context
-            context = context.baseContext
-        }
-        return null
     }
 
 }

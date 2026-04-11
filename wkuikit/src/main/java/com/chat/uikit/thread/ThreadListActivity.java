@@ -68,7 +68,10 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         adapter.setOnItemLongClickListener((adapter1, view, position) -> {
             ThreadEntity entity = adapter.getItem(position);
             if (entity != null) {
-                showThreadOptions(entity);
+                String currentUid = com.chat.base.config.WKConfig.getInstance().getUid();
+                if (currentUid.equals(entity.creator_uid)) {
+                    showThreadOptions(entity);
+                }
             }
             return true;
         });

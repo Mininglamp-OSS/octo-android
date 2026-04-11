@@ -73,7 +73,7 @@ public class ThreadModel extends WKBaseModel {
     /**
      * 创建子区
      */
-    public void createThread(String groupNo, String name, String sourceMessageId, IThreadDetailListener listener) {
+    public void createThread(String groupNo, String name, String sourceMessageId, JSONObject sourceMessagePayload, IThreadDetailListener listener) {
         JSONObject body = new JSONObject();
         body.put("name", name);
         if (!TextUtils.isEmpty(sourceMessageId)) {
@@ -81,6 +81,9 @@ public class ThreadModel extends WKBaseModel {
                 body.put("source_message_id", Long.parseLong(sourceMessageId));
             } catch (NumberFormatException ignored) {
             }
+        }
+        if (sourceMessagePayload != null) {
+            body.put("source_message_payload", sourceMessagePayload);
         }
         request(createService(ThreadService.class).createThread(groupNo, body), new IRequestResultListener<>() {
             @Override

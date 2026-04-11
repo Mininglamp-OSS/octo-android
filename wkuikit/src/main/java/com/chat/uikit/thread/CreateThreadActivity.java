@@ -3,6 +3,8 @@ package com.chat.uikit.thread;
 import android.content.Intent;
 import android.text.TextUtils;
 
+import com.alibaba.fastjson.JSONObject;
+
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
@@ -109,11 +111,27 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
             }
         }
 
+        // 构建源消息 payload，与 iOS 一致
+        JSONObject sourcePayload = null;
+        if (!TextUtils.isEmpty(sourceMessageId) && !TextUtils.isEmpty(sourceContent)) {
+            sourcePayload = new JSONObject();
+            sourcePayload.put("type", 1);
+            sourcePayload.put("content", sourceContent);
+            if (!TextUtils.isEmpty(sourceFromUid)) {
+                sourcePayload.put("from_uid", sourceFromUid);
+            }
+            if (!TextUtils.isEmpty(sourceFromName)) {
+                sourcePayload.put("from_name", sourceFromName);
+            }
+        }
+
         wkVBinding.createBtn.setEnabled(false);
         String finalName = name;
-        ThreadModel.getInstance().createThread(groupNo, finalName, sourceMessageId, (code, msg, entity) -> {
+        ThreadModel.getInstance().createThread(groupNo, finalName, sourceMessageId, sourcePayload, (code, msg, entity) -> {
             wkVBinding.createBtn.setEnabled(true);
             if (code == HttpResponseCode.success && entity != null) {
+                // 创建者自动加入子区成员，与 iOS 一致
+                ThreadModel.getInstance().joinThread(groupNo, entity.short_id, (c, m) -> {});
                 String channelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
                 Intent intent = new Intent(this, ChatActivity.class);
                 intent.putExtra("channelId", channelId);

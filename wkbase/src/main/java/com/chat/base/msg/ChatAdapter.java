@@ -60,18 +60,32 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     private final AdapterType adapterType;
+    private ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> localProviderList;
 
     ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getItemProviderList() {
-        return adapterType == AdapterType.normalMessage ? WKMsgItemViewManager.getInstance().getChatItemProviderList() : WKMsgItemViewManager.getInstance().getPinnedChatItemProviderList();
+        return localProviderList;
     }
 
     public ChatAdapter(@NonNull IConversationContext iConversationContext, AdapterType adapterType) {
         super();
         this.adapterType = adapterType;
         this.iConversationContext = iConversationContext;
-        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> list = getItemProviderList();
-        for (int type : list.keySet()) {
-            addItemProvider(Objects.requireNonNull(list.get(type)));
+        ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> sourceList =
+                adapterType == AdapterType.normalMessage
+                        ? WKMsgItemViewManager.getInstance().getChatItemProviderList()
+                        : WKMsgItemViewManager.getInstance().getPinnedChatItemProviderList();
+        localProviderList = new ConcurrentHashMap<>();
+        for (int type : sourceList.keySet()) {
+            try {
+                BaseItemProvider<WKUIChatMsgItemEntity> newProvider =
+                        sourceList.get(type).getClass().getDeclaredConstructor().newInstance();
+                localProviderList.put(type, newProvider);
+                addItemProvider(newProvider);
+            } catch (Exception e) {
+                BaseItemProvider<WKUIChatMsgItemEntity> original = Objects.requireNonNull(sourceList.get(type));
+                localProviderList.put(type, original);
+                addItemProvider(original);
+            }
         }
     }
 

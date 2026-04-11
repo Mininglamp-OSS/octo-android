@@ -12,7 +12,36 @@ import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 public class WKThreadCreatedContent extends WKMessageContent {
+
+    // 全局缓存：threadChannelId → 最新消息条数（对齐 iOS messageCountCache）
+    private static final ConcurrentHashMap<String, Integer> messageCountCache = new ConcurrentHashMap<>();
+
+    /**
+     * 获取子区最新消息数量：优先从缓存取，fallback 到 content 的值
+     */
+    public static int getMessageCount(String threadChannelId, int fallback) {
+        Integer cached = messageCountCache.get(threadChannelId);
+        return cached != null ? cached : fallback;
+    }
+
+    public static void setMessageCount(String threadChannelId, int count) {
+        if (threadChannelId != null) {
+            messageCountCache.put(threadChannelId, count);
+        }
+    }
+
+    public static void incrementMessageCount(String threadChannelId) {
+        if (threadChannelId != null) {
+            messageCountCache.merge(threadChannelId, 1, Integer::sum);
+        }
+    }
+
+    public static void clearCache() {
+        messageCountCache.clear();
+    }
 
     public String content;
     public String from_uid;

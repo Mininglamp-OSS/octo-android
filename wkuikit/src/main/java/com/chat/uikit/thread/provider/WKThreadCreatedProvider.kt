@@ -52,10 +52,11 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
         // 第二行左：「子区名称」
         helper.getView<TextView>(R.id.threadNameTv).text = "「${content.thread_name ?: ""}」"
 
-        // 第二行右：直接用 payload 的 message_count，和 iOS 一致
+        // 第二行右：优先从缓存取最新消息数量，fallback 到 payload（对齐 iOS latestMessageCount:）
         val actionTv = helper.getView<TextView>(R.id.actionTv)
-        if (content.message_count > 0) {
-            actionTv.text = String.format(context.getString(R.string.str_thread_msg_count), content.message_count)
+        val latestCount = WKThreadCreatedContent.getMessageCount(content.channel_id, content.message_count)
+        if (latestCount > 0) {
+            actionTv.text = String.format(context.getString(R.string.str_thread_msg_count), latestCount)
         } else {
             actionTv.text = context.getString(R.string.str_view_thread)
         }

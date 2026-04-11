@@ -98,6 +98,7 @@ import com.chat.uikit.group.GroupDetailActivity;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.thread.ThreadDetailActivity;
+import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.robot.service.WKRobotModel;
 import com.chat.uikit.space.SpaceModel;
@@ -296,6 +297,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         isUploadReadMsg = true;
         chatPanelManager.initRefreshListener();
         EndpointManager.getInstance().invoke("start_screen_shot", this);
+        // 从子区返回时重新拉取消息数量
+        fetchThreadMessageCounts();
     }
 
     @Override
@@ -1081,6 +1084,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             wkVBinding.topLayout.subtitleView.setVisibility(View.VISIBLE);
             chatPanelManager.showOrHideForbiddenView();
+            // 获取群内子区的消息数量，更新缓存（对齐 iOS fetchThreadMessageCounts）
+            fetchThreadMessageCounts();
         } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
             // 子区：同步成员 + 显示子区标题
             ThreadModel.getInstance().syncThreadMembers(channelId, null);
@@ -1170,6 +1175,54 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             resetGroupApproveView();
         }, 150);
 
+    }
+
+    /**
+     * 获取群内所有子区的消息数量，更新到全局缓存（对齐 iOS fetchThreadMessageCounts）
+     */
+    private void fetchThreadMessageCounts() {
+        if (channelType != WKChannelType.GROUP) return;
+        ThreadModel.getInstance().listThreads(channelId, (code, msg, list) -> {
+            if (code == com.chat.base.net.HttpResponseCode.success && list != null) {
+                for (com.chat.uikit.thread.service.entity.ThreadEntity t : list) {
+                    if (!TextUtils.isEmpty(t.channel_id)) {
+                        WKThreadCreatedContent.setMessageCount(t.channel_id, t.message_count);
+                    }
+                }
+                refreshThreadCreatedCards();
+            }
+        });
+        // 用新消息监听代替会话刷新监听，只在真正收到新消息时 +1
+        String listenerKey = "thread_count_" + channelId;
+        WKIM.getInstance().getMsgManager().addOnNewMsgListener(listenerKey, msgs -> {
+            if (msgs == null) return;
+            boolean needRefresh = false;
+            for (WKMsg m : msgs) {
+                if (m.channelType == WKChannelType.COMMUNITY_TOPIC
+                        && m.channelID != null
+                        && m.channelID.startsWith(channelId + "____")) {
+                    WKThreadCreatedContent.incrementMessageCount(m.channelID);
+                    needRefresh = true;
+                }
+            }
+            if (needRefresh) {
+                refreshThreadCreatedCards();
+            }
+        });
+    }
+
+    /**
+     * 刷新聊天列表中所有子区创建卡片的消息数量
+     */
+    private void refreshThreadCreatedCards() {
+        if (chatAdapter == null) return;
+        int headerCount = chatAdapter.getHeaderLayoutCount();
+        for (int i = 0; i < chatAdapter.getData().size(); i++) {
+            WKUIChatMsgItemEntity item = chatAdapter.getData().get(i);
+            if (item.wkMsg != null && item.wkMsg.type == WKContentType.threadCreated) {
+                chatAdapter.notifyItemChanged(i + headerCount);
+            }
+        }
     }
 
     private void getChannelState() {
@@ -2073,7 +2126,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return;
         }
 
-        if (channelType == WKChannelType.GROUP && !TextUtils.isEmpty(wkMsg.fromUID) && !wkMsg.fromUID.equals(loginUID)) {
+        if ((channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) && !TextUtils.isEmpty(wkMsg.fromUID) && !wkMsg.fromUID.equals(loginUID)) {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, wkMsg.fromUID);
             if (member != null) {
                 chatPanelManager.addSpan(member.memberName, member.memberUID);
@@ -2361,6 +2414,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKIM.getInstance().getMsgManager().removeClearMsg(channelId);
         WKIM.getInstance().getRobotManager().removeRefreshRobotMenu(channelId);
         WKIM.getInstance().getReminderManager().removeNewReminderListener(channelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + channelId);
     }
 
     @Override

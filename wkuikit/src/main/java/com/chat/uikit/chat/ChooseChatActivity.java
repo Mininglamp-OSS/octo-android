@@ -27,6 +27,7 @@ import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelStatus;
+import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
@@ -201,6 +202,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         List<WKUIConversationMsg> list = WKIM.getInstance().getConversationManager().getAll();
         allList = new ArrayList<>();
         for (int i = 0, size = list.size(); i < size; i++) {
+            if (list.get(i).channelType == WKChannelType.COMMUNITY_TOPIC) continue;
             ChooseChatEntity chooseChatEntity = new ChooseChatEntity(list.get(i));
             if (list.get(i).getWkChannel() != null) {
                 WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(list.get(i).getWkChannel().channelID, list.get(i).getWkChannel().channelType, WKConfig.getInstance().getUid());

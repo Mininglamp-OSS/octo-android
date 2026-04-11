@@ -501,7 +501,7 @@ public class WKIMUtils {
                     for (int i = 0; i < word.content.length(); i++) {
                         sb.append("*");
                     }
-                    content = content.replaceAll(word.content, sb.toString());
+                    content = content.replace(word.content, sb.toString());
                 }
             }
 

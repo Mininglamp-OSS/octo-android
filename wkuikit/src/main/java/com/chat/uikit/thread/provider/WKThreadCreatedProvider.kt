@@ -15,7 +15,7 @@ import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
 import com.chat.uikit.chat.ChatActivity
 import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent
-import com.chat.uikit.thread.service.ThreadModel
+
 import com.xinbida.wukongim.entity.WKChannelType
 
 class WKThreadCreatedProvider : WKChatBaseProvider() {
@@ -66,13 +66,10 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
         }
         helper.getView<View>(R.id.threadCardLayout).setOnClickListener {
             val channelId = content.channel_id ?: return@setOnClickListener
-            val parsed = ThreadModel.getInstance().parseChannelId(channelId) ?: return@setOnClickListener
-            ThreadModel.getInstance().joinThread(parsed[0], parsed[1]) { _, _ ->
-                val intent = Intent(context, ChatActivity::class.java)
-                intent.putExtra("channelId", channelId)
-                intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                context.startActivity(intent)
-            }
+            val intent = Intent(context, ChatActivity::class.java)
+            intent.putExtra("channelId", channelId)
+            intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
+            context.startActivity(intent)
         }
     }
 }

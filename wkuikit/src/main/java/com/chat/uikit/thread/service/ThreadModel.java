@@ -82,17 +82,14 @@ public class ThreadModel extends WKBaseModel {
             } catch (NumberFormatException ignored) {
             }
         }
-        android.util.Log.d("CreateThread", "API request body=" + body.toJSONString() + " groupNo=" + groupNo);
         request(createService(ThreadService.class).createThread(groupNo, body), new IRequestResultListener<>() {
             @Override
             public void onSuccess(ThreadEntity result) {
-                android.util.Log.d("CreateThread", "API success shortId=" + result.short_id);
                 listener.onResult(HttpResponseCode.success, "", result);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                android.util.Log.e("CreateThread", "API fail code=" + code + " msg=" + msg);
                 listener.onResult(code, msg, null);
             }
         });

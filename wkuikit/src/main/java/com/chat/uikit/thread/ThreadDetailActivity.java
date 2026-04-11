@@ -18,6 +18,7 @@ import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActThreadDetailLayoutBinding;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
+import com.chat.uikit.thread.service.entity.ThreadMember;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -126,7 +127,25 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                         wkVBinding.archiveBtn.setText(R.string.str_unarchive_thread);
                     }
                 }
+
+                // 通过成员列表判断当前用户是否已加入子区
+                checkMembership(currentUid);
             }
+        });
+    }
+
+    private void checkMembership(String currentUid) {
+        ThreadModel.getInstance().getThreadMembers(groupNo, shortId, "", 1, 100, (code, msg, members) -> {
+            boolean isMember = false;
+            if (code == HttpResponseCode.success && members != null) {
+                for (ThreadMember member : members) {
+                    if (currentUid.equals(member.uid) && member.is_deleted == 0) {
+                        isMember = true;
+                        break;
+                    }
+                }
+            }
+            wkVBinding.leaveBtn.setVisibility(isMember ? View.VISIBLE : View.GONE);
         });
     }
 }

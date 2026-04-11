@@ -210,6 +210,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private final String loginUID = WKConfig.getInstance().getUid();
     private final int callingViewHeight = AndroidUtilities.dp(40f);
     private final int pinnedViewHeight = AndroidUtilities.dp(50f);
+    private boolean hasJoinedThread = false;
 
     private int getTopPinViewHeight() {
         int totalHeight = 0;
@@ -1871,10 +1872,27 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         hideChannelAllPinnedMessage = WKSharedPreferencesUtil.getInstance().getIntWithUID(key);
     }
 
+    private float dispatchDownX, dispatchDownY;
+    private long dispatchDownTime;
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (ev.getAction() == MotionEvent.ACTION_DOWN)
-            EndpointManager.getInstance().invoke("chat_activity_touch", null);
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                dispatchDownX = ev.getRawX();
+                dispatchDownY = ev.getRawY();
+                dispatchDownTime = ev.getDownTime();
+                break;
+            case MotionEvent.ACTION_UP:
+                int touchSlop = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
+                long duration = ev.getEventTime() - dispatchDownTime;
+                if (Math.abs(ev.getRawX() - dispatchDownX) < touchSlop
+                        && Math.abs(ev.getRawY() - dispatchDownY) < touchSlop
+                        && duration < android.view.ViewConfiguration.getLongPressTimeout()) {
+                    EndpointManager.getInstance().invoke("chat_activity_touch", null);
+                }
+                break;
+        }
         return super.dispatchTouchEvent(ev);
     }
 
@@ -1960,6 +1978,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKChannel channel = getChatChannelInfo();
         wkMsg.setChannelInfo(channel);
         WKSendMsgUtils.getInstance().sendMessage(wkMsg);
+
+        // 子区首次发消息时自动加入成员列表
+        if (channelType == WKChannelType.COMMUNITY_TOPIC && !hasJoinedThread) {
+            hasJoinedThread = true;
+            String[] parsed = ThreadModel.getInstance().parseChannelId(channelId);
+            if (parsed != null) {
+                ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
+            }
+        }
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {

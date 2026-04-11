@@ -537,6 +537,31 @@ class SelectTextHelper(builder: Builder) {
         }
     }
 
+    private fun createRootTouchListener(): OnTouchListener {
+        return object : OnTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            private val touchSlop = android.view.ViewConfiguration.get(mContext).scaledTouchSlop
+
+            override fun onTouch(v: View?, event: android.view.MotionEvent?): Boolean {
+                when (event?.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        downX = event.rawX
+                        downY = event.rawY
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        if (Math.abs(event.rawX - downX) < touchSlop
+                            && Math.abs(event.rawY - downY) < touchSlop) {
+                            reset()
+                            mTextView.rootView.setOnTouchListener(null)
+                        }
+                    }
+                }
+                return false
+            }
+        }
+    }
+
     /**
      * 重置弹窗
      */
@@ -673,11 +698,7 @@ class SelectTextHelper(builder: Builder) {
                     null
                 }
                 // 根布局监听
-                mRootTouchListener = OnTouchListener { _, _ ->
-                    reset()
-                    mTextView.rootView.setOnTouchListener(null)
-                    return@OnTouchListener false
-                }
+                mRootTouchListener = createRootTouchListener()
                 mTextView.rootView.setOnTouchListener(mRootTouchListener)
                 mOnScrollChangedListener = OnScrollChangedListener {
                     if (mScrollShow) {
@@ -770,11 +791,7 @@ class SelectTextHelper(builder: Builder) {
                     null
                 }
                 // 根布局监听
-                mRootTouchListener = OnTouchListener { _, _ ->
-                    reset()
-                    mTextView.rootView.setOnTouchListener(null)
-                    return@OnTouchListener false
-                }
+                mRootTouchListener = createRootTouchListener()
                 mTextView.rootView.setOnTouchListener(mRootTouchListener)
                 mOnScrollChangedListener = OnScrollChangedListener {
                     if (mScrollShow) {

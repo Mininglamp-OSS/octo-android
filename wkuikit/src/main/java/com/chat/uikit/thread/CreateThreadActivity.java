@@ -2,7 +2,7 @@ package com.chat.uikit.thread;
 
 import android.content.Intent;
 import android.text.TextUtils;
-import android.util.Log;
+
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
@@ -20,7 +20,6 @@ import com.xinbida.wukongim.entity.WKChannelType;
 
 public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBinding> {
 
-    private static final String TAG = "CreateThread";
 
     private String groupNo;
     private String sourceMessageId;
@@ -55,8 +54,6 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
         sourceContent = getIntent().getStringExtra("sourceContent");
         sourceFromName = getIntent().getStringExtra("sourceFromName");
         sourceFromUid = getIntent().getStringExtra("sourceFromUid");
-
-        Log.d(TAG, "initView groupNo=" + groupNo + " sourceMessageId=" + sourceMessageId + " sourceContent=" + sourceContent);
 
         if (!TextUtils.isEmpty(sourceMessageId) && !TextUtils.isEmpty(sourceContent)) {
             wkVBinding.divider.setVisibility(View.VISIBLE);
@@ -112,12 +109,9 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
             }
         }
 
-        Log.d(TAG, "createThread name=" + name + " groupNo=" + groupNo + " sourceMessageId=" + sourceMessageId);
-
         wkVBinding.createBtn.setEnabled(false);
         String finalName = name;
         ThreadModel.getInstance().createThread(groupNo, finalName, sourceMessageId, (code, msg, entity) -> {
-            Log.d(TAG, "createThread result code=" + code + " msg=" + msg + " entity=" + (entity != null ? entity.short_id : "null"));
             wkVBinding.createBtn.setEnabled(true);
             if (code == HttpResponseCode.success && entity != null) {
                 String channelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);

@@ -1247,9 +1247,21 @@ class ChatPanelManager(
         )
         remindRecycleView!!.setView(parentView, remindHeaderView)
         remindRecycleView!!.addOnScrollListener(remindRecycleView!!.onScrollListener)
+        // 子区用父群的成员列表来做 @mention（对齐 iOS 行为）
+        val mentionChannelID: String
+        val mentionChannelType: Byte
+        if (iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            val parsed = com.chat.uikit.thread.service.ThreadModel.getInstance()
+                .parseChannelId(iConversationContext.chatChannelInfo.channelID)
+            mentionChannelID = parsed?.get(0) ?: iConversationContext.chatChannelInfo.channelID
+            mentionChannelType = WKChannelType.GROUP
+        } else {
+            mentionChannelID = iConversationContext.chatChannelInfo.channelID
+            mentionChannelType = iConversationContext.chatChannelInfo.channelType
+        }
         remindMemberAdapter = RemindMemberAdapter(
-            iConversationContext.chatChannelInfo.channelID,
-            iConversationContext.chatChannelInfo.channelType
+            mentionChannelID,
+            mentionChannelType
         )
         remindRecycleView!!.adapter = remindMemberAdapter
         remindMemberAdapter!!.addHeaderView(remindHeaderView!!)
@@ -1762,7 +1774,7 @@ class ChatPanelManager(
                 hideRobotView()
             }
         }
-        if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP && isSearchGroupMembers) {
+        if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && isSearchGroupMembers) {
             var remindSearchKey: String = content
 
             remindSearchKey = remindSearchKey.replace("@".toRegex(), "")
@@ -1895,7 +1907,7 @@ class ChatPanelManager(
     }
 
     fun hideRemindView() {
-        if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP && remindRecycleView!!.visibility != View.GONE) {
+        if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && remindRecycleView!!.visibility != View.GONE) {
             CommonAnim.getInstance().hideTop2Bottom(remindRecycleView!!)
         }
     }

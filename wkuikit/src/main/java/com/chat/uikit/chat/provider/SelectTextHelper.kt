@@ -537,6 +537,31 @@ class SelectTextHelper(builder: Builder) {
         }
     }
 
+    private fun createRootTouchListener(): OnTouchListener {
+        return object : OnTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            private val touchSlop = android.view.ViewConfiguration.get(mContext).scaledTouchSlop
+
+            override fun onTouch(v: View?, event: android.view.MotionEvent?): Boolean {
+                when (event?.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        downX = event.rawX
+                        downY = event.rawY
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        if (Math.abs(event.rawX - downX) < touchSlop
+                            && Math.abs(event.rawY - downY) < touchSlop) {
+                            reset()
+                            mTextView.rootView.setOnTouchListener(null)
+                        }
+                    }
+                }
+                return false
+            }
+        }
+    }
+
     /**
      * 重置弹窗
      */
@@ -645,6 +670,9 @@ class SelectTextHelper(builder: Builder) {
                 if (mIsShowPinnedMessage == 1) {
                     return true
                 }
+                // 先清除其他消息的选中状态
+                EndpointManager.getInstance().invoke("chat_activity_touch", null)
+
                 coordinate = fullLayoutLocation[0]
                 mTouchX = fullLayoutLocation[0][0].toInt()
                 mTouchY = fullLayoutLocation[0][1].toInt()
@@ -673,11 +701,7 @@ class SelectTextHelper(builder: Builder) {
                     null
                 }
                 // 根布局监听
-                mRootTouchListener = OnTouchListener { _, _ ->
-                    reset()
-                    mTextView.rootView.setOnTouchListener(null)
-                    return@OnTouchListener false
-                }
+                mRootTouchListener = createRootTouchListener()
                 mTextView.rootView.setOnTouchListener(mRootTouchListener)
                 mOnScrollChangedListener = OnScrollChangedListener {
                     if (mScrollShow) {
@@ -742,6 +766,9 @@ class SelectTextHelper(builder: Builder) {
                 if (mIsShowPinnedMessage == 1) {
                     return true
                 }
+                // 先清除其他消息的选中状态
+                EndpointManager.getInstance().invoke("chat_activity_touch", null)
+
                 coordinate = textViewLocation[0]
                 mTouchX = textViewLocation[0][0].toInt()
                 mTouchY = textViewLocation[0][1].toInt()
@@ -770,11 +797,7 @@ class SelectTextHelper(builder: Builder) {
                     null
                 }
                 // 根布局监听
-                mRootTouchListener = OnTouchListener { _, _ ->
-                    reset()
-                    mTextView.rootView.setOnTouchListener(null)
-                    return@OnTouchListener false
-                }
+                mRootTouchListener = createRootTouchListener()
                 mTextView.rootView.setOnTouchListener(mRootTouchListener)
                 mOnScrollChangedListener = OnScrollChangedListener {
                     if (mScrollShow) {

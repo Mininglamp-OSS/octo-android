@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp">
+
+    <!-- 第一行：# 子区名称 ... 时间 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/threadHashTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="#"
+            android:textColor="@color/colorAccent"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/threadNameTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/colorDark"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/threadTimeTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textColor="@color/color999"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- 第二行：消息预览 ... 未读气泡 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/threadContentTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="18dp"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/color999"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/threadUnreadBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:minWidth="18dp"
+            android:layout_marginStart="5dp"
+            android:background="@drawable/thread_unread_badge_bg"
+            android:gravity="center"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

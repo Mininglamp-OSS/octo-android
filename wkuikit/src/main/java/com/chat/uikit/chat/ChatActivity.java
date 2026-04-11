@@ -97,6 +97,9 @@ import com.chat.uikit.group.ChooseVideoCallMembersActivity;
 import com.chat.uikit.group.GroupDetailActivity;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.thread.ThreadDetailActivity;
+import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
+import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.robot.service.WKRobotModel;
 import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.user.service.UserModel;
@@ -208,6 +211,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private final String loginUID = WKConfig.getInstance().getUid();
     private final int callingViewHeight = AndroidUtilities.dp(40f);
     private final int pinnedViewHeight = AndroidUtilities.dp(50f);
+    private boolean hasJoinedThread = false;
 
     private int getTopPinViewHeight() {
         int totalHeight = 0;
@@ -293,6 +297,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         isUploadReadMsg = true;
         chatPanelManager.initRefreshListener();
         EndpointManager.getInstance().invoke("start_screen_shot", this);
+        // 从子区返回时重新拉取消息数量
+        fetchThreadMessageCounts();
     }
 
     @Override
@@ -527,8 +533,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);
             if ((member != null && member.isDeleted == 1) || channelType == WKChannelType.CUSTOMER_SERVICE)
                 return;
-            Intent intent = new Intent(ChatActivity.this, channelType == WKChannelType.GROUP ? GroupDetailActivity.class : ChatPersonalActivity.class);
-            intent.putExtra("channelId", channelId);
+            Intent intent;
+            if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                intent = new Intent(ChatActivity.this, ThreadDetailActivity.class);
+                intent.putExtra("channelId", channelId);
+            } else {
+                intent = new Intent(ChatActivity.this, channelType == WKChannelType.GROUP ? GroupDetailActivity.class : ChatPersonalActivity.class);
+                intent.putExtra("channelId", channelId);
+            }
             startActivity(intent);
         });
 
@@ -564,9 +576,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
             if ((member != null && member.isDeleted == 1) || channelType == WKChannelType.CUSTOMER_SERVICE)
                 return;
-//              SoftKeyboardUtils.getInstance().hideInput(this, wkVBinding.toolbarView.editText);
-            Intent intent = new Intent(ChatActivity.this, channelType == WKChannelType.GROUP ? GroupDetailActivity.class : ChatPersonalActivity.class);
-            intent.putExtra("channelId", channelId);
+            Intent intent;
+            if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                intent = new Intent(ChatActivity.this, ThreadDetailActivity.class);
+                intent.putExtra("channelId", channelId);
+            } else {
+                intent = new Intent(ChatActivity.this, channelType == WKChannelType.GROUP ? GroupDetailActivity.class : ChatPersonalActivity.class);
+                intent.putExtra("channelId", channelId);
+            }
             startActivity(intent);
         });
 
@@ -653,7 +670,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (channel == null) return;
             if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
                 showChannelName(channel);
-                wkVBinding.topLayout.avatarView.showAvatar(channel);
+                if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    wkVBinding.topLayout.avatarView.defaultAvatarTv.setVisibility(View.GONE);
+                    wkVBinding.topLayout.avatarView.imageView.setVisibility(View.VISIBLE);
+                    wkVBinding.topLayout.avatarView.imageView.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+                    wkVBinding.topLayout.avatarView.imageView.setPadding(0, 0, 0, 0);
+                    wkVBinding.topLayout.avatarView.imageView.setImageResource(R.mipmap.ic_thread);
+                } else {
+                    wkVBinding.topLayout.avatarView.showAvatar(channel);
+                }
                 EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
                 //用户在线状态
                 if (channel.channelType == WKChannelType.PERSONAL) {
@@ -1013,7 +1038,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             EndpointManager.getInstance().invoke("show_avatar_other_info", new AvatarOtherViewMenu(wkVBinding.topLayout.otherLayout, channel, wkVBinding.topLayout.avatarView, true));
         }
-        wkVBinding.topLayout.avatarView.showAvatar(channelId, channelType, avatarKey);
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            wkVBinding.topLayout.avatarView.defaultAvatarTv.setVisibility(View.GONE);
+            wkVBinding.topLayout.avatarView.imageView.setVisibility(View.VISIBLE);
+            wkVBinding.topLayout.avatarView.imageView.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+            wkVBinding.topLayout.avatarView.imageView.setPadding(0, 0, 0, 0);
+            wkVBinding.topLayout.avatarView.imageView.setImageResource(R.mipmap.ic_thread);
+        } else {
+            wkVBinding.topLayout.avatarView.showAvatar(channelId, channelType, avatarKey);
+        }
 
         //如果是群聊就同步群成员信息
         if (channelType == WKChannelType.GROUP) {
@@ -1051,6 +1084,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             wkVBinding.topLayout.subtitleView.setVisibility(View.VISIBLE);
             chatPanelManager.showOrHideForbiddenView();
+            // 获取群内子区的消息数量，更新缓存（对齐 iOS fetchThreadMessageCounts）
+            fetchThreadMessageCounts();
+        } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            // 子区：同步成员 + 显示子区标题
+            ThreadModel.getInstance().syncThreadMembers(channelId, null);
+            hideOrShowRightView(true);
+            if (channel != null) {
+                showChannelName(channel);
+                // 子区副标题可显示父群名
+                if (channel.remoteExtraMap != null && channel.remoteExtraMap.containsKey("parentGroupNo")) {
+                    String parentGroupNo = (String) channel.remoteExtraMap.get("parentGroupNo");
+                    WKChannel parentChannel = WKIM.getInstance().getChannelManager().getChannel(parentGroupNo, WKChannelType.GROUP);
+                    if (parentChannel != null) {
+                        wkVBinding.topLayout.subtitleTv.setText(parentChannel.channelName);
+                        wkVBinding.topLayout.subtitleView.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+            // 隐藏通话按钮
+            if (callIV != null) {
+                callIV.setVisibility(View.GONE);
+            }
         } else {
             hideOrShowRightView(true);
             wkVBinding.topLayout.subtitleCountTv.setVisibility(View.GONE);
@@ -1120,6 +1175,54 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             resetGroupApproveView();
         }, 150);
 
+    }
+
+    /**
+     * 获取群内所有子区的消息数量，更新到全局缓存（对齐 iOS fetchThreadMessageCounts）
+     */
+    private void fetchThreadMessageCounts() {
+        if (channelType != WKChannelType.GROUP) return;
+        ThreadModel.getInstance().listThreads(channelId, (code, msg, list) -> {
+            if (code == com.chat.base.net.HttpResponseCode.success && list != null) {
+                for (com.chat.uikit.thread.service.entity.ThreadEntity t : list) {
+                    if (!TextUtils.isEmpty(t.channel_id)) {
+                        WKThreadCreatedContent.setMessageCount(t.channel_id, t.message_count);
+                    }
+                }
+                refreshThreadCreatedCards();
+            }
+        });
+        // 用新消息监听代替会话刷新监听，只在真正收到新消息时 +1
+        String listenerKey = "thread_count_" + channelId;
+        WKIM.getInstance().getMsgManager().addOnNewMsgListener(listenerKey, msgs -> {
+            if (msgs == null) return;
+            boolean needRefresh = false;
+            for (WKMsg m : msgs) {
+                if (m.channelType == WKChannelType.COMMUNITY_TOPIC
+                        && m.channelID != null
+                        && m.channelID.startsWith(channelId + "____")) {
+                    WKThreadCreatedContent.incrementMessageCount(m.channelID);
+                    needRefresh = true;
+                }
+            }
+            if (needRefresh) {
+                refreshThreadCreatedCards();
+            }
+        });
+    }
+
+    /**
+     * 刷新聊天列表中所有子区创建卡片的消息数量
+     */
+    private void refreshThreadCreatedCards() {
+        if (chatAdapter == null) return;
+        int headerCount = chatAdapter.getHeaderLayoutCount();
+        for (int i = 0; i < chatAdapter.getData().size(); i++) {
+            WKUIChatMsgItemEntity item = chatAdapter.getData().get(i);
+            if (item.wkMsg != null && item.wkMsg.type == WKContentType.threadCreated) {
+                chatAdapter.notifyItemChanged(i + headerCount);
+            }
+        }
     }
 
     private void getChannelState() {
@@ -1822,10 +1925,27 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         hideChannelAllPinnedMessage = WKSharedPreferencesUtil.getInstance().getIntWithUID(key);
     }
 
+    private float dispatchDownX, dispatchDownY;
+    private long dispatchDownTime;
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (ev.getAction() == MotionEvent.ACTION_DOWN)
-            EndpointManager.getInstance().invoke("chat_activity_touch", null);
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                dispatchDownX = ev.getRawX();
+                dispatchDownY = ev.getRawY();
+                dispatchDownTime = ev.getDownTime();
+                break;
+            case MotionEvent.ACTION_UP:
+                int touchSlop = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
+                long duration = ev.getEventTime() - dispatchDownTime;
+                if (Math.abs(ev.getRawX() - dispatchDownX) < touchSlop
+                        && Math.abs(ev.getRawY() - dispatchDownY) < touchSlop
+                        && duration < android.view.ViewConfiguration.getLongPressTimeout()) {
+                    EndpointManager.getInstance().invoke("chat_activity_touch", null);
+                }
+                break;
+        }
         return super.dispatchTouchEvent(ev);
     }
 
@@ -1911,6 +2031,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKChannel channel = getChatChannelInfo();
         wkMsg.setChannelInfo(channel);
         WKSendMsgUtils.getInstance().sendMessage(wkMsg);
+
+        // 子区首次发消息时自动加入成员列表
+        if (channelType == WKChannelType.COMMUNITY_TOPIC && !hasJoinedThread) {
+            hasJoinedThread = true;
+            String[] parsed = ThreadModel.getInstance().parseChannelId(channelId);
+            if (parsed != null) {
+                ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
+            }
+        }
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {
@@ -1997,7 +2126,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return;
         }
 
-        if (channelType == WKChannelType.GROUP && !TextUtils.isEmpty(wkMsg.fromUID) && !wkMsg.fromUID.equals(loginUID)) {
+        if ((channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) && !TextUtils.isEmpty(wkMsg.fromUID) && !wkMsg.fromUID.equals(loginUID)) {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, wkMsg.fromUID);
             if (member != null) {
                 chatPanelManager.addSpan(member.memberName, member.memberUID);
@@ -2285,6 +2414,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKIM.getInstance().getMsgManager().removeClearMsg(channelId);
         WKIM.getInstance().getRobotManager().removeRefreshRobotMenu(channelId);
         WKIM.getInstance().getReminderManager().removeNewReminderListener(channelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + channelId);
     }
 
     @Override

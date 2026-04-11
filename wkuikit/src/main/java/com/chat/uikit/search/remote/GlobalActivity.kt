@@ -213,6 +213,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         val conversations = WKIM.getInstance().conversationManager.all ?: return Pair(friends, groups)
         val lowerKeyword = keyword.lowercase()
         for (conv in conversations) {
+            if (conv.channelType == WKChannelType.COMMUNITY_TOPIC) continue
             val channel = conv.getWkChannel() ?: continue
             val displayName = when {
                 !channel.channelRemark.isNullOrEmpty() -> channel.channelRemark

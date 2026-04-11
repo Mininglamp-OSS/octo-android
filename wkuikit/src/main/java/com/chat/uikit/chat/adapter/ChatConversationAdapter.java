@@ -5,7 +5,10 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -13,6 +16,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
@@ -56,12 +60,18 @@ import org.telegram.ui.Components.RLottieImageView;
 
 import org.json.JSONObject;
 
+import com.chat.uikit.thread.service.ThreadModel;
+import com.chat.uikit.thread.service.entity.ThreadEntity;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 2019-11-15 13:46
@@ -69,6 +79,15 @@ import java.util.Set;
  */
 public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMsg, BaseViewHolder> {
     private IListener iListener;
+    private IThreadPreviewClickListener threadPreviewClickListener;
+    // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
+    private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
+    // 标记正在加载的 groupNo，避免重复请求
+    private final Set<String> threadLoadingSet = Collections.synchronizedSet(new HashSet<>());
+    // 防抖：延迟调 API，等服务端处理完消息再拉取
+    private final android.os.Handler threadRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Map<String, Runnable> pendingRefreshTasks = new ConcurrentHashMap<>();
+    private static final long THREAD_REFRESH_DELAY_MS = 1000;
 
     public ChatConversationAdapter(@Nullable List<ChatConversationMsg> data) {
         super(R.layout.item_chat_conv_layout, data);
@@ -85,10 +104,15 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         setStatus(helper, item, false);
         showTyping(helper, conversationMsg);
         showCalling(helper, conversationMsg);
+        showThreadPreviews(helper, item);
     }
 
     public void addListener(IListener iItemMenuClick) {
         this.iListener = iItemMenuClick;
+    }
+
+    public void setThreadPreviewClickListener(IThreadPreviewClickListener listener) {
+        this.threadPreviewClickListener = listener;
     }
 
     @Override
@@ -111,6 +135,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
             if (chatConversationMsg.isRefreshChannelInfo) {
                 showChannel(baseViewHolder, item);
+                showThreadPreviews(baseViewHolder, item);
                 chatConversationMsg.isRefreshChannelInfo = false;
             }
             if (chatConversationMsg.isRefreshStatus) {
@@ -579,6 +604,388 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setText(R.id.nameTv, showName);
     }
 
+    /**
+     * 展示子区预览（最多 2 个最近活跃子区 + "+N 个子区" 折叠行）
+     * 参考 iOS WKConversationGroupThreadCell：带分支线 + 圆角卡片容器 + 未读数气泡
+     */
+    private void showThreadPreviews(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
+        FrameLayout container = helper.getView(R.id.threadPreviewContainer);
+        container.removeAllViews();
+        container.setVisibility(View.GONE);
+
+        if (item.channelType != WKChannelType.GROUP
+                || WKConfig.getInstance().getAppConfig().thread_on != 1) {
+            return;
+        }
+
+        String groupNo = item.channelID;
+        List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
+        if (cachedList == null) {
+            loadThreadPreviews(groupNo);
+            return;
+        }
+
+        // 过滤活跃子区（status == 1）并按 updated_at 降序（与 iOS 一致）
+        List<ThreadEntity> activeList = new ArrayList<>();
+        for (ThreadEntity entity : cachedList) {
+            if (entity.status == 1) {
+                activeList.add(entity);
+            }
+        }
+        if (activeList.isEmpty()) {
+            return;
+        }
+        // updated_at 是 ISO 格式字符串，可直接用字符串比较排序
+        Collections.sort(activeList, (a, b) -> {
+            String ua = a.updated_at != null ? a.updated_at : "";
+            String ub = b.updated_at != null ? b.updated_at : "";
+            return ub.compareTo(ua);
+        });
+
+        container.setVisibility(View.VISIBLE);
+        int showCount = Math.min(activeList.size(), 2);
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+
+        // 内容包装层（卡片 + "+N"），放在 FrameLayout 中和分支线分层
+        LinearLayout contentWrapper = new LinearLayout(getContext());
+        contentWrapper.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout.LayoutParams wrapperLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        contentWrapper.setLayoutParams(wrapperLp);
+
+        // 1. 圆角卡片容器（仅含子区行 + 分隔线）
+        LinearLayout cardContainer = new LinearLayout(getContext());
+        cardContainer.setOrientation(LinearLayout.VERTICAL);
+        cardContainer.setBackgroundResource(R.drawable.thread_container_border);
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardLp.setMarginStart(AndroidUtilities.dp(64));
+        cardLp.setMarginEnd(AndroidUtilities.dp(15));
+        cardLp.topMargin = AndroidUtilities.dp(4);
+
+        // 记录每行 View 用于分支线定位
+        List<View> rowViews = new ArrayList<>();
+
+        for (int i = 0; i < showCount; i++) {
+            // 添加分隔线（第二行起）
+            if (i > 0) {
+                View separator = new View(getContext());
+                separator.setBackgroundColor(0x26999999);
+                LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(0.5f));
+                sepLp.setMarginStart(AndroidUtilities.dp(10));
+                sepLp.setMarginEnd(AndroidUtilities.dp(10));
+                cardContainer.addView(separator, sepLp);
+            }
+
+            ThreadEntity entity = activeList.get(i);
+            View rowView = inflater.inflate(R.layout.item_thread_preview_row, cardContainer, false);
+
+            TextView nameTv = rowView.findViewById(R.id.threadNameTv);
+            TextView timeTv = rowView.findViewById(R.id.threadTimeTv);
+            TextView unreadBadge = rowView.findViewById(R.id.threadUnreadBadge);
+            TextView contentTv = rowView.findViewById(R.id.threadContentTv);
+
+            nameTv.setText(entity.name);
+
+            // 显示最后一条消息的时间，fallback 到 updated_at
+            long displayTime = 0;
+            if (entity.last_message_time > 0) {
+                // 自动判断秒/毫秒
+                displayTime = entity.last_message_time > 1_000_000_000_000L
+                        ? entity.last_message_time : entity.last_message_time * 1000;
+            }
+            if (displayTime <= 0) {
+                displayTime = parseUpdatedAt(entity.updated_at);
+            }
+            if (displayTime > 0) {
+                timeTv.setText(formatThreadTime(displayTime));
+                timeTv.setVisibility(View.VISIBLE);
+            } else {
+                timeTv.setVisibility(View.GONE);
+            }
+
+            // 未读数气泡
+            int unread = entity.unread_count;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            if (threadConv != null) {
+                unread = threadConv.unreadCount;
+            }
+            if (unread > 0) {
+                unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                unreadBadge.setVisibility(View.VISIBLE);
+            } else {
+                unreadBadge.setVisibility(View.GONE);
+            }
+
+            // 最后消息预览
+            String preview = "";
+            if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
+                preview = entity.last_message_sender_name + "：";
+            }
+            if (!TextUtils.isEmpty(entity.last_message_content)) {
+                preview += entity.last_message_content;
+            }
+            if (!TextUtils.isEmpty(preview)) {
+                contentTv.setText(preview);
+                contentTv.setVisibility(View.VISIBLE);
+            } else {
+                contentTv.setVisibility(View.GONE);
+            }
+
+            String finalThreadChannelId = threadChannelId;
+            rowView.setOnClickListener(v -> {
+                if (threadPreviewClickListener != null) {
+                    threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo, entity.short_id, entity.is_joined);
+                }
+            });
+
+            cardContainer.addView(rowView);
+            rowViews.add(rowView);
+        }
+
+        contentWrapper.addView(cardContainer, cardLp);
+
+        // "+N 个子区" 放在卡片外部
+        if (activeList.size() > 2) {
+            int moreCount = activeList.size() - 2;
+            TextView moreTv = new TextView(getContext());
+            moreTv.setText("+" + moreCount + " 个子区");
+            moreTv.setTextSize(13);
+            moreTv.setTextColor(Theme.colorAccount);
+            LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            moreLp.setMarginStart(AndroidUtilities.dp(74));
+            moreLp.topMargin = AndroidUtilities.dp(4);
+            moreTv.setOnClickListener(v -> {
+                if (threadPreviewClickListener != null) {
+                    threadPreviewClickListener.onMoreThreadsClick(groupNo);
+                }
+            });
+            contentWrapper.addView(moreTv, moreLp);
+        }
+
+        container.addView(contentWrapper);
+
+        // 2. 分支线视图（从头像区域弯曲到每一行，放在最底层）
+        ThreadBranchView branchView = new ThreadBranchView(getContext(), showCount);
+        FrameLayout.LayoutParams branchLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        container.addView(branchView, 0, branchLp);
+
+        // 等布局完成后计算每行中心 Y 并更新分支线
+        container.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                container.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                float[] centerYs = new float[rowViews.size()];
+                for (int i = 0; i < rowViews.size(); i++) {
+                    View row = rowViews.get(i);
+                    centerYs[i] = row.getTop() + cardContainer.getTop()
+                            + contentWrapper.getTop() + row.getHeight() / 2f;
+                }
+                branchView.setRowCenterYs(centerYs);
+            }
+        });
+    }
+
+    /**
+     * 首次加载子区数据（cache 为空时触发）
+     */
+    private void loadThreadPreviews(String groupNo) {
+        if (threadLoadingSet.contains(groupNo)) {
+            return;
+        }
+        threadLoadingSet.add(groupNo);
+        ThreadModel.getInstance().listThreads(groupNo, (code, msg, list) -> {
+            threadLoadingSet.remove(groupNo);
+            List<ThreadEntity> result = (list != null) ? list : new ArrayList<>();
+            threadDataCache.put(groupNo, result);
+            AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));
+        });
+    }
+
+    /**
+     * 重新加载子区数据，保留旧缓存直到新数据到达，避免闪烁。
+     * 对比新旧数据，只有数据实际变化时才刷新 UI。
+     */
+    private void reloadThreadPreviews(String groupNo) {
+        if (threadLoadingSet.contains(groupNo)) {
+            return;
+        }
+        threadLoadingSet.add(groupNo);
+        ThreadModel.getInstance().listThreads(groupNo, (code, msg, list) -> {
+            threadLoadingSet.remove(groupNo);
+            List<ThreadEntity> newData = (list != null) ? list : new ArrayList<>();
+            List<ThreadEntity> oldData = threadDataCache.get(groupNo);
+            threadDataCache.put(groupNo, newData);
+            // 只有数据变化时才刷新 UI，避免不必要的重绘
+            if (!isThreadDataEqual(oldData, newData)) {
+                AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));
+            }
+        });
+    }
+
+    /**
+     * 比较两份子区列表是否展示内容一致（前 2 个活跃子区的关键字段 + 总数）
+     */
+    private boolean isThreadDataEqual(List<ThreadEntity> oldList, List<ThreadEntity> newList) {
+        if (oldList == null || newList == null) return oldList == newList;
+        return buildThreadFingerprint(oldList).equals(buildThreadFingerprint(newList));
+    }
+
+    private String buildThreadFingerprint(List<ThreadEntity> list) {
+        List<ThreadEntity> active = new ArrayList<>();
+        for (ThreadEntity e : list) {
+            if (e.status == 1) active.add(e);
+        }
+        Collections.sort(active, (a, b) -> {
+            String ua = a.updated_at != null ? a.updated_at : "";
+            String ub = b.updated_at != null ? b.updated_at : "";
+            return ub.compareTo(ua);
+        });
+        StringBuilder sb = new StringBuilder();
+        sb.append(active.size()).append("|");
+        int count = Math.min(active.size(), 2);
+        for (int i = 0; i < count; i++) {
+            ThreadEntity e = active.get(i);
+            sb.append(e.short_id).append(":")
+              .append(e.updated_at != null ? e.updated_at : "").append(":")
+              .append(e.unread_count).append(":")
+              .append(e.last_message_content != null ? e.last_message_content : "").append("|");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 直接更新可见 ViewHolder 的子区预览，不触发 notifyItemChanged，避免闪烁。
+     */
+    private void updateThreadPreviewDirectly(String groupNo) {
+        if (getRecyclerView() == null) return;
+        for (int i = 0; i < getData().size(); i++) {
+            if (getData().get(i).uiConversationMsg.channelID.equals(groupNo)) {
+                int adapterPos = i + getHeaderLayoutCount();
+                RecyclerView.ViewHolder vh = getRecyclerView().findViewHolderForAdapterPosition(adapterPos);
+                if (vh instanceof BaseViewHolder) {
+                    showThreadPreviews((BaseViewHolder) vh, getData().get(i).uiConversationMsg);
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * 刷新指定群组的子区预览（防抖：延迟 1 秒再调 API，等服务端处理完消息更新 updated_at）
+     */
+    public void refreshThreadPreviews(String groupNo) {
+        // 取消之前排队的同组刷新
+        Runnable old = pendingRefreshTasks.remove(groupNo);
+        if (old != null) {
+            threadRefreshHandler.removeCallbacks(old);
+        }
+        Runnable task = () -> {
+            pendingRefreshTasks.remove(groupNo);
+            threadLoadingSet.remove(groupNo);
+            reloadThreadPreviews(groupNo);
+        };
+        pendingRefreshTasks.put(groupNo, task);
+        threadRefreshHandler.postDelayed(task, THREAD_REFRESH_DELAY_MS);
+    }
+
+    /**
+     * 重新加载所有群组的子区预览（保留旧缓存，新数据到达后原子替换）
+     */
+    public void clearAndReloadThreadData() {
+        // 清除待执行的防抖任务
+        for (Runnable r : pendingRefreshTasks.values()) {
+            threadRefreshHandler.removeCallbacks(r);
+        }
+        pendingRefreshTasks.clear();
+        threadLoadingSet.clear();
+        for (int i = 0; i < getData().size(); i++) {
+            WKUIConversationMsg msg = getData().get(i).uiConversationMsg;
+            if (msg.channelType == WKChannelType.GROUP
+                    && WKConfig.getInstance().getAppConfig().thread_on == 1) {
+                reloadThreadPreviews(msg.channelID);
+            }
+        }
+    }
+
+    /**
+     * 格式化子区预览时间，始终包含时分（如 "18:34"、"昨天 14:05"、"4月11日 09:12"）
+     */
+    private String formatThreadTime(long timeMs) {
+        java.util.Calendar today = java.util.Calendar.getInstance();
+        java.util.Calendar target = java.util.Calendar.getInstance();
+        target.setTimeInMillis(timeMs);
+        java.text.SimpleDateFormat hmFmt = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+
+        if (today.get(java.util.Calendar.YEAR) == target.get(java.util.Calendar.YEAR)) {
+            int dayDiff = today.get(java.util.Calendar.DAY_OF_YEAR) - target.get(java.util.Calendar.DAY_OF_YEAR);
+            if (dayDiff == 0) {
+                return hmFmt.format(new java.util.Date(timeMs));
+            } else if (dayDiff == 1) {
+                return getContext().getString(R.string.yesterday) + " " + hmFmt.format(new java.util.Date(timeMs));
+            } else {
+                java.text.SimpleDateFormat mdFmt = new java.text.SimpleDateFormat("M/d HH:mm", java.util.Locale.getDefault());
+                return mdFmt.format(new java.util.Date(timeMs));
+            }
+        } else {
+            java.text.SimpleDateFormat ymdFmt = new java.text.SimpleDateFormat("yyyy/M/d HH:mm", java.util.Locale.getDefault());
+            return ymdFmt.format(new java.util.Date(timeMs));
+        }
+    }
+
+    /**
+     * 解析 updated_at 字符串为毫秒时间戳，兼容多种格式
+     */
+    private static long parseUpdatedAt(String updatedAt) {
+        if (TextUtils.isEmpty(updatedAt)) return 0;
+        // 尝试当作纯数字（Unix 时间戳）
+        try {
+            long ts = Long.parseLong(updatedAt.trim());
+            return ts > 1_000_000_000_000L ? ts : ts * 1000;
+        } catch (NumberFormatException ignored) {
+        }
+        // 带时区的格式优先尝试（保留时区信息正确转换）
+        String[][] patternsWithTz = {
+                {"yyyy-MM-dd'T'HH:mm:ssXXX"},     // 2026-04-11T18:30:00+08:00
+                {"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"}, // 2026-04-11T18:30:00.000+08:00
+        };
+        if (updatedAt.contains("+") || updatedAt.contains("Z") || updatedAt.matches(".*-\\d{2}:\\d{2}$")) {
+            for (String[] p : patternsWithTz) {
+                try {
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(p[0], java.util.Locale.US);
+                    java.util.Date date = sdf.parse(updatedAt.endsWith("Z") ? updatedAt.replace("Z", "+00:00") : updatedAt);
+                    if (date != null) return date.getTime();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        // 无时区标识，当作服务端本地时间（与设备同时区）
+        String[] patterns = {
+                "yyyy-MM-dd'T'HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd'T'HH:mm:ss.SSS",
+                "yyyy-MM-dd HH:mm:ss.SSS",
+        };
+        for (String pattern : patterns) {
+            try {
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.US);
+                java.util.Date date = sdf.parse(updatedAt);
+                if (date != null) return date.getTime();
+            } catch (Exception ignored) {
+            }
+        }
+        return 0;
+    }
+
     private boolean isSetChatPwd(WKChannel channel) {
         if (channel == null || channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey(WKChannelExtras.chatPwdOn))
             return false;
@@ -633,6 +1040,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private void showCalling(final BaseViewHolder helper, ChatConversationMsg conversationMsg) {
         helper.setGone(R.id.callingIv, conversationMsg.isCalling == 0);
+    }
+
+    public interface IThreadPreviewClickListener {
+        void onThreadClick(String channelId, String groupNo, String shortId, int isJoined);
+        void onMoreThreadsClick(String groupNo);
     }
 
     public enum ItemMenu {

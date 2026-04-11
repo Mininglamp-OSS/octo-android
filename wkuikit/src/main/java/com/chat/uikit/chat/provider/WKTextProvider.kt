@@ -554,7 +554,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                 )
             ) // 选中文本的颜色
             .setSelectAll(true) // 初次选中是否全选 default true
-            .setScrollShow(false) // 滚动时是否继续显示 default true
+            .setScrollShow(true) // 滚动时临时隐藏，停止后恢复选中状态
             .setSelectedAllNoPop(true) // 已经全选无弹窗，设置了监听会回调 onSelectAllShowCustomPop 方法
             .setMagnifierShow(true) // 放大镜 default true
             .setSelectTextLength(2)// 首次选中文本的长度 default 2

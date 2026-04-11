@@ -11,4 +11,5 @@ public class WKAPPConfig {
     public int invite_system_account_join_group_on;
     public int register_user_must_complete_info_on;
     public int can_modify_api_url;
+    public int thread_on;
 }

@@ -252,8 +252,8 @@ public class WKUIChatMsgItemEntity {
             for (String uid : wkMsg.baseContentMsgModel.mentionInfo.uids) {
                 String showName = "";
                 WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(
-                        conversationContext.getChatChannelInfo().channelID,
-                        conversationContext.getChatChannelInfo().channelType, uid);
+                        getMemberLookupChannelID(wkMsg),
+                        getMemberLookupChannelType(wkMsg), uid);
                 if (member != null) {
                     showName = member.remark;
                     if (TextUtils.isEmpty(showName))
@@ -264,7 +264,7 @@ public class WKUIChatMsgItemEntity {
                     int index = displaySpans.toString().indexOf(showName);
                     if (index >= 0) {
                         String groupNo = "";
-                        if (wkMsg.channelType == WKChannelType.GROUP) {
+                        if (wkMsg.channelType == WKChannelType.GROUP || wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
                             groupNo = wkMsg.channelID;
                         }
                         showName = showName + " ";
@@ -377,7 +377,7 @@ public class WKUIChatMsgItemEntity {
                     nameSpan.setSpan(new StyleSpan(Typeface.BOLD), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     if (isUserDetail && iLinkClick != null) {
                         String groupNo = "";
-                        if (wkMsg.channelType == WKChannelType.GROUP) {
+                        if (wkMsg.channelType == WKChannelType.GROUP || wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
                             groupNo = wkMsg.channelID;
                         }
                         String content = entity.value;
@@ -393,9 +393,26 @@ public class WKUIChatMsgItemEntity {
             }
         }
         // 自动检测 @mention：对没有 entity 标记的 @xxx 文本，匹配群成员/联系人（与 iOS detectMentionsInText 一致）
-        if (wkMsg.channelType == WKChannelType.GROUP && iLinkClick != null) {
+        if ((wkMsg.channelType == WKChannelType.GROUP || wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) && iLinkClick != null) {
             detectAndApplyMentions(conversationContext, wkMsg);
         }
+    }
+
+    /**
+     * 子区使用父群的 channelID 和 GROUP 类型来查成员（子区 channelID 格式：groupNo____shortId）
+     */
+    private String getMemberLookupChannelID(WKMsg wkMsg) {
+        if (wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC && wkMsg.channelID != null && wkMsg.channelID.contains("____")) {
+            return wkMsg.channelID.substring(0, wkMsg.channelID.indexOf("____"));
+        }
+        return wkMsg.channelID;
+    }
+
+    private byte getMemberLookupChannelType(WKMsg wkMsg) {
+        if (wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            return WKChannelType.GROUP;
+        }
+        return wkMsg.channelType;
     }
 
     /**
@@ -407,7 +424,7 @@ public class WKUIChatMsgItemEntity {
         Pattern pattern = Pattern.compile("@(\\S+)");
         Matcher m = pattern.matcher(text);
         List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
-                .getMembers(wkMsg.channelID, wkMsg.channelType);
+                .getMembers(getMemberLookupChannelID(wkMsg), getMemberLookupChannelType(wkMsg));
 
         // 收集已有 mention span 的范围，避免重复
         NormalClickableSpan[] existingSpans = displaySpans.getSpans(0, displaySpans.length(), NormalClickableSpan.class);

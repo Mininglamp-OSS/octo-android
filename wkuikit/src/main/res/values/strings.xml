@@ -388,5 +388,25 @@
     <string name="thinking_text">Thinking</string>
     <string name="release_to_send_slide_to_cancel">松手发送，上移取消</string>
     <string name="release_to_cancel">松手取消</string>
+
+    <string name="str_threads">子区</string>
+    <string name="str_create_thread">创建子区</string>
+    <string name="str_enter_thread">进入子区</string>
+    <string name="str_thread_name">子区名称</string>
+    <string name="str_thread_name_hint">输入子区名称</string>
+    <string name="str_join_thread">加入子区</string>
+    <string name="str_leave_thread">离开子区</string>
+    <string name="str_archive_thread">归档子区</string>
+    <string name="str_unarchive_thread">取消归档</string>
+    <string name="str_delete_thread">删除子区</string>
+    <string name="str_thread_members">子区成员</string>
+    <string name="str_thread_archived_tip">该子区已归档</string>
+    <string name="str_thread_deleted_tip">该子区已删除</string>
+    <string name="str_creator">创建者</string>
+    <string name="str_new_thread">新子区</string>
+    <string name="str_thread_name_label">子区名称（可选）</string>
+    <string name="str_view_thread">查看子区</string>
+    <string name="str_thread_started">发起了子区</string>
+    <string name="str_thread_msg_count">%d条 ></string>
 </resources>
 

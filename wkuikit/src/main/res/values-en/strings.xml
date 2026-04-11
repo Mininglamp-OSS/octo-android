@@ -318,5 +318,25 @@
     <string name="speech_permission_required">Please allow speech recognition in Settings</string>
     <string name="speech_not_available">Speech recognition unavailable</string>
     <string name="voice_cancel">Cancel</string>
+
+    <string name="str_threads">Threads</string>
+    <string name="str_create_thread">Create Thread</string>
+    <string name="str_enter_thread">Enter Thread</string>
+    <string name="str_thread_name">Thread Name</string>
+    <string name="str_thread_name_hint">Enter thread name</string>
+    <string name="str_join_thread">Join Thread</string>
+    <string name="str_leave_thread">Leave Thread</string>
+    <string name="str_archive_thread">Archive Thread</string>
+    <string name="str_unarchive_thread">Unarchive</string>
+    <string name="str_delete_thread">Delete Thread</string>
+    <string name="str_thread_members">Thread Members</string>
+    <string name="str_thread_archived_tip">This thread has been archived</string>
+    <string name="str_thread_deleted_tip">This thread has been deleted</string>
+    <string name="str_creator">Creator</string>
+    <string name="str_new_thread">New Thread</string>
+    <string name="str_thread_name_label">Thread Name (optional)</string>
+    <string name="str_view_thread">View</string>
+    <string name="str_thread_started">started a thread</string>
+    <string name="str_thread_msg_count">%d msg ></string>
 </resources>
 

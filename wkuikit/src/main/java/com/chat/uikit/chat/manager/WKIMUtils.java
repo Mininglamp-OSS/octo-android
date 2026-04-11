@@ -41,8 +41,10 @@ import com.chat.uikit.chat.ChatActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.enity.ProhibitWord;
+import com.chat.base.net.HttpResponseCode;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.SearchUserActivity;
 import com.chat.uikit.user.UserDetailActivity;
@@ -53,6 +55,7 @@ import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
+import com.xinbida.wukongim.entity.WKChannelStatus;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKMsg;
@@ -66,6 +69,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -310,7 +314,29 @@ public class WKIMUtils {
          * 设置获取频道信息的监听
          */
         WKIM.getInstance().getChannelManager().addOnGetChannelInfoListener((channelId, channelType, iChannelInfoListener) -> {
-            WKCommonModel.getInstance().getChannel(channelId, channelType, null);
+            if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                String[] parsed = ThreadModel.getInstance().parseChannelId(channelId);
+                if (parsed != null) {
+                    ThreadModel.getInstance().getThreadDetail(parsed[0], parsed[1], (code, msg, entity) -> {
+                        if (code == HttpResponseCode.success && entity != null) {
+                            WKChannel channel = new WKChannel();
+                            channel.channelID = channelId;
+                            channel.channelType = WKChannelType.COMMUNITY_TOPIC;
+                            channel.channelName = entity.name;
+                            channel.status = WKChannelStatus.statusNormal;
+                            HashMap<String, Object> extraMap = new HashMap<>();
+                            extraMap.put("parentGroupNo", entity.group_no);
+                            extraMap.put("threadStatus", entity.status);
+                            extraMap.put("creatorUid", entity.creator_uid);
+                            extraMap.put("shortId", entity.short_id);
+                            channel.remoteExtraMap = extraMap;
+                            WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
+                        }
+                    });
+                }
+            } else {
+                WKCommonModel.getInstance().getChannel(channelId, channelType, null);
+            }
             return null;
         });
         WKIM.getInstance().getChannelMembersManager().addOnGetChannelMembersListener((channelID, b, keyword, page, limit, iChannelMemberListResult) -> GroupModel.getInstance().getChannelMembers(channelID, keyword, page, limit, iChannelMemberListResult));
@@ -339,8 +365,12 @@ public class WKIMUtils {
         });
         //刷新群成员
         WKIM.getInstance().getChannelMembersManager().addOnSyncChannelMembers((channelID, channelType) -> {
-            if (!TextUtils.isEmpty(channelID) && channelType == WKChannelType.GROUP) {
-                GroupModel.getInstance().groupMembersSync(channelID, null);
+            if (!TextUtils.isEmpty(channelID)) {
+                if (channelType == WKChannelType.GROUP) {
+                    GroupModel.getInstance().groupMembersSync(channelID, null);
+                } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    ThreadModel.getInstance().syncThreadMembers(channelID, null);
+                }
             }
         });
 

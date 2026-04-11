@@ -54,6 +54,12 @@
         <activity android:name=".setting.WKThemeSettingActivity" />
         <activity android:name=".setting.WKLanguageActivity" />
         <activity android:name=".group.WKAllMembersActivity" />
+        <activity android:name=".thread.ThreadListActivity" />
+        <activity android:name=".thread.ThreadDetailActivity" />
+        <activity android:name=".thread.ThreadMembersActivity" />
+        <activity
+            android:name=".thread.CreateThreadActivity"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
         <activity android:name=".user.WKFileHelperActivity" />
         <activity android:name=".user.WKSystemTeamActivity" />
         <activity android:name=".group.WKSetGroupRemarkActivity" />

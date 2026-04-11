@@ -37,6 +37,7 @@ import com.chat.uikit.group.service.GroupContract;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.group.service.GroupPresenter;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.thread.ThreadListActivity;
 import com.chat.uikit.user.UserDetailActivity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -253,6 +254,15 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 startActivity(intent);
             }
         });
+        // 子区入口
+        if (WKConfig.getInstance().getAppConfig().thread_on == 1) {
+            wkVBinding.threadLayout.setVisibility(View.VISIBLE);
+            SingleClickUtil.onSingleClick(wkVBinding.threadLayout, view1 -> {
+                Intent intent = new Intent(this, ThreadListActivity.class);
+                intent.putExtra("groupNo", groupNo);
+                startActivity(intent);
+            });
+        }
         wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
             String showName = "";
             if (groupChannel != null) {

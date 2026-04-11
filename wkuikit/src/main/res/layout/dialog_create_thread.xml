@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/str_create_thread"
+        android:textColor="@color/colorDark"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <androidx.appcompat.widget.AppCompatEditText
+        android:id="@+id/threadNameEt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:background="@drawable/radian_normal_layout"
+        android:hint="@string/str_thread_name_hint"
+        android:maxLength="50"
+        android:maxLines="1"
+        android:minHeight="44dp"
+        android:paddingHorizontal="12dp"
+        android:singleLine="true"
+        android:textColor="@color/colorDark"
+        android:textColorHint="@color/color999"
+        android:textSize="15sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/cancelBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/radian_normal_layout"
+            android:gravity="center"
+            android:text="@string/cancel"
+            android:textColor="@color/color999"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/confirmBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_dialog_api_btn_confirm"
+            android:gravity="center"
+            android:text="@string/sure"
+            android:textColor="@color/white"
+            android:textSize="15sp" />
+    </LinearLayout>
+</LinearLayout>

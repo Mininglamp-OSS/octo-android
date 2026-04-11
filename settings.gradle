@@ -16,12 +16,20 @@ dependencyResolutionManagement {
         maven {
             url "https://maven.google.com"
         }
+        //OPPO推送（公开只读凭证，见 OPPO 官方文档）
+        maven {
+            url 'https://maven.columbus.heytapmobi.com/repository/maven-public/'
+            credentials {
+                username 'cmuser'
+                password 'c0b08da17ery566c3870fed67789bcb36abc2e32'
+            }
+        }
     }
 }
 rootProject.name = "TsddClient"
 include ':MyLibs:rlottie'
-include ':MyLibs:oppopush'
 include ':MyLibs:vivopush'
+include ':MyLibs:xiaomipush'
 include ':app'
 include ':wkbase'
 include ':wkuikit'

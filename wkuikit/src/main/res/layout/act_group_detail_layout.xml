@@ -100,6 +100,19 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/threadLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/str_threads" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/noticeLayout"
                         style="@style/layoutBg"
                         android:orientation="vertical">

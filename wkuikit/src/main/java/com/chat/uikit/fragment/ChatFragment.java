@@ -53,8 +53,10 @@ import com.chat.uikit.databinding.FragChatConversationLayoutBinding;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.chat.ChatActivity;
 import com.chat.uikit.search.remote.GlobalActivity;
 import com.chat.uikit.space.SpaceEntity;
+import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.space.SpacePopupWindow;
 import com.xinbida.wukongim.WKIM;
@@ -284,6 +286,30 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         });
+        // 子区预览点击监听
+        chatConversationAdapter.setThreadPreviewClickListener(new ChatConversationAdapter.IThreadPreviewClickListener() {
+            @Override
+            public void onThreadClick(String channelId, String groupNo, String shortId, int isJoined) {
+                if (isJoined == 0) {
+                    ThreadModel.getInstance().joinThread(groupNo, shortId, (code, msg) -> {
+                        if (code == HttpResponseCode.success) {
+                            navigateToThreadChat(channelId);
+                        } else {
+                            WKToastUtils.getInstance().showToast(msg);
+                        }
+                    });
+                } else {
+                    navigateToThreadChat(channelId);
+                }
+            }
+
+            @Override
+            public void onMoreThreadsClick(String groupNo) {
+                Intent intent = new Intent(getActivity(), com.chat.uikit.thread.ThreadListActivity.class);
+                intent.putExtra("groupNo", groupNo);
+                startActivity(intent);
+            }
+        });
         //频道刷新监听
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("chat_fragment_refresh_channel", (channel, isEnd) -> {
             if (channel != null) {
@@ -393,6 +419,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 监听刷新消息
         WKIM.getInstance().getMsgManager().addOnRefreshMsgListener("chat_fragment", (msg, left) -> {
             if (msg == null) return;
+            // 子区消息到达时，刷新父群聊的子区预览
+            if (msg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                String[] parsed = ThreadModel.getInstance().parseChannelId(msg.channelID);
+                if (parsed != null) {
+                    chatConversationAdapter.refreshThreadPreviews(parsed[0]);
+                }
+                return;
+            }
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                 if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(msg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == msg.channelType && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientSeq == msg.clientSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(msg.clientMsgNO))) {
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().status != msg.status || chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().remoteExtra.readedCount != msg.remoteExtra.readedCount) {
@@ -464,12 +498,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
 
-            // 过滤子区会话
+            // 过滤子区会话，同时提取父群组 ID 用于刷新子区预览
             List<WKUIConversationMsg> filteredList = new ArrayList<>();
+            Set<String> threadParentGroups = new HashSet<>();
             for (WKUIConversationMsg msg : list) {
                 if (msg.channelType != WKChannelType.COMMUNITY_TOPIC) {
                     filteredList.add(msg);
+                } else {
+                    String[] parsed = ThreadModel.getInstance().parseChannelId(msg.channelID);
+                    if (parsed != null) {
+                        threadParentGroups.add(parsed[0]);
+                    }
                 }
+            }
+            // 刷新有子区消息更新的父群聊的子区预览
+            for (String parentGroupNo : threadParentGroups) {
+                chatConversationAdapter.refreshThreadPreviews(parentGroupNo);
             }
             list = filteredList;
             if (WKReader.isEmpty(list)) {
@@ -841,12 +885,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg == null) {
             return;
         }
-        // 子区会话不在主聊天列表显示
+        // 子区会话不在主聊天列表显示，但需要刷新父群聊的子区预览
         if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            // 从子区 channelId 提取父群组 groupNo，刷新其子区预览
+            String[] parsed = ThreadModel.getInstance().parseChannelId(uiConversationMsg.channelID);
+            if (parsed != null) {
+                chatConversationAdapter.refreshThreadPreviews(parsed[0]);
+            }
             if (isEnd) {
                 sortMsg(chatConversationAdapter.getData());
             }
             return;
+        }
+        // 群聊收到子区创建系统消息时，刷新子区预览
+        if (uiConversationMsg.channelType == WKChannelType.GROUP
+                && uiConversationMsg.getWkMsg() != null
+                && uiConversationMsg.getWkMsg().type == WKContentType.threadCreated) {
+            chatConversationAdapter.refreshThreadPreviews(uiConversationMsg.channelID);
         }
         // || (uiConversationMsg.getWkChannel() != null && uiConversationMsg.getWkChannel().follow == 0 && uiConversationMsg.channelType == WKChannelType.PERSONAL)
         if (uiConversationMsg.isDeleted == 1 || TextUtils.equals(uiConversationMsg.channelID, "0")) {
@@ -1150,6 +1205,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
     }
 
+    private void navigateToThreadChat(String channelId) {
+        Intent intent = new Intent(getActivity(), ChatActivity.class);
+        intent.putExtra("channelId", channelId);
+        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
+        startActivity(intent);
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -1171,8 +1233,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
-        // 子区数量缓存清除，返回时重新获取
-        chatConversationAdapter.clearThreadCountCache();
+        // 子区数据缓存清除并重新加载，返回时实时更新
+        chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
         refreshExtrasIfNeeded();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");

@@ -185,4 +185,11 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/threadPreviewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:paddingBottom="5dp" />
 </LinearLayout>

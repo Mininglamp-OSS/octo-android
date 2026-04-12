@@ -26,6 +26,7 @@ import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.CrashHandler;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
@@ -84,12 +85,17 @@ public class WKBaseApplication {
             appModules = JSON.parseArray(json, AppModule.class);
         }
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
+        // 初始化 Bugly 崩溃日志收集
+        CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
+        if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
+            CrashReport.setUserId(WKConfig.getInstance().getUid());
+        }
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());
         initCacheDir();
         new Thread(() -> {
             EmojiManager.getInstance().init();
             RLottieApplication.getInstance().init(context);
-            CrashHandler.getInstance().init(context);
+            // CrashHandler.getInstance().init(context); // 已接入 Bugly，暂时禁用本地崩溃收集
             //158638
 //            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
         }).start();

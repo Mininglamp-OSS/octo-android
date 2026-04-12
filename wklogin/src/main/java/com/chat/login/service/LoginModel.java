@@ -18,6 +18,7 @@ import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.login.entity.CountryCodeEntity;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.login.entity.ThirdAuthCode;
 import com.chat.login.entity.ThirdLoginResult;
 import com.chat.login.entity.VerfiCodeResult;
@@ -492,5 +493,6 @@ public class LoginModel extends WKBaseModel {
         }
         WKConfig.getInstance().setUid(userInfo.uid);
         WKConfig.getInstance().setUserName(userInfo.name);
+        CrashReport.setUserId(userInfo.uid);
     }
 }

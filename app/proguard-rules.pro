@@ -101,6 +101,10 @@
 -keep class com.yalantis.ucrop** { *; }
 -keep interface com.yalantis.ucrop** { *; }
 
+# Bugly 符号表还原：保留源文件名和行号，使用标准格式（兼容 R8 8.x）
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
 #华为
 -ignorewarnings
 -keepattributes *Annotation*
@@ -157,6 +161,7 @@
 -keep class com.chat.uikit.contacts.FriendUIEntity { *; }
 -keep class com.chat.uikit.chat.msgmodel.** { *; }
 -keep class com.chat.uikit.enity.** { *; }
+-keep class com.chat.uikit.thread.service.entity.** { *; }
 -keep class com.chat.uikit.group.service.entity.** { *; }
 -keep class com.chat.uikit.group.GroupEntity { *; }
 -keep class com.chat.uikit.group.GroupMemberEntity { *; }

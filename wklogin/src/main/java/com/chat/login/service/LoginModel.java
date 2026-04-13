@@ -4,6 +4,7 @@ package com.chat.login.service;
 import android.text.TextUtils;
 
 import com.alibaba.fastjson.JSONObject;
+import com.chat.base.WKBaseApplication;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -18,6 +19,7 @@ import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.login.entity.CountryCodeEntity;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.login.entity.ThirdAuthCode;
 import com.chat.login.entity.ThirdLoginResult;
 import com.chat.login.entity.VerfiCodeResult;
@@ -492,5 +494,14 @@ public class LoginModel extends WKBaseModel {
         }
         WKConfig.getInstance().setUid(userInfo.uid);
         WKConfig.getInstance().setUserName(userInfo.name);
+        if (!TextUtils.isEmpty(userInfo.short_no)) {
+            CrashReport.setUserId(userInfo.short_no);
+        } else {
+            CrashReport.setUserId(userInfo.uid);
+        }
+        CrashReport.putUserData(WKBaseApplication.getInstance().getContext(), "uid", userInfo.uid);
+        if (!TextUtils.isEmpty(userInfo.name)) {
+            CrashReport.putUserData(WKBaseApplication.getInstance().getContext(), "name", userInfo.name);
+        }
     }
 }

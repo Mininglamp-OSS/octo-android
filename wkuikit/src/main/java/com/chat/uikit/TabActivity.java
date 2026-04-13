@@ -74,8 +74,11 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         return ActTabMainBinding.inflate(getLayoutInflater());
     }
 
+    private final long tabCreateTime = android.os.SystemClock.elapsedRealtime();
+
     @Override
     protected void initPresenter() {
+        android.util.Log.w("StartupPerf", "[TabActivity] initPresenter entered, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
         ActManagerUtils.getInstance().clearAllActivity();
     }
 
@@ -87,30 +90,11 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @SuppressLint("CheckResult")
     @Override
     protected void initView() {
-//        wkVBinding.vp.setUserInputEnabled(false);
-        UserModel.getInstance().device();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
-            RxPermissions rxPermissions = new RxPermissions(this);
-            rxPermissions.request(Manifest.permission.POST_NOTIFICATIONS).subscribe(aBoolean -> {
-                if (!aBoolean) {
-                    WKDialogUtils.getInstance().showDialog(this, getString(com.chat.base.R.string.authorization_request), desc, true, getString(R.string.cancel), getString(R.string.to_set), 0, Theme.colorAccount, index -> {
-                        if (index == 1) {
-                            EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
-                        }
-                    });
-                }
-            });
-        } else {
-            boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
-            if (!isEnabled) {
-                EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
-            }
-        }
+        android.util.Log.w("StartupPerf", "[TabActivity] initView entered, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
 
+        // ===== 关键路径：先设置 ViewPager + Tab，让第一帧尽快渲染 =====
         chatIV = new RLottieImageView(this);
         contactsIV = new RLottieImageView(this);
-//        workplaceIV = new RLottieImageView(this);
         meIV = new RLottieImageView(this);
         chatTV = new TextView(this);
         contactsTV = new TextView(this);
@@ -132,20 +116,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         List<Fragment> fragments = new ArrayList<>(3);
         fragments.add(new ChatFragment());
         fragments.add(new ContactsFragment());
-//        Fragment workplaceFra = (Fragment) EndpointManager.getInstance().invoke("get_workplace_fragment", null);
-//        fragments.add(workplaceFra);
         fragments.add(new MyFragment());
 
         wkVBinding.vp.setAdapter(new WKFragmentStateAdapter(this, fragments));
-        WKCommonModel.getInstance().getAppNewVersion(false, version -> {
-            String v = WKDeviceUtils.getInstance().getVersionName(TabActivity.this);
-            if (version != null && !TextUtils.isEmpty(version.url) && WKDeviceUtils.getInstance().isNewerVersion(version.version, v)) {
-                WKDialogUtils.getInstance().showNewVersionDialog(TabActivity.this, version);
-            }
-        });
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        notificationManager.cancelAll();
-        WKCommonModel.getInstance().getAppConfig(null);
         wkVBinding.bottomNavigation.getOrCreateBadge(R.id.i_chat).setVisible(false);
         wkVBinding.bottomNavigation.getOrCreateBadge(R.id.i_my).setVisible(false);
 //        wkVBinding.bottomNavigation.getOrCreateBadge(R.id.i_workplace).setVisible(false);
@@ -197,7 +170,40 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         msgCounterView.setVisibility(View.GONE);
         playAnimation(0);
 
+        android.util.Log.w("StartupPerf", "[TabActivity] initView done, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
 
+        // 非关键工作延迟到第一帧渲染后执行，不阻塞启动
+        wkVBinding.getRoot().post(() -> {
+            UserModel.getInstance().device();
+            WKCommonModel.getInstance().getAppNewVersion(false, version -> {
+                String v = WKDeviceUtils.getInstance().getVersionName(TabActivity.this);
+                if (version != null && !TextUtils.isEmpty(version.url) && WKDeviceUtils.getInstance().isNewerVersion(version.version, v)) {
+                    WKDialogUtils.getInstance().showNewVersionDialog(TabActivity.this, version);
+                }
+            });
+            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            notificationManager.cancelAll();
+            WKCommonModel.getInstance().getAppConfig(null);
+            // 通知权限检查
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
+                RxPermissions rxPermissions = new RxPermissions(this);
+                rxPermissions.request(Manifest.permission.POST_NOTIFICATIONS).subscribe(aBoolean -> {
+                    if (!aBoolean) {
+                        WKDialogUtils.getInstance().showDialog(this, getString(com.chat.base.R.string.authorization_request), desc, true, getString(R.string.cancel), getString(R.string.to_set), 0, Theme.colorAccount, index -> {
+                            if (index == 1) {
+                                EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
+                            }
+                        });
+                    }
+                });
+            } else {
+                boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
+                if (!isEnabled) {
+                    EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
+                }
+            }
+        });
     }
 
     @Override

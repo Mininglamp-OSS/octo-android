@@ -1582,7 +1582,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val maxWidth =
             if (AndroidUtilities.isPORTRAIT) AndroidUtilities.getScreenWidth() else AndroidUtilities.getScreenHeight()
         val width: Int
-        val checkBoxMargin = 30
+        val checkBoxMargin = 34
         var flameWidth = 0
         var pinnedWidth = 0
         if ((msgItemEntity.wkMsg.flame == 1 && msgItemEntity.wkMsg.flameSecond > 0) && msgItemEntity.wkMsg.type != WKContentType.WK_IMAGE

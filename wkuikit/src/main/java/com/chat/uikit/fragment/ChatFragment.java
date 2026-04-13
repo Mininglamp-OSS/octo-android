@@ -140,8 +140,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         return FragChatConversationLayoutBinding.inflate(getLayoutInflater());
     }
 
+    private long fragCreateTime;
+
     @Override
     protected void initView() {
+        fragCreateTime = android.os.SystemClock.elapsedRealtime();
+        android.util.Log.w("StartupPerf", "[ChatFragment] initView entered");
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {
             TextView textView = new TextView(getActivity());
@@ -165,6 +169,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         Theme.setPressedBackground(wkVBinding.deviceIv);
         Theme.setPressedBackground(wkVBinding.searchIv);
         Theme.setPressedBackground(wkVBinding.rightIv);
+        android.util.Log.w("StartupPerf", "[ChatFragment] initView done: " + (android.os.SystemClock.elapsedRealtime() - fragCreateTime) + "ms");
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -490,6 +495,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
+            android.util.Log.w("StartupPerf", "[ChatFragment] onRefreshMsgList: size=" + (list == null ? 0 : list.size()) + ", since fragCreate: " + (android.os.SystemClock.elapsedRealtime() - fragCreateTime) + "ms");
             if (WKReader.isEmpty(list)) {
                 return;
             }
@@ -635,6 +641,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
+            android.util.Log.w("StartupPerf", "[ChatFragment] connectionStatus changed: " + i + ", reason: " + reason);
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
                 wkVBinding.spaceArrowTv.setVisibility(View.GONE);
@@ -768,17 +775,46 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
 
     private void getChatMsg() {
+        long tGetChat = android.os.SystemClock.elapsedRealtime();
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        android.util.Log.w("StartupPerf", "[ChatFragment] getChatMsg: spaceId=" + (TextUtils.isEmpty(currentSpaceId) ? "null" : currentSpaceId));
         if (!TextUtils.isEmpty(currentSpaceId)) {
-            // Space 模式：本地 DB 可能有其他 Space 的旧会话，不能直接使用
-            // 清空后让 sync(space_id) 返回的数据作为唯一数据源（参考 iOS spaceChannelKeys 白名单机制）
+            String lastLoaded = WKSharedPreferencesUtil.getInstance()
+                    .getSPWithUID("last_loaded_space_id");
+            boolean spaceChanged = !currentSpaceId.equals(lastLoaded);
+            android.util.Log.w("StartupPerf", "[ChatFragment] lastLoaded=" + lastLoaded + " spaceChanged=" + spaceChanged);
+
+            if (!spaceChanged) {
+                // 同一 Space：从本地 DB 加载缓存，立即显示
+                WKIM.getInstance().getConversationManager().getAll(list -> {
+                    List<ChatConversationMsg> tempList = new ArrayList<>();
+                    spaceConversationKeys.clear();
+                    if (WKReader.isNotEmpty(list)) {
+                        for (WKUIConversationMsg conv : list) {
+                            if (conv.channelType == WKChannelType.COMMUNITY_TOPIC) continue;
+                            tempList.add(new ChatConversationMsg(conv));
+                            spaceConversationKeys.add(channelKey(conv.channelID, conv.channelType));
+                        }
+                    }
+                    AndroidUtilities.runOnUIThread(() -> {
+                        syncSpaceKeysToGlobal();
+                        sortMsg(tempList);
+                        android.util.Log.w("StartupPerf", "[ChatFragment] cache loaded, since getChatMsg: " + (android.os.SystemClock.elapsedRealtime() - tGetChat) + "ms, items=" + tempList.size() + ", T=" + (android.os.SystemClock.elapsedRealtime() - com.chat.base.WKBaseApplication.PROCESS_START) + "ms");
+                    });
+                });
+                return;
+            }
+
+            // Space 变化或首次加载：清空后让 sync 返回新数据
+            WKSharedPreferencesUtil.getInstance()
+                    .putSPWithUID("last_loaded_space_id", currentSpaceId);
             spaceConversationKeys.clear();
             Schedulers.io().scheduleDirect(() -> {
+                long tClear = android.os.SystemClock.elapsedRealtime();
                 WKIM.getInstance().getConversationManager().clearAll();
-                // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
-                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                android.util.Log.w("StartupPerf", "[ChatFragment] clearAll done: " + (android.os.SystemClock.elapsedRealtime() - tClear) + "ms");
                 WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                    // sync 结果由 RefreshMsgListListener 处理，会填充 spaceConversationKeys
+                    android.util.Log.w("StartupPerf", "[ChatFragment] syncConversation callback fired, since getChatMsg: " + (android.os.SystemClock.elapsedRealtime() - tGetChat) + "ms");
                 });
             });
             return;
@@ -829,7 +865,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onAttach(@NotNull Context context) {
         super.onAttach(context);
-        tabActivity = (TabActivity) context;
+        if (context instanceof TabActivity) {
+            tabActivity = (TabActivity) context;
+        }
     }
 
     private void resetChildData(WKUIConversationMsg uiConversationMsg, boolean isEnd) {

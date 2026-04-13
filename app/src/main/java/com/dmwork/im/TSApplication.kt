@@ -39,6 +39,7 @@ import kotlin.system.exitProcess
 
 class TSApplication : MultiDexApplication() {
     override fun onCreate() {
+        android.util.Log.w("StartupPerf", "[Process] ===== T=0 baseline, elapsedRealtime=${WKBaseApplication.PROCESS_START}ms =====")
         super.onCreate()
         val processName = getProcessName(this, Process.myPid())
         if (processName != null) {
@@ -92,17 +93,38 @@ class TSApplication : MultiDexApplication() {
     }
 
     private fun initAll() {
+        val tag = "StartupPerf"
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        var t = t0
 
         WKMultiLanguageUtil.getInstance().init(this)
+        android.util.Log.w(tag, "[Application] MultiLanguage.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         WKBaseApplication.getInstance().init(getAppPackageName(), this)
+        android.util.Log.w(tag, "[Application] WKBaseApplication.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         Theme.applyTheme()
+        android.util.Log.w(tag, "[Application] Theme.applyTheme: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         initApi()
+        android.util.Log.w(tag, "[Application] initApi: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         WKLoginApplication.getInstance().init(this)
+        android.util.Log.w(tag, "[Application] WKLoginApplication.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         WKScanApplication.getInstance().init(this)
+        android.util.Log.w(tag, "[Application] WKScanApplication.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         WKUIKitApplication.getInstance().init(this)
+        android.util.Log.w(tag, "[Application] WKUIKitApplication.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         WKPushApplication.getInstance().init(getAppPackageName(), this)
+        android.util.Log.w(tag, "[Application] WKPushApplication.init: ${android.os.SystemClock.elapsedRealtime() - t}ms"); t = android.os.SystemClock.elapsedRealtime()
+
         addAppFrontBack()
         addListener()
+        android.util.Log.w(tag, "[Application] addAppFrontBack+addListener: ${android.os.SystemClock.elapsedRealtime() - t}ms")
+        android.util.Log.w(tag, "[Application] ===== initAll TOTAL: ${android.os.SystemClock.elapsedRealtime() - t0}ms, T=${android.os.SystemClock.elapsedRealtime() - WKBaseApplication.PROCESS_START}ms =====")
     }
 
     private fun initApi() {
@@ -135,6 +157,7 @@ class TSApplication : MultiDexApplication() {
         val helper = AppFrontBackHelper()
         helper.register(this, object : AppFrontBackHelper.OnAppStatusListener {
             override fun onFront() {
+                android.util.Log.w("StartupPerf", "[TSApp] onFront called, disconnect=${WKBaseApplication.getInstance().disconnect}")
                 if (!TextUtils.isEmpty(WKConfig.getInstance().token)) {
                     if (WKBaseApplication.getInstance().disconnect) {
                         Handler(Looper.getMainLooper()).postDelayed({
@@ -143,7 +166,9 @@ class TSApplication : MultiDexApplication() {
                         }, 1000)
                     }
                     WKIMUtils.getInstance().initIMListener()
+                    val tConn = android.os.SystemClock.elapsedRealtime()
                     WKUIKitApplication.getInstance().startChat()
+                    android.util.Log.w("StartupPerf", "[TSApp] startChat() called: ${android.os.SystemClock.elapsedRealtime() - tConn}ms")
                     UserModel.getInstance().getOnlineUsers()
 
                 }

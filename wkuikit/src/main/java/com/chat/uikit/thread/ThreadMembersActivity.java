@@ -90,7 +90,9 @@ public class ThreadMembersActivity extends WKBaseActivity<ActAllMemberLayoutBind
             if (code == HttpResponseCode.success && WKReader.isNotEmpty(list)) {
                 List<AllGroupMemberEntity> allList = new ArrayList<>();
                 String channelId = ThreadModel.getInstance().buildChannelId(groupNo, shortId);
-                for (ThreadMember tm : list) {
+                for (Object item : list) {
+                    if (!(item instanceof ThreadMember)) continue;
+                    ThreadMember tm = (ThreadMember) item;
                     WKChannelMember member = new WKChannelMember();
                     member.memberUID = tm.uid;
                     member.memberName = tm.name;

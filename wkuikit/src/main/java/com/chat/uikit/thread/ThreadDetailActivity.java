@@ -138,7 +138,9 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
         ThreadModel.getInstance().getThreadMembers(groupNo, shortId, "", 1, 100, (code, msg, members) -> {
             boolean isMember = false;
             if (code == HttpResponseCode.success && members != null) {
-                for (ThreadMember member : members) {
+                for (Object item : members) {
+                    if (!(item instanceof ThreadMember)) continue;
+                    ThreadMember member = (ThreadMember) item;
                     if (currentUid.equals(member.uid) && member.is_deleted == 0) {
                         isMember = true;
                         break;

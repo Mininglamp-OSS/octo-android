@@ -15,6 +15,7 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.chat.base.act.PlayVideoActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.DBHelper;
@@ -26,6 +27,7 @@ import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.CrashHandler;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
@@ -45,6 +47,9 @@ public class WKBaseApplication {
     private WeakReference<Context> context;
     private DBHelper mDbHelper;
     private String fileDir = "wkIM";// 缓存目录
+
+    // 进程级启动时间戳，供各模块计算绝对耗时
+    public static final long PROCESS_START = android.os.SystemClock.elapsedRealtime();
 
     public boolean disconnect = true;
 
@@ -69,13 +74,53 @@ public class WKBaseApplication {
     private List<AppModule> appModules;
 
     public void init(@NonNull String packageName, Application context) {
+        final String tag = "StartupPerf";
+        long t0 = android.os.SystemClock.elapsedRealtime();
+        long t = t0;
+
         applicationHandler = new Handler(context.getMainLooper());
         this.packageName = packageName;
         this.application = context;
         this.context = new WeakReference<>(context);
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
+        versionName = WKDeviceUtils.getInstance().getVersionName(context);
+
+        android.util.Log.w(tag, "[WKBaseApp] basic setup: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
+        // Bugly + Emoji + RLottie 合并到一个后台线程，减少 CPU 争抢
+        new Thread(() -> {
+            long tt = android.os.SystemClock.elapsedRealtime();
+            CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
+            if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
+                UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
+                if (userInfo != null && !TextUtils.isEmpty(userInfo.short_no)) {
+                    CrashReport.setUserId(userInfo.short_no);
+                } else {
+                    CrashReport.setUserId(WKConfig.getInstance().getUid());
+                }
+                CrashReport.putUserData(context, "uid", WKConfig.getInstance().getUid());
+                if (userInfo != null && !TextUtils.isEmpty(userInfo.name)) {
+                    CrashReport.putUserData(context, "name", userInfo.name);
+                }
+            }
+            android.util.Log.w(tag, "[WKBaseApp][BG] Bugly init: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+            EmojiManager.getInstance().init();
+            android.util.Log.w(tag, "[WKBaseApp][BG] EmojiManager.init: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+            RLottieApplication.getInstance().init(context);
+            android.util.Log.w(tag, "[WKBaseApp][BG] RLottie.init: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms");
+        }).start();
+
+        // Glide + cacheDir 不依赖 SP，先执行，给 EncryptedSP 后台线程更多时间
+        Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());
+        android.util.Log.w(tag, "[WKBaseApp] Glide registry: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
+        initCacheDir();
+        android.util.Log.w(tag, "[WKBaseApp] initCacheDir: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
+        android.util.Log.w(tag, "[WKBaseApp] EncryptedSP first access (getBoolean): " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         if (isShowDialog) {
             return;
         }
@@ -83,16 +128,9 @@ public class WKBaseApplication {
         if (!TextUtils.isEmpty(json)) {
             appModules = JSON.parseArray(json, AppModule.class);
         }
-        versionName = WKDeviceUtils.getInstance().getVersionName(context);
-        Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());
-        initCacheDir();
-        new Thread(() -> {
-            EmojiManager.getInstance().init();
-            RLottieApplication.getInstance().init(context);
-            CrashHandler.getInstance().init(context);
-            //158638
-//            HttpsUtils.SSLParams sslParams1 = HttpsUtils.getSslSocketFactory();
-        }).start();
+        android.util.Log.w(tag, "[WKBaseApp] SP read app_module: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms");
+
+        android.util.Log.w(tag, "[WKBaseApp] ===== init TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms =====");
         //监听视频播放
         EndpointManager.getInstance().setMethod("play_video", object -> {
             if (object instanceof PlayVideoMenu playVideoMenu) {
@@ -179,4 +217,5 @@ public class WKBaseApplication {
         }
         return appModule.getStatus() != 0 && appModule.getChecked();
     }
+
 }

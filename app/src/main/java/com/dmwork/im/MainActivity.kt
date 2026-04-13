@@ -1,13 +1,15 @@
 package com.dmwork.im
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.chat.base.WKBaseApplication
-import com.chat.base.base.WKBaseActivity
 import com.chat.base.config.WKApiConfig
 import com.chat.base.config.WKConfig
 import com.chat.base.config.WKSharedPreferencesUtil
@@ -20,34 +22,43 @@ import com.chat.uikit.TabActivity
 import com.chat.uikit.message.MsgModel
 import com.chat.uikit.space.SpaceModel
 import com.xinbida.wukongim.WKIM
-import com.dmwork.im.databinding.ActivityMainBinding
 
-class MainActivity : WKBaseActivity<ActivityMainBinding>() {
+/**
+ * 轻量级路由 Activity：不继承 WKBaseActivity，不膨胀布局（除非首次显示协议弹窗）。
+ * 对于已登录用户的冷启动，onCreate 只做条件判断 + startActivity，省去 ~200ms 的布局膨胀开销。
+ */
+class MainActivity : AppCompatActivity() {
 
-    override fun supportSlideBack(): Boolean = false
+    private val perfTag = "StartupPerf"
+    private val tCreate = android.os.SystemClock.elapsedRealtime()
 
-    override fun getViewBinding(): ActivityMainBinding {
-        return ActivityMainBinding.inflate(layoutInflater)
-    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val t = android.os.SystemClock.elapsedRealtime()
+        super.onCreate(savedInstanceState)
+        android.util.Log.w(perfTag, "[MainActivity] onCreate, T=${t - WKBaseApplication.PROCESS_START}ms, super.onCreate: ${android.os.SystemClock.elapsedRealtime() - t}ms")
 
-    override fun initView() {
-        super.initView()
-        val isShowDialog: Boolean =
-            WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog")
-        if (isShowDialog) {
-            showDialog()
-        } else gotoApp()
+        val isShowDialog = WKSharedPreferencesUtil.getInstance()
+            .getBoolean("show_agreement_dialog")
+        if (!isShowDialog) {
+            // 快速路径：已同意协议，直接路由，不膨胀布局
+            gotoApp()
+            return
+        }
+
+        // 慢路径：首次启动，需要显示协议弹窗
+        setContentView(R.layout.activity_main)
+        showDialog()
     }
 
     private fun gotoApp() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().token)) {
             if (TextUtils.isEmpty(WKConfig.getInstance().userInfo.name)) {
-                startActivity(Intent(this@MainActivity, PerfectUserInfoActivity::class.java))
+                startActivity(Intent(this, PerfectUserInfoActivity::class.java))
             } else {
                 val publicRSAKey: String =
                     WKIM.getInstance().cmdManager.rsaPublicKey
                 if (TextUtils.isEmpty(publicRSAKey)) {
-                    val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
+                    val intent = Intent(this, WKLoginActivity::class.java)
                     intent.putExtra("from", getIntent().getIntExtra("from", 0))
                     startActivity(intent)
                 } else {
@@ -56,7 +67,7 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                 }
             }
         } else {
-            val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
+            val intent = Intent(this, WKLoginActivity::class.java)
             intent.putExtra("from", getIntent().getIntExtra("from", 0))
             startActivity(intent)
         }
@@ -64,22 +75,29 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
     }
 
     private fun loadSpaceAndGo() {
+        val t = android.os.SystemClock.elapsedRealtime()
         MsgModel.getInstance().loadCurrentSpaceId()
+        android.util.Log.w(perfTag, "[MainActivity] loadCurrentSpaceId: ${android.os.SystemClock.elapsedRealtime() - t}ms")
         val currentSpaceId = MsgModel.getInstance().currentSpaceId
         if (!currentSpaceId.isNullOrEmpty()) {
-            // 已有 currentSpaceId，直接进入
-            startActivity(Intent(this@MainActivity, TabActivity::class.java))
+            android.util.Log.w(perfTag, "[MainActivity] has cached spaceId, go TabActivity directly")
+            val intent = Intent(this, TabActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
             finish()
             return
         }
         // 没有 currentSpaceId，从服务器获取 Space 列表
+        val tNet = android.os.SystemClock.elapsedRealtime()
+        android.util.Log.w(perfTag, "[MainActivity] no cached spaceId, calling getMySpaces()...")
         SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
             override fun onResult(list: List<com.chat.uikit.space.SpaceEntity>?) {
+                android.util.Log.w(perfTag, "[MainActivity] getMySpaces onResult: ${android.os.SystemClock.elapsedRealtime() - tNet}ms")
                 if (!list.isNullOrEmpty() && !list[0].space_id.isNullOrEmpty()) {
                     MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
                     startActivity(Intent(this@MainActivity, TabActivity::class.java))
                 } else {
-                    // 没有Space，回到登录页让用户登录后再引导
                     val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
                     intent.putExtra("from", getIntent().getIntExtra("from", 0))
                     startActivity(intent)
@@ -88,7 +106,7 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
             }
 
             override fun onError(code: Int, msg: String?) {
-                // 网络失败回到登录页
+                android.util.Log.w(perfTag, "[MainActivity] getMySpaces onError($code): ${android.os.SystemClock.elapsedRealtime() - tNet}ms")
                 val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
                 intent.putExtra("from", getIntent().getIntExtra("from", 0))
                 startActivity(intent)
@@ -109,8 +127,9 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                 NormalClickableContent(NormalClickableContent.NormalClickableTypes.Other, ""),
                 object : NormalClickableSpan.IClick {
                     override fun onClick(view: View) {
-                        showWebView(
-                            WKApiConfig.baseWebUrl + "user_agreement.html"
+                        startActivity(
+                            Intent(Intent.ACTION_VIEW,
+                                Uri.parse(WKApiConfig.baseWebUrl + "user_agreement.html"))
                         )
                     }
                 }), userAgreementIndex, userAgreementIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -122,7 +141,10 @@ class MainActivity : WKBaseActivity<ActivityMainBinding>() {
                 NormalClickableContent(NormalClickableContent.NormalClickableTypes.Other, ""),
                 object : NormalClickableSpan.IClick {
                     override fun onClick(view: View) {
-                        WKApiConfig.baseWebUrl + "privacy_policy.html"
+                        startActivity(
+                            Intent(Intent.ACTION_VIEW,
+                                Uri.parse(WKApiConfig.baseWebUrl + "privacy_policy.html"))
+                        )
                     }
                 }), privacyPolicyIndex, privacyPolicyIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )

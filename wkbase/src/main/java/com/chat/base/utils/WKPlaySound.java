@@ -35,7 +35,7 @@ public class WKPlaySound {
     public void playRecordMsg(int playID) {
         try {
             if (soundPool == null) {
-                soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
+                soundPool = new SoundPool(3, AudioManager.STREAM_NOTIFICATION, 0);
                 soundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
                     if (status == 0) {
                         try {
@@ -62,7 +62,7 @@ public class WKPlaySound {
     public void playOutMsg(int playID) {
         try {
             if (soundPool == null) {
-                soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
+                soundPool = new SoundPool(3, AudioManager.STREAM_NOTIFICATION, 0);
                 soundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
                     if (status == 0) {
                         try {
@@ -89,7 +89,7 @@ public class WKPlaySound {
     public void playInMsg(int playID) {
         try {
             if (soundPool == null) {
-                soundPool = new SoundPool(3, AudioManager.STREAM_SYSTEM, 0);
+                soundPool = new SoundPool(3, AudioManager.STREAM_NOTIFICATION, 0);
                 soundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
                     if (status == 0) {
                         try {

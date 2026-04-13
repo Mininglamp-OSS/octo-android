@@ -248,7 +248,9 @@ public class ThreadModel extends WKBaseModel {
         if (WKReader.isEmpty(list)) {
             return members;
         }
-        for (ThreadMember tm : list) {
+        for (Object item : list) {
+            if (!(item instanceof ThreadMember)) continue;
+            ThreadMember tm = (ThreadMember) item;
             WKChannelMember member = new WKChannelMember();
             member.memberUID = tm.uid;
             member.memberName = tm.name;

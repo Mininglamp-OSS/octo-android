@@ -31,22 +31,30 @@ public abstract class WKBaseFragment<WKVBinding extends ViewBinding> extends Fra
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        String fragName = getClass().getSimpleName();
+        long t0 = android.os.SystemClock.elapsedRealtime();
+        long t = t0;
 
         if (getArguments() != null) {
             getDataBundle(getArguments());
         }
 
-
         if (mContentView == null) {
-            //设置布局
             wkVBinding = getViewBinding();
             mContentView = wkVBinding.getRoot();
+            android.util.Log.w("StartupPerf", "[" + fragName + "] getViewBinding (inflate): " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
 
             initPresenter();
             initView();
+            android.util.Log.w("StartupPerf", "[" + fragName + "] initView: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
             initListener();
+            android.util.Log.w("StartupPerf", "[" + fragName + "] initListener: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
             initData();
+            android.util.Log.w("StartupPerf", "[" + fragName + "] initData: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms");
             initTitleBar();
+            android.util.Log.w("StartupPerf", "[" + fragName + "] ===== onCreateView TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms, T=" + (android.os.SystemClock.elapsedRealtime() - com.chat.base.WKBaseApplication.PROCESS_START) + "ms =====");
         } else {
             ViewGroup parent = (ViewGroup) mContentView.getParent();
             if (parent != null) {

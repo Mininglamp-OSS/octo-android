@@ -169,20 +169,45 @@ public class WKUIKitApplication {
     }
 
     private WeakReference<Application> mContext;
+    private volatile boolean wkimInitialized = false;
 
     public void init(Application mContext) {
+        final String tag = "StartupPerf";
+        long t0 = android.os.SystemClock.elapsedRealtime();
+
         this.mContext = new WeakReference<>(mContext);
-        initIM();
-        //初始化im事件及监听
-        WKIMUtils.getInstance().initIMListener();
-        initKitModuleListener();
-        String json = WKSharedPreferencesUtil.getInstance().getSP("wk_sensitive_words");
-        if (!TextUtils.isEmpty(json)) {
-            sensitiveWords = JSON.parseObject(json, SensitiveWords.class);
-        }
-        MsgModel.getInstance().syncSensitiveWords();
-        ProhibitWordModel.Companion.getInstance().sync();
-        MsgModel.getInstance().deleteFlameMsg();
+
+        // WKIM.init + 监听注册 + sensitiveWords 全部移到后台线程
+        // ChatFragment 在 ~1000ms 后才需要 WKIM，有充足时间完成
+        new Thread(() -> {
+            long tt = android.os.SystemClock.elapsedRealtime();
+            initIM();
+            android.util.Log.w(tag, "[UIKit][BG] initIM (WKIM.init + db): " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+
+            // sensitiveWords 解析放在 WKIM 线程，避免争抢主线程 CPU
+            String json = WKSharedPreferencesUtil.getInstance().getSP("wk_sensitive_words");
+            if (!TextUtils.isEmpty(json)) {
+                sensitiveWords = JSON.parseObject(json, SensitiveWords.class);
+            }
+            android.util.Log.w(tag, "[UIKit][BG] parse sensitiveWords: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+
+            WKIMUtils.getInstance().initIMListener();
+            android.util.Log.w(tag, "[UIKit][BG] initIMListener: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+            initKitModuleListener();
+            android.util.Log.w(tag, "[UIKit][BG] initKitModuleListener: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms");
+            wkimInitialized = true;
+            android.util.Log.w(tag, "[UIKit][BG] WKIM fully ready: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms since init()");
+
+            // 网络同步 + 阅后即焚清理，紧接着在同一线程执行
+            tt = android.os.SystemClock.elapsedRealtime();
+            MsgModel.getInstance().syncSensitiveWords();
+            ProhibitWordModel.Companion.getInstance().sync();
+            android.util.Log.w(tag, "[UIKit][BG] syncSensitiveWords + ProhibitWord.sync: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms"); tt = android.os.SystemClock.elapsedRealtime();
+            MsgModel.getInstance().deleteFlameMsg();
+            android.util.Log.w(tag, "[UIKit][BG] deleteFlameMsg: " + (android.os.SystemClock.elapsedRealtime() - tt) + "ms");
+        }).start();
+
+        android.util.Log.w(tag, "[UIKit] ===== init TOTAL (main thread): " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms =====");
     }
 
     public Context getContext() {
@@ -205,8 +230,19 @@ public class WKUIKitApplication {
         }
     }
 
+    public boolean isWkimReady() {
+        return wkimInitialized;
+    }
+
     public void startChat() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
+            if (!wkimInitialized) {
+                // WKIM 后台初始化尚未完成（正常不会发生），延迟重试
+                android.util.Log.w("StartupPerf", "[UIKit] startChat: WKIM not ready, retry in 100ms");
+                new android.os.Handler(android.os.Looper.getMainLooper())
+                        .postDelayed(this::startChat, 100);
+                return;
+            }
             Log.e("去连接", "-->");
             WKIM.getInstance().getConnectionManager().connection();
         }

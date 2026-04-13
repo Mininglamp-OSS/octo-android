@@ -61,36 +61,41 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     @SuppressLint("SourceLockedOrientationActivity")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        String actName = getClass().getSimpleName();
+        long t0 = android.os.SystemClock.elapsedRealtime();
+        long t = t0;
+
         super.onCreate(savedInstanceState);
-        //禁止横屏
-        // setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        //这个特性是安卓5.0以后才支持的所以需要对系统版本号做判断
-//        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
-//            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-//                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-//            );
-//            getWindow().setStatusBarColor(Color.TRANSPARENT);
-//        }
+        android.util.Log.w("StartupPerf", "[" + actName + "] super.onCreate: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         boolean na = WKStatusBarUtils.isNavigationBarExist(this);
-//        if (na) {
-//            getWindow().getDecorView().findViewById(android.R.id.content).setPadding(0, 0, 0, WKStatusBarUtils.getNavigationBarHeight(this));
-//        }
         WKMultiLanguageUtil.getInstance().setConfiguration();
-//        adaptTheme(false);
+
         wkVBinding = getViewBinding();
+        android.util.Log.w("StartupPerf", "[" + actName + "] getViewBinding (inflate): " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         setContentView(wkVBinding.getRoot());
+        android.util.Log.w("StartupPerf", "[" + actName + "] setContentView: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         initSwipeBackFinish();
         initPresenter();
         loadingPopup = new XPopup.Builder(this)
                 .asLoading(getString(R.string.loading));
         toggleStatusBarMode();
-//        setStatusBarColor();
+        android.util.Log.w("StartupPerf", "[" + actName + "] swipeBack+presenter+popup+statusBar: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         initData(savedInstanceState);
         initView();
+        android.util.Log.w("StartupPerf", "[" + actName + "] initView: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         initListener();
+        android.util.Log.w("StartupPerf", "[" + actName + "] initListener: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
+
         initTitleBar();
         initData();
         ActManagerUtils.getInstance().addActivity(this);
+        android.util.Log.w("StartupPerf", "[" + actName + "] titleBar+initData+addActivity: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms");
+        android.util.Log.w("StartupPerf", "[" + actName + "] ===== onCreate TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms, T=" + (android.os.SystemClock.elapsedRealtime() - com.chat.base.WKBaseApplication.PROCESS_START) + "ms =====");
     }
 
     /**

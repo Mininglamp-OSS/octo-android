@@ -93,17 +93,19 @@ public class DBHelper {
     }
 
     public Cursor rawQuery(String sql) {
+        if (mDb == null || !mDb.isOpen()) return null;
         return mDb.rawQuery(sql, null);
     }
 
     public Cursor rawQuery(String sql, String[] selectionArgs) {
+        if (mDb == null || !mDb.isOpen()) return null;
         return mDb.rawQuery(sql, selectionArgs);
     }
 
     public Cursor select(String table, String selection,
                          String[] selectionArgs,
                          String orderBy) {
-        if (mDb == null) return null;
+        if (mDb == null || !mDb.isOpen()) return null;
         Cursor cursor;
         try {
             cursor = mDb.query(table, null, selection, selectionArgs,
@@ -116,15 +118,18 @@ public class DBHelper {
     }
 
     public long insert(String table, ContentValues cv) {
+        if (mDb == null || !mDb.isOpen()) return -1;
         return mDb.insert(table, null, cv);
     }
 
     public long insertOrReplace(String table, ContentValues cv) {
+        if (mDb == null || !mDb.isOpen()) return -1;
         return mDb.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public boolean update(String tableName, ContentValues cv, String where,
                           String[] whereValue) {
+        if (mDb == null || !mDb.isOpen()) return false;
         boolean flag = false;
         try {
             flag = mDb.update(tableName, cv, where, whereValue) > 0;
@@ -135,6 +140,7 @@ public class DBHelper {
     }
 
     public boolean delete(String tableName, String where, String[] whereValue) {
+        if (mDb == null || !mDb.isOpen()) return false;
         int count = mDb.delete(tableName, where, whereValue);
         return count > 0;
     }

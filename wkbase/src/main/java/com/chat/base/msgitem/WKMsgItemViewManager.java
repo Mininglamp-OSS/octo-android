@@ -67,10 +67,16 @@ public class WKMsgItemViewManager {
     }
 
     public ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getChatItemProviderList() {
+        if (chatItemProviderList == null) {
+            return new ConcurrentHashMap<>();
+        }
         return chatItemProviderList;
     }
 
     public ConcurrentHashMap<Integer, BaseItemProvider<WKUIChatMsgItemEntity>> getPinnedChatItemProviderList() {
+        if (pinnedChatItemProviderList == null) {
+            return new ConcurrentHashMap<>();
+        }
         return pinnedChatItemProviderList;
     }
 

@@ -185,4 +185,5 @@ public class WKBaseApplication {
         }
         return appModule.getStatus() != 0 && appModule.getChecked();
     }
+
 }

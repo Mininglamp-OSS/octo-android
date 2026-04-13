@@ -101,6 +101,10 @@
 -keep class com.yalantis.ucrop** { *; }
 -keep interface com.yalantis.ucrop** { *; }
 
+# Bugly 符号表还原：保留源文件名和行号，使用标准格式（兼容 R8 8.x）
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
 #华为
 -ignorewarnings
 -keepattributes *Annotation*

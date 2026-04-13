@@ -161,6 +161,7 @@
 -keep class com.chat.uikit.contacts.FriendUIEntity { *; }
 -keep class com.chat.uikit.chat.msgmodel.** { *; }
 -keep class com.chat.uikit.enity.** { *; }
+-keep class com.chat.uikit.thread.service.entity.** { *; }
 -keep class com.chat.uikit.group.service.entity.** { *; }
 -keep class com.chat.uikit.group.GroupEntity { *; }
 -keep class com.chat.uikit.group.GroupMemberEntity { *; }

@@ -15,6 +15,7 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.chat.base.act.PlayVideoActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.DBHelper;
@@ -88,7 +89,16 @@ public class WKBaseApplication {
         // 初始化 Bugly 崩溃日志收集
         CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
         if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
-            CrashReport.setUserId(WKConfig.getInstance().getUid());
+            UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
+            if (userInfo != null && !TextUtils.isEmpty(userInfo.short_no)) {
+                CrashReport.setUserId(userInfo.short_no);
+            } else {
+                CrashReport.setUserId(WKConfig.getInstance().getUid());
+            }
+            CrashReport.putUserData(context, "uid", WKConfig.getInstance().getUid());
+            if (userInfo != null && !TextUtils.isEmpty(userInfo.name)) {
+                CrashReport.putUserData(context, "name", userInfo.name);
+            }
         }
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());
         initCacheDir();

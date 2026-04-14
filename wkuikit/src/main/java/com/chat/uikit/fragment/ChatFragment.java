@@ -12,7 +12,10 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Gravity;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
@@ -37,6 +40,8 @@ import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
+import com.chat.base.ui.components.BottomSheet;
+import com.chat.base.ui.components.SegmentTabView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
@@ -49,6 +54,8 @@ import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.contacts.service.FriendModel;
+import com.chat.uikit.category.CategoryEntity;
+import com.chat.uikit.category.CategoryModel;
 import com.chat.uikit.databinding.FragChatConversationLayoutBinding;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.group.service.GroupModel;
@@ -105,6 +112,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private Timer connectTimer;
     private TabActivity tabActivity;
     private String currentSpaceName;
+
+    // 分段 Tab 切换：0=群聊, 1=私聊
+    private int currentTab = 0;
+    private SegmentTabView segmentTabView;
+    private final List<ChatConversationMsg> allConversations = new ArrayList<>();
+    private List<CategoryEntity> categoryList = new ArrayList<>();
 
     // Space 会话过滤：记录当前 Space 下已确认的会话 channel key，
     // 用于过滤实时消息推送中不属于当前 Space 的会话
@@ -169,6 +182,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         Theme.setPressedBackground(wkVBinding.deviceIv);
         Theme.setPressedBackground(wkVBinding.searchIv);
         Theme.setPressedBackground(wkVBinding.rightIv);
+
+        // 分段 Tab 切换控件
+        segmentTabView = new SegmentTabView(requireContext(),
+                new String[]{getString(R.string.str_group_chat), getString(R.string.str_private_chat)});
+        wkVBinding.segmentTabContainer.addView(segmentTabView,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT));
+        segmentTabView.setOnTabSelectedListener(index -> {
+            currentTab = index;
+            filterAndDisplay();
+        });
+
         android.util.Log.w("StartupPerf", "[ChatFragment] initView done: " + (android.os.SystemClock.elapsedRealtime() - fragCreateTime) + "ms");
     }
 
@@ -200,9 +226,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
                 // 清除成员缓存
                 SpaceModel.getInstance().invalidateMembersCache();
+                CategoryModel.getInstance().invalidateCache();
+                loadCategories();
 
                 // 参考 iOS：先立即清空 UI（给用户即时反馈），再异步清 DB
                 spaceConversationKeys.clear();
+                allConversations.clear();
                 chatConversationAdapter.setList(new ArrayList<>());
 
                 // DB 清理 + 会话同步放到后台线程（iOS 用 serial DB queue，不阻塞主线程）
@@ -289,6 +318,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         }
                     });
                 }
+            } else if (menu == ChatConversationAdapter.ItemMenu.moveToCategory) {
+                showMoveToCategoryDialog(item.channelID);
             }
         });
         // 子区预览点击监听
@@ -315,24 +346,57 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 startActivity(intent);
             }
         });
+        // 恢复用户折叠状态
+        restoreCollapsedSections();
+        // Section header 折叠/展开回调 → 重建列表 + 持久化
+        chatConversationAdapter.setSectionToggleListener((sectionId, collapsed) -> {
+            filterAndDisplay();
+            saveCollapsedSections();
+        });
+        // Section header 长按 → 分组管理菜单（移到最前 / 删除分组）
+        chatConversationAdapter.setSectionLongClickListener((sectionId, sectionTitle, anchor) ->
+                showSectionManagePopup(sectionId, sectionTitle, anchor));
+
+        // "创建分组" 弹窗入口
+        EndpointManager.getInstance().setMethod("show_create_category_dialog", object -> {
+            showCreateCategoryDialog();
+            return null;
+        });
+
         //频道刷新监听
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("chat_fragment_refresh_channel", (channel, isEnd) -> {
             if (channel != null) {
-                for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-                    if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channel.channelType) {
-
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.setWkChannel(channel);
-                        // fixme 不能强制刷新整个列表，导致重新获取channel 频繁刷新UI卡顿
-                        if (chatConversationAdapter.getData().get(i).isTop != channel.top) {
-                            chatConversationAdapter.getData().get(i).isTop = channel.top;
-                            sortMsg(chatConversationAdapter.getData());
-                        } else {
+                // 先在共享对象更新前比较 isTop 是否变化
+                boolean topChanged = false;
+                for (ChatConversationMsg allMsg : allConversations) {
+                    if (!TextUtils.isEmpty(allMsg.uiConversationMsg.channelID)
+                            && allMsg.uiConversationMsg.channelID.equals(channel.channelID)
+                            && allMsg.uiConversationMsg.channelType == channel.channelType) {
+                        topChanged = allMsg.isTop != channel.top;
+                        allMsg.uiConversationMsg.setWkChannel(channel);
+                        allMsg.isTop = channel.top;
+                        break;
+                    }
+                }
+                if (topChanged) {
+                    // 置顶状态变化：重建列表
+                    if (currentTab == 0) {
+                        filterAndDisplay();
+                    } else {
+                        sortMsg(allConversations);
+                    }
+                    setAllCount();
+                } else {
+                    // 非置顶变化：局部刷新
+                    for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                        if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
+                        if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channel.channelType) {
                             chatConversationAdapter.getData().get(i).isRefreshChannelInfo = true;
                             chatConversationAdapter.getData().get(i).isResetCounter = true;
                             notifyRecycler(i, chatConversationAdapter.getData().get(i));
+                            setAllCount();
+                            break;
                         }
-                        setAllCount();
-                        break;
                     }
                 }
             }
@@ -340,7 +404,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //监听移除最近会话
         WKIM.getInstance().getConversationManager().addOnDeleteMsgListener("chat_fragment", (s, b) -> {
             if (!TextUtils.isEmpty(s)) {
+                // 从 allConversations 移除
+                allConversations.removeIf(msg ->
+                        msg.uiConversationMsg != null && msg.uiConversationMsg.channelID.equals(s) && msg.uiConversationMsg.channelType == b);
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(s) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == b) {
                         boolean isResetCount = chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount > 0;
                         chatConversationAdapter.removeAt(i);
@@ -371,6 +439,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                     if (from_uid.equals(WKConfig.getInstance().getUid())) return;
                     for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                        if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                         if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channelType) {
                             chatConversationAdapter.getData().get(i).isResetTyping = true;
                             chatConversationAdapter.getData().get(i).typingUserName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
@@ -433,6 +502,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                 if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(msg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == msg.channelType && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientSeq == msg.clientSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(msg.clientMsgNO))) {
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().status != msg.status || chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().remoteExtra.readedCount != msg.remoteExtra.readedCount) {
                         chatConversationAdapter.getData().get(i).isRefreshStatus = true;
@@ -466,6 +536,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getMsgManager().addOnClearMsgListener("chat_fragment", (channelID, channelType, fromUID) -> {
             if (TextUtils.isEmpty(fromUID))
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channelType) {
                         chatConversationAdapter.getData().get(i).uiConversationMsg.setWkMsg(null);
                         chatConversationAdapter.getData().get(i).isResetContent = true;
@@ -480,6 +551,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             for (WKReminder reader : list) {
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (reader.done == 0
                             && !TextUtils.isEmpty(reader.messageID)
                             && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null
@@ -526,8 +598,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
 
-            if (chatConversationAdapter.getData().isEmpty()) {
-                // 适配器为空，说明是 Space 切换后的首次同步结果，记录有效会话 key
+            if (allConversations.isEmpty()) {
+                // allConversations 为空，说明是首次加载或 Space 切换后的首次同步结果
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
@@ -551,48 +623,78 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // 多条
             for (WKUIConversationMsg uiConversationMsg : list) {
                 boolean isAdd = true;
-                for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-                    if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
-                        // Space 过滤：消息来自其他 Space 时，跳过所有视觉更新
+                // 先检查 allConversations（含未在当前 tab 显示的会话）
+                for (ChatConversationMsg allMsg : allConversations) {
+                    if (!TextUtils.isEmpty(allMsg.uiConversationMsg.channelID)
+                            && allMsg.uiConversationMsg.channelID.equals(uiConversationMsg.channelID)
+                            && allMsg.uiConversationMsg.channelType == uiConversationMsg.channelType) {
+                        // Space 过滤
                         if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
                             isAdd = false;
                             break;
                         }
                         isAdd = false;
-                        if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp || (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null && !chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
-                            chatConversationAdapter.getData().get(i).isResetTyping = true;
-                            chatConversationAdapter.getData().get(i).typingUserName = "";
-                            chatConversationAdapter.getData().get(i).typingStartTime = 0;
-                            chatConversationAdapter.getData().get(i).isRefreshStatus = true;
+                        // 先设置刷新标志（对象与 adapter 共享，必须在更新数据之前比较）
+                        if (allMsg.uiConversationMsg.unreadCount != uiConversationMsg.unreadCount) {
+                            allMsg.isResetCounter = true;
                         }
-                        if (chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount != uiConversationMsg.unreadCount) {
-                            chatConversationAdapter.getData().get(i).isResetCounter = true;
+                        if (allMsg.uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp) {
+                            allMsg.isResetTime = true;
                         }
-                        if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp) {
-                            chatConversationAdapter.getData().get(i).isResetTime = true;
+                        if (!allMsg.uiConversationMsg.clientMsgNo.equals(uiConversationMsg.clientMsgNo)) {
+                            allMsg.isResetContent = true;
                         }
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.setWkMsg(uiConversationMsg.getWkMsg());
-                        if (!chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo.equals(uiConversationMsg.clientMsgNo)) {
-                            chatConversationAdapter.getData().get(i).isResetContent = true;
+                        if (allMsg.uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq
+                                || allMsg.uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp
+                                || (allMsg.uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null
+                                    && !allMsg.uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
+                            allMsg.isResetTyping = true;
+                            allMsg.typingUserName = "";
+                            allMsg.typingStartTime = 0;
+                            allMsg.isRefreshStatus = true;
                         }
-                        WKIMUtils.getInstance().resetMsgProhibitWord(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg());
-                        // todo 比较是否真的改过提醒内容
-                        chatConversationAdapter.getData().get(i).isResetReminders = true;
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq = uiConversationMsg.lastMsgSeq;
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
-                        // 保留已有的 extras（草稿等），sync 结果不含 extras 时不覆盖
+                        allMsg.isResetReminders = true;
+                        // 更新数据
+                        allMsg.uiConversationMsg.setWkMsg(uiConversationMsg.getWkMsg());
+                        allMsg.uiConversationMsg.lastMsgSeq = uiConversationMsg.lastMsgSeq;
+                        allMsg.uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
+                        allMsg.uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
+                        allMsg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
                         if (uiConversationMsg.getRemoteMsgExtra() != null) {
-                            chatConversationAdapter.getData().get(i).uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                            allMsg.uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
                         }
-
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.setReminderList(uiConversationMsg.getReminderList());
-                        chatConversationAdapter.getData().get(i).uiConversationMsg.localExtraMap = null;
-                        notifyRecycler(i, chatConversationAdapter.getData().get(i));
-                        setAllCount();
+                        allMsg.uiConversationMsg.setReminderList(uiConversationMsg.getReminderList());
+                        allMsg.uiConversationMsg.localExtraMap = null;
+                        WKIMUtils.getInstance().resetMsgProhibitWord(allMsg.uiConversationMsg.getWkMsg());
                         break;
                     }
+                }
+                // 在当前 tab 的 adapter 中查找并更新 UI 标志
+                if (!isAdd) {
+                    for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                        if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
+                        if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
+                            if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp || (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null && !chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
+                                chatConversationAdapter.getData().get(i).isResetTyping = true;
+                                chatConversationAdapter.getData().get(i).typingUserName = "";
+                                chatConversationAdapter.getData().get(i).typingStartTime = 0;
+                                chatConversationAdapter.getData().get(i).isRefreshStatus = true;
+                            }
+                            if (chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount != uiConversationMsg.unreadCount) {
+                                chatConversationAdapter.getData().get(i).isResetCounter = true;
+                            }
+                            if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp) {
+                                chatConversationAdapter.getData().get(i).isResetTime = true;
+                            }
+                            if (!chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo.equals(uiConversationMsg.clientMsgNo)) {
+                                chatConversationAdapter.getData().get(i).isResetContent = true;
+                            }
+                            chatConversationAdapter.getData().get(i).isResetReminders = true;
+                            notifyRecycler(i, chatConversationAdapter.getData().get(i));
+                            break;
+                        }
+                    }
+                    setAllCount();
                 }
                 if (isAdd) {
                     // 私聊 Space 未读数适配（参考 iOS WKConversationWrapModel.unreadCount）
@@ -622,8 +724,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
             if (WKReader.isNotEmpty(uiList)) {
-                // 有新会话加入，需要合并排序
-                uiList.addAll(chatConversationAdapter.getData());
+                // 有新会话加入，合并到 allConversations 后重新排序
+                uiList.addAll(allConversations);
                 sortMsg(uiList);
             }
             // 仅已有会话更新时，notifyRecycler 已处理局部刷新，不需要 sortMsg 全量重绘
@@ -653,7 +755,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 startPingTimer();
                 // 注册流程补偿：SDK 连接成功时如果列表仍为空（getChatMsg 的 sync 因连接未就绪而未触发），补一次 sync
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
-                if (!TextUtils.isEmpty(spaceId) && chatConversationAdapter.getData().isEmpty()) {
+                if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty()) {
                     spaceConversationKeys.clear();
                     Schedulers.io().scheduleDirect(() -> {
                         WKIM.getInstance().getConversationManager().clearAll();
@@ -698,7 +800,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
+                // 从 allConversations 移除
+                allConversations.removeIf(msg ->
+                        msg.uiConversationMsg != null
+                                && msg.uiConversationMsg.channelID.equals(channel.channelID)
+                                && msg.uiConversationMsg.channelType == channel.channelType);
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channel.channelType) {
                         boolean isResetCount = chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount > 0;
                         chatConversationAdapter.removeAt(i);
@@ -727,6 +835,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // syncCoverExtra 完成后刷新草稿等 extra 信息
         EndpointManager.getInstance().setMethod("refresh_conversation_extras", object -> {
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                 WKUIConversationMsg convMsg = chatConversationAdapter.getData().get(i).uiConversationMsg;
                 WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
                         .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
@@ -767,6 +876,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     protected void initData() {
         getData();
+        loadCategories();
     }
 
     private void getData() {
@@ -845,21 +955,30 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void setAllCount() {
-        int allCount = 0;
-        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-            ChatConversationMsg item = chatConversationAdapter.getData().get(i);
+        int groupCount = 0;
+        int personalCount = 0;
+        // 使用 allConversations（全量数据）计算未读数，不受 tab 过滤影响
+        List<ChatConversationMsg> source = allConversations.isEmpty()
+                ? chatConversationAdapter.getData() : allConversations;
+        for (int i = 0, size = source.size(); i < size; i++) {
+            ChatConversationMsg item = source.get(i);
+            if (item.isSectionHeader) continue;
             if (item.uiConversationMsg.getWkChannel() != null && item.uiConversationMsg.getWkChannel().mute == 0) {
                 if (item.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
-                    allCount += chatConversationAdapter.getEffectiveUnreadCount(item);
+                    personalCount += chatConversationAdapter.getEffectiveUnreadCount(item);
                 } else {
-                    allCount += item.uiConversationMsg.unreadCount;
+                    groupCount += item.uiConversationMsg.unreadCount;
                 }
             }
         }
-        if (tabActivity != null) {
-            tabActivity.setMsgCount(allCount);
+        // 角标显示在顶部 sub-tab 上，不显示在底部聊天 tab
+        if (segmentTabView != null) {
+            segmentTabView.setBadge(0, groupCount);
+            segmentTabView.setBadge(1, personalCount);
         }
-        // EndpointManager.getInstance().invoke("refresh_chat_unread_count",allCount);
+        if (tabActivity != null) {
+            tabActivity.setMsgCount(0);
+        }
     }
 
     @Override
@@ -874,6 +993,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (WKReader.isNotEmpty(chatConversationAdapter.getData())) {
             boolean isAdd = true;
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                 boolean isBreak = false;
                 if (WKReader.isNotEmpty(chatConversationAdapter.getData().get(i).childList)) {
                     for (int j = 0, len = chatConversationAdapter.getData().get(i).childList.size(); j < len; j++) {
@@ -931,7 +1051,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 chatConversationAdapter.refreshThreadPreviews(parsed[0]);
             }
             if (isEnd) {
-                sortMsg(chatConversationAdapter.getData());
+                sortMsg(allConversations);
             }
             return;
         }
@@ -944,7 +1064,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // || (uiConversationMsg.getWkChannel() != null && uiConversationMsg.getWkChannel().follow == 0 && uiConversationMsg.channelType == WKChannelType.PERSONAL)
         if (uiConversationMsg.isDeleted == 1 || TextUtils.equals(uiConversationMsg.channelID, "0")) {
             if (isEnd) {
-                sortMsg(chatConversationAdapter.getData());
+                sortMsg(allConversations);
             }
             return;
         }
@@ -952,11 +1072,70 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             resetChildData(uiConversationMsg, isEnd);
             return;
         }
+
+        // 判断会话是否属于当前 tab 显示范围
+        byte currentTabType = currentTab == 0 ? WKChannelType.GROUP : WKChannelType.PERSONAL;
+        boolean matchesCurrentTab = uiConversationMsg.channelType == currentTabType;
+
         boolean isAdd = true;
         int index = -1;
         boolean isSort = false;
+
+        // 先检查 allConversations 中是否已有该会话（处理不在当前 tab 的情况）
+        // 注意：allConversations 与 adapter data 共享同一对象，
+        // 必须在更新数据之前设置刷新标志，否则 adapter 循环中的比较永远为 false
+        boolean foundInAll = false;
+        for (ChatConversationMsg allMsg : allConversations) {
+            if (!TextUtils.isEmpty(allMsg.uiConversationMsg.channelID)
+                    && allMsg.uiConversationMsg.channelID.equals(uiConversationMsg.channelID)
+                    && allMsg.uiConversationMsg.channelType == uiConversationMsg.channelType) {
+                foundInAll = true;
+                // 先设置刷新标志（在数据更新之前比较）
+                if (allMsg.uiConversationMsg.unreadCount != uiConversationMsg.unreadCount) {
+                    allMsg.isResetCounter = true;
+                }
+                if (allMsg.uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp) {
+                    allMsg.isResetTime = true;
+                }
+                if (!allMsg.uiConversationMsg.clientMsgNo.equals(uiConversationMsg.clientMsgNo)) {
+                    allMsg.isResetContent = true;
+                }
+                if (allMsg.uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq
+                        || allMsg.uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp
+                        || (allMsg.uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null
+                            && !allMsg.uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
+                    allMsg.isResetTyping = true;
+                    allMsg.typingUserName = "";
+                    allMsg.typingStartTime = 0;
+                    allMsg.isRefreshStatus = true;
+                }
+                allMsg.isResetReminders = true;
+                // 排序标志也在此处提前计算（共享对象，adapter 循环中比较会失败）
+                if (allMsg.uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq
+                        || allMsg.uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp
+                        || (allMsg.uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null
+                            && !allMsg.uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
+                    isSort = true;
+                }
+                // 更新数据
+                allMsg.uiConversationMsg.setWkMsg(uiConversationMsg.getWkMsg());
+                allMsg.uiConversationMsg.lastMsgSeq = uiConversationMsg.lastMsgSeq;
+                allMsg.uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
+                allMsg.uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
+                allMsg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                if (uiConversationMsg.getRemoteMsgExtra() != null) {
+                    allMsg.uiConversationMsg.setRemoteMsgExtra(uiConversationMsg.getRemoteMsgExtra());
+                }
+                allMsg.uiConversationMsg.setReminderList(uiConversationMsg.getReminderList());
+                allMsg.uiConversationMsg.localExtraMap = null;
+                WKIMUtils.getInstance().resetMsgProhibitWord(allMsg.uiConversationMsg.getWkMsg());
+                break;
+            }
+        }
+
         if (WKReader.isNotEmpty(chatConversationAdapter.getData())) {
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                 if (!TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID) && !TextUtils.isEmpty(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(uiConversationMsg.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == uiConversationMsg.channelType) {
                     // Space 过滤：实时消息来自其他 Space 时，跳过所有更新
                     if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
@@ -968,13 +1147,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         chatConversationAdapter.getData().get(i).uiConversationMsg = uiConversationMsg;
                         break;
                     }
+                    // 记录 adapter 中的位置（排序时需要先移除旧项）
+                    index = i;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq != uiConversationMsg.lastMsgSeq || chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp != uiConversationMsg.lastMsgTimestamp || (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null && uiConversationMsg.getWkMsg() != null && !chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().clientMsgNO.equals(uiConversationMsg.getWkMsg().clientMsgNO))) {
                         isSort = true;
                         chatConversationAdapter.getData().get(i).isResetTyping = true;
                         chatConversationAdapter.getData().get(i).typingUserName = "";
                         chatConversationAdapter.getData().get(i).typingStartTime = 0;
                         chatConversationAdapter.getData().get(i).isRefreshStatus = true;
-                        index = i;
                     }
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount != uiConversationMsg.unreadCount) {
                         chatConversationAdapter.getData().get(i).isResetCounter = true;
@@ -1006,6 +1186,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         }
+
+        // 会话已在 allConversations 中但不在当前 tab 的 adapter 中
+        if (isAdd && foundInAll) {
+            isAdd = false;
+            setAllCount();
+        }
+
         if (!isEnd) msgCount++;
 
         if (isAdd) {
@@ -1029,27 +1216,42 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             spaceConversationKeys.add(key);
             syncSpaceKeysToGlobal();
-            if (!isEnd) {
-                chatConversationAdapter.addData(new ChatConversationMsg(uiConversationMsg));
-            } else {
-                int insertIndex = getInsertIndex(uiConversationMsg);
-                chatConversationAdapter.addData(insertIndex, new ChatConversationMsg(uiConversationMsg));
-                scrollToPositionIfNearTop(insertIndex);
+            ChatConversationMsg newMsg = new ChatConversationMsg(uiConversationMsg);
+            // 始终添加到全量列表
+            allConversations.add(newMsg);
+            // 仅在匹配当前 tab 时添加到 adapter 显示
+            if (matchesCurrentTab) {
+                if (currentTab == 0) {
+                    // 群聊 tab：有 section header，用 filterAndDisplay 重建列表
+                    filterAndDisplay();
+                } else if (!isEnd) {
+                    chatConversationAdapter.addData(newMsg);
+                } else {
+                    int insertIndex = getInsertIndex(uiConversationMsg);
+                    chatConversationAdapter.addData(insertIndex, newMsg);
+                    scrollToPositionIfNearTop(insertIndex);
+                }
             }
             setAllCount();
         }
         if (isEnd) {
             if (isSort && msgCount == 0) {
-                int insertIndex = getInsertIndex(uiConversationMsg);
-                if (insertIndex != index) {
-                    if (index != -1) chatConversationAdapter.removeAt(index);
-                    chatConversationAdapter.addData(insertIndex, new ChatConversationMsg(uiConversationMsg));
-                    scrollToPositionIfNearTop(insertIndex);
+                if (currentTab == 0) {
+                    // 群聊 tab：有 section header，用 filterAndDisplay 重建
+                    filterAndDisplay();
+                } else {
+                    int insertIndex = getInsertIndex(uiConversationMsg);
+                    if (insertIndex != index) {
+                        if (index != -1) chatConversationAdapter.removeAt(index);
+                        ChatConversationMsg newSortMsg = new ChatConversationMsg(uiConversationMsg);
+                        chatConversationAdapter.addData(insertIndex, newSortMsg);
+                        scrollToPositionIfNearTop(insertIndex);
+                    }
                 }
             } else {
                 if (msgCount > 0) {
                     msgCount = 0;
-                    sortMsg(chatConversationAdapter.getData());
+                    sortMsg(allConversations);
                 }
             }
         }
@@ -1139,17 +1341,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 在 onResume 中调用，确保无论 syncCoverExtra 何时完成都能显示草稿。
      */
     private void refreshExtrasIfNeeded() {
-        if (chatConversationAdapter.getData().isEmpty()) return;
-        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-            WKUIConversationMsg convMsg = chatConversationAdapter.getData().get(i).uiConversationMsg;
+        // 刷新 allConversations（覆盖所有 tab 的会话）
+        for (ChatConversationMsg allMsg : allConversations) {
+            WKUIConversationMsg convMsg = allMsg.uiConversationMsg;
             if (convMsg.getRemoteMsgExtra() == null || TextUtils.isEmpty(convMsg.getRemoteMsgExtra().draft)) {
                 WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
                         .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
                 if (extra != null && !TextUtils.isEmpty(extra.draft)) {
                     convMsg.setRemoteMsgExtra(extra);
-                    chatConversationAdapter.getData().get(i).isResetContent = true;
-                    notifyRecycler(i, chatConversationAdapter.getData().get(i));
+                    allMsg.isResetContent = true;
                 }
+            }
+        }
+        // 刷新当前 tab 可见的 adapter 项
+        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
+            if (chatConversationAdapter.getData().get(i).isResetContent) {
+                notifyRecycler(i, chatConversationAdapter.getData().get(i));
             }
         }
     }
@@ -1165,6 +1373,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             pendingSpaceResync = false;
             spaceConversationKeys.clear();
+            allConversations.clear();
             chatConversationAdapter.setList(new ArrayList<>());
             Schedulers.io().scheduleDirect(() -> {
                 WKIM.getInstance().getConversationManager().clearAll();
@@ -1195,11 +1404,685 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         tempList.addAll(normalList);
         tempList.addAll(0, topList);
         AndroidUtilities.runOnUIThread(() -> {
-            chatConversationAdapter.setList(tempList);
+            allConversations.clear();
+            allConversations.addAll(tempList);
+            filterAndDisplay();
             setAllCount();
             scrollToPositionIfNearTop(0);
             syncSpaceKeysToGlobal();
         });
+    }
+
+    /**
+     * 根据当前 tab 过滤 allConversations 并刷新 adapter。
+     * 群聊 tab (0): channelType == GROUP，按 category 分组显示
+     * 私聊 tab (1): channelType == PERSONAL，无分组
+     */
+    private void filterAndDisplay() {
+        if (currentTab == 0) {
+            // 群聊 tab：按 category 分组显示
+            // 1. 建立 channelId → ChatConversationMsg 映射
+            HashMap<String, ChatConversationMsg> channelMap = new HashMap<>();
+            for (ChatConversationMsg msg : allConversations) {
+                if (msg.uiConversationMsg == null || msg.uiConversationMsg.channelType != WKChannelType.GROUP)
+                    continue;
+                channelMap.put(msg.uiConversationMsg.channelID, msg);
+            }
+
+            List<ChatConversationMsg> displayList = new ArrayList<>();
+            Set<String> groupedChannelIds = new HashSet<>();
+
+            // 2. 收集已归组的 channelId
+            for (CategoryEntity category : categoryList) {
+                if (category.category_id == null || category.groups == null) continue;
+                for (CategoryEntity.CategoryGroup cg : category.groups) {
+                    groupedChannelIds.add(cg.group_no);
+                }
+            }
+
+            // 3. 未归组群聊 — 直接排在最顶部，不包 section header
+            List<ChatConversationMsg> ungrouped = new ArrayList<>();
+            for (ChatConversationMsg msg : allConversations) {
+                if (msg.uiConversationMsg == null || msg.uiConversationMsg.channelType != WKChannelType.GROUP)
+                    continue;
+                if (!groupedChannelIds.contains(msg.uiConversationMsg.channelID)) {
+                    ungrouped.add(msg);
+                }
+            }
+            // 置顶排前面，同级别按最新消息时间倒序
+            ungrouped.sort((a, b) -> {
+                int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                if (topA != topB) return topB - topA;
+                return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
+            });
+            displayList.addAll(ungrouped);
+
+            // 4. 用户自建分组，置顶群聊在分组内部排到最前
+            for (CategoryEntity category : categoryList) {
+                if (category.category_id == null) continue;
+                displayList.add(new ChatConversationMsg(category.category_id, category.name));
+                if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
+                    if (category.groups != null) {
+                        List<ChatConversationMsg> sectionItems = new ArrayList<>();
+                        for (CategoryEntity.CategoryGroup cg : category.groups) {
+                            ChatConversationMsg msg = channelMap.get(cg.group_no);
+                            if (msg != null) {
+                                sectionItems.add(msg);
+                            }
+                        }
+                        // 置顶排前面，同级别按最新消息时间倒序
+                        sectionItems.sort((a, b) -> {
+                            int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                            int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                            if (topA != topB) return topB - topA;
+                            return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
+                        });
+                        displayList.addAll(sectionItems);
+                    }
+                }
+            }
+
+            chatConversationAdapter.setList(displayList);
+        } else {
+            // 私聊 tab：无分组
+            List<ChatConversationMsg> filtered = new ArrayList<>();
+            for (ChatConversationMsg msg : allConversations) {
+                if (msg.uiConversationMsg != null && msg.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
+                    filtered.add(msg);
+                }
+            }
+            chatConversationAdapter.setList(filtered);
+        }
+    }
+
+    private void showSectionManagePopup(String sectionId, String sectionTitle, View anchor) {
+        if (getActivity() == null) return;
+        List<PopupMenuItem> items = new ArrayList<>();
+
+        // 移到最前（已在最前时不显示）
+        boolean isFirst = false;
+        for (CategoryEntity cat : categoryList) {
+            if (cat.category_id != null) {
+                isFirst = cat.category_id.equals(sectionId);
+                break;
+            }
+        }
+        if (!isFirst) {
+        items.add(new PopupMenuItem(getString(R.string.move_to_front), R.mipmap.msg_arrowright, () -> {
+            String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+            if (TextUtils.isEmpty(spaceId)) return;
+
+            List<String> newOrder = new ArrayList<>();
+            newOrder.add(sectionId);
+            for (CategoryEntity cat : categoryList) {
+                if (cat.category_id != null && !cat.category_id.equals(sectionId)) {
+                    newOrder.add(cat.category_id);
+                }
+            }
+            CategoryModel.getInstance().sort(spaceId, newOrder, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    loadCategories();
+                } else {
+                    WKToastUtils.getInstance().showToastNormal(msg);
+                }
+            });
+        }));
+        }
+
+        // 移动分组（拖拽排序）
+        items.add(new PopupMenuItem(getString(R.string.reorder_category), R.mipmap.msg_arrowright, () -> {
+            showReorderCategorySheet();
+        }));
+
+        // 删除分组
+        PopupMenuItem deleteItem = new PopupMenuItem(getString(R.string.delete_category), R.mipmap.msg_delete, () -> {
+            WKDialogUtils.getInstance().showDialog(getActivity(),
+                    getString(R.string.delete_category),
+                    getString(R.string.delete_category_confirm),
+                    true, "", getString(R.string.base_delete),
+                    0, ContextCompat.getColor(requireActivity(), R.color.red),
+                    index -> {
+                        if (index == 1) {
+                            String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+                            if (TextUtils.isEmpty(spaceId)) return;
+                            CategoryModel.getInstance().delete(spaceId, sectionId, (code, msg) -> {
+                                if (code == HttpResponseCode.success) {
+                                    loadCategories();
+                                } else {
+                                    WKToastUtils.getInstance().showToastNormal(msg);
+                                }
+                            });
+                        }
+                    });
+        });
+        deleteItem.setColor(ContextCompat.getColor(requireContext(), R.color.red));
+        items.add(deleteItem);
+
+        WKDialogUtils.getInstance().showScreenPopup(anchor, items);
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void showReorderCategorySheet() {
+        if (getActivity() == null) return;
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(spaceId)) return;
+
+        // 过滤出用户自建分组
+        List<CategoryEntity> reorderList = new ArrayList<>();
+        for (CategoryEntity cat : categoryList) {
+            if (cat.category_id != null) {
+                reorderList.add(cat);
+            }
+        }
+        if (reorderList.isEmpty()) return;
+
+        Context ctx = requireContext();
+        BottomSheet.Builder builder = new BottomSheet.Builder(ctx, false);
+        builder.setApplyBottomPadding(false);
+
+        LinearLayout root = new LinearLayout(ctx);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(ContextCompat.getColor(ctx, R.color.screen_bg));
+
+        // ── 标题栏 ──
+        FrameLayout header = new FrameLayout(ctx);
+        header.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(16),
+                AndroidUtilities.dp(20), AndroidUtilities.dp(14));
+
+        TextView titleTv = new TextView(ctx);
+        titleTv.setText(R.string.reorder_category);
+        titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 17);
+        titleTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        FrameLayout.LayoutParams titleParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        titleParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+        header.addView(titleTv, titleParams);
+
+        TextView doneTv = new TextView(ctx);
+        doneTv.setText(R.string.reorder_done);
+        doneTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
+        doneTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        doneTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorAccent));
+        FrameLayout.LayoutParams doneParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        doneParams.gravity = Gravity.CENTER_VERTICAL | Gravity.END;
+        header.addView(doneTv, doneParams);
+
+        root.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 分割线 ──
+        View divider = new View(ctx);
+        divider.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+        root.addView(divider, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 1));
+
+        // ── RecyclerView ──
+        RecyclerView recyclerView = new RecyclerView(ctx);
+        recyclerView.setLayoutManager(new LinearLayoutManager(ctx));
+
+        // ItemTouchHelper（前置声明，adapter 内需引用）
+        final androidx.recyclerview.widget.ItemTouchHelper[] itemTouchHelper = new androidx.recyclerview.widget.ItemTouchHelper[1];
+
+        // Adapter
+        RecyclerView.Adapter<RecyclerView.ViewHolder> adapter = new RecyclerView.Adapter<>() {
+            @NonNull
+            @Override
+            public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+                FrameLayout row = new FrameLayout(ctx);
+                row.setBackground(ContextCompat.getDrawable(ctx, R.drawable.layout_bg));
+                row.setMinimumHeight(AndroidUtilities.dp(52));
+                row.setLayoutParams(new RecyclerView.LayoutParams(
+                        RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
+
+                // 分组名
+                TextView nameTv = new TextView(ctx);
+                nameTv.setTag("name");
+                nameTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
+                nameTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+                FrameLayout.LayoutParams nameParams = new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+                nameParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+                nameParams.leftMargin = AndroidUtilities.dp(20);
+                nameParams.rightMargin = AndroidUtilities.dp(56);
+                row.addView(nameTv, nameParams);
+
+                // 拖拽手柄
+                ImageView handleIv = new ImageView(ctx);
+                handleIv.setTag("handle");
+                handleIv.setImageResource(R.drawable.ic_drag_handle);
+                handleIv.setPadding(AndroidUtilities.dp(12), AndroidUtilities.dp(12),
+                        AndroidUtilities.dp(12), AndroidUtilities.dp(12));
+                FrameLayout.LayoutParams handleParams = new FrameLayout.LayoutParams(
+                        AndroidUtilities.dp(48), AndroidUtilities.dp(48));
+                handleParams.gravity = Gravity.CENTER_VERTICAL | Gravity.END;
+                handleParams.rightMargin = AndroidUtilities.dp(4);
+                row.addView(handleIv, handleParams);
+
+                // 分割线
+                View divider = new View(ctx);
+                divider.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+                FrameLayout.LayoutParams divParams = new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, 1);
+                divParams.gravity = Gravity.BOTTOM;
+                divParams.leftMargin = AndroidUtilities.dp(20);
+                row.addView(divider, divParams);
+
+                return new RecyclerView.ViewHolder(row) {};
+            }
+
+            @Override
+            public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+                CategoryEntity cat = reorderList.get(position);
+                TextView nameTv = holder.itemView.findViewWithTag("name");
+                nameTv.setText(cat.name);
+
+                ImageView handleIv = holder.itemView.findViewWithTag("handle");
+                handleIv.setOnTouchListener((v, event) -> {
+                    if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                        itemTouchHelper[0].startDrag(holder);
+                    }
+                    return false;
+                });
+            }
+
+            @Override
+            public int getItemCount() {
+                return reorderList.size();
+            }
+        };
+
+        // ItemTouchHelper callback
+        androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback callback =
+                new androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+                        androidx.recyclerview.widget.ItemTouchHelper.UP | androidx.recyclerview.widget.ItemTouchHelper.DOWN,
+                        0) {
+                    @Override
+                    public boolean onMove(@NonNull RecyclerView rv,
+                                          @NonNull RecyclerView.ViewHolder from,
+                                          @NonNull RecyclerView.ViewHolder to) {
+                        int fromPos = from.getAdapterPosition();
+                        int toPos = to.getAdapterPosition();
+                        java.util.Collections.swap(reorderList, fromPos, toPos);
+                        adapter.notifyItemMoved(fromPos, toPos);
+                        rv.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.LONG_PRESS);
+                        return true;
+                    }
+
+                    @Override
+                    public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                        // no swipe
+                    }
+
+                    @Override
+                    public void onSelectedChanged(RecyclerView.ViewHolder viewHolder, int actionState) {
+                        super.onSelectedChanged(viewHolder, actionState);
+                        if (actionState == androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_DRAG
+                                && viewHolder != null) {
+                            viewHolder.itemView.setAlpha(0.85f);
+                            viewHolder.itemView.setElevation(AndroidUtilities.dp(4));
+                        }
+                    }
+
+                    @Override
+                    public void clearView(@NonNull RecyclerView rv,
+                                          @NonNull RecyclerView.ViewHolder viewHolder) {
+                        super.clearView(rv, viewHolder);
+                        viewHolder.itemView.setAlpha(1f);
+                        viewHolder.itemView.setElevation(0f);
+                    }
+                };
+        itemTouchHelper[0] = new androidx.recyclerview.widget.ItemTouchHelper(callback);
+        itemTouchHelper[0].attachToRecyclerView(recyclerView);
+        recyclerView.setAdapter(adapter);
+
+        root.addView(recyclerView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 底部安全间距 ──
+        View bottomPad = new View(ctx);
+        root.addView(bottomPad, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(8)));
+
+        builder.setCustomView(root);
+        BottomSheet sheet = builder.show();
+        sheet.setBackgroundColor(ContextCompat.getColor(ctx, R.color.screen_bg));
+
+        // ── 完成按钮 ──
+        doneTv.setOnClickListener(v -> {
+            List<String> newOrder = new ArrayList<>();
+            for (CategoryEntity cat : reorderList) {
+                newOrder.add(cat.category_id);
+            }
+            CategoryModel.getInstance().sort(spaceId, newOrder, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    loadCategories();
+                    sheet.dismiss();
+                } else {
+                    WKToastUtils.getInstance().showToastNormal(msg);
+                }
+            });
+        });
+    }
+
+    private void loadCategories() {
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(spaceId)) {
+            categoryList = new ArrayList<>();
+            return;
+        }
+        CategoryModel.getInstance().list(spaceId, new CategoryModel.ICategoryListListener() {
+            @Override
+            public void onResult(List<CategoryEntity> list) {
+                categoryList = list != null ? list : new ArrayList<>();
+                filterAndDisplay();
+            }
+
+            @Override
+            public void onError(int code, String msg) {
+                // 失败时保留旧列表，不影响 UI
+            }
+        });
+    }
+
+    private void showCreateCategoryDialog() {
+        if (getActivity() == null) return;
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(spaceId)) {
+            WKToastUtils.getInstance().showToastNormal("请先选择 Space");
+            return;
+        }
+        Context ctx = requireContext();
+        int accentColor = ContextCompat.getColor(ctx, R.color.colorAccent);
+
+        // ── 根布局 ──
+        LinearLayout root = new LinearLayout(ctx);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int pad = AndroidUtilities.dp(24);
+        root.setPadding(pad, AndroidUtilities.dp(20), pad, AndroidUtilities.dp(16));
+
+        // ── 标题 ──
+        TextView titleTv = new TextView(ctx);
+        titleTv.setText(R.string.create_category_title);
+        titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        titleTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        root.addView(titleTv, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 标签 ──
+        TextView labelTv = new TextView(ctx);
+        labelTv.setText(R.string.create_category_label);
+        labelTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 14);
+        labelTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = AndroidUtilities.dp(18);
+        root.addView(labelTv, labelParams);
+
+        // ── 输入框 ──
+        android.widget.EditText editText = new android.widget.EditText(ctx);
+        editText.setHint(R.string.create_category_hint);
+        editText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        editText.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        editText.setHintTextColor(ContextCompat.getColor(ctx, R.color.color999));
+        editText.setSingleLine();
+        editText.setMaxLines(1);
+        editText.setFilters(new android.text.InputFilter[]{
+                new android.text.InputFilter.LengthFilter(20)});
+        editText.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(12),
+                AndroidUtilities.dp(14), AndroidUtilities.dp(12));
+        // 圆角边框
+        android.graphics.drawable.GradientDrawable inputBg = new android.graphics.drawable.GradientDrawable();
+        inputBg.setCornerRadius(AndroidUtilities.dp(8));
+        inputBg.setStroke(AndroidUtilities.dp(1.5f), accentColor);
+        inputBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+        editText.setBackground(inputBg);
+        LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        editParams.topMargin = AndroidUtilities.dp(8);
+        root.addView(editText, editParams);
+
+        // ── 提示文字 ──
+        TextView helperTv = new TextView(ctx);
+        helperTv.setText(R.string.create_category_helper);
+        helperTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
+        helperTv.setTextColor(ContextCompat.getColor(ctx, R.color.color999));
+        LinearLayout.LayoutParams helperParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        helperParams.topMargin = AndroidUtilities.dp(6);
+        root.addView(helperTv, helperParams);
+
+        // ── 按钮行 ──
+        LinearLayout btnRow = new LinearLayout(ctx);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.END);
+        LinearLayout.LayoutParams btnRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnRowParams.topMargin = AndroidUtilities.dp(18);
+
+        // 取消按钮
+        TextView cancelBtn = new TextView(ctx);
+        cancelBtn.setText(R.string.cancel);
+        cancelBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        cancelBtn.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        cancelBtn.setGravity(Gravity.CENTER);
+        cancelBtn.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(10),
+                AndroidUtilities.dp(24), AndroidUtilities.dp(10));
+        android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+        cancelBg.setCornerRadius(AndroidUtilities.dp(8));
+        cancelBg.setStroke(AndroidUtilities.dp(1), ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+        cancelBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+        cancelBtn.setBackground(cancelBg);
+
+        // 创建按钮
+        TextView createBtn = new TextView(ctx);
+        createBtn.setText(R.string.create_category_btn);
+        createBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        createBtn.setTextColor(accentColor);
+        createBtn.setGravity(Gravity.CENTER);
+        createBtn.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(10),
+                AndroidUtilities.dp(24), AndroidUtilities.dp(10));
+        android.graphics.drawable.GradientDrawable createBtnBg = new android.graphics.drawable.GradientDrawable();
+        createBtnBg.setCornerRadius(AndroidUtilities.dp(8));
+        createBtnBg.setColor(accentColor & 0x30FFFFFF | 0x30000000); // 淡紫色背景
+        createBtn.setBackground(createBtnBg);
+
+        LinearLayout.LayoutParams createBtnParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        createBtnParams.leftMargin = AndroidUtilities.dp(12);
+        btnRow.addView(cancelBtn);
+        btnRow.addView(createBtn, createBtnParams);
+        root.addView(btnRow, btnRowParams);
+
+        // ── Dialog ──
+        android.app.AlertDialog.Builder dialogBuilder = new android.app.AlertDialog.Builder(ctx);
+        dialogBuilder.setView(root);
+        android.app.AlertDialog dialog = dialogBuilder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            android.graphics.drawable.GradientDrawable windowBg = new android.graphics.drawable.GradientDrawable();
+            windowBg.setCornerRadius(AndroidUtilities.dp(16));
+            windowBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+            dialog.getWindow().setBackgroundDrawable(windowBg);
+        }
+        dialog.show();
+
+        // 自动弹出键盘
+        editText.requestFocus();
+        editText.postDelayed(() -> {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(editText, 0);
+        }, 200);
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        createBtn.setOnClickListener(v -> {
+            String text = editText.getText().toString().trim();
+            if (TextUtils.isEmpty(text)) return;
+            dialog.dismiss();
+            CategoryModel.getInstance().create(spaceId, text, new CategoryModel.ICategoryListener() {
+                @Override
+                public void onResult(CategoryEntity category) {
+                    loadCategories();
+                }
+
+                @Override
+                public void onError(int code, String msg) {
+                    WKToastUtils.getInstance().showToastNormal(msg);
+                }
+            });
+        });
+    }
+
+    private void showMoveToCategoryDialog(String groupNo) {
+        if (getActivity() == null || categoryList.isEmpty()) {
+            WKToastUtils.getInstance().showToastNormal(getString(R.string.create_category_hint));
+            return;
+        }
+        Context ctx = requireContext();
+
+        // 找到当前群聊所在的分组
+        String currentCategoryId = null;
+        for (CategoryEntity cat : categoryList) {
+            if (cat.category_id != null && cat.groups != null) {
+                for (CategoryEntity.CategoryGroup cg : cat.groups) {
+                    if (groupNo.equals(cg.group_no)) {
+                        currentCategoryId = cat.category_id;
+                        break;
+                    }
+                }
+            }
+            if (currentCategoryId != null) break;
+        }
+
+        BottomSheet.Builder builder = new BottomSheet.Builder(ctx, false);
+        builder.setApplyBottomPadding(false);
+
+        LinearLayout root = new LinearLayout(ctx);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(ContextCompat.getColor(ctx, R.color.screen_bg));
+
+        // ── 标题 ──
+        TextView titleTv = new TextView(ctx);
+        titleTv.setText(R.string.move_to_category);
+        titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 17);
+        titleTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        titleTv.setGravity(Gravity.CENTER);
+        titleTv.setPadding(0, AndroidUtilities.dp(18), 0, AndroidUtilities.dp(14));
+        root.addView(titleTv, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 分割线 ──
+        View divider = new View(ctx);
+        divider.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+        root.addView(divider, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 1));
+
+        // ── 分组列表 ──
+        String finalCurrentCategoryId = currentCategoryId;
+        for (CategoryEntity cat : categoryList) {
+            if (cat.category_id == null) continue;
+            boolean isCurrent = cat.category_id.equals(finalCurrentCategoryId);
+
+            FrameLayout row = new FrameLayout(ctx);
+            row.setBackground(ContextCompat.getDrawable(ctx, R.drawable.layout_bg));
+            row.setMinimumHeight(AndroidUtilities.dp(52));
+
+            // 分组名
+            TextView nameTv = new TextView(ctx);
+            nameTv.setText(cat.name);
+            nameTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
+            nameTv.setTextColor(ContextCompat.getColor(ctx,
+                    isCurrent ? R.color.colorAccent : R.color.colorDark));
+            if (isCurrent) {
+                nameTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            }
+            FrameLayout.LayoutParams nameParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+            nameParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+            nameParams.leftMargin = AndroidUtilities.dp(20);
+            nameParams.rightMargin = AndroidUtilities.dp(48);
+            row.addView(nameTv, nameParams);
+
+            // 选中标记
+            if (isCurrent) {
+                ImageView checkIv = new ImageView(ctx);
+                checkIv.setImageResource(R.mipmap.msg_check);
+                checkIv.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                        ContextCompat.getColor(ctx, R.color.colorAccent),
+                        android.graphics.PorterDuff.Mode.SRC_IN));
+                FrameLayout.LayoutParams checkParams = new FrameLayout.LayoutParams(
+                        AndroidUtilities.dp(20), AndroidUtilities.dp(20));
+                checkParams.gravity = Gravity.CENTER_VERTICAL | Gravity.END;
+                checkParams.rightMargin = AndroidUtilities.dp(20);
+                row.addView(checkIv, checkParams);
+            }
+
+            row.setOnClickListener(v -> {
+                builder.getDismissRunnable().run();
+                if (isCurrent) return;
+                CategoryModel.getInstance().moveGroup(groupNo, cat.category_id, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        loadCategories();
+                    } else {
+                        WKToastUtils.getInstance().showToastNormal(msg);
+                    }
+                });
+            });
+
+            root.addView(row, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
+        // ── "移出分组"（仅已归组时显示）──
+        if (currentCategoryId != null) {
+            View div2 = new View(ctx);
+            div2.setBackgroundColor(ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+            root.addView(div2, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 1));
+
+            FrameLayout removeRow = new FrameLayout(ctx);
+            removeRow.setBackground(ContextCompat.getDrawable(ctx, R.drawable.layout_bg));
+            removeRow.setMinimumHeight(AndroidUtilities.dp(52));
+
+            TextView removeTv = new TextView(ctx);
+            removeTv.setText(R.string.remove_from_category);
+            removeTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16);
+            removeTv.setTextColor(ContextCompat.getColor(ctx, R.color.red));
+            FrameLayout.LayoutParams removeParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+            removeParams.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+            removeParams.leftMargin = AndroidUtilities.dp(20);
+            removeRow.addView(removeTv, removeParams);
+
+            removeRow.setOnClickListener(v -> {
+                builder.getDismissRunnable().run();
+                CategoryModel.getInstance().moveGroup(groupNo, null, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        loadCategories();
+                    } else {
+                        WKToastUtils.getInstance().showToastNormal(msg);
+                    }
+                });
+            });
+
+            root.addView(removeRow, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
+        // ── 底部安全间距 ──
+        View bottomPad = new View(ctx);
+        root.addView(bottomPad, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(8)));
+
+        builder.setCustomView(root);
+        BottomSheet sheet = builder.show();
+        sheet.setBackgroundColor(ContextCompat.getColor(ctx, R.color.screen_bg));
     }
 
     //检测正在输入的定时器
@@ -1222,6 +2105,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             public void onNext(@NonNull Long value) {
                 boolean isCancel = true;
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).typingStartTime > 0) {
                         long typingStartTime = chatConversationAdapter.getData().get(i).typingStartTime;
                         if (WKTimeUtils.getInstance().getCurrentSeconds() - typingStartTime >= 8) {
@@ -1398,6 +2282,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int getTopChatCount() {
         int count = 0;
         for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
             if (chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel().top == 1)
                 count++;
         }
@@ -1426,6 +2311,34 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void notifyRecycler(int index, ChatConversationMsg msg) {
         if (wkVBinding.recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE || (!wkVBinding.recyclerView.isComputingLayout())) {
             chatConversationAdapter.notifyItemChanged(index, msg);
+        }
+    }
+
+    private static final String KEY_COLLAPSED_SECTIONS = "collapsed_sections";
+
+    private void saveCollapsedSections() {
+        Set<String> collapsed = new HashSet<>();
+        for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            ChatConversationMsg item = chatConversationAdapter.getData().get(i);
+            if (item.isSectionHeader && chatConversationAdapter.isSectionCollapsed(item.sectionId)) {
+                collapsed.add(item.sectionId);
+            }
+        }
+        String uid = WKConfig.getInstance().getUid();
+        WKSharedPreferencesUtil.getInstance().putSP(uid + "_" + KEY_COLLAPSED_SECTIONS,
+                TextUtils.join(",", collapsed));
+    }
+
+    private void restoreCollapsedSections() {
+        String uid = WKConfig.getInstance().getUid();
+        String saved = WKSharedPreferencesUtil.getInstance().getSP(uid + "_" + KEY_COLLAPSED_SECTIONS);
+        if (!TextUtils.isEmpty(saved)) {
+            for (String sectionId : saved.split(",")) {
+                if (!TextUtils.isEmpty(sectionId)) {
+                    // 直接操作 adapter 的折叠状态
+                    chatConversationAdapter.setCollapsed(sectionId, true);
+                }
+            }
         }
     }
 
@@ -1551,6 +2464,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         boolean isScrollToFirstIndex = true;
         LinearLayoutManager linearLayoutManager = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
         for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+            if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
             if (chatConversationAdapter.getData().get(i).getUnReadCount() > 0 && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel().mute == 0) {
                 if (firstTime == 0) {
                     firstTime = chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp;

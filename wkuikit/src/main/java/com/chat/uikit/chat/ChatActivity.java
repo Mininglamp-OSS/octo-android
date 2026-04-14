@@ -1846,6 +1846,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         linearLayoutManager.scrollToPosition(chatAdapter.getItemCount() - 1);
     }
 
+    /**
+     * 安全地执行 adapter 修改操作：如果 RecyclerView 正在布局或滚动中，
+     * 将操作 post 到下一帧执行，避免 IllegalStateException。
+     */
+    private void safeAdapterAction(Runnable action) {
+        if (wkVBinding.recyclerView.isComputingLayout()) {
+            wkVBinding.recyclerView.post(action);
+        } else {
+            action.run();
+        }
+    }
+
     // 显示一条时间消息
     private synchronized WKMsg addTimeMsg(long newMsgTime) {
         long lastMsgTime = chatAdapter.getLastTimeMsg();
@@ -2582,37 +2594,41 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private synchronized void sendMsgInserted(WKMsg msg) {
         if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {
-            if (msg.orderSeq > maxMsgOrderSeq) {
-                maxMsgOrderSeq = msg.orderSeq;
-            }
-            WKMsg timeMsg = addTimeMsg(msg.timestamp);
-            //判断当前会话是否存在正在输入
-            int index = chatAdapter.getData().size() - 1;
-            if (chatAdapter.lastMsgIsTyping()) index--;
-            if (index < 0) index = 0;
-            WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
-            if (timeMsg == null) {
-                if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                    chatAdapter.getData().get(index).nextMsg = msg;
-                    itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
-                }
-            } else {
-                chatAdapter.getData().get(index).nextMsg = timeMsg;
-                itemEntity.previousMsg = timeMsg;
-            }
-            chatAdapter.addData(index + 1, itemEntity);
-            int type = chatAdapter.getData().get(index).wkMsg.type;
-            if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
-                chatAdapter.notifyItemChanged(index);
-            } else {
-                chatAdapter.notifyBackground(index);
-            }
-
-            if (isToEnd) {
-                scrollToEnd();
-            }
-            isToEnd = true;
+            safeAdapterAction(() -> doSendMsgInserted(msg));
         }
+    }
+
+    private void doSendMsgInserted(WKMsg msg) {
+        if (msg.orderSeq > maxMsgOrderSeq) {
+            maxMsgOrderSeq = msg.orderSeq;
+        }
+        WKMsg timeMsg = addTimeMsg(msg.timestamp);
+        //判断当前会话是否存在正在输入
+        int index = chatAdapter.getData().size() - 1;
+        if (chatAdapter.lastMsgIsTyping()) index--;
+        if (index < 0) index = 0;
+        WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
+        if (timeMsg == null) {
+            if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                chatAdapter.getData().get(index).nextMsg = msg;
+                itemEntity.previousMsg = chatAdapter.getData().get(index).wkMsg;
+            }
+        } else {
+            chatAdapter.getData().get(index).nextMsg = timeMsg;
+            itemEntity.previousMsg = timeMsg;
+        }
+        chatAdapter.addData(index + 1, itemEntity);
+        int type = chatAdapter.getData().get(index).wkMsg.type;
+        if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
+            chatAdapter.notifyItemChanged(index);
+        } else {
+            chatAdapter.notifyBackground(index);
+        }
+
+        if (isToEnd) {
+            scrollToEnd();
+        }
+        isToEnd = true;
     }
 
     /**
@@ -2670,69 +2686,171 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private synchronized void receivedMessages(List<WKMsg> list) {
         list = filterSystemBotMessages(list);
-        if (WKReader.isNotEmpty(list)) {
-            for (WKMsg msg : list) {
-                // 命令消息和撤回消息不显示在聊天
-                if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist)
-                    continue;
+        if (!WKReader.isNotEmpty(list)) return;
 
-                if (msg.remoteExtra.readedCount == 0) {
-                    msg.remoteExtra.unreadCount = count - 1;
-                }
-                if (msg.channelID.equals(channelId) && msg.channelType == channelType) {
-                    if (!chatAdapter.isExist(msg.clientMsgNO, msg.messageID)) {
-                        if (!isCanLoadMore) {
-                            //移除正在输入
-                            if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg != null && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
-                                chatAdapter.removeAt(chatAdapter.getItemCount() - 1);
-                            }
-                            WKMsg timeMsg = addTimeMsg(msg.timestamp);
-                            WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
-                            if (timeMsg != null && chatAdapter.getData().size() > 1) {
-                                chatAdapter.getData().get(chatAdapter.getData().size() - 2).nextMsg = timeMsg;
-                            }
-                            int previousMsgIndex = -1;
-                            if (timeMsg == null) {
-                                if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                                    itemEntity.previousMsg = chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg;
-                                    chatAdapter.getData().get(chatAdapter.getData().size() - 1).nextMsg = itemEntity.wkMsg;
-                                }
-                            } else {
-                                itemEntity.previousMsg = timeMsg;
-                            }
-                            if (WKReader.isNotEmpty(chatAdapter.getData())) {
-                                previousMsgIndex = chatAdapter.getData().size() - 1;
-                            }
-                            if (!isShowHistory && redDot == 0 && itemEntity.wkMsg.flame == 1 && itemEntity.wkMsg.type != WKContentType.WK_VOICE && itemEntity.wkMsg.type != WKContentType.WK_IMAGE && itemEntity.wkMsg.type != WKContentType.WK_VIDEO) {
-                                itemEntity.wkMsg.viewed = 1;
-                                itemEntity.wkMsg.viewedAt = WKTimeUtils.getInstance().getCurrentMills();
-                                WKIM.getInstance().getMsgManager().updateViewedAt(1, itemEntity.wkMsg.viewedAt, itemEntity.wkMsg.clientMsgNO);
-                            }
-                            WKPlaySound.getInstance().playInMsg(R.raw.sound_in);
-                            chatAdapter.addData(itemEntity);
-                            if (msg.messageSeq > maxMsgSeq) {
-                                maxMsgSeq = msg.messageSeq;
-                            }
-                            if (msg.orderSeq > maxMsgOrderSeq) {
-                                maxMsgOrderSeq = msg.orderSeq;
-                            }
-                            if (previousMsgIndex != -1 && previousMsgIndex < chatAdapter.getData().size()) {
-                                chatAdapter.notifyBackground(previousMsgIndex);
-                            }
-                        }
-                        if (isShowHistory || redDot > 0) {
-                            redDot += 1;
-                            showUnReadCountView();
-                            wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
-                        } else {
-                            scrollToEnd();
-                            if (msg.setting.receipt == 1) readMsgIds.add(msg.messageID);
-                        }
+        // 收集需要批量添加的 items 和需要刷新背景的索引
+        List<WKUIChatMsgItemEntity> pendingItems = new ArrayList<>();
+        List<Integer> backgroundRefreshIndices = new ArrayList<>();
+        boolean needScrollToEnd = false;
+        boolean needPlaySound = false;
+        boolean typingRemoved = false;
+
+        for (WKMsg msg : list) {
+            // 命令消息和撤回消息不显示在聊天
+            if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist)
+                continue;
+
+            if (msg.remoteExtra.readedCount == 0) {
+                msg.remoteExtra.unreadCount = count - 1;
+            }
+            if (!msg.channelID.equals(channelId) || msg.channelType != channelType)
+                continue;
+            if (chatAdapter.isExist(msg.clientMsgNO, msg.messageID))
+                continue;
+
+            if (!isCanLoadMore) {
+                // 移除正在输入（只移除一次）
+                if (!typingRemoved && chatAdapter.getItemCount() > 0) {
+                    WKUIChatMsgItemEntity lastItem = chatAdapter.getData().get(chatAdapter.getItemCount() - 1);
+                    if (lastItem.wkMsg != null && lastItem.wkMsg.type == WKContentType.typing) {
+                        chatAdapter.getData().remove(chatAdapter.getItemCount() - 1);
+                        typingRemoved = true;
                     }
                 }
 
+                // 构建时间消息（不直接添加到 adapter，加入 pendingItems）
+                WKMsg timeMsg = buildTimeMsg(msg.timestamp, pendingItems);
+
+                WKUIChatMsgItemEntity itemEntity = WKIMUtils.getInstance().msg2UiMsg(this, msg, count, showNickName, chatAdapter.isShowChooseItem());
+
+                // 计算 previousMsg / nextMsg 链接关系
+                // 最后一个已有数据 = adapter 现有数据 + 已收集的 pendingItems
+                WKUIChatMsgItemEntity lastExisting = getLastItem(pendingItems);
+                int previousMsgIndex = -1;
+
+                if (timeMsg != null) {
+                    // 时间消息刚加入 pendingItems，更新其前一条的 nextMsg
+                    if (pendingItems.size() >= 2) {
+                        pendingItems.get(pendingItems.size() - 2).nextMsg = timeMsg;
+                    } else if (WKReader.isNotEmpty(chatAdapter.getData())) {
+                        chatAdapter.getData().get(chatAdapter.getData().size() - 1).nextMsg = timeMsg;
+                    }
+                    itemEntity.previousMsg = timeMsg;
+                } else {
+                    if (lastExisting != null) {
+                        itemEntity.previousMsg = lastExisting.wkMsg;
+                        lastExisting.nextMsg = itemEntity.wkMsg;
+                    }
+                }
+
+                // 记录需要刷新背景的索引（adapter 中最后一条现有数据）
+                if (pendingItems.isEmpty() && WKReader.isNotEmpty(chatAdapter.getData())) {
+                    previousMsgIndex = chatAdapter.getData().size() - 1;
+                }
+
+                if (!isShowHistory && redDot == 0 && itemEntity.wkMsg.flame == 1 && itemEntity.wkMsg.type != WKContentType.WK_VOICE && itemEntity.wkMsg.type != WKContentType.WK_IMAGE && itemEntity.wkMsg.type != WKContentType.WK_VIDEO) {
+                    itemEntity.wkMsg.viewed = 1;
+                    itemEntity.wkMsg.viewedAt = WKTimeUtils.getInstance().getCurrentMills();
+                    WKIM.getInstance().getMsgManager().updateViewedAt(1, itemEntity.wkMsg.viewedAt, itemEntity.wkMsg.clientMsgNO);
+                }
+
+                needPlaySound = true;
+                pendingItems.add(itemEntity);
+
+                if (msg.messageSeq > maxMsgSeq) {
+                    maxMsgSeq = msg.messageSeq;
+                }
+                if (msg.orderSeq > maxMsgOrderSeq) {
+                    maxMsgOrderSeq = msg.orderSeq;
+                }
+                if (previousMsgIndex != -1) {
+                    backgroundRefreshIndices.add(previousMsgIndex);
+                }
+            }
+
+            if (isShowHistory || redDot > 0) {
+                redDot += 1;
+                showUnReadCountView();
+            } else {
+                needScrollToEnd = true;
+                if (msg.setting.receipt == 1) readMsgIds.add(msg.messageID);
             }
         }
+
+        // 批量提交到 adapter，确保不在 RecyclerView 布局期间执行
+        final boolean finalTypingRemoved = typingRemoved;
+        final boolean finalNeedPlaySound = needPlaySound;
+        final boolean finalNeedScrollToEnd = needScrollToEnd;
+        final int finalRedDot = redDot;
+        safeAdapterAction(() -> {
+            if (finalTypingRemoved) {
+                chatAdapter.notifyItemRemoved(chatAdapter.getItemCount());
+            }
+            if (finalNeedPlaySound) {
+                WKPlaySound.getInstance().playInMsg(R.raw.sound_in);
+            }
+            if (WKReader.isNotEmpty(pendingItems)) {
+                chatAdapter.addData(pendingItems);
+            }
+            for (int idx : backgroundRefreshIndices) {
+                if (idx >= 0 && idx < chatAdapter.getData().size()) {
+                    chatAdapter.notifyBackground(idx);
+                }
+            }
+            if (finalRedDot > 0) {
+                wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, true, true, false));
+            }
+            if (finalNeedScrollToEnd) {
+                scrollToEnd();
+            }
+        });
+    }
+
+    /**
+     * 构建时间消息实体（不直接操作 adapter），加入 pendingItems 列表。
+     * 判断是否需要时间分隔基于 adapter 现有数据 + 已收集的 pendingItems。
+     */
+    private WKMsg buildTimeMsg(long newMsgTime, List<WKUIChatMsgItemEntity> pendingItems) {
+        // 取最后一条时间：优先从 pendingItems 找，否则用 adapter 的
+        long lastMsgTime;
+        if (WKReader.isNotEmpty(pendingItems)) {
+            lastMsgTime = pendingItems.get(pendingItems.size() - 1).wkMsg.timestamp;
+            // 向前搜索 pendingItems 中的时间消息
+            for (int i = pendingItems.size() - 1; i >= 0; i--) {
+                if (pendingItems.get(i).wkMsg.type == WKContentType.msgPromptTime) {
+                    lastMsgTime = pendingItems.get(i).wkMsg.timestamp;
+                    break;
+                }
+            }
+        } else {
+            lastMsgTime = chatAdapter.getLastTimeMsg();
+        }
+
+        if (!WKTimeUtils.getInstance().isSameDay(newMsgTime, lastMsgTime)) {
+            WKUIChatMsgItemEntity uiChatMsgEntity = new WKUIChatMsgItemEntity(this, null, null);
+            WKMsg msg = new WKMsg();
+            uiChatMsgEntity.wkMsg = msg;
+            uiChatMsgEntity.isChoose = (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(0).isChoose);
+            uiChatMsgEntity.wkMsg.type = WKContentType.msgPromptTime;
+            uiChatMsgEntity.wkMsg.content = WKTimeUtils.getInstance().getShowDate(newMsgTime * 1000);
+            uiChatMsgEntity.wkMsg.timestamp = WKTimeUtils.getInstance().getCurrentSeconds();
+            pendingItems.add(uiChatMsgEntity);
+            return msg;
+        }
+        return null;
+    }
+
+    /**
+     * 获取逻辑上的"最后一条"item：优先从 pendingItems 取，否则从 adapter 取。
+     */
+    private WKUIChatMsgItemEntity getLastItem(List<WKUIChatMsgItemEntity> pendingItems) {
+        if (WKReader.isNotEmpty(pendingItems)) {
+            return pendingItems.get(pendingItems.size() - 1);
+        }
+        if (WKReader.isNotEmpty(chatAdapter.getData())) {
+            return chatAdapter.getData().get(chatAdapter.getData().size() - 1);
+        }
+        return null;
     }
 
     private synchronized void typing(WKCMD wkCmd) {
@@ -2756,45 +2874,51 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, from_uid);
                 if (mChannelMember == null || mChannelMember.isDeleted == 1) return;
             }
-            if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
-                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setFrom(channel);
-                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.fromUID = from_uid;
-                chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setMemberOfFrom(mChannelMember);
-                chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+            final WKChannelMember finalMember = mChannelMember;
+            final WKChannel finalChannel = channel;
+            safeAdapterAction(() -> doTyping(finalChannel, from_uid, finalMember));
+        }
+    }
+
+    private void doTyping(WKChannel channel, String from_uid, WKChannelMember mChannelMember) {
+        if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
+            chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setFrom(channel);
+            chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.fromUID = from_uid;
+            chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setMemberOfFrom(mChannelMember);
+            chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+        } else {
+            addTimeMsg(WKTimeUtils.getInstance().getCurrentSeconds());
+            int index = chatAdapter.getData().size() - 1;
+            if (chatAdapter.lastMsgIsTyping()) index--;
+            if (index < 0) index = 0;
+
+            WKUIChatMsgItemEntity msgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
+            msgItemEntity.wkMsg.channelType = channelType;
+            msgItemEntity.wkMsg.channelID = channelId;
+            msgItemEntity.wkMsg.type = WKContentType.typing;
+            msgItemEntity.wkMsg.setFrom(channel);
+            msgItemEntity.showNickName = showNickName;
+            msgItemEntity.wkMsg.fromUID = channel.channelID;
+            WKChannelMember member = new WKChannelMember();
+            member.memberUID = channel.channelID;
+            member.channelID = channelId;
+            member.channelType = channelType;
+            member.memberName = channel.channelName;
+            member.memberRemark = channel.channelRemark;
+            msgItemEntity.wkMsg.setMemberOfFrom(member);
+            msgItemEntity.previousMsg = chatAdapter.getLastMsg();
+            chatAdapter.addData(msgItemEntity);
+            chatAdapter.getData().get(index).nextMsg = msgItemEntity.wkMsg;
+
+            int type = chatAdapter.getData().get(index).wkMsg.type;
+            if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
+                chatAdapter.notifyItemChanged(index);
             } else {
-                addTimeMsg(WKTimeUtils.getInstance().getCurrentSeconds());
-                int index = chatAdapter.getData().size() - 1;
-                if (chatAdapter.lastMsgIsTyping()) index--;
-                if (index < 0) index = 0;
+                chatAdapter.notifyBackground(index);
+            }
 
-                WKUIChatMsgItemEntity msgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
-                msgItemEntity.wkMsg.channelType = channelType;
-                msgItemEntity.wkMsg.channelID = channelId;
-                msgItemEntity.wkMsg.type = WKContentType.typing;
-                msgItemEntity.wkMsg.setFrom(channel);
-                msgItemEntity.showNickName = showNickName;
-                msgItemEntity.wkMsg.fromUID = channel.channelID;
-                WKChannelMember member = new WKChannelMember();
-                member.memberUID = channel.channelID;
-                member.channelID = channelId;
-                member.channelType = channelType;
-                member.memberName = channel.channelName;
-                member.memberRemark = channel.channelRemark;
-                msgItemEntity.wkMsg.setMemberOfFrom(member);
-                msgItemEntity.previousMsg = chatAdapter.getLastMsg();
-                chatAdapter.addData(msgItemEntity);
-                chatAdapter.getData().get(index).nextMsg = msgItemEntity.wkMsg;
-
-                int type = chatAdapter.getData().get(index).wkMsg.type;
-                if (WKContentType.isLocalMsg(type) || WKContentType.isSystemMsg(type)) {
-                    chatAdapter.notifyItemChanged(index);
-                } else {
-                    chatAdapter.notifyBackground(index);
-                }
-
-                if (!isShowHistory && !isCanLoadMore) {
-                    scrollToEnd();
-                }
+            if (!isShowHistory && !isCanLoadMore) {
+                scrollToEnd();
             }
         }
     }

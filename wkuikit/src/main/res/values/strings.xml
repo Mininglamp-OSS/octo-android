@@ -408,5 +408,25 @@
     <string name="str_view_thread">查看子区</string>
     <string name="str_thread_started">发起了子区</string>
     <string name="str_thread_msg_count">%d条 ></string>
+    <string name="str_group_chat">群聊</string>
+    <string name="str_private_chat">私聊</string>
+
+    <string name="section_pinned">置顶</string>
+    <string name="section_channels">频道</string>
+
+    <string name="create_category">创建分组</string>
+    <string name="create_category_title">创建分组</string>
+    <string name="create_category_hint">输入分组名称，如「设计」「市场」…</string>
+    <string name="create_category_label">分组名称</string>
+    <string name="create_category_helper">使用场景化名称便于快速定位，最多 20 字</string>
+    <string name="create_category_btn">创建</string>
+    <string name="section_ungrouped">未分组</string>
+    <string name="move_to_category">移动到分组</string>
+    <string name="remove_from_category">移出分组</string>
+    <string name="move_to_front">移到最前</string>
+    <string name="reorder_category">移动分组</string>
+    <string name="reorder_done">完成</string>
+    <string name="delete_category">删除分组</string>
+    <string name="delete_category_confirm">删除后，分组内的群聊将移至未分组区域</string>
 </resources>
 

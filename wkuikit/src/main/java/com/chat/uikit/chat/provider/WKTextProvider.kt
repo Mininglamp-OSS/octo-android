@@ -303,6 +303,12 @@ open class WKTextProvider : WKChatBaseProvider() {
         val tableScrollView = cardView.findViewById<HorizontalScrollView>(com.chat.base.R.id.tableScrollView)
         val copyBtn = cardView.findViewById<ImageView>(com.chat.base.R.id.tableCopyBtn)
 
+        // 表格无数据时移除 stretchColumns 避免 Android 框架除零崩溃
+        if (tableData.headers.isEmpty() && tableData.rows.isEmpty()) {
+            tableContent.setStretchAllColumns(false)
+            return cardView
+        }
+
         // 水平滑动表格时禁止 RecyclerView / ItemTouchHelper 拦截，避免误触回复手势
         tableScrollView.setOnTouchListener { v, event ->
             when (event.action) {
@@ -325,6 +331,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         val borderColor = Color.parseColor("#E8E8E8")
         val headerTextColor = Color.parseColor("#333333")
         val cellTextColor = Color.parseColor("#555555")
+
+        // 确认有列数据后再启用 stretchColumns，避免 0 列时框架除零崩溃
+        tableContent.setStretchAllColumns(true)
 
         if (tableData.headers.isNotEmpty()) {
             val headerRow = TableRow(context)

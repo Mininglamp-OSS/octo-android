@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:descendantFocusability="blocksDescendants"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/contentLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/layout_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="15dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="15dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/hashTag"
+            android:layout_width="18dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="#"
+            android:textColor="@color/color999"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nameTv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:lines="1"
+            android:textColor="@color/colorDark"
+            android:textSize="14sp" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/forbiddenIv"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginStart="6dp"
+            android:src="@mipmap/icon_forbidden"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/muteIv"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginStart="4dp"
+            android:src="@mipmap/list_mute"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/msgCountTv"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:minWidth="18dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/thread_unread_badge_bg"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:textColor="@color/white"
+            android:textSize="10sp"
+            android:fontFamily="sans-serif-medium"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/threadPreviewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="5dp"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="33dp"
+        android:background="@color/homeColor" />
+</LinearLayout>

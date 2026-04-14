@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -63,6 +64,8 @@ import org.json.JSONObject;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 
+import android.view.animation.DecelerateInterpolator;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -78,8 +81,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * 会话记录适配器
  */
 public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMsg, BaseViewHolder> {
+    private static final int TYPE_NORMAL = 0;   // 私聊：传统 IM 风格
+    private static final int TYPE_COMPACT = 1;  // 群聊：紧凑频道列表风格
+    private static final int TYPE_SECTION_HEADER = 2; // 分组 header
+
     private IListener iListener;
     private IThreadPreviewClickListener threadPreviewClickListener;
+    private ISectionToggleListener sectionToggleListener;
+    private ISectionLongClickListener sectionLongClickListener;
+    private final Set<String> collapsedSections = new HashSet<>();
     // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
     // 标记正在加载的 groupNo，避免重复请求
@@ -94,7 +104,46 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     @Override
+    protected int getDefItemViewType(int position) {
+        ChatConversationMsg item = getItem(position);
+        if (item != null && item.isSectionHeader) {
+            return TYPE_SECTION_HEADER;
+        }
+        if (item != null && item.uiConversationMsg != null
+                && item.uiConversationMsg.channelType == WKChannelType.GROUP) {
+            return TYPE_COMPACT;
+        }
+        return TYPE_NORMAL;
+    }
+
+    @NonNull
+    @Override
+    protected BaseViewHolder onCreateDefViewHolder(@NonNull ViewGroup parent, int viewType) {
+        int layoutRes;
+        if (viewType == TYPE_SECTION_HEADER) {
+            layoutRes = R.layout.item_chat_section_header;
+        } else if (viewType == TYPE_COMPACT) {
+            layoutRes = R.layout.item_chat_conv_compact_layout;
+        } else {
+            layoutRes = R.layout.item_chat_conv_layout;
+        }
+        return createBaseViewHolder(parent, layoutRes);
+    }
+
+    @Override
     protected void convert(@NonNull final BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        if (helper.getItemViewType() == TYPE_SECTION_HEADER) {
+            convertSectionHeader(helper, conversationMsg);
+            return;
+        }
+        if (helper.getItemViewType() == TYPE_COMPACT) {
+            convertCompact(helper, conversationMsg);
+        } else {
+            convertNormal(helper, conversationMsg);
+        }
+    }
+
+    private void convertNormal(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
         WKUIConversationMsg item = conversationMsg.uiConversationMsg;
         setUnreadCount(helper, conversationMsg, false);
         showTime(helper, item);
@@ -104,6 +153,64 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         setStatus(helper, item, false);
         showTyping(helper, conversationMsg);
         showCalling(helper, conversationMsg);
+        showThreadPreviews(helper, item);
+    }
+
+    private void convertCompact(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        WKUIConversationMsg item = conversationMsg.uiConversationMsg;
+
+        // 频道名
+        String showName = "";
+        if (item.getWkChannel() != null) {
+            showName = TextUtils.isEmpty(item.getWkChannel().channelRemark)
+                    ? item.getWkChannel().channelName
+                    : item.getWkChannel().channelRemark;
+            if (TextUtils.isEmpty(showName)) {
+                showName = getContext().getString(R.string.chat);
+                WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
+            }
+        } else {
+            showName = getContext().getString(R.string.chat);
+            WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
+        }
+        helper.setText(R.id.nameTv, showName);
+
+        // 未读数
+        setUnreadCount(helper, conversationMsg, false);
+
+        // 置顶背景
+        boolean isTop = item.getWkChannel() != null && item.getWkChannel().top == 1;
+        helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+
+        // 免打扰图标
+        ImageView muteIv = helper.getView(R.id.muteIv);
+        if (item.getWkChannel() != null && item.getWkChannel().mute == 1) {
+            muteIv.setVisibility(View.VISIBLE);
+            Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+        } else {
+            muteIv.setVisibility(View.GONE);
+        }
+
+        // 禁言图标
+        ImageView forbiddenIv = helper.getView(R.id.forbiddenIv);
+        if (item.getWkChannel() != null && item.getWkChannel().forbidden == 1) {
+            WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager()
+                    .getMember(item.channelID, item.channelType, WKConfig.getInstance().getUid());
+            if (mChannelMember != null && mChannelMember.role == 0) {
+                forbiddenIv.setVisibility(View.VISIBLE);
+                forbiddenIv.setColorFilter(new PorterDuffColorFilter(
+                        ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
+            } else {
+                forbiddenIv.setVisibility(View.GONE);
+            }
+        } else {
+            forbiddenIv.setVisibility(View.GONE);
+        }
+
+        // 长按事件
+        addEvent(helper, item);
+
+        // 子区预览
         showThreadPreviews(helper, item);
     }
 
@@ -117,39 +224,66 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     @Override
     protected void convert(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg uiConversationMsg, @NotNull List<?> payloads) {
+        if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
+            return;
+        }
         ChatConversationMsg chatConversationMsg = (ChatConversationMsg) payloads.get(0);
         if (chatConversationMsg != null && chatConversationMsg.uiConversationMsg != null) {
-            WKUIConversationMsg item = chatConversationMsg.uiConversationMsg;
-//            showContent(baseViewHolder, item);
-            if (chatConversationMsg.isResetCounter) {
-                setUnreadCount(baseViewHolder, chatConversationMsg, true);
-                chatConversationMsg.isResetCounter = false;
+            if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
+                convertCompactPayloads(baseViewHolder, chatConversationMsg);
+            } else {
+                convertNormalPayloads(baseViewHolder, chatConversationMsg);
             }
-            if (chatConversationMsg.isResetTime) {
-                showTime(baseViewHolder, item);
-                chatConversationMsg.isResetTime = false;
-            }
-            if (chatConversationMsg.isResetTyping) {
-                showTyping(baseViewHolder, chatConversationMsg);
-                chatConversationMsg.isResetTyping = false;
-            }
-            if (chatConversationMsg.isRefreshChannelInfo) {
-                showChannel(baseViewHolder, item);
-                showThreadPreviews(baseViewHolder, item);
-                chatConversationMsg.isRefreshChannelInfo = false;
-            }
-            if (chatConversationMsg.isRefreshStatus) {
-                setStatus(baseViewHolder, item, true);
-                chatConversationMsg.isRefreshStatus = false;
-            }
-            // 内容或提醒变化时统一走 showReminders：有草稿显示草稿，否则显示最后一条消息
-            if (chatConversationMsg.isResetContent || chatConversationMsg.isResetReminders) {
-                showReminders(baseViewHolder, chatConversationMsg);
-                chatConversationMsg.isResetContent = false;
-                chatConversationMsg.isResetReminders = false;
-            }
-            showCalling(baseViewHolder, chatConversationMsg);
         }
+    }
+
+    private void convertNormalPayloads(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg chatConversationMsg) {
+        WKUIConversationMsg item = chatConversationMsg.uiConversationMsg;
+        if (chatConversationMsg.isResetCounter) {
+            setUnreadCount(baseViewHolder, chatConversationMsg, true);
+            chatConversationMsg.isResetCounter = false;
+        }
+        if (chatConversationMsg.isResetTime) {
+            showTime(baseViewHolder, item);
+            chatConversationMsg.isResetTime = false;
+        }
+        if (chatConversationMsg.isResetTyping) {
+            showTyping(baseViewHolder, chatConversationMsg);
+            chatConversationMsg.isResetTyping = false;
+        }
+        if (chatConversationMsg.isRefreshChannelInfo) {
+            showChannel(baseViewHolder, item);
+            showThreadPreviews(baseViewHolder, item);
+            chatConversationMsg.isRefreshChannelInfo = false;
+        }
+        if (chatConversationMsg.isRefreshStatus) {
+            setStatus(baseViewHolder, item, true);
+            chatConversationMsg.isRefreshStatus = false;
+        }
+        // 内容或提醒变化时统一走 showReminders：有草稿显示草稿，否则显示最后一条消息
+        if (chatConversationMsg.isResetContent || chatConversationMsg.isResetReminders) {
+            showReminders(baseViewHolder, chatConversationMsg);
+            chatConversationMsg.isResetContent = false;
+            chatConversationMsg.isResetReminders = false;
+        }
+        showCalling(baseViewHolder, chatConversationMsg);
+    }
+
+    private void convertCompactPayloads(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg chatConversationMsg) {
+        if (chatConversationMsg.isResetCounter) {
+            setUnreadCount(baseViewHolder, chatConversationMsg, true);
+            chatConversationMsg.isResetCounter = false;
+        }
+        if (chatConversationMsg.isRefreshChannelInfo) {
+            convertCompact(baseViewHolder, chatConversationMsg);
+            chatConversationMsg.isRefreshChannelInfo = false;
+        }
+        // 紧凑模式不需要处理 time/typing/status/content/calling
+        chatConversationMsg.isResetTime = false;
+        chatConversationMsg.isResetTyping = false;
+        chatConversationMsg.isRefreshStatus = false;
+        chatConversationMsg.isResetContent = false;
+        chatConversationMsg.isResetReminders = false;
     }
 
     public interface IListener {
@@ -331,15 +465,27 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void setUnreadCount(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg item, boolean isAnimated) {
-        CounterView counterView = baseViewHolder.getView(R.id.msgCountTv);
-        boolean isMute;
-        if (item.uiConversationMsg.getWkChannel() != null) {
-            isMute = item.uiConversationMsg.getWkChannel().mute == 1;
-        } else isMute = false;
-        counterView.setColors(R.color.white, isMute ? R.color.color999 : R.color.reminderColor);
-        counterView.setCount(item.getUnReadCount(), isAnimated);
-        counterView.setGravity(Gravity.END);
-        counterView.setVisibility(item.getUnReadCount() > 0 ? View.VISIBLE : View.GONE);
+        int unread = item.getUnReadCount();
+        View view = baseViewHolder.getView(R.id.msgCountTv);
+        if (view instanceof CounterView) {
+            // 普通布局（私聊）：CounterView
+            CounterView counterView = (CounterView) view;
+            boolean isMute = item.uiConversationMsg.getWkChannel() != null
+                    && item.uiConversationMsg.getWkChannel().mute == 1;
+            counterView.setColors(R.color.white, isMute ? R.color.color999 : R.color.reminderColor);
+            counterView.setCount(unread, isAnimated);
+            counterView.setGravity(Gravity.END);
+            counterView.setVisibility(unread > 0 ? View.VISIBLE : View.GONE);
+        } else if (view instanceof TextView) {
+            // 紧凑布局（群聊）：圆形 TextView
+            TextView badge = (TextView) view;
+            if (unread > 0) {
+                badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                badge.setVisibility(View.VISIBLE);
+            } else {
+                badge.setVisibility(View.GONE);
+            }
+        }
     }
 
     private void showTime(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
@@ -869,6 +1015,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void updateThreadPreviewDirectly(String groupNo) {
         if (getRecyclerView() == null) return;
         for (int i = 0; i < getData().size(); i++) {
+            if (getData().get(i).isSectionHeader) continue;
             if (getData().get(i).uiConversationMsg.channelID.equals(groupNo)) {
                 int adapterPos = i + getHeaderLayoutCount();
                 RecyclerView.ViewHolder vh = getRecyclerView().findViewHolderForAdapterPosition(adapterPos);
@@ -909,6 +1056,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         pendingRefreshTasks.clear();
         threadLoadingSet.clear();
         for (int i = 0; i < getData().size(); i++) {
+            if (getData().get(i).isSectionHeader) continue;
             WKUIConversationMsg msg = getData().get(i).uiConversationMsg;
             if (msg.channelType == WKChannelType.GROUP
                     && WKConfig.getInstance().getAppConfig().thread_on == 1) {
@@ -1034,6 +1182,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         //list.add(new ChatLongClickEntity(2, item.unreadCount > 0 ? getContext().getString(R.string.sign_read_msg) : getContext().getString(R.string.sign_unread_msg)));
         list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
+        if (item.channelType == WKChannelType.GROUP) {
+            list.add(new PopupMenuItem(getContext().getString(R.string.move_to_category), R.mipmap.msg_forward, () -> iListener.onClick(ItemMenu.moveToCategory, item)));
+        }
         list.add(new PopupMenuItem(getContext().getString(R.string.delete_msg), R.mipmap.msg_delete, () -> iListener.onClick(ItemMenu.delete, item)));
         WKDialogUtils.getInstance().setViewLongClickPopup(helper.getView(R.id.contentLayout), list);
     }
@@ -1042,12 +1193,88 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setGone(R.id.callingIv, conversationMsg.isCalling == 0);
     }
 
+    // ── Section header ────────────────────────────────────────────
+
+    private void convertSectionHeader(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
+        TextView titleTv = helper.getView(R.id.sectionTitle);
+        ImageView arrowIv = helper.getView(R.id.sectionArrow);
+        View divider = helper.getView(R.id.sectionDivider);
+
+        int position = helper.getAdapterPosition() - getHeaderLayoutCount();
+        divider.setVisibility(position > 0 ? View.VISIBLE : View.GONE);
+
+        titleTv.setText(msg.sectionTitle);
+
+        boolean collapsed = collapsedSections.contains(msg.sectionId);
+        arrowIv.setRotation(collapsed ? -90f : 0f);
+
+        helper.itemView.setOnClickListener(v -> {
+            boolean nowCollapsed = collapsedSections.contains(msg.sectionId);
+            if (nowCollapsed) {
+                collapsedSections.remove(msg.sectionId);
+            } else {
+                collapsedSections.add(msg.sectionId);
+            }
+            // 箭头旋转动画
+            float from = nowCollapsed ? -90f : 0f;
+            float to = nowCollapsed ? 0f : -90f;
+            arrowIv.animate().rotation(to).setDuration(200)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+
+            if (sectionToggleListener != null) {
+                sectionToggleListener.onSectionToggled(msg.sectionId, !nowCollapsed);
+            }
+        });
+
+        // 长按：仅用户自建分组（排除内置 sectionId）
+        boolean isBuiltIn = "ungrouped".equals(msg.sectionId)
+                || "channels".equals(msg.sectionId);
+        if (!isBuiltIn && sectionLongClickListener != null) {
+            helper.itemView.setOnLongClickListener(v -> {
+                sectionLongClickListener.onSectionLongClick(msg.sectionId, msg.sectionTitle, v);
+                return true;
+            });
+        } else {
+            helper.itemView.setOnLongClickListener(null);
+        }
+    }
+
+    public boolean isSectionCollapsed(String sectionId) {
+        return collapsedSections.contains(sectionId);
+    }
+
+    public void setCollapsed(String sectionId, boolean collapsed) {
+        if (collapsed) {
+            collapsedSections.add(sectionId);
+        } else {
+            collapsedSections.remove(sectionId);
+        }
+    }
+
+    public void setSectionToggleListener(ISectionToggleListener listener) {
+        this.sectionToggleListener = listener;
+    }
+
+    public interface ISectionToggleListener {
+        void onSectionToggled(String sectionId, boolean collapsed);
+    }
+
+    public void setSectionLongClickListener(ISectionLongClickListener listener) {
+        this.sectionLongClickListener = listener;
+    }
+
+    public interface ISectionLongClickListener {
+        void onSectionLongClick(String sectionId, String sectionTitle, View anchor);
+    }
+
+    // ── Thread preview ──────────────────────────────────────────
+
     public interface IThreadPreviewClickListener {
         void onThreadClick(String channelId, String groupNo, String shortId, int isJoined);
         void onMoreThreadsClick(String groupNo);
     }
 
     public enum ItemMenu {
-        delete, top, mute
+        delete, top, mute, moveToCategory
     }
 }

@@ -29,6 +29,11 @@ public class ChatConversationMsg {
     private final String loginUID;
     public int isCalling = 0;
 
+    // Section header 支持
+    public boolean isSectionHeader = false;
+    public String sectionId;
+    public String sectionTitle;
+
     public ChatConversationMsg(WKUIConversationMsg msg) {
         this.uiConversationMsg = msg;
         if (uiConversationMsg.getWkChannel() != null) {
@@ -36,6 +41,15 @@ public class ChatConversationMsg {
         }
         loginUID = WKConfig.getInstance().getUid();
         WKIMUtils.getInstance().resetMsgProhibitWord(msg.getWkMsg());
+    }
+
+    /** Section header 专用构造 */
+    public ChatConversationMsg(String sectionId, String sectionTitle) {
+        this.isSectionHeader = true;
+        this.sectionId = sectionId;
+        this.sectionTitle = sectionTitle;
+        this.uiConversationMsg = null;
+        this.loginUID = "";
     }
 
     public int getUnReadCount() {

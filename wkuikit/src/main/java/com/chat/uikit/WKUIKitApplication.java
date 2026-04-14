@@ -403,6 +403,9 @@ public class WKUIKitApplication {
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             mContext.get().startActivity(intent);
         }));
+        EndpointManager.getInstance().setMethod(EndpointCategory.tabMenus + "_create_category", EndpointCategory.tabMenus, 150, object -> new PopupMenuItem(mContext.get().getString(R.string.create_category), R.mipmap.menu_add, () ->
+                EndpointManager.getInstance().invoke("show_create_category_dialog", null)
+        ));
 
         //显示聊天页面
         EndpointManager.getInstance().setMethod(EndpointSID.chatView, object -> {

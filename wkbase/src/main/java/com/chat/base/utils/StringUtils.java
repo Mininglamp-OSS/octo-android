@@ -35,6 +35,7 @@ import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -416,16 +417,7 @@ public class StringUtils {
 //                }
             }
         }
-//        LinkedHashSet<String> hashSet = new LinkedHashSet<>(list);
-
-        for (int i = 0; i < list.size(); i++) {
-            for (int j = 0; j < list.size(); j++) {
-                if (i != j && list.get(i).equals(list.get(j))) {
-                    list.remove(list.get(j));
-                }
-            }
-        }
-        return list;
+        return new ArrayList<>(new LinkedHashSet<>(list));
     }
 
     public static double pers = 1048576;

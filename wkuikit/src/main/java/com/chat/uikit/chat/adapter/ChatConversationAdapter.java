@@ -1016,7 +1016,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (getRecyclerView() == null) return;
         for (int i = 0; i < getData().size(); i++) {
             if (getData().get(i).isSectionHeader) continue;
-            if (getData().get(i).uiConversationMsg.channelID.equals(groupNo)) {
+            WKUIConversationMsg convMsg = getData().get(i).uiConversationMsg;
+            if (convMsg == null) continue;
+            if (convMsg.channelID.equals(groupNo)) {
                 int adapterPos = i + getHeaderLayoutCount();
                 RecyclerView.ViewHolder vh = getRecyclerView().findViewHolderForAdapterPosition(adapterPos);
                 if (vh instanceof BaseViewHolder) {

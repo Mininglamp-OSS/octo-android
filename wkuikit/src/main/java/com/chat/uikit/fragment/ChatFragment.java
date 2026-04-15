@@ -1505,6 +1505,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (getActivity() == null) return;
         List<PopupMenuItem> items = new ArrayList<>();
 
+        // 新建群聊（自动归入当前分组）
+        items.add(new PopupMenuItem(getString(R.string.create_new_group), R.mipmap.msg_contacts, () -> {
+            Intent intent = new Intent(getActivity(), ChooseContactsActivity.class);
+            intent.putExtra("categoryId", sectionId);
+            startActivity(intent);
+        }));
+
+        // 重命名
+        items.add(new PopupMenuItem(getString(R.string.rename_category), R.mipmap.msg_edit, () -> {
+            showRenameCategoryDialog(sectionId, sectionTitle);
+        }));
+
         // 移到最前（已在最前时不显示）
         boolean isFirst = false;
         for (CategoryEntity cat : categoryList) {
@@ -1514,36 +1526,29 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         if (!isFirst) {
-        items.add(new PopupMenuItem(getString(R.string.move_to_front), R.mipmap.msg_arrowright, () -> {
-            String spaceId = MsgModel.getInstance().getCurrentSpaceId();
-            if (TextUtils.isEmpty(spaceId)) return;
+            items.add(new PopupMenuItem(getString(R.string.move_to_front), R.mipmap.msg_forward, () -> {
+                String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+                if (TextUtils.isEmpty(spaceId)) return;
 
-            List<String> newOrder = new ArrayList<>();
-            newOrder.add(sectionId);
-            for (CategoryEntity cat : categoryList) {
-                if (cat.category_id != null && !cat.category_id.equals(sectionId)) {
-                    newOrder.add(cat.category_id);
+                List<String> newOrder = new ArrayList<>();
+                newOrder.add(sectionId);
+                for (CategoryEntity cat : categoryList) {
+                    if (cat.category_id != null && !cat.category_id.equals(sectionId)) {
+                        newOrder.add(cat.category_id);
+                    }
                 }
-            }
-            CategoryModel.getInstance().sort(spaceId, newOrder, (code, msg) -> {
-                if (code == HttpResponseCode.success) {
-                    loadCategories();
-                } else {
-                    WKToastUtils.getInstance().showToastNormal(msg);
-                }
-            });
-        }));
+                CategoryModel.getInstance().sort(spaceId, newOrder, (code, msg) -> {
+                    if (code == HttpResponseCode.success) {
+                        loadCategories();
+                    } else {
+                        WKToastUtils.getInstance().showToastNormal(msg);
+                    }
+                });
+            }));
         }
 
-        // 创建群聊（自动归入当前分组）
-        items.add(new PopupMenuItem(getString(R.string.create_new_group), R.mipmap.msg_arrowright, () -> {
-            Intent intent = new Intent(getActivity(), ChooseContactsActivity.class);
-            intent.putExtra("categoryId", sectionId);
-            startActivity(intent);
-        }));
-
-        // 移动分组（拖拽排序）
-        items.add(new PopupMenuItem(getString(R.string.reorder_category), R.mipmap.msg_arrowright, () -> {
+        // 分组排序（拖拽排序）
+        items.add(new PopupMenuItem(getString(R.string.reorder_category), R.mipmap.msg_reorder, () -> {
             showReorderCategorySheet();
         }));
 
@@ -1572,6 +1577,131 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         items.add(deleteItem);
 
         WKDialogUtils.getInstance().showScreenPopup(anchor, items);
+    }
+
+    private void showRenameCategoryDialog(String categoryId, String currentName) {
+        if (getActivity() == null) return;
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(spaceId)) return;
+
+        Context ctx = requireContext();
+        int accentColor = ContextCompat.getColor(ctx, R.color.colorAccent);
+
+        // 根布局
+        LinearLayout root = new LinearLayout(ctx);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int pad = AndroidUtilities.dp(24);
+        root.setPadding(pad, AndroidUtilities.dp(20), pad, AndroidUtilities.dp(16));
+
+        // 标题
+        TextView titleTv = new TextView(ctx);
+        titleTv.setText(R.string.rename_category_title);
+        titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 20);
+        titleTv.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleTv.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        root.addView(titleTv, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 输入框
+        android.widget.EditText editText = new android.widget.EditText(ctx);
+        editText.setHint(R.string.rename_category_hint);
+        editText.setText(currentName);
+        editText.setSelection(currentName != null ? currentName.length() : 0);
+        editText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        editText.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        editText.setHintTextColor(ContextCompat.getColor(ctx, R.color.color999));
+        editText.setSingleLine();
+        editText.setMaxLines(1);
+        editText.setFilters(new android.text.InputFilter[]{
+                new android.text.InputFilter.LengthFilter(20)});
+        editText.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(12),
+                AndroidUtilities.dp(14), AndroidUtilities.dp(12));
+        android.graphics.drawable.GradientDrawable inputBg = new android.graphics.drawable.GradientDrawable();
+        inputBg.setCornerRadius(AndroidUtilities.dp(8));
+        inputBg.setStroke(AndroidUtilities.dp(1.5f), accentColor);
+        inputBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+        editText.setBackground(inputBg);
+        LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        editParams.topMargin = AndroidUtilities.dp(14);
+        root.addView(editText, editParams);
+
+        // 按钮行
+        LinearLayout btnRow = new LinearLayout(ctx);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.END);
+        LinearLayout.LayoutParams btnRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnRowParams.topMargin = AndroidUtilities.dp(18);
+
+        TextView cancelBtn = new TextView(ctx);
+        cancelBtn.setText(R.string.cancel);
+        cancelBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        cancelBtn.setTextColor(ContextCompat.getColor(ctx, R.color.colorDark));
+        cancelBtn.setGravity(Gravity.CENTER);
+        cancelBtn.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(10),
+                AndroidUtilities.dp(24), AndroidUtilities.dp(10));
+        android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+        cancelBg.setCornerRadius(AndroidUtilities.dp(8));
+        cancelBg.setStroke(AndroidUtilities.dp(1), ContextCompat.getColor(ctx, R.color.colorE8E7E7));
+        cancelBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+        cancelBtn.setBackground(cancelBg);
+
+        TextView confirmBtn = new TextView(ctx);
+        confirmBtn.setText(R.string.sure);
+        confirmBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 15);
+        confirmBtn.setTextColor(accentColor);
+        confirmBtn.setGravity(Gravity.CENTER);
+        confirmBtn.setPadding(AndroidUtilities.dp(24), AndroidUtilities.dp(10),
+                AndroidUtilities.dp(24), AndroidUtilities.dp(10));
+        android.graphics.drawable.GradientDrawable confirmBtnBg = new android.graphics.drawable.GradientDrawable();
+        confirmBtnBg.setCornerRadius(AndroidUtilities.dp(8));
+        confirmBtnBg.setColor(accentColor & 0x30FFFFFF | 0x30000000);
+        confirmBtn.setBackground(confirmBtnBg);
+
+        LinearLayout.LayoutParams confirmBtnParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        confirmBtnParams.leftMargin = AndroidUtilities.dp(12);
+        btnRow.addView(cancelBtn);
+        btnRow.addView(confirmBtn, confirmBtnParams);
+        root.addView(btnRow, btnRowParams);
+
+        // Dialog
+        android.app.AlertDialog.Builder dialogBuilder = new android.app.AlertDialog.Builder(ctx);
+        dialogBuilder.setView(root);
+        android.app.AlertDialog dialog = dialogBuilder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            android.graphics.drawable.GradientDrawable windowBg = new android.graphics.drawable.GradientDrawable();
+            windowBg.setCornerRadius(AndroidUtilities.dp(16));
+            windowBg.setColor(ContextCompat.getColor(ctx, R.color.white));
+            dialog.getWindow().setBackgroundDrawable(windowBg);
+        }
+        dialog.show();
+
+        editText.requestFocus();
+        editText.postDelayed(() -> {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(editText, 0);
+        }, 200);
+
+        cancelBtn.setOnClickListener(v -> dialog.dismiss());
+        confirmBtn.setOnClickListener(v -> {
+            String newName = editText.getText().toString().trim();
+            if (TextUtils.isEmpty(newName) || newName.equals(currentName)) {
+                dialog.dismiss();
+                return;
+            }
+            CategoryModel.getInstance().rename(spaceId, categoryId, newName, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    loadCategories();
+                } else {
+                    WKToastUtils.getInstance().showToastNormal(msg);
+                }
+            });
+            dialog.dismiss();
+        });
     }
 
     @SuppressLint("ClickableViewAccessibility")

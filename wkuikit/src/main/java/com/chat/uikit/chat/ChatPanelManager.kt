@@ -1047,7 +1047,6 @@ class ChatPanelManager(
         menuRecyclerView!!.addOnScrollListener(menuRecyclerView!!.onScrollListener)
         if (menus.isNotEmpty()) {
             robotMenuAdapter!!.setList(menus)
-            CommonAnim.getInstance().showLeft2Right(menuView)
         }
 
         resetMenuHeader()
@@ -1177,25 +1176,7 @@ class ChatPanelManager(
     }
 
     private fun checkRobotMenu(iConversationContext: IConversationContext) {
-        val robotMembers =
-            WKIM.getInstance().channelMembersManager.getRobotMembers(
-                iConversationContext.chatChannelInfo.channelID,
-                iConversationContext.chatChannelInfo.channelType
-            )
-        if ((iConversationContext.chatChannelInfo.robot == 1 || robotMembers != null) && robotMembers.isNotEmpty()) {
-            if (menuView.isGone) {
-                CommonAnim.getInstance().showLeft2Right(menuView)
-            }
-//            if (menuRecyclerView!!.visibility == visibility && robotMenuAdapter!!.data.size == 0) {
-            val menus = WKRobotModel.getInstance().getRobotMenus(
-                iConversationContext.chatChannelInfo.channelID,
-                iConversationContext.chatChannelInfo.channelType
-            )
-            robotMenuAdapter!!.setList(menus)
-            resetMenuHeader()
-//            }
-        }
-
+        // 不显示机器人菜单按钮
     }
 
     private fun resetMenuHeader() {

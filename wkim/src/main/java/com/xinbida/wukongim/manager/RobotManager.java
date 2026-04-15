@@ -72,7 +72,9 @@ public class RobotManager extends BaseManager {
     }
 
     private void setRefreshRobotMenu() {
+        if (refreshRobotMenu == null || refreshRobotMenu.isEmpty()) return;
         runOnMainThread(() -> {
+            if (refreshRobotMenu == null) return;
             for (Map.Entry<String, IRefreshRobotMenu> entry : refreshRobotMenu.entrySet()) {
                 entry.getValue().onRefreshRobotMenu();
             }

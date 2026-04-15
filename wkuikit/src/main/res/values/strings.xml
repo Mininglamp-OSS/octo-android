@@ -408,6 +408,8 @@
     <string name="str_view_thread">查看子区</string>
     <string name="str_thread_started">发起了子区</string>
     <string name="str_thread_msg_count">%d条 ></string>
+    <string name="str_expand_threads">%d 个子区</string>
+    <string name="str_collapse_threads">收起 %d 个子区</string>
     <string name="str_group_chat">群聊</string>
     <string name="str_private_chat">私聊</string>
 

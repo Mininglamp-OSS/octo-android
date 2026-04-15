@@ -814,11 +814,15 @@ public class WKConnection {
                         hasAttached = true;
                         // 使用 Options 只解码尺寸信息
                         BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inJustDecodeBounds = true; // 只获取图片信息,不加载到内存
+                        options.inJustDecodeBounds = true;
                         BitmapFactory.decodeFile(imageContent.localPath, options);
 
                         imageContent.width = options.outWidth;
                         imageContent.height = options.outHeight;
+
+                        // 修正文件扩展名：AI 生成图片可能保存为 .png 但实际是 jpeg/webp
+                        imageContent.localPath = fixImageExtension(imageContent.localPath, options.outMimeType);
+
                         msg.baseContentMsgModel = imageContent;
                     }
                 } catch (Exception e) {
@@ -922,6 +926,38 @@ public class WKConnection {
                 sendMessage(sendMsg);
             }
         }
+    }
+
+    /**
+     * 检测图片文件的真实 MIME 类型，如果与文件扩展名不匹配则重命名文件。
+     * 解决 AI 生成图片（如豆包）保存为 .png 但实际内容为 jpeg/webp 导致服务器拒绝上传的问题。
+     */
+    private String fixImageExtension(String filePath, String actualMimeType) {
+        if (TextUtils.isEmpty(actualMimeType) || TextUtils.isEmpty(filePath)) return filePath;
+
+        String correctExt;
+        switch (actualMimeType) {
+            case "image/jpeg": correctExt = "jpg"; break;
+            case "image/png": correctExt = "png"; break;
+            case "image/webp": correctExt = "webp"; break;
+            case "image/gif": correctExt = "gif"; break;
+            default: return filePath;
+        }
+
+        int dotIndex = filePath.lastIndexOf(".");
+        if (dotIndex == -1) return filePath;
+
+        String currentExt = filePath.substring(dotIndex + 1).toLowerCase();
+        if (correctExt.equals(currentExt)) return filePath;
+
+        // 扩展名不匹配，重命名文件
+        String newPath = filePath.substring(0, dotIndex + 1) + correctExt;
+        File oldFile = new File(filePath);
+        File newFile = new File(newPath);
+        if (oldFile.renameTo(newFile)) {
+            return newPath;
+        }
+        return filePath;
     }
 
     public boolean connectionIsNull() {

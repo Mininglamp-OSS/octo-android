@@ -830,28 +830,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             View rowView = inflater.inflate(R.layout.item_thread_preview_row, cardContainer, false);
 
             TextView nameTv = rowView.findViewById(R.id.threadNameTv);
-            TextView timeTv = rowView.findViewById(R.id.threadTimeTv);
             TextView unreadBadge = rowView.findViewById(R.id.threadUnreadBadge);
-            TextView contentTv = rowView.findViewById(R.id.threadContentTv);
 
             nameTv.setText(entity.name);
-
-            // 显示最后一条消息的时间，fallback 到 updated_at
-            long displayTime = 0;
-            if (entity.last_message_time > 0) {
-                // 自动判断秒/毫秒
-                displayTime = entity.last_message_time > 1_000_000_000_000L
-                        ? entity.last_message_time : entity.last_message_time * 1000;
-            }
-            if (displayTime <= 0) {
-                displayTime = parseUpdatedAt(entity.updated_at);
-            }
-            if (displayTime > 0) {
-                timeTv.setText(formatThreadTime(displayTime));
-                timeTv.setVisibility(View.VISIBLE);
-            } else {
-                timeTv.setVisibility(View.GONE);
-            }
 
             // 未读数气泡
             int unread = entity.unread_count;
@@ -866,21 +847,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 unreadBadge.setVisibility(View.VISIBLE);
             } else {
                 unreadBadge.setVisibility(View.GONE);
-            }
-
-            // 最后消息预览
-            String preview = "";
-            if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
-                preview = entity.last_message_sender_name + "：";
-            }
-            if (!TextUtils.isEmpty(entity.last_message_content)) {
-                preview += entity.last_message_content;
-            }
-            if (!TextUtils.isEmpty(preview)) {
-                contentTv.setText(preview);
-                contentTv.setVisibility(View.VISIBLE);
-            } else {
-                contentTv.setVisibility(View.GONE);
             }
 
             String finalThreadChannelId = threadChannelId;
@@ -1065,75 +1031,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 reloadThreadPreviews(msg.channelID);
             }
         }
-    }
-
-    /**
-     * 格式化子区预览时间，始终包含时分（如 "18:34"、"昨天 14:05"、"4月11日 09:12"）
-     */
-    private String formatThreadTime(long timeMs) {
-        java.util.Calendar today = java.util.Calendar.getInstance();
-        java.util.Calendar target = java.util.Calendar.getInstance();
-        target.setTimeInMillis(timeMs);
-        java.text.SimpleDateFormat hmFmt = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
-
-        if (today.get(java.util.Calendar.YEAR) == target.get(java.util.Calendar.YEAR)) {
-            int dayDiff = today.get(java.util.Calendar.DAY_OF_YEAR) - target.get(java.util.Calendar.DAY_OF_YEAR);
-            if (dayDiff == 0) {
-                return hmFmt.format(new java.util.Date(timeMs));
-            } else if (dayDiff == 1) {
-                return getContext().getString(R.string.yesterday) + " " + hmFmt.format(new java.util.Date(timeMs));
-            } else {
-                java.text.SimpleDateFormat mdFmt = new java.text.SimpleDateFormat("M/d HH:mm", java.util.Locale.getDefault());
-                return mdFmt.format(new java.util.Date(timeMs));
-            }
-        } else {
-            java.text.SimpleDateFormat ymdFmt = new java.text.SimpleDateFormat("yyyy/M/d HH:mm", java.util.Locale.getDefault());
-            return ymdFmt.format(new java.util.Date(timeMs));
-        }
-    }
-
-    /**
-     * 解析 updated_at 字符串为毫秒时间戳，兼容多种格式
-     */
-    private static long parseUpdatedAt(String updatedAt) {
-        if (TextUtils.isEmpty(updatedAt)) return 0;
-        // 尝试当作纯数字（Unix 时间戳）
-        try {
-            long ts = Long.parseLong(updatedAt.trim());
-            return ts > 1_000_000_000_000L ? ts : ts * 1000;
-        } catch (NumberFormatException ignored) {
-        }
-        // 带时区的格式优先尝试（保留时区信息正确转换）
-        String[][] patternsWithTz = {
-                {"yyyy-MM-dd'T'HH:mm:ssXXX"},     // 2026-04-11T18:30:00+08:00
-                {"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"}, // 2026-04-11T18:30:00.000+08:00
-        };
-        if (updatedAt.contains("+") || updatedAt.contains("Z") || updatedAt.matches(".*-\\d{2}:\\d{2}$")) {
-            for (String[] p : patternsWithTz) {
-                try {
-                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(p[0], java.util.Locale.US);
-                    java.util.Date date = sdf.parse(updatedAt.endsWith("Z") ? updatedAt.replace("Z", "+00:00") : updatedAt);
-                    if (date != null) return date.getTime();
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        // 无时区标识，当作服务端本地时间（与设备同时区）
-        String[] patterns = {
-                "yyyy-MM-dd'T'HH:mm:ss",
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd'T'HH:mm:ss.SSS",
-                "yyyy-MM-dd HH:mm:ss.SSS",
-        };
-        for (String pattern : patterns) {
-            try {
-                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.US);
-                java.util.Date date = sdf.parse(updatedAt);
-                if (date != null) return date.getTime();
-            } catch (Exception ignored) {
-            }
-        }
-        return 0;
     }
 
     private boolean isSetChatPwd(WKChannel channel) {

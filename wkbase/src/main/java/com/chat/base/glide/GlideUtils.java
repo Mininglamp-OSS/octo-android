@@ -297,6 +297,10 @@ public class GlideUtils {
                                     // 原图
                                     path = media.getRealPath();
                             }
+                            // 压缩失败时 compressPath 为空，fallback 到沙盒路径或原图路径
+                            if (TextUtils.isEmpty(path)) {
+                                path = media.isToSandboxPath() ? media.getSandboxPath() : media.getRealPath();
+                            }
                             // int mediaType = PictureMimeType.getMimeType(media.getMimeType());
                             if (PictureMimeType.isHasVideo(media.getMimeType())) {
                                 chooseResult.model = ChooseResultModel.video;

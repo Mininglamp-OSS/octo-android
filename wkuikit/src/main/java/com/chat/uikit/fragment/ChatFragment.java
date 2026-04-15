@@ -53,6 +53,7 @@ import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
 import com.chat.uikit.chat.manager.WKIMUtils;
+import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.category.CategoryEntity;
 import com.chat.uikit.category.CategoryModel;
@@ -971,10 +972,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         }
-        // 角标显示在顶部 sub-tab 上，不显示在底部聊天 tab
+        // 顶部 sub-tab 不再显示未读气泡
         if (segmentTabView != null) {
-            segmentTabView.setBadge(0, groupCount);
-            segmentTabView.setBadge(1, personalCount);
+            segmentTabView.setBadge(0, 0);
+            segmentTabView.setBadge(1, 0);
         }
         if (tabActivity != null) {
             tabActivity.setMsgCount(0);
@@ -1430,56 +1431,60 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             List<ChatConversationMsg> displayList = new ArrayList<>();
-            Set<String> groupedChannelIds = new HashSet<>();
 
-            // 2. 收集已归组的 channelId
+            // 2. 用户自建分组排在前面，未分组（category_id == null）排在最后
+            List<CategoryEntity> userCategories = new ArrayList<>();
+            CategoryEntity defaultCategory = null;
             for (CategoryEntity category : categoryList) {
-                if (category.category_id == null || category.groups == null) continue;
-                for (CategoryEntity.CategoryGroup cg : category.groups) {
-                    groupedChannelIds.add(cg.group_no);
+                if (category.groups == null) continue;
+                if (category.category_id == null) {
+                    defaultCategory = category;
+                } else {
+                    userCategories.add(category);
                 }
             }
 
-            // 3. 未归组群聊 — 直接排在最顶部，不包 section header
-            List<ChatConversationMsg> ungrouped = new ArrayList<>();
-            for (ChatConversationMsg msg : allConversations) {
-                if (msg.uiConversationMsg == null || msg.uiConversationMsg.channelType != WKChannelType.GROUP)
-                    continue;
-                if (!groupedChannelIds.contains(msg.uiConversationMsg.channelID)) {
-                    ungrouped.add(msg);
-                }
-            }
-            // 置顶排前面，同级别按最新消息时间倒序
-            ungrouped.sort((a, b) -> {
-                int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
-                int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
-                if (topA != topB) return topB - topA;
-                return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
-            });
-            displayList.addAll(ungrouped);
-
-            // 4. 用户自建分组，置顶群聊在分组内部排到最前
-            for (CategoryEntity category : categoryList) {
-                if (category.category_id == null) continue;
+            // 3. 用户自建分组
+            for (CategoryEntity category : userCategories) {
                 displayList.add(new ChatConversationMsg(category.category_id, category.name));
                 if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
-                    if (category.groups != null) {
-                        List<ChatConversationMsg> sectionItems = new ArrayList<>();
-                        for (CategoryEntity.CategoryGroup cg : category.groups) {
-                            ChatConversationMsg msg = channelMap.get(cg.group_no);
-                            if (msg != null) {
-                                sectionItems.add(msg);
-                            }
+                    List<ChatConversationMsg> sectionItems = new ArrayList<>();
+                    for (CategoryEntity.CategoryGroup cg : category.groups) {
+                        ChatConversationMsg msg = channelMap.get(cg.group_no);
+                        if (msg != null) {
+                            sectionItems.add(msg);
                         }
-                        // 置顶排前面，同级别按最新消息时间倒序
-                        sectionItems.sort((a, b) -> {
-                            int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
-                            int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
-                            if (topA != topB) return topB - topA;
-                            return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
-                        });
-                        displayList.addAll(sectionItems);
                     }
+                    sectionItems.sort((a, b) -> {
+                        int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                        int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                        if (topA != topB) return topB - topA;
+                        return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
+                    });
+                    displayList.addAll(sectionItems);
+                }
+            }
+
+            // 4. 未分组（服务端返回的 category_id == null 的分组）放在最后
+            if (defaultCategory != null && !defaultCategory.groups.isEmpty()) {
+                String sectionId = "ungrouped";
+                String sectionTitle = defaultCategory.name != null ? defaultCategory.name : getString(R.string.default_group);
+                displayList.add(new ChatConversationMsg(sectionId, sectionTitle));
+                if (!chatConversationAdapter.isSectionCollapsed(sectionId)) {
+                    List<ChatConversationMsg> ungroupedItems = new ArrayList<>();
+                    for (CategoryEntity.CategoryGroup cg : defaultCategory.groups) {
+                        ChatConversationMsg msg = channelMap.get(cg.group_no);
+                        if (msg != null) {
+                            ungroupedItems.add(msg);
+                        }
+                    }
+                    ungroupedItems.sort((a, b) -> {
+                        int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                        int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+                        if (topA != topB) return topB - topA;
+                        return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
+                    });
+                    displayList.addAll(ungroupedItems);
                 }
             }
 
@@ -1529,6 +1534,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             });
         }));
         }
+
+        // 创建群聊（自动归入当前分组）
+        items.add(new PopupMenuItem(getString(R.string.create_new_group), R.mipmap.msg_arrowright, () -> {
+            Intent intent = new Intent(getActivity(), ChooseContactsActivity.class);
+            intent.putExtra("categoryId", sectionId);
+            startActivity(intent);
+        }));
 
         // 移动分组（拖拽排序）
         items.add(new PopupMenuItem(getString(R.string.reorder_category), R.mipmap.msg_arrowright, () -> {
@@ -2159,6 +2171,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
         refreshExtrasIfNeeded();
+        // 刷新分组数据，确保新建群聊等操作后分组列表及时更新
+        CategoryModel.getInstance().invalidateCache();
+        loadCategories();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
         wkVBinding.deviceIv.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
 //        String appLoginType = String.format(getString(R.string.pc_login), getString(R.string.app_name));

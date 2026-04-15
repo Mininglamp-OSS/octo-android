@@ -42,6 +42,7 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
     protected void initView() {
         groupNo = getIntent().getStringExtra("groupNo");
         adapter = new ThreadListAdapter();
+        adapter.setGroupNo(groupNo);
         initAdapter(wkVBinding.recyclerView, adapter);
         wkVBinding.sectionTitleTv.setVisibility(View.GONE);
     }
@@ -61,6 +62,7 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
                 SingleClickUtil.determineTriggerSingleClick(view, v -> {
                     ThreadEntity entity = adapter.getItem(position);
                     if (entity != null) {
+                        adapter.markVisited(entity.short_id);
                         openThread(entity);
                     }
                 }));
@@ -75,6 +77,13 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
             }
             return true;
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 从聊天页返回后刷新未读气泡
+        adapter.notifyDataSetChanged();
     }
 
     @Override

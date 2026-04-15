@@ -77,6 +77,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     private List<WKMessageContent> msgContentList;
     private int maxSelectCount = -1;
     private boolean isShowSaveLabelDialog = false;
+    private String categoryId;
 
     @Override
     protected ActChooseContactsLayoutBinding getViewBinding() {
@@ -121,6 +122,8 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
 
         if (getIntent().hasExtra("isShowSaveLabelDialog"))
             isShowSaveLabelDialog = getIntent().getBooleanExtra("isShowSaveLabelDialog", false);
+        if (getIntent().hasExtra("categoryId"))
+            categoryId = getIntent().getStringExtra("categoryId");
     }
 
     @Override
@@ -194,7 +197,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                     WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, ids.get(0), WKChannelType.PERSONAL, 0, true, msgContentList));
                     finish();
                 } else {
-                    GroupModel.getInstance().createGroup(name.toString(), ids, names, (code, msg, groupEntity) -> {
+                    GroupModel.getInstance().createGroup(name.toString(), ids, names, categoryId, (code, msg, groupEntity) -> {
                         hideTitleRightLoading();
                         if (code == HttpResponseCode.success && groupEntity != null) {
                             WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, groupEntity.group_no, WKChannelType.GROUP, 0, true, msgContentList));

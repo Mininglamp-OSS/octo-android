@@ -2443,7 +2443,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
         MsgModel.getInstance().startCheckFlameMsgTimer();
         saveEditContent();
-
+        cleanFilePickCache();
     }
 
     private void saveEditContent() {
@@ -2532,6 +2532,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private void handleFileResult(android.net.Uri uri) {
         try {
             String filePath = WKFileUtils.getInstance().getChooseFileResultPath(this, uri);
+            // 验证解析出的路径是否真正可读（Android 10+ Scoped Storage 下可能无权限）
+            if (!TextUtils.isEmpty(filePath)) {
+                java.io.File checkFile = new java.io.File(filePath);
+                if (!checkFile.exists() || !checkFile.canRead() || checkFile.length() == 0) {
+                    filePath = null; // 路径不可用，走 ContentResolver 复制
+                }
+            }
             if (TextUtils.isEmpty(filePath)) {
                 // Copy file from content URI to local cache
                 String fileName = "file_" + System.currentTimeMillis();
@@ -2589,6 +2596,21 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void cleanFilePickCache() {
+        try {
+            java.io.File cacheDir = new java.io.File(getCacheDir(), "file_pick");
+            if (cacheDir.exists() && cacheDir.isDirectory()) {
+                java.io.File[] files = cacheDir.listFiles();
+                if (files != null) {
+                    for (java.io.File f : files) {
+                        f.delete();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 

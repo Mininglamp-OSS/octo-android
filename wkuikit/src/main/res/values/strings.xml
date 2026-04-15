@@ -428,5 +428,6 @@
     <string name="reorder_done">完成</string>
     <string name="delete_category">删除分组</string>
     <string name="delete_category_confirm">删除后，分组内的群聊将移至未分组区域</string>
+    <string name="default_group">未分组</string>
 </resources>
 

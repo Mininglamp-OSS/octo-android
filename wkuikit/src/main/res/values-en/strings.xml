@@ -338,5 +338,6 @@
     <string name="str_view_thread">View</string>
     <string name="str_thread_started">started a thread</string>
     <string name="str_thread_msg_count">%d msg ></string>
+    <string name="default_group">Ungrouped</string>
 </resources>
 

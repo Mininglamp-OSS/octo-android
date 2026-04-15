@@ -25,14 +25,11 @@ public class WKSharedPreferencesUtil {
         String mTAG = "wkSharedPreferences";
         SharedPreferences prefs;
         SharedPreferences.Editor editor;
-        long t0 = android.os.SystemClock.elapsedRealtime();
         try {
             // Use EncryptedSharedPreferences to prevent plaintext storage of tokens and passwords
             MasterKey masterKey = new MasterKey.Builder(context)
                     .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                     .build();
-            long t1 = android.os.SystemClock.elapsedRealtime();
-            android.util.Log.w("StartupPerf", "[EncryptedSP] MasterKey.build: " + (t1 - t0) + "ms");
             prefs = EncryptedSharedPreferences.create(
                     context,
                     mTAG,
@@ -40,7 +37,6 @@ public class WKSharedPreferencesUtil {
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             );
-            android.util.Log.w("StartupPerf", "[EncryptedSP] EncryptedSharedPreferences.create: " + (android.os.SystemClock.elapsedRealtime() - t1) + "ms");
         } catch (Exception e) {
             // Fallback to regular SharedPreferences to avoid crashes, but still keep data scoped to the app
             prefs = context.getSharedPreferences(mTAG, Context.MODE_PRIVATE);
@@ -48,7 +44,6 @@ public class WKSharedPreferencesUtil {
         mPreferences = prefs;
         editor = mPreferences.edit();
         mEditor = editor;
-        android.util.Log.w("StartupPerf", "[EncryptedSP] ===== TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms =====");
     }
 
 //    private static class SharedPreferencesUtilBinder {

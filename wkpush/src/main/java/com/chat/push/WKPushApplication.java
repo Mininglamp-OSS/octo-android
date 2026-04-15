@@ -57,40 +57,22 @@ public class WKPushApplication {
 
     //初始化推送服务
     public void init(String pushBundleID, final Context context) {
-        final String tag = "StartupPerf";
-        long t0 = android.os.SystemClock.elapsedRealtime();
-
         this.pushBundleID = pushBundleID;
         this.mContext = new WeakReference<>(context);
         addListener();
 
-        long t = android.os.SystemClock.elapsedRealtime();
-        android.util.Log.w(tag, "[Push] addListener: " + (t - t0) + "ms");
-
         // Push token 获取移到后台线程，不阻塞启动
-        new Thread(() -> {
-            long tPush = android.os.SystemClock.elapsedRealtime();
-            initPush();
-            android.util.Log.w(tag, "[Push][BG] initPush: " + (android.os.SystemClock.elapsedRealtime() - tPush) + "ms");
-        }).start();
-        android.util.Log.w(tag, "[Push] initPush dispatched to BG, init TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms");
+        new Thread(this::initPush).start();
 
         EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
     }
 
     private void initPush() {
-        final String tag = "StartupPerf";
         if (mContext == null || mContext.get() == null) return;
 
-        long t = android.os.SystemClock.elapsedRealtime();
         FirebaseApp.initializeApp(mContext.get());
-        android.util.Log.w(tag, "[Push] FirebaseApp.initializeApp: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
-
         notifyChannel(WKBaseApplication.getInstance().application);
-        android.util.Log.w(tag, "[Push] notifyChannel: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
-
         getPushToken();
-        android.util.Log.w(tag, "[Push] getPushToken: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms");
 //        if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
 //            if (OsUtils.isEmui()) {
 //                new Thread(() -> getHuaWeiToken(mContext.get())).start();

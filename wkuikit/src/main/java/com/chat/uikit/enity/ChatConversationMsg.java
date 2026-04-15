@@ -33,6 +33,7 @@ public class ChatConversationMsg {
     public boolean isSectionHeader = false;
     public String sectionId;
     public String sectionTitle;
+    public int sectionGroupCount = -1;
 
     public ChatConversationMsg(WKUIConversationMsg msg) {
         this.uiConversationMsg = msg;

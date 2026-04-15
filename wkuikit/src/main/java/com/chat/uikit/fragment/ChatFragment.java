@@ -159,7 +159,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     protected void initView() {
         fragCreateTime = android.os.SystemClock.elapsedRealtime();
-        android.util.Log.w("StartupPerf", "[ChatFragment] initView entered");
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {
             TextView textView = new TextView(getActivity());
@@ -196,7 +195,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             filterAndDisplay();
         });
 
-        android.util.Log.w("StartupPerf", "[ChatFragment] initView done: " + (android.os.SystemClock.elapsedRealtime() - fragCreateTime) + "ms");
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -568,7 +566,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
-            android.util.Log.w("StartupPerf", "[ChatFragment] onRefreshMsgList: size=" + (list == null ? 0 : list.size()) + ", since fragCreate: " + (android.os.SystemClock.elapsedRealtime() - fragCreateTime) + "ms");
+
             if (WKReader.isEmpty(list)) {
                 return;
             }
@@ -744,7 +742,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
-            android.util.Log.w("StartupPerf", "[ChatFragment] connectionStatus changed: " + i + ", reason: " + reason);
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
                 wkVBinding.spaceArrowTv.setVisibility(View.GONE);
@@ -886,14 +883,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
 
     private void getChatMsg() {
-        long tGetChat = android.os.SystemClock.elapsedRealtime();
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        android.util.Log.w("StartupPerf", "[ChatFragment] getChatMsg: spaceId=" + (TextUtils.isEmpty(currentSpaceId) ? "null" : currentSpaceId));
         if (!TextUtils.isEmpty(currentSpaceId)) {
             String lastLoaded = WKSharedPreferencesUtil.getInstance()
                     .getSPWithUID("last_loaded_space_id");
             boolean spaceChanged = !currentSpaceId.equals(lastLoaded);
-            android.util.Log.w("StartupPerf", "[ChatFragment] lastLoaded=" + lastLoaded + " spaceChanged=" + spaceChanged);
 
             if (!spaceChanged) {
                 // 同一 Space：从本地 DB 加载缓存，立即显示
@@ -910,7 +904,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     AndroidUtilities.runOnUIThread(() -> {
                         syncSpaceKeysToGlobal();
                         sortMsg(tempList);
-                        android.util.Log.w("StartupPerf", "[ChatFragment] cache loaded, since getChatMsg: " + (android.os.SystemClock.elapsedRealtime() - tGetChat) + "ms, items=" + tempList.size() + ", T=" + (android.os.SystemClock.elapsedRealtime() - com.chat.base.WKBaseApplication.PROCESS_START) + "ms");
                     });
                 });
                 return;
@@ -921,11 +914,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     .putSPWithUID("last_loaded_space_id", currentSpaceId);
             spaceConversationKeys.clear();
             Schedulers.io().scheduleDirect(() -> {
-                long tClear = android.os.SystemClock.elapsedRealtime();
                 WKIM.getInstance().getConversationManager().clearAll();
-                android.util.Log.w("StartupPerf", "[ChatFragment] clearAll done: " + (android.os.SystemClock.elapsedRealtime() - tClear) + "ms");
                 WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                    android.util.Log.w("StartupPerf", "[ChatFragment] syncConversation callback fired, since getChatMsg: " + (android.os.SystemClock.elapsedRealtime() - tGetChat) + "ms");
                 });
             });
             return;
@@ -1446,7 +1436,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             // 3. 用户自建分组
             for (CategoryEntity category : userCategories) {
-                displayList.add(new ChatConversationMsg(category.category_id, category.name));
+                // 先统计实际有会话的群聊数量
+                int actualCount = 0;
+                if (category.groups != null) {
+                    for (CategoryEntity.CategoryGroup cg : category.groups) {
+                        if (channelMap.containsKey(cg.group_no)) actualCount++;
+                    }
+                }
+                ChatConversationMsg sectionHeader = new ChatConversationMsg(category.category_id, category.name);
+                sectionHeader.sectionGroupCount = actualCount;
+                displayList.add(sectionHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
                     List<ChatConversationMsg> sectionItems = new ArrayList<>();
                     for (CategoryEntity.CategoryGroup cg : category.groups) {

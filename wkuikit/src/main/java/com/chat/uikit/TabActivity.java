@@ -74,11 +74,8 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         return ActTabMainBinding.inflate(getLayoutInflater());
     }
 
-    private final long tabCreateTime = android.os.SystemClock.elapsedRealtime();
-
     @Override
     protected void initPresenter() {
-        android.util.Log.w("StartupPerf", "[TabActivity] initPresenter entered, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
         ActManagerUtils.getInstance().clearAllActivity();
     }
 
@@ -90,8 +87,6 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @SuppressLint("CheckResult")
     @Override
     protected void initView() {
-        android.util.Log.w("StartupPerf", "[TabActivity] initView entered, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
-
         // ===== 关键路径：先设置 ViewPager + Tab，让第一帧尽快渲染 =====
         chatIV = new RLottieImageView(this);
         contactsIV = new RLottieImageView(this);
@@ -169,8 +164,6 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
 //        workplaceCounterView.setVisibility(View.GONE);
         msgCounterView.setVisibility(View.GONE);
         playAnimation(0);
-
-        android.util.Log.w("StartupPerf", "[TabActivity] initView done, since create: " + (android.os.SystemClock.elapsedRealtime() - tabCreateTime) + "ms");
 
         // 非关键工作延迟到第一帧渲染后执行，不阻塞启动
         wkVBinding.getRoot().post(() -> {

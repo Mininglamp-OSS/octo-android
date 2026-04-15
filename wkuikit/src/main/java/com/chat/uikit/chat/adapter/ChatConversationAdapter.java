@@ -1096,6 +1096,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private void convertSectionHeader(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
         TextView titleTv = helper.getView(R.id.sectionTitle);
+        TextView countTv = helper.getView(R.id.sectionCount);
         ImageView arrowIv = helper.getView(R.id.sectionArrow);
         View divider = helper.getView(R.id.sectionDivider);
 
@@ -1107,23 +1108,35 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         boolean collapsed = collapsedSections.contains(msg.sectionId);
         arrowIv.setRotation(collapsed ? -90f : 0f);
 
-        helper.itemView.setOnClickListener(v -> {
-            boolean nowCollapsed = collapsedSections.contains(msg.sectionId);
-            if (nowCollapsed) {
-                collapsedSections.remove(msg.sectionId);
-            } else {
-                collapsedSections.add(msg.sectionId);
-            }
-            // 箭头旋转动画
-            float from = nowCollapsed ? -90f : 0f;
-            float to = nowCollapsed ? 0f : -90f;
-            arrowIv.animate().rotation(to).setDuration(200)
-                    .setInterpolator(new DecelerateInterpolator()).start();
+        // 分组数量显示：折叠且有群聊时显示数字
+        if (msg.sectionGroupCount > 0 && collapsed) {
+            countTv.setText("(" + msg.sectionGroupCount + ")");
+            countTv.setVisibility(View.VISIBLE);
+        } else {
+            countTv.setVisibility(View.GONE);
+        }
 
-            if (sectionToggleListener != null) {
-                sectionToggleListener.onSectionToggled(msg.sectionId, !nowCollapsed);
-            }
-        });
+        // 空分组点不开
+        if (msg.sectionGroupCount == 0) {
+            helper.itemView.setOnClickListener(null);
+            helper.itemView.setClickable(false);
+        } else {
+            helper.itemView.setOnClickListener(v -> {
+                boolean nowCollapsed = collapsedSections.contains(msg.sectionId);
+                if (nowCollapsed) {
+                    collapsedSections.remove(msg.sectionId);
+                } else {
+                    collapsedSections.add(msg.sectionId);
+                }
+                float to = nowCollapsed ? 0f : -90f;
+                arrowIv.animate().rotation(to).setDuration(200)
+                        .setInterpolator(new DecelerateInterpolator()).start();
+
+                if (sectionToggleListener != null) {
+                    sectionToggleListener.onSectionToggled(msg.sectionId, !nowCollapsed);
+                }
+            });
+        }
 
         // 长按：仅用户自建分组（排除内置 sectionId）
         boolean isBuiltIn = "ungrouped".equals(msg.sectionId)

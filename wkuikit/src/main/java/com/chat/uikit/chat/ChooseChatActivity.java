@@ -27,6 +27,8 @@ import com.chat.uikit.chat.adapter.ChooseChatAdapter;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActChooseChatLayoutBinding;
 import com.chat.uikit.message.MsgModel;
+import com.chat.uikit.thread.service.ThreadModel;
+import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
@@ -36,27 +38,35 @@ import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * 选择会话页面 — 群聊/私聊 Tab + 群聊按分组展示
+ * 选择会话页面 — 群聊/私聊 Tab + 群聊按分组展示 + 子区支持
  */
 public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBinding> {
     private ChooseChatAdapter chooseChatAdapter;
     private Button rightBtn;
     private boolean isChoose;
 
-    // 全部会话（含群聊+私聊），按 channelType 分开
     private List<ChooseChatEntity> allList;
     private List<ChooseChatEntity> groupList;
     private List<ChooseChatEntity> personalList;
 
-    // Tab 切换：0=群聊, 1=私聊
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
     private List<CategoryEntity> categoryList = new ArrayList<>();
+
+    // 子区数据
+    private final Map<String, List<ThreadEntity>> threadCache = new HashMap<>();
+    private final Map<String, List<ChooseChatEntity>> threadEntityCache = new HashMap<>();
+    private final Set<String> expandedThreadGroups = new HashSet<>();
+    private boolean threadsLoaded = false;
 
     @Override
     protected ActChooseChatLayoutBinding getViewBinding() {
@@ -78,18 +88,22 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     protected void rightButtonClick() {
         super.rightButtonClick();
 
-        List<WKUIConversationMsg> selectedList = new ArrayList<>();
+        List<WKChannel> list = new ArrayList<>();
         for (int i = 0, size = chooseChatAdapter.getData().size(); i < size; i++) {
             ChooseChatEntity entity = chooseChatAdapter.getData().get(i);
-            if (entity.isSectionHeader) continue;
-            if (entity.isCheck)
-                selectedList.add(entity.uiConveursationMsg);
-        }
-        List<WKChannel> list = new ArrayList<>();
-        if (WKReader.isNotEmpty(selectedList)) {
-            for (int i = 0; i < selectedList.size(); i++) {
-                list.add(selectedList.get(i).getWkChannel());
+            if (entity.isSectionHeader || entity.isThreadToggle) continue;
+            if (!entity.isCheck) continue;
+
+            if (entity.isThread) {
+                WKChannel channel = new WKChannel(entity.threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+                channel.channelName = entity.threadName;
+                list.add(channel);
+            } else if (entity.uiConveursationMsg != null && entity.uiConveursationMsg.getWkChannel() != null) {
+                list.add(entity.uiConveursationMsg.getWkChannel());
             }
+        }
+
+        if (WKReader.isNotEmpty(list)) {
             if (isChoose) {
                 if (WKUIKitApplication.getInstance().getMessageContentList() != null) {
                     WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, WKUIKitApplication.getInstance().getMessageContentList(), new WKUIKitApplication.IShowChatConfirm() {
@@ -122,7 +136,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         chooseChatAdapter = new ChooseChatAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chooseChatAdapter);
 
-        // 创建新聊天按钮
         wkVBinding.createTv.setOnClickListener(v -> {
             Intent intent = new Intent(this, ChooseContactsActivity.class);
             if (WKUIKitApplication.getInstance().getMessageContentList() != null)
@@ -130,7 +143,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             startActivity(intent);
         });
 
-        // 分段 Tab 切换控件
         segmentTabView = new SegmentTabView(this,
                 new String[]{getString(R.string.str_group_chat), getString(R.string.str_private_chat)});
         wkVBinding.segmentTabContainer.addView(segmentTabView,
@@ -160,6 +172,18 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             ChooseChatEntity chooseChatEntity = (ChooseChatEntity) adapter.getItem(position);
             if (chooseChatEntity == null || chooseChatEntity.isSectionHeader) return;
 
+            // 子区折叠/展开 toggle
+            if (chooseChatEntity.isThreadToggle) {
+                String groupNo = chooseChatEntity.parentGroupNo;
+                if (expandedThreadGroups.contains(groupNo)) {
+                    expandedThreadGroups.remove(groupNo);
+                } else {
+                    expandedThreadGroups.add(groupNo);
+                }
+                filterAndDisplay();
+                return;
+            }
+
             boolean isSelect = !chooseChatEntity.isBan && !chooseChatEntity.isForbidden;
             if (isSelect) {
                 chooseChatEntity.isCheck = !chooseChatEntity.isCheck;
@@ -175,7 +199,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             }
         });
 
-        // section header 折叠/展开
         chooseChatAdapter.setSectionToggleListener((sectionId, collapsed) -> filterAndDisplay());
 
         wkVBinding.searchEt.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
@@ -207,6 +230,11 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         for (int i = 0, size = allList.size(); i < size; i++) {
             if (allList.get(i).isCheck) count++;
         }
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) {
+                if (entity.isCheck) count++;
+            }
+        }
         return count;
     }
 
@@ -226,7 +254,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             filterAndDisplay();
             return;
         }
-        // 在当前 tab 对应的列表中搜索
         List<ChooseChatEntity> source = currentTab == 0 ? groupList : personalList;
         List<ChooseChatEntity> tempList = new ArrayList<>();
         String lowerContent = content.toLowerCase(Locale.getDefault());
@@ -236,12 +263,25 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 continue;
             String channelName = entity.uiConveursationMsg.getWkChannel().channelName;
             String channelRemark = entity.uiConveursationMsg.getWkChannel().channelRemark;
-            if ((!TextUtils.isEmpty(channelName) && channelName.toLowerCase(Locale.getDefault()).contains(lowerContent))
-                    || (!TextUtils.isEmpty(channelRemark) && channelRemark.toLowerCase(Locale.getDefault()).contains(lowerContent))) {
+            if (matchSearch(channelName, lowerContent) || matchSearch(channelRemark, lowerContent)) {
                 tempList.add(entity);
             }
         }
+        if (currentTab == 0) {
+            for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+                for (ChooseChatEntity entity : threadItems) {
+                    if (!TextUtils.isEmpty(entity.threadName)
+                            && entity.threadName.toLowerCase(Locale.getDefault()).contains(lowerContent)) {
+                        tempList.add(entity);
+                    }
+                }
+            }
+        }
         chooseChatAdapter.setList(tempList);
+    }
+
+    private boolean matchSearch(String text, String lowerContent) {
+        return !TextUtils.isEmpty(text) && text.toLowerCase(Locale.getDefault()).contains(lowerContent);
     }
 
     @Override
@@ -270,7 +310,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             }
             allList.add(chooseChatEntity);
 
-            // 按 channelType 分类
             if (list.get(i).channelType == WKChannelType.GROUP) {
                 groupList.add(chooseChatEntity);
             } else if (list.get(i).channelType == WKChannelType.PERSONAL) {
@@ -279,8 +318,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         }
 
         rightBtn.setVisibility(View.GONE);
-
-        // 加载分组数据
         loadCategories();
     }
 
@@ -288,27 +325,74 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (TextUtils.isEmpty(spaceId)) {
             categoryList = new ArrayList<>();
-            filterAndDisplay();
+            loadAllThreads();
             return;
         }
         CategoryModel.getInstance().list(spaceId, new CategoryModel.ICategoryListListener() {
             @Override
             public void onResult(List<CategoryEntity> list) {
                 categoryList = list != null ? list : new ArrayList<>();
-                filterAndDisplay();
+                loadAllThreads();
             }
 
             @Override
             public void onError(int code, String msg) {
                 categoryList = new ArrayList<>();
-                filterAndDisplay();
+                loadAllThreads();
             }
         });
     }
 
+    private void loadAllThreads() {
+        if (WKConfig.getInstance().getAppConfig().thread_on != 1 || groupList.isEmpty()) {
+            threadsLoaded = true;
+            filterAndDisplay();
+            return;
+        }
+
+        final int[] pending = {groupList.size()};
+        for (ChooseChatEntity groupEntity : groupList) {
+            if (groupEntity.uiConveursationMsg == null) {
+                pending[0]--;
+                if (pending[0] <= 0) {
+                    threadsLoaded = true;
+                    filterAndDisplay();
+                }
+                continue;
+            }
+            String groupNo = groupEntity.uiConveursationMsg.channelID;
+            ThreadModel.getInstance().listThreads(groupNo, (code, msg, result) -> {
+                if (result != null) {
+                    threadCache.put(groupNo, result);
+                    List<ChooseChatEntity> threadItems = new ArrayList<>();
+                    List<ThreadEntity> activeList = new ArrayList<>();
+                    for (ThreadEntity entity : result) {
+                        if (entity.status == 1) {
+                            activeList.add(entity);
+                        }
+                    }
+                    Collections.sort(activeList, (a, b) -> {
+                        String ua = a.updated_at != null ? a.updated_at : "";
+                        String ub = b.updated_at != null ? b.updated_at : "";
+                        return ub.compareTo(ua);
+                    });
+                    for (ThreadEntity te : activeList) {
+                        String channelId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
+                        threadItems.add(new ChooseChatEntity(channelId, te.name));
+                    }
+                    threadEntityCache.put(groupNo, threadItems);
+                }
+                pending[0]--;
+                if (pending[0] <= 0) {
+                    threadsLoaded = true;
+                    filterAndDisplay();
+                }
+            });
+        }
+    }
+
     private void filterAndDisplay() {
         if (currentTab == 0) {
-            // 群聊 tab：按 category 分组显示
             HashMap<String, ChooseChatEntity> channelMap = new HashMap<>();
             for (ChooseChatEntity entity : groupList) {
                 if (entity.uiConveursationMsg != null) {
@@ -318,7 +402,6 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
             List<ChooseChatEntity> displayList = new ArrayList<>();
 
-            // 用户自建分组排在前面，未分组（category_id == null）排在最后
             List<CategoryEntity> userCategories = new ArrayList<>();
             CategoryEntity defaultCategory = null;
             for (CategoryEntity category : categoryList) {
@@ -330,9 +413,8 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 }
             }
 
-            // 用户自建分组
             for (CategoryEntity category : userCategories) {
-                displayList.add(new ChooseChatEntity(category.category_id, category.name));
+                displayList.add(new ChooseChatEntity(category.category_id, category.name, true));
                 if (!chooseChatAdapter.isSectionCollapsed(category.category_id)) {
                     List<ChooseChatEntity> sectionItems = new ArrayList<>();
                     for (CategoryEntity.CategoryGroup cg : category.groups) {
@@ -342,15 +424,17 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                         }
                     }
                     sortByTopAndTime(sectionItems);
-                    displayList.addAll(sectionItems);
+                    for (ChooseChatEntity item : sectionItems) {
+                        displayList.add(item);
+                        appendThreads(displayList, item);
+                    }
                 }
             }
 
-            // 未分组放在最后
             if (defaultCategory != null && !defaultCategory.groups.isEmpty()) {
                 String sectionId = "ungrouped";
                 String sectionTitle = defaultCategory.name != null ? defaultCategory.name : getString(R.string.default_group);
-                displayList.add(new ChooseChatEntity(sectionId, sectionTitle));
+                displayList.add(new ChooseChatEntity(sectionId, sectionTitle, true));
                 if (!chooseChatAdapter.isSectionCollapsed(sectionId)) {
                     List<ChooseChatEntity> ungroupedItems = new ArrayList<>();
                     for (CategoryEntity.CategoryGroup cg : defaultCategory.groups) {
@@ -360,20 +444,39 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                         }
                     }
                     sortByTopAndTime(ungroupedItems);
-                    displayList.addAll(ungroupedItems);
+                    for (ChooseChatEntity item : ungroupedItems) {
+                        displayList.add(item);
+                        appendThreads(displayList, item);
+                    }
                 }
             }
 
-            // 如果没有分组数据，直接平铺显示所有群聊
             if (categoryList.isEmpty()) {
-                sortByTopAndTime(groupList);
-                displayList.addAll(groupList);
+                List<ChooseChatEntity> sorted = new ArrayList<>(groupList);
+                sortByTopAndTime(sorted);
+                for (ChooseChatEntity item : sorted) {
+                    displayList.add(item);
+                    appendThreads(displayList, item);
+                }
             }
 
             chooseChatAdapter.setList(displayList);
         } else {
-            // 私聊 tab：扁平列表
             chooseChatAdapter.setList(personalList);
+        }
+    }
+
+    private void appendThreads(List<ChooseChatEntity> displayList, ChooseChatEntity groupEntity) {
+        if (!threadsLoaded || groupEntity.uiConveursationMsg == null) return;
+        String groupNo = groupEntity.uiConveursationMsg.channelID;
+        List<ChooseChatEntity> threads = threadEntityCache.get(groupNo);
+        if (threads == null || threads.isEmpty()) return;
+
+        boolean expanded = expandedThreadGroups.contains(groupNo);
+        // toggle 始终在子区上方，点击切换展开/折叠
+        displayList.add(ChooseChatEntity.threadToggle(groupNo, threads.size(), expanded));
+        if (expanded) {
+            displayList.addAll(threads);
         }
     }
 
@@ -393,23 +496,51 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         }
 
         /** Section header 专用构造 */
-        ChooseChatEntity(String sectionId, String sectionTitle) {
-            this.isSectionHeader = true;
+        ChooseChatEntity(String sectionId, String sectionTitle, boolean isSectionHeader) {
+            this.isSectionHeader = isSectionHeader;
             this.sectionId = sectionId;
             this.sectionTitle = sectionTitle;
             this.uiConveursationMsg = null;
         }
 
+        /** 子区条目专用构造 */
+        ChooseChatEntity(String threadChannelId, String threadName) {
+            this.isThread = true;
+            this.threadChannelId = threadChannelId;
+            this.threadName = threadName;
+            this.uiConveursationMsg = null;
+        }
+
+        /** 子区折叠/展开 toggle */
+        static ChooseChatEntity threadToggle(String parentGroupNo, int threadCount, boolean expanded) {
+            ChooseChatEntity entity = new ChooseChatEntity((WKUIConversationMsg) null);
+            entity.uiConveursationMsg = null;
+            entity.isThreadToggle = true;
+            entity.parentGroupNo = parentGroupNo;
+            entity.threadCount = threadCount;
+            entity.threadExpanded = expanded;
+            return entity;
+        }
+
         public WKUIConversationMsg uiConveursationMsg;
         public boolean isCheck;
-        // 禁言中
         public boolean isForbidden;
-        // 禁用中
         public boolean isBan;
 
-        // Section header 支持
+        // Section header
         public boolean isSectionHeader = false;
         public String sectionId;
         public String sectionTitle;
+
+        // 子区
+        public boolean isThread = false;
+        public String threadChannelId;
+        public String threadName;
+
+        // 子区折叠/展开 toggle
+        public boolean isThreadToggle = false;
+        public String parentGroupNo;
+        public int threadCount;
+        public boolean threadExpanded;
     }
 }

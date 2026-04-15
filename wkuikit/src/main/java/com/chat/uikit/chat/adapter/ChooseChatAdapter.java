@@ -27,13 +27,15 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 选择会话适配器 — 支持 section header + 群聊紧凑布局
+ * 选择会话适配器 — 支持 section header + 群聊紧凑布局 + 子区 + 子区折叠
  */
 public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.ChooseChatEntity, BaseViewHolder> {
 
-    private static final int TYPE_NORMAL = 0;          // 私聊：带头像
-    private static final int TYPE_COMPACT = 1;          // 群聊：# + 群名，无头像
-    private static final int TYPE_SECTION_HEADER = 2;   // 分组标题
+    private static final int TYPE_NORMAL = 0;
+    private static final int TYPE_COMPACT = 1;
+    private static final int TYPE_SECTION_HEADER = 2;
+    private static final int TYPE_THREAD = 3;
+    private static final int TYPE_THREAD_TOGGLE = 4;
 
     private final Set<String> collapsedSections = new HashSet<>();
     private ISectionToggleListener sectionToggleListener;
@@ -45,9 +47,9 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
     @Override
     protected int getDefItemViewType(int position) {
         ChooseChatActivity.ChooseChatEntity item = getItem(position);
-        if (item != null && item.isSectionHeader) {
-            return TYPE_SECTION_HEADER;
-        }
+        if (item != null && item.isSectionHeader) return TYPE_SECTION_HEADER;
+        if (item != null && item.isThreadToggle) return TYPE_THREAD_TOGGLE;
+        if (item != null && item.isThread) return TYPE_THREAD;
         if (item != null && item.uiConveursationMsg != null
                 && item.uiConveursationMsg.channelType == WKChannelType.GROUP) {
             return TYPE_COMPACT;
@@ -59,12 +61,22 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
     @Override
     protected BaseViewHolder onCreateDefViewHolder(@NonNull ViewGroup parent, int viewType) {
         int layoutRes;
-        if (viewType == TYPE_SECTION_HEADER) {
-            layoutRes = R.layout.item_chat_section_header;
-        } else if (viewType == TYPE_COMPACT) {
-            layoutRes = R.layout.item_choose_chat_compact_layout;
-        } else {
-            layoutRes = R.layout.item_choose_chat_layout;
+        switch (viewType) {
+            case TYPE_SECTION_HEADER:
+                layoutRes = R.layout.item_chat_section_header;
+                break;
+            case TYPE_COMPACT:
+                layoutRes = R.layout.item_choose_chat_compact_layout;
+                break;
+            case TYPE_THREAD:
+                layoutRes = R.layout.item_choose_chat_thread_layout;
+                break;
+            case TYPE_THREAD_TOGGLE:
+                layoutRes = R.layout.item_choose_chat_thread_toggle;
+                break;
+            default:
+                layoutRes = R.layout.item_choose_chat_layout;
+                break;
         }
         return createBaseViewHolder(parent, layoutRes);
     }
@@ -72,7 +84,8 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
     @Override
     protected void convert(@NonNull BaseViewHolder holder, ChooseChatActivity.ChooseChatEntity item, @NonNull List<?> payloads) {
         super.convert(holder, item, payloads);
-        if (holder.getItemViewType() == TYPE_SECTION_HEADER) return;
+        int viewType = holder.getItemViewType();
+        if (viewType == TYPE_SECTION_HEADER || viewType == TYPE_THREAD_TOGGLE) return;
         ChooseChatActivity.ChooseChatEntity entity = (ChooseChatActivity.ChooseChatEntity) payloads.get(0);
         if (entity != null) {
             CheckBox checkBox = holder.getView(R.id.checkbox);
@@ -83,15 +96,22 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
 
     @Override
     protected void convert(@NonNull BaseViewHolder helper, ChooseChatActivity.ChooseChatEntity item) {
-        if (helper.getItemViewType() == TYPE_SECTION_HEADER) {
-            convertSectionHeader(helper, item);
-            return;
+        switch (helper.getItemViewType()) {
+            case TYPE_SECTION_HEADER:
+                convertSectionHeader(helper, item);
+                return;
+            case TYPE_THREAD_TOGGLE:
+                convertThreadToggle(helper, item);
+                return;
+            case TYPE_THREAD:
+                convertThread(helper, item);
+                return;
+            case TYPE_COMPACT:
+                convertCompact(helper, item);
+                return;
+            default:
+                convertNormal(helper, item);
         }
-        if (helper.getItemViewType() == TYPE_COMPACT) {
-            convertCompact(helper, item);
-            return;
-        }
-        convertNormal(helper, item);
     }
 
     // ── 私聊：带头像 ────────────────────────────────────────────
@@ -122,7 +142,7 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
         }
     }
 
-    // ── 群聊：紧凑风格（# + 群名 + checkbox）──────────────────────
+    // ── 群聊：紧凑风格 ──────────────────────────────────────────
 
     private void convertCompact(@NonNull BaseViewHolder helper, ChooseChatActivity.ChooseChatEntity item) {
         CheckBox checkBox = helper.getView(R.id.checkbox);
@@ -144,6 +164,29 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.uiConveursationMsg.channelID, item.uiConveursationMsg.channelType);
             helper.setGone(R.id.fullStaffingTv, true);
             helper.setGone(R.id.checkbox, false);
+        }
+    }
+
+    // ── 子区 ────────────────────────────────────────────────────
+
+    private void convertThread(@NonNull BaseViewHolder helper, ChooseChatActivity.ChooseChatEntity item) {
+        CheckBox checkBox = helper.getView(R.id.checkbox);
+        setupCheckBox(checkBox, item);
+        helper.setText(R.id.nameTv, item.threadName);
+    }
+
+    // ── 子区折叠/展开 toggle ────────────────────────────────────
+
+    private void convertThreadToggle(@NonNull BaseViewHolder helper, ChooseChatActivity.ChooseChatEntity item) {
+        TextView toggleText = helper.getView(R.id.toggleText);
+        ImageView toggleArrow = helper.getView(R.id.toggleArrow);
+
+        if (item.threadExpanded) {
+            toggleText.setText(String.format(getContext().getString(R.string.str_collapse_threads), item.threadCount));
+            toggleArrow.setRotation(0f);
+        } else {
+            toggleText.setText(String.format(getContext().getString(R.string.str_expand_threads), item.threadCount));
+            toggleArrow.setRotation(-90f);
         }
     }
 

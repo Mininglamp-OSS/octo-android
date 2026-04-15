@@ -38,5 +38,13 @@
             android:textSize="13sp"
             android:textStyle="bold"
             android:letterSpacing="0.05" />
+
+        <TextView
+            android:id="@+id/sectionCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:textColor="@color/clrCCC"
+            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

@@ -61,41 +61,26 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     @SuppressLint("SourceLockedOrientationActivity")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        String actName = getClass().getSimpleName();
-        long t0 = android.os.SystemClock.elapsedRealtime();
-        long t = t0;
-
         super.onCreate(savedInstanceState);
-        android.util.Log.w("StartupPerf", "[" + actName + "] super.onCreate: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
 
         boolean na = WKStatusBarUtils.isNavigationBarExist(this);
         WKMultiLanguageUtil.getInstance().setConfiguration();
 
         wkVBinding = getViewBinding();
-        android.util.Log.w("StartupPerf", "[" + actName + "] getViewBinding (inflate): " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
-
         setContentView(wkVBinding.getRoot());
-        android.util.Log.w("StartupPerf", "[" + actName + "] setContentView: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
 
         initSwipeBackFinish();
         initPresenter();
         loadingPopup = new XPopup.Builder(this)
                 .asLoading(getString(R.string.loading));
         toggleStatusBarMode();
-        android.util.Log.w("StartupPerf", "[" + actName + "] swipeBack+presenter+popup+statusBar: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
 
         initData(savedInstanceState);
         initView();
-        android.util.Log.w("StartupPerf", "[" + actName + "] initView: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
-
         initListener();
-        android.util.Log.w("StartupPerf", "[" + actName + "] initListener: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms"); t = android.os.SystemClock.elapsedRealtime();
-
         initTitleBar();
         initData();
         ActManagerUtils.getInstance().addActivity(this);
-        android.util.Log.w("StartupPerf", "[" + actName + "] titleBar+initData+addActivity: " + (android.os.SystemClock.elapsedRealtime() - t) + "ms");
-        android.util.Log.w("StartupPerf", "[" + actName + "] ===== onCreate TOTAL: " + (android.os.SystemClock.elapsedRealtime() - t0) + "ms, T=" + (android.os.SystemClock.elapsedRealtime() - com.chat.base.WKBaseApplication.PROCESS_START) + "ms =====");
     }
 
     /**

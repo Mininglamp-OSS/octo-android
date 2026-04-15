@@ -96,6 +96,23 @@ public class CategoryModel extends WKBaseModel {
         });
     }
 
+    public void rename(String spaceId, String categoryId, String name, ICommonListener listener) {
+        JSONObject json = new JSONObject();
+        json.put("name", name);
+        request(createService(CategoryService.class).update(spaceId, categoryId, json), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                invalidateCache();
+                listener.onResult(200, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
+    }
+
     public void delete(String spaceId, String categoryId, ICommonListener listener) {
         request(createService(CategoryService.class).delete(spaceId, categoryId), new IRequestResultListener<>() {
             @Override

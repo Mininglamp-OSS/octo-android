@@ -39,9 +39,11 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
         width = AndroidUtilities.getScreenWidth() - (AndroidUtilities.dp(30) * 8);
         Theme.setColorFilter(getContext(), wkVBinding.deleteIv, R.color.popupTextColor);
         List<EmojiEntry> emojiIndexs = new ArrayList<>();
+        List<EmojiEntry> customList = EmojiManager.getInstance().getEmojiWithType("custom_");
         List<EmojiEntry> normalList = EmojiManager.getInstance().getEmojiWithType("0_");
         List<EmojiEntry> naturelList = EmojiManager.getInstance().getEmojiWithType("1_");
         List<EmojiEntry> symbolsList = EmojiManager.getInstance().getEmojiWithType("2_");
+        emojiIndexs.addAll(customList);
         emojiIndexs.addAll(normalList);
         emojiIndexs.addAll(naturelList);
         emojiIndexs.addAll(symbolsList);

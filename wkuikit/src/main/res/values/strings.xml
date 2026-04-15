@@ -428,6 +428,9 @@
     <string name="move_to_front">移到最前</string>
     <string name="reorder_category">分组排序</string>
     <string name="reorder_done">完成</string>
+    <string name="rename_category">重命名</string>
+    <string name="rename_category_title">重命名分组</string>
+    <string name="rename_category_hint">请输入分组名称</string>
     <string name="delete_category">删除分组</string>
     <string name="delete_category_confirm">删除后，分组内的群聊将移至未分组区域</string>
     <string name="default_group">未分组</string>

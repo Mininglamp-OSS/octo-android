@@ -29,13 +29,8 @@ import com.xinbida.wukongim.WKIM
  */
 class MainActivity : AppCompatActivity() {
 
-    private val perfTag = "StartupPerf"
-    private val tCreate = android.os.SystemClock.elapsedRealtime()
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        val t = android.os.SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
-        android.util.Log.w(perfTag, "[MainActivity] onCreate, T=${t - WKBaseApplication.PROCESS_START}ms, super.onCreate: ${android.os.SystemClock.elapsedRealtime() - t}ms")
 
         val isShowDialog = WKSharedPreferencesUtil.getInstance()
             .getBoolean("show_agreement_dialog")
@@ -75,12 +70,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadSpaceAndGo() {
-        val t = android.os.SystemClock.elapsedRealtime()
         MsgModel.getInstance().loadCurrentSpaceId()
-        android.util.Log.w(perfTag, "[MainActivity] loadCurrentSpaceId: ${android.os.SystemClock.elapsedRealtime() - t}ms")
         val currentSpaceId = MsgModel.getInstance().currentSpaceId
         if (!currentSpaceId.isNullOrEmpty()) {
-            android.util.Log.w(perfTag, "[MainActivity] has cached spaceId, go TabActivity directly")
             val intent = Intent(this, TabActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             startActivity(intent)
@@ -89,11 +81,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
         // 没有 currentSpaceId，从服务器获取 Space 列表
-        val tNet = android.os.SystemClock.elapsedRealtime()
-        android.util.Log.w(perfTag, "[MainActivity] no cached spaceId, calling getMySpaces()...")
         SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
             override fun onResult(list: List<com.chat.uikit.space.SpaceEntity>?) {
-                android.util.Log.w(perfTag, "[MainActivity] getMySpaces onResult: ${android.os.SystemClock.elapsedRealtime() - tNet}ms")
                 if (!list.isNullOrEmpty() && !list[0].space_id.isNullOrEmpty()) {
                     MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
                     startActivity(Intent(this@MainActivity, TabActivity::class.java))
@@ -106,7 +95,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onError(code: Int, msg: String?) {
-                android.util.Log.w(perfTag, "[MainActivity] getMySpaces onError($code): ${android.os.SystemClock.elapsedRealtime() - tNet}ms")
                 val intent = Intent(this@MainActivity, WKLoginActivity::class.java)
                 intent.putExtra("from", getIntent().getIntExtra("from", 0))
                 startActivity(intent)

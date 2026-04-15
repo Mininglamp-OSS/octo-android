@@ -168,7 +168,7 @@ public class EmojiManager {
                 if (!sb.toString().endsWith("(")) {
                     sb.append("|");
                 }
-                sb.append(defaultEntries.get(i).text);
+                sb.append(Pattern.quote(defaultEntries.get(i).text));
             }
             sb.append(")");
             patternStr = sb.toString();
@@ -248,6 +248,15 @@ public class EmojiManager {
                 }
             }
         }
+    }
+
+    /**
+     * 判断是否为自定义表情（ID 以 custom_ 开头），通过内部注册的 entry ID 判断，
+     * 不依赖用户输入的文本内容，确保不会误判。
+     */
+    public boolean isCustomEmoji(String text) {
+        Entry entry = text2entry.get(text);
+        return entry != null && entry.id.startsWith("custom_");
     }
 
     public boolean isHeart(String tag) {

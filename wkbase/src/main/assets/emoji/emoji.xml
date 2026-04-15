@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PopoEmoticons>
     <Catalog Title="default">
+        <Emoticon ID="custom_action" Tag="[崇尚行动]" File="custom_action.png" />
+        <Emoticon ID="custom_taste" Tag="[有品位]" File="custom_taste.png" />
         <Emoticon ID="0_0" Tag="😀" File="0_0.png" />
         <Emoticon ID="0_1" Tag="😃" File="0_1.png" />
         <Emoticon ID="0_2" Tag="😄" File="0_2.png" />

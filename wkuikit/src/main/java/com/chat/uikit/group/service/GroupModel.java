@@ -52,6 +52,10 @@ public class GroupModel extends WKBaseModel {
      * @param ids  成员
      */
     public void createGroup(String name, List<String> ids, List<String> names, final IGroupInfo iGroupInfo) {
+        createGroup(name, ids, names, null, iGroupInfo);
+    }
+
+    public void createGroup(String name, List<String> ids, List<String> names, String categoryId, final IGroupInfo iGroupInfo) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("name", name);
         JSONArray jsonArray = new JSONArray();
@@ -65,6 +69,9 @@ public class GroupModel extends WKBaseModel {
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (!TextUtils.isEmpty(spaceId)) {
             jsonObject.put("space_id", spaceId);
+        }
+        if (!TextUtils.isEmpty(categoryId)) {
+            jsonObject.put("category_id", categoryId);
         }
         request(createService(GroupService.class).createGroup(jsonObject), new IRequestResultListener<>() {
             @Override

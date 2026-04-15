@@ -53,6 +53,7 @@ import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
 import com.chat.uikit.chat.manager.WKIMUtils;
+import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.category.CategoryEntity;
 import com.chat.uikit.category.CategoryModel;
@@ -1533,6 +1534,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             });
         }));
         }
+
+        // 创建群聊（自动归入当前分组）
+        items.add(new PopupMenuItem(getString(R.string.create_new_group), R.mipmap.msg_arrowright, () -> {
+            Intent intent = new Intent(getActivity(), ChooseContactsActivity.class);
+            intent.putExtra("categoryId", sectionId);
+            startActivity(intent);
+        }));
 
         // 移动分组（拖拽排序）
         items.add(new PopupMenuItem(getString(R.string.reorder_category), R.mipmap.msg_arrowright, () -> {

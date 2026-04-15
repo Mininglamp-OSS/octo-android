@@ -181,7 +181,7 @@
     <string name="remark">备注</string>
     <string name="remark_desc">群聊的备注仅自己可见</string>
     <string name="enter_group_name">填入</string>
-    <string name="create_new_group">新建</string>
+    <string name="create_new_group">新建群聊</string>
     <string name="font_size">字体大小</string>
     <string name="font_size_default">标准</string>
     <string name="preview_text_size">预览字体大小</string>
@@ -424,7 +424,7 @@
     <string name="move_to_category">移动到分组</string>
     <string name="remove_from_category">移出分组</string>
     <string name="move_to_front">移到最前</string>
-    <string name="reorder_category">移动分组</string>
+    <string name="reorder_category">分组排序</string>
     <string name="reorder_done">完成</string>
     <string name="delete_category">删除分组</string>
     <string name="delete_category_confirm">删除后，分组内的群聊将移至未分组区域</string>

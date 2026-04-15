@@ -180,7 +180,7 @@
     <string name="remark">Remark</string>
     <string name="remark_desc">The group name customized with your remark is only visible to you.</string>
     <string name="enter_group_name">Enter</string>
-    <string name="create_new_group">Create</string>
+    <string name="create_new_group">New Group</string>
     <string name="font_size">Text Size</string>
     <string name="font_size_default">Default</string>
     <string name="preview_text_size">Preview text size</string>

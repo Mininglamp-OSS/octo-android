@@ -972,10 +972,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         }
-        // 角标显示在顶部 sub-tab 上，不显示在底部聊天 tab
+        // 顶部 sub-tab 不再显示未读气泡
         if (segmentTabView != null) {
-            segmentTabView.setBadge(0, groupCount);
-            segmentTabView.setBadge(1, personalCount);
+            segmentTabView.setBadge(0, 0);
+            segmentTabView.setBadge(1, 0);
         }
         if (tabActivity != null) {
             tabActivity.setMsgCount(0);
@@ -2171,6 +2171,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
         refreshExtrasIfNeeded();
+        // 刷新分组数据，确保新建群聊等操作后分组列表及时更新
+        CategoryModel.getInstance().invalidateCache();
+        loadCategories();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
         wkVBinding.deviceIv.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
 //        String appLoginType = String.format(getString(R.string.pc_login), getString(R.string.app_name));

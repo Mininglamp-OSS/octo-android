@@ -9,17 +9,19 @@
     android:paddingHorizontal="15dp"
     android:paddingVertical="10dp">
 
-    <!-- # 图标 -->
-    <TextView
-        android:id="@+id/iconTv"
+    <!-- 子区图标：紫色渐变方框 + 白色子区图标 -->
+    <FrameLayout
         android:layout_width="36dp"
         android:layout_height="36dp"
-        android:background="@drawable/bg_dialog_api_btn_confirm"
-        android:gravity="center"
-        android:text="#"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:background="@drawable/bg_dialog_api_btn_confirm">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_thread"
+            android:tint="@color/white" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
@@ -65,6 +67,21 @@
             android:visibility="gone"
             tools:text="张三: 最后一条消息" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/threadUnreadBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="18dp"
+        android:minWidth="18dp"
+        android:layout_marginStart="5dp"
+        android:background="@drawable/thread_unread_badge_bg"
+        android:gravity="center"
+        android:paddingStart="5dp"
+        android:paddingEnd="5dp"
+        android:textColor="@color/white"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium"
+        android:visibility="gone" />
 
     <androidx.appcompat.widget.AppCompatImageView
         style="@style/arrow_right_iv"

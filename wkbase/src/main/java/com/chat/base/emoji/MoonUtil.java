@@ -230,13 +230,24 @@ public class MoonUtil {
         }
     }
 
+    // 自定义表情在消息气泡中的固定显示尺寸（dp）
+    private static final int CUSTOM_EMOJI_SIZE_DP = 120;
+
     public static Drawable getEmotDrawable(Context context, String text, float scale) {
         Drawable drawable = EmojiManager.getInstance().getDrawable(context, text);
 
         // scale
         if (drawable != null) {
-            int width = (int) (drawable.getIntrinsicWidth() * scale);
-            int height = (int) (drawable.getIntrinsicHeight() * scale);
+            int width, height;
+            // 通过 EmojiManager 注册的 entry ID 判断是否为自定义表情
+            if (EmojiManager.getInstance().isCustomEmoji(text)) {
+                int sizePx = com.chat.base.utils.AndroidUtilities.dp(CUSTOM_EMOJI_SIZE_DP);
+                width = sizePx;
+                height = sizePx;
+            } else {
+                width = (int) (drawable.getIntrinsicWidth() * scale);
+                height = (int) (drawable.getIntrinsicHeight() * scale);
+            }
             drawable.setBounds(0, 0, width, height);
         }
 

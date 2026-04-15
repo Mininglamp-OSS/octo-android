@@ -76,6 +76,19 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
                 break;
             }
         }
+        // 自定义表情（如 [崇尚行动]）使用 AlignImageSpan，光标不允许进入 span 内部
+        if (selStart == selEnd) {
+            AlignImageSpan[] emojiSpans = getText().getSpans(0, getText().length(), AlignImageSpan.class);
+            for (AlignImageSpan span : emojiSpans) {
+                int spanStart = getText().getSpanStart(span);
+                int spanEnd = getText().getSpanEnd(span);
+                if (spanEnd - spanStart > 1 && selStart > spanStart && selStart < spanEnd) {
+                    // 光标在多字符 span 内部，跳到末尾
+                    setSelection(spanEnd);
+                    return;
+                }
+            }
+        }
         super.onSelectionChanged(selStart, selEnd);
     }
 

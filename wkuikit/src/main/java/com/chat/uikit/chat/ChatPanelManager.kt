@@ -1915,10 +1915,12 @@ class ChatPanelManager(
 
     private fun getEmojiLayout(): View {
         val width = AndroidUtilities.getScreenWidth() - AndroidUtilities.dp(30f) * 8
+        val customList = EmojiManager.getInstance().getEmojiWithType("custom_")
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
         val naturelList = EmojiManager.getInstance().getEmojiWithType("1_")
         val symbolsList = EmojiManager.getInstance().getEmojiWithType("2_")
         val list = ArrayList<EmojiEntry>()
+        list.addAll(customList)
         list.addAll(normalList)
         list.addAll(naturelList)
         list.addAll(symbolsList)
@@ -1942,13 +1944,19 @@ class ChatPanelManager(
 
         emojiAdapter.setOnItemClickListener { adapter, _, position ->
             val emojiEntry = adapter.getItem(position) as EmojiEntry
-            val curPosition: Int = editText.selectionStart
-            val sb = java.lang.StringBuilder(
-                Objects.requireNonNull(editText.text).toString()
-            )
-            sb.insert(curPosition, emojiEntry.text)
-            MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
-            editText.setSelection(curPosition + emojiEntry.text.length)
+            if (emojiEntry.tag.startsWith("custom_")) {
+                // 自定义表情直接作为独立消息发送
+                val textContent = WKTextContent(emojiEntry.text)
+                iConversationContext.sendMessage(textContent)
+            } else {
+                val curPosition: Int = editText.selectionStart
+                val sb = java.lang.StringBuilder(
+                    Objects.requireNonNull(editText.text).toString()
+                )
+                sb.insert(curPosition, emojiEntry.text)
+                MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
+                editText.setSelection(curPosition + emojiEntry.text.length)
+            }
         }
         return emojiLayout
     }

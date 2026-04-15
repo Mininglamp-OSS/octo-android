@@ -52,8 +52,30 @@
         </LinearLayout>
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/createTv"
+        style="@style/layoutBg"
+        android:background="@color/white"
+        android:text="@string/create_new_chat"
+        android:textColor="@color/colorDark"
+        android:textSize="16sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginEnd="15dp"
+        android:background="@color/colorE8E7E7" />
+
+    <FrameLayout
+        android:id="@+id/segmentTabContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 </LinearLayout>

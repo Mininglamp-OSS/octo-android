@@ -27,6 +27,7 @@
     <string name="common_emoji">最近使用</string>
     <string name="all_emoji">所有表情</string>
     <string name="str_send">发送</string>
+    <string name="str_send_message_hint">给朋友留言</string>
     <string name="str_base_reply">评论</string>
     <string name="str_search">搜索</string>
     <string name="b_complete">完成</string>

@@ -19,6 +19,8 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -83,6 +85,7 @@ import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
 import com.chat.base.msgcontent.WKFileContent;
 import com.chat.uikit.chat.provider.WKFileProvider;
+import com.chat.uikit.chat.provider.WKVideoProvider;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
@@ -118,6 +121,7 @@ import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
@@ -258,6 +262,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_FILE, new WKFileProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VIDEO, new WKVideoProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
@@ -267,6 +272,7 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_MULTIPLE_FORWARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_FILE, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VIDEO, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod("uikit_sql", EndpointCategory.wkDBMenus, object -> new DBMenu("uikit_sql"));
         //注册消息长按菜单配置
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false, false));
@@ -428,6 +434,7 @@ public class WKUIKitApplication {
             ChooseChatMenu messageContent = (ChooseChatMenu) object;
             Intent intent = new Intent(mContext.get(), ChooseChatActivity.class);
             intent.putExtra("isChoose", true);
+            intent.putExtra("singleSelect", messageContent.singleSelect);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             mContext.get().startActivity(intent);
             WKUIKitApplication.this.messageContentList = messageContent.list;
@@ -639,9 +646,25 @@ public class WKUIKitApplication {
     }
 
     public void sendChooseChatBack(List<WKChannel> list) {
+        String extraText = pendingExtraText;
+        pendingExtraText = null;
+
         if (chooseChatCallBack != null) {
             chooseChatCallBack.iChoose.onResult(list);
             chooseChatCallBack = null;
+        }
+
+        // 媒体消息已由回调发出，延迟发送留言文字确保服务端顺序：内容在前、文字在后
+        if (!TextUtils.isEmpty(extraText) && list != null) {
+            List<WKChannel> channels = new ArrayList<>(list);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                WKTextContent textContent = new WKTextContent(extraText);
+                for (WKChannel channel : channels) {
+                    WKSendOptions options = new WKSendOptions();
+                    options.setting.receipt = channel.receipt;
+                    WKIM.getInstance().getMsgManager().sendWithOptions(textContent, channel, options);
+                }
+            }, 200);
         }
     }
 
@@ -659,6 +682,7 @@ public class WKUIKitApplication {
     private ChatChooseContacts chooseChatCallBack;
     private ChooseContactsMenu contactsMenu;
     private List<WKMessageContent> messageContentList;
+    private String pendingExtraText;
 
     public void exitLogin(int from) {
         MsgModel.getInstance().stopTimer();
@@ -810,10 +834,32 @@ public class WKUIKitApplication {
                     return list.size();
                 }
             });
-            nameTv.setVisibility(View.GONE);
+            StringBuilder nameBuilder = new StringBuilder();
+            for (int i = 0, size = list.size(); i < size; i++) {
+                String name = list.get(i).channelRemark;
+                if (TextUtils.isEmpty(name)) name = list.get(i).channelName;
+                if (list.get(i).channelID.equals(WKSystemAccount.system_file_helper)) {
+                    name = context.getString(R.string.wk_file_helper);
+                }
+                if (list.get(i).channelID.equals(WKSystemAccount.system_team)) {
+                    name = context.getString(R.string.wk_system_notice);
+                }
+                if (!TextUtils.isEmpty(name)) {
+                    if (nameBuilder.length() > 0) nameBuilder.append("、");
+                    nameBuilder.append(name);
+                }
+            }
+            nameTv.setText(nameBuilder.toString());
+            nameTv.setVisibility(View.VISIBLE);
             avatarView.setVisibility(View.GONE);
-            contentTv.setVisibility(View.GONE);
         }
+
+        FrameLayout videoPreviewLayout = view.findViewById(R.id.videoPreviewLayout);
+        ImageView videoCoverIv = view.findViewById(R.id.videoCoverIv);
+        LinearLayout filePreviewLayout = view.findViewById(R.id.filePreviewLayout);
+        ImageView filePreviewIconIv = view.findViewById(R.id.filePreviewIconIv);
+        TextView filePreviewNameTv = view.findViewById(R.id.filePreviewNameTv);
+        TextView filePreviewSizeTv = view.findViewById(R.id.filePreviewSizeTv);
 
         if (messageContentList.size() == 1) {
             WKMessageContent messageContent = messageContentList.get(0);
@@ -829,7 +875,6 @@ public class WKUIKitApplication {
                     showUrl = imgMsgModel.localPath;
                     File file = new File(showUrl);
                     if (!file.exists()) {
-                        //如果本地文件被删除就显示网络图片
                         showUrl = WKApiConfig.getShowUrl(imgMsgModel.url);
                     }
                 } else {
@@ -837,6 +882,33 @@ public class WKUIKitApplication {
                 }
                 GlideUtils.getInstance().showImg(context, showUrl, ints[0], ints[1], imageView);
                 imageView.setVisibility(View.VISIBLE);
+                contentTv.setVisibility(View.GONE);
+            } else if (messageContent.type == WKContentType.WK_VIDEO) {
+                WKVideoContent videoContent = (WKVideoContent) messageContent;
+                int[] ints = ImageUtils.getInstance().getImageWidthAndHeightToTalk(videoContent.width, videoContent.height);
+                ViewGroup.LayoutParams coverParams = videoCoverIv.getLayoutParams();
+                coverParams.width = ints[0];
+                coverParams.height = ints[1];
+                videoCoverIv.setLayoutParams(coverParams);
+                String coverUrl = "";
+                if (!TextUtils.isEmpty(videoContent.coverLocalPath)) {
+                    File f = new File(videoContent.coverLocalPath);
+                    if (f.exists()) coverUrl = videoContent.coverLocalPath;
+                }
+                if (TextUtils.isEmpty(coverUrl) && !TextUtils.isEmpty(videoContent.cover)) {
+                    coverUrl = WKApiConfig.getShowUrl(videoContent.cover);
+                }
+                GlideUtils.getInstance().showImg(context, coverUrl, ints[0], ints[1], videoCoverIv);
+                videoPreviewLayout.setVisibility(View.VISIBLE);
+                imageView.setVisibility(View.GONE);
+                contentTv.setVisibility(View.GONE);
+            } else if (messageContent instanceof WKFileContent) {
+                WKFileContent fileContent = (WKFileContent) messageContent;
+                filePreviewNameTv.setText(fileContent.name != null ? fileContent.name : "");
+                filePreviewSizeTv.setText(WKFileProvider.formatFileSize(fileContent.size));
+                WKFileProvider.setFileIcon(filePreviewIconIv, fileContent.extension, fileContent.name);
+                filePreviewLayout.setVisibility(View.VISIBLE);
+                imageView.setVisibility(View.GONE);
                 contentTv.setVisibility(View.GONE);
             } else {
                 String content = messageContent.getDisplayContent();
@@ -853,11 +925,17 @@ public class WKUIKitApplication {
             contentTv.setVisibility(View.VISIBLE);
             contentTv.setText(String.format(context.getString(R.string.item_forward_count), messageContentList.size()));
         }
+        EditText messageEt = view.findViewById(R.id.messageEt);
+
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle(context.getString(R.string.send_to));
 
         builder.setView(view);
-        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> iShowChatConfirm.onBack(list, messageContentList));
+        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> {
+            String extraText = messageEt.getText() != null ? messageEt.getText().toString().trim() : "";
+            pendingExtraText = TextUtils.isEmpty(extraText) ? null : extraText;
+            iShowChatConfirm.onBack(list, messageContentList);
+        });
         builder.setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> {
 
         });

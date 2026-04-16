@@ -22,4 +22,7 @@
     <string name="space_guide_join">加入</string>
     <string name="space_guide_back">\u2190 返回</string>
     <string name="space_guide_input_invite_code">输入邀请码</string>
+
+    <string name="please_login_first">请先登录</string>
+    <string name="share_content_empty">分享内容为空</string>
 </resources>

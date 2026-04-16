@@ -19,6 +19,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -118,6 +119,7 @@ import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKSendOptions;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
@@ -428,6 +430,7 @@ public class WKUIKitApplication {
             ChooseChatMenu messageContent = (ChooseChatMenu) object;
             Intent intent = new Intent(mContext.get(), ChooseChatActivity.class);
             intent.putExtra("isChoose", true);
+            intent.putExtra("singleSelect", messageContent.singleSelect);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             mContext.get().startActivity(intent);
             WKUIKitApplication.this.messageContentList = messageContent.list;
@@ -639,9 +642,25 @@ public class WKUIKitApplication {
     }
 
     public void sendChooseChatBack(List<WKChannel> list) {
+        String extraText = pendingExtraText;
+        pendingExtraText = null;
+
         if (chooseChatCallBack != null) {
             chooseChatCallBack.iChoose.onResult(list);
             chooseChatCallBack = null;
+        }
+
+        // 媒体消息已由回调发出，延迟发送留言文字确保服务端顺序：内容在前、文字在后
+        if (!TextUtils.isEmpty(extraText) && list != null) {
+            List<WKChannel> channels = new ArrayList<>(list);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                WKTextContent textContent = new WKTextContent(extraText);
+                for (WKChannel channel : channels) {
+                    WKSendOptions options = new WKSendOptions();
+                    options.setting.receipt = channel.receipt;
+                    WKIM.getInstance().getMsgManager().sendWithOptions(textContent, channel, options);
+                }
+            }, 200);
         }
     }
 
@@ -659,6 +678,7 @@ public class WKUIKitApplication {
     private ChatChooseContacts chooseChatCallBack;
     private ChooseContactsMenu contactsMenu;
     private List<WKMessageContent> messageContentList;
+    private String pendingExtraText;
 
     public void exitLogin(int from) {
         MsgModel.getInstance().stopTimer();
@@ -810,9 +830,24 @@ public class WKUIKitApplication {
                     return list.size();
                 }
             });
-            nameTv.setVisibility(View.GONE);
+            StringBuilder nameBuilder = new StringBuilder();
+            for (int i = 0, size = list.size(); i < size; i++) {
+                String name = list.get(i).channelRemark;
+                if (TextUtils.isEmpty(name)) name = list.get(i).channelName;
+                if (list.get(i).channelID.equals(WKSystemAccount.system_file_helper)) {
+                    name = context.getString(R.string.wk_file_helper);
+                }
+                if (list.get(i).channelID.equals(WKSystemAccount.system_team)) {
+                    name = context.getString(R.string.wk_system_notice);
+                }
+                if (!TextUtils.isEmpty(name)) {
+                    if (nameBuilder.length() > 0) nameBuilder.append("、");
+                    nameBuilder.append(name);
+                }
+            }
+            nameTv.setText(nameBuilder.toString());
+            nameTv.setVisibility(View.VISIBLE);
             avatarView.setVisibility(View.GONE);
-            contentTv.setVisibility(View.GONE);
         }
 
         if (messageContentList.size() == 1) {
@@ -853,11 +888,17 @@ public class WKUIKitApplication {
             contentTv.setVisibility(View.VISIBLE);
             contentTv.setText(String.format(context.getString(R.string.item_forward_count), messageContentList.size()));
         }
+        EditText messageEt = view.findViewById(R.id.messageEt);
+
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle(context.getString(R.string.send_to));
 
         builder.setView(view);
-        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> iShowChatConfirm.onBack(list, messageContentList));
+        builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> {
+            String extraText = messageEt.getText() != null ? messageEt.getText().toString().trim() : "";
+            pendingExtraText = TextUtils.isEmpty(extraText) ? null : extraText;
+            iShowChatConfirm.onBack(list, messageContentList);
+        });
         builder.setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> {
 
         });

@@ -6,6 +6,7 @@ public class CategoryEntity {
     public String category_id;
     public String name;
     public int sort;
+    public boolean is_default;
     public List<CategoryGroup> groups;
 
     public static class CategoryGroup {

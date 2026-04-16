@@ -1227,18 +1227,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
         if (isEnd) {
             if (isSort && msgCount == 0) {
-                if (currentTab == 0) {
-                    // 群聊 tab：有 section header，用 filterAndDisplay 重建
-                    filterAndDisplay();
-                } else {
-                    int insertIndex = getInsertIndex(uiConversationMsg);
-                    if (insertIndex != index) {
-                        if (index != -1) chatConversationAdapter.removeAt(index);
-                        ChatConversationMsg newSortMsg = new ChatConversationMsg(uiConversationMsg);
-                        chatConversationAdapter.addData(insertIndex, newSortMsg);
-                        scrollToPositionIfNearTop(insertIndex);
-                    }
-                }
+                sortMsg(allConversations);
             } else {
                 if (msgCount > 0) {
                     msgCount = 0;
@@ -1430,7 +1419,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             List<CategoryEntity> categories = new ArrayList<>(categoryList);
             for (CategoryEntity category : categories) {
                 if (category == null || category.groups == null) continue;
-                if (category.category_id == null) {
+                if (category.is_default) {
                     defaultCategory = category;
                 } else {
                     userCategories.add(category);

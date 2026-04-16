@@ -14,6 +14,7 @@ import java.util.List;
 public class ChooseChatMenu {
     public ChatChooseContacts mChatChooseContacts;
     public List<WKMessageContent> list;
+    public boolean singleSelect;
 
     public ChooseChatMenu(ChatChooseContacts mChatChooseContacts, WKMessageContent messageContent) {
         this.mChatChooseContacts = mChatChooseContacts;

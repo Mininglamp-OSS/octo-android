@@ -53,6 +53,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     private ChooseChatAdapter chooseChatAdapter;
     private Button rightBtn;
     private boolean isChoose;
+    private boolean singleSelect;
 
     private List<ChooseChatEntity> allList;
     private List<ChooseChatEntity> groupList;
@@ -89,17 +90,22 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         super.rightButtonClick();
 
         List<WKChannel> list = new ArrayList<>();
+        Set<String> addedIds = new HashSet<>();
         for (int i = 0, size = chooseChatAdapter.getData().size(); i < size; i++) {
             ChooseChatEntity entity = chooseChatAdapter.getData().get(i);
             if (entity.isSectionHeader || entity.isThreadToggle) continue;
             if (!entity.isCheck) continue;
 
             if (entity.isThread) {
-                WKChannel channel = new WKChannel(entity.threadChannelId, WKChannelType.COMMUNITY_TOPIC);
-                channel.channelName = entity.threadName;
-                list.add(channel);
+                if (addedIds.add(entity.threadChannelId)) {
+                    WKChannel channel = new WKChannel(entity.threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+                    channel.channelName = entity.threadName;
+                    list.add(channel);
+                }
             } else if (entity.uiConveursationMsg != null && entity.uiConveursationMsg.getWkChannel() != null) {
-                list.add(entity.uiConveursationMsg.getWkChannel());
+                if (addedIds.add(entity.uiConveursationMsg.getWkChannel().channelID)) {
+                    list.add(entity.uiConveursationMsg.getWkChannel());
+                }
             }
         }
 
@@ -129,6 +135,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     @Override
     protected void initPresenter() {
         isChoose = getIntent().getBooleanExtra("isChoose", false);
+        singleSelect = getIntent().getBooleanExtra("singleSelect", false);
     }
 
     @Override
@@ -187,8 +194,18 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             boolean isSelect = !chooseChatEntity.isBan && !chooseChatEntity.isForbidden;
             if (isSelect) {
                 chooseChatEntity.isCheck = !chooseChatEntity.isCheck;
+                if (singleSelect && chooseChatEntity.isCheck) {
+                    // 单选模式：取消其他已选项
+                    for (int j = 0, s = chooseChatAdapter.getData().size(); j < s; j++) {
+                        ChooseChatEntity other = chooseChatAdapter.getData().get(j);
+                        if (other != chooseChatEntity && other.isCheck) {
+                            other.isCheck = false;
+                            adapter.notifyItemChanged(j + adapter.getHeaderLayoutCount(), other);
+                        }
+                    }
+                }
                 int selectCount = getSelectedCount();
-                if (chooseChatEntity.isCheck && selectCount > 9) {
+                if (!singleSelect && chooseChatEntity.isCheck && selectCount > 9) {
                     chooseChatEntity.isCheck = false;
                     showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), 9));
                     adapter.notifyItemChanged(position + adapter.getHeaderLayoutCount());
@@ -406,7 +423,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             CategoryEntity defaultCategory = null;
             for (CategoryEntity category : categoryList) {
                 if (category.groups == null) continue;
-                if (category.category_id == null) {
+                if (category.is_default) {
                     defaultCategory = category;
                 } else {
                     userCategories.add(category);

@@ -1410,12 +1410,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 私聊 tab (1): channelType == PERSONAL，无分组
      */
     private void filterAndDisplay() {
+        if (chatConversationAdapter == null || getActivity() == null) return;
         if (currentTab == 0) {
             // 群聊 tab：按 category 分组显示
             // 1. 建立 channelId → ChatConversationMsg 映射
             HashMap<String, ChatConversationMsg> channelMap = new HashMap<>();
-            for (ChatConversationMsg msg : allConversations) {
-                if (msg.uiConversationMsg == null || msg.uiConversationMsg.channelType != WKChannelType.GROUP)
+            List<ChatConversationMsg> snapshot = new ArrayList<>(allConversations);
+            for (ChatConversationMsg msg : snapshot) {
+                if (msg == null || msg.uiConversationMsg == null || msg.uiConversationMsg.channelType != WKChannelType.GROUP)
                     continue;
                 channelMap.put(msg.uiConversationMsg.channelID, msg);
             }
@@ -1425,8 +1427,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // 2. 用户自建分组排在前面，未分组（category_id == null）排在最后
             List<CategoryEntity> userCategories = new ArrayList<>();
             CategoryEntity defaultCategory = null;
-            for (CategoryEntity category : categoryList) {
-                if (category.groups == null) continue;
+            List<CategoryEntity> categories = new ArrayList<>(categoryList);
+            for (CategoryEntity category : categories) {
+                if (category == null || category.groups == null) continue;
                 if (category.category_id == null) {
                     defaultCategory = category;
                 } else {

@@ -158,6 +158,7 @@
 #----------登录模块---------------
 -keep class com.chat.login.entity.** { *; }
 #----------uikit模块--------------
+-keep class com.chat.uikit.category.** { *; }
 -keep class com.chat.uikit.contacts.FriendUIEntity { *; }
 -keep class com.chat.uikit.chat.msgmodel.** { *; }
 -keep class com.chat.uikit.enity.** { *; }

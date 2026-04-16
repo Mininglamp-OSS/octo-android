@@ -20,6 +20,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -84,6 +85,7 @@ import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
 import com.chat.base.msgcontent.WKFileContent;
 import com.chat.uikit.chat.provider.WKFileProvider;
+import com.chat.uikit.chat.provider.WKVideoProvider;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
@@ -260,6 +262,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_CARD, new WKCardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_FILE, new WKFileProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VIDEO, new WKVideoProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
@@ -269,6 +272,7 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_MULTIPLE_FORWARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_FILE, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VIDEO, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod("uikit_sql", EndpointCategory.wkDBMenus, object -> new DBMenu("uikit_sql"));
         //注册消息长按菜单配置
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false, false));
@@ -850,6 +854,13 @@ public class WKUIKitApplication {
             avatarView.setVisibility(View.GONE);
         }
 
+        FrameLayout videoPreviewLayout = view.findViewById(R.id.videoPreviewLayout);
+        ImageView videoCoverIv = view.findViewById(R.id.videoCoverIv);
+        LinearLayout filePreviewLayout = view.findViewById(R.id.filePreviewLayout);
+        ImageView filePreviewIconIv = view.findViewById(R.id.filePreviewIconIv);
+        TextView filePreviewNameTv = view.findViewById(R.id.filePreviewNameTv);
+        TextView filePreviewSizeTv = view.findViewById(R.id.filePreviewSizeTv);
+
         if (messageContentList.size() == 1) {
             WKMessageContent messageContent = messageContentList.get(0);
             if (messageContent.type == WKContentType.WK_IMAGE) {
@@ -864,7 +875,6 @@ public class WKUIKitApplication {
                     showUrl = imgMsgModel.localPath;
                     File file = new File(showUrl);
                     if (!file.exists()) {
-                        //如果本地文件被删除就显示网络图片
                         showUrl = WKApiConfig.getShowUrl(imgMsgModel.url);
                     }
                 } else {
@@ -872,6 +882,33 @@ public class WKUIKitApplication {
                 }
                 GlideUtils.getInstance().showImg(context, showUrl, ints[0], ints[1], imageView);
                 imageView.setVisibility(View.VISIBLE);
+                contentTv.setVisibility(View.GONE);
+            } else if (messageContent.type == WKContentType.WK_VIDEO) {
+                WKVideoContent videoContent = (WKVideoContent) messageContent;
+                int[] ints = ImageUtils.getInstance().getImageWidthAndHeightToTalk(videoContent.width, videoContent.height);
+                ViewGroup.LayoutParams coverParams = videoCoverIv.getLayoutParams();
+                coverParams.width = ints[0];
+                coverParams.height = ints[1];
+                videoCoverIv.setLayoutParams(coverParams);
+                String coverUrl = "";
+                if (!TextUtils.isEmpty(videoContent.coverLocalPath)) {
+                    File f = new File(videoContent.coverLocalPath);
+                    if (f.exists()) coverUrl = videoContent.coverLocalPath;
+                }
+                if (TextUtils.isEmpty(coverUrl) && !TextUtils.isEmpty(videoContent.cover)) {
+                    coverUrl = WKApiConfig.getShowUrl(videoContent.cover);
+                }
+                GlideUtils.getInstance().showImg(context, coverUrl, ints[0], ints[1], videoCoverIv);
+                videoPreviewLayout.setVisibility(View.VISIBLE);
+                imageView.setVisibility(View.GONE);
+                contentTv.setVisibility(View.GONE);
+            } else if (messageContent instanceof WKFileContent) {
+                WKFileContent fileContent = (WKFileContent) messageContent;
+                filePreviewNameTv.setText(fileContent.name != null ? fileContent.name : "");
+                filePreviewSizeTv.setText(WKFileProvider.formatFileSize(fileContent.size));
+                WKFileProvider.setFileIcon(filePreviewIconIv, fileContent.extension, fileContent.name);
+                filePreviewLayout.setVisibility(View.VISIBLE);
+                imageView.setVisibility(View.GONE);
                 contentTv.setVisibility(View.GONE);
             } else {
                 String content = messageContent.getDisplayContent();

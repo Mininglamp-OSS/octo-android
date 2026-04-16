@@ -2,11 +2,13 @@ package com.dmwork.im
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.text.TextUtils
 import android.widget.Toast
 import com.chat.base.config.WKConfig
@@ -15,7 +17,9 @@ import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChooseChatMenu
 import com.chat.base.msgcontent.WKFileContent
+import com.chat.uikit.message.MsgModel
 import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKMessageContent
@@ -50,13 +54,21 @@ class ShareReceiveActivity : Activity() {
                 finish()
                 return@ChatChooseContacts
             }
+            val spaceId = MsgModel.getInstance().getCurrentSpaceId()
             for (channel in channelList) {
                 for (content in messageContents) {
+                    // DM 消息注入 spaceId
+                    if (!TextUtils.isEmpty(spaceId) && channel.channelType == WKChannelType.PERSONAL) {
+                        content.spaceId = spaceId
+                    }
                     val options = WKSendOptions()
                     options.setting.receipt = channel.receipt
                     WKIM.getInstance().msgManager.sendWithOptions(content, channel, options)
                 }
             }
+            val toast = Toast.makeText(this@ShareReceiveActivity, R.string.is_forward, Toast.LENGTH_SHORT)
+            toast.setGravity(Gravity.CENTER, 0, 0)
+            toast.show()
             finish()
         }, messageContents)
 
@@ -144,6 +156,16 @@ class ShareReceiveActivity : Activity() {
                     video.second = (retriever.extractMetadata(
                         MediaMetadataRetriever.METADATA_KEY_DURATION
                     )?.toLongOrNull() ?: 0L) / 1000
+                    // 提取视频第一帧作为封面
+                    val coverBitmap = retriever.getFrameAtTime(0)
+                    if (coverBitmap != null) {
+                        val coverFile = File(cacheDir, "share/${System.currentTimeMillis()}_cover.jpg")
+                        FileOutputStream(coverFile).use { out ->
+                            coverBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                        }
+                        video.coverLocalPath = coverFile.absolutePath
+                        coverBitmap.recycle()
+                    }
                     retriever.release()
                 } catch (_: Exception) { }
                 video
@@ -179,14 +201,36 @@ class ShareReceiveActivity : Activity() {
 
     private fun getFileName(uri: Uri): String {
         var name: String? = null
+        // 1. 从 ContentResolver 查询 DISPLAY_NAME
         if (uri.scheme == "content") {
-            val cursor = contentResolver.query(uri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex >= 0) {
-                        name = it.getString(nameIndex)
+            try {
+                val cursor = contentResolver.query(
+                    uri,
+                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                    null, null, null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex >= 0) {
+                            name = it.getString(nameIndex)
+                        }
                     }
+                }
+            } catch (_: Exception) { }
+        }
+        // 2. 如果拿到的名字看起来像 hash（微信常见），尝试从 Intent extras 获取原始文件名
+        if (!name.isNullOrBlank() && looksLikeHash(name!!)) {
+            val ext = name!!.substringAfterLast('.', "")
+            val betterName = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+                ?: intent.getStringExtra(Intent.EXTRA_TITLE)
+                ?: intent.clipData?.description?.label?.toString()
+            if (!betterName.isNullOrBlank()) {
+                // 确保带上扩展名
+                name = if (ext.isNotEmpty() && !betterName.endsWith(".$ext", ignoreCase = true)) {
+                    "$betterName.$ext"
+                } else {
+                    betterName
                 }
             }
         }
@@ -194,5 +238,12 @@ class ShareReceiveActivity : Activity() {
             name = uri.lastPathSegment ?: "shared_file"
         }
         return name!!
+    }
+
+    /** 判断文件名主体部分是否像 hash（32位十六进制 或 hash+时间戳） */
+    private fun looksLikeHash(fileName: String): Boolean {
+        val baseName = fileName.substringBeforeLast('.')
+        // 32位纯hex（MD5）或 hex+时间戳数字（微信常见格式）
+        return baseName.matches(Regex("^[0-9a-fA-F]{32,}[_\\-]?\\d*$"))
     }
 }

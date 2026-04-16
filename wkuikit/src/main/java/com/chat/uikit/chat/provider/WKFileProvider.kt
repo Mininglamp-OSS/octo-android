@@ -273,6 +273,7 @@ class WKFileProvider : WKChatBaseProvider() {
             }
             imageView.setImageResource(iconRes)
         }
+        @JvmStatic
         fun formatFileSize(size: Long): String {
             return when {
                 size < 1024 -> "$size B"

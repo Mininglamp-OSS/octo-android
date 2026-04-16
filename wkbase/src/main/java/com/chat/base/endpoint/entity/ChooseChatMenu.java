@@ -24,6 +24,6 @@ public class ChooseChatMenu {
 
     public ChooseChatMenu(ChatChooseContacts mChatChooseContacts, List<WKMessageContent> list) {
         this.mChatChooseContacts = mChatChooseContacts;
-        this.list = list;
+        this.list = new ArrayList<>(list);
     }
 }

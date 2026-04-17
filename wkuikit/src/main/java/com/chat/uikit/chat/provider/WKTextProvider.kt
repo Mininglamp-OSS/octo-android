@@ -135,6 +135,7 @@ open class WKTextProvider : WKChatBaseProvider() {
 
         // 渲染文本和表格卡片（按原始顺序交叉排列）
         renderTableCards(contentTvLayout, contentTv, textColor, uiChatMsgItemEntity)
+
 //        val preText =  PrecomputedTextCompat.create(
 //            uiChatMsgItemEntity.displaySpans,
 //            TextViewCompat.getTextMetricsParams(contentTv)
@@ -201,6 +202,11 @@ open class WKTextProvider : WKChatBaseProvider() {
 
         // 无表格：直接设置全部文本
         if (tableDataList.isNullOrEmpty()) {
+            // 修复：Markwon 的 OrderedListItemSpan.margin 初始为 0，
+            // 必须在 setText 前调用 measure() 用 textView 的 Paint 预计算列表序号宽度，
+            // 否则首次 StaticLayout 创建时 getLeadingMargin() 返回过小的缩进值，
+            // 导致行断点偏右、文字右侧被截断。
+            io.noties.markwon.core.spans.OrderedListItemSpan.measure(contentTv, displaySpans)
             contentTv.text = displaySpans
             return
         }

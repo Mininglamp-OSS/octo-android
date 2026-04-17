@@ -633,6 +633,10 @@ public class MsgModel extends WKBaseModel {
                     String loginUID = WKConfig.getInstance().getUid();
                     List<WKReminder> list = new ArrayList<>();
                     for (WKSyncReminder reminder : result) {
+                        // 对齐 iOS：只保留属于当前用户的提醒，过滤掉同名用户（如 "张乾" vs "张乾1"）
+                        if (!TextUtils.isEmpty(reminder.uid) && !reminder.uid.equals(loginUID)) {
+                            continue;
+                        }
                         WKReminder WKReminder = syncReminderToReminder(reminder);
                         if (!TextUtils.isEmpty(reminder.publisher) && reminder.publisher.equals(loginUID)) {
                             WKReminder.done = 1;

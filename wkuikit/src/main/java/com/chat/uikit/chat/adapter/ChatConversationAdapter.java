@@ -1238,6 +1238,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void convertSectionHeader(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
         TextView titleTv = helper.getView(R.id.sectionTitle);
         TextView countTv = helper.getView(R.id.sectionCount);
+        TextView mentionTv = helper.getView(R.id.sectionMentionTv);
         ImageView arrowIv = helper.getView(R.id.sectionArrow);
         View divider = helper.getView(R.id.sectionDivider);
 
@@ -1255,6 +1256,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             countTv.setVisibility(View.VISIBLE);
         } else {
             countTv.setVisibility(View.GONE);
+        }
+
+        // 折叠时显示 @mention 提醒（对齐 iOS [有人@我]）
+        if (collapsed && msg.sectionHasMention) {
+            mentionTv.setText(getContext().getString(R.string.last_msg_remind));
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
         }
 
         // 空分组点不开

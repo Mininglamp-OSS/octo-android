@@ -34,6 +34,7 @@ public class ChatConversationMsg {
     public String sectionId;
     public String sectionTitle;
     public int sectionGroupCount = -1;
+    public boolean sectionHasMention = false;
 
     public ChatConversationMsg(WKUIConversationMsg msg) {
         this.uiConversationMsg = msg;

@@ -49,12 +49,14 @@ import com.chat.uikit.R;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.message.MessageHandler;
 import com.xinbida.wukongim.db.ReminderDBManager;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMentionType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
@@ -628,11 +630,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 }
             }
         }
-        // 也检查子区的 @mention（子区提醒 channel 格式为 groupNo____threadId）
-        if (!hasMention && conversationMsg.uiConversationMsg != null) {
-            hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
-                    conversationMsg.uiConversationMsg.channelID, WKMentionType.WKReminderTypeMentionMe);
-        }
         if (!hasMention) {
             contentTv.setVisibility(View.GONE);
             return;
@@ -1034,8 +1031,53 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             threadLoadingSet.remove(groupNo);
             List<ThreadEntity> result = (list != null) ? list : new ArrayList<>();
             threadDataCache.put(groupNo, result);
+            // 对齐 iOS：子区加载后检查 @所有人消息，补创建本地 reminder
+            // saveOrUpdateReminders 会自动触发 addOnNewReminderListener → filterAndDisplay
+            checkThreadMentionAll(groupNo, result);
             AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));
         });
+    }
+
+    /**
+     * 子区加载后检查 @所有人：遍历有未读的子区，查本地会话最后一条消息的 mentionAll，
+     * 如果有且无对应 reminder，则创建本地 reminder（对齐 iOS 客户端补偿逻辑）。
+     * @return 是否创建了新的 reminder
+     */
+    private boolean checkThreadMentionAll(String groupNo, List<ThreadEntity> threads) {
+        String loginUID = WKConfig.getInstance().getUid();
+        boolean created = false;
+        for (ThreadEntity entity : threads) {
+            if (entity.status != 1 || entity.unread_count <= 0) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            // 已有 reminder 就跳过
+            if (hasThreadMentionForChannel(threadChannelId)) continue;
+            // 查本地会话的最后一条消息
+            WKConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getWithChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            if (conv == null || TextUtils.isEmpty(conv.lastClientMsgNO)) continue;
+            WKMsg lastMsg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(conv.lastClientMsgNO);
+            if (lastMsg == null) continue;
+            // 解析消息内容（DB 取出的消息可能未解析 baseContentMsgModel）
+            lastMsg = MessageHandler.getInstance().parsingMsg(lastMsg);
+            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+                    && !TextUtils.isEmpty(lastMsg.fromUID) && !lastMsg.fromUID.equals(loginUID)) {
+                WKReminder reminder = new WKReminder();
+                reminder.reminderID = lastMsg.messageSeq;
+                reminder.messageID = lastMsg.messageID;
+                reminder.messageSeq = lastMsg.messageSeq;
+                reminder.channelID = threadChannelId;
+                reminder.channelType = WKChannelType.COMMUNITY_TOPIC;
+                reminder.type = WKMentionType.WKReminderTypeMentionMe;
+                reminder.publisher = lastMsg.fromUID;
+                reminder.isLocate = 1;
+                reminder.done = 0;
+                reminder.version = 0;
+                WKIM.getInstance().getReminderManager().saveOrUpdateReminders(
+                        java.util.Collections.singletonList(reminder));
+                created = true;
+            }
+        }
+        return created;
     }
 
     /**

@@ -1001,9 +1001,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         }
                     }
                 }
-                // 2. 检查该群下子区的 reminders（通过 adapter 的子区缓存）
+                // 2. 检查该群下子区的 reminders（直接查 DB，不依赖 threadDataCache）
                 if (!hasMention) {
-                    hasMention = chatConversationAdapter.hasThreadMention(item.uiConversationMsg.channelID);
+                    hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                            item.uiConversationMsg.channelID, WKMentionType.WKReminderTypeMentionMe);
                 }
             }
             if (hasMention) break;
@@ -1429,6 +1430,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             setAllCount();
             scrollToPositionIfNearTop(0);
             syncSpaceKeysToGlobal();
+            // 延迟重检 @提醒：冷启动时 reminder 创建可能晚于会话列表渲染
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                updateGroupMentionBadge();
+                filterAndDisplay();
+            }, 1500);
         });
     }
 

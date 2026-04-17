@@ -80,6 +80,7 @@ import com.xinbida.wukongim.entity.WKMsgSetting
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKTextContent
+import org.json.JSONObject
 import java.io.File
 import java.util.Objects
 import java.util.regex.Pattern
@@ -133,52 +134,110 @@ open class WKTextProvider : WKChatBaseProvider() {
         contentTv.setTextColor(textColor)
         contentTv.movementMethod = LinkMovementMethod.getInstance()
 
-        // 渲染文本和表格卡片（按原始顺序交叉排列）
-        renderTableCards(contentTvLayout, contentTv, textColor, uiChatMsgItemEntity)
+        // 检测链接卡片消息
+        val rawText = (uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKTextContent)?.content ?: ""
+        val isLinkCard = rawText.startsWith(LINK_PREFIX)
+        if (isLinkCard) {
+            renderLinkCard(contentTvLayout, contentTv, uiChatMsgItemEntity)
+        } else {
+            // 非链接消息：恢复 contentTv 可见性 & 清除旧链接卡片（RecyclerView 复用）
+            contentTv.visibility = View.VISIBLE
+            removeDynamicViews(contentTvLayout, LINK_CARD_TAG)
 
-//        val preText =  PrecomputedTextCompat.create(
-//            uiChatMsgItemEntity.displaySpans,
-//            TextViewCompat.getTextMetricsParams(contentTv)
-//        )
-//
-//        TextViewCompat.setPrecomputedText(contentTv, preText)
-//
-//
-//        fun AppCompatTextView.setTextFuture(charSequence: CharSequence){
-//            this.setTextFuture(PrecomputedTextCompat.getTextFuture(
-//                charSequence,
-//                TextViewCompat.getTextMetricsParams(this),
-//                null
-//            ))
-//        }
-//
-//        contentTv.setTextFuture(uiChatMsgItemEntity.displaySpans)
+            // 渲染文本和表格卡片（按原始顺序交叉排列）
+            renderTableCards(contentTvLayout, contentTv, textColor, uiChatMsgItemEntity)
 
-        // 链接识别
-//        val urls = StringUtils.getStrUrls(contentTv.text.toString())
-//        if (urls.size > 0) {
-//            showLinkInfo(uiChatMsgItemEntity, msgTimeView, linkView, from, urls[urls.size - 1])
-//        } else {
-//            linkView.visibility = View.GONE
-//            msgTimeView.visibility = View.VISIBLE
-//        }
+            selectText(contentTv, contentTvLayout, uiChatMsgItemEntity)
 
-        //setSelectableTextHelper(contentTv,0,true)
-        selectText(contentTv, contentTvLayout, uiChatMsgItemEntity)
+            // Bot 命令按钮：检测消息中的 /approve 和 /reject 命令，渲染为可点击按钮
+            setupBotCommandButtons(contentTv, contentTvLayout, uiChatMsgItemEntity)
+        }
+
+        // 引用回复：链接卡片和普通文本都需要渲染
         if (uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply != null && uiChatMsgItemEntity.wkMsg.baseContentMsgModel.reply.payload != null) {
             replyView(contentTvLayout, from, uiChatMsgItemEntity)
         }
-
-        // Bot 命令按钮：检测消息中的 /approve 和 /reject 命令，渲染为可点击按钮
-        setupBotCommandButtons(contentTv, contentTvLayout, uiChatMsgItemEntity)
     }
 
     companion object {
         private val CMD_PATTERN: Pattern = Pattern.compile("/(approve|reject)\\s+\\S+(?:\\s+\\S+)?")
         private const val BOT_BUTTONS_TAG = "bot_cmd_buttons"
         private const val TABLE_CARD_TAG = "table_card"
+        private const val LINK_CARD_TAG = "link_card"
+        private const val LINK_PREFIX = "[链接]"
         // 记录已操作的消息，防止 RecyclerView 复用时按钮状态丢失
         private val handledMsgIds = HashSet<String>()
+    }
+
+    private fun removeDynamicViews(parent: ViewGroup, tag: String) {
+        val toRemove = mutableListOf<View>()
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            if (child.tag == tag) {
+                toRemove.add(child)
+            }
+        }
+        toRemove.forEach { parent.removeView(it) }
+    }
+
+    private fun renderLinkCard(
+        contentTvLayout: BubbleLayout,
+        contentTv: EmojiTextView,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity
+    ) {
+        // 清除旧的动态 View（RecyclerView 复用）
+        removeDynamicViews(contentTvLayout, LINK_CARD_TAG)
+        removeDynamicViews(contentTvLayout, TABLE_CARD_TAG)
+
+        val rawText = (uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKTextContent)?.content ?: ""
+        val jsonStr = rawText.removePrefix(LINK_PREFIX)
+        val json = try {
+            JSONObject(jsonStr)
+        } catch (_: Exception) {
+            contentTv.text = rawText
+            return
+        }
+
+        val title = json.optString("title", "")
+        val url = json.optString("url", "")
+        val icon = json.optString("icon", "")
+
+        // 隐藏原有文本视图
+        contentTv.visibility = View.GONE
+
+        val cardView = LayoutInflater.from(context).inflate(R.layout.layout_link_card, contentTvLayout, false)
+        cardView.tag = LINK_CARD_TAG
+
+        val titleTv = cardView.findViewById<TextView>(R.id.titleTv)
+        val urlTv = cardView.findViewById<TextView>(R.id.urlTv)
+        val webLabelTv = cardView.findViewById<TextView>(R.id.webLabelTv)
+        val faviconIv = cardView.findViewById<ImageView>(R.id.faviconIv)
+
+        titleTv.text = title.ifEmpty {
+            try {
+                android.net.Uri.parse(url).host ?: url
+            } catch (_: Exception) {
+                url
+            }
+        }
+        urlTv.text = try {
+            android.net.Uri.parse(url).host ?: url
+        } catch (_: Exception) {
+            url
+        }
+        webLabelTv.text = "网页"
+
+        if (icon.isNotEmpty()) {
+            GlideUtils.getInstance().showImg(context, icon, faviconIv)
+        }
+
+        cardView.setOnClickListener {
+            val intent = Intent(context, WKWebViewActivity::class.java)
+            intent.putExtra("url", url)
+            context.startActivity(intent)
+        }
+
+        contentTvLayout.addView(cardView)
     }
 
     private fun renderTableCards(

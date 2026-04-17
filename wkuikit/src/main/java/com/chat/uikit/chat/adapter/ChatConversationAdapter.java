@@ -344,6 +344,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (TextUtils.isEmpty(content) || WKContentType.isSystemMsg(msg.type)) {
             content = getShowContent(msg.content);
         }
+        // 链接卡片消息：显示友好预览
+        if (content != null && content.startsWith("[链接]")) {
+            content = parseLinkPreview(content);
+        }
         // 截屏消息：SDK 不认识 type=20，baseModel.getDisplayContent() 返回"未知消息"，需要覆盖
         if (msg.type == WKContentType.screenshot) {
             String name;
@@ -392,6 +396,25 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private String getShowContent(String contentJson) {
         return StringUtils.getShowContent(getContext(), contentJson);
+    }
+
+    private String parseLinkPreview(String content) {
+        try {
+            String jsonStr = content.substring("[链接]".length());
+            org.json.JSONObject json = new org.json.JSONObject(jsonStr);
+            String title = json.optString("title", "");
+            if (!TextUtils.isEmpty(title)) {
+                return "[链接] " + title;
+            }
+            String url = json.optString("url", "");
+            if (!TextUtils.isEmpty(url)) {
+                android.net.Uri uri = android.net.Uri.parse(url);
+                String host = uri.getHost();
+                return "[链接] " + (host != null ? host : url);
+            }
+        } catch (Exception ignored) {
+        }
+        return "[链接]";
     }
 
     private void setStatus(BaseViewHolder helper, WKUIConversationMsg item, boolean isPlayAnimation) {

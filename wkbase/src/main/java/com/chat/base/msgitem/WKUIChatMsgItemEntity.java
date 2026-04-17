@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -40,6 +41,7 @@ import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.WKIMApplication;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -107,6 +109,11 @@ public class WKUIChatMsgItemEntity {
 
         String rawContent = getContent();
         Activity context = conversationContext.getChatActivity();
+
+        // 深色模式下自己发送的消息气泡背景较深，@mention 使用白色以保证可读性
+        boolean isSelfDarkBubble = Theme.isDark()
+                && TextUtils.equals(wkMsg.fromUID, WKIMApplication.getInstance().getUid());
+        int mentionColor = isSelfDarkBubble ? Color.WHITE : Theme.colorAccount;
 
         // Markwon 渲染：将 Markdown 语法转为 Android Spans，同时提取表格数据
         Pair<Spanned, List<WKTableData>> result = WKMarkwonProvider.toMarkdownWithTables(context, rawContent);
@@ -274,7 +281,7 @@ public class WKUIChatMsgItemEntity {
                         String finalGroupNo = groupNo;
                         String content = uid;
                         if (!TextUtils.isEmpty(groupNo)) content = content + "|" + groupNo;
-                        nameSpan.setSpan(new NormalClickableSpan(false, Theme.colorAccount, new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, content), view -> {
+                        nameSpan.setSpan(new NormalClickableSpan(false, mentionColor, new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, content), view -> {
                             if (iLinkClick != null) {
                                 iLinkClick.onShowUserDetail(uid, finalGroupNo);
                             }
@@ -312,12 +319,12 @@ public class WKUIChatMsgItemEntity {
             String currentText = displaySpans.toString();
             int index = currentText.indexOf(mentionAll);
             if (index >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(Theme.colorAccount), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
             int index1 = currentText.indexOf(mentionAll1);
             if (index1 >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(Theme.colorAccount), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
@@ -383,9 +390,9 @@ public class WKUIChatMsgItemEntity {
                         String content = entity.value;
                         if (!TextUtils.isEmpty(groupNo)) content = content + "|" + groupNo;
                         String finalGroupNo = groupNo;
-                        nameSpan.setSpan(new NormalClickableSpan(false, Theme.colorAccount, new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, content), view -> iLinkClick.onShowUserDetail(entity.value, finalGroupNo)), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        nameSpan.setSpan(new NormalClickableSpan(false, mentionColor, new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, content), view -> iLinkClick.onShowUserDetail(entity.value, finalGroupNo)), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     } else {
-                        nameSpan.setSpan(new ForegroundColorSpan(Theme.colorAccount), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        nameSpan.setSpan(new ForegroundColorSpan(mentionColor), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     }
 
                     displaySpans.replace(start, end, nameSpan);
@@ -394,7 +401,7 @@ public class WKUIChatMsgItemEntity {
         }
         // 自动检测 @mention：对没有 entity 标记的 @xxx 文本，匹配群成员/联系人（与 iOS detectMentionsInText 一致）
         if ((wkMsg.channelType == WKChannelType.GROUP || wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) && iLinkClick != null) {
-            detectAndApplyMentions(conversationContext, wkMsg);
+            detectAndApplyMentions(conversationContext, wkMsg, mentionColor);
         }
     }
 
@@ -419,7 +426,7 @@ public class WKUIChatMsgItemEntity {
      * 自动检测文本中的 @mention，匹配群成员或联系人，添加可点击 span。
      * 仅处理没有被 entity mention 覆盖的 @xxx 文本。
      */
-    private void detectAndApplyMentions(IConversationContext conversationContext, WKMsg wkMsg) {
+    private void detectAndApplyMentions(IConversationContext conversationContext, WKMsg wkMsg, int mentionColor) {
         String text = displaySpans.toString();
         Pattern pattern = Pattern.compile("@(\\S+)");
         Matcher m = pattern.matcher(text);
@@ -469,7 +476,7 @@ public class WKUIChatMsgItemEntity {
                 String finalUID = matchedUID;
                 displaySpans.setSpan(new StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 String clickContent = matchedUID + "|" + groupNo;
-                displaySpans.setSpan(new NormalClickableSpan(false, Theme.colorAccount,
+                displaySpans.setSpan(new NormalClickableSpan(false, mentionColor,
                         new NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, clickContent),
                         view -> iLinkClick.onShowUserDetail(finalUID, groupNo)), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }

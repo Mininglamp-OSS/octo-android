@@ -10,6 +10,7 @@ import com.xinbida.wukongim.db.ConversationDbManager;
 import com.xinbida.wukongim.db.MsgDbManager;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSyncMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.interfaces.IReceivedMsgListener;
@@ -532,6 +533,24 @@ public class MessageHandler {
                 //如果存在艾特情况直接将消息存储
                 WKUIConversationMsg conversationMsg = ConversationDbManager.getInstance().insertOrUpdateWithMsg(lastMsg, 1);
                 WKIM.getInstance().getConversationManager().setOnRefreshMsg(conversationMsg, "cutData");
+                // 对齐 iOS WKChatManager：@所有人 时客户端本地创建 reminder（服务端不为 @所有人 生成 reminder）
+                if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+                        && !TextUtils.isEmpty(lastMsg.fromUID)
+                        && !lastMsg.fromUID.equals(WKIMApplication.getInstance().getUid())) {
+                    WKReminder reminder = new WKReminder();
+                    reminder.reminderID = lastMsg.messageSeq;
+                    reminder.messageID = lastMsg.messageID;
+                    reminder.messageSeq = lastMsg.messageSeq;
+                    reminder.channelID = lastMsg.channelID;
+                    reminder.channelType = lastMsg.channelType;
+                    reminder.type = 1; // WKReminderTypeMentionMe
+                    reminder.publisher = lastMsg.fromUID;
+                    reminder.isLocate = 1;
+                    reminder.done = 0;
+                    reminder.version = 0;
+                    WKIM.getInstance().getReminderManager().saveOrUpdateReminders(
+                            java.util.Collections.singletonList(reminder));
+                }
                 continue;
             }
 

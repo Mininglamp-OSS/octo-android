@@ -68,6 +68,7 @@ import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.space.SpacePopupWindow;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
@@ -547,26 +548,27 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
         });
         WKIM.getInstance().getReminderManager().addOnNewReminderListener("chat_fragment", list -> {
-            if (WKReader.isEmpty(list) || WKReader.isEmpty(chatConversationAdapter.getData()))
-                return;
-            for (WKReminder reader : list) {
-                for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
-                    if (reader.done == 0
-                            && !TextUtils.isEmpty(reader.messageID)
-                            && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null
-                            && !TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().messageID)
-                            && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null
-                            && reader.messageID.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().messageID)) {
-                        chatConversationAdapter.getData().get(i).isResetReminders = true;
-                        notifyRecycler(i, chatConversationAdapter.getData().get(i));
-                        break;
-                    }
+            if (WKReader.isEmpty(list)) return;
+            // 对齐 iOS updateConversations：收集受影响的 channelID，重置会话对象的 reminderList 缓存
+            Set<String> affectedChannels = new HashSet<>();
+            for (WKReminder r : list) {
+                if (!TextUtils.isEmpty(r.channelID)) {
+                    affectedChannels.add(r.channelID);
                 }
             }
-            updateGroupMentionBadge();
-            // 提醒到达后重建 section header 的 @mention 状态
-            filterAndDisplay();
+            AndroidUtilities.runOnUIThread(() -> {
+                // 重置受影响会话的 reminderList 为 null，下次 getReminderList() 会从 DB 重新读取
+                for (ChatConversationMsg msg : allConversations) {
+                    if (msg.isSectionHeader || msg.uiConversationMsg == null) continue;
+                    if (affectedChannels.contains(msg.uiConversationMsg.channelID)) {
+                        msg.uiConversationMsg.setReminderList(null);
+                        msg.isResetReminders = true;
+                    }
+                }
+                // 刷新 UI
+                updateGroupMentionBadge();
+                filterAndDisplay();
+            });
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
@@ -1449,8 +1451,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
-            // 检查子区
-            if (chatConversationAdapter.hasThreadMention(cg.group_no)) {
+            // 检查子区：直接查 DB（不依赖 threadDataCache，冷启动时可能为空）
+            if (ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                    cg.group_no, WKMentionType.WKReminderTypeMentionMe)) {
                 return true;
             }
         }

@@ -62,6 +62,17 @@ public class ReminderDBManager {
     }
 
     /**
+     * 查询指定父群下所有子区的未完成提醒（channel_id LIKE 'groupNo____%'）
+     */
+    public boolean hasUndoneReminderWithChannelPrefix(String groupNo, int reminderType) {
+        String prefix = groupNo + "____%";
+        String sql = "select 1 from " + reminders + " where channel_id LIKE ? and done=0 and type=? limit 1";
+        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{prefix, reminderType})) {
+            return cursor != null && cursor.moveToFirst();
+        }
+    }
+
+    /**
      * 同步查询（仅供后台线程使用）
      *
      * @deprecated 建议使用 queryWithChannelAndDoneAsync 避免 ANR

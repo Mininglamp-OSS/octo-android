@@ -21,6 +21,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
@@ -662,15 +663,16 @@ public class MsgModel extends WKBaseModel {
 
     public void doneReminder(List<Long> list) {
         if (WKReader.isEmpty(list)) return;
+        // 对齐 iOS：先更新本地 DB，再发 API
+        ReminderDBManager.getInstance().doneWithReminderIds(list);
+        WKIM.getInstance().getReminderManager().clearAllCache();
         request(createService(MsgService.class).doneReminder(list), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
-
             }
 
             @Override
             public void onFail(int code, String msg) {
-
             }
         });
     }

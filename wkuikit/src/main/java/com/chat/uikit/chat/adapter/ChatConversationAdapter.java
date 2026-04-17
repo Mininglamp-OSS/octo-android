@@ -49,6 +49,7 @@ import com.chat.uikit.R;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
@@ -626,6 +627,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     break;
                 }
             }
+        }
+        // 也检查子区的 @mention（子区提醒 channel 格式为 groupNo____threadId）
+        if (!hasMention && conversationMsg.uiConversationMsg != null) {
+            hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                    conversationMsg.uiConversationMsg.channelID, WKMentionType.WKReminderTypeMentionMe);
         }
         if (!hasMention) {
             contentTv.setVisibility(View.GONE);

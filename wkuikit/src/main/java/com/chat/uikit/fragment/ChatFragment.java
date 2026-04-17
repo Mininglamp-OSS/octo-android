@@ -73,6 +73,7 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
+import com.xinbida.wukongim.entity.WKMentionType;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
@@ -563,6 +564,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
+            updateGroupMentionBadge();
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
@@ -970,6 +972,39 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (tabActivity != null) {
             tabActivity.setMsgCount(0);
         }
+        updateGroupMentionBadge();
+    }
+
+    /**
+     * 检查群聊和子区会话中是否有未处理的 @mention 提醒，
+     * 有则在群聊 Tab 上显示 @ 角标。
+     */
+    private void updateGroupMentionBadge() {
+        if (segmentTabView == null) return;
+        boolean hasMention = false;
+        // 1. 遍历 allConversations 中的 GROUP 会话
+        List<ChatConversationMsg> source = allConversations.isEmpty()
+                ? chatConversationAdapter.getData() : allConversations;
+        for (ChatConversationMsg item : source) {
+            if (item.isSectionHeader) continue;
+            if (item.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                List<WKReminder> reminders = item.getReminders();
+                if (WKReader.isNotEmpty(reminders)) {
+                    for (WKReminder r : reminders) {
+                        if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
+                            hasMention = true;
+                            break;
+                        }
+                    }
+                }
+                // 2. 检查该群下子区的 reminders（通过 adapter 的子区缓存）
+                if (!hasMention) {
+                    hasMention = chatConversationAdapter.hasThreadMention(item.uiConversationMsg.channelID);
+                }
+            }
+            if (hasMention) break;
+        }
+        segmentTabView.setMentionBadge(0, hasMention, getString(R.string.last_msg_remind));
     }
 
     @Override

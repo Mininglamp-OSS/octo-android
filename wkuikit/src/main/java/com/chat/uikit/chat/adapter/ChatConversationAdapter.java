@@ -3,7 +3,10 @@ package com.chat.uikit.chat.adapter;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -52,6 +55,7 @@ import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMentionType;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 
@@ -207,6 +211,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             forbiddenIv.setVisibility(View.GONE);
         }
 
+        // @mention 提醒预览
+        showCompactReminders(helper, conversationMsg);
+
         // 长按事件
         addEvent(helper, item);
 
@@ -278,12 +285,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             convertCompact(baseViewHolder, chatConversationMsg);
             chatConversationMsg.isRefreshChannelInfo = false;
         }
-        // 紧凑模式不需要处理 time/typing/status/content/calling
+        // 内容或提醒变化时刷新紧凑行的 @mention 预览
+        if (chatConversationMsg.isResetContent || chatConversationMsg.isResetReminders) {
+            showCompactReminders(baseViewHolder, chatConversationMsg);
+            chatConversationMsg.isResetContent = false;
+            chatConversationMsg.isResetReminders = false;
+        }
+        // 紧凑模式不需要处理 time/typing/status/calling
         chatConversationMsg.isResetTime = false;
         chatConversationMsg.isResetTyping = false;
         chatConversationMsg.isRefreshStatus = false;
-        chatConversationMsg.isResetContent = false;
-        chatConversationMsg.isResetReminders = false;
     }
 
     public interface IListener {
@@ -578,6 +589,41 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         return item.uiConversationMsg.unreadCount;
     }
 
+    /**
+     * 群聊紧凑行：有 @mention 时显示 [有人@你] + 消息预览，否则隐藏
+     */
+    private void showCompactReminders(@NotNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        TextView contentTv = helper.getView(R.id.compactContentTv);
+        List<WKReminder> reminders = conversationMsg.getReminders();
+        boolean hasMention = false;
+        if (WKReader.isNotEmpty(reminders)) {
+            for (WKReminder r : reminders) {
+                if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
+                    hasMention = true;
+                    break;
+                }
+            }
+        }
+        if (!hasMention) {
+            contentTv.setVisibility(View.GONE);
+            return;
+        }
+        contentTv.setVisibility(View.VISIBLE);
+        String mentionTag = getContext().getString(R.string.last_msg_remind);
+        WKUIConversationMsg item = conversationMsg.uiConversationMsg;
+        String msgContent = getContent(item.getWkMsg());
+        String fromName = getFromName(item.channelType, item.getWkMsg());
+        String preview = TextUtils.isEmpty(fromName) ? msgContent : fromName + "：" + msgContent;
+
+        SpannableStringBuilder ssb = new SpannableStringBuilder();
+        ssb.append(mentionTag);
+        ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.reminderColor)),
+                0, mentionTag.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ssb.append(" ");
+        ssb.append(preview);
+        contentTv.setText(ssb);
+    }
+
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         String content;
         androidx.emoji2.widget.EmojiTextView contentTv = helper.getView(R.id.contentTv);
@@ -849,6 +895,24 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 unreadBadge.setVisibility(View.GONE);
             }
 
+            // @mention 提示
+            TextView mentionTv = rowView.findViewById(R.id.threadMentionTv);
+            boolean threadHasMention = hasThreadMentionForChannel(threadChannelId);
+            if (threadHasMention) {
+                String mentionTag = getContext().getString(R.string.last_msg_remind);
+                String lastMsg = "";
+                if (!TextUtils.isEmpty(entity.last_message_content)) {
+                    lastMsg = entity.last_message_content;
+                    if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
+                        lastMsg = entity.last_message_sender_name + ": " + lastMsg;
+                    }
+                }
+                mentionTv.setText(mentionTag + (TextUtils.isEmpty(lastMsg) ? "" : " " + lastMsg));
+                mentionTv.setVisibility(View.VISIBLE);
+            } else {
+                mentionTv.setVisibility(View.GONE);
+            }
+
             String finalThreadChannelId = threadChannelId;
             rowView.setOnClickListener(v -> {
                 if (threadPreviewClickListener != null) {
@@ -865,8 +929,30 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // "+N 个子区" 放在卡片外部
         if (activeList.size() > 2) {
             int moreCount = activeList.size() - 2;
+            // 检查未展示子区是否有 @mention
+            boolean moreMention = false;
+            for (int i = 2; i < activeList.size(); i++) {
+                String tcId = ThreadModel.getInstance().buildChannelId(groupNo, activeList.get(i).short_id);
+                if (hasThreadMentionForChannel(tcId)) {
+                    moreMention = true;
+                    break;
+                }
+            }
             TextView moreTv = new TextView(getContext());
-            moreTv.setText("+" + moreCount + " 个子区");
+            String moreText = "+" + moreCount + " 个子区";
+            if (moreMention) {
+                String mentionTag = getContext().getString(R.string.last_msg_remind);
+                SpannableStringBuilder ssb = new SpannableStringBuilder();
+                ssb.append(moreText);
+                ssb.append(" ");
+                int start = ssb.length();
+                ssb.append(mentionTag);
+                ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.reminderColor)),
+                        start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                moreTv.setText(ssb);
+            } else {
+                moreTv.setText(moreText);
+            }
             moreTv.setTextSize(13);
             moreTv.setTextColor(Theme.colorAccount);
             LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(
@@ -1011,6 +1097,38 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         };
         pendingRefreshTasks.put(groupNo, task);
         threadRefreshHandler.postDelayed(task, THREAD_REFRESH_DELAY_MS);
+    }
+
+    /**
+     * 检查指定群组的子区是否有未处理的 @mention 提醒
+     */
+    public boolean hasThreadMention(String groupNo) {
+        List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
+        if (cachedList == null || cachedList.isEmpty()) return false;
+        for (ThreadEntity entity : cachedList) {
+            if (entity.status != 1) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            if (hasThreadMentionForChannel(threadChannelId)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 检查指定子区 channelId 是否有未处理的 @mention 提醒（排除自己发的）
+     */
+    private boolean hasThreadMentionForChannel(String threadChannelId) {
+        String loginUID = WKConfig.getInstance().getUid();
+        List<WKReminder> reminders = WKIM.getInstance().getReminderManager()
+                .getReminders(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+        if (WKReader.isNotEmpty(reminders)) {
+            for (WKReminder r : reminders) {
+                if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0
+                        && (TextUtils.isEmpty(r.publisher) || !r.publisher.equals(loginUID))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

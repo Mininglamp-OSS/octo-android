@@ -16,16 +16,32 @@
         android:layout_marginEnd="4dp"
         android:src="@drawable/ic_thread" />
 
-    <TextView
-        android:id="@+id/threadNameTv"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:ellipsize="end"
-        android:lines="1"
-        android:textColor="@color/colorDark"
-        android:textSize="14sp"
-        android:fontFamily="sans-serif-medium" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/threadNameTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/colorDark"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/threadMentionTv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/reminderColor"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/threadUnreadBadge"

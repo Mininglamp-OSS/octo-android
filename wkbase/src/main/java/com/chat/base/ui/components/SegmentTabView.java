@@ -31,6 +31,7 @@ public class SegmentTabView extends LinearLayout {
     private final LinearLayout[] tabContainers = new LinearLayout[2];
     private final TextView[] tabs = new TextView[2];
     private final TextView[] badges = new TextView[2];
+    private final TextView[] mentionBadges = new TextView[2];
     private int selectedIndex = 0;
     private OnTabSelectedListener listener;
 
@@ -97,6 +98,21 @@ public class SegmentTabView extends LinearLayout {
             badgeLp.gravity = Gravity.CENTER_VERTICAL;
             container.addView(badge, badgeLp);
 
+            // mentionBadge — 红色文字 [有人@你]，和列表提醒风格统一
+            TextView mentionBadge = new TextView(context);
+            mentionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            mentionBadge.setTextColor(0xFFFF9500); // 橙色，区别于列表中的红色提醒
+            mentionBadge.setGravity(Gravity.CENTER);
+            mentionBadge.setIncludeFontPadding(false);
+            mentionBadge.getPaint().setFakeBoldText(true);
+            mentionBadge.setVisibility(GONE);
+            LayoutParams mentionLp = new LayoutParams(
+                    LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+            mentionLp.leftMargin = AndroidUtilities.dp(4);
+            mentionLp.gravity = Gravity.CENTER_VERTICAL;
+            container.addView(mentionBadge, mentionLp);
+            mentionBadges[i] = mentionBadge;
+
             LayoutParams lp = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
             container.setLayoutParams(lp);
 
@@ -144,6 +160,32 @@ public class SegmentTabView extends LinearLayout {
         } else {
             badge.setVisibility(GONE);
         }
+    }
+
+    /**
+     * 设置指定 tab 的 @mention 提示文字。
+     * @param tabIndex 0 或 1
+     * @param hasMention true 显示，false 隐藏
+     * @param text 显示的提示文字，如 [有人@你]
+     */
+    public void setMentionBadge(int tabIndex, boolean hasMention, String text) {
+        if (tabIndex < 0 || tabIndex >= 2) return;
+        TextView badge = mentionBadges[tabIndex];
+        if (hasMention) {
+            badge.setText(text);
+            badge.setVisibility(VISIBLE);
+        } else {
+            badge.setVisibility(GONE);
+        }
+    }
+
+    /**
+     * 设置指定 tab 的 @mention 角标。
+     * @param tabIndex 0 或 1
+     * @param hasMention true 显示，false 隐藏
+     */
+    public void setMentionBadge(int tabIndex, boolean hasMention) {
+        setMentionBadge(tabIndex, hasMention, "");
     }
 
     private void updateTabStyles() {

@@ -1,0 +1,1 @@
+ALTER TABLE 'reminders' add column 'done_at' integer DEFAULT 0;

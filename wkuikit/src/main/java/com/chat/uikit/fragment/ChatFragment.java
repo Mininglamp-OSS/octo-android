@@ -73,6 +73,7 @@ import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
 import com.xinbida.wukongim.entity.WKMentionType;
 import com.xinbida.wukongim.entity.WKReminder;
@@ -549,11 +550,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         WKIM.getInstance().getReminderManager().addOnNewReminderListener("chat_fragment", list -> {
             if (WKReader.isEmpty(list)) return;
-            // 对齐 iOS updateConversations：收集受影响的 channelID，重置会话对象的 reminderList 缓存
+            // 收集受影响的 channelID + 子区对应的父群 channelID
             Set<String> affectedChannels = new HashSet<>();
+            Set<String> affectedParentGroups = new HashSet<>();
             for (WKReminder r : list) {
                 if (!TextUtils.isEmpty(r.channelID)) {
                     affectedChannels.add(r.channelID);
+                    // 子区提醒：提取父群 ID，确保父群的线程预览也刷新
+                    String[] parsed = ThreadModel.getInstance().parseChannelId(r.channelID);
+                    if (parsed != null) {
+                        affectedParentGroups.add(parsed[0]);
+                    }
                 }
             }
             AndroidUtilities.runOnUIThread(() -> {
@@ -563,6 +570,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     if (affectedChannels.contains(msg.uiConversationMsg.channelID)) {
                         msg.uiConversationMsg.setReminderList(null);
                         msg.isResetReminders = true;
+                    }
+                    // 子区提醒到达时，刷新父群的线程预览
+                    if (affectedParentGroups.contains(msg.uiConversationMsg.channelID)) {
+                        msg.isResetReminders = true;
+                        chatConversationAdapter.refreshThreadPreviews(msg.uiConversationMsg.channelID);
                     }
                 }
                 // 刷新 UI
@@ -1441,6 +1453,33 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 检查分组内是否有未处理的 @mention 提醒（含群聊和子区），对齐 iOS WKCategorySectionCell
      */
+    /**
+     * 对齐 iOS WKCategorySectionCell：计算分组下所有会话的未读消息总数（含子区）
+     * 子区会话 (COMMUNITY_TOPIC) 不在 allConversations 中，需从 ConversationManager 单独查询
+     */
+    private int getUnreadCountInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
+        if (category.groups == null) return 0;
+        // 一次性获取所有子区会话，避免在循环内重复查询
+        List<WKConversationMsg> topicConvs = WKIM.getInstance().getConversationManager()
+                .getWithChannelType(WKChannelType.COMMUNITY_TOPIC);
+        int total = 0;
+        for (CategoryEntity.CategoryGroup cg : category.groups) {
+            // 父群未读数
+            ChatConversationMsg msg = channelMap.get(cg.group_no);
+            if (msg != null) {
+                total += msg.getUnReadCount();
+            }
+            // 子区未读数：channelID 以 groupNo____ 开头
+            String prefix = cg.group_no + "____";
+            for (WKConversationMsg conv : topicConvs) {
+                if (conv.channelID != null && conv.channelID.startsWith(prefix)) {
+                    total += conv.unreadCount;
+                }
+            }
+        }
+        return total;
+    }
+
     private boolean hasMentionInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
         if (category.groups == null) return false;
         String loginUID = WKConfig.getInstance().getUid();
@@ -1510,6 +1549,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
                 ChatConversationMsg sectionHeader = new ChatConversationMsg(category.category_id, category.name);
                 sectionHeader.sectionGroupCount = actualCount;
+                sectionHeader.sectionUnreadCount = getUnreadCountInCategory(category, channelMap);
                 sectionHeader.sectionHasMention = hasMentionInCategory(category, channelMap);
                 displayList.add(sectionHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
@@ -1535,6 +1575,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 String sectionId = "ungrouped";
                 String sectionTitle = defaultCategory.name != null ? defaultCategory.name : getString(R.string.default_group);
                 ChatConversationMsg ungroupedHeader = new ChatConversationMsg(sectionId, sectionTitle);
+                ungroupedHeader.sectionUnreadCount = getUnreadCountInCategory(defaultCategory, channelMap);
                 ungroupedHeader.sectionHasMention = hasMentionInCategory(defaultCategory, channelMap);
                 displayList.add(ungroupedHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(sectionId)) {

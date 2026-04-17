@@ -86,16 +86,11 @@ public class ThreadListAdapter extends BaseQuickAdapter<ThreadEntity, BaseViewHo
             }
             if (hasMention) {
                 String mentionTag = getContext().getString(R.string.last_msg_remind);
-                SpannableStringBuilder ssb = new SpannableStringBuilder();
-                ssb.append(mentionTag);
-                ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.reminderColor)),
-                        0, mentionTag.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                if (!TextUtils.isEmpty(preview)) {
-                    ssb.append(" ");
-                    ssb.append(preview);
-                }
-                lastMessageTv.setText(ssb);
+                String fullText = TextUtils.isEmpty(preview) ? mentionTag : mentionTag + " " + preview;
+                lastMessageTv.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
+                lastMessageTv.setText(fullText);
             } else {
+                lastMessageTv.setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
                 lastMessageTv.setText(preview);
             }
         } else {

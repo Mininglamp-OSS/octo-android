@@ -208,6 +208,7 @@ class WKSqlContentValues {
         cv.put("text", reminder.text);
         cv.put("version", reminder.version);
         cv.put("done", reminder.done);
+        cv.put("done_at", reminder.doneAt);
         cv.put("need_upload", reminder.needUpload);
         cv.put("publisher", reminder.publisher);
 

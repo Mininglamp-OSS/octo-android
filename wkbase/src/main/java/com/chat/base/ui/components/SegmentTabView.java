@@ -98,16 +98,23 @@ public class SegmentTabView extends LinearLayout {
             badgeLp.gravity = Gravity.CENTER_VERTICAL;
             container.addView(badge, badgeLp);
 
-            // mentionBadge — 红色文字 [有人@你]，和列表提醒风格统一
+            // mentionBadge — 对齐 iOS：橙色圆角背景 + 白色文字（紧凑）
             TextView mentionBadge = new TextView(context);
-            mentionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
-            mentionBadge.setTextColor(0xFFFF9500); // 橙色，区别于列表中的红色提醒
+            mentionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8);
+            mentionBadge.setTextColor(0xFFFFFFFF);
             mentionBadge.setGravity(Gravity.CENTER);
             mentionBadge.setIncludeFontPadding(false);
             mentionBadge.getPaint().setFakeBoldText(true);
+            int mentionHeight = AndroidUtilities.dp(14);
+            mentionBadge.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), 0);
+            GradientDrawable mentionBg = new GradientDrawable();
+            mentionBg.setShape(GradientDrawable.RECTANGLE);
+            mentionBg.setCornerRadius(AndroidUtilities.dp(7));
+            mentionBg.setColor(0xFFFF9500); // 橙色
+            mentionBadge.setBackground(mentionBg);
             mentionBadge.setVisibility(GONE);
             LayoutParams mentionLp = new LayoutParams(
-                    LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+                    LayoutParams.WRAP_CONTENT, mentionHeight);
             mentionLp.leftMargin = AndroidUtilities.dp(4);
             mentionLp.gravity = Gravity.CENTER_VERTICAL;
             container.addView(mentionBadge, mentionLp);
@@ -172,7 +179,9 @@ public class SegmentTabView extends LinearLayout {
         if (tabIndex < 0 || tabIndex >= 2) return;
         TextView badge = mentionBadges[tabIndex];
         if (hasMention) {
-            badge.setText(text);
+            // 去掉方括号，橙色胶囊内不需要（对齐 iOS）
+            String displayText = text != null ? text.replace("[", "").replace("]", "") : text;
+            badge.setText(displayText);
             badge.setVisibility(VISIBLE);
         } else {
             badge.setVisibility(GONE);

@@ -19,6 +19,7 @@ public class WKReminder {
     public Map data;
     public long version;
     public int done;
+    public long doneAt;
     public int needUpload;
     public String publisher;
 }

@@ -38,6 +38,7 @@ public class ReminderDBManager {
     public void doneWithReminderIds(List<Long> ids) {
         ContentValues cv = new ContentValues();
         cv.put("done", 1);
+        cv.put("done_at", System.currentTimeMillis() / 1000);
         String[] strings = new String[ids.size()];
         for (int i = 0; i < ids.size(); i++) {
             strings[i] = ids.get(i) + "";
@@ -140,7 +141,7 @@ public class ReminderDBManager {
         return list;
     }
 
-    private List<WKReminder> queryWithIds(List<Long> ids) {
+    public List<WKReminder> queryWithIds(List<Long> ids) {
         StringBuilder stringBuffer = new StringBuilder();
         for (int i = 0, size = ids.size(); i < size; i++) {
             if (!TextUtils.isEmpty(stringBuffer)) {
@@ -285,6 +286,7 @@ public class ReminderDBManager {
         reminder.text = WKCursor.readString(cursor, "text");
         reminder.version = WKCursor.readLong(cursor, "version");
         reminder.done = WKCursor.readInt(cursor, "done");
+        reminder.doneAt = WKCursor.readLong(cursor, "done_at");
         String data = WKCursor.readString(cursor, "data");
         reminder.needUpload = WKCursor.readInt(cursor, "need_upload");
         reminder.publisher = WKCursor.readString(cursor, "publisher");

@@ -631,6 +631,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
         }
         if (!hasMention) {
+            contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
+            contentTv.setTypeface(null, Typeface.NORMAL);
             contentTv.setVisibility(View.GONE);
             return;
         }
@@ -640,14 +642,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         String msgContent = getContent(item.getWkMsg());
         String fromName = getFromName(item.channelType, item.getWkMsg());
         String preview = TextUtils.isEmpty(fromName) ? msgContent : fromName + "：" + msgContent;
-
-        SpannableStringBuilder ssb = new SpannableStringBuilder();
-        ssb.append(mentionTag);
-        ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.reminderColor)),
-                0, mentionTag.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        ssb.append(" ");
-        ssb.append(preview);
-        contentTv.setText(ssb);
+        // 整行高亮（对齐子区 threadMentionTv 样式）
+        contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
+        contentTv.setTypeface(null, Typeface.BOLD);
+        contentTv.setText(mentionTag + " " + preview);
     }
 
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
@@ -1287,6 +1285,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         TextView titleTv = helper.getView(R.id.sectionTitle);
         TextView countTv = helper.getView(R.id.sectionCount);
         TextView mentionTv = helper.getView(R.id.sectionMentionTv);
+        TextView unreadBadge = helper.getView(R.id.sectionUnreadBadge);
         ImageView arrowIv = helper.getView(R.id.sectionArrow);
         View divider = helper.getView(R.id.sectionDivider);
 
@@ -1312,6 +1311,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             mentionTv.setVisibility(View.VISIBLE);
         } else {
             mentionTv.setVisibility(View.GONE);
+        }
+
+        // 对齐 iOS WKCategorySectionCell：折叠时显示未读总数气泡
+        if (collapsed && msg.sectionUnreadCount > 0) {
+            unreadBadge.setText(msg.sectionUnreadCount > 99 ? "99+" : String.valueOf(msg.sectionUnreadCount));
+            unreadBadge.setVisibility(View.VISIBLE);
+        } else {
+            unreadBadge.setVisibility(View.GONE);
         }
 
         // 空分组点不开

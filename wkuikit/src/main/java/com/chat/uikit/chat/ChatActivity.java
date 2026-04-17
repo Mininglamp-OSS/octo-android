@@ -2483,13 +2483,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // 对齐 iOS viewWillDisappear：在父页面 onResume 之前同步标记已读，避免列表闪烁
+        MsgModel.getInstance().doneReminder(reminderIds);
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
         isShowChatActivity = false;
         WKUIKitApplication.getInstance().chattingChannelID = "";
         isUploadReadMsg = false;
         WKPlayVoiceUtils.getInstance().stopPlay();
-        MsgModel.getInstance().doneReminder(reminderIds);
         EndpointManager.getInstance().invoke("stop_screen_shot", this);
     }
 

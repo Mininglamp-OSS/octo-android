@@ -232,6 +232,8 @@ public class MoonUtil {
 
     // 自定义表情在消息气泡中的固定显示尺寸（dp）
     private static final int CUSTOM_EMOJI_SIZE_DP = 120;
+    // 自定义表情在会话列表等小尺寸场景的显示尺寸（dp），与普通表情行高接近
+    private static final int CUSTOM_EMOJI_SMALL_SIZE_DP = 20;
 
     public static Drawable getEmotDrawable(Context context, String text, float scale) {
         Drawable drawable = EmojiManager.getInstance().getDrawable(context, text);
@@ -241,7 +243,8 @@ public class MoonUtil {
             int width, height;
             // 通过 EmojiManager 注册的 entry ID 判断是否为自定义表情
             if (EmojiManager.getInstance().isCustomEmoji(text)) {
-                int sizePx = com.chat.base.utils.AndroidUtilities.dp(CUSTOM_EMOJI_SIZE_DP);
+                int sizeDp = scale < DEF_SCALE ? CUSTOM_EMOJI_SMALL_SIZE_DP : CUSTOM_EMOJI_SIZE_DP;
+                int sizePx = com.chat.base.utils.AndroidUtilities.dp(sizeDp);
                 width = sizePx;
                 height = sizePx;
             } else {

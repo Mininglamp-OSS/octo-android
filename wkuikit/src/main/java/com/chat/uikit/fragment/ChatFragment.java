@@ -1093,12 +1093,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg == null) {
             return;
         }
-        // 子区会话不在主聊天列表显示，但需要刷新父群聊的子区预览
+        // 子区会话不在主聊天列表显示，但需要刷新父群聊的子区预览并更新排序
         if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
-            // 从子区 channelId 提取父群组 groupNo，刷新其子区预览
             String[] parsed = ThreadModel.getInstance().parseChannelId(uiConversationMsg.channelID);
             if (parsed != null) {
                 chatConversationAdapter.refreshThreadPreviews(parsed[0]);
+                // 更新父群的 lastMsgTimestamp，使其在分组内上浮（对齐 iOS addOrUpdateChildren）
+                for (ChatConversationMsg msg : allConversations) {
+                    if (msg.uiConversationMsg != null
+                            && parsed[0].equals(msg.uiConversationMsg.channelID)
+                            && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                        if (uiConversationMsg.lastMsgTimestamp > msg.uiConversationMsg.lastMsgTimestamp) {
+                            msg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                        }
+                        break;
+                    }
+                }
             }
             if (isEnd) {
                 sortMsg(allConversations);

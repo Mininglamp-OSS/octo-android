@@ -154,6 +154,8 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
     private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+    private static final int MAX_ADAPTER_SIZE = 300;
+    private static final int TRIM_BATCH_SIZE = 60;
 
     private String channelId = "";
     private byte channelType = WKChannelType.PERSONAL;
@@ -198,6 +200,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private boolean isUpdateRedDot = true;
     private ImageView callIV;
     private ImageView moreIV;
+    private long lastShowTimeUpdate = 0;
+    private int lastShowTimeIndex = -1;
     //查询聊天数据偏移量
     private final int limit = 30;
     private boolean isShowPinnedView = false;
@@ -1446,38 +1450,39 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             chatAdapter.resetData(list);
             chatAdapter.setNewInstance(list);
+            chatAdapter.rebuildIndex();
         } else {
             chatAdapter.resetData(list);
             if (pullMode == 1) {
                 if (WKReader.isNotEmpty(chatAdapter.getData()) && WKReader.isNotEmpty(list))
                     list.get(0).previousMsg = chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg;
                 chatAdapter.addData(list);
+                chatAdapter.rebuildIndex();
+                trimTopIfNeeded();
             } else {
                 if (WKReader.isNotEmpty(list) && WKReader.isNotEmpty(chatAdapter.getData())) {
                     list.get(list.size() - 1).nextMsg = chatAdapter.getData().get(0).wkMsg;
                 }
                 chatAdapter.addData(0, list);
+                chatAdapter.rebuildIndex();
+                trimBottomIfNeeded();
             }
         }
         if (tipsOrderSeq != 0 || lastPreviewMsgOrderSeq != 0) {
             wkVBinding.recyclerView.setVisibility(View.VISIBLE);
             if (tipsOrderSeq != 0) {
-                for (int i = 0; i < chatAdapter.getData().size(); i++) {
-                    if (chatAdapter.getItem(i).wkMsg.orderSeq == tipsOrderSeq) {
-                        linearLayoutManager.scrollToPositionWithOffset(i, AndroidUtilities.dp(50));
-                        chatAdapter.getItem(i).isShowTips = true;
-                        chatAdapter.notifyItemChanged(i);
-                        tipsOrderSeq = 0;
-                        break;
-                    }
+                int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsOrderSeq);
+                if (tipsIndex >= 0) {
+                    linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
+                    chatAdapter.getItem(tipsIndex).isShowTips = true;
+                    chatAdapter.notifyItemChanged(tipsIndex);
+                    tipsOrderSeq = 0;
                 }
             }
             if (lastPreviewMsgOrderSeq != 0) {
-                for (int i = 0; i < chatAdapter.getData().size(); i++) {
-                    if (chatAdapter.getItem(i).wkMsg.orderSeq == lastPreviewMsgOrderSeq) {
-                        linearLayoutManager.scrollToPositionWithOffset(i, keepOffsetY);
-                        break;
-                    }
+                int previewIndex = chatAdapter.findPositionByOrderSeq(lastPreviewMsgOrderSeq);
+                if (previewIndex >= 0) {
+                    linearLayoutManager.scrollToPositionWithOffset(previewIndex, keepOffsetY);
                 }
             }
         } else {
@@ -1713,6 +1718,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 chatAdapter.removeAt(timeIndex);
             }
         }
+        chatAdapter.rebuildIndex();
     }
 
     private void showToast(int textId) {
@@ -1720,8 +1726,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private synchronized void setShowTime() {
-        String showTime = "";
         int index = linearLayoutManager.findFirstVisibleItemPosition();
+        if (index == lastShowTimeIndex) return;
+        long now = System.currentTimeMillis();
+        if (now - lastShowTimeUpdate < 100) return;
+        lastShowTimeIndex = index;
+        lastShowTimeUpdate = now;
+        String showTime = "";
         if (index > 0 && index < chatAdapter.getData().size()) {
             WKUIChatMsgItemEntity WKUIChatMsgItemEntity = chatAdapter.getData().get(index);
             if (WKUIChatMsgItemEntity.wkMsg != null && WKUIChatMsgItemEntity.wkMsg.timestamp > 0) {
@@ -1850,6 +1861,40 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 安全地执行 adapter 修改操作：如果 RecyclerView 正在布局或滚动中，
      * 将操作 post 到下一帧执行，避免 IllegalStateException。
      */
+    private void trimBottomIfNeeded() {
+        int size = chatAdapter.getData().size();
+        if (size <= MAX_ADAPTER_SIZE) return;
+        int lastVisible = linearLayoutManager.findLastVisibleItemPosition();
+        if (lastVisible >= size - 5) return; // too close to bottom, skip
+        int removeCount = Math.min(TRIM_BATCH_SIZE, size - MAX_ADAPTER_SIZE);
+        int removeStart = size - removeCount;
+        chatAdapter.getData().subList(removeStart, size).clear();
+        chatAdapter.notifyItemRangeRemoved(removeStart, removeCount);
+        // clean previousMsg/nextMsg at new boundary
+        int newSize = chatAdapter.getData().size();
+        if (newSize > 0) {
+            chatAdapter.getData().get(newSize - 1).nextMsg = null;
+        }
+        isCanLoadMore = true;
+        chatAdapter.rebuildIndex();
+    }
+
+    private void trimTopIfNeeded() {
+        int size = chatAdapter.getData().size();
+        if (size <= MAX_ADAPTER_SIZE) return;
+        int firstVisible = linearLayoutManager.findFirstVisibleItemPosition();
+        if (firstVisible < 5) return; // too close to top, skip
+        int removeCount = Math.min(TRIM_BATCH_SIZE, size - MAX_ADAPTER_SIZE);
+        chatAdapter.getData().subList(0, removeCount).clear();
+        chatAdapter.notifyItemRangeRemoved(0, removeCount);
+        // clean previousMsg/nextMsg at new boundary
+        if (!chatAdapter.getData().isEmpty()) {
+            chatAdapter.getData().get(0).previousMsg = null;
+        }
+        isCanRefresh = true;
+        chatAdapter.rebuildIndex();
+    }
+
     private void safeAdapterAction(Runnable action) {
         if (wkVBinding.recyclerView.isComputingLayout()) {
             wkVBinding.recyclerView.post(action);
@@ -2819,6 +2864,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             if (WKReader.isNotEmpty(pendingItems)) {
                 chatAdapter.addData(pendingItems);
+                chatAdapter.rebuildIndex();
+                trimTopIfNeeded();
             }
             for (int idx : backgroundRefreshIndices) {
                 if (idx >= 0 && idx < chatAdapter.getData().size()) {
@@ -2955,14 +3002,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
         List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
         chatAdapter.refreshReplyMsg(wkMsg);
-        for (int i = 0, size = list.size(); i < size; i++) {
-            if (list.get(i).wkMsg == null) {
-                continue;
-            }
-            boolean isNotify = false;
-            if (list.get(i).wkMsg.clientSeq == wkMsg.clientSeq
-                    || list.get(i).wkMsg.clientMsgNO.equals(wkMsg.clientMsgNO)
-                    || (!TextUtils.isEmpty(list.get(i).wkMsg.messageID) && !TextUtils.isEmpty(wkMsg.messageID) && list.get(i).wkMsg.messageID.equals(wkMsg.messageID))) {
+        int i = chatAdapter.findPositionByMsg(wkMsg);
+        if (i >= 0 && i < list.size()) {
+            {
+                boolean isNotify = false;
                 if (wkMsg.messageSeq > maxMsgSeq) {
                     maxMsgSeq = wkMsg.messageSeq;
                 }
@@ -3094,7 +3137,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     }
                     WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(noRelationMsg, false);
                 }
-                break;
             }
         }
     }

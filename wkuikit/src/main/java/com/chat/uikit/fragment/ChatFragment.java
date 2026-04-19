@@ -1041,10 +1041,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (WKReader.isNotEmpty(chatConversationAdapter.getData().get(i).childList)) {
                     for (int j = 0, len = chatConversationAdapter.getData().get(i).childList.size(); j < len; j++) {
                         if (chatConversationAdapter.getData().get(i).childList.get(j).uiConversationMsg.channelID.equals(uiConversationMsg.channelID)) {
+                            // 更新匹配的子区数据
+                            chatConversationAdapter.getData().get(i).childList.get(j).uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq = uiConversationMsg.lastMsgSeq;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
-                            chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount += uiConversationMsg.unreadCount;
+                            // 重新计算父群未读数：遍历所有子区求和（避免 += 累加导致虚高）
+                            int totalChildUnread = 0;
+                            for (ChatConversationMsg child : chatConversationAdapter.getData().get(i).childList) {
+                                totalChildUnread += child.uiConversationMsg.unreadCount;
+                            }
+                            chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount = totalChildUnread;
                             notifyRecycler(i, chatConversationAdapter.getData().get(i));
                             isBreak = true;
                             isAdd = false;
@@ -1465,12 +1472,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 .getWithChannelType(WKChannelType.COMMUNITY_TOPIC);
         int total = 0;
         for (CategoryEntity.CategoryGroup cg : category.groups) {
-            // 父群未读数
             ChatConversationMsg msg = channelMap.get(cg.group_no);
             if (msg != null) {
-                total += msg.getUnReadCount();
+                if (WKReader.isNotEmpty(msg.childList)) {
+                    // 有子区列表时，getUnReadCount() 已包含子区未读，不再重复累加
+                    total += msg.getUnReadCount();
+                    continue;
+                }
+                // 无子区列表：加父群自身未读
+                total += msg.uiConversationMsg.unreadCount;
             }
-            // 子区未读数：channelID 以 groupNo____ 开头
+            // 从 SDK 查子区未读（仅当 childList 为空时才走到这里，避免双重计算）
             String prefix = cg.group_no + "____";
             for (WKConversationMsg conv : topicConvs) {
                 if (conv.channelID != null && conv.channelID.startsWith(prefix)) {

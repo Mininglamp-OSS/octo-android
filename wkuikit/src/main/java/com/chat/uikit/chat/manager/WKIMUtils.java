@@ -277,6 +277,13 @@ public class WKIMUtils {
                         && !WKUIKitApplication.getInstance().isInCurrentSpace(channelID, channelType)) {
                     isAlertMsg = false;
                 }
+                // 子区：检查父群是否在当前 Space（对齐 iOS isMessageInCurrentSpace）
+                if (isAlertMsg && channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    String[] parsed = com.chat.uikit.thread.service.ThreadModel.getInstance().parseChannelId(channelID);
+                    if (parsed != null && !WKUIKitApplication.getInstance().isInCurrentSpace(parsed[0], WKChannelType.GROUP)) {
+                        isAlertMsg = false;
+                    }
+                }
                 // 私聊：通过消息内容中的 space_id 判断
                 if (isAlertMsg && channelType == WKChannelType.PERSONAL) {
                     WKMsg lastMsg = msgList.get(msgList.size() - 1);

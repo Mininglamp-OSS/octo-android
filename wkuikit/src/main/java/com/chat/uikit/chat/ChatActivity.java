@@ -1093,6 +1093,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
             // 子区：同步成员 + 显示子区标题
             ThreadModel.getInstance().syncThreadMembers(channelId, null);
+            // 同步父群成员，确保子区 @mention 能查到成员列表
+            String[] parsed = ThreadModel.getInstance().parseChannelId(channelId);
+            if (parsed != null) {
+                GroupModel.getInstance().groupMembersSync(parsed[0], null);
+            }
             hideOrShowRightView(true);
             if (channel != null) {
                 showChannelName(channel);

@@ -996,7 +996,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 有则在群聊 Tab 上显示 @ 角标。
      */
     private void updateGroupMentionBadge() {
-        if (segmentTabView == null) return;
+        if (segmentTabView == null || !isAdded()) return;
         boolean hasMention = false;
         // 1. 遍历 allConversations 中的 GROUP 会话
         List<ChatConversationMsg> source = allConversations.isEmpty()
@@ -1444,6 +1444,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             syncSpaceKeysToGlobal();
             // 延迟重检 @提醒：冷启动时 reminder 创建可能晚于会话列表渲染
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (!isAdded()) return;
                 updateGroupMentionBadge();
                 filterAndDisplay();
             }, 1500);

@@ -80,16 +80,26 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                         : WKMsgItemViewManager.getInstance().getPinnedChatItemProviderList();
         localProviderList = new ConcurrentHashMap<>();
         for (int type : sourceList.keySet()) {
+            BaseItemProvider<WKUIChatMsgItemEntity> provider = null;
             try {
-                BaseItemProvider<WKUIChatMsgItemEntity> newProvider =
-                        sourceList.get(type).getClass().getDeclaredConstructor().newInstance();
-                localProviderList.put(type, newProvider);
-                addItemProvider(newProvider);
-            } catch (Exception e) {
-                BaseItemProvider<WKUIChatMsgItemEntity> original = Objects.requireNonNull(sourceList.get(type));
-                localProviderList.put(type, original);
-                addItemProvider(original);
+                provider = sourceList.get(type).getClass().getDeclaredConstructor().newInstance();
+            } catch (Exception ignored) {
             }
+            if (provider == null) {
+                // 带 int 参数的构造函数（如 WKSystemProvider(int type)），
+                // 避免 fallback 到单例原始实例导致 Activity 泄漏
+                try {
+                    //noinspection unchecked
+                    provider = (BaseItemProvider<WKUIChatMsgItemEntity>)
+                            sourceList.get(type).getClass().getDeclaredConstructor(int.class).newInstance(type);
+                } catch (Exception ignored) {
+                }
+            }
+            if (provider == null) {
+                provider = Objects.requireNonNull(sourceList.get(type));
+            }
+            localProviderList.put(type, provider);
+            addItemProvider(provider);
         }
     }
 

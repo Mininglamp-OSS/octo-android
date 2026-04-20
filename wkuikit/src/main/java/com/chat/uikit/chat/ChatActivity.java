@@ -637,8 +637,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 setShowTime();
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
                 if (lastItemPosition < chatAdapter.getItemCount() - 1) {
-                    boolean shouldShow = dy > 0 || redDot > 0 || isTipMessage;
-                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, shouldShow, true, false));
+                    wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, true, true, false));
                 } else {
                     wkVBinding.chatUnreadLayout.newMsgLayout.post(() -> CommonAnim.getInstance().showOrHide(wkVBinding.chatUnreadLayout.newMsgLayout, redDot > 0, true, false));
                 }

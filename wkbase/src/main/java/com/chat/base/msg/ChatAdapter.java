@@ -96,7 +96,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 }
             }
             if (provider == null) {
-                provider = Objects.requireNonNull(sourceList.get(type));
+                continue; // 反射均失败，跳过该 provider，避免使用单例实例导致 Activity 泄漏
             }
             localProviderList.put(type, provider);
             addItemProvider(provider);

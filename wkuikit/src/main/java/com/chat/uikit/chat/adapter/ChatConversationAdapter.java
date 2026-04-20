@@ -953,15 +953,35 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // "+N 个子区" 放在卡片外部
         if (activeList.size() > 2) {
             int moreCount = activeList.size() - 2;
-            // 检查未展示子区是否有 @mention
+            // 检查未展示子区是否有 @mention，并汇总未读数
             boolean moreMention = false;
+            int moreUnread = 0;
             for (int i = 2; i < activeList.size(); i++) {
-                String tcId = ThreadModel.getInstance().buildChannelId(groupNo, activeList.get(i).short_id);
+                ThreadEntity te = activeList.get(i);
+                String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
                 if (hasThreadMentionForChannel(tcId)) {
                     moreMention = true;
-                    break;
                 }
+                int u = te.unread_count;
+                WKUIConversationMsg tc = WKIM.getInstance().getConversationManager()
+                        .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+                if (tc != null) {
+                    u = tc.unreadCount;
+                }
+                moreUnread += u;
             }
+
+            // 水平容器："+N 个子区" 文字 + 未读气泡
+            LinearLayout moreRow = new LinearLayout(getContext());
+            moreRow.setOrientation(LinearLayout.HORIZONTAL);
+            moreRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            moreLp.setMarginStart(AndroidUtilities.dp(74));
+            moreLp.setMarginEnd(AndroidUtilities.dp(15));
+            moreLp.topMargin = AndroidUtilities.dp(4);
+
             TextView moreTv = new TextView(getContext());
             String moreText = "+" + moreCount + " 个子区";
             if (moreMention) {
@@ -979,17 +999,34 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
             moreTv.setTextSize(13);
             moreTv.setTextColor(Theme.colorAccount);
-            LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            moreLp.setMarginStart(AndroidUtilities.dp(74));
-            moreLp.topMargin = AndroidUtilities.dp(4);
-            moreTv.setOnClickListener(v -> {
+            LinearLayout.LayoutParams tvLp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            moreRow.addView(moreTv, tvLp);
+
+            // 未读数气泡（与子区行样式一致）
+            if (moreUnread > 0) {
+                TextView unreadBadge = new TextView(getContext());
+                unreadBadge.setText(moreUnread > 99 ? "99+" : String.valueOf(moreUnread));
+                unreadBadge.setTextSize(11);
+                unreadBadge.setTextColor(ContextCompat.getColor(getContext(), R.color.white));
+                unreadBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                unreadBadge.setGravity(Gravity.CENTER);
+                unreadBadge.setBackgroundResource(R.drawable.thread_unread_badge_bg);
+                unreadBadge.setMinWidth(AndroidUtilities.dp(18));
+                unreadBadge.setHeight(AndroidUtilities.dp(18));
+                unreadBadge.setPadding(AndroidUtilities.dp(5), 0, AndroidUtilities.dp(5), 0);
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, AndroidUtilities.dp(18));
+                badgeLp.setMarginStart(AndroidUtilities.dp(5));
+                moreRow.addView(unreadBadge, badgeLp);
+            }
+
+            moreRow.setOnClickListener(v -> {
                 if (threadPreviewClickListener != null) {
                     threadPreviewClickListener.onMoreThreadsClick(groupNo);
                 }
             });
-            contentWrapper.addView(moreTv, moreLp);
+            contentWrapper.addView(moreRow, moreLp);
         }
 
         container.addView(contentWrapper);

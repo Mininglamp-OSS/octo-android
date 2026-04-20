@@ -41,6 +41,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.chat.base.common.WKCommonModel;
+import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
@@ -2483,6 +2484,26 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     protected void onDestroy() {
         super.onDestroy();
         chatPanelManager.onDestroy();
+        // 移除 WKIM 各 Manager 的监听，防止单例持有 Activity 引用导致泄漏
+        WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(channelId);
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(channelId);
+        WKIM.getInstance().getChannelMembersManager().removeRefreshChannelMemberInfo(channelId);
+        WKIM.getInstance().getChannelMembersManager().removeRemoveChannelMemberListener(channelId);
+        WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener(channelId);
+        WKIM.getInstance().getMsgManager().removeDeleteMsgListener(channelId);
+        WKIM.getInstance().getMsgManager().removeRefreshMsgListener(channelId);
+        WKIM.getInstance().getMsgManager().removeSendMsgCallBack(channelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener(channelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + channelId);
+        WKIM.getInstance().getMsgManager().removeClearMsg(channelId);
+        WKIM.getInstance().getCMDManager().removeCmdListener(channelId);
+        WKIM.getInstance().getReminderManager().removeNewReminderListener(channelId);
+        WKVoiceViewManager.getInstance().release();
+        EndpointManager.getInstance().remove(channelId);
+        EndpointManager.getInstance().remove("hide_pinned_view");
+        EndpointManager.getInstance().remove("show_pinned_view");
+        EndpointManager.getInstance().remove("tip_msg_in_chat");
+        EndpointManager.getInstance().remove("reset_channel_all_pinned_msg");
         ActManagerUtils.getInstance().removeActivity(this);
         if (disposable != null) {
             disposable.dispose();

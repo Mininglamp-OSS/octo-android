@@ -1418,22 +1418,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 当收到不属于当前 Space 的实时消息时调用，使用防抖避免频繁请求。
      * 同步结果由 RefreshMsgListListener 处理，会重新校准 spaceConversationKeys。
      */
+    private final Runnable spaceResyncRunnable = () -> {
+        pendingSpaceResync = false;
+        spaceConversationKeys.clear();
+        allConversations.clear();
+        chatConversationAdapter.setList(new ArrayList<>());
+        Schedulers.io().scheduleDirect(() -> {
+            WKIM.getInstance().getConversationManager().clearAll();
+            // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+            // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            });
+        });
+    };
+
     private void scheduleSpaceResync() {
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            pendingSpaceResync = false;
-            spaceConversationKeys.clear();
-            allConversations.clear();
-            chatConversationAdapter.setList(new ArrayList<>());
-            Schedulers.io().scheduleDirect(() -> {
-                WKIM.getInstance().getConversationManager().clearAll();
-                // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
-                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                });
-            });
-        }, 500);
+        pingHandler.postDelayed(spaceResyncRunnable, 500);
     }
 
     //排序消息
@@ -2420,9 +2422,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getConversationManager().removeOnDeleteMsgListener("chat_fragment");
         WKIM.getInstance().getCMDManager().removeCmdListener("chat_fragment_cmd");
         WKIM.getInstance().getMsgManager().removeRefreshMsgListener("chat_fragment");
+        WKIM.getInstance().getMsgManager().removeClearMsg("chat_fragment");
         WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener("chat_fragment");
         WKIM.getInstance().getMsgManager().removeSendMsgAckListener("chat_fragment");
         WKIM.getInstance().getReminderManager().removeNewReminderListener("chat_fragment");
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("chat_fragment_refresh_channel");
+        EndpointManager.getInstance().remove("show_create_category_dialog");
+        EndpointManager.getInstance().remove("");
+        EndpointManager.getInstance().remove("chat_cover");
+        EndpointManager.getInstance().remove("refresh_conversation_extras");
+        EndpointManager.getInstance().remove("refresh_conversation_calling");
+        EndpointManager.getInstance().remove("scroll_to_unread_channel");
+        pingHandler.removeCallbacks(spaceResyncRunnable);
         stopPingTimer();
     }
 

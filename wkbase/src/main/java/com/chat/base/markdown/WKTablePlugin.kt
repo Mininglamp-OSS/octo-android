@@ -20,33 +20,44 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
         /** 表格占位符：标记表格在渲染文本中的原始位置 */
         const val TABLE_PLACEHOLDER = "\uFFFC"
 
-        /** 线程安全的表格数据缓冲区，供单次 toMarkdown 调用后消费 */
-        private val pendingTables = mutableListOf<WKTableData>()
+        /**
+         * 使用 ThreadLocal 替代共享 mutableList，消除多线程竞争：
+         * - 后台线程（buildUiMsgList）和主线程（实时新消息）可以并发渲染 Markdown
+         * - 每个线程有独立的 pendingTables 缓冲区，无需加锁
+         */
+        private val pendingTables = ThreadLocal<MutableList<WKTableData>>()
+
+        private fun getOrCreatePending(): MutableList<WKTableData> {
+            var list = pendingTables.get()
+            if (list == null) {
+                list = mutableListOf()
+                pendingTables.set(list)
+            }
+            return list
+        }
 
         @JvmStatic
         fun create(): WKTablePlugin = WKTablePlugin()
 
         /**
-         * 获取并清空上一次 Markwon 渲染过程中提取的所有表格数据。
+         * 获取并清空当前线程上一次 Markwon 渲染过程中提取的所有表格数据。
          * 必须在 toMarkdown() 之后立即调用，否则数据会在下次渲染时被覆盖。
          */
         @JvmStatic
-        @Synchronized
         fun consumeTableData(): List<WKTableData> {
-            val result = ArrayList(pendingTables)
-            pendingTables.clear()
+            val list = pendingTables.get() ?: return emptyList()
+            val result = ArrayList(list)
+            list.clear()
             return result
         }
 
-        @Synchronized
         private fun addTableData(data: WKTableData) {
-            pendingTables.add(data)
+            getOrCreatePending().add(data)
         }
 
         /** 渲染开始前清空缓冲区，防止残留 */
-        @Synchronized
         internal fun clearPending() {
-            pendingTables.clear()
+            pendingTables.get()?.clear()
         }
     }
 

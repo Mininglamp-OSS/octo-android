@@ -385,7 +385,6 @@ public class MsgModel extends WKBaseModel {
                     last_message_seq = 0;
                     syncCmdMsgs(0);
                     ackDeviceUUID();
-                    syncReminder();
                     syncCoverExtra();
                     new Handler(Looper.getMainLooper()).postDelayed(() -> EndpointManager.getInstance().invoke("refresh_conversation_calling",null),300);
                 } else {

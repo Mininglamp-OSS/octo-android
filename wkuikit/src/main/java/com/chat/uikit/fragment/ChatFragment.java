@@ -127,6 +127,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     // 用于过滤实时消息推送中不属于当前 Space 的会话
     private final Set<String> spaceConversationKeys = new HashSet<>();
     private boolean pendingSpaceResync = false;
+    // 对齐 iOS：仅在首次会话同步完成后调用一次 syncReminder，避免重复网络请求
+    private boolean hasInitialReminderSynced = false;
 
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
@@ -1459,12 +1461,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             setAllCount();
             scrollToPositionIfNearTop(0);
             syncSpaceKeysToGlobal();
-            // 延迟重检 @提醒：冷启动时 reminder 创建可能晚于会话列表渲染
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                if (!isAdded()) return;
-                updateGroupMentionBadge();
-                filterAndDisplay();
-            }, 1500);
+            // 对齐 iOS：仅首次会话同步完成后调用一次 syncReminder
+            if (!hasInitialReminderSynced) {
+                hasInitialReminderSynced = true;
+                MsgModel.getInstance().syncReminder();
+            }
         });
     }
 

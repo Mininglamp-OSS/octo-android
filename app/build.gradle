@@ -49,8 +49,8 @@ android {
         applicationId appId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 17
-        versionName "1.1.6"
+        versionCode 19
+        versionName "1.1.8"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -126,4 +126,11 @@ dependencies {
     implementation project(path: ':wklogin')
     implementation project(path: ':wkscan')
     implementation project(path: ':wkpush')
+
+    // 性能监控（仅 debug 包）
+    debugImplementation('io.github.didi.dokit:dokitx:3.7.11') {
+        exclude group: 'com.android.volley', module: 'volley'
+    }
+    debugImplementation 'com.android.volley:volley:1.2.1'
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.14'
 }

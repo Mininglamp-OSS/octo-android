@@ -46,5 +46,34 @@
             android:layout_marginStart="4dp"
             android:textColor="@color/clrCCC"
             android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/sectionMentionTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="@color/reminderColor"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/sectionUnreadBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:minWidth="18dp"
+            android:background="@drawable/thread_unread_badge_bg"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium"
+            android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>

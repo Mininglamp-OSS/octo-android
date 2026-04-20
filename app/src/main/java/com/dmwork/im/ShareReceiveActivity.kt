@@ -25,12 +25,18 @@ import com.xinbida.wukongim.msgmodel.WKImageContent
 import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKTextContent
 import com.xinbida.wukongim.msgmodel.WKVideoContent
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.util.regex.Pattern
 
 class ShareReceiveActivity : Activity() {
 
     private var chooseChatStarted = false
+
+    companion object {
+        private val URL_WITH_SCHEME: Pattern = Pattern.compile("https?://\\S+")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,6 +106,16 @@ class ShareReceiveActivity : Activity() {
         if (type == "text/plain") {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (!text.isNullOrBlank()) {
+                val trimmed = text.trim()
+                // 要求 URL 带 scheme，避免 Patterns.WEB_URL 对 "hello.co" 等误匹配
+                val matcher = URL_WITH_SCHEME.matcher(trimmed)
+                if (matcher.find()) {
+                    val url = matcher.group()
+                    val textAround = (trimmed.substring(0, matcher.start()) +
+                            trimmed.substring(matcher.end())).trim()
+                    val content = buildLinkMessage(url, textAround)
+                    return listOf(WKTextContent(content))
+                }
                 return listOf(WKTextContent(text))
             }
             return emptyList()
@@ -125,6 +141,22 @@ class ShareReceiveActivity : Activity() {
         if (uris.isNullOrEmpty()) return emptyList()
 
         return uris.mapNotNull { uri -> createContentFromUri(uri, type) }
+    }
+
+    private fun buildLinkMessage(url: String, textTitle: String): String {
+        val title = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+            ?: intent.getStringExtra(Intent.EXTRA_TITLE)
+            ?: textTitle
+        val parsed = Uri.parse(url)
+        val host = parsed.host ?: ""
+        val scheme = parsed.scheme ?: "https"
+        val icon = "$scheme://$host/favicon.ico"
+        val json = JSONObject().apply {
+            put("title", title)
+            put("url", url)
+            put("icon", icon)
+        }
+        return "[链接]$json"
     }
 
     private fun createContentFromUri(uri: Uri, mimeType: String): WKMessageContent? {

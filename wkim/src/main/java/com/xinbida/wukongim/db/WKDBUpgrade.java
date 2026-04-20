@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -36,21 +38,32 @@ public class WKDBUpgrade {
 
     void onUpgrade(SQLiteDatabase db) {
         long maxIndex = WKIMApplication.getInstance().getDBUpgradeIndex();
-        long tempIndex = maxIndex;
         List<WKDBSql> list = getExecSQL();
+        // 按 index 升序排序，确保迁移按时间顺序执行
+        Collections.sort(list, new Comparator<WKDBSql>() {
+            @Override
+            public int compare(WKDBSql a, WKDBSql b) {
+                return Long.compare(a.index, b.index);
+            }
+        });
         for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).index > maxIndex && list.get(i).sqlList != null && !list.get(i).sqlList.isEmpty()) {
-                for (String sql : list.get(i).sqlList) {
+            WKDBSql dbSql = list.get(i);
+            if (dbSql.index > maxIndex && dbSql.sqlList != null && !dbSql.sqlList.isEmpty()) {
+                boolean success = true;
+                for (String sql : dbSql.sqlList) {
                     if (!TextUtils.isEmpty(sql)) {
-                        db.execSQL(sql);
+                        try {
+                            db.execSQL(sql);
+                        } catch (Exception e) {
+                            WKLoggerUtils.getInstance().e(TAG, "Migration " + dbSql.index + " failed: " + e.getMessage());
+                            success = false;
+                        }
                     }
                 }
-                if (list.get(i).index > tempIndex) {
-                    tempIndex = list.get(i).index;
-                }
+                // 无论单条 SQL 是否失败，都更新 index，避免重复执行导致连锁错误（如 ADD COLUMN 重复会报 duplicate column）
+                WKIMApplication.getInstance().setDBUpgradeIndex(dbSql.index);
             }
         }
-        WKIMApplication.getInstance().setDBUpgradeIndex(tempIndex);
     }
 
     private List<WKDBSql> getExecSQL() {

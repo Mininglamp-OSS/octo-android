@@ -277,6 +277,13 @@ public class WKIMUtils {
                         && !WKUIKitApplication.getInstance().isInCurrentSpace(channelID, channelType)) {
                     isAlertMsg = false;
                 }
+                // 子区：检查父群是否在当前 Space（对齐 iOS isMessageInCurrentSpace）
+                if (isAlertMsg && channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    String[] parsed = com.chat.uikit.thread.service.ThreadModel.getInstance().parseChannelId(channelID);
+                    if (parsed != null && !WKUIKitApplication.getInstance().isInCurrentSpace(parsed[0], WKChannelType.GROUP)) {
+                        isAlertMsg = false;
+                    }
+                }
                 // 私聊：通过消息内容中的 space_id 判断
                 if (isAlertMsg && channelType == WKChannelType.PERSONAL) {
                     WKMsg lastMsg = msgList.get(msgList.size() - 1);
@@ -290,7 +297,21 @@ public class WKIMUtils {
             if (newMsgNotice && isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.mute == 0) {
-                    showNotification(msgList.get(msgList.size() - 1), msgShowDetail, channel, playNewMsgMedia, isVibrate);
+                    // 子区额外检查父群免打扰：父群 mute 时子区也静默
+                    boolean parentMuted = false;
+                    if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+                        String[] parsed = ThreadModel.getInstance().parseChannelId(channelID);
+                        if (parsed != null) {
+                            WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                                    .getChannel(parsed[0], WKChannelType.GROUP);
+                            if (parentChannel != null && parentChannel.mute == 1) {
+                                parentMuted = true;
+                            }
+                        }
+                    }
+                    if (!parentMuted) {
+                        showNotification(msgList.get(msgList.size() - 1), msgShowDetail, channel, playNewMsgMedia, isVibrate);
+                    }
                 }
             }
 
@@ -330,6 +351,12 @@ public class WKIMUtils {
                             extraMap.put("creatorUid", entity.creator_uid);
                             extraMap.put("shortId", entity.short_id);
                             channel.remoteExtraMap = extraMap;
+                            // 对齐 iOS：子区继承父群的免打扰设置
+                            WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                                    .getChannel(entity.group_no, WKChannelType.GROUP);
+                            if (parentChannel != null) {
+                                channel.mute = parentChannel.mute;
+                            }
                             WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                         }
                     });

@@ -31,6 +31,7 @@ import com.xinbida.wukongim.entity.WKMsgReaction;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity> {
     private final IConversationContext iConversationContext;
+    private final HashMap<String, Integer> clientMsgNoIndex = new HashMap<>(512);
+    private final HashMap<String, Integer> messageIdIndex = new HashMap<>(512);
+    private final HashMap<Long, Integer> orderSeqIndex = new HashMap<>(512);
 
     public enum AdapterType {
         normalMessage, pinnedMessage
@@ -76,16 +80,26 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                         : WKMsgItemViewManager.getInstance().getPinnedChatItemProviderList();
         localProviderList = new ConcurrentHashMap<>();
         for (int type : sourceList.keySet()) {
+            BaseItemProvider<WKUIChatMsgItemEntity> provider = null;
             try {
-                BaseItemProvider<WKUIChatMsgItemEntity> newProvider =
-                        sourceList.get(type).getClass().getDeclaredConstructor().newInstance();
-                localProviderList.put(type, newProvider);
-                addItemProvider(newProvider);
-            } catch (Exception e) {
-                BaseItemProvider<WKUIChatMsgItemEntity> original = Objects.requireNonNull(sourceList.get(type));
-                localProviderList.put(type, original);
-                addItemProvider(original);
+                provider = sourceList.get(type).getClass().getDeclaredConstructor().newInstance();
+            } catch (Exception ignored) {
             }
+            if (provider == null) {
+                // 带 int 参数的构造函数（如 WKSystemProvider(int type)），
+                // 避免 fallback 到单例原始实例导致 Activity 泄漏
+                try {
+                    //noinspection unchecked
+                    provider = (BaseItemProvider<WKUIChatMsgItemEntity>)
+                            sourceList.get(type).getClass().getDeclaredConstructor(int.class).newInstance(type);
+                } catch (Exception ignored) {
+                }
+            }
+            if (provider == null) {
+                continue; // 反射均失败，跳过该 provider，避免使用单例实例导致 Activity 泄漏
+            }
+            localProviderList.put(type, provider);
+            addItemProvider(provider);
         }
     }
 
@@ -153,25 +167,61 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         iConversationContext.setEditContent(content);
     }
 
-    //是否存在某条消息
-    public boolean isExist(String clientMsgNo, String messageId) {
-        if (TextUtils.isEmpty(clientMsgNo)) return false;
-        boolean isExist = false;
-        for (int i = 0, size = getData().size(); i < size; i++) {
-            if (getData().get(i).wkMsg == null) {
-                continue;
+    public void rebuildIndex() {
+        clientMsgNoIndex.clear();
+        messageIdIndex.clear();
+        orderSeqIndex.clear();
+        List<WKUIChatMsgItemEntity> data = getData();
+        for (int i = 0, size = data.size(); i < size; i++) {
+            WKMsg msg = data.get(i).wkMsg;
+            if (msg == null) continue;
+            if (!TextUtils.isEmpty(msg.clientMsgNO)) {
+                clientMsgNoIndex.put(msg.clientMsgNO, i);
             }
-            if (!TextUtils.isEmpty(messageId) && !TextUtils.isEmpty(getData().get(i).wkMsg.messageID) && getData().get(i).wkMsg.messageID.equals(messageId)) {
-                isExist = true;
-                break;
+            if (!TextUtils.isEmpty(msg.messageID)) {
+                messageIdIndex.put(msg.messageID, i);
             }
-
-            if (!TextUtils.isEmpty(getData().get(i).wkMsg.clientMsgNO) && getData().get(i).wkMsg.clientMsgNO.equals(clientMsgNo)) {
-                isExist = true;
-                break;
+            if (msg.orderSeq != 0) {
+                orderSeqIndex.put(msg.orderSeq, i);
             }
         }
-        return isExist;
+    }
+
+    //是否存在某条消息
+    public boolean isExist(String clientMsgNo, String messageId) {
+        if (!TextUtils.isEmpty(messageId) && messageIdIndex.containsKey(messageId)) {
+            return true;
+        }
+        if (!TextUtils.isEmpty(clientMsgNo) && clientMsgNoIndex.containsKey(clientMsgNo)) {
+            return true;
+        }
+        return false;
+    }
+
+    public int findPositionByMsg(WKMsg wkMsg) {
+        if (wkMsg == null) return -1;
+        if (!TextUtils.isEmpty(wkMsg.clientMsgNO)) {
+            Integer pos = clientMsgNoIndex.get(wkMsg.clientMsgNO);
+            if (pos != null && pos >= 0 && pos < getData().size()) return pos;
+        }
+        if (!TextUtils.isEmpty(wkMsg.messageID)) {
+            Integer pos = messageIdIndex.get(wkMsg.messageID);
+            if (pos != null && pos >= 0 && pos < getData().size()) return pos;
+        }
+        // fallback: linear search by clientSeq
+        for (int i = 0, size = getData().size(); i < size; i++) {
+            if (getData().get(i).wkMsg != null && getData().get(i).wkMsg.clientSeq == wkMsg.clientSeq) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public int findPositionByOrderSeq(long orderSeq) {
+        if (orderSeq == 0) return -1;
+        Integer pos = orderSeqIndex.get(orderSeq);
+        if (pos != null && pos >= 0 && pos < getData().size()) return pos;
+        return -1;
     }
 
     //获取最后一条消息

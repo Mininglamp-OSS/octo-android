@@ -68,11 +68,14 @@ import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.space.SpaceModel;
 import com.chat.uikit.space.SpacePopupWindow;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.xinbida.wukongim.entity.WKCMDKeys;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelState;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
+import com.xinbida.wukongim.entity.WKMentionType;
 import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
@@ -124,6 +127,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     // 用于过滤实时消息推送中不属于当前 Space 的会话
     private final Set<String> spaceConversationKeys = new HashSet<>();
     private boolean pendingSpaceResync = false;
+    // 对齐 iOS：仅在首次会话同步完成后调用一次 syncReminder，避免重复网络请求
+    private boolean hasInitialReminderSynced = false;
 
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
@@ -546,23 +551,38 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
         });
         WKIM.getInstance().getReminderManager().addOnNewReminderListener("chat_fragment", list -> {
-            if (WKReader.isEmpty(list) || WKReader.isEmpty(chatConversationAdapter.getData()))
-                return;
-            for (WKReminder reader : list) {
-                for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
-                    if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
-                    if (reader.done == 0
-                            && !TextUtils.isEmpty(reader.messageID)
-                            && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null
-                            && !TextUtils.isEmpty(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().messageID)
-                            && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg() != null
-                            && reader.messageID.equals(chatConversationAdapter.getData().get(i).uiConversationMsg.getWkMsg().messageID)) {
-                        chatConversationAdapter.getData().get(i).isResetReminders = true;
-                        notifyRecycler(i, chatConversationAdapter.getData().get(i));
-                        break;
+            if (WKReader.isEmpty(list)) return;
+            // 收集受影响的 channelID + 子区对应的父群 channelID
+            Set<String> affectedChannels = new HashSet<>();
+            Set<String> affectedParentGroups = new HashSet<>();
+            for (WKReminder r : list) {
+                if (!TextUtils.isEmpty(r.channelID)) {
+                    affectedChannels.add(r.channelID);
+                    // 子区提醒：提取父群 ID，确保父群的线程预览也刷新
+                    String[] parsed = ThreadModel.getInstance().parseChannelId(r.channelID);
+                    if (parsed != null) {
+                        affectedParentGroups.add(parsed[0]);
                     }
                 }
             }
+            AndroidUtilities.runOnUIThread(() -> {
+                // 重置受影响会话的 reminderList 为 null，下次 getReminderList() 会从 DB 重新读取
+                for (ChatConversationMsg msg : allConversations) {
+                    if (msg.isSectionHeader || msg.uiConversationMsg == null) continue;
+                    if (affectedChannels.contains(msg.uiConversationMsg.channelID)) {
+                        msg.uiConversationMsg.setReminderList(null);
+                        msg.isResetReminders = true;
+                    }
+                    // 子区提醒到达时，刷新父群的线程预览
+                    if (affectedParentGroups.contains(msg.uiConversationMsg.channelID)) {
+                        msg.isResetReminders = true;
+                        chatConversationAdapter.refreshThreadPreviews(msg.uiConversationMsg.channelID);
+                    }
+                }
+                // 刷新 UI
+                updateGroupMentionBadge();
+                filterAndDisplay();
+            });
         });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
@@ -970,6 +990,40 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (tabActivity != null) {
             tabActivity.setMsgCount(0);
         }
+        updateGroupMentionBadge();
+    }
+
+    /**
+     * 检查群聊和子区会话中是否有未处理的 @mention 提醒，
+     * 有则在群聊 Tab 上显示 @ 角标。
+     */
+    private void updateGroupMentionBadge() {
+        if (segmentTabView == null || !isAdded()) return;
+        boolean hasMention = false;
+        // 1. 遍历 allConversations 中的 GROUP 会话
+        List<ChatConversationMsg> source = allConversations.isEmpty()
+                ? chatConversationAdapter.getData() : allConversations;
+        for (ChatConversationMsg item : source) {
+            if (item.isSectionHeader) continue;
+            if (item.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                List<WKReminder> reminders = item.getReminders();
+                if (WKReader.isNotEmpty(reminders)) {
+                    for (WKReminder r : reminders) {
+                        if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
+                            hasMention = true;
+                            break;
+                        }
+                    }
+                }
+                // 2. 检查该群下子区的 reminders（直接查 DB，不依赖 threadDataCache）
+                if (!hasMention) {
+                    hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                            item.uiConversationMsg.channelID, WKMentionType.WKReminderTypeMentionMe);
+                }
+            }
+            if (hasMention) break;
+        }
+        segmentTabView.setMentionBadge(0, hasMention, getString(R.string.last_msg_remind));
     }
 
     @Override
@@ -989,10 +1043,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (WKReader.isNotEmpty(chatConversationAdapter.getData().get(i).childList)) {
                     for (int j = 0, len = chatConversationAdapter.getData().get(i).childList.size(); j < len; j++) {
                         if (chatConversationAdapter.getData().get(i).childList.get(j).uiConversationMsg.channelID.equals(uiConversationMsg.channelID)) {
+                            // 更新匹配的子区数据
+                            chatConversationAdapter.getData().get(i).childList.get(j).uiConversationMsg.unreadCount = uiConversationMsg.unreadCount;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.lastMsgSeq = uiConversationMsg.lastMsgSeq;
                             chatConversationAdapter.getData().get(i).uiConversationMsg.clientMsgNo = uiConversationMsg.clientMsgNo;
-                            chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount += uiConversationMsg.unreadCount;
+                            // 重新计算父群未读数：遍历所有子区求和（避免 += 累加导致虚高）
+                            int totalChildUnread = 0;
+                            for (ChatConversationMsg child : chatConversationAdapter.getData().get(i).childList) {
+                                totalChildUnread += child.uiConversationMsg.unreadCount;
+                            }
+                            chatConversationAdapter.getData().get(i).uiConversationMsg.unreadCount = totalChildUnread;
                             notifyRecycler(i, chatConversationAdapter.getData().get(i));
                             isBreak = true;
                             isAdd = false;
@@ -1034,12 +1095,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg == null) {
             return;
         }
-        // 子区会话不在主聊天列表显示，但需要刷新父群聊的子区预览
+        // 子区会话不在主聊天列表显示，但需要刷新父群聊的子区预览并更新排序
         if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
-            // 从子区 channelId 提取父群组 groupNo，刷新其子区预览
             String[] parsed = ThreadModel.getInstance().parseChannelId(uiConversationMsg.channelID);
             if (parsed != null) {
                 chatConversationAdapter.refreshThreadPreviews(parsed[0]);
+                // 更新父群的 lastMsgTimestamp，使其在分组内上浮（对齐 iOS addOrUpdateChildren）
+                for (ChatConversationMsg msg : allConversations) {
+                    if (msg.uiConversationMsg != null
+                            && parsed[0].equals(msg.uiConversationMsg.channelID)
+                            && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                        if (uiConversationMsg.lastMsgTimestamp > msg.uiConversationMsg.lastMsgTimestamp) {
+                            msg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                        }
+                        break;
+                    }
+                }
             }
             if (isEnd) {
                 sortMsg(allConversations);
@@ -1347,22 +1418,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 当收到不属于当前 Space 的实时消息时调用，使用防抖避免频繁请求。
      * 同步结果由 RefreshMsgListListener 处理，会重新校准 spaceConversationKeys。
      */
+    private final Runnable spaceResyncRunnable = () -> {
+        pendingSpaceResync = false;
+        spaceConversationKeys.clear();
+        allConversations.clear();
+        chatConversationAdapter.setList(new ArrayList<>());
+        Schedulers.io().scheduleDirect(() -> {
+            WKIM.getInstance().getConversationManager().clearAll();
+            // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+            // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            });
+        });
+    };
+
     private void scheduleSpaceResync() {
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            pendingSpaceResync = false;
-            spaceConversationKeys.clear();
-            allConversations.clear();
-            chatConversationAdapter.setList(new ArrayList<>());
-            Schedulers.io().scheduleDirect(() -> {
-                WKIM.getInstance().getConversationManager().clearAll();
-                // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
-                // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                });
-            });
-        }, 500);
+        pingHandler.postDelayed(spaceResyncRunnable, 500);
     }
 
     //排序消息
@@ -1390,7 +1463,72 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             setAllCount();
             scrollToPositionIfNearTop(0);
             syncSpaceKeysToGlobal();
+            // 对齐 iOS：仅首次会话同步完成后调用一次 syncReminder
+            if (!hasInitialReminderSynced) {
+                hasInitialReminderSynced = true;
+                MsgModel.getInstance().syncReminder();
+            }
         });
+    }
+
+    /**
+     * 检查分组内是否有未处理的 @mention 提醒（含群聊和子区），对齐 iOS WKCategorySectionCell
+     */
+    /**
+     * 对齐 iOS WKCategorySectionCell：计算分组下所有会话的未读消息总数（含子区）
+     * 子区会话 (COMMUNITY_TOPIC) 不在 allConversations 中，需从 ConversationManager 单独查询
+     */
+    private int getUnreadCountInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
+        if (category.groups == null) return 0;
+        // 一次性获取所有子区会话，避免在循环内重复查询
+        List<WKConversationMsg> topicConvs = WKIM.getInstance().getConversationManager()
+                .getWithChannelType(WKChannelType.COMMUNITY_TOPIC);
+        int total = 0;
+        for (CategoryEntity.CategoryGroup cg : category.groups) {
+            ChatConversationMsg msg = channelMap.get(cg.group_no);
+            if (msg != null) {
+                if (WKReader.isNotEmpty(msg.childList)) {
+                    // 有子区列表时，getUnReadCount() 已包含子区未读，不再重复累加
+                    total += msg.getUnReadCount();
+                    continue;
+                }
+                // 无子区列表：加父群自身未读
+                total += msg.uiConversationMsg.unreadCount;
+            }
+            // 从 SDK 查子区未读（仅当 childList 为空时才走到这里，避免双重计算）
+            String prefix = cg.group_no + "____";
+            for (WKConversationMsg conv : topicConvs) {
+                if (conv.channelID != null && conv.channelID.startsWith(prefix)) {
+                    total += conv.unreadCount;
+                }
+            }
+        }
+        return total;
+    }
+
+    private boolean hasMentionInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
+        if (category.groups == null) return false;
+        String loginUID = WKConfig.getInstance().getUid();
+        for (CategoryEntity.CategoryGroup cg : category.groups) {
+            if (!channelMap.containsKey(cg.group_no)) continue;
+            // 从 SDK DB 直接读取提醒（不依赖会话对象的 reminderList，避免时序问题）
+            List<WKReminder> reminders = WKIM.getInstance().getReminderManager()
+                    .getReminders(cg.group_no, WKChannelType.GROUP);
+            if (WKReader.isNotEmpty(reminders)) {
+                for (WKReminder r : reminders) {
+                    if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0
+                            && (TextUtils.isEmpty(r.publisher) || !r.publisher.equals(loginUID))) {
+                        return true;
+                    }
+                }
+            }
+            // 检查子区：直接查 DB（不依赖 threadDataCache，冷启动时可能为空）
+            if (ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                    cg.group_no, WKMentionType.WKReminderTypeMentionMe)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1437,6 +1575,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
                 ChatConversationMsg sectionHeader = new ChatConversationMsg(category.category_id, category.name);
                 sectionHeader.sectionGroupCount = actualCount;
+                sectionHeader.sectionUnreadCount = getUnreadCountInCategory(category, channelMap);
+                sectionHeader.sectionHasMention = hasMentionInCategory(category, channelMap);
                 displayList.add(sectionHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
                     List<ChatConversationMsg> sectionItems = new ArrayList<>();
@@ -1460,7 +1600,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (defaultCategory != null && !defaultCategory.groups.isEmpty()) {
                 String sectionId = "ungrouped";
                 String sectionTitle = defaultCategory.name != null ? defaultCategory.name : getString(R.string.default_group);
-                displayList.add(new ChatConversationMsg(sectionId, sectionTitle));
+                ChatConversationMsg ungroupedHeader = new ChatConversationMsg(sectionId, sectionTitle);
+                ungroupedHeader.sectionUnreadCount = getUnreadCountInCategory(defaultCategory, channelMap);
+                ungroupedHeader.sectionHasMention = hasMentionInCategory(defaultCategory, channelMap);
+                displayList.add(ungroupedHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(sectionId)) {
                     List<ChatConversationMsg> ungroupedItems = new ArrayList<>();
                     for (CategoryEntity.CategoryGroup cg : defaultCategory.groups) {
@@ -2279,9 +2422,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getConversationManager().removeOnDeleteMsgListener("chat_fragment");
         WKIM.getInstance().getCMDManager().removeCmdListener("chat_fragment_cmd");
         WKIM.getInstance().getMsgManager().removeRefreshMsgListener("chat_fragment");
+        WKIM.getInstance().getMsgManager().removeClearMsg("chat_fragment");
         WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener("chat_fragment");
         WKIM.getInstance().getMsgManager().removeSendMsgAckListener("chat_fragment");
         WKIM.getInstance().getReminderManager().removeNewReminderListener("chat_fragment");
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("chat_fragment_refresh_channel");
+        EndpointManager.getInstance().remove("show_create_category_dialog");
+        EndpointManager.getInstance().remove("");
+        EndpointManager.getInstance().remove("chat_cover");
+        EndpointManager.getInstance().remove("refresh_conversation_extras");
+        EndpointManager.getInstance().remove("refresh_conversation_calling");
+        EndpointManager.getInstance().remove("scroll_to_unread_channel");
+        pingHandler.removeCallbacks(spaceResyncRunnable);
         stopPingTimer();
     }
 

@@ -10,6 +10,7 @@ import com.xinbida.wukongim.db.ConversationDbManager;
 import com.xinbida.wukongim.db.MsgDbManager;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKSyncMsg;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.interfaces.IReceivedMsgListener;
@@ -527,6 +528,35 @@ public class MessageHandler {
                         }
                     }
                 }
+            }
+            // 对齐 iOS WKChatManager：@所有人 时客户端本地创建 reminder（服务端不为 @所有人 生成 reminder）
+            // GROUP 消息检查 red_dot（对齐 iOS showUnread）；COMMUNITY_TOPIC 子区不检查（服务端 red_dot 策略不同）
+            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+                    && (lastMsg.channelType != WKChannelType.GROUP || list.get(i).red_dot == 1)
+                    && !TextUtils.isEmpty(lastMsg.fromUID)
+                    && !lastMsg.fromUID.equals(WKIMApplication.getInstance().getUid())) {
+                WKReminder reminder = new WKReminder();
+                // 对齐 iOS：用 messageID（全局唯一）作为 reminderID，避免不同子区 messageSeq 相同导致冲突
+                long reminderId = lastMsg.messageSeq; // fallback
+                if (!TextUtils.isEmpty(lastMsg.messageID)) {
+                    try {
+                        reminderId = Long.parseLong(lastMsg.messageID);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                reminder.reminderID = reminderId;
+                reminder.messageID = lastMsg.messageID;
+                reminder.messageSeq = lastMsg.messageSeq;
+                reminder.channelID = lastMsg.channelID;
+                reminder.channelType = lastMsg.channelType;
+                reminder.type = 1; // WKReminderTypeMentionMe
+                reminder.text = "[有人@我]";
+                reminder.publisher = lastMsg.fromUID;
+                reminder.isLocate = 1;
+                reminder.done = 0;
+                reminder.version = 0;
+                WKIM.getInstance().getReminderManager().saveOrUpdateReminders(
+                        java.util.Collections.singletonList(reminder));
             }
             if (isSave) {
                 //如果存在艾特情况直接将消息存储

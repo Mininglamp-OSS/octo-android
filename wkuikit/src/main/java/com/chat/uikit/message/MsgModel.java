@@ -21,6 +21,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
@@ -41,6 +42,7 @@ import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKConversationMsgExtra;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKReminder;
+import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.entity.WKSyncChannelMsg;
 import com.xinbida.wukongim.entity.WKSyncChat;
 import com.xinbida.wukongim.entity.WKSyncConvMsgExtra;
@@ -383,7 +385,6 @@ public class MsgModel extends WKBaseModel {
                     last_message_seq = 0;
                     syncCmdMsgs(0);
                     ackDeviceUUID();
-                    syncReminder();
                     syncCoverExtra();
                     new Handler(Looper.getMainLooper()).postDelayed(() -> EndpointManager.getInstance().invoke("refresh_conversation_calling",null),300);
                 } else {
@@ -633,6 +634,10 @@ public class MsgModel extends WKBaseModel {
                     String loginUID = WKConfig.getInstance().getUid();
                     List<WKReminder> list = new ArrayList<>();
                     for (WKSyncReminder reminder : result) {
+                        // 对齐 iOS：只保留属于当前用户的提醒，过滤掉同名用户（如 "张乾" vs "张乾1"）
+                        if (!TextUtils.isEmpty(reminder.uid) && !reminder.uid.equals(loginUID)) {
+                            continue;
+                        }
                         WKReminder WKReminder = syncReminderToReminder(reminder);
                         if (!TextUtils.isEmpty(reminder.publisher) && reminder.publisher.equals(loginUID)) {
                             WKReminder.done = 1;
@@ -658,15 +663,51 @@ public class MsgModel extends WKBaseModel {
 
     public void doneReminder(List<Long> list) {
         if (WKReader.isEmpty(list)) return;
+
+        // 对齐 iOS WKReminderManager.done: 同步更新 DB + 会话对象，避免返回列表时闪烁
+        // Step 1: 标记前先查出受影响的 channelID
+        List<WKReminder> affected = ReminderDBManager.getInstance().queryWithIds(list);
+        List<String> channelIds = new ArrayList<>();
+        for (WKReminder r : affected) {
+            if (!TextUtils.isEmpty(r.channelID) && !channelIds.contains(r.channelID)) {
+                channelIds.add(r.channelID);
+            }
+        }
+
+        // Step 2: 更新 DB (done=1)
+        ReminderDBManager.getInstance().doneWithReminderIds(list);
+
+        // Step 3: 清除 ReminderManager 内存缓存
+        WKIM.getInstance().getReminderManager().clearAllCache();
+
+        // Step 4: 对齐 iOS updateConversations — 同步刷新受影响会话的 reminderList
+        if (WKReader.isNotEmpty(channelIds)) {
+            List<WKUIConversationMsg> uiMsgList = WKIM.getInstance().getConversationManager()
+                    .getWithChannelIds(channelIds);
+            for (WKUIConversationMsg msg : uiMsgList) {
+                // 设为 null，下次 getReminderList() 会从 DB 读取最新(done=1 已排除)
+                msg.setReminderList(null);
+            }
+            WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsgList, "doneReminders");
+        }
+
+        // Step 5: 异步通知服务端，失败重试一次
         request(createService(MsgService.class).doneReminder(list), new IRequestResultListener<>() {
             @Override
             public void onSuccess(CommonResponse result) {
-
             }
 
             @Override
             public void onFail(int code, String msg) {
+                request(createService(MsgService.class).doneReminder(list), new IRequestResultListener<>() {
+                    @Override
+                    public void onSuccess(CommonResponse result) {
+                    }
 
+                    @Override
+                    public void onFail(int code, String msg) {
+                    }
+                });
             }
         });
     }

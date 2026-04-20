@@ -330,4 +330,15 @@ public class WKVoiceViewManager {
             panelView.cancelAllRecording();
         }
     }
+
+    /**
+     * 释放 panelView 引用，防止单例持有已销毁的 Activity 上下文导致内存泄漏。
+     * 应在 ChatActivity#onDestroy 中调用。
+     */
+    public void release() {
+        if (panelView != null) {
+            panelView.cancelAllRecording();
+            panelView = null;
+        }
+    }
 }

@@ -147,10 +147,9 @@ public class ReminderManager extends BaseManager {
         if (WKCommonUtils.isNotEmpty(reminderList)) {
             // 更新内存缓存（按 channelID 和 channelType 分组）
             updateMemoryCache(reminderList);
-            // 通知监听器
-            setNewReminders(reminderList);
-            // 更新db
+            // 先写 DB，再通知监听器（确保 listener 中读 DB 能拿到数据）
             ReminderDBManager.getInstance().insertOrUpdateReminders(reminderList);
+            setNewReminders(reminderList);
         }
 
 

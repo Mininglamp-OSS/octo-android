@@ -3,7 +3,10 @@ package com.chat.uikit.chat.adapter;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -46,12 +49,16 @@ import com.chat.uikit.R;
 import com.chat.uikit.enity.ChatConversationMsg;
 import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.message.MessageHandler;
+import com.xinbida.wukongim.db.ReminderDBManager;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMentionType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKMsg;
+import com.xinbida.wukongim.entity.WKReminder;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 
@@ -207,6 +214,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             forbiddenIv.setVisibility(View.GONE);
         }
 
+        // @mention 提醒预览
+        showCompactReminders(helper, conversationMsg);
+
         // 长按事件
         addEvent(helper, item);
 
@@ -278,12 +288,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             convertCompact(baseViewHolder, chatConversationMsg);
             chatConversationMsg.isRefreshChannelInfo = false;
         }
-        // 紧凑模式不需要处理 time/typing/status/content/calling
+        // 内容或提醒变化时刷新紧凑行的 @mention 预览
+        if (chatConversationMsg.isResetContent || chatConversationMsg.isResetReminders) {
+            showCompactReminders(baseViewHolder, chatConversationMsg);
+            chatConversationMsg.isResetContent = false;
+            chatConversationMsg.isResetReminders = false;
+        }
+        // 紧凑模式不需要处理 time/typing/status/calling
         chatConversationMsg.isResetTime = false;
         chatConversationMsg.isResetTyping = false;
         chatConversationMsg.isRefreshStatus = false;
-        chatConversationMsg.isResetContent = false;
-        chatConversationMsg.isResetReminders = false;
     }
 
     public interface IListener {
@@ -333,6 +347,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (TextUtils.isEmpty(content) || WKContentType.isSystemMsg(msg.type)) {
             content = getShowContent(msg.content);
         }
+        // 链接卡片消息：显示友好预览
+        if (content != null && content.startsWith("[链接]")) {
+            content = parseLinkPreview(content);
+        }
         // 截屏消息：SDK 不认识 type=20，baseModel.getDisplayContent() 返回"未知消息"，需要覆盖
         if (msg.type == WKContentType.screenshot) {
             String name;
@@ -381,6 +399,25 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     private String getShowContent(String contentJson) {
         return StringUtils.getShowContent(getContext(), contentJson);
+    }
+
+    private String parseLinkPreview(String content) {
+        try {
+            String jsonStr = content.substring("[链接]".length());
+            org.json.JSONObject json = new org.json.JSONObject(jsonStr);
+            String title = json.optString("title", "");
+            if (!TextUtils.isEmpty(title)) {
+                return "[链接] " + title;
+            }
+            String url = json.optString("url", "");
+            if (!TextUtils.isEmpty(url)) {
+                android.net.Uri uri = android.net.Uri.parse(url);
+                String host = uri.getHost();
+                return "[链接] " + (host != null ? host : url);
+            }
+        } catch (Exception ignored) {
+        }
+        return "[链接]";
     }
 
     private void setStatus(BaseViewHolder helper, WKUIConversationMsg item, boolean isPlayAnimation) {
@@ -576,6 +613,39 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
         }
         return item.uiConversationMsg.unreadCount;
+    }
+
+    /**
+     * 群聊紧凑行：有 @mention 时显示 [有人@你] + 消息预览，否则隐藏
+     */
+    private void showCompactReminders(@NotNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        TextView contentTv = helper.getView(R.id.compactContentTv);
+        List<WKReminder> reminders = conversationMsg.getReminders();
+        boolean hasMention = false;
+        if (WKReader.isNotEmpty(reminders)) {
+            for (WKReminder r : reminders) {
+                if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
+                    hasMention = true;
+                    break;
+                }
+            }
+        }
+        if (!hasMention) {
+            contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
+            contentTv.setTypeface(null, Typeface.NORMAL);
+            contentTv.setVisibility(View.GONE);
+            return;
+        }
+        contentTv.setVisibility(View.VISIBLE);
+        String mentionTag = getContext().getString(R.string.last_msg_remind);
+        WKUIConversationMsg item = conversationMsg.uiConversationMsg;
+        String msgContent = getContent(item.getWkMsg());
+        String fromName = getFromName(item.channelType, item.getWkMsg());
+        String preview = TextUtils.isEmpty(fromName) ? msgContent : fromName + "：" + msgContent;
+        // 整行高亮（对齐子区 threadMentionTv 样式）
+        contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
+        contentTv.setTypeface(null, Typeface.BOLD);
+        contentTv.setText(mentionTag + " " + preview);
     }
 
     private void showContent(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
@@ -849,6 +919,24 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 unreadBadge.setVisibility(View.GONE);
             }
 
+            // @mention 提示
+            TextView mentionTv = rowView.findViewById(R.id.threadMentionTv);
+            boolean threadHasMention = hasThreadMentionForChannel(threadChannelId);
+            if (threadHasMention) {
+                String mentionTag = getContext().getString(R.string.last_msg_remind);
+                String lastMsg = "";
+                if (!TextUtils.isEmpty(entity.last_message_content)) {
+                    lastMsg = entity.last_message_content;
+                    if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
+                        lastMsg = entity.last_message_sender_name + ": " + lastMsg;
+                    }
+                }
+                mentionTv.setText(mentionTag + (TextUtils.isEmpty(lastMsg) ? "" : " " + lastMsg));
+                mentionTv.setVisibility(View.VISIBLE);
+            } else {
+                mentionTv.setVisibility(View.GONE);
+            }
+
             String finalThreadChannelId = threadChannelId;
             rowView.setOnClickListener(v -> {
                 if (threadPreviewClickListener != null) {
@@ -865,21 +953,80 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // "+N 个子区" 放在卡片外部
         if (activeList.size() > 2) {
             int moreCount = activeList.size() - 2;
-            TextView moreTv = new TextView(getContext());
-            moreTv.setText("+" + moreCount + " 个子区");
-            moreTv.setTextSize(13);
-            moreTv.setTextColor(Theme.colorAccount);
+            // 检查未展示子区是否有 @mention，并汇总未读数
+            boolean moreMention = false;
+            int moreUnread = 0;
+            for (int i = 2; i < activeList.size(); i++) {
+                ThreadEntity te = activeList.get(i);
+                String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
+                if (hasThreadMentionForChannel(tcId)) {
+                    moreMention = true;
+                }
+                int u = te.unread_count;
+                WKUIConversationMsg tc = WKIM.getInstance().getConversationManager()
+                        .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+                if (tc != null) {
+                    u = tc.unreadCount;
+                }
+                moreUnread += u;
+            }
+
+            // 水平容器："+N 个子区" 文字 + 未读气泡
+            LinearLayout moreRow = new LinearLayout(getContext());
+            moreRow.setOrientation(LinearLayout.HORIZONTAL);
+            moreRow.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
             moreLp.setMarginStart(AndroidUtilities.dp(74));
+            moreLp.setMarginEnd(AndroidUtilities.dp(15));
             moreLp.topMargin = AndroidUtilities.dp(4);
-            moreTv.setOnClickListener(v -> {
+
+            TextView moreTv = new TextView(getContext());
+            String moreText = "+" + moreCount + " 个子区";
+            if (moreMention) {
+                String mentionTag = getContext().getString(R.string.last_msg_remind);
+                SpannableStringBuilder ssb = new SpannableStringBuilder();
+                ssb.append(moreText);
+                ssb.append(" ");
+                int start = ssb.length();
+                ssb.append(mentionTag);
+                ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.reminderColor)),
+                        start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                moreTv.setText(ssb);
+            } else {
+                moreTv.setText(moreText);
+            }
+            moreTv.setTextSize(13);
+            moreTv.setTextColor(Theme.colorAccount);
+            LinearLayout.LayoutParams tvLp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            moreRow.addView(moreTv, tvLp);
+
+            // 未读数气泡（与子区行样式一致）
+            if (moreUnread > 0) {
+                TextView unreadBadge = new TextView(getContext());
+                unreadBadge.setText(moreUnread > 99 ? "99+" : String.valueOf(moreUnread));
+                unreadBadge.setTextSize(11);
+                unreadBadge.setTextColor(ContextCompat.getColor(getContext(), R.color.white));
+                unreadBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                unreadBadge.setGravity(Gravity.CENTER);
+                unreadBadge.setBackgroundResource(R.drawable.thread_unread_badge_bg);
+                unreadBadge.setMinWidth(AndroidUtilities.dp(18));
+                unreadBadge.setHeight(AndroidUtilities.dp(18));
+                unreadBadge.setPadding(AndroidUtilities.dp(5), 0, AndroidUtilities.dp(5), 0);
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, AndroidUtilities.dp(18));
+                badgeLp.setMarginStart(AndroidUtilities.dp(5));
+                moreRow.addView(unreadBadge, badgeLp);
+            }
+
+            moreRow.setOnClickListener(v -> {
                 if (threadPreviewClickListener != null) {
                     threadPreviewClickListener.onMoreThreadsClick(groupNo);
                 }
             });
-            contentWrapper.addView(moreTv, moreLp);
+            contentWrapper.addView(moreRow, moreLp);
         }
 
         container.addView(contentWrapper);
@@ -919,8 +1066,53 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             threadLoadingSet.remove(groupNo);
             List<ThreadEntity> result = (list != null) ? list : new ArrayList<>();
             threadDataCache.put(groupNo, result);
+            // 对齐 iOS：子区加载后检查 @所有人消息，补创建本地 reminder
+            // saveOrUpdateReminders 会自动触发 addOnNewReminderListener → filterAndDisplay
+            checkThreadMentionAll(groupNo, result);
             AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));
         });
+    }
+
+    /**
+     * 子区加载后检查 @所有人：遍历有未读的子区，查本地会话最后一条消息的 mentionAll，
+     * 如果有且无对应 reminder，则创建本地 reminder（对齐 iOS 客户端补偿逻辑）。
+     * @return 是否创建了新的 reminder
+     */
+    private boolean checkThreadMentionAll(String groupNo, List<ThreadEntity> threads) {
+        String loginUID = WKConfig.getInstance().getUid();
+        boolean created = false;
+        for (ThreadEntity entity : threads) {
+            if (entity.status != 1 || entity.unread_count <= 0) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            // 已有 reminder 就跳过
+            if (hasThreadMentionForChannel(threadChannelId)) continue;
+            // 查本地会话的最后一条消息
+            WKConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getWithChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            if (conv == null || TextUtils.isEmpty(conv.lastClientMsgNO)) continue;
+            WKMsg lastMsg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(conv.lastClientMsgNO);
+            if (lastMsg == null) continue;
+            // 解析消息内容（DB 取出的消息可能未解析 baseContentMsgModel）
+            lastMsg = MessageHandler.getInstance().parsingMsg(lastMsg);
+            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+                    && !TextUtils.isEmpty(lastMsg.fromUID) && !lastMsg.fromUID.equals(loginUID)) {
+                WKReminder reminder = new WKReminder();
+                reminder.reminderID = lastMsg.messageSeq;
+                reminder.messageID = lastMsg.messageID;
+                reminder.messageSeq = lastMsg.messageSeq;
+                reminder.channelID = threadChannelId;
+                reminder.channelType = WKChannelType.COMMUNITY_TOPIC;
+                reminder.type = WKMentionType.WKReminderTypeMentionMe;
+                reminder.publisher = lastMsg.fromUID;
+                reminder.isLocate = 1;
+                reminder.done = 0;
+                reminder.version = 0;
+                WKIM.getInstance().getReminderManager().saveOrUpdateReminders(
+                        java.util.Collections.singletonList(reminder));
+                created = true;
+            }
+        }
+        return created;
     }
 
     /**
@@ -1014,6 +1206,38 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     /**
+     * 检查指定群组的子区是否有未处理的 @mention 提醒
+     */
+    public boolean hasThreadMention(String groupNo) {
+        List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
+        if (cachedList == null || cachedList.isEmpty()) return false;
+        for (ThreadEntity entity : cachedList) {
+            if (entity.status != 1) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            if (hasThreadMentionForChannel(threadChannelId)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 检查指定子区 channelId 是否有未处理的 @mention 提醒（排除自己发的）
+     */
+    private boolean hasThreadMentionForChannel(String threadChannelId) {
+        String loginUID = WKConfig.getInstance().getUid();
+        List<WKReminder> reminders = WKIM.getInstance().getReminderManager()
+                .getReminders(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+        if (WKReader.isNotEmpty(reminders)) {
+            for (WKReminder r : reminders) {
+                if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0
+                        && (TextUtils.isEmpty(r.publisher) || !r.publisher.equals(loginUID))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * 重新加载所有群组的子区预览（保留旧缓存，新数据到达后原子替换）
      */
     public void clearAndReloadThreadData() {
@@ -1097,6 +1321,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void convertSectionHeader(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
         TextView titleTv = helper.getView(R.id.sectionTitle);
         TextView countTv = helper.getView(R.id.sectionCount);
+        TextView mentionTv = helper.getView(R.id.sectionMentionTv);
+        TextView unreadBadge = helper.getView(R.id.sectionUnreadBadge);
         ImageView arrowIv = helper.getView(R.id.sectionArrow);
         View divider = helper.getView(R.id.sectionDivider);
 
@@ -1114,6 +1340,22 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             countTv.setVisibility(View.VISIBLE);
         } else {
             countTv.setVisibility(View.GONE);
+        }
+
+        // 折叠时显示 @mention 提醒（对齐 iOS [有人@我]）
+        if (collapsed && msg.sectionHasMention) {
+            mentionTv.setText(getContext().getString(R.string.last_msg_remind));
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
+        }
+
+        // 对齐 iOS WKCategorySectionCell：折叠时显示未读总数气泡
+        if (collapsed && msg.sectionUnreadCount > 0) {
+            unreadBadge.setText(msg.sectionUnreadCount > 99 ? "99+" : String.valueOf(msg.sectionUnreadCount));
+            unreadBadge.setVisibility(View.VISIBLE);
+        } else {
+            unreadBadge.setVisibility(View.GONE);
         }
 
         // 空分组点不开

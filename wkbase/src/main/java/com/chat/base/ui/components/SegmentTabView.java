@@ -31,6 +31,7 @@ public class SegmentTabView extends LinearLayout {
     private final LinearLayout[] tabContainers = new LinearLayout[2];
     private final TextView[] tabs = new TextView[2];
     private final TextView[] badges = new TextView[2];
+    private final TextView[] mentionBadges = new TextView[2];
     private int selectedIndex = 0;
     private OnTabSelectedListener listener;
 
@@ -97,6 +98,28 @@ public class SegmentTabView extends LinearLayout {
             badgeLp.gravity = Gravity.CENTER_VERTICAL;
             container.addView(badge, badgeLp);
 
+            // mentionBadge — 对齐 iOS：橙色圆角背景 + 白色文字（紧凑）
+            TextView mentionBadge = new TextView(context);
+            mentionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8);
+            mentionBadge.setTextColor(0xFFFFFFFF);
+            mentionBadge.setGravity(Gravity.CENTER);
+            mentionBadge.setIncludeFontPadding(false);
+            mentionBadge.getPaint().setFakeBoldText(true);
+            int mentionHeight = AndroidUtilities.dp(14);
+            mentionBadge.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), 0);
+            GradientDrawable mentionBg = new GradientDrawable();
+            mentionBg.setShape(GradientDrawable.RECTANGLE);
+            mentionBg.setCornerRadius(AndroidUtilities.dp(7));
+            mentionBg.setColor(0xFFFF9500); // 橙色
+            mentionBadge.setBackground(mentionBg);
+            mentionBadge.setVisibility(GONE);
+            LayoutParams mentionLp = new LayoutParams(
+                    LayoutParams.WRAP_CONTENT, mentionHeight);
+            mentionLp.leftMargin = AndroidUtilities.dp(4);
+            mentionLp.gravity = Gravity.CENTER_VERTICAL;
+            container.addView(mentionBadge, mentionLp);
+            mentionBadges[i] = mentionBadge;
+
             LayoutParams lp = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
             container.setLayoutParams(lp);
 
@@ -144,6 +167,34 @@ public class SegmentTabView extends LinearLayout {
         } else {
             badge.setVisibility(GONE);
         }
+    }
+
+    /**
+     * 设置指定 tab 的 @mention 提示文字。
+     * @param tabIndex 0 或 1
+     * @param hasMention true 显示，false 隐藏
+     * @param text 显示的提示文字，如 [有人@你]
+     */
+    public void setMentionBadge(int tabIndex, boolean hasMention, String text) {
+        if (tabIndex < 0 || tabIndex >= 2) return;
+        TextView badge = mentionBadges[tabIndex];
+        if (hasMention) {
+            // 去掉方括号，橙色胶囊内不需要（对齐 iOS）
+            String displayText = text != null ? text.replace("[", "").replace("]", "") : text;
+            badge.setText(displayText);
+            badge.setVisibility(VISIBLE);
+        } else {
+            badge.setVisibility(GONE);
+        }
+    }
+
+    /**
+     * 设置指定 tab 的 @mention 角标。
+     * @param tabIndex 0 或 1
+     * @param hasMention true 显示，false 隐藏
+     */
+    public void setMentionBadge(int tabIndex, boolean hasMention) {
+        setMentionBadge(tabIndex, hasMention, "");
     }
 
     private void updateTabStyles() {

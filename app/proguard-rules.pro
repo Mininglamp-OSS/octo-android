@@ -149,6 +149,11 @@
 -dontwarn org.xsocket.**
 -keep class org.xsocket.** {*;}
 
+#----------消息 Provider 反射实例化（ChatAdapter / WKMsgItemViewManager）---
+-keepclassmembers class * extends com.chad.library.adapter.base.provider.BaseItemProvider {
+    <init>(...);
+}
+
 #----------UI-------------------
 -keep class com.chat.base.entity.** { *; }
 -keep class com.chat.base.base.** { *; }

@@ -38,6 +38,7 @@ public class ReminderDBManager {
     public void doneWithReminderIds(List<Long> ids) {
         ContentValues cv = new ContentValues();
         cv.put("done", 1);
+        cv.put("done_at", System.currentTimeMillis() / 1000);
         String[] strings = new String[ids.size()];
         for (int i = 0; i < ids.size(); i++) {
             strings[i] = ids.get(i) + "";
@@ -59,6 +60,17 @@ public class ReminderDBManager {
             }
         }
         return version;
+    }
+
+    /**
+     * 查询指定父群下所有子区的未完成提醒（channel_id LIKE 'groupNo____%'）
+     */
+    public boolean hasUndoneReminderWithChannelPrefix(String groupNo, int reminderType) {
+        String prefix = groupNo + "____%";
+        String sql = "select 1 from " + reminders + " where channel_id LIKE ? and done=0 and type=? limit 1";
+        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{prefix, reminderType})) {
+            return cursor != null && cursor.moveToFirst();
+        }
     }
 
     /**
@@ -129,7 +141,7 @@ public class ReminderDBManager {
         return list;
     }
 
-    private List<WKReminder> queryWithIds(List<Long> ids) {
+    public List<WKReminder> queryWithIds(List<Long> ids) {
         StringBuilder stringBuffer = new StringBuilder();
         for (int i = 0, size = ids.size(); i < size; i++) {
             if (!TextUtils.isEmpty(stringBuffer)) {
@@ -274,6 +286,7 @@ public class ReminderDBManager {
         reminder.text = WKCursor.readString(cursor, "text");
         reminder.version = WKCursor.readLong(cursor, "version");
         reminder.done = WKCursor.readInt(cursor, "done");
+        reminder.doneAt = WKCursor.readLong(cursor, "done_at");
         String data = WKCursor.readString(cursor, "data");
         reminder.needUpload = WKCursor.readInt(cursor, "need_upload");
         reminder.publisher = WKCursor.readString(cursor, "publisher");

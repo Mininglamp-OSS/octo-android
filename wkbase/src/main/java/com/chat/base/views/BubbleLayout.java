@@ -53,6 +53,9 @@ public class BubbleLayout extends LinearLayout {
     //     箭头底部左右两个弧度分别是由 mArrowDownLeftRadius, mArrowDownRightRadius 控制
     private int mArrowTopLeftRadius, mArrowTopRightRadius, mArrowDownLeftRadius, mArrowDownRightRadius;
 
+    // 箭头是否在气泡顶部（仅群聊微信风格使用，默认 false 保持原始底部风格）
+    private boolean mArrowAtTop = false;
+
     private OnClickEdgeListener mListener;
     private final Region mRegion = new Region();
 
@@ -222,9 +225,13 @@ public class BubbleLayout extends LinearLayout {
         mPaint.setColor(mBubbleColor);
         mPath.reset();
 
-        int topOffset = (topOffset = mLookPosition) + mLookLength > mBottom ? mBottom - mLookWidth : topOffset;
-        // topOffset = Math.max(topOffset, mShadowRadius);
-        topOffset = getHeight();
+        int topOffset;
+        if (mArrowAtTop && (mLook == Look.LEFT || mLook == Look.RIGHT)) {
+            int cornerRadius = (mLook == Look.LEFT) ? getLTR() : getRTR();
+            topOffset = mTop + cornerRadius;
+        } else {
+            topOffset = getHeight();
+        }
         int leftOffset = (leftOffset = mLookPosition) + mLookLength > mRight ? mRight - mLookWidth : leftOffset;
         leftOffset = (int) Math.max(leftOffset, mShadowRadius);
 
@@ -247,6 +254,11 @@ public class BubbleLayout extends LinearLayout {
                             mLookLength, mLookWidth / 2F,
                             mLookLength, mLookWidth / 2F + mArrowDownLeftRadius);
                     mPath.lineTo(mLeft, mBottom - getLDR());
+                } else if (mArrowAtTop) {
+                    float arrowTipY = topOffset + mLookWidth / 2F;
+                    float dy = Math.max(0, mBottom - getLDR() - arrowTipY);
+                    mPath.rCubicTo(0F, Math.min(mArrowTopLeftRadius, dy * 0.3F),
+                            mLookLength, dy, mLookLength, dy);
                 }
                 mPath.quadTo(mLeft, mBottom,
                         mLeft + getLDR(), mBottom);
@@ -304,6 +316,11 @@ public class BubbleLayout extends LinearLayout {
                             -mLookLength, mLookWidth / 2F,
                             -mLookLength, mLookWidth / 2F + mArrowDownRightRadius);
                     mPath.lineTo(mRight, mBottom - getRDR());
+                } else if (mArrowAtTop) {
+                    float arrowTipY = topOffset + mLookWidth / 2F;
+                    float dy = Math.max(0, mBottom - getRDR() - arrowTipY);
+                    mPath.rCubicTo(0F, Math.min(mArrowTopRightRadius, dy * 0.3F),
+                            -mLookLength, dy, -mLookLength, dy);
                 }
                 mPath.quadTo(mRight, mBottom,
                         mRight - getRDR(), mBottom);
@@ -498,6 +515,10 @@ public class BubbleLayout extends LinearLayout {
 
     public void setBubbleRadius(int mBubbleRadius) {
         this.mBubbleRadius = mBubbleRadius;
+    }
+
+    public void setArrowAtTop(boolean atTop) {
+        this.mArrowAtTop = atTop;
     }
 
     public int getLTR() {

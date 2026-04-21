@@ -28,19 +28,6 @@
         android:visibility="visible"
         app:shadowRadius="0dp">
 
-        <TextView
-            android:id="@+id/receivedTextNameTv"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="3dp"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:singleLine="true"
-            android:textColor="@color/colorDark"
-            android:textSize="12sp"
-            android:visibility="visible" />
-
-
 
         <com.chat.uikit.view.ChatTextTimeLayout
             android:id="@+id/textContentLayout"

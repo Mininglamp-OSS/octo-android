@@ -101,7 +101,6 @@ open class WKTextProvider : WKChatBaseProvider() {
 //        val textContentLayout = parentView.findViewById<View>(R.id.textContentLayout)
         //   val linkView = parentView.findViewById<LinearLayout>(R.id.linkView)
         val contentTv = parentView.findViewById<EmojiTextView>(R.id.contentTv)
-        val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
         //val msgTimeView = parentView.findViewById<View>(R.id.msgTimeView)
 
 
@@ -123,11 +122,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         if (from == WKChatIteMsgFromType.SEND) {
             contentTv.setBackgroundResource(R.drawable.send_chat_text_bg)
             contentLayout.gravity = Gravity.END
-            receivedTextNameTv.visibility = View.GONE
             textColor = ContextCompat.getColor(context, R.color.colorDark)
         } else {
             contentTv.setBackgroundResource(R.drawable.received_chat_text_bg)
-            setFromName(uiChatMsgItemEntity, from, receivedTextNameTv)
             contentLayout.gravity = Gravity.START
             textColor = ContextCompat.getColor(context, R.color.receive_text_color)
         }
@@ -1205,8 +1202,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         from: WKChatIteMsgFromType
     ) {
-        val receivedTextNameTv = parentView.findViewById<TextView>(R.id.receivedTextNameTv)
-        setFromName(uiChatMsgItemEntity, from, receivedTextNameTv)
+        val receivedNameTv = parentView.findViewById<TextView>(R.id.receivedNameTv)
+            ?: return
+        setFromName(uiChatMsgItemEntity, from, receivedNameTv)
     }
 
     override fun refreshReply(

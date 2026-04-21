@@ -50,13 +50,11 @@ public class WKVoiceViewManager {
         panelView = new WKVoicePanelView(iConversationContext.getChatActivity());
 
         // Fetch voice config to determine if voice input tab should be shown
+        final WKVoicePanelView localPanelView = panelView;
         WKVoiceInputService.getInstance().fetchConfig((config, error) -> {
-            if (config != null && config.getEnabled()) {
-                panelView.setVoiceInputEnabled(true);
-            } else {
-                panelView.setVoiceInputEnabled(false);
-            }
-            panelView.setup();
+            if (localPanelView != panelView) return;
+            localPanelView.setVoiceInputEnabled(config != null && config.getEnabled());
+            localPanelView.setup();
             connectCallbacks(iConversationContext);
         });
 

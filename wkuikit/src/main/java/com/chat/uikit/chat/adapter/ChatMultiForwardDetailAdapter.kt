@@ -319,7 +319,8 @@ class ChatMultiForwardDetailAdapter(
                         val tableContainer = holder.getView<LinearLayout>(R.id.tableCardContainer)
                         tableContainer.removeAllViews()
 
-                        val (spanned, tables) = WKMarkwonProvider.toMarkdownWithTables(context, content)
+                        val (rawSpanned, tables) = WKMarkwonProvider.toMarkdownWithTables(context, content)
+                        val spanned = applyUrlHighlighting(rawSpanned)
                         if (tables.isEmpty()) {
                             contentTv.text = spanned
                         } else {
@@ -619,5 +620,34 @@ class ChatMultiForwardDetailAdapter(
             WKToastUtils.getInstance()
                 .showToastNormal(context.getString(R.string.str_file_not_exist))
         }
+    }
+
+    private fun applyUrlHighlighting(spanned: android.text.Spanned): android.text.SpannableStringBuilder {
+        val ssb = android.text.SpannableStringBuilder(spanned)
+        val displayText = ssb.toString()
+        val urls = com.chat.base.utils.StringUtils.getStrUrls(displayText)
+        for (url in urls) {
+            var fromIndex = 0
+            while (fromIndex >= 0) {
+                fromIndex = displayText.indexOf(url, fromIndex)
+                if (fromIndex >= 0) {
+                    ssb.setSpan(object : android.text.style.ClickableSpan() {
+                        override fun onClick(widget: android.view.View) {
+                            val intent = android.content.Intent(context, com.chat.base.act.WKWebViewActivity::class.java)
+                            intent.putExtra("url", url)
+                            context.startActivity(intent)
+                        }
+                        override fun updateDrawState(ds: android.text.TextPaint) {
+                            ds.color = androidx.core.content.ContextCompat.getColor(context, com.chat.base.R.color.blue)
+                            ds.isUnderlineText = false
+                        }
+                    }, fromIndex, fromIndex + url.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(android.text.style.StyleSpan(Typeface.BOLD),
+                        fromIndex, fromIndex + url.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    fromIndex += url.length
+                }
+            }
+        }
+        return ssb
     }
 }

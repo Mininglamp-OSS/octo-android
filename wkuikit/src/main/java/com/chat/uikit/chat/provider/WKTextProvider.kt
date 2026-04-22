@@ -402,7 +402,7 @@ open class WKTextProvider : WKChatBaseProvider() {
             headerRow.setBackgroundColor(headerBgColor)
             for ((colIdx, header) in tableData.headers.withIndex()) {
                 headerRow.addView(
-                    createCellTextView(header, textSize, cellPaddingH, cellPaddingV,
+                    createCellTextView(header.text, header.links, textSize, cellPaddingH, cellPaddingV,
                         headerTextColor, true, tableData, colIdx, borderColor)
                 )
             }
@@ -414,7 +414,7 @@ open class WKTextProvider : WKChatBaseProvider() {
             if (rowIdx % 2 == 1) tableRow.setBackgroundColor(evenRowBgColor)
             for ((colIdx, cell) in row.withIndex()) {
                 tableRow.addView(
-                    createCellTextView(cell, textSize, cellPaddingH, cellPaddingV,
+                    createCellTextView(cell.text, cell.links, textSize, cellPaddingH, cellPaddingV,
                         cellTextColor, false, tableData, colIdx, borderColor)
                 )
             }
@@ -424,10 +424,10 @@ open class WKTextProvider : WKChatBaseProvider() {
         copyBtn.setOnClickListener {
             val sb = StringBuilder()
             if (tableData.headers.isNotEmpty()) {
-                sb.appendLine(tableData.headers.joinToString("\t"))
+                sb.appendLine(tableData.headers.joinToString("\t") { it.text })
             }
             for (row in tableData.rows) {
-                sb.appendLine(row.joinToString("\t"))
+                sb.appendLine(row.joinToString("\t") { it.text })
             }
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("table", sb.toString().trimEnd()))
@@ -441,6 +441,7 @@ open class WKTextProvider : WKChatBaseProvider() {
 
     private fun createCellTextView(
         text: String,
+        links: List<com.chat.base.markdown.WKTableCellLink>,
         textSize: Float,
         paddingH: Int,
         paddingV: Int,
@@ -451,7 +452,29 @@ open class WKTextProvider : WKChatBaseProvider() {
         borderColor: Int
     ): TextView {
         return TextView(context).apply {
-            this.text = text
+            if (links.isNotEmpty()) {
+                val spannable = android.text.SpannableString(text)
+                for (link in links) {
+                    if (link.start >= 0 && link.end <= text.length && link.start < link.end) {
+                        val url = link.url
+                        spannable.setSpan(object : android.text.style.ClickableSpan() {
+                            override fun onClick(widget: android.view.View) {
+                                val intent = android.content.Intent(context, WKWebViewActivity::class.java)
+                                intent.putExtra("url", url)
+                                context.startActivity(intent)
+                            }
+                            override fun updateDrawState(ds: android.text.TextPaint) {
+                                ds.color = androidx.core.content.ContextCompat.getColor(context, com.chat.base.R.color.blue)
+                                ds.isUnderlineText = false
+                            }
+                        }, link.start, link.end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                this.text = spannable
+                movementMethod = android.text.method.LinkMovementMethod.getInstance()
+            } else {
+                this.text = text
+            }
             this.textSize = textSize
             setTextColor(textColor)
             setPadding(paddingH, paddingV, paddingH, paddingV)
@@ -459,7 +482,6 @@ open class WKTextProvider : WKChatBaseProvider() {
             if (isBold) {
                 typeface = Typeface.DEFAULT_BOLD
             }
-            // 对齐方式
             if (colIdx < tableData.alignments.size) {
                 gravity = when (tableData.alignments[colIdx]) {
                     org.commonmark.ext.gfm.tables.TableCell.Alignment.CENTER -> Gravity.CENTER
@@ -471,7 +493,6 @@ open class WKTextProvider : WKChatBaseProvider() {
                 TableRow.LayoutParams.WRAP_CONTENT,
                 TableRow.LayoutParams.WRAP_CONTENT
             )
-            // 右边框和底边框（模拟单元格分隔线）
             val gd = GradientDrawable()
             gd.setStroke(1, borderColor)
             gd.setColor(Color.TRANSPARENT)

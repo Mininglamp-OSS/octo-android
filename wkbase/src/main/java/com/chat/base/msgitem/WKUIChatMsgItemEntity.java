@@ -106,7 +106,6 @@ public class WKUIChatMsgItemEntity {
                 || wkMsg.baseContentMsgModel == null) {
             return;
         }
-
         String rawContent = getContent();
         Activity context = conversationContext.getChatActivity();
 
@@ -286,67 +285,13 @@ public class WKUIChatMsgItemEntity {
                                 iLinkClick.onShowUserDetail(uid, finalGroupNo);
                             }
                         }), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        displaySpans.replace(index, (index + showName.length()), nameSpan);
+                        int replaceEnd = Math.min(index + showName.length(), displaySpans.length());
+                        displaySpans.replace(index, replaceEnd, nameSpan);
                     }
                 }
             }
         }
-        // URL 高亮（始终执行）
-        {
-            String displayText = displaySpans.toString();
-            List<String> urls = StringUtils.getStrUrls(displayText);
-            for (String url : urls) {
-                int fromIndex = 0;
-                while (fromIndex >= 0) {
-                    fromIndex = displayText.indexOf(url, fromIndex);
-                    if (fromIndex >= 0) {
-                        NormalClickableSpan span = new NormalClickableSpan(false, ContextCompat.getColor(context, R.color.blue), new NormalClickableContent(NormalClickableContent.NormalClickableTypes.URL, url), view -> {
-                            Intent intent = new Intent(conversationContext.getChatActivity(), WKWebViewActivity.class);
-                            intent.putExtra("url", url);
-                            conversationContext.getChatActivity().startActivity(intent);
-                        });
-                        displaySpans.setSpan(new StyleSpan(Typeface.BOLD), fromIndex, (fromIndex + url.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        displaySpans.setSpan(span, fromIndex, (fromIndex + url.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                        fromIndex += url.length();
-                    }
-                }
-            }
-        }
-        // @所有人 高亮（始终执行）
-        if (wkMsg.baseContentMsgModel.mentionAll == 1) {
-            String mentionAll = "@All";
-            String mentionAll1 = "@所有人";
-            String currentText = displaySpans.toString();
-            int index = currentText.indexOf(mentionAll);
-            if (index >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-            int index1 = currentText.indexOf(mentionAll1);
-            if (index1 >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-        }
-        // emoji：在渲染后文本中匹配
-        String renderedText = displaySpans.toString();
-        Matcher matcher = EmojiManager.getInstance().getPattern().matcher(renderedText);
-        while (matcher.find()) {
-            int start = matcher.start();
-            int end = matcher.end();
-            String emoji = renderedText.substring(start, end);
-            Drawable d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.DEF_SCALE);
-            if (d != null) {
-                AlignImageSpan span = new AlignImageSpan(d, AlignImageSpan.ALIGN_CENTER) {
-                    @Override
-                    public void onClick(View view) {
-
-                    }
-                };
-                displaySpans.setSpan(span, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-        }
-        // 单独处理 @mention entity（使用文本搜索定位）
+        // 处理 @mention entity（使用 replace()，必须在所有 setSpan 操作之前完成）
         if (WKReader.isNotEmpty(wkMsg.baseContentMsgModel.entities)) {
             for (WKMsgEntity entity : wkMsg.baseContentMsgModel.entities) {
                 if (entity.type.equals(ChatContentSpanType.getMention())) {
@@ -395,8 +340,66 @@ public class WKUIChatMsgItemEntity {
                         nameSpan.setSpan(new ForegroundColorSpan(mentionColor), 0, showName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                     }
 
-                    displaySpans.replace(start, end, nameSpan);
+                    int replaceEnd = Math.min(end, displaySpans.length());
+                    displaySpans.replace(start, replaceEnd, nameSpan);
                 }
+            }
+        }
+        // === 以下所有操作仅使用 setSpan()，不修改文本，在所有 replace() 完成后执行 ===
+
+        // URL 高亮
+        {
+            String displayText = displaySpans.toString();
+            List<String> urls = StringUtils.getStrUrls(displayText);
+            for (String url : urls) {
+                int fromIndex = 0;
+                while (fromIndex >= 0) {
+                    fromIndex = displayText.indexOf(url, fromIndex);
+                    if (fromIndex >= 0) {
+                        NormalClickableSpan span = new NormalClickableSpan(false, ContextCompat.getColor(context, R.color.blue), new NormalClickableContent(NormalClickableContent.NormalClickableTypes.URL, url), view -> {
+                            Intent intent = new Intent(conversationContext.getChatActivity(), WKWebViewActivity.class);
+                            intent.putExtra("url", url);
+                            conversationContext.getChatActivity().startActivity(intent);
+                        });
+                        displaySpans.setSpan(new StyleSpan(Typeface.BOLD), fromIndex, (fromIndex + url.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        displaySpans.setSpan(span, fromIndex, (fromIndex + url.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        fromIndex += url.length();
+                    }
+                }
+            }
+        }
+        // @所有人 高亮
+        if (wkMsg.baseContentMsgModel.mentionAll == 1) {
+            String mentionAll = "@All";
+            String mentionAll1 = "@所有人";
+            String currentText = displaySpans.toString();
+            int index = currentText.indexOf(mentionAll);
+            if (index >= 0) {
+                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            int index1 = currentText.indexOf(mentionAll1);
+            if (index1 >= 0) {
+                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
+        // emoji
+        String renderedText = displaySpans.toString();
+        Matcher matcher = EmojiManager.getInstance().getPattern().matcher(renderedText);
+        while (matcher.find()) {
+            int start = matcher.start();
+            int end = matcher.end();
+            String emoji = renderedText.substring(start, end);
+            Drawable d = MoonUtil.getEmotDrawable(context, emoji, MoonUtil.DEF_SCALE);
+            if (d != null) {
+                AlignImageSpan span = new AlignImageSpan(d, AlignImageSpan.ALIGN_CENTER) {
+                    @Override
+                    public void onClick(View view) {
+
+                    }
+                };
+                displaySpans.setSpan(span, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
         // 自动检测 @mention：对没有 entity 标记的 @xxx 文本，匹配群成员/联系人（与 iOS detectMentionsInText 一致）

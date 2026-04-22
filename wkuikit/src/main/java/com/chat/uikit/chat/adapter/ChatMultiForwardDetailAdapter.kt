@@ -552,7 +552,7 @@ class ChatMultiForwardDetailAdapter(
             val headerRow = TableRow(context)
             headerRow.setBackgroundColor(headerBgColor)
             for ((colIdx, header) in tableData.headers.withIndex()) {
-                headerRow.addView(createCell(header, textSize, cellPaddingH, cellPaddingV,
+                headerRow.addView(createCell(header.text, textSize, cellPaddingH, cellPaddingV,
                     Color.parseColor("#333333"), true, tableData, colIdx, borderColor))
             }
             tableContent.addView(headerRow)
@@ -561,15 +561,15 @@ class ChatMultiForwardDetailAdapter(
             val tableRow = TableRow(context)
             if (rowIdx % 2 == 1) tableRow.setBackgroundColor(evenRowBgColor)
             for ((colIdx, cell) in row.withIndex()) {
-                tableRow.addView(createCell(cell, textSize, cellPaddingH, cellPaddingV,
+                tableRow.addView(createCell(cell.text, textSize, cellPaddingH, cellPaddingV,
                     Color.parseColor("#555555"), false, tableData, colIdx, borderColor))
             }
             tableContent.addView(tableRow)
         }
         copyBtn.setOnClickListener {
             val sb = StringBuilder()
-            if (tableData.headers.isNotEmpty()) sb.appendLine(tableData.headers.joinToString("\t"))
-            for (row in tableData.rows) sb.appendLine(row.joinToString("\t"))
+            if (tableData.headers.isNotEmpty()) sb.appendLine(tableData.headers.joinToString("\t") { it.text })
+            for (row in tableData.rows) sb.appendLine(row.joinToString("\t") { it.text })
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("table", sb.toString().trimEnd()))
             WKToastUtils.getInstance().showToastNormal(context.getString(com.chat.base.R.string.str_table_copied))

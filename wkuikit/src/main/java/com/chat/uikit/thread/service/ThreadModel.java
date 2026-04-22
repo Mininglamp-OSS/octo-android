@@ -54,10 +54,17 @@ public class ThreadModel extends WKBaseModel {
     }
 
     /**
-     * 获取子区列表
+     * 获取子区列表（全量，兼容旧调用）
      */
     public void listThreads(String groupNo, IThreadListListener listener) {
-        request(createService(ThreadService.class).listThreads(groupNo), new IRequestResultListener<>() {
+        listThreads(groupNo, 1, 10000, listener);
+    }
+
+    /**
+     * 获取子区列表（单页，用于列表分页加载）
+     */
+    public void listThreads(String groupNo, int page, int limit, IThreadListListener listener) {
+        request(createService(ThreadService.class).listThreads(groupNo, page, limit), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<ThreadEntity> result) {
                 listener.onResult(HttpResponseCode.success, "", result);

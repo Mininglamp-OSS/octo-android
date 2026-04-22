@@ -10,11 +10,14 @@ import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
+import com.chat.base.net.HttpResponseCode
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
+import com.chat.base.utils.WKToastUtils
 import com.chat.uikit.R
 import com.chat.uikit.chat.ChatActivity
 import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent
+import com.chat.uikit.thread.service.ThreadModel
 
 import com.xinbida.wukongim.entity.WKChannelType
 
@@ -67,10 +70,43 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
         }
         helper.getView<View>(R.id.threadCardLayout).setOnClickListener {
             val channelId = content.channel_id ?: return@setOnClickListener
-            val intent = Intent(context, ChatActivity::class.java)
-            intent.putExtra("channelId", channelId)
-            intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-            context.startActivity(intent)
+            val parsed = ThreadModel.getInstance().parseChannelId(channelId)
+            if (parsed == null) {
+                // 无法解析，直接打开
+                val intent = Intent(context, ChatActivity::class.java)
+                intent.putExtra("channelId", channelId)
+                intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
+                context.startActivity(intent)
+                return@setOnClickListener
+            }
+            val groupNo = parsed[0]
+            val shortId = parsed[1]
+            // 先查询子区状态，防止打开已关闭的子区
+            ThreadModel.getInstance().getThreadDetail(groupNo, shortId) { code, msg, entity ->
+                if (code == HttpResponseCode.success.toInt() && entity != null) {
+                    if (entity.status == 3) {
+                        // 子区已被关闭
+                        WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
+                    } else {
+                        val intent = Intent(context, ChatActivity::class.java)
+                        intent.putExtra("channelId", channelId)
+                        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
+                        context.startActivity(intent)
+                    }
+                } else {
+                    // API 错误，检查是否包含删除相关信息
+                    val errMsg = msg ?: ""
+                    if (errMsg.contains("deleted") || errMsg.contains("已关闭") || errMsg.contains("已删除")) {
+                        WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
+                    } else {
+                        // 其他网络错误降级直接打开
+                        val intent = Intent(context, ChatActivity::class.java)
+                        intent.putExtra("channelId", channelId)
+                        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
+                        context.startActivity(intent)
+                    }
+                }
+            }
         }
     }
 }

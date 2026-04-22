@@ -402,6 +402,9 @@
     <string name="str_thread_members">子区成员</string>
     <string name="str_thread_archived_tip">该子区已归档</string>
     <string name="str_thread_deleted_tip">该子区已删除</string>
+    <string name="str_close_thread">关闭子区</string>
+    <string name="str_close_thread_confirm">确定关闭该子区？关闭后所有成员将无法再访问。</string>
+    <string name="str_thread_closed_tip">该子区已被关闭</string>
     <string name="str_creator">创建者</string>
     <string name="str_new_thread">新子区</string>
     <string name="str_thread_name_label">子区名称（可选）</string>

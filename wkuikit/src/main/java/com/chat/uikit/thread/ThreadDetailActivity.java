@@ -50,6 +50,8 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
         }
     }
 
+    private boolean isCreator;
+
     @Override
     protected void initListener() {
         SingleClickUtil.onSingleClick(wkVBinding.threadMembersLayout, v -> {
@@ -60,7 +62,29 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
             startActivity(intent);
         });
 
-        wkVBinding.leaveBtn.setOnClickListener(v ->
+        wkVBinding.leaveBtn.setOnClickListener(v -> {
+            if (isCreator) {
+                // 创建者：关闭子区
+                WKDialogUtils.getInstance().showDialog(this,
+                        getString(R.string.str_close_thread),
+                        getString(R.string.str_close_thread_confirm),
+                        true, "", getString(R.string.sure),
+                        0, ContextCompat.getColor(this, R.color.red),
+                        index -> {
+                            if (index == 1) {
+                                ThreadModel.getInstance().deleteThread(groupNo, shortId, (code, msg) -> {
+                                    if (code == HttpResponseCode.success) {
+                                        EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat,
+                                                new WKChannel(channelId, WKChannelType.COMMUNITY_TOPIC));
+                                        finish();
+                                    } else {
+                                        WKToastUtils.getInstance().showToast(msg);
+                                    }
+                                });
+                            }
+                        });
+            } else {
+                // 非创建者：离开子区
                 WKDialogUtils.getInstance().showDialog(this,
                         getString(R.string.str_leave_thread),
                         getString(R.string.str_leave_thread) + "?",
@@ -70,7 +94,6 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                             if (index == 1) {
                                 ThreadModel.getInstance().leaveThread(groupNo, shortId, (code, msg) -> {
                                     if (code == HttpResponseCode.success) {
-                                        // 通知子区聊天页也关闭
                                         EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat,
                                                 new WKChannel(channelId, WKChannelType.COMMUNITY_TOPIC));
                                         finish();
@@ -79,7 +102,9 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                                     }
                                 });
                             }
-                        }));
+                        });
+            }
+        });
 
         wkVBinding.archiveBtn.setOnClickListener(v -> {
             if (threadEntity != null && threadEntity.status == 1) {
@@ -118,7 +143,9 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                 wkVBinding.creatorNameTv.setText(entity.creator_name);
 
                 String currentUid = WKConfig.getInstance().getUid();
-                boolean isCreator = currentUid.equals(entity.creator_uid);
+                isCreator = currentUid.equals(entity.creator_uid);
+                // 根据创建者身份设置按钮文本
+                wkVBinding.leaveBtn.setText(isCreator ? R.string.str_close_thread : R.string.str_leave_thread);
                 if (isCreator) {
                     wkVBinding.archiveBtn.setVisibility(View.VISIBLE);
                     if (entity.status == 1) {

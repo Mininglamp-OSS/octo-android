@@ -18,7 +18,7 @@ import retrofit2.http.Query;
 public interface ThreadService {
 
     @GET("groups/{groupNo}/threads")
-    Observable<List<ThreadEntity>> listThreads(@Path("groupNo") String groupNo);
+    Observable<List<ThreadEntity>> listThreads(@Path("groupNo") String groupNo, @Query("page") int page, @Query("limit") int limit);
 
     @POST("groups/{groupNo}/threads")
     Observable<ThreadEntity> createThread(@Path("groupNo") String groupNo, @Body JSONObject body);

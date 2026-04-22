@@ -98,9 +98,9 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/radian_normal_layout"
                 android:gravity="center"
-                android:text="@string/str_leave_thread"
                 android:textColor="@color/red"
-                android:textSize="16sp" />
+                android:textSize="16sp"
+                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

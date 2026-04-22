@@ -256,8 +256,9 @@ open class WKTextProvider : WKChatBaseProvider() {
         val displaySpans = uiChatMsgItemEntity.displaySpans
         val tableDataList = uiChatMsgItemEntity.tableDataList
 
-        // 无表格：直接设置全部文本
+        // 无表格：直接设置全部文本，恢复气泡宽度为 wrap_content（RecyclerView 复用）
         if (tableDataList.isNullOrEmpty()) {
+            contentTvLayout.layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT
             // 修复：Markwon 的 OrderedListItemSpan.margin 初始为 0，
             // 必须在 setText 前调用 measure() 用 textView 的 Paint 预计算列表序号宽度，
             // 否则首次 StaticLayout 创建时 getLeadingMargin() 返回过小的缩进值，
@@ -265,6 +266,13 @@ open class WKTextProvider : WKChatBaseProvider() {
             io.noties.markwon.core.spans.OrderedListItemSpan.measure(contentTv, displaySpans)
             contentTv.text = displaySpans
             return
+        }
+
+        // 有表格：气泡撑满最大宽度，让表格卡片有足够空间展示
+        val textContentLayout = contentTvLayout.findViewById<View>(R.id.textContentLayout)
+        if (textContentLayout != null && textContentLayout.layoutParams.width > 0) {
+            contentTvLayout.layoutParams.width = textContentLayout.layoutParams.width +
+                contentTvLayout.paddingStart + contentTvLayout.paddingEnd
         }
 
         // 按占位符 \uFFFC 拆分文本为多段
@@ -344,6 +352,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                 )
             )
         }
+
     }
 
     /** 去除 CharSequence 首尾的换行符，保留中间内容和 Span */

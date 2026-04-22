@@ -475,19 +475,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void initListener() {
-        ItemTouchHelper helper = new ItemTouchHelper(new MessageSwipeController(this, new SwipeControllerActions() {
-            @Override
-            public void showReplyUI(int position) {
-                if (position < 0 || position >= chatAdapter.getData().size()) return;
-                showReply(chatAdapter.getData().get(position).wkMsg);
-            }
-
-            @Override
-            public void hideSoft() {
-                //   mHelper.resetState();
-            }
-        }));
-        helper.attachToRecyclerView(wkVBinding.recyclerView);
+        // 禁用滑动快捷回复手势：与表格水平滚动冲突，且长按已支持回复
+        // ItemTouchHelper helper = new ItemTouchHelper(new MessageSwipeController(this, new SwipeControllerActions() {
+        //     @Override
+        //     public void showReplyUI(int position) {
+        //         if (position < 0 || position >= chatAdapter.getData().size()) return;
+        //         showReply(chatAdapter.getData().get(position).wkMsg);
+        //     }
+        //     @Override
+        //     public void hideSoft() {}
+        // }));
+        // helper.attachToRecyclerView(wkVBinding.recyclerView);
         wkVBinding.topLayout.backIv.setOnClickListener(v -> setBackListener());
         callIV.setOnClickListener(view -> {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);

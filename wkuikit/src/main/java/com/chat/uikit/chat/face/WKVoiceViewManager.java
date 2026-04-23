@@ -45,16 +45,18 @@ public class WKVoiceViewManager {
     }
 
     private WKVoicePanelView panelView;
+    private int panelGeneration;
 
     public View getVoiceView(IConversationContext iConversationContext) {
         panelView = new WKVoicePanelView(iConversationContext.getChatActivity());
+        final int generation = ++panelGeneration;
 
         // Fetch voice config to determine if voice input tab should be shown
-        final WKVoicePanelView localPanelView = panelView;
         WKVoiceInputService.getInstance().fetchConfig((config, error) -> {
-            if (localPanelView != panelView) return;
-            localPanelView.setVoiceInputEnabled(config != null && config.getEnabled());
-            localPanelView.setup();
+            // panelView 可能已被 release() 置空，或已被新的 getVoiceView() 替换
+            if (panelView == null || generation != panelGeneration) return;
+            panelView.setVoiceInputEnabled(config != null && config.getEnabled());
+            panelView.setup();
             connectCallbacks(iConversationContext);
         });
 

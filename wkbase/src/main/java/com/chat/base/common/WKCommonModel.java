@@ -118,7 +118,7 @@ public class WKCommonModel extends WKBaseModel {
 
 
     public void getChannel(String channelID, byte channelType, IGetChannel iGetChannel) {
-        dispatchQueuePool.execute(() -> request(createService(WKCommonService.class).getChannel(channelID, channelType), new IRequestResultListener<ChannelInfoEntity>() {
+        AndroidUtilities.runOnUIThread(() -> dispatchQueuePool.execute(() -> request(createService(WKCommonService.class).getChannel(channelID, channelType), new IRequestResultListener<ChannelInfoEntity>() {
             @Override
             public void onSuccess(ChannelInfoEntity result) {
                 saveChannel(result);
@@ -134,7 +134,7 @@ public class WKCommonModel extends WKBaseModel {
 
                 }
             }
-        }));
+        })));
 
     }
 

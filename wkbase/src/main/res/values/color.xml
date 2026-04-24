@@ -8,10 +8,10 @@
     <color name="redDisable">#F7A5A5</color>
     <color name="transparent">#00000000</color>
     <color name="colorF5F5F5">#f5f5f5</color>
-    <color name="colorAccent">#6366f1</color>
-    <color name="colorAccentUn">#956366f1</color>
+    <color name="colorAccent">#7761F4</color>
+    <color name="colorAccentUn">#957761F4</color>
     <color name="colorAccentDisabled">#7E7E7E</color>
-    <color name="color_text_select_cursor">#956366f1</color>
+    <color name="color_text_select_cursor">#957761F4</color>
     <color name="colorSystemBg">#26000000</color>
     <color name="clrCCC">#ccc</color>
     <color name="blue">#2196F3</color>

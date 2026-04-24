@@ -37,6 +37,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
+import com.chat.base.views.BubbleLayout
 import com.chad.library.adapter.base.provider.BaseItemProvider
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.R
@@ -162,7 +163,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         if (msgItemEntity.isRefreshAvatarAndName && helper.getViewOrNull<AvatarView>(R.id.avatarView) != null) {
             val avatarView = helper.getView<AvatarView>(R.id.avatarView)
             setAvatar(msgItemEntity, avatarView)
-            if (helper.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
+            if (helper.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
                 setFromName(msgItemEntity, from, helper.getView(R.id.receivedNameTv))
             } else {
                 if (helper.getViewOrNull<View>(R.id.wkBaseContentLayout) != null) {
@@ -426,7 +427,13 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 
 
             setData(baseViewHolder.bindingAdapterPosition, baseView, msgItemEntity, from)
-            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.WK_TEXT && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
+            // 群聊/子区覆盖气泡为微信风格（私聊保持原始风格不变）
+            if (msgItemEntity.wkMsg.channelType == WKChannelType.GROUP
+                || msgItemEntity.wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                val bgType = getMsgBgType(msgItemEntity.previousMsg, msgItemEntity.wkMsg, msgItemEntity.nextMsg)
+                applyGroupChatBubbleStyle(baseView, bgType, from)
+            }
+            if (baseViewHolder.getViewOrNull<View>(R.id.receivedNameTv) != null && msgItemEntity.wkMsg.type != WKContentType.typing && msgItemEntity.wkMsg.type != WKContentType.richText) {
                 setFromName(msgItemEntity, from, baseViewHolder.getView(R.id.receivedNameTv))
             }
             setMsgTimeAndStatus(
@@ -444,6 +451,78 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             )
             msgItemEntity.isUpdateStatus = false
         }
+    }
+
+    /**
+     * 群聊气泡微信风格覆盖：圆角矩形 + 独立小箭头
+     * 原始代码箭头在 bottom（最后一条），微信风格箭头应在 top（第一条）
+     * 在 setData 之后调用，根据 bgType 重新设定箭头位置
+     */
+    private fun applyGroupChatBubbleStyle(view: View, bgType: WKMsgBgType, from: WKChatIteMsgFromType): Boolean {
+        if (view is BubbleLayout) {
+            val normalRadius = 10
+            val arrowLength = AndroidUtilities.dp(6f)
+            val arrowCurve = AndroidUtilities.dp(2f)
+            val hasArrow = bgType == WKMsgBgType.top || bgType == WKMsgBgType.single
+
+            if (hasArrow) {
+                // 第一条/独立消息：设置微信风格箭头在顶部
+                view.setArrowAtTop(true)
+                view.setLookWidth(8)
+                view.setLookLength(arrowLength)
+                view.setLTR(normalRadius)
+                view.setRTR(normalRadius)
+                view.setLDR(normalRadius)
+                view.setRDR(normalRadius)
+                if (from == WKChatIteMsgFromType.RECEIVED) {
+                    view.setLook(BubbleLayout.Look.LEFT)
+                    view.setArrowDownRightRadius(0)
+                    view.setArrowTopRightRadius(arrowCurve)
+                    view.setArrowTopLeftRadius(arrowCurve)
+                    view.setArrowDownLeftRadius(arrowCurve)
+                } else {
+                    view.setLook(BubbleLayout.Look.RIGHT)
+                    view.setArrowDownLeftRadius(0)
+                    view.setArrowTopLeftRadius(arrowCurve)
+                    view.setArrowTopRightRadius(arrowCurve)
+                    view.setArrowDownRightRadius(arrowCurve)
+                }
+                val lp = view.layoutParams
+                if (lp is LinearLayout.LayoutParams) {
+                    lp.leftMargin = 0
+                    lp.rightMargin = 0
+                }
+            } else {
+                // center/bottom：无箭头，纯圆角矩形
+                view.setLook(BubbleLayout.Look.TOP)
+                view.setLookLength(0)
+                view.setArrowAtTop(false)
+                view.setArrowDownRightRadius(0)
+                view.setArrowDownLeftRadius(0)
+                view.setLTR(normalRadius)
+                view.setRTR(normalRadius)
+                view.setLDR(normalRadius)
+                view.setRDR(normalRadius)
+                val lp = view.layoutParams
+                if (lp is LinearLayout.LayoutParams) {
+                    if (from == WKChatIteMsgFromType.RECEIVED) {
+                        lp.leftMargin = AndroidUtilities.dp(6f)
+                        lp.rightMargin = 0
+                    } else {
+                        lp.rightMargin = AndroidUtilities.dp(6f)
+                        lp.leftMargin = 0
+                    }
+                }
+            }
+            view.initPadding()
+            return true // 每个消息只有一个 BubbleLayout，找到即返回
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                if (applyGroupChatBubbleStyle(view.getChildAt(i), bgType, from)) return true
+            }
+        }
+        return false
     }
 
     // 获取消息显示背景类型
@@ -483,22 +562,22 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         return bgType
     }
 
-    protected open fun isShowAvatar(nowMsg: WKMsg?, nextMsg: WKMsg?): Boolean {
+    protected open fun isShowAvatar(nowMsg: WKMsg?, previousMsg: WKMsg?): Boolean {
         var isShowAvatar = false
         var nowUID = ""
-        var nextUID = ""
+        var prevUID = ""
         if (nowMsg != null && !TextUtils.isEmpty(nowMsg.fromUID)
             && nowMsg.remoteExtra.revoke == 0 && !WKContentType.isSystemMsg(nowMsg.type)
         ) {
             nowUID = nowMsg.fromUID
         }
-        if (nextMsg != null && !TextUtils.isEmpty(nextMsg.fromUID)
-            && nextMsg.type != WKContentType.screenshot
-            && nextMsg.remoteExtra.revoke == 0 && !WKContentType.isSystemMsg(nextMsg.type)
+        if (previousMsg != null && !TextUtils.isEmpty(previousMsg.fromUID)
+            && previousMsg.type != WKContentType.screenshot
+            && previousMsg.remoteExtra.revoke == 0 && !WKContentType.isSystemMsg(previousMsg.type)
         ) {
-            nextUID = nextMsg.fromUID
+            prevUID = previousMsg.fromUID
         }
-        if (nowUID != nextUID) {
+        if (nowUID != prevUID) {
             isShowAvatar = true
         }
         return isShowAvatar
@@ -671,13 +750,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         avatarView.setSize(40f)
         val layoutParams = avatarView.layoutParams as FrameLayout.LayoutParams
-        if (uiChatMsgItemEntity.wkMsg.reactionList != null && uiChatMsgItemEntity.wkMsg.reactionList.isNotEmpty()) {
-            // 向下的距离是回应数据的高度+阴影高度-回应向上的距离
-            layoutParams.bottomMargin = AndroidUtilities.dp(24f)
-        } else layoutParams.bottomMargin = 0
+        layoutParams.bottomMargin = 0
 
         layoutParams.gravity =
-            if (from == WKChatIteMsgFromType.RECEIVED) Gravity.START or Gravity.BOTTOM else Gravity.END or Gravity.BOTTOM
+            if (from == WKChatIteMsgFromType.RECEIVED) Gravity.START or Gravity.TOP else Gravity.END or Gravity.TOP
 //        if (from == WKChatIteMsgFromType.RECEIVED) {
 //            layoutParams.leftMargin = AndroidUtilities.dp(10f)
 //            layoutParams.rightMargin = AndroidUtilities.dp(10f)
@@ -701,7 +777,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             } else avatarView.visibility =
                 if (isShowAvatar(
                         uiChatMsgItemEntity.wkMsg,
-                        uiChatMsgItemEntity.nextMsg
+                        uiChatMsgItemEntity.previousMsg
                     )
                 ) VISIBLE else GONE
         }
@@ -806,11 +882,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             editedTv.visibility = GONE
         }
         pinIV.visibility = if (uiChatMsgItemEntity.isPinned == 1) VISIBLE else GONE
-        val timeSpace = WKTimeUtils.getInstance().getTimeSpace(msgTime * 1000)
-        val time = WKTimeUtils.getInstance().time2HourStr(msgTime * 1000)
-        if (!WKTimeUtils.getInstance().is24Hour) msgTimeTv.text =
-            String.format("%s %s", timeSpace, time) else msgTimeTv.text =
-            String.format("%s", time)
+        msgTimeTv.text = WKTimeUtils.getInstance().getMsgTimeStr(msgTime * 1000)
         val isShowNormalColor: Boolean
         val drawable: RLottieDrawable
         var autoRepeat = false

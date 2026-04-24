@@ -182,6 +182,10 @@ public class ConversationManager extends BaseManager {
 
     public void setOnRefreshMsg(List<WKUIConversationMsg> list, String from) {
         if (WKCommonUtils.isEmpty(list)) return;
+        // 在当前（后台）线程预加载 wkMsg，避免主线程回调中懒加载触发 DB 查询导致 ANR
+        for (int i = 0, size = list.size(); i < size; i++) {
+            list.get(i).getWkMsg();
+        }
         if (refreshMsgMap != null && !refreshMsgMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (int i = 0, size = list.size(); i < size; i++) {
@@ -227,7 +231,9 @@ public class ConversationManager extends BaseManager {
         boolean result = ConversationDbManager.getInstance().updateRedDot(channelID, channelType, redDot);
         if (result) {
             WKUIConversationMsg msg = getUIConversationMsg(channelID, channelType);
-            setOnRefreshMsg(msg, "updateRedDot");
+            if (msg != null) {
+                setOnRefreshMsg(msg, "updateRedDot");
+            }
         }
     }
 

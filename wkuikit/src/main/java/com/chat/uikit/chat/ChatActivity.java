@@ -17,7 +17,6 @@ import android.os.Looper;
 import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.VelocityTracker;
 import android.view.ViewConfiguration;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -156,11 +155,10 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
-    private static final String SCROLL_PERF = "ScrollPerf";
     private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
     private static final int MAX_ADAPTER_SIZE = 300;
     private static final int TRIM_BATCH_SIZE = 60;
-    private VelocityTracker flingCompensationTracker; // 诊断：独立速度追踪
+    private RecyclerView.EdgeEffectFactory edgeEffectFactory; // 用于清除 EdgeEffect
 
     private String channelId = "";
     private byte channelType = WKChannelType.PERSONAL;
@@ -176,6 +174,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long tipsOrderSeq = 0; //需要强提示的msg
     private int keepOffsetY = 0; // 上次浏览消息的偏移量
     private int redDot = 0; // 未读消息数量
+    private boolean hasPositionedUnread = false; // 是否已完成未读定位
     private int lastVisibleMsgSeq = 0; // 最后可见消息序号
     private int maxMsgSeq = 0;
     private long maxMsgOrderSeq = 0;
@@ -477,19 +476,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void initListener() {
-        ItemTouchHelper helper = new ItemTouchHelper(new MessageSwipeController(this, new SwipeControllerActions() {
-            @Override
-            public void showReplyUI(int position) {
-                if (position < 0 || position >= chatAdapter.getData().size()) return;
-                showReply(chatAdapter.getData().get(position).wkMsg);
-            }
-
-            @Override
-            public void hideSoft() {
-                //   mHelper.resetState();
-            }
-        }));
-        helper.attachToRecyclerView(wkVBinding.recyclerView);
+        // 禁用滑动快捷回复手势：与表格水平滚动冲突，且长按已支持回复
+        // ItemTouchHelper helper = new ItemTouchHelper(new MessageSwipeController(this, new SwipeControllerActions() {
+        //     @Override
+        //     public void showReplyUI(int position) {
+        //         if (position < 0 || position >= chatAdapter.getData().size()) return;
+        //         showReply(chatAdapter.getData().get(position).wkMsg);
+        //     }
+        //     @Override
+        //     public void hideSoft() {}
+        // }));
+        // helper.attachToRecyclerView(wkVBinding.recyclerView);
         wkVBinding.topLayout.backIv.setOnClickListener(v -> setBackListener());
         callIV.setOnClickListener(view -> {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);
@@ -598,37 +595,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             startActivity(intent);
         });
 
-        // Fling 补偿：notifyDataSetChanged + scrollToPositionWithOffset 后，
-        // RecyclerView 内部 fling() 会暂时失效（返回 false）。
-        // 用独立的 VelocityTracker 捕获真实速度，在 fling 失效时用 smoothScrollBy 补偿。
-        final int minFlingVelocity = ViewConfiguration.get(this).getScaledMinimumFlingVelocity();
-        final int maxFlingVelocity = ViewConfiguration.get(this).getScaledMaximumFlingVelocity();
-        wkVBinding.recyclerView.setOnTouchListener((v, event) -> {
-            if (flingCompensationTracker == null) {
-                flingCompensationTracker = VelocityTracker.obtain();
-            }
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN) {
-                flingCompensationTracker.clear();
-            }
-            flingCompensationTracker.addMovement(event);
-            if (action == MotionEvent.ACTION_UP) {
-                flingCompensationTracker.computeCurrentVelocity(1000, maxFlingVelocity);
-                final int capturedVel = (int) flingCompensationTracker.getYVelocity();
-                if (Math.abs(capturedVel) >= minFlingVelocity) {
-                    wkVBinding.recyclerView.post(() -> {
-                        if (wkVBinding.recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE
-                                && !isRefreshLoading && !isMoreLoading) {
-                            // RecyclerView 自身 fling 失效，用 smoothScrollBy 补偿惯性滑动
-                            int distance = -capturedVel / 3;
-                            wkVBinding.recyclerView.smoothScrollBy(0, distance);
-                        }
-                    });
-                }
-            }
-            return false;
-        });
-
         wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
@@ -667,7 +633,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     if (!canDown) { // 到达底部
                         showMoreLoading();
                     } else if (!canUp) { // 到达顶部
-                        Log.d(SCROLL_PERF, "▶ 到达顶部，准备 showRefreshLoading");
+
                         showRefreshLoading();
                     }
                 } else {
@@ -910,10 +876,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 if (chatAdapter != null && chatAdapter.getLastMsg() != null) {
                     tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
                 }
-                if (maxOrderSeq > tempMaxOrderSeq) {
-                    // scrollToEnd();
-//                    isCanRefresh = true;
-//                    isShowHistory = false;
+                if (maxOrderSeq > tempMaxOrderSeq && !hasPositionedUnread) {
                     getData(0, true, maxOrderSeq, true);
                 }
 //                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
@@ -1380,9 +1343,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
             @Override
             public void onResult(List<WKMsg> list) {
-                long t0 = System.currentTimeMillis();
-                Log.d(SCROLL_PERF, "getData.onResult | pullMode=" + pullMode
-                        + " | rawSize=" + list.size());
                 if (isShowPinnedView) {
                     EndpointManager.getInstance().invoke("is_syncing_message", 0);
                 }
@@ -1403,8 +1363,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         tempList.add(msg);
                     }
                 }
-                Log.d(SCROLL_PERF, "  过滤/去重耗时=" + (System.currentTimeMillis() - t0) + "ms | filteredSize=" + tempList.size());
-
                 // 预处理 msgList（快，主线程）
                 boolean msgAddEmptyView = WKReader.isNotEmpty(tempList) && tempList.size() < limit;
                 if (msgAddEmptyView) {
@@ -1436,12 +1394,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         .observeOn(AndroidSchedulers.mainThread())
                         .subscribe(uiList -> {
                             if (isFinishing() || isDestroyed()) return;
-                            long tApply = System.currentTimeMillis();
-                            Log.d(SCROLL_PERF, "  构建 UI list 完成(后台) | uiListSize=" + uiList.size()
-                                    + " | 后台耗时=" + (tApply - t0) + "ms");
-
                             applyDataToAdapter(uiList, pullMode, isSetNewData, isScrollToEnd);
-                            Log.d(SCROLL_PERF, "  applyDataToAdapter 耗时=" + (System.currentTimeMillis() - tApply) + "ms");
 
                             wkVBinding.chatUnreadLayout.progress.setVisibility(View.GONE);
                             wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.VISIBLE);
@@ -1453,7 +1406,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             }
                             isRefreshLoading = false;
                             isMoreLoading = false;
-                            Log.d(SCROLL_PERF, "getData.onResult 总耗时=" + (System.currentTimeMillis() - t0) + "ms | adapterSize=" + chatAdapter.getItemCount());
                         });
             }
         });
@@ -1503,26 +1455,32 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void applyDataToAdapter(List<WKUIChatMsgItemEntity> list, int pullMode, boolean isSetNewData, boolean isScrollToEnd) {
         if (isSetNewData) {
+            int unreadScrollIndex = -1;
             if (unreadStartMsgOrderSeq != 0) {
+                int bestIndex = -1;
                 for (int i = 0, size = list.size(); i < size; i++) {
-                    if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq == unreadStartMsgOrderSeq) {
-                        WKUIChatMsgItemEntity uiChatMsgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
-                        uiChatMsgItemEntity.wkMsg.type = WKContentType.msgPromptNewMsg;
-                        int index = i;
-                        if (index <= 0) index = 0;
-                        if (index > list.size() - 1) index = list.size() - 1;
-                        list.add(index, uiChatMsgItemEntity);
-                        if (index >= 1) {
-                            linearLayoutManager.scrollToPositionWithOffset(index, 50);
-                        } else wkVBinding.recyclerView.scrollToPosition(index);
-                        unreadStartMsgOrderSeq = 0;
+                    if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq > 0
+                            && list.get(i).wkMsg.orderSeq >= unreadStartMsgOrderSeq) {
+                        bestIndex = i;
                         break;
                     }
                 }
+                if (bestIndex >= 0) {
+                    WKUIChatMsgItemEntity uiChatMsgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
+                    uiChatMsgItemEntity.wkMsg.type = WKContentType.msgPromptNewMsg;
+                    list.add(bestIndex, uiChatMsgItemEntity);
+                    unreadScrollIndex = bestIndex;
+                }
+                unreadStartMsgOrderSeq = 0;
             }
             chatAdapter.resetData(list);
             chatAdapter.setNewInstance(list);
             chatAdapter.rebuildIndex();
+            if (unreadScrollIndex >= 0) {
+                final int scrollTarget = unreadScrollIndex;
+                linearLayoutManager.scrollToPositionWithOffset(scrollTarget, AndroidUtilities.dp(50));
+                hasPositionedUnread = true;
+            }
         } else {
             chatAdapter.resetData(list);
             if (pullMode == 1) {
@@ -1560,6 +1518,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 chatAdapter.rebuildIndex();
                 // 将 viewport 锚定到旧消息位置，让新消息在上方可滑动到达
                 linearLayoutManager.scrollToPositionWithOffset(insertCount, 0);
+                clearEdgeEffects();
             }
         }
         if (tipsOrderSeq != 0 || lastPreviewMsgOrderSeq != 0) {
@@ -1869,11 +1828,25 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         linearLayoutManager.scrollToPosition(index);
     }
 
+    /**
+     * 清除 RecyclerView 顶部/底部 EdgeEffect 的残留状态。
+     * 加载历史消息后 scrollToPositionWithOffset 不会重置 EdgeEffect，
+     * 导致后续 fling() 的速度被 mTopGlow.onAbsorb() 吞掉而返回 false。
+     *
+     * 使用公开 API setEdgeEffectFactory() 触发 invalidateGlows()，
+     * 将所有 EdgeEffect 置 null，下次滚动时自动重建。
+     */
+    private void clearEdgeEffects() {
+        if (edgeEffectFactory == null) {
+            edgeEffectFactory = wkVBinding.recyclerView.getEdgeEffectFactory();
+        }
+        wkVBinding.recyclerView.setEdgeEffectFactory(edgeEffectFactory);
+    }
+
 
     private void showRefreshLoading() {
         if (isRefreshLoading || !isCanRefresh) return;
         isRefreshLoading = true;
-        Log.d(SCROLL_PERF, "showRefreshLoading START | adapterSize=" + chatAdapter.getItemCount());
         WKMsg wkMsg = new WKMsg();
         wkMsg.type = WKContentType.loading;
         int index = 0;
@@ -1960,15 +1933,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void trimBottomIfNeeded() {
         int size = chatAdapter.getData().size();
-        if (size <= MAX_ADAPTER_SIZE) {
-            Log.d(SCROLL_PERF, "  trimBottom: 不需要裁剪, size=" + size);
-            return;
-        }
+        if (size <= MAX_ADAPTER_SIZE) return;
         int lastVisible = linearLayoutManager.findLastVisibleItemPosition();
         if (lastVisible >= size - 5) return; // too close to bottom, skip
         int removeCount = Math.min(TRIM_BATCH_SIZE, size - MAX_ADAPTER_SIZE);
         int removeStart = size - removeCount;
-        Log.d(SCROLL_PERF, "  trimBottom: 裁剪 " + removeCount + " 条从 pos=" + removeStart);
         chatAdapter.getData().subList(removeStart, size).clear();
         chatAdapter.notifyItemRangeRemoved(removeStart, removeCount);
         // clean previousMsg/nextMsg at new boundary
@@ -2589,10 +2558,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (flingCompensationTracker != null) {
-            flingCompensationTracker.recycle();
-            flingCompensationTracker = null;
-        }
         chatPanelManager.onDestroy();
         // 移除 WKIM 各 Manager 的监听，防止单例持有 Activity 引用导致泄漏
         WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(channelId);

@@ -608,6 +608,7 @@ class SelectTextHelper(builder: Builder) {
         mStartHandle = null
         mEndHandle = null
         mOperateWindow = null
+        EndpointManager.getInstance().remove("chat_activity_touch")
     }
 
     /**

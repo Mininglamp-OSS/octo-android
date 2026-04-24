@@ -50,8 +50,9 @@ public class SegmentTabView extends LinearLayout {
     public SegmentTabView(@NonNull Context context, String[] tabTitles) {
         super(context);
         setOrientation(HORIZONTAL);
-        setGravity(Gravity.CENTER_VERTICAL);
+        setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         setWillNotDraw(false);
+        setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
         init(context, tabTitles);
     }
 
@@ -71,7 +72,7 @@ public class SegmentTabView extends LinearLayout {
 
             TextView tv = new TextView(context);
             tv.setText(tabTitles[i]);
-            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
             tv.setGravity(Gravity.CENTER);
             container.addView(tv, new LayoutParams(
                     LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
@@ -120,7 +121,10 @@ public class SegmentTabView extends LinearLayout {
             container.addView(mentionBadge, mentionLp);
             mentionBadges[i] = mentionBadge;
 
-            LayoutParams lp = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
+            LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+            if (i > 0) {
+                lp.leftMargin = AndroidUtilities.dp(24);
+            }
             container.setLayoutParams(lp);
 
             final int index = i;
@@ -210,9 +214,10 @@ public class SegmentTabView extends LinearLayout {
     }
 
     private void animateIndicator() {
-        LinearLayout target = tabContainers[selectedIndex];
-        float newLeft = target.getLeft();
-        float newRight = target.getRight();
+        TextView target = tabs[selectedIndex];
+        LinearLayout container = tabContainers[selectedIndex];
+        float newLeft = container.getLeft() + target.getLeft();
+        float newRight = newLeft + target.getWidth();
 
         if (indicatorLeft == 0 && indicatorRight == 0) {
             indicatorLeft = newLeft;
@@ -237,9 +242,10 @@ public class SegmentTabView extends LinearLayout {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
-        LinearLayout target = tabContainers[selectedIndex];
-        indicatorLeft = target.getLeft();
-        indicatorRight = target.getRight();
+        TextView target = tabs[selectedIndex];
+        LinearLayout container = tabContainers[selectedIndex];
+        indicatorLeft = container.getLeft() + target.getLeft();
+        indicatorRight = indicatorLeft + target.getWidth();
     }
 
     @Override
@@ -250,10 +256,9 @@ public class SegmentTabView extends LinearLayout {
         // 1. 全宽基准线 — 分隔导航区和内容区
         canvas.drawRect(0, bottom - baselineHeight, getWidth(), bottom, baselinePaint);
 
-        // 2. 选中指示条 — 压在基准线上方，比 tab 略窄
+        // 2. 选中指示条 — 与文字等宽，压在基准线上
         float top = bottom - indicatorHeight;
-        float inset = (indicatorRight - indicatorLeft) * 0.15f;
-        indicatorRect.set(indicatorLeft + inset, top, indicatorRight - inset, bottom);
+        indicatorRect.set(indicatorLeft, top, indicatorRight, bottom);
         indicatorPaint.setColor(Theme.colorAccount);
         canvas.drawRoundRect(indicatorRect, indicatorRadius, indicatorRadius, indicatorPaint);
     }

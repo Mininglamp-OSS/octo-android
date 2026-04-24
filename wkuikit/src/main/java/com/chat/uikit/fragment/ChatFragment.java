@@ -167,7 +167,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {
             TextView textView = new TextView(getActivity());
-            textView.setTextSize(18);
+            textView.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            textView.setTextSize(15);
             Typeface face = Typeface.createFromAsset(getResources().getAssets(),
                     "fonts/mw_bold.ttf");
             textView.setTypeface(face);
@@ -179,13 +182,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
+        chatConversationAdapter.restoreExpandedState();
         chatConversationAdapter.setAnimationEnable(false);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
 
-        Theme.setPressedBackground(wkVBinding.deviceIv);
-        Theme.setPressedBackground(wkVBinding.searchIv);
+        Theme.setPressedBackground(wkVBinding.deviceLayout);
         Theme.setPressedBackground(wkVBinding.rightIv);
 
         // 分段 Tab 切换控件
@@ -210,14 +213,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             WKDialogUtils.getInstance().showScreenPopup(view, list);
         });
 
-        wkVBinding.deviceIv.setOnClickListener(v -> EndpointManager.getInstance().invoke("show_pc_login_view", getActivity()));
-        wkVBinding.searchIv.setOnClickListener(view1 -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                @SuppressWarnings("unchecked") ActivityOptionsCompat activityOptions = ActivityOptionsCompat.makeSceneTransitionAnimation(requireActivity(), new Pair<>(wkVBinding.searchIv, "searchView"));
-                startActivity(new Intent(getActivity(), GlobalActivity.class), activityOptions.toBundle());
-            } else {
-                startActivity(new Intent(getActivity(), GlobalActivity.class));
-            }
+        wkVBinding.deviceLayout.setOnClickListener(v -> EndpointManager.getInstance().invoke("show_pc_login_view", getActivity()));
+        wkVBinding.chatSearchBarLayout.setOnClickListener(view1 -> {
+            startActivity(new Intent(getActivity(), GlobalActivity.class));
         });
         wkVBinding.signalLayout.setOnClickListener(v -> showNetworkTooltip(v));
 
@@ -226,7 +224,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             popup.setOnSpaceSelectedListener(space -> {
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
-                wkVBinding.textSwitcher.setText(space.name);
+                setSpaceSwitcherText(space.name);
+                updateSpaceAvatar(space.name);
 
                 // 清除成员缓存
                 SpaceModel.getInstance().invalidateMembersCache();
@@ -461,7 +460,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         int online = wkCmd.paramJsonObject.optInt("online");
                         String uid = wkCmd.paramJsonObject.optString("uid");
                         if (uid.equals(WKConfig.getInstance().getUid()) && device_flag == 1) {
-                            wkVBinding.deviceIv.setVisibility(online == 1 ? View.VISIBLE : View.GONE);
+                            wkVBinding.deviceLayout.setVisibility(online == 1 ? View.VISIBLE : View.GONE);
                             WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_pc_online", online);
                         }
                     }
@@ -764,10 +763,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             if (i == WKConnectStatus.syncMsg) {
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
-                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
+                wkVBinding.spaceChevronIv.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.success) {
-                wkVBinding.textSwitcher.setText(getDisplayTitle());
-                wkVBinding.spaceArrowTv.setVisibility(View.VISIBLE);
+                setSpaceSwitcherText(getDisplayTitle());
+                wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
                 connectedAtMs = System.currentTimeMillis();
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
                 startPingTimer();
@@ -785,12 +784,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
-                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
+                wkVBinding.spaceChevronIv.setVisibility(View.GONE);
                 stopPingTimer();
                 wkVBinding.signalLayout.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.noNetwork) {
                 wkVBinding.textSwitcher.setText(getString(R.string.network_error_tips));
-                wkVBinding.spaceArrowTv.setVisibility(View.GONE);
+                wkVBinding.spaceChevronIv.setVisibility(View.GONE);
                 stopPingTimer();
                 wkVBinding.signalLayout.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.kicked) {
@@ -812,8 +811,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (connectedAtMs == 0) {
             connectedAtMs = System.currentTimeMillis();
         }
-        wkVBinding.textSwitcher.setText(getDisplayTitle());
-        wkVBinding.spaceArrowTv.setVisibility(View.VISIBLE);
+        setSpaceSwitcherText(getDisplayTitle());
+        wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
         startPingTimer();
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
@@ -2404,10 +2403,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void navigateToThreadChat(String channelId) {
-        Intent intent = new Intent(getActivity(), ChatActivity.class);
-        intent.putExtra("channelId", channelId);
-        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-        startActivity(intent);
+        WKIMUtils.getInstance().startChatActivity(
+                new ChatViewMenu(getActivity(), channelId, WKChannelType.COMMUNITY_TOPIC, 0, false));
     }
 
     @Override
@@ -2448,7 +2445,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         CategoryModel.getInstance().invalidateCache();
         loadCategories();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
-        wkVBinding.deviceIv.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
+        wkVBinding.deviceLayout.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
 //        String appLoginType = String.format(getString(R.string.pc_login), getString(R.string.app_name));
 //        int muteForApp = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_mute_of_app");
 //        if (muteForApp == 1) {
@@ -2726,21 +2723,42 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         for (SpaceEntity space : list) {
                             if (spaceId.equals(space.space_id)) {
                                 currentSpaceName = space.name;
-                                wkVBinding.textSwitcher.setText(space.name);
+                                setSpaceSwitcherText(space.name);
+                                updateSpaceAvatar(space.name);
                                 return;
                             }
                         }
                     }
-                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                    setSpaceSwitcherText(getString(R.string.app_name));
+                    updateSpaceAvatar(getString(R.string.app_name));
                 }
 
                 @Override
                 public void onError(int code, String msg) {
-                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                    setSpaceSwitcherText(getString(R.string.app_name));
+                    updateSpaceAvatar(getString(R.string.app_name));
                 }
             });
         } else {
-            wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+            setSpaceSwitcherText(getString(R.string.app_name));
+            updateSpaceAvatar(getString(R.string.app_name));
+        }
+    }
+
+    private void setSpaceSwitcherText(String text) {
+        for (int i = 0; i < wkVBinding.textSwitcher.getChildCount(); i++) {
+            View child = wkVBinding.textSwitcher.getChildAt(i);
+            if (child instanceof TextView) {
+                ((TextView) child).setText(text);
+            }
+            child.clearAnimation();
+        }
+        wkVBinding.textSwitcher.requestLayout();
+    }
+
+    private void updateSpaceAvatar(String name) {
+        if (name != null && !name.isEmpty()) {
+            wkVBinding.spaceAvatarTv.setText(name.substring(0, 1).toUpperCase());
         }
     }
 

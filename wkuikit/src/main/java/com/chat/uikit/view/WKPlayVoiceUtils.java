@@ -122,6 +122,12 @@ public class WKPlayVoiceUtils {
         this.iPlayListener.add(iPlayListener);
     }
 
+    public void removePlayListener(IPlayListener listener) {
+        if (this.iPlayListener != null) {
+            this.iPlayListener.remove(listener);
+        }
+    }
+
     public interface IPlayListener {
         void onCompletion(String key);
 

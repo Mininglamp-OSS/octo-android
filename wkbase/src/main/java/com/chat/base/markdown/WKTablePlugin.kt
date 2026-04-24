@@ -67,9 +67,9 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
 
     override fun configureVisitor(builder: MarkwonVisitor.Builder) {
         builder.on(org.commonmark.ext.gfm.tables.TableBlock::class.java) { visitor, tableBlock ->
-            val headers = mutableListOf<String>()
+            val headers = mutableListOf<WKTableCell>()
             val alignments = mutableListOf<TableCell.Alignment?>()
-            val bodyRows = mutableListOf<List<String>>()
+            val bodyRows = mutableListOf<List<WKTableCell>>()
 
             var child: Node? = tableBlock.firstChild
             while (child != null) {
@@ -115,13 +115,13 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
         builder.on(TableCell::class.java) { _, _ -> }
     }
 
-    private fun extractCellsWithAlignment(row: TableRow): Pair<List<String>, List<TableCell.Alignment?>> {
-        val cells = mutableListOf<String>()
+    private fun extractCellsWithAlignment(row: TableRow): Pair<List<WKTableCell>, List<TableCell.Alignment?>> {
+        val cells = mutableListOf<WKTableCell>()
         val alignments = mutableListOf<TableCell.Alignment?>()
         var cell: Node? = row.firstChild
         while (cell != null) {
             if (cell is TableCell) {
-                cells.add(extractText(cell).trim())
+                cells.add(extractCell(cell))
                 alignments.add(cell.alignment)
             }
             cell = cell.next
@@ -129,30 +129,55 @@ class WKTablePlugin private constructor() : AbstractMarkwonPlugin() {
         return Pair(cells, alignments)
     }
 
-    private fun extractCells(row: TableRow): List<String> {
-        val cells = mutableListOf<String>()
+    private fun extractCells(row: TableRow): List<WKTableCell> {
+        val cells = mutableListOf<WKTableCell>()
         var cell: Node? = row.firstChild
         while (cell != null) {
             if (cell is TableCell) {
-                cells.add(extractText(cell).trim())
+                cells.add(extractCell(cell))
             }
             cell = cell.next
         }
         return cells
     }
 
-    private fun extractText(node: Node): String {
+    private fun extractCell(node: Node): WKTableCell {
         val sb = StringBuilder()
+        val links = mutableListOf<WKTableCellLink>()
+        extractNodeContent(node, sb, links)
+        val text = sb.toString().trim()
+        // 调整 link 偏移量（trim 可能移除前导空格）
+        val leadingSpaces = sb.toString().length - sb.toString().trimStart().length
+        val adjustedLinks = if (leadingSpaces > 0) {
+            links.mapNotNull { link ->
+                val newStart = link.start - leadingSpaces
+                val newEnd = link.end - leadingSpaces
+                if (newEnd > 0 && newStart < text.length) {
+                    WKTableCellLink(newStart.coerceAtLeast(0), newEnd.coerceAtMost(text.length), link.url)
+                } else null
+            }
+        } else links
+        return WKTableCell(text, adjustedLinks)
+    }
+
+    private fun extractNodeContent(node: Node, sb: StringBuilder, links: MutableList<WKTableCellLink>) {
         var child: Node? = node.firstChild
         while (child != null) {
             when (child) {
                 is org.commonmark.node.Text -> sb.append(child.literal)
                 is org.commonmark.node.Code -> sb.append(child.literal)
                 is org.commonmark.node.SoftLineBreak -> sb.append(" ")
-                else -> sb.append(extractText(child))
+                is org.commonmark.node.Link -> {
+                    val start = sb.length
+                    extractNodeContent(child, sb, links)
+                    val end = sb.length
+                    if (end > start && child.destination.isNotEmpty()) {
+                        links.add(WKTableCellLink(start, end, child.destination))
+                    }
+                }
+                else -> extractNodeContent(child, sb, links)
             }
             child = child.next
         }
-        return sb.toString()
     }
 }

@@ -1081,7 +1081,8 @@ public class MsgDbManager {
         List<WKMessageSearchResult> list = new ArrayList<>();
 
         String sql = "select distinct c.*, count(*) message_count, case count(*) WHEN 1 then" +
-                " m.client_seq else ''END client_seq, CASE count(*) WHEN 1 THEN m.searchable_word else '' end searchable_word " +
+                " m.client_seq else ''END client_seq, CASE count(*) WHEN 1 THEN m.searchable_word else '' end searchable_word," +
+                " CASE count(*) WHEN 1 THEN m.order_seq ELSE 0 END order_seq " +
                 "from " + channel + " c LEFT JOIN " + message + " m ON m.channel_id = c.channel_id and " +
                 "m.channel_type = c.channel_type WHERE m.is_deleted=0 and searchable_word LIKE ? GROUP BY " +
                 "c.channel_id, c.channel_type ORDER BY m.created_at DESC limit 100";
@@ -1095,6 +1096,7 @@ public class MsgDbManager {
             result.wkChannel = channel;
             result.messageCount = WKCursor.readInt(cursor, "message_count");
             result.searchableWord = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.searchable_word);
+            result.orderSeq = WKCursor.readLong(cursor, WKDBColumns.WKMessageColumns.order_seq);
             list.add(result);
         }
         cursor.close();

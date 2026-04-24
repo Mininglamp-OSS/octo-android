@@ -1,8 +1,11 @@
 package com.chat.uikit.search.remote
 
+import android.graphics.Color
 import android.os.Build
 import android.text.Html
-import android.text.TextUtils
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.widget.TextView
 import com.chad.library.adapter.base.BaseMultiItemQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
@@ -18,6 +21,7 @@ class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
         addItemType(1, R.layout.item_global_channel_layout)
         addItemType(2, R.layout.item_global_message_layout)
         addItemType(3, R.layout.item_global_search_layout)
+        addItemType(4, R.layout.item_global_message_layout)
     }
 
     override fun convert(holder: BaseViewHolder, item: DataVO) {
@@ -57,6 +61,35 @@ class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
 
         } else if (item.itemType == 3) {
             holder.setText(R.id.searchKeyTv, item.text)
+        } else if (item.itemType == 4) {
+            val avatarView = holder.getView<AvatarView>(R.id.avatarView)
+            avatarView.setSize(40f)
+            avatarView.showAvatar(item.channel?.channel_id, item.channel!!.channel_type)
+            holder.setText(R.id.nameTv, item.channel.channel_name ?: "")
+            val contentTv = holder.getView<TextView>(R.id.contentTv)
+            contentTv.text = highlightKeyword(item.text, item.keyword)
+            holder.setText(R.id.timeTv, "")
+        }
+    }
+
+    companion object {
+        private const val HIGHLIGHT_COLOR = 0xFF7761F4.toInt()
+
+        fun highlightKeyword(text: String, keyword: String): CharSequence {
+            if (keyword.isEmpty() || text.isEmpty()) return text
+            val spannable = SpannableString(text)
+            val lowerText = text.lowercase()
+            val lowerKeyword = keyword.lowercase()
+            var start = lowerText.indexOf(lowerKeyword)
+            while (start >= 0) {
+                spannable.setSpan(
+                    ForegroundColorSpan(HIGHLIGHT_COLOR),
+                    start, start + keyword.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                start = lowerText.indexOf(lowerKeyword, start + keyword.length)
+            }
+            return spannable
         }
     }
 }

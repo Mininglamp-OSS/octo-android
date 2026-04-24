@@ -228,15 +228,33 @@ public class WKTimeUtils {
         return sdf.format(new Date(timeStamp));
     }
 
+    public String getMsgTimeStr(long timeStamp) {
+        Calendar now = Calendar.getInstance();
+        Calendar msg = Calendar.getInstance();
+        msg.setTimeInMillis(timeStamp);
+
+        String timeStr = time2HourStr(timeStamp);
+        if (now.get(Calendar.YEAR) == msg.get(Calendar.YEAR)) {
+            if (now.get(Calendar.DAY_OF_YEAR) == msg.get(Calendar.DAY_OF_YEAR)) {
+                return timeStr;
+            } else {
+                String dateStr = new SimpleDateFormat("M/d", Locale.getDefault()).format(new Date(timeStamp));
+                return dateStr + " " + timeStr;
+            }
+        } else {
+            String dateStr = new SimpleDateFormat("yyyy/M/d", Locale.getDefault()).format(new Date(timeStamp));
+            return dateStr + " " + timeStr;
+        }
+    }
+
     public String time2HourStr(long timeStamp) {
         SimpleDateFormat sdf;
         if (is24Hour()) {
             sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
         } else {
-            sdf = new SimpleDateFormat("hh:mm", Locale.getDefault());
+            sdf = new SimpleDateFormat("a hh:mm", Locale.CHINESE);
         }
         return sdf.format(new Date(timeStamp));
-
     }
 
     public String time2DateStr4(long timeStamp) {

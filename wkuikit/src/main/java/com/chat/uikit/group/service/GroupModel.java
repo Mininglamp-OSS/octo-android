@@ -11,9 +11,13 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.config.WKApiConfig;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
+import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
+import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
 import com.chat.uikit.message.MsgModel;
@@ -318,6 +322,21 @@ public class GroupModel extends WKBaseModel {
         });
     }
 
+    public void uploadGroupAvatar(String groupNo, String filePath, final ICommonListener listener) {
+        String url = WKApiConfig.baseUrl + "groups/" + groupNo + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                listener.onResult(HttpResponseCode.success, "");
+            }
+
+            @Override
+            public void onError() {
+                listener.onResult(HttpResponseCode.error, "upload failed");
+            }
+        });
+    }
+
     /**
      * 删除群成员
      *
@@ -447,4 +466,37 @@ public class GroupModel extends WKBaseModel {
         });
     }
 
+    public interface IGroupMdListener {
+        void onResult(int code, String msg, GroupMdEntity entity);
+    }
+
+    public void getGroupMd(String groupNo, IGroupMdListener listener) {
+        request(createService(GroupService.class).getGroupMd(groupNo), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(GroupMdEntity result) {
+                listener.onResult(HttpResponseCode.success, "", result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public void updateGroupMd(String groupNo, String content, ICommonListener listener) {
+        JSONObject json = new JSONObject();
+        json.put("content", content);
+        request(createService(GroupService.class).updateGroupMd(groupNo, json), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                listener.onResult(HttpResponseCode.success, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
+    }
 }

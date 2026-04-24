@@ -82,9 +82,32 @@ object WKMarkwonProvider {
     @JvmStatic
     fun toMarkdownWithTables(context: Context, text: String): Pair<Spanned, List<WKTableData>> {
         WKTablePlugin.clearPending()
-        val spanned = getInstance(context).toMarkdown(text)
+        val spanned = getInstance(context).toMarkdown(ensureTableTermination(text))
         val tables = WKTablePlugin.consumeTableData()
         return Pair(spanned, tables)
+    }
+
+    /**
+     * CommonMark-java 的表格扩展不要求 body 行包含 `|`，
+     * 非空行紧跟表格会被错误地当作表格行。
+     * 在表格最后一个 `|` 行与后续非表格行之间插入空行来正确终止表格。
+     */
+    private fun ensureTableTermination(text: String): String {
+        val lines = text.split('\n')
+        val result = StringBuilder()
+        for (i in lines.indices) {
+            result.append(lines[i])
+            if (i < lines.size - 1) {
+                result.append('\n')
+                if (lines[i].trimStart().startsWith("|")) {
+                    val nextTrimmed = lines[i + 1].trimStart()
+                    if (nextTrimmed.isNotEmpty() && !nextTrimmed.startsWith("|")) {
+                        result.append('\n')
+                    }
+                }
+            }
+        }
+        return result.toString()
     }
 
     @JvmStatic

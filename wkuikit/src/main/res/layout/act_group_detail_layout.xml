@@ -76,9 +76,26 @@
 
                     <LinearLayout
                         android:id="@+id/groupAvatarLayout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/group_avatar" />
+
+                        <View
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1" />
+
+                        <com.chat.base.ui.components.AvatarView
+                            android:id="@+id/groupAvatarView"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:layout_gravity="center_vertical" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/groupQrLayout"
@@ -152,6 +169,28 @@
                             android:lineSpacingExtra="4dp"
                             android:maxLines="3"
                             android:textSize="16sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/groupMdLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/group_md" />
+
+                        <TextView
+                            android:id="@+id/groupMdStatusTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginEnd="10dp"
+                            android:text="@string/group_md_not_configured"
+                            android:textColor="#999999"
+                            android:textSize="14sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>
 
                     <LinearLayout

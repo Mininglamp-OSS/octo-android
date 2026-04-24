@@ -9,6 +9,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
+import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
@@ -22,6 +23,9 @@ import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.glide.ChooseMimeType;
+import com.chat.base.glide.ChooseResult;
+import com.chat.base.glide.GlideUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
@@ -113,10 +117,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             wkVBinding.msgSettingLayout.addView(msgPrivacyLayout);
         }
 
-        View groupAvatarLayout = (View) EndpointManager.getInstance().invoke("group_avatar_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.groupAvatarLayout));
-        if (groupAvatarLayout != null) {
-            wkVBinding.groupAvatarLayout.addView(groupAvatarLayout);
-        }
+        initGroupAvatar();
 
         View groupManagerLayout = (View) EndpointManager.getInstance().invoke("group_manager_view", new ChatSettingCellMenu(groupNo, WKChannelType.GROUP, wkVBinding.groupManageLayout));
         if (groupManagerLayout != null) {
@@ -303,6 +304,12 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             });
         });
         wkVBinding.inGroupNameLayout.setOnClickListener(v -> updateNameInGroupDialog());
+        SingleClickUtil.onSingleClick(wkVBinding.groupMdLayout, view1 -> {
+            if (!groupIsEnable()) return;
+            Intent intent = new Intent(this, GroupMdActivity.class);
+            intent.putExtra("groupNo", groupNo);
+            startActivity(intent);
+        });
         SingleClickUtil.onSingleClick(wkVBinding.noticeLayout, view1 -> {
             if (!groupIsEnable()) return;
             String notice = "";
@@ -334,6 +341,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                     groupChannel = channel;
                     setData();
                     setNotice();
+                    setGroupMdStatus();
                 }
             }
         });
@@ -443,6 +451,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
             setData();
             setNotice();
+            setGroupMdStatus();
         }
         groupPresenter.getGroupInfo(groupNo);
         getMembers();
@@ -562,6 +571,24 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
     }
 
+    private void setGroupMdStatus() {
+        HashMap extraMap = groupChannel.remoteExtraMap;
+        if (extraMap != null && extraMap.containsKey("has_group_md")) {
+            Object hasObj = extraMap.get("has_group_md");
+            boolean hasMd = false;
+            if (hasObj instanceof Boolean) hasMd = (Boolean) hasObj;
+            else if (hasObj instanceof Number) hasMd = ((Number) hasObj).intValue() == 1;
+            if (hasMd) {
+                int version = 0;
+                Object vObj = extraMap.get("group_md_version");
+                if (vObj instanceof Number) version = ((Number) vObj).intValue();
+                wkVBinding.groupMdStatusTv.setText(String.format(getString(R.string.group_md_configured), version));
+                return;
+            }
+        }
+        wkVBinding.groupMdStatusTv.setText(R.string.group_md_not_configured);
+    }
+
     private void setData() {
         wkVBinding.nameTv.setText(groupChannel.channelName);
         wkVBinding.remarkTv.setText(groupChannel.channelRemark);
@@ -618,4 +645,55 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     private boolean groupIsEnable() {
         return groupChannel != null && groupChannel.status != Const.GroupStatusDisband;
     }
+
+    private void initGroupAvatar() {
+        WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
+                .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        if (me != null && me.role != WKChannelMemberRole.normal) {
+            wkVBinding.groupAvatarLayout.setVisibility(View.VISIBLE);
+            wkVBinding.groupAvatarView.setSize(40);
+            wkVBinding.groupAvatarView.showAvatar(groupNo, WKChannelType.GROUP);
+            wkVBinding.groupAvatarLayout.setOnClickListener(v -> chooseGroupAvatar());
+        } else {
+            wkVBinding.groupAvatarLayout.setVisibility(View.GONE);
+        }
+    }
+
+    private void chooseGroupAvatar() {
+        GlideUtils.getInstance().chooseIMG(this, 1, true, ChooseMimeType.img, false, false, new GlideUtils.ISelectBack() {
+            @Override
+            public void onBack(List<ChooseResult> paths) {
+                if (WKReader.isNotEmpty(paths) && !TextUtils.isEmpty(paths.get(0).path)) {
+                    Intent intent = new Intent(GroupDetailActivity.this, WKCropImageActivity.class);
+                    intent.putExtra("path", paths.get(0).path);
+                    cropResultLauncher.launch(intent);
+                }
+            }
+
+            @Override
+            public void onCancel() {
+            }
+        });
+    }
+
+    private final androidx.activity.result.ActivityResultLauncher<Intent> cropResultLauncher =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    String path = result.getData().getStringExtra("path");
+                    if (TextUtils.isEmpty(path)) return;
+                    GroupModel.getInstance().uploadGroupAvatar(groupNo, path, (code, msg) -> {
+                        if (code == HttpResponseCode.success) {
+                            WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(groupNo, WKChannelType.GROUP);
+                            if (channel != null) {
+                                channel.avatarCacheKey = java.util.UUID.randomUUID().toString().replace("-", "");
+                                WKIM.getInstance().getChannelManager().updateAvatarCacheKey(groupNo, WKChannelType.GROUP, channel.avatarCacheKey);
+                            }
+                            wkVBinding.groupAvatarView.showAvatar(groupNo, WKChannelType.GROUP);
+                            showToast(getString(R.string.upload_success));
+                        } else {
+                            showToast(getString(R.string.upload_fail));
+                        }
+                    });
+                }
+            });
 }

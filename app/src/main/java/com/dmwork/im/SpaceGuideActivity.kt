@@ -42,7 +42,7 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
     }
 
     private fun setupStatusBar() {
-        window.statusBarColor = 0xFF6366f1.toInt()
+        window.statusBarColor = 0xFF7761F4.toInt()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.setSystemBarsAppearance(
                 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS

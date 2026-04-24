@@ -89,7 +89,16 @@ public class ChatTextTimeLayout extends FrameLayout {
          * TextViewFlowLayout by Attributes to turn on/off this feature
          *  */
 
-        int usernameWidth = ((LinearLayout) getParent()).getChildAt(0).getMeasuredWidth();
+        // 用户名在气泡内时（旧布局），取第一个子 View 宽度作为最小宽度
+        // 用户名已移到气泡外部时，父布局只有一个子 View（即 this），跳过
+        LinearLayout parentLayout = (LinearLayout) getParent();
+        int usernameWidth = 0;
+        if (parentLayout.getChildCount() > 1) {
+            View firstChild = parentLayout.getChildAt(0);
+            if (firstChild != this && firstChild.getVisibility() != GONE) {
+                usernameWidth = firstChild.getMeasuredWidth();
+            }
+        }
 
         if (usernameWidth > textViewWidth + containerWidth) {
             widthSize = usernameWidth;

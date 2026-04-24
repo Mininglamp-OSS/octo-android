@@ -14,6 +14,8 @@ public class WKMessageSearchResult implements Parcelable {
     public String searchableWord;
     //条数
     public int messageCount;
+    //单条消息时的 orderSeq，用于定位
+    public long orderSeq;
 
     public WKMessageSearchResult() {
     }
@@ -22,6 +24,7 @@ public class WKMessageSearchResult implements Parcelable {
         wkChannel = in.readParcelable(WKChannel.class.getClassLoader());
         searchableWord = in.readString();
         messageCount = in.readInt();
+        orderSeq = in.readLong();
     }
 
     public static final Creator<WKMessageSearchResult> CREATOR = new Creator<WKMessageSearchResult>() {
@@ -46,5 +49,6 @@ public class WKMessageSearchResult implements Parcelable {
         dest.writeParcelable(wkChannel, flags);
         dest.writeString(searchableWord);
         dest.writeInt(messageCount);
+        dest.writeLong(orderSeq);
     }
 }

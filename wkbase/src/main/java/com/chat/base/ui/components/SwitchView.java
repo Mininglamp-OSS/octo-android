@@ -242,7 +242,7 @@ public class SwitchView extends View {
 
     private void animateToCheckedState(boolean newCheckedState) {
         checkAnimator = ObjectAnimator.ofFloat(this, "progress", newCheckedState ? 1 : 0);
-        checkAnimator.setDuration(semHaptics ? 150 : 250);
+        checkAnimator.setDuration(semHaptics ? 200 : 300);
         checkAnimator.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
@@ -382,11 +382,12 @@ public class SwitchView extends View {
             return;
         }
 
-        int width = AndroidUtilities.dp(31);
-        int thumb = AndroidUtilities.dp(20);
+        int width = AndroidUtilities.dp(44);
+        int trackHeight = AndroidUtilities.dp(26);
+        int thumbRadius = AndroidUtilities.dp(10);
         int x = (getMeasuredWidth() - width) / 2;
-        float y = (getMeasuredHeight() - AndroidUtilities.dpf2(14)) / 2;
-        int tx = x + AndroidUtilities.dp(7) + (int) (AndroidUtilities.dp(17) * progress);
+        float y = (getMeasuredHeight() - trackHeight) / 2f;
+        int tx = x + AndroidUtilities.dp(13) + (int) (AndroidUtilities.dp(18) * progress);
         int ty = getMeasuredHeight() / 2;
 
 
@@ -450,9 +451,8 @@ public class SwitchView extends View {
             paint.setColor(color);
             paint2.setColor(color);
 
-            rectF.set(x, y, x + width, y + AndroidUtilities.dpf2(14));
-            canvasToDraw.drawRoundRect(rectF, AndroidUtilities.dpf2(7), AndroidUtilities.dpf2(7), paint);
-            canvasToDraw.drawCircle(tx, ty, AndroidUtilities.dpf2(10), paint);
+            rectF.set(x, y, x + width, y + trackHeight);
+            canvasToDraw.drawRoundRect(rectF, trackHeight / 2f, trackHeight / 2f, paint);
 
             if (a == 0 && rippleDrawable != null) {
                 rippleDrawable.setBounds(tx - AndroidUtilities.dp(18), ty - AndroidUtilities.dp(18), tx + AndroidUtilities.dp(18), ty + AndroidUtilities.dp(18));
@@ -499,7 +499,7 @@ public class SwitchView extends View {
             alpha = (int) (a1 + (a2 - a1) * colorProgress);
             paint.setColor(((alpha & 0xff) << 24) | ((red & 0xff) << 16) | ((green & 0xff) << 8) | (blue & 0xff));
 
-            canvasToDraw.drawCircle(tx, ty, AndroidUtilities.dp(8), paint);
+            canvasToDraw.drawCircle(tx, ty, thumbRadius, paint);
 
             if (a == 0) {
                 if (iconDrawable != null) {

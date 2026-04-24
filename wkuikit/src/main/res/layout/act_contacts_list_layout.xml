@@ -35,7 +35,7 @@
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:layout_marginEnd="30dp"
-            app:sidebarBackgroundColor="#6366f1"
+            app:sidebarBackgroundColor="#7761F4"
             app:sidebarTextColor="@android:color/white"
             app:sidebarTextSize="@dimen/font_size_20" />
 
@@ -46,7 +46,7 @@
             android:layout_gravity="center|end"
             app:sidebarItemHeight="18dp"
             app:sidebarTextColor="#999999"
-            app:sidebarTextColorChoose="#6366f1"
+            app:sidebarTextColorChoose="#7761F4"
             app:sidebarTextSize="@dimen/font_size_10"
             app:sidebarTextSizeChoose="@dimen/font_size_10" />
     </FrameLayout>

@@ -12,6 +12,9 @@
         <activity
             android:name=".group.GroupNoticeActivity"
             android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".group.GroupMdActivity"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".group.GroupDetailActivity" />
         <activity android:name=".group.SavedGroupsActivity"
             android:launchMode="singleTop" />

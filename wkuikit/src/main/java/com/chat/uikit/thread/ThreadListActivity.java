@@ -9,15 +9,17 @@ import androidx.annotation.NonNull;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKToastUtils;
+import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
-import com.chat.uikit.chat.ChatActivity;
+import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.databinding.ActThreadListLayoutBinding;
 import com.chat.uikit.thread.adapter.ThreadListAdapter;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.scwang.smart.refresh.layout.api.RefreshLayout;
 import com.scwang.smart.refresh.layout.listener.OnRefreshListener;
+import com.scwang.smart.refresh.layout.listener.OnLoadMoreListener;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
@@ -25,8 +27,12 @@ import java.util.List;
 
 public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBinding> {
 
+    private static final int PAGE_LIMIT = 100;
+
     private String groupNo;
     private ThreadListAdapter adapter;
+    private int currentPage = 1;
+    private final List<ThreadEntity> allActiveList = new ArrayList<>();
 
     @Override
     protected ActThreadListLayoutBinding getViewBinding() {
@@ -49,9 +55,17 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
 
     @Override
     protected void initListener() {
+        wkVBinding.refreshLayout.setEnableLoadMore(true);
         wkVBinding.refreshLayout.setOnRefreshListener(new OnRefreshListener() {
             @Override
             public void onRefresh(@NonNull RefreshLayout refreshLayout) {
+                currentPage = 1;
+                loadData();
+            }
+        });
+        wkVBinding.refreshLayout.setOnLoadMoreListener(new OnLoadMoreListener() {
+            @Override
+            public void onLoadMore(@NonNull RefreshLayout refreshLayout) {
                 loadData();
             }
         });
@@ -82,33 +96,45 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
     @Override
     protected void onResume() {
         super.onResume();
-        // 从聊天页返回后刷新未读气泡
-        adapter.notifyDataSetChanged();
+        // 从聊天页返回后刷新列表
+        refreshFromFirstPage();
     }
 
     @Override
     protected void initData() {
         super.initData();
-        loadData();
+        // loadData() 由 onResume() 触发，避免首次创建时重复请求
     }
 
     private void loadData() {
-        ThreadModel.getInstance().listThreads(groupNo, (code, msg, list) -> {
+        ThreadModel.getInstance().listThreads(groupNo, currentPage, PAGE_LIMIT, (code, msg, list) -> {
             wkVBinding.refreshLayout.finishRefresh();
+            wkVBinding.refreshLayout.finishLoadMore();
             if (code == HttpResponseCode.success && list != null) {
-                List<ThreadEntity> activeList = new ArrayList<>();
+                List<ThreadEntity> pageActiveList = new ArrayList<>();
                 for (ThreadEntity entity : list) {
                     // status: 1=活跃, 2=归档, 3=删除
                     if (entity.status == 1) {
-                        activeList.add(entity);
+                        pageActiveList.add(entity);
                     }
                 }
-                adapter.setList(activeList);
-                if (!activeList.isEmpty()) {
+                if (currentPage == 1) {
+                    allActiveList.clear();
+                }
+                allActiveList.addAll(pageActiveList);
+                adapter.setList(new ArrayList<>(allActiveList));
+                if (!allActiveList.isEmpty()) {
                     wkVBinding.sectionTitleTv.setVisibility(View.VISIBLE);
-                    wkVBinding.sectionTitleTv.setText(String.format("已加入子区 - %d", activeList.size()));
+                    wkVBinding.sectionTitleTv.setText(String.format("已加入子区 - %d", allActiveList.size()));
                 } else {
                     wkVBinding.sectionTitleTv.setVisibility(View.GONE);
+                }
+                // 判断是否还有更多数据
+                if (list.size() < PAGE_LIMIT) {
+                    wkVBinding.refreshLayout.setNoMoreData(true);
+                } else {
+                    wkVBinding.refreshLayout.setNoMoreData(false);
+                    currentPage++;
                 }
             } else {
                 WKToastUtils.getInstance().showToast(msg);
@@ -132,16 +158,19 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
     }
 
     private void navigateToChat(String channelId) {
-        Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra("channelId", channelId);
-        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-        startActivity(intent);
+        WKIMUtils.getInstance().startChatActivity(
+                new ChatViewMenu(this, channelId, WKChannelType.COMMUNITY_TOPIC, 0, false));
     }
 
     private void openCreateThread() {
         Intent intent = new Intent(this, CreateThreadActivity.class);
         intent.putExtra("groupNo", groupNo);
         startActivity(intent);
+    }
+
+    private void refreshFromFirstPage() {
+        currentPage = 1;
+        loadData();
     }
 
     private void showThreadOptions(ThreadEntity entity) {
@@ -156,18 +185,18 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
                     if (which == 0) {
                         if (entity.status == 1) {
                             ThreadModel.getInstance().archiveThread(groupNo, entity.short_id, (code, msg) -> {
-                                if (code == HttpResponseCode.success) loadData();
+                                if (code == HttpResponseCode.success) refreshFromFirstPage();
                                 else WKToastUtils.getInstance().showToast(msg);
                             });
                         } else {
                             ThreadModel.getInstance().unarchiveThread(groupNo, entity.short_id, (code, msg) -> {
-                                if (code == HttpResponseCode.success) loadData();
+                                if (code == HttpResponseCode.success) refreshFromFirstPage();
                                 else WKToastUtils.getInstance().showToast(msg);
                             });
                         }
                     } else if (which == 1) {
                         ThreadModel.getInstance().deleteThread(groupNo, entity.short_id, (code, msg) -> {
-                            if (code == HttpResponseCode.success) loadData();
+                            if (code == HttpResponseCode.success) refreshFromFirstPage();
                             else WKToastUtils.getInstance().showToast(msg);
                         });
                     }

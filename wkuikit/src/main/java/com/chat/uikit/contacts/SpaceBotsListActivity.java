@@ -70,7 +70,7 @@ public class SpaceBotsListActivity extends WKBaseActivity<ActContactsListLayoutB
                 },
                 () -> friendAdapter.getData().size()
         ));
-        int themeColor = Color.parseColor("#6366f1");
+        int themeColor = Color.parseColor("#7761F4");
         wkVBinding.quickSideBarView.setLetters(CharacterParser.getInstance().getList());
         wkVBinding.quickSideBarView.setTextChooseColor(themeColor);
         wkVBinding.quickSideBarTipsView.setBackgroundColor(themeColor);

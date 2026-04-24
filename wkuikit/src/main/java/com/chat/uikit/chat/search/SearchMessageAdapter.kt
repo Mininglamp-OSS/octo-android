@@ -10,9 +10,13 @@ import com.chat.base.msgitem.WKContentType
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
+import com.chat.uikit.search.remote.GlobalAdapter
 
 class SearchMessageAdapter :
     BaseQuickAdapter<GlobalMessage, BaseViewHolder>(R.layout.item_global_message_layout) {
+
+    var keyword: String = ""
+
     override fun convert(holder: BaseViewHolder, item: GlobalMessage) {
         val avatarView = holder.getView<AvatarView>(R.id.avatarView)
         avatarView.setSize(40f)
@@ -26,25 +30,20 @@ class SearchMessageAdapter :
             holder.setText(R.id.nameTv, Html.fromHtml(item.channel.getHtmlName()))
         }
         val contentTv = holder.getView<TextView>(R.id.contentTv)
-        val type = item.getContentType()
-        if (type == WKContentType.WK_TEXT) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        val rawContent = item.payload["content"]
+        if (rawContent is String && rawContent.isNotEmpty() && !rawContent.contains("<mark>")) {
+            contentTv.text = GlobalAdapter.highlightKeyword(rawContent, keyword)
+        } else {
+            val type = item.getContentType()
+            if (type == WKContentType.WK_TEXT) {
                 contentTv.text = Html.fromHtml(item.getHtmlText(), Html.FROM_HTML_MODE_LEGACY)
-            } else {
-                contentTv.text = Html.fromHtml(item.getHtmlText())
-            }
-        } else if (type == WKContentType.WK_FILE) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                contentTv.text =
-                    Html.fromHtml(item.getHtmlWithField("name"), Html.FROM_HTML_MODE_LEGACY)
-            } else {
-                contentTv.text = Html.fromHtml(item.getHtmlWithField("name"))
+            } else if (type == WKContentType.WK_FILE) {
+                contentTv.text = Html.fromHtml(item.getHtmlWithField("name"), Html.FROM_HTML_MODE_LEGACY)
             }
         }
         holder.setText(
             R.id.timeTv,
             WKTimeUtils.getInstance().getTimeString(item.timestamp * 1000)
         )
-
     }
 }

@@ -8,7 +8,10 @@ class DataVO(
     val type: Int,
     val channel: GlobalChannel?,
     val message: GlobalMessage?,
-    val text: String
+    val text: String,
+    val keyword: String = "",
+    val messageCount: Int = 0,
+    val orderSeq: Long = 0
 ) :
     MultiItemEntity {
 
@@ -21,5 +24,6 @@ class DataVO(
         const val CHANNEL: Int = 1
         const val MESSAGE: Int = 2
         const val SEARCH: Int = 3
+        const val LOCAL_MSG: Int = 4
     }
 }

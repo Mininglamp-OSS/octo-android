@@ -51,8 +51,8 @@ import org.telegram.ui.Components.RLottieDrawable;
 import java.lang.reflect.Method;
 
 public class Theme {
-    public static int colorAccount = 0xFF6366f1;
-    public static int colorAccountDisable = 0x956366f1;
+    public static int colorAccount = 0xFF7761F4;
+    public static int colorAccountDisable = 0x957761F4;
     public static int color999 = 0xFF999999;
     public static int colorCCC = 0xFFCCCCCC;
     public static int pressedColor = 0xff8c9197;

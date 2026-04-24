@@ -20,11 +20,13 @@ import com.chat.uikit.databinding.ActGlobalLayoutBinding
 import com.chat.base.entity.GlobalChannel
 import com.chat.base.entity.GlobalSearchReq
 import com.chat.base.search.GlobalSearchModel
+import com.chat.uikit.chat.search.MessageRecordActivity
 import com.chat.uikit.search.SearchUserActivity
 import com.scwang.smart.refresh.layout.api.RefreshLayout
 import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannelType
+import com.xinbida.wukongim.entity.WKMessageSearchResult
 import java.util.Objects
 
 class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
@@ -135,6 +137,27 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                             )
                         )
                     }
+
+                    DataVO.LOCAL_MSG -> {
+                        if (item.messageCount == 1 && item.orderSeq > 0) {
+                            EndpointManager.getInstance().invoke(
+                                EndpointSID.chatView,
+                                ChatViewMenu(
+                                    this@GlobalActivity,
+                                    item.channel!!.channel_id,
+                                    item.channel.channel_type,
+                                    item.orderSeq,
+                                    false
+                                )
+                            )
+                        } else {
+                            val intent = Intent(this@GlobalActivity, MessageRecordActivity::class.java)
+                            intent.putExtra("channel_id", item.channel!!.channel_id)
+                            intent.putExtra("channel_type", item.channel.channel_type)
+                            intent.putExtra("keyword", item.keyword)
+                            startActivity(intent)
+                        }
+                    }
                 }
             }
         }
@@ -176,8 +199,39 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
                     list.add(DataVO(DataVO.SEARCH, null, null, keyword))
                     list.add(DataVO(DataVO.SPAN, null, null, ""))
-                    if (WKReader.isNotEmpty(resp.messages)) {
+
+                    // 本地消息内容搜索
+                    val localMsgResults = WKIM.getInstance().msgManager.search(keyword)
+                    if (WKReader.isNotEmpty(localMsgResults)) {
                         list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
+                        for (result in localMsgResults) {
+                            val ch = result.wkChannel
+                            val fullChannel = if (ch != null) {
+                                WKIM.getInstance().channelManager.getChannel(ch.channelID, ch.channelType) ?: ch
+                            } else null
+                            val displayName = fullChannel?.channelRemark?.takeIf { it.isNotEmpty() }
+                                ?: fullChannel?.channelName?.takeIf { it.isNotEmpty() }
+                                ?: fullChannel?.channelID ?: ""
+                            val gc = GlobalChannel().apply {
+                                channel_id = fullChannel?.channelID ?: ""
+                                channel_type = fullChannel?.channelType ?: 0
+                                channel_name = displayName
+                            }
+                            val snippet = if (result.messageCount == 1 && !result.searchableWord.isNullOrEmpty()) {
+                                snippetFromText(result.searchableWord, keyword, 40)
+                            } else {
+                                "${result.messageCount} 条相关聊天记录"
+                            }
+                            list.add(DataVO(DataVO.LOCAL_MSG, gc, null, snippet, keyword, result.messageCount, result.orderSeq))
+                        }
+                        list.add(DataVO(DataVO.SPAN, null, null, ""))
+                    }
+
+                    // API 远程消息搜索
+                    if (WKReader.isNotEmpty(resp.messages)) {
+                        if (!WKReader.isNotEmpty(localMsgResults)) {
+                            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
+                        }
                         for (message in resp.messages) {
                             list.add(DataVO(DataVO.MESSAGE, message.channel, message, ""))
                         }
@@ -200,6 +254,18 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 showToast(msg)
             }
         }
+    }
+
+    private fun snippetFromText(text: String, keyword: String, maxLength: Int): String {
+        val idx = text.lowercase().indexOf(keyword.lowercase())
+        if (idx < 0) return if (text.length > maxLength) "${text.substring(0, maxLength)}..." else text
+        val radius = (maxLength - keyword.length) / 2
+        val start = maxOf(0, idx - radius)
+        val end = minOf(text.length, idx + keyword.length + radius)
+        var snippet = text.substring(start, end)
+        if (start > 0) snippet = "...$snippet"
+        if (end < text.length) snippet = "$snippet..."
+        return snippet
     }
 
     /**

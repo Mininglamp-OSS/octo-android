@@ -36,7 +36,8 @@
             android:layout_gravity="center"
             android:layout_marginEnd="35dp"
             android:src="@mipmap/ic_ab_search"
-            android:tint="@color/popupTextColor" />
+            android:tint="@color/popupTextColor"
+            android:visibility="gone" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/rightIv"
@@ -45,9 +46,15 @@
             android:layout_gravity="center"
             android:layout_marginEnd="15dp"
             android:src="@mipmap/msg_add"
-            android:tint="@color/popupTextColor" />
+            android:tint="@color/popupTextColor"
+            android:visibility="gone" />
     </LinearLayout>
 
+    <FrameLayout
+        android:id="@+id/searchBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -72,7 +79,7 @@
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:layout_marginEnd="30dp"
-            app:sidebarBackgroundColor="#6366f1"
+            app:sidebarBackgroundColor="#7761F4"
             app:sidebarTextColor="@android:color/white"
             app:sidebarTextSize="@dimen/font_size_20" />
 
@@ -83,7 +90,7 @@
             android:layout_gravity="center|end"
             app:sidebarItemHeight="18dp"
             app:sidebarTextColor="#999999"
-            app:sidebarTextColorChoose="#6366f1"
+            app:sidebarTextColorChoose="#7761F4"
             app:sidebarTextSize="@dimen/font_size_10"
             app:sidebarTextSizeChoose="@dimen/font_size_10" />
     </FrameLayout>

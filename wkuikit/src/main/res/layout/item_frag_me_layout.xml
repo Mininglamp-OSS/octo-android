@@ -1,28 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/itemRootLayout"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginStart="15dp"
+    android:layout_marginEnd="15dp"
     android:orientation="vertical">
 
-    <LinearLayout style="@style/layoutBg">
-
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/imageView"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:scaleType="centerCrop"
-            android:src="@mipmap/icon_setting" />
+    <LinearLayout
+        android:id="@+id/contentRow"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
 
         <TextView
             android:id="@+id/nameTv"
-            style="@style/leftTextView"
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:layout_marginStart="15dp"
             android:layout_weight="1"
             android:fontFamily="sans-serif-medium"
-            android:textColor="@color/colorDark" />
+            android:textColor="@color/colorDark"
+            android:textSize="16sp" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/newVersionIv"
@@ -33,10 +37,42 @@
             android:visibility="invisible"
             tools:visibility="visible" />
 
-        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+        <TextView
+            android:id="@+id/detailTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:textColor="#999999"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <com.chat.base.ui.components.SwitchView
+            android:id="@+id/darkModeSwitch"
+            android:layout_width="50dp"
+            android:layout_height="30dp"
+            android:layout_gravity="center_vertical"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/arrowIv"
+            android:layout_width="7dp"
+            android:layout_height="12dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="6dp"
+            android:src="@mipmap/ic_arrow_right" />
     </LinearLayout>
 
     <View
+        android:id="@+id/dividerView"
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="#E5E5E5" />
+
+    <View
         android:id="@+id/bottomView"
-        style="@style/view_line_15" />
+        android:layout_width="match_parent"
+        android:layout_height="12dp"
+        android:visibility="gone" />
 </LinearLayout>

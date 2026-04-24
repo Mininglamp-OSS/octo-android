@@ -212,7 +212,11 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 }
             }
         }
-        WKPlayVoiceUtils.getInstance().setPlayListener(object : IPlayListener {
+        val oldListener = playBtn.getTag(R.id.playBtn) as? IPlayListener
+        if (oldListener != null) {
+            WKPlayVoiceUtils.getInstance().removePlayListener(oldListener)
+        }
+        val playListener = object : IPlayListener {
             override fun onCompletion(key: String) {
                 if (key == uiChatMsgItemEntity.wkMsg.clientMsgNO) {
                     voiceWaveform.setProgress(0f)
@@ -239,7 +243,9 @@ class WKVoiceProvider : WKChatBaseProvider() {
                     voiceWaveform.isFresh = false
                 }
             }
-        })
+        }
+        playBtn.setTag(R.id.playBtn, playListener)
+        WKPlayVoiceUtils.getInstance().setPlayListener(playListener)
     }
 
     override val itemViewType: Int

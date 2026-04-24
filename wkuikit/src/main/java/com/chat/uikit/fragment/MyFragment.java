@@ -43,7 +43,6 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         wkVBinding.recyclerView.setNestedScrollingEnabled(false);
         adapter = new PersonalItemAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, adapter);
-        //设置数据item
         List<PersonalInfoMenu> endpoints = EndpointManager.getInstance().invokes(EndpointCategory.personalCenter, null);
         for (int i = 0; i < endpoints.size(); i++) {
             if (!TextUtils.isEmpty(endpoints.get(i).sid)
@@ -53,16 +52,28 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                 break;
             }
         }
+        // 将网页端移到最前面，对齐 iOS 分组顺序
+        for (int i = 0; i < endpoints.size(); i++) {
+            if (endpoints.get(i).text.equals(getString(R.string.web_login))) {
+                PersonalInfoMenu webItem = endpoints.remove(i);
+                endpoints.add(0, webItem);
+                break;
+            }
+        }
+        // 深色模式开关插入第一行
+        PersonalInfoMenu darkModeItem = new PersonalInfoMenu(
+                PersonalItemAdapter.SID_DARK_MODE, 0,
+                getString(R.string.dark_night), null);
+        endpoints.add(0, darkModeItem);
         adapter.setList(endpoints);
     }
 
     @Override
     protected void initPresenter() {
-        wkVBinding.avatarView.setSize(90);
+        wkVBinding.avatarView.setSize(55);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
-        Theme.setPressedBackground(wkVBinding.qrIv);
     }
 
     @Override
@@ -73,8 +84,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                 menu.iPersonalInfoMenuClick.onClick();
             }
         }));
-        SingleClickUtil.onSingleClick(wkVBinding.avatarView, view -> gotoMyInfo());
-        SingleClickUtil.onSingleClick(wkVBinding.qrIv, view -> gotoMyInfo());
+        SingleClickUtil.onSingleClick(wkVBinding.cardLayout, view -> gotoMyInfo());
         // 隐藏入口：长按头像 3 秒修改 API 地址
         final android.os.Handler longPressHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         final Runnable longPressRunnable = () -> {
@@ -101,13 +111,11 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                     longPressHandler.removeCallbacks(longPressRunnable);
                     break;
             }
-            return false; // 返回 false，不拦截单击事件
+            return false;
         });
     }
 
     void gotoMyInfo() {
-//        String str = WKDeviceUtils.getSignature(getActivity());
-//        Log.e("签名",str+"");
         startActivity(new Intent(getActivity(), MyInfoActivity.class));
     }
 
@@ -116,6 +124,24 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         super.onResume();
         wkVBinding.nameTv.setText(WKConfig.getInstance().getUserInfo().name);
         wkVBinding.avatarView.showAvatar(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
+
+        String shortNo = WKConfig.getInstance().getUserInfo().short_no;
+        if (!TextUtils.isEmpty(shortNo)) {
+            wkVBinding.shortNoTv.setVisibility(android.view.View.VISIBLE);
+            wkVBinding.shortNoTv.setText(getString(R.string.app_name) + " 号：" + shortNo);
+        }
+
+        String versionName = WKDeviceUtils.getInstance().getVersionName(requireContext());
+        String buildCode;
+        try {
+            buildCode = String.valueOf(requireContext().getPackageManager()
+                    .getPackageInfo(requireContext().getPackageName(), 0).versionCode);
+        } catch (Exception e) {
+            buildCode = "";
+        }
+        wkVBinding.statusTv.setText(getString(R.string.online_status_text) + " · Android v" + versionName + "(" + buildCode + ")");
+        wkVBinding.versionTv.setText(getString(R.string.app_name) + " · v" + versionName + " (" + buildCode + ")");
+
         if (null != adapter) {
             try {
                 WKCommonModel.getInstance().getAppNewVersion(false, version -> {

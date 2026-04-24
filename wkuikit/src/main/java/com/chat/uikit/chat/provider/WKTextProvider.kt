@@ -572,7 +572,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                 if (isApprove) {
                     setTextColor(android.graphics.Color.WHITE)
                     background = GradientDrawable().apply {
-                        setColor(android.graphics.Color.parseColor("#6366f1"))
+                        setColor(android.graphics.Color.parseColor("#7761F4"))
                         this.cornerRadius = cornerRadius
                     }
                 } else {

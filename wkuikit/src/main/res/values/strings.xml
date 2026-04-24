@@ -3,7 +3,7 @@
     <string name="connecting">连接中</string>
     <string name="not_connected">未连接</string>
     <string name="news_line">以下为新消息</string>
-    <string name="contacts_num">%d位联系人</string>
+    <string name="contacts_num">共 %d 位联系人</string>
     <string name="login_out">退出登录</string>
     <string name="login_out_dialog">退出后不会删除任何历史数据，下次登录依然可以使用本账号。</string>
     <string name="tab_msg">消息</string>
@@ -278,9 +278,12 @@
     <string name="open_new_msg_notice_desc">在系统通知权限页面的类别分类中，打开‘新消息通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
     <string name="open_new_rtc_notice">打开音视频邀请通知</string>
     <string name="open_new_rtc_notice_desc">在系统通知权限页面的类别分类中，打开‘音视频邀请通知’页面，开启‘允许通知’和‘振动’，‘声音’选项</string>
-    <string name="tab_text_chat">聊天</string>
+    <string name="online_status_text">在线</string>
+    <string name="str_connected">已连接</string>
+    <string name="search_contacts_placeholder">搜索联系人、AI、群聊</string>
+    <string name="tab_text_chat">消息</string>
     <string name="tab_text_contacts">联系人</string>
-    <string name="tab_text_me">我的</string>
+    <string name="tab_text_me">我</string>
     <string name="invitation_sent">邀请已发送</string>
     <string name="find_chat_content">查找聊天记录</string>
     <string name="uikit_search_specified_content">搜索指定内容</string>

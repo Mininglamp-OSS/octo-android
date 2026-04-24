@@ -36,7 +36,8 @@
             android:layout_gravity="center"
             android:layout_marginEnd="35dp"
             android:src="@mipmap/ic_ab_search"
-            android:tint="@color/popupTextColor" />
+            android:tint="@color/popupTextColor"
+            android:visibility="gone" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/rightIv"
@@ -45,9 +46,42 @@
             android:layout_gravity="center"
             android:layout_marginEnd="15dp"
             android:src="@mipmap/msg_add"
-            android:tint="@color/popupTextColor" />
+            android:tint="@color/popupTextColor"
+            android:visibility="gone" />
     </LinearLayout>
 
+    <FrameLayout
+        android:id="@+id/searchBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="15dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_contacts_search_bar">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@mipmap/ic_ab_search"
+                android:tint="#999999" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/search_contacts_placeholder"
+                android:textColor="#999999"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </FrameLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -72,7 +106,7 @@
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:layout_marginEnd="30dp"
-            app:sidebarBackgroundColor="#6366f1"
+            app:sidebarBackgroundColor="#7761F4"
             app:sidebarTextColor="@android:color/white"
             app:sidebarTextSize="@dimen/font_size_20" />
 
@@ -83,7 +117,7 @@
             android:layout_gravity="center|end"
             app:sidebarItemHeight="18dp"
             app:sidebarTextColor="#999999"
-            app:sidebarTextColorChoose="#6366f1"
+            app:sidebarTextColorChoose="#7761F4"
             app:sidebarTextSize="@dimen/font_size_10"
             app:sidebarTextSizeChoose="@dimen/font_size_10" />
     </FrameLayout>

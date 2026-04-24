@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Monitor screen -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M3,3h18c1.1,0 2,0.9 2,2v10c0,1.1 -0.9,2 -2,2H3c-1.1,0 -2,-0.9 -2,-2V5c0,-1.1 0.9,-2 2,-2z"
+        android:strokeColor="#676a6f"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.5" />
+    <!-- Stand -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M12,17v4"
+        android:strokeColor="#676a6f"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.5" />
+    <!-- Base -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M8,21h8"
+        android:strokeColor="#676a6f"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.5" />
+</vector>

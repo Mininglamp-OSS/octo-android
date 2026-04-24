@@ -100,8 +100,7 @@ public class SpacePopupWindow {
         });
 
         loadSpaces();
-        popupWindow.showAtLocation(anchorView, Gravity.TOP | Gravity.START,
-                anchorView.getLeft() + 15, anchorView.getBottom() + 20);
+        popupWindow.showAsDropDown(anchorView, 0, 8);
     }
 
     private RecyclerView recyclerView;

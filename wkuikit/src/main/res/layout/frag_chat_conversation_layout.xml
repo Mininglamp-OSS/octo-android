@@ -15,28 +15,40 @@
         <LinearLayout
             android:id="@+id/spaceHeaderLayout"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_marginStart="15dp"
+            android:background="@drawable/bg_space_capsule"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="12dp">
+
+            <TextView
+                android:id="@+id/spaceAvatarTv"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_space_avatar"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <TextSwitcher
                 android:id="@+id/textSwitcher"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:inAnimation="@anim/ts_in_anim"
                 android:outAnimation="@anim/ts_out_anim"
                 android:tag="-1"
                 android:text="@string/not_connected" />
 
-            <TextView
-                android:id="@+id/spaceArrowTv"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+            <ImageView
+                android:id="@+id/spaceChevronIv"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:layout_marginStart="4dp"
-                android:text="▾"
-                android:textColor="@color/colorDark"
-                android:textSize="14sp"
+                android:src="@drawable/ic_chevron_down"
                 android:visibility="gone" />
 
         </LinearLayout>
@@ -71,24 +83,30 @@
 
         </LinearLayout>
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/deviceIv"
+        <FrameLayout
+            android:id="@+id/deviceLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_marginEnd="16dp"
-            android:src="@mipmap/menu_devices"
-            android:tint="@color/popupTextColor"
-            android:visibility="gone" />
+            android:visibility="gone">
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/searchIv"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginEnd="35dp"
-            android:src="@mipmap/ic_ab_search"
-            android:tint="@color/popupTextColor" />
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/deviceIv"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_monitor_online" />
+
+            <View
+                android:id="@+id/deviceOnlineDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="-1dp"
+                android:layout_marginEnd="-1dp"
+                android:background="@drawable/bg_online_dot" />
+        </FrameLayout>
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/rightIv"
@@ -99,6 +117,40 @@
             android:src="@mipmap/msg_add"
             android:tint="@color/popupTextColor" />
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/chatSearchBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="15dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/bg_contacts_search_bar">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@mipmap/ic_ab_search"
+                android:tint="#999999" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/str_search"
+                android:textColor="#999999"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </FrameLayout>
 
     <FrameLayout
         android:id="@+id/segmentTabContainer"

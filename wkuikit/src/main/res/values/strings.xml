@@ -72,7 +72,7 @@
     <string name="apply_join_group">[进群申请]</string>
     <string name="ar_feed_sound_cancel">松手取消</string>
     <string name="new_msg_notice">新消息通知</string>
-    <string name="web_login">电脑端登录</string>
+    <string name="web_login">网页端</string>
     <string name="currency">通用</string>
     <string name="saved_groups">保存的群聊</string>
     <string name="head_portrait">头像</string>

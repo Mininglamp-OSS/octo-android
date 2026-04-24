@@ -9,9 +9,10 @@ import androidx.annotation.NonNull;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.WKToastUtils;
+import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
-import com.chat.uikit.chat.ChatActivity;
+import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.databinding.ActThreadListLayoutBinding;
 import com.chat.uikit.thread.adapter.ThreadListAdapter;
 import com.chat.uikit.thread.service.ThreadModel;
@@ -157,10 +158,8 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
     }
 
     private void navigateToChat(String channelId) {
-        Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra("channelId", channelId);
-        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-        startActivity(intent);
+        WKIMUtils.getInstance().startChatActivity(
+                new ChatViewMenu(this, channelId, WKChannelType.COMMUNITY_TOPIC, 0, false));
     }
 
     private void openCreateThread() {

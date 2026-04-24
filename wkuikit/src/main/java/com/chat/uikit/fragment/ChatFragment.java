@@ -2399,10 +2399,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void navigateToThreadChat(String channelId) {
-        Intent intent = new Intent(getActivity(), ChatActivity.class);
-        intent.putExtra("channelId", channelId);
-        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-        startActivity(intent);
+        WKIMUtils.getInstance().startChatActivity(
+                new ChatViewMenu(getActivity(), channelId, WKChannelType.COMMUNITY_TOPIC, 0, false));
     }
 
     @Override

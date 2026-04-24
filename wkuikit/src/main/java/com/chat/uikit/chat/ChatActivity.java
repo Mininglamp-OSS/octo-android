@@ -174,6 +174,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long tipsOrderSeq = 0; //需要强提示的msg
     private int keepOffsetY = 0; // 上次浏览消息的偏移量
     private int redDot = 0; // 未读消息数量
+    private boolean hasPositionedUnread = false; // 是否已完成未读定位
     private int lastVisibleMsgSeq = 0; // 最后可见消息序号
     private int maxMsgSeq = 0;
     private long maxMsgOrderSeq = 0;
@@ -875,10 +876,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 if (chatAdapter != null && chatAdapter.getLastMsg() != null) {
                     tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
                 }
-                if (maxOrderSeq > tempMaxOrderSeq) {
-                    // scrollToEnd();
-//                    isCanRefresh = true;
-//                    isShowHistory = false;
+                if (maxOrderSeq > tempMaxOrderSeq && !hasPositionedUnread) {
                     getData(0, true, maxOrderSeq, true);
                 }
 //                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
@@ -1457,26 +1455,32 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void applyDataToAdapter(List<WKUIChatMsgItemEntity> list, int pullMode, boolean isSetNewData, boolean isScrollToEnd) {
         if (isSetNewData) {
+            int unreadScrollIndex = -1;
             if (unreadStartMsgOrderSeq != 0) {
+                int bestIndex = -1;
                 for (int i = 0, size = list.size(); i < size; i++) {
-                    if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq == unreadStartMsgOrderSeq) {
-                        WKUIChatMsgItemEntity uiChatMsgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
-                        uiChatMsgItemEntity.wkMsg.type = WKContentType.msgPromptNewMsg;
-                        int index = i;
-                        if (index <= 0) index = 0;
-                        if (index > list.size() - 1) index = list.size() - 1;
-                        list.add(index, uiChatMsgItemEntity);
-                        if (index >= 1) {
-                            linearLayoutManager.scrollToPositionWithOffset(index, 50);
-                        } else wkVBinding.recyclerView.scrollToPosition(index);
-                        unreadStartMsgOrderSeq = 0;
+                    if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq > 0
+                            && list.get(i).wkMsg.orderSeq >= unreadStartMsgOrderSeq) {
+                        bestIndex = i;
                         break;
                     }
                 }
+                if (bestIndex >= 0) {
+                    WKUIChatMsgItemEntity uiChatMsgItemEntity = new WKUIChatMsgItemEntity(this, new WKMsg(), null);
+                    uiChatMsgItemEntity.wkMsg.type = WKContentType.msgPromptNewMsg;
+                    list.add(bestIndex, uiChatMsgItemEntity);
+                    unreadScrollIndex = bestIndex;
+                }
+                unreadStartMsgOrderSeq = 0;
             }
             chatAdapter.resetData(list);
             chatAdapter.setNewInstance(list);
             chatAdapter.rebuildIndex();
+            if (unreadScrollIndex >= 0) {
+                final int scrollTarget = unreadScrollIndex;
+                linearLayoutManager.scrollToPositionWithOffset(scrollTarget, AndroidUtilities.dp(50));
+                hasPositionedUnread = true;
+            }
         } else {
             chatAdapter.resetData(list);
             if (pullMode == 1) {

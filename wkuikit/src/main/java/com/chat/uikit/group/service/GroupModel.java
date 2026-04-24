@@ -14,6 +14,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
 import com.chat.uikit.group.GroupEntity;
+import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
 import com.chat.uikit.message.MsgModel;
@@ -447,4 +448,37 @@ public class GroupModel extends WKBaseModel {
         });
     }
 
+    public interface IGroupMdListener {
+        void onResult(int code, String msg, GroupMdEntity entity);
+    }
+
+    public void getGroupMd(String groupNo, IGroupMdListener listener) {
+        request(createService(GroupService.class).getGroupMd(groupNo), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(GroupMdEntity result) {
+                listener.onResult(HttpResponseCode.success, "", result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public void updateGroupMd(String groupNo, String content, ICommonListener listener) {
+        JSONObject json = new JSONObject();
+        json.put("content", content);
+        request(createService(GroupService.class).updateGroupMd(groupNo, json), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                listener.onResult(HttpResponseCode.success, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
+    }
 }

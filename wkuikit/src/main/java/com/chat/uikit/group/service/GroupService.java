@@ -3,6 +3,7 @@ package com.chat.uikit.group.service;
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.uikit.group.GroupEntity;
+import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.chat.uikit.group.service.entity.GroupQr;
 import com.chat.uikit.group.service.entity.H5ConfirmUrl;
@@ -64,4 +65,13 @@ public interface GroupService {
 
     @GET("groups/{group_no}/members")
     Observable<List<GroupMember>> groupMembers(@Path("group_no") String groupNO, @Query("keyword") String keyword, @Query("page") int page, @Query("limit") int limit);
+
+    @GET("groups/{groupNo}/md")
+    Observable<GroupMdEntity> getGroupMd(@Path("groupNo") String groupNo);
+
+    @PUT("groups/{groupNo}/md")
+    Observable<CommonResponse> updateGroupMd(@Path("groupNo") String groupNo, @Body JSONObject jsonObject);
+
+    @HTTP(method = "DELETE", path = "groups/{groupNo}/md")
+    Observable<CommonResponse> deleteGroupMd(@Path("groupNo") String groupNo);
 }

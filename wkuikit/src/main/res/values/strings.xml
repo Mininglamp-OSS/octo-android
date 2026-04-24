@@ -440,5 +440,12 @@
     <string name="delete_category">删除分组</string>
     <string name="delete_category_confirm">删除后，分组内的群聊将移至未分组区域</string>
     <string name="default_group">未分组</string>
+    <string name="group_md">GROUP.md</string>
+    <string name="group_md_configured">已配置 v%d</string>
+    <string name="group_md_not_configured">未配置</string>
+    <string name="group_md_placeholder"># 群组说明\n\n## 简介\n描述本群的用途和主题…\n\n## 规则\n1. 规则一\n2. 规则二\n\n## 常用链接\n- 链接一\n- 链接二</string>
+    <string name="group_md_byte_count">%1$d / %2$d bytes</string>
+    <string name="group_md_readonly_hint">暂未配置 GROUP.md</string>
+    <string name="group_md_exceed_limit">内容超过最大字节限制</string>
 </resources>
 

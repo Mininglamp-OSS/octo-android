@@ -1,0 +1,149 @@
+package com.chat.uikit.group;
+
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.TextView;
+
+import androidx.core.content.ContextCompat;
+
+import com.chat.base.base.WKBaseActivity;
+import com.chat.base.config.WKConfig;
+import com.chat.base.msgitem.WKChannelMemberRole;
+import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.uikit.R;
+import com.chat.uikit.databinding.ActGroupMdLayoutBinding;
+import com.chat.uikit.group.service.GroupModel;
+import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannelMember;
+import com.xinbida.wukongim.entity.WKChannelType;
+
+import java.nio.charset.StandardCharsets;
+
+public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
+
+    private static final int MAX_BYTES = 10240;
+    private String groupNo;
+    private String originalContent = "";
+    private TextView titleRightTv;
+    private boolean canEdit;
+
+    @Override
+    protected ActGroupMdLayoutBinding getViewBinding() {
+        return ActGroupMdLayoutBinding.inflate(getLayoutInflater());
+    }
+
+    @Override
+    protected void setTitle(TextView titleTv) {
+        titleTv.setText(R.string.group_md);
+    }
+
+    @Override
+    protected String getRightTvText(TextView textView) {
+        titleRightTv = textView;
+        return getString(R.string.save);
+    }
+
+    @Override
+    protected boolean hideStatusBar() {
+        return true;
+    }
+
+    @Override
+    protected void rightLayoutClick() {
+        String content = wkVBinding.contentEt.getText() != null
+                ? wkVBinding.contentEt.getText().toString() : "";
+        if (content.equals(originalContent)) return;
+        int byteLen = content.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLen > MAX_BYTES) {
+            showToast(getString(R.string.group_md_exceed_limit));
+            return;
+        }
+        showTitleRightLoading();
+        GroupModel.getInstance().updateGroupMd(groupNo, content, (code, msg) -> {
+            if (code == HttpResponseCode.success) {
+                WKIM.getInstance().getChannelManager().fetchChannelInfo(groupNo, WKChannelType.GROUP);
+                finish();
+            } else {
+                hideTitleRightLoading();
+                showToast(msg);
+            }
+        });
+    }
+
+    @Override
+    protected void initView() {
+        wkVBinding.contentEt.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateByteCount(s.toString());
+            }
+        });
+    }
+
+    @Override
+    protected void initListener() {}
+
+    @Override
+    protected void initData() {
+        groupNo = getIntent().getStringExtra("groupNo");
+
+        WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
+                .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        canEdit = member != null && member.role != WKChannelMemberRole.normal;
+
+        if (canEdit) {
+            titleRightTv.setVisibility(View.VISIBLE);
+            wkVBinding.contentEt.setEnabled(true);
+            wkVBinding.byteCountTv.setVisibility(View.VISIBLE);
+        } else {
+            titleRightTv.setVisibility(View.GONE);
+            wkVBinding.contentEt.setFocusableInTouchMode(false);
+            wkVBinding.contentEt.setEnabled(true);
+            wkVBinding.byteCountTv.setVisibility(View.GONE);
+        }
+
+        if (loadingPopup != null) loadingPopup.show();
+        GroupModel.getInstance().getGroupMd(groupNo, (code, msg, entity) -> {
+            if (loadingPopup != null) loadingPopup.dismiss();
+            if (code == HttpResponseCode.success && entity != null
+                    && !TextUtils.isEmpty(entity.content)) {
+                originalContent = entity.content;
+                wkVBinding.contentEt.setText(entity.content);
+                wkVBinding.contentEt.setSelection(entity.content.length());
+                wkVBinding.readonlyHintLayout.setVisibility(View.GONE);
+                wkVBinding.contentEt.setVisibility(View.VISIBLE);
+                updateByteCount(entity.content);
+            } else if (!canEdit) {
+                wkVBinding.contentEt.setVisibility(View.GONE);
+                wkVBinding.readonlyHintLayout.setVisibility(View.VISIBLE);
+            }
+            if (canEdit) {
+                wkVBinding.contentEt.requestFocus();
+                SoftKeyboardUtils.getInstance().showSoftKeyBoard(this, wkVBinding.contentEt);
+            }
+        });
+    }
+
+    private void updateByteCount(String text) {
+        int byteLen = text.getBytes(StandardCharsets.UTF_8).length;
+        wkVBinding.byteCountTv.setText(String.format(getString(R.string.group_md_byte_count), byteLen, MAX_BYTES));
+        wkVBinding.byteCountTv.setTextColor(byteLen > MAX_BYTES
+                ? ContextCompat.getColor(this, R.color.reminderColor)
+                : 0xFF999999);
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
+    }
+}

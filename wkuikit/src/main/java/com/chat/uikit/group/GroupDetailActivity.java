@@ -303,6 +303,12 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             });
         });
         wkVBinding.inGroupNameLayout.setOnClickListener(v -> updateNameInGroupDialog());
+        SingleClickUtil.onSingleClick(wkVBinding.groupMdLayout, view1 -> {
+            if (!groupIsEnable()) return;
+            Intent intent = new Intent(this, GroupMdActivity.class);
+            intent.putExtra("groupNo", groupNo);
+            startActivity(intent);
+        });
         SingleClickUtil.onSingleClick(wkVBinding.noticeLayout, view1 -> {
             if (!groupIsEnable()) return;
             String notice = "";
@@ -334,6 +340,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                     groupChannel = channel;
                     setData();
                     setNotice();
+                    setGroupMdStatus();
                 }
             }
         });
@@ -443,6 +450,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
             setData();
             setNotice();
+            setGroupMdStatus();
         }
         groupPresenter.getGroupInfo(groupNo);
         getMembers();
@@ -560,6 +568,24 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             wkVBinding.groupNoticeTv.setVisibility(View.GONE);
         }
 
+    }
+
+    private void setGroupMdStatus() {
+        HashMap extraMap = groupChannel.remoteExtraMap;
+        if (extraMap != null && extraMap.containsKey("has_group_md")) {
+            Object hasObj = extraMap.get("has_group_md");
+            boolean hasMd = false;
+            if (hasObj instanceof Boolean) hasMd = (Boolean) hasObj;
+            else if (hasObj instanceof Number) hasMd = ((Number) hasObj).intValue() == 1;
+            if (hasMd) {
+                int version = 0;
+                Object vObj = extraMap.get("group_md_version");
+                if (vObj instanceof Number) version = ((Number) vObj).intValue();
+                wkVBinding.groupMdStatusTv.setText(String.format(getString(R.string.group_md_configured), version));
+                return;
+            }
+        }
+        wkVBinding.groupMdStatusTv.setText(R.string.group_md_not_configured);
     }
 
     private void setData() {

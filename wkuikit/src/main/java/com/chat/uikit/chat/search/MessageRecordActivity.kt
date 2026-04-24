@@ -31,6 +31,7 @@ import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
+import com.xinbida.wukongim.entity.WKMsg
 
 class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
     private lateinit var channelID: String
@@ -46,6 +47,7 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
     override fun initPresenter() {
         channelID = intent.getStringExtra("channel_id")!!
         channelType = intent.getByteExtra("channel_type", WKChannelType.PERSONAL)
+        keyword = intent.getStringExtra("keyword") ?: ""
     }
 
     override fun initView() {
@@ -148,34 +150,82 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
                 )
             }
         }
+
+        if (keyword.isNotEmpty()) {
+            wkVBinding.searchEt.setText(keyword)
+            wkVBinding.searchEt.setSelection(keyword.length)
+        }
     }
 
     fun searchMessage() {
+        messageAdapter.keyword = keyword
+        // 本地搜索
+        val localMsgs = WKIM.getInstance().msgManager.searchWithChannel(keyword, channelID, channelType)
+        val localMessages = ArrayList<GlobalMessage>()
+        if (WKReader.isNotEmpty(localMsgs)) {
+            for (msg in localMsgs) {
+                val gm = GlobalMessage()
+                gm.message_seq = msg.messageSeq.toLong()
+                gm.from_uid = msg.fromUID ?: ""
+                gm.timestamp = msg.timestamp
+                val payloadMap = HashMap<String, Any>()
+                payloadMap["type"] = msg.type
+                payloadMap["content"] = msg.searchableWord?.takeIf { it.isNotEmpty() }
+                    ?: msg.baseContentMsgModel?.getSearchableWord()
+                    ?: ""
+                gm.payload = payloadMap
+                val gc = com.chat.base.entity.GlobalChannel()
+                gc.channel_id = channelID
+                gc.channel_type = channelType
+                val ch = WKIM.getInstance().channelManager.getChannel(channelID, channelType)
+                gc.channel_name = ch?.channelRemark?.takeIf { it.isNotEmpty() }
+                    ?: ch?.channelName ?: ""
+                gm.channel = gc
+                localMessages.add(gm)
+            }
+        }
+
+        // 远程 API 搜索
         val contentType = ArrayList<Int>()
         contentType.add(WKContentType.WK_TEXT)
         contentType.add(WKContentType.WK_FILE)
         val req =
             GlobalSearchReq(1, keyword, channelID, channelType, "", "", contentType, page, 20, 0, 0)
 
-        GlobalSearchModel.search(req) { code, msg, resp ->
+        GlobalSearchModel.search(req) { code, _, resp ->
             wkVBinding.refreshLayout.finishRefresh()
             wkVBinding.refreshLayout.finishLoadMore()
-            if (code != HttpResponseCode.success) {
-                showToast(msg)
-                return@search
+
+            val merged = ArrayList<GlobalMessage>()
+            val seenSeqs = HashSet<Long>()
+
+            // 本地结果优先
+            if (page == 1) {
+                for (m in localMessages) {
+                    if (seenSeqs.add(m.message_seq)) merged.add(m)
+                }
             }
-            if (resp == null || WKReader.isEmpty(resp.messages)) {
+
+            // API 结果去重合并
+            if (code == HttpResponseCode.success && resp != null && WKReader.isNotEmpty(resp.messages)) {
+                for (m in resp.messages) {
+                    if (seenSeqs.add(m.message_seq)) merged.add(m)
+                }
+            }
+
+            if (merged.isEmpty()) {
                 wkVBinding.refreshLayout.setEnableLoadMore(false)
                 if (page == 1) {
+                    messageAdapter.setList(ArrayList())
                     wkVBinding.noDataTv.visibility = View.VISIBLE
                 }
                 return@search
             }
             wkVBinding.noDataTv.visibility = View.GONE
             if (page == 1) {
-                messageAdapter.setList(resp.messages)
+                messageAdapter.setList(merged)
             } else {
-                messageAdapter.addData(resp.messages)
+                messageAdapter.addData(merged)
             }
         }
     }

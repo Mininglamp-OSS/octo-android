@@ -10,7 +10,7 @@ class GlobalChannel {
 
 
     fun getHtmlName():String{
-        return channel_name.replace("<mark>", "<font color=#f65835>")
+        return channel_name.replace("<mark>", "<font color=#7761F4>")
             .replace("</mark>", "</font>")
     }
 }

@@ -35,6 +35,9 @@
     <string name="my_in_group_name">我在本群的昵称</string>
     <string name="update_in_gorup_name">设置你在群里的昵称，这个昵称只会在这个群内显示</string>
     <string name="group_name">群聊名称</string>
+    <string name="group_avatar">群头像</string>
+    <string name="upload_success">上传成功</string>
+    <string name="upload_fail">上传失败</string>
     <string name="group_qr">群二维码</string>
     <string name="group_card">群名片</string>
     <string name="group_announcement">群公告</string>

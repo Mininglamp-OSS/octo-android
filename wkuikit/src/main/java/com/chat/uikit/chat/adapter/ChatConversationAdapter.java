@@ -1,5 +1,6 @@
 package com.chat.uikit.chat.adapter;
 
+import android.content.Context;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
@@ -101,6 +102,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
     // 标记正在加载的 groupNo，避免重复请求
     private final Set<String> threadLoadingSet = Collections.synchronizedSet(new HashSet<>());
+    // 子区展开状态（默认折叠，在此集合中的表示已展开，对齐 iOS expandedThreadGroups）
+    private final Set<String> expandedThreadGroups = new HashSet<>();
     // 防抖：延迟调 API，等服务端处理完消息再拉取
     private final android.os.Handler threadRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Map<String, Runnable> pendingRefreshTasks = new ConcurrentHashMap<>();
@@ -229,8 +232,30 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 长按事件
         addEvent(helper, item);
 
-        // 子区预览
-        showThreadPreviews(helper, item);
+        // 子区：默认折叠，点击图标展开/折叠（对齐 iOS）
+        ImageView threadToggleIv = helper.getView(R.id.threadToggleIv);
+        FrameLayout container = helper.getView(R.id.threadPreviewContainer);
+        boolean hasThreads = hasActiveThreads(item.channelID);
+        if (hasThreads) {
+            threadToggleIv.setVisibility(View.VISIBLE);
+            threadToggleIv.setColorFilter(new PorterDuffColorFilter(
+                    com.chat.base.ui.Theme.colorAccount, PorterDuff.Mode.SRC_IN));
+            threadToggleIv.setOnClickListener(v -> {
+                toggleThreadExpanded(item.channelID);
+                int pos = helper.getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos);
+            });
+            if (isThreadExpanded(item.channelID)) {
+                showThreadPreviews(helper, item);
+            } else {
+                container.removeAllViews();
+                container.setVisibility(View.GONE);
+            }
+        } else {
+            threadToggleIv.setVisibility(View.GONE);
+            threadToggleIv.setOnClickListener(null);
+            showThreadPreviews(helper, item);
+        }
     }
 
     public void addListener(IListener iItemMenuClick) {
@@ -239,6 +264,40 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     public void setThreadPreviewClickListener(IThreadPreviewClickListener listener) {
         this.threadPreviewClickListener = listener;
+    }
+
+    private boolean isThreadExpanded(String channelId) {
+        return expandedThreadGroups.contains(channelId);
+    }
+
+    private void toggleThreadExpanded(String channelId) {
+        if (expandedThreadGroups.contains(channelId)) {
+            expandedThreadGroups.remove(channelId);
+        } else {
+            expandedThreadGroups.add(channelId);
+        }
+        saveExpandedState();
+    }
+
+    private void saveExpandedState() {
+        String uid = WKConfig.getInstance().getUid();
+        String key = uid + "_expanded_thread_groups";
+        String value = TextUtils.join(",", expandedThreadGroups);
+        getContext().getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
+                .edit().putString(key, value).apply();
+    }
+
+    public void restoreExpandedState() {
+        String uid = WKConfig.getInstance().getUid();
+        String key = uid + "_expanded_thread_groups";
+        String value = getContext().getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
+                .getString(key, "");
+        expandedThreadGroups.clear();
+        if (!TextUtils.isEmpty(value)) {
+            for (String id : value.split(",")) {
+                if (!TextUtils.isEmpty(id)) expandedThreadGroups.add(id);
+            }
+        }
     }
 
     @Override
@@ -829,6 +888,23 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setText(R.id.nameTv, showName);
     }
 
+    private boolean hasActiveThreads(String groupNo) {
+        List<ThreadEntity> cached = threadDataCache.get(groupNo);
+        if (cached == null) {
+            loadThreadPreviewsSilent(groupNo);
+            return false;
+        }
+        for (ThreadEntity e : cached) {
+            if (e.status == 1) return true;
+        }
+        return false;
+    }
+
+    private void loadThreadPreviewsSilent(String groupNo) {
+        if (threadLoadingSet.contains(groupNo)) return;
+        loadThreadPreviews(groupNo);
+    }
+
     /**
      * 展示子区预览（最多 2 个最近活跃子区 + "+N 个子区" 折叠行）
      * 参考 iOS WKConversationGroupThreadCell：带分支线 + 圆角卡片容器 + 未读数气泡
@@ -1186,11 +1262,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             WKUIConversationMsg convMsg = getData().get(i).uiConversationMsg;
             if (convMsg == null) continue;
             if (convMsg.channelID.equals(groupNo)) {
-                int adapterPos = i + getHeaderLayoutCount();
-                RecyclerView.ViewHolder vh = getRecyclerView().findViewHolderForAdapterPosition(adapterPos);
-                if (vh instanceof BaseViewHolder) {
-                    showThreadPreviews((BaseViewHolder) vh, getData().get(i).uiConversationMsg);
-                }
+                notifyItemChanged(i + getHeaderLayoutCount());
                 break;
             }
         }

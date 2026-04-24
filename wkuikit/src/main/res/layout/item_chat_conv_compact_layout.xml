@@ -81,6 +81,15 @@
             android:textSize="10sp"
             android:fontFamily="sans-serif-medium"
             android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/threadToggleIv"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_thread"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:visibility="gone" />
     </LinearLayout>
 
     <FrameLayout

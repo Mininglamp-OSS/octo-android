@@ -11,8 +11,11 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.config.WKApiConfig;
+import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
+import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
 import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.uikit.group.service.entity.GroupMember;
@@ -315,6 +318,21 @@ public class GroupModel extends WKBaseModel {
             @Override
             public void onFail(int code, String msg) {
                 iCommonListener.onResult(code, msg);
+            }
+        });
+    }
+
+    public void uploadGroupAvatar(String groupNo, String filePath, final ICommonListener listener) {
+        String url = WKApiConfig.baseUrl + "groups/" + groupNo + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
+            @Override
+            public void onSuccess(String url) {
+                listener.onResult(HttpResponseCode.success, "");
+            }
+
+            @Override
+            public void onError() {
+                listener.onResult(HttpResponseCode.error, "upload failed");
             }
         });
     }

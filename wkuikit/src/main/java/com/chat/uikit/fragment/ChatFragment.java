@@ -179,6 +179,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
+        chatConversationAdapter.restoreExpandedState();
         chatConversationAdapter.setAnimationEnable(false);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);

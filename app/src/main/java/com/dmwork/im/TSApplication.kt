@@ -102,7 +102,6 @@ class TSApplication : MultiDexApplication() {
         WKPushApplication.getInstance().init(getAppPackageName(), this)
         addAppFrontBack()
         addListener()
-        DebugTools.init(this)
     }
 
     private fun initApi() {

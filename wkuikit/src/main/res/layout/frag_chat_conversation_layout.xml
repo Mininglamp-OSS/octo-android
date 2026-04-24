@@ -38,6 +38,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:measureAllChildren="false"
                 android:inAnimation="@anim/ts_in_anim"
                 android:outAnimation="@anim/ts_out_anim"
                 android:tag="-1"

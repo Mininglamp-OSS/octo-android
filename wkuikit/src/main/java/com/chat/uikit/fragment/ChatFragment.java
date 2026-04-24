@@ -167,6 +167,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {
             TextView textView = new TextView(getActivity());
+            textView.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
             textView.setTextSize(15);
             Typeface face = Typeface.createFromAsset(getResources().getAssets(),
                     "fonts/mw_bold.ttf");
@@ -221,7 +224,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             popup.setOnSpaceSelectedListener(space -> {
                 currentSpaceName = space.name;
                 MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
-                wkVBinding.textSwitcher.setText(space.name);
+                setSpaceSwitcherText(space.name);
                 updateSpaceAvatar(space.name);
 
                 // 清除成员缓存
@@ -762,7 +765,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 wkVBinding.textSwitcher.setText(getString(R.string.sync_msg));
                 wkVBinding.spaceChevronIv.setVisibility(View.GONE);
             } else if (i == WKConnectStatus.success) {
-                wkVBinding.textSwitcher.setText(getDisplayTitle());
+                setSpaceSwitcherText(getDisplayTitle());
                 wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
                 connectedAtMs = System.currentTimeMillis();
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
@@ -808,7 +811,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (connectedAtMs == 0) {
             connectedAtMs = System.currentTimeMillis();
         }
-        wkVBinding.textSwitcher.setText(getDisplayTitle());
+        setSpaceSwitcherText(getDisplayTitle());
         wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
         startPingTimer();
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
@@ -2720,26 +2723,37 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         for (SpaceEntity space : list) {
                             if (spaceId.equals(space.space_id)) {
                                 currentSpaceName = space.name;
-                                wkVBinding.textSwitcher.setText(space.name);
+                                setSpaceSwitcherText(space.name);
                                 updateSpaceAvatar(space.name);
                                 return;
                             }
                         }
                     }
-                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                    setSpaceSwitcherText(getString(R.string.app_name));
                     updateSpaceAvatar(getString(R.string.app_name));
                 }
 
                 @Override
                 public void onError(int code, String msg) {
-                    wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+                    setSpaceSwitcherText(getString(R.string.app_name));
                     updateSpaceAvatar(getString(R.string.app_name));
                 }
             });
         } else {
-            wkVBinding.textSwitcher.setText(getString(R.string.app_name));
+            setSpaceSwitcherText(getString(R.string.app_name));
             updateSpaceAvatar(getString(R.string.app_name));
         }
+    }
+
+    private void setSpaceSwitcherText(String text) {
+        for (int i = 0; i < wkVBinding.textSwitcher.getChildCount(); i++) {
+            View child = wkVBinding.textSwitcher.getChildAt(i);
+            if (child instanceof TextView) {
+                ((TextView) child).setText(text);
+            }
+            child.clearAnimation();
+        }
+        wkVBinding.textSwitcher.requestLayout();
     }
 
     private void updateSpaceAvatar(String name) {

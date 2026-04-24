@@ -231,7 +231,9 @@ public class ConversationManager extends BaseManager {
         boolean result = ConversationDbManager.getInstance().updateRedDot(channelID, channelType, redDot);
         if (result) {
             WKUIConversationMsg msg = getUIConversationMsg(channelID, channelType);
-            setOnRefreshMsg(msg, "updateRedDot");
+            if (msg != null) {
+                setOnRefreshMsg(msg, "updateRedDot");
+            }
         }
     }
 

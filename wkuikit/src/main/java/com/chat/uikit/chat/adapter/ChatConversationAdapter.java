@@ -166,6 +166,15 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void convertCompact(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
         WKUIConversationMsg item = conversationMsg.uiConversationMsg;
 
+        // 群聊头像
+        AvatarView compactAvatar = helper.getView(R.id.compactAvatarView);
+        compactAvatar.setSize(36);
+        if (item.getWkChannel() != null) {
+            compactAvatar.showAvatar(item.getWkChannel());
+        } else {
+            compactAvatar.showAvatar(item.channelID, item.channelType);
+        }
+
         // 频道名
         String showName = "";
         if (item.getWkChannel() != null) {

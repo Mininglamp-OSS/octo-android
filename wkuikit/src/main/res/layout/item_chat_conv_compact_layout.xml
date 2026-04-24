@@ -17,15 +17,11 @@
         android:paddingEnd="15dp"
         android:paddingBottom="8dp">
 
-        <TextView
-            android:id="@+id/hashTag"
-            android:layout_width="18dp"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="#"
-            android:textColor="@color/color999"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+        <com.chat.base.ui.components.AvatarView
+            android:id="@+id/compactAvatarView"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -97,6 +93,6 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="0.5dp"
-        android:layout_marginStart="33dp"
+        android:layout_marginStart="59dp"
         android:background="@color/homeColor" />
 </LinearLayout>

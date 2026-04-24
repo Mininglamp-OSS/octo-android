@@ -882,11 +882,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             editedTv.visibility = GONE
         }
         pinIV.visibility = if (uiChatMsgItemEntity.isPinned == 1) VISIBLE else GONE
-        val timeSpace = WKTimeUtils.getInstance().getTimeSpace(msgTime * 1000)
-        val time = WKTimeUtils.getInstance().time2HourStr(msgTime * 1000)
-        if (!WKTimeUtils.getInstance().is24Hour) msgTimeTv.text =
-            String.format("%s %s", timeSpace, time) else msgTimeTv.text =
-            String.format("%s", time)
+        msgTimeTv.text = WKTimeUtils.getInstance().getMsgTimeStr(msgTime * 1000)
         val isShowNormalColor: Boolean
         val drawable: RLottieDrawable
         var autoRepeat = false

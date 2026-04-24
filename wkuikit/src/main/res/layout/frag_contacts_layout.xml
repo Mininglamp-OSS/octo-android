@@ -53,35 +53,8 @@
     <FrameLayout
         android:id="@+id/searchBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="36dp"
-        android:layout_marginStart="15dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="15dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/bg_contacts_search_bar">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:src="@mipmap/ic_ab_search"
-                android:tint="#999999" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="@string/search_contacts_placeholder"
-                android:textColor="#999999"
-                android:textSize="14sp" />
-        </LinearLayout>
-    </FrameLayout>
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <FrameLayout
         android:layout_width="match_parent"

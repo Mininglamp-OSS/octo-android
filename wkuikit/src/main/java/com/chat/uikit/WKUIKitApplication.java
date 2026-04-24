@@ -334,13 +334,13 @@ public class WKUIKitApplication {
 
         //添加通讯录
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_friends", EndpointCategory.mailList, 100,
-                object -> new ContactsMenu("friend", R.mipmap.icon_new_friend, mContext.get().getString(R.string.new_friends), NewFriendsActivity.class));
+                object -> new ContactsMenu("friend", R.drawable.ic_contacts_new_friend, mContext.get().getString(R.string.new_friends), NewFriendsActivity.class));
         // 群聊
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_groups", EndpointCategory.mailList, 90,
-                object -> new ContactsMenu("group_chat", R.mipmap.icon_my_groups, mContext.get().getString(R.string.contacts_section_group_chat), MyGroupsListActivity.class));
+                object -> new ContactsMenu("group_chat", R.drawable.ic_contacts_my_groups, mContext.get().getString(R.string.contacts_section_group_chat), MyGroupsListActivity.class));
         // 已添加AI
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_added_ai", EndpointCategory.mailList, 80,
-                object -> new ContactsMenu("added_ai", R.mipmap.icon_space_bots, mContext.get().getString(R.string.contacts_section_added_ai), SpaceBotsListActivity.class));
+                object -> new ContactsMenu("added_ai", R.drawable.ic_contacts_added_ai, mContext.get().getString(R.string.contacts_section_added_ai), SpaceBotsListActivity.class));
 
         // 添加聊天工具栏菜单语音
         EndpointManager.getInstance().setMethod(EndpointCategory.wkChatToolBar + "_voice", EndpointCategory.wkChatToolBar, 97, object -> {

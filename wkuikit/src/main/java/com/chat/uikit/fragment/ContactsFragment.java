@@ -11,6 +11,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -136,14 +137,16 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     protected void initListener() {
         Object orgViewObject = EndpointManager.getInstance().invoke("org_contacts_view", requireContext());
         friendAdapter = new FriendAdapter();
+        // 搜索栏作为第一个 header，跟随列表滚动
+        friendAdapter.addHeaderView(buildSearchBarHeader());
+        // 筛选 tab
+        friendAdapter.addHeaderView(buildFilterHeaderView());
         RecyclerView headerRecyclerView = new RecyclerView(requireContext());
         friendAdapter.addHeaderView(headerRecyclerView);
         if (orgViewObject != null) {
             View orgView = (View) orgViewObject;
             friendAdapter.addHeaderView(orgView);
         }
-        // 添加筛选区域 header
-        friendAdapter.addHeaderView(buildFilterHeaderView());
         friendAdapter.addFooterView(getFooterView());
         initAdapter(wkVBinding.recyclerView, friendAdapter);
         // 关闭 item 动画，避免滑动/刷新时的闪烁
@@ -561,21 +564,56 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         lastFriendBadgeNum = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
     }
 
+    private View buildSearchBarHeader() {
+        FrameLayout searchBar = new FrameLayout(requireContext());
+        searchBar.setBackgroundResource(R.drawable.bg_contacts_search_bar);
+        int hMargin = AndroidUtilities.dp(15);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(36));
+        lp.setMargins(hMargin, AndroidUtilities.dp(4), hMargin, AndroidUtilities.dp(12));
+        searchBar.setLayoutParams(lp);
+
+        LinearLayout inner = new LinearLayout(requireContext());
+        inner.setOrientation(LinearLayout.HORIZONTAL);
+        inner.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams innerLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        searchBar.addView(inner, innerLp);
+
+        ImageView icon = new ImageView(requireContext());
+        icon.setImageResource(R.mipmap.ic_ab_search);
+        icon.setColorFilter(Color.parseColor("#999999"));
+        inner.addView(icon, new LinearLayout.LayoutParams(AndroidUtilities.dp(16), AndroidUtilities.dp(16)));
+
+        TextView hint = new TextView(requireContext());
+        hint.setText(R.string.search_contacts_placeholder);
+        hint.setTextColor(Color.parseColor("#999999"));
+        hint.setTextSize(14);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hintLp.leftMargin = AndroidUtilities.dp(6);
+        inner.addView(hint, hintLp);
+
+        searchBar.setOnClickListener(v -> startActivity(new Intent(getActivity(), GlobalActivity.class)));
+        return searchBar;
+    }
+
     /**
-     * 构建筛选区域 View：标题 + 3个筛选按钮
+     * 构建筛选区域 View：3个筛选按钮
      */
     private View buildFilterHeaderView() {
         LinearLayout container = new LinearLayout(requireContext());
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.homeColor));
+        container.setBackgroundResource(R.drawable.layout_bg);
         int hPadding = AndroidUtilities.dp(15);
-        container.setPadding(hPadding, AndroidUtilities.dp(12), hPadding, AndroidUtilities.dp(8));
+        container.setPadding(hPadding, AndroidUtilities.dp(8), hPadding, AndroidUtilities.dp(8));
 
+        boolean isDark = Theme.isDark();
         LinearLayout btnRow = new LinearLayout(requireContext());
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
         GradientDrawable pillBg = new GradientDrawable();
         pillBg.setCornerRadius(AndroidUtilities.dp(10));
-        pillBg.setColor(Color.parseColor("#F2F2F7"));
+        pillBg.setColor(isDark ? Color.parseColor("#2C2C2E") : Color.parseColor("#F2F2F7"));
         btnRow.setBackground(pillBg);
         btnRow.setPadding(AndroidUtilities.dp(2), AndroidUtilities.dp(2),
                 AndroidUtilities.dp(2), AndroidUtilities.dp(2));
@@ -621,6 +659,7 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                 getString(R.string.contacts_human) + " · " + humanCount
         };
 
+        boolean isDark = Theme.isDark();
         for (int i = 0; i < 3; i++) {
             if (filterBtns[i] == null) continue;
             filterBtns[i].setText(labels[i]);
@@ -628,8 +667,8 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
             GradientDrawable bg = new GradientDrawable();
             bg.setCornerRadius(AndroidUtilities.dp(8));
             if (contactsFilter == i) {
-                bg.setColor(Color.WHITE);
-                filterBtns[i].setTextColor(Color.parseColor("#333333"));
+                bg.setColor(isDark ? Color.parseColor("#3A3A3C") : Color.WHITE);
+                filterBtns[i].setTextColor(isDark ? Color.WHITE : Color.parseColor("#333333"));
                 filterBtns[i].setTypeface(Typeface.DEFAULT_BOLD);
             } else {
                 bg.setColor(Color.TRANSPARENT);

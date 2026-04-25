@@ -252,6 +252,14 @@ public class GroupModel extends WKBaseModel {
             member.createdAt = list.get(i).created_at;
             HashMap<String, Object> hashMap = new HashMap<>();
             hashMap.put(WKChannelMemberExtras.WKCode, list.get(i).vercode);
+            // 外部成员标识：来自其他 Space 的成员（后端 PR #1167-#1169 提供的字段）
+            hashMap.put(WKChannelMemberExtras.isExternal, list.get(i).is_external);
+            if (!TextUtils.isEmpty(list.get(i).source_space_id)) {
+                hashMap.put(WKChannelMemberExtras.sourceSpaceID, list.get(i).source_space_id);
+            }
+            if (!TextUtils.isEmpty(list.get(i).source_space_name)) {
+                hashMap.put(WKChannelMemberExtras.sourceSpaceName, list.get(i).source_space_name);
+            }
             member.extraMap = hashMap;
             members.add(member);
         }

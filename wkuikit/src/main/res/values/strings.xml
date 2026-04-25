@@ -450,5 +450,9 @@
     <string name="group_md_byte_count">%1$d / %2$d bytes</string>
     <string name="group_md_readonly_hint">暂未配置 GROUP.md</string>
     <string name="group_md_exceed_limit">内容超过最大字节限制</string>
+    <!-- 外部群 / 外部成员标识 -->
+    <string name="external_group_tag">外部群</string>
+    <string name="external_member_badge">外部</string>
+    <string name="external_member_source_format">来自 %1$s</string>
 </resources>
 

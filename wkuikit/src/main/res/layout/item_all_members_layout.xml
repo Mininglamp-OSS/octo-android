@@ -59,6 +59,17 @@
             android:layout_marginStart="10dp"
             android:textColor="@color/color999"
             android:textSize="@dimen/font_size_14" />
+
+        <TextView
+            android:id="@+id/sourceSpaceTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:ellipsize="end"
+            android:lines="1"
+            android:textColor="@color/external_member_source_text"
+            android:textSize="@dimen/font_size_14"
+            android:visibility="gone" />
     </LinearLayout>
 
 </LinearLayout>

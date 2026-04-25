@@ -64,12 +64,30 @@
                             android:layout_height="wrap_content"
                             android:layout_gravity="center_vertical"
                             android:layout_marginStart="10dp"
-                            android:layout_marginEnd="10dp"
+                            android:layout_marginEnd="6dp"
                             android:layout_weight="2"
+                            android:ellipsize="end"
                             android:gravity="end"
+                            android:lines="1"
                             android:text=""
                             android:textColor="@color/colorDark"
                             android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/externalGroupTagTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_external_group_tag"
+                            android:paddingStart="6dp"
+                            android:paddingTop="2dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="2dp"
+                            android:text="@string/external_group_tag"
+                            android:textColor="@color/external_group_tag_text"
+                            android:textSize="11sp"
+                            android:visibility="gone" />
 
                         <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>

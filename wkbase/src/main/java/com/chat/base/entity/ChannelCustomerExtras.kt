@@ -8,6 +8,7 @@ class WKChannelCustomerExtras : WKChannelExtras() {
         const val memberCount = "member_count"
         const val onlineCount = "online_count"
         const val role = "role"
+        const val isExternalGroup = "is_external_group"
     }
 
 }

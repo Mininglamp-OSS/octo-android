@@ -23,6 +23,7 @@ import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.enity.AllGroupMemberEntity;
 import com.xinbida.wukongim.entity.WKChannelMember;
+import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import org.jetbrains.annotations.NotNull;
@@ -105,6 +106,50 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
                     LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
                     Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
         }
+
+        // 外部成员标识：紫色「外部」角标 + 「来自 {source_space_name}」副标题
+        View oldExternalBadge = nameRow.findViewWithTag("external_badge");
+        if (oldExternalBadge != null) nameRow.removeView(oldExternalBadge);
+        TextView sourceSpaceTv = baseViewHolder.getView(R.id.sourceSpaceTv);
+        if (isExternalMember(channelMember)) {
+            TextView externalBadge = new TextView(getContext());
+            externalBadge.setTag("external_badge");
+            externalBadge.setText(R.string.external_member_badge);
+            externalBadge.setTextColor(ContextCompat.getColor(getContext(), R.color.external_member_badge_text));
+            externalBadge.setTextSize(10f);
+            externalBadge.setTypeface(Typeface.DEFAULT_BOLD);
+            externalBadge.setBackgroundResource(R.drawable.bg_external_member_badge);
+            int hPad = AndroidUtilities.dp(5f);
+            int vPad = AndroidUtilities.dp(1f);
+            externalBadge.setPadding(hPad, vPad, hPad, vPad);
+            nameRow.addView(externalBadge, LayoutHelper.createLinear(
+                    LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
+                    Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
+
+            String sourceSpaceName = sourceSpaceName(channelMember);
+            if (!TextUtils.isEmpty(sourceSpaceName)) {
+                sourceSpaceTv.setText(getContext().getString(R.string.external_member_source_format, sourceSpaceName));
+                sourceSpaceTv.setVisibility(View.VISIBLE);
+            } else {
+                sourceSpaceTv.setVisibility(View.GONE);
+            }
+        } else {
+            sourceSpaceTv.setVisibility(View.GONE);
+        }
+    }
+
+    private static boolean isExternalMember(WKChannelMember member) {
+        if (member == null || member.extraMap == null) return false;
+        Object v = member.extraMap.get(WKChannelMemberExtras.isExternal);
+        if (v instanceof Number) return ((Number) v).intValue() == 1;
+        if (v instanceof Boolean) return (Boolean) v;
+        return false;
+    }
+
+    private static String sourceSpaceName(WKChannelMember member) {
+        if (member == null || member.extraMap == null) return null;
+        Object v = member.extraMap.get(WKChannelMemberExtras.sourceSpaceName);
+        return v == null ? null : v.toString();
     }
 
     public void setSearchKey(String searchKey) {

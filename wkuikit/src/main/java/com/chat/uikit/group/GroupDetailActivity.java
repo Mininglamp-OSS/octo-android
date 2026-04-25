@@ -571,6 +571,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
     }
 
+    private boolean isExternalGroup(WKChannel channel) {
+        if (channel == null || channel.remoteExtraMap == null) return false;
+        Object v = channel.remoteExtraMap.get(WKChannelCustomerExtras.isExternalGroup);
+        if (v instanceof Number) return ((Number) v).intValue() == 1;
+        if (v instanceof Boolean) return (Boolean) v;
+        return false;
+    }
+
     private void setGroupMdStatus() {
         HashMap extraMap = groupChannel.remoteExtraMap;
         if (extraMap != null && extraMap.containsKey("has_group_md")) {
@@ -596,6 +604,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         wkVBinding.stickSwitchView.setChecked(groupChannel.top == 1);
         wkVBinding.saveSwitchView.setChecked(groupChannel.save == 1);
         wkVBinding.showNickSwitchView.setChecked(groupChannel.showNick == 1);
+        wkVBinding.externalGroupTagTv.setVisibility(isExternalGroup(groupChannel) ? View.VISIBLE : View.GONE);
 
 
         if (groupType == WKGroupType.superGroup && groupChannel.remoteExtraMap != null && groupChannel.remoteExtraMap.containsKey(WKChannelCustomerExtras.memberCount)) {

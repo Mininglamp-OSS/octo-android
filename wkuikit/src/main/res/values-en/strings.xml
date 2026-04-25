@@ -339,5 +339,9 @@
     <string name="str_thread_started">started a thread</string>
     <string name="str_thread_msg_count">%d msg ></string>
     <string name="default_group">Ungrouped</string>
+    <!-- External group / external member tags -->
+    <string name="external_group_tag">External</string>
+    <string name="external_member_badge">External</string>
+    <string name="external_member_source_format">From %1$s</string>
 </resources>
 

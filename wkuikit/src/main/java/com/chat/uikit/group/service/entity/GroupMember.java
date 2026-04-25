@@ -20,4 +20,8 @@ public class GroupMember {
     public String invite_uid;
     public long forbidden_expir_time;
     public String vercode;
+    // 外部成员标识（来自其他 Space 的成员）
+    public int is_external;
+    public String source_space_id;
+    public String source_space_name;
 }

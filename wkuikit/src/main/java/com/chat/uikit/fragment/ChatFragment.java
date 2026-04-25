@@ -1440,7 +1440,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 拷贝一份，避免对 adapter data list 并发修改
         List<ChatConversationMsg> snapshot = new ArrayList<>(list);
         groupMsg(snapshot);
-        Collections.sort(snapshot, (conversationMsg, t1) -> (int) (t1.uiConversationMsg.lastMsgTimestamp - conversationMsg.uiConversationMsg.lastMsgTimestamp));
+        Collections.sort(snapshot, (conversationMsg, t1) -> Long.compare(t1.uiConversationMsg.lastMsgTimestamp, conversationMsg.uiConversationMsg.lastMsgTimestamp));
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
         for (int i = 0, size = snapshot.size(); i < size; i++) {

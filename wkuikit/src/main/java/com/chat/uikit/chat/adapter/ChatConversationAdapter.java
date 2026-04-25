@@ -239,11 +239,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (hasThreads) {
             threadToggleIv.setVisibility(View.VISIBLE);
             threadToggleIv.setColorFilter(new PorterDuffColorFilter(
-                    com.chat.base.ui.Theme.colorAccount, PorterDuff.Mode.SRC_IN));
+                    getThreadToggleColor(item), PorterDuff.Mode.SRC_IN));
             threadToggleIv.setOnClickListener(v -> {
+                boolean wasExpanded = isThreadExpanded(item.channelID);
                 toggleThreadExpanded(item.channelID);
                 int pos = helper.getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos);
+                if (pos != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(pos);
+                    if (!wasExpanded && getRecyclerView() != null) {
+                        getRecyclerView().post(() ->
+                                getRecyclerView().smoothScrollToPosition(pos));
+                    }
+                }
             });
             if (isThreadExpanded(item.channelID)) {
                 showThreadPreviews(helper, item);
@@ -1289,6 +1296,34 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 检查指定群组的子区是否有未处理的 @mention 提醒
      */
+    private int getThreadToggleColor(WKUIConversationMsg item) {
+        if (hasThreadMention(item.channelID)) {
+            return 0xFFFF9500; // 橙色 — 有@mention
+        }
+        int unread = getThreadUnreadCount(item.channelID);
+        if (unread > 0) {
+            boolean muted = item.getWkChannel() != null && item.getWkChannel().mute == 1;
+            return muted ? 0xFFA3D6ED : 0xFFFF0000; // 静音浅蓝 / 未静音红色
+        }
+        return com.chat.base.ui.Theme.colorAccount; // 默认主题色
+    }
+
+    private int getThreadUnreadCount(String groupNo) {
+        List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
+        if (cachedList == null || cachedList.isEmpty()) return 0;
+        int total = 0;
+        for (ThreadEntity entity : cachedList) {
+            if (entity.status != 1) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            if (threadConv != null) {
+                total += threadConv.unreadCount;
+            }
+        }
+        return total;
+    }
+
     public boolean hasThreadMention(String groupNo) {
         List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
         if (cachedList == null || cachedList.isEmpty()) return false;

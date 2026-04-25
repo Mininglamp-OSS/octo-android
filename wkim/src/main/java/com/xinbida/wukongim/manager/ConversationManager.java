@@ -245,6 +245,7 @@ public class ConversationManager extends BaseManager {
         boolean result = ConversationDbManager.getInstance().insertOrUpdateMsgExtra(extra);
         if (result) {
             WKUIConversationMsg msg = getUIConversationMsg(extra.channelID, extra.channelType);
+            if (msg == null) return;
             List<WKUIConversationMsg> list = new ArrayList<>();
             list.add(msg);
             setOnRefreshMsg(list, "updateMsgExtra");

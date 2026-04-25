@@ -981,10 +981,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
         }
-        // 顶部 sub-tab 不再显示未读气泡
         if (segmentTabView != null) {
-            segmentTabView.setBadge(0, 0);
-            segmentTabView.setBadge(1, 0);
+            segmentTabView.setBadge(1, personalCount);
         }
         if (tabActivity != null) {
             tabActivity.setMsgCount(0);

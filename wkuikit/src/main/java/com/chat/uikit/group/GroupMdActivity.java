@@ -16,7 +16,9 @@ import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActGroupMdLayoutBinding;
 import com.chat.uikit.group.service.GroupModel;
+import com.chat.uikit.thread.service.ThreadModel;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -26,6 +28,9 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
 
     private static final int MAX_BYTES = 10240;
     private String groupNo;
+    private String shortId;
+    private String channelId;
+    private boolean isThread;
     private String originalContent = "";
     private TextView titleRightTv;
     private boolean canEdit;
@@ -55,22 +60,37 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
     protected void rightLayoutClick() {
         String content = wkVBinding.contentEt.getText() != null
                 ? wkVBinding.contentEt.getText().toString() : "";
-        if (content.equals(originalContent)) return;
+        if (content.equals(originalContent)) {
+            finish();
+            return;
+        }
         int byteLen = content.getBytes(StandardCharsets.UTF_8).length;
         if (byteLen > MAX_BYTES) {
             showToast(getString(R.string.group_md_exceed_limit));
             return;
         }
         showTitleRightLoading();
-        GroupModel.getInstance().updateGroupMd(groupNo, content, (code, msg) -> {
-            if (code == HttpResponseCode.success) {
-                WKIM.getInstance().getChannelManager().fetchChannelInfo(groupNo, WKChannelType.GROUP);
-                finish();
-            } else {
-                hideTitleRightLoading();
-                showToast(msg);
-            }
-        });
+        if (isThread) {
+            ThreadModel.getInstance().updateThreadMd(groupNo, shortId, content, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    updateThreadMdExtra(!content.isEmpty());
+                    finish();
+                } else {
+                    hideTitleRightLoading();
+                    showToast(msg);
+                }
+            });
+        } else {
+            GroupModel.getInstance().updateGroupMd(groupNo, content, (code, msg) -> {
+                if (code == HttpResponseCode.success) {
+                    WKIM.getInstance().getChannelManager().fetchChannelInfo(groupNo, WKChannelType.GROUP);
+                    finish();
+                } else {
+                    hideTitleRightLoading();
+                    showToast(msg);
+                }
+            });
+        }
     }
 
     @Override
@@ -95,10 +115,18 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
     @Override
     protected void initData() {
         groupNo = getIntent().getStringExtra("groupNo");
+        byte channelType = getIntent().getByteExtra("channelType", WKChannelType.GROUP);
+        isThread = channelType == WKChannelType.COMMUNITY_TOPIC;
 
-        WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
-                .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
-        canEdit = member != null && member.role != WKChannelMemberRole.normal;
+        if (isThread) {
+            shortId = getIntent().getStringExtra("shortId");
+            channelId = getIntent().getStringExtra("channelId");
+            canEdit = getIntent().getBooleanExtra("canEdit", false);
+        } else {
+            WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
+                    .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+            canEdit = member != null && member.role != WKChannelMemberRole.normal;
+        }
 
         if (canEdit) {
             titleRightTv.setVisibility(View.VISIBLE);
@@ -112,7 +140,7 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
         }
 
         if (loadingPopup != null) loadingPopup.show();
-        GroupModel.getInstance().getGroupMd(groupNo, (code, msg, entity) -> {
+        GroupModel.IGroupMdListener mdListener = (code, msg, entity) -> {
             if (loadingPopup != null) loadingPopup.dismiss();
             if (code == HttpResponseCode.success && entity != null
                     && !TextUtils.isEmpty(entity.content)) {
@@ -130,7 +158,28 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
                 wkVBinding.contentEt.requestFocus();
                 SoftKeyboardUtils.getInstance().showSoftKeyBoard(this, wkVBinding.contentEt);
             }
-        });
+        };
+
+        if (isThread) {
+            ThreadModel.getInstance().getThreadMd(groupNo, shortId, mdListener);
+        } else {
+            GroupModel.getInstance().getGroupMd(groupNo, mdListener);
+        }
+    }
+
+    private void updateThreadMdExtra(boolean hasContent) {
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, WKChannelType.COMMUNITY_TOPIC);
+        if (channel != null) {
+            if (channel.remoteExtraMap == null) {
+                channel.remoteExtraMap = new java.util.HashMap<>();
+            }
+            channel.remoteExtraMap.put("has_thread_md", hasContent);
+            Object vObj = channel.remoteExtraMap.get("thread_md_version");
+            int version = vObj instanceof Number ? ((Number) vObj).intValue() : 0;
+            if (hasContent) version++;
+            channel.remoteExtraMap.put("thread_md_version", version);
+            WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
+        }
     }
 
     private void updateByteCount(String text) {

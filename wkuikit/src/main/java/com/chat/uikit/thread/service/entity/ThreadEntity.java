@@ -22,6 +22,8 @@ public class ThreadEntity implements Parcelable {
     public int is_joined;
     public String created_at;
     public String updated_at;
+    public boolean has_thread_md;
+    public int thread_md_version;
 
     public ThreadEntity() {
     }

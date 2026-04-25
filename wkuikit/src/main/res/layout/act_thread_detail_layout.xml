@@ -77,6 +77,28 @@
                     android:textSize="15sp" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/threadMdLayout"
+                style="@style/layoutBg">
+
+                <TextView
+                    style="@style/leftTextView"
+                    android:layout_weight="1"
+                    android:text="@string/group_md" />
+
+                <TextView
+                    android:id="@+id/threadMdStatusTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="10dp"
+                    android:text="@string/group_md_not_configured"
+                    android:textColor="#999999"
+                    android:textSize="14sp" />
+
+                <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/archiveBtn"
                 android:layout_width="match_parent"

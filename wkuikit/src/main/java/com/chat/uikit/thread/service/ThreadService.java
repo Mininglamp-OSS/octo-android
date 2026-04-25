@@ -2,6 +2,7 @@ package com.chat.uikit.thread.service;
 
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.chat.uikit.thread.service.entity.ThreadMember;
 
@@ -12,6 +13,7 @@ import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.HTTP;
 import retrofit2.http.POST;
+import retrofit2.http.PUT;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
@@ -43,6 +45,12 @@ public interface ThreadService {
 
     @GET("groups/{groupNo}/threads/{shortId}/members")
     Observable<List<ThreadMember>> getThreadMembers(@Path("groupNo") String groupNo, @Path("shortId") String shortId, @Query("keyword") String keyword, @Query("page") int page, @Query("limit") int limit);
+
+    @GET("groups/{groupNo}/threads/{shortId}/md")
+    Observable<GroupMdEntity> getThreadMd(@Path("groupNo") String groupNo, @Path("shortId") String shortId);
+
+    @PUT("groups/{groupNo}/threads/{shortId}/md")
+    Observable<CommonResponse> updateThreadMd(@Path("groupNo") String groupNo, @Path("shortId") String shortId, @Body JSONObject body);
 
     @GET("thread/channel/{channelID}/membersync")
     Observable<List<ThreadMember>> syncThreadMembers(@Path("channelID") String channelID, @Query("version") long version, @Query("limit") int limit);

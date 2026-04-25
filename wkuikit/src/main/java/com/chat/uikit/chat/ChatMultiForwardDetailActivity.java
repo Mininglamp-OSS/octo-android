@@ -13,6 +13,7 @@ import com.chat.uikit.databinding.ActCommonListLayoutWhiteBinding;
 import com.chat.uikit.enity.ChatMultiForwardEntity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKCMDKeys;
+import com.tencent.bugly.crashreport.CrashReport;
 import com.xinbida.wukongim.entity.WKMsg;
 
 import java.util.ArrayList;
@@ -72,7 +73,17 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
                 WKMultiForwardContent = (WKMultiForwardContent) msg.baseContentMsgModel;
             }
         }
-        if (WKMultiForwardContent == null) {
+        if (WKMultiForwardContent == null || WKMultiForwardContent.msgList == null) {
+            String source = !TextUtils.isEmpty(contentJson) ? "json" : "db";
+            String msgNo = clientMsgNo != null ? clientMsgNo : "null";
+            boolean contentNull = WKMultiForwardContent == null;
+            boolean listNull = !contentNull && WKMultiForwardContent.msgList == null;
+            String detail = "source=" + source
+                    + " clientMsgNo=" + msgNo
+                    + " contentNull=" + contentNull
+                    + " msgListNull=" + listNull
+                    + " rawJson=" + (contentJson != null ? contentJson.substring(0, Math.min(contentJson.length(), 500)) : "null");
+            CrashReport.postCatchedException(new IllegalStateException("MultiForwardDetail 数据异常: " + detail));
             showToast("传入数据有误！");
             finish();
             return;

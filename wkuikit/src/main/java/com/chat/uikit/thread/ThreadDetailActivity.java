@@ -16,6 +16,7 @@ import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActThreadDetailLayoutBinding;
+import com.chat.uikit.group.GroupMdActivity;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.chat.uikit.thread.service.entity.ThreadMember;
@@ -106,6 +107,16 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
             }
         });
 
+        SingleClickUtil.onSingleClick(wkVBinding.threadMdLayout, v -> {
+            Intent intent = new Intent(this, GroupMdActivity.class);
+            intent.putExtra("groupNo", groupNo);
+            intent.putExtra("shortId", shortId);
+            intent.putExtra("channelId", channelId);
+            intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
+            intent.putExtra("canEdit", isCreator);
+            startActivity(intent);
+        });
+
         wkVBinding.archiveBtn.setOnClickListener(v -> {
             if (threadEntity != null && threadEntity.status == 1) {
                 ThreadModel.getInstance().archiveThread(groupNo, shortId, (code, msg) -> {
@@ -159,6 +170,31 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                 checkMembership(currentUid);
             }
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        setThreadMdStatus();
+    }
+
+    private void setThreadMdStatus() {
+        if (channelId == null) return;
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, WKChannelType.COMMUNITY_TOPIC);
+        if (channel != null && channel.remoteExtraMap != null) {
+            Object hasObj = channel.remoteExtraMap.get("has_thread_md");
+            boolean hasMd = false;
+            if (hasObj instanceof Boolean) hasMd = (Boolean) hasObj;
+            else if (hasObj instanceof Number) hasMd = ((Number) hasObj).intValue() == 1;
+            if (hasMd) {
+                int version = 0;
+                Object vObj = channel.remoteExtraMap.get("thread_md_version");
+                if (vObj instanceof Number) version = ((Number) vObj).intValue();
+                wkVBinding.threadMdStatusTv.setText(String.format(getString(R.string.group_md_configured), version));
+                return;
+            }
+        }
+        wkVBinding.threadMdStatusTv.setText(R.string.group_md_not_configured);
     }
 
     private void checkMembership(String currentUid) {

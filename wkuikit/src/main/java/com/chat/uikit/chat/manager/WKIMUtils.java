@@ -350,6 +350,8 @@ public class WKIMUtils {
                             extraMap.put("threadStatus", entity.status);
                             extraMap.put("creatorUid", entity.creator_uid);
                             extraMap.put("shortId", entity.short_id);
+                            extraMap.put("has_thread_md", entity.has_thread_md);
+                            extraMap.put("thread_md_version", entity.thread_md_version);
                             channel.remoteExtraMap = extraMap;
                             // 对齐 iOS：子区继承父群的免打扰设置
                             WKChannel parentChannel = WKIM.getInstance().getChannelManager()

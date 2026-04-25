@@ -3,6 +3,7 @@ package com.chat.base.ui.components;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
@@ -18,10 +19,6 @@ import com.chat.base.R;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 
-/**
- * Web 风格下划线 Tab — 类似 Discord/Slack 频道切换。
- * 底部有一条全宽基准线分隔导航和内容区，选中 tab 的指示条压在基准线上。
- */
 public class SegmentTabView extends LinearLayout {
 
     public interface OnTabSelectedListener {
@@ -35,49 +32,46 @@ public class SegmentTabView extends LinearLayout {
     private int selectedIndex = 0;
     private OnTabSelectedListener listener;
 
-    // 底部全宽基准线
-    private final Paint baselinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final float baselineHeight = AndroidUtilities.dp(0.5f);
-
-    // 选中指示条
-    private final Paint indicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF indicatorRect = new RectF();
-    private float indicatorLeft;
-    private float indicatorRight;
-    private final int indicatorHeight = AndroidUtilities.dp(2.5f);
-    private final int indicatorRadius = AndroidUtilities.dp(1.5f);
+    private final Paint pillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF pillRect = new RectF();
+    private float pillLeft, pillRight, pillTop, pillBottom;
+    private final int pillRadius = AndroidUtilities.dp(20);
+    private final int pillMargin = AndroidUtilities.dp(2);
 
     public SegmentTabView(@NonNull Context context, String[] tabTitles) {
         super(context);
         setOrientation(HORIZONTAL);
-        setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        setGravity(Gravity.CENTER_VERTICAL);
         setWillNotDraw(false);
-        setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
+        int hPad = AndroidUtilities.dp(3);
+        int vPad = AndroidUtilities.dp(3);
+        setPadding(hPad, vPad, hPad, vPad);
         init(context, tabTitles);
     }
 
     private void init(Context context, String[] tabTitles) {
-        indicatorPaint.setColor(Theme.colorAccount);
-        indicatorPaint.setStyle(Paint.Style.FILL);
+        pillPaint.setStyle(Paint.Style.FILL);
+        pillPaint.setShadowLayer(AndroidUtilities.dp(2), 0, AndroidUtilities.dp(1), 0x18000000);
 
-        baselinePaint.setStyle(Paint.Style.FILL);
-        baselinePaint.setColor(ContextCompat.getColor(context, R.color.color999));
-        baselinePaint.setAlpha(60);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(AndroidUtilities.dp(22));
+        bg.setColor(Theme.isDark() ? 0xFF2C2C2E : 0xFFF0F0F0);
+        setBackground(bg);
 
         for (int i = 0; i < 2; i++) {
             LinearLayout container = new LinearLayout(context);
             container.setOrientation(HORIZONTAL);
             container.setGravity(Gravity.CENTER);
-            container.setPadding(0, AndroidUtilities.dp(10), 0, AndroidUtilities.dp(12));
+            container.setPadding(0, AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4));
 
             TextView tv = new TextView(context);
             tv.setText(tabTitles[i]);
-            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
             tv.setGravity(Gravity.CENTER);
             container.addView(tv, new LayoutParams(
                     LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
 
-            // badge — 圆形红底白字，和子区未读气泡一致
             TextView badge = new TextView(context);
             badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
             badge.setTextColor(ContextCompat.getColor(context, R.color.white));
@@ -95,11 +89,10 @@ public class SegmentTabView extends LinearLayout {
             badge.setVisibility(GONE);
             LayoutParams badgeLp = new LayoutParams(
                     LayoutParams.WRAP_CONTENT, badgeSize);
-            badgeLp.leftMargin = AndroidUtilities.dp(6);
+            badgeLp.leftMargin = AndroidUtilities.dp(5);
             badgeLp.gravity = Gravity.CENTER_VERTICAL;
             container.addView(badge, badgeLp);
 
-            // mentionBadge — 对齐 iOS：橙色圆角背景 + 白色文字（紧凑）
             TextView mentionBadge = new TextView(context);
             mentionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8);
             mentionBadge.setTextColor(0xFFFFFFFF);
@@ -111,7 +104,7 @@ public class SegmentTabView extends LinearLayout {
             GradientDrawable mentionBg = new GradientDrawable();
             mentionBg.setShape(GradientDrawable.RECTANGLE);
             mentionBg.setCornerRadius(AndroidUtilities.dp(7));
-            mentionBg.setColor(0xFFFF9500); // 橙色
+            mentionBg.setColor(0xFFFF9500);
             mentionBadge.setBackground(mentionBg);
             mentionBadge.setVisibility(GONE);
             LayoutParams mentionLp = new LayoutParams(
@@ -121,10 +114,7 @@ public class SegmentTabView extends LinearLayout {
             container.addView(mentionBadge, mentionLp);
             mentionBadges[i] = mentionBadge;
 
-            LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-            if (i > 0) {
-                lp.leftMargin = AndroidUtilities.dp(24);
-            }
+            LayoutParams lp = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
             container.setLayoutParams(lp);
 
             final int index = i;
@@ -157,11 +147,6 @@ public class SegmentTabView extends LinearLayout {
         return selectedIndex;
     }
 
-    /**
-     * 设置指定 tab 的未读数角标。
-     * @param tabIndex 0 或 1
-     * @param count 未读数，0 则隐藏
-     */
     public void setBadge(int tabIndex, int count) {
         if (tabIndex < 0 || tabIndex >= 2) return;
         TextView badge = badges[tabIndex];
@@ -173,17 +158,10 @@ public class SegmentTabView extends LinearLayout {
         }
     }
 
-    /**
-     * 设置指定 tab 的 @mention 提示文字。
-     * @param tabIndex 0 或 1
-     * @param hasMention true 显示，false 隐藏
-     * @param text 显示的提示文字，如 [有人@你]
-     */
     public void setMentionBadge(int tabIndex, boolean hasMention, String text) {
         if (tabIndex < 0 || tabIndex >= 2) return;
         TextView badge = mentionBadges[tabIndex];
         if (hasMention) {
-            // 去掉方括号，橙色胶囊内不需要（对齐 iOS）
             String displayText = text != null ? text.replace("[", "").replace("]", "") : text;
             badge.setText(displayText);
             badge.setVisibility(VISIBLE);
@@ -192,11 +170,6 @@ public class SegmentTabView extends LinearLayout {
         }
     }
 
-    /**
-     * 设置指定 tab 的 @mention 角标。
-     * @param tabIndex 0 或 1
-     * @param hasMention true 显示，false 隐藏
-     */
     public void setMentionBadge(int tabIndex, boolean hasMention) {
         setMentionBadge(tabIndex, hasMention, "");
     }
@@ -204,36 +177,35 @@ public class SegmentTabView extends LinearLayout {
     private void updateTabStyles() {
         for (int i = 0; i < 2; i++) {
             if (i == selectedIndex) {
-                tabs[i].setTextColor(Theme.colorAccount);
+                tabs[i].setTextColor(ContextCompat.getColor(getContext(), R.color.colorDark));
                 tabs[i].getPaint().setFakeBoldText(true);
             } else {
-                tabs[i].setTextColor(ContextCompat.getColor(getContext(), R.color.popupTextColor));
+                tabs[i].setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
                 tabs[i].getPaint().setFakeBoldText(false);
             }
         }
     }
 
     private void animateIndicator() {
-        TextView target = tabs[selectedIndex];
-        LinearLayout container = tabContainers[selectedIndex];
-        float newLeft = container.getLeft() + target.getLeft();
-        float newRight = newLeft + target.getWidth();
+        LinearLayout target = tabContainers[selectedIndex];
+        float newLeft = target.getLeft() + pillMargin;
+        float newRight = target.getRight() - pillMargin;
 
-        if (indicatorLeft == 0 && indicatorRight == 0) {
-            indicatorLeft = newLeft;
-            indicatorRight = newRight;
+        if (pillLeft == 0 && pillRight == 0) {
+            pillLeft = newLeft;
+            pillRight = newRight;
             invalidate();
             return;
         }
 
         ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
         animator.setDuration(200);
-        float startLeft = indicatorLeft;
-        float startRight = indicatorRight;
+        float startLeft = pillLeft;
+        float startRight = pillRight;
         animator.addUpdateListener(a -> {
             float fraction = (float) a.getAnimatedValue();
-            indicatorLeft = startLeft + (newLeft - startLeft) * fraction;
-            indicatorRight = startRight + (newRight - startRight) * fraction;
+            pillLeft = startLeft + (newLeft - startLeft) * fraction;
+            pillRight = startRight + (newRight - startRight) * fraction;
             invalidate();
         });
         animator.start();
@@ -242,24 +214,18 @@ public class SegmentTabView extends LinearLayout {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
-        TextView target = tabs[selectedIndex];
-        LinearLayout container = tabContainers[selectedIndex];
-        indicatorLeft = container.getLeft() + target.getLeft();
-        indicatorRight = indicatorLeft + target.getWidth();
+        LinearLayout target = tabContainers[selectedIndex];
+        pillLeft = target.getLeft() + pillMargin;
+        pillRight = target.getRight() - pillMargin;
+        pillTop = pillMargin;
+        pillBottom = getHeight() - pillMargin;
     }
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
+        pillPaint.setColor(Theme.isDark() ? 0xFF3A3A3C : Color.WHITE);
+        pillRect.set(pillLeft, pillMargin, pillRight, getHeight() - pillMargin);
+        canvas.drawRoundRect(pillRect, pillRadius, pillRadius, pillPaint);
         super.dispatchDraw(canvas);
-        float bottom = getHeight();
-
-        // 1. 全宽基准线 — 分隔导航区和内容区
-        canvas.drawRect(0, bottom - baselineHeight, getWidth(), bottom, baselinePaint);
-
-        // 2. 选中指示条 — 与文字等宽，压在基准线上
-        float top = bottom - indicatorHeight;
-        indicatorRect.set(indicatorLeft, top, indicatorRight, bottom);
-        indicatorPaint.setColor(Theme.colorAccount);
-        canvas.drawRoundRect(indicatorRect, indicatorRadius, indicatorRadius, indicatorPaint);
     }
 }

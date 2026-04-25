@@ -6,6 +6,8 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
+import com.chat.uikit.group.service.GroupModel;
+import com.chat.uikit.group.service.entity.GroupMdEntity;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.utils.WKReader;
@@ -277,6 +279,36 @@ public class ThreadModel extends WKBaseModel {
 
     public interface IThreadListListener {
         void onResult(int code, String msg, List<ThreadEntity> list);
+    }
+
+    public void getThreadMd(String groupNo, String shortId, GroupModel.IGroupMdListener listener) {
+        request(createService(ThreadService.class).getThreadMd(groupNo, shortId), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(GroupMdEntity result) {
+                listener.onResult(HttpResponseCode.success, "", result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public void updateThreadMd(String groupNo, String shortId, String content, ICommonListener listener) {
+        JSONObject json = new JSONObject();
+        json.put("content", content);
+        request(createService(ThreadService.class).updateThreadMd(groupNo, shortId, json), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                listener.onResult(HttpResponseCode.success, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
     }
 
     public interface IThreadDetailListener {

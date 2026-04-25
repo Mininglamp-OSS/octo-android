@@ -677,7 +677,8 @@ class ChatPanelManager(
     fun chatAvatarClick(uid: String, isLongClick: Boolean) {
         if (isLongClick) {
             if (uid == this.loginUID) return
-            if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP) {
+            if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+                iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
                 val loginMember = WKIM.getInstance().channelMembersManager.getMember(
                     iConversationContext.chatChannelInfo.channelID,
                     iConversationContext.chatChannelInfo.channelType,

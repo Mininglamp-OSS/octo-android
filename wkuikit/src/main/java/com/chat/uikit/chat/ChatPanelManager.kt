@@ -1668,8 +1668,18 @@ class ChatPanelManager(
     ) {
         val pattern = java.util.regex.Pattern.compile("@([^@\\s]+)")
         val matcher = pattern.matcher(content)
-        val channelId = iConversationContext.chatChannelInfo.channelID
-        val channelType = iConversationContext.chatChannelInfo.channelType
+        var channelId = iConversationContext.chatChannelInfo.channelID
+        var channelType = iConversationContext.chatChannelInfo.channelType
+
+        // 子区成员在父群上，需要用父群的channelID查成员
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            val channel = iConversationContext.chatChannelInfo
+            val parentGroupNo = channel.remoteExtraMap?.get("parentGroupNo") as? String
+            if (!parentGroupNo.isNullOrEmpty()) {
+                channelId = parentGroupNo
+                channelType = WKChannelType.GROUP
+            }
+        }
 
         val members = WKIM.getInstance().channelMembersManager
             .getMembers(channelId, channelType)

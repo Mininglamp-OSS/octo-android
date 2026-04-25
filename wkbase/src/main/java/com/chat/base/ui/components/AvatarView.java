@@ -89,7 +89,7 @@ public class AvatarView extends FrameLayout {
     }
 
     public void setSize(float size) {
-        float cornerSize = size * 0.4F;
+        float cornerSize = size * 0.5F;
         imageView.getLayoutParams().width = AndroidUtilities.dp(size);
         imageView.getLayoutParams().height = AndroidUtilities.dp(size);
         imageView.setShapeAppearanceModel(imageView.getShapeAppearanceModel()

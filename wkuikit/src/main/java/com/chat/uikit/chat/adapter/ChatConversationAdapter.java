@@ -171,7 +171,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
         // 群聊头像
         AvatarView compactAvatar = helper.getView(R.id.compactAvatarView);
-        compactAvatar.setSize(36);
+        compactAvatar.setSize(52);
         if (item.getWkChannel() != null) {
             compactAvatar.showAvatar(item.getWkChannel());
         } else {
@@ -814,7 +814,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setGone(R.id.groupIV, item.channelType != WKChannelType.GROUP);
         boolean isTop;
         AvatarView avatarView = helper.getView(R.id.avatarView);
-        avatarView.setSize(50);
+        avatarView.setSize(52);
         if (item.getWkChannel() != null) {
             if (item.channelType == WKChannelType.COMMUNITY) {
                 EndpointManager.getInstance().invoke("show_community_avatar", new ShowCommunityAvatarMenu(getContext(), avatarView, item.getWkChannel()));

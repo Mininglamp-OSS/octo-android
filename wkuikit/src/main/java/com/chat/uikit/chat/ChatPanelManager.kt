@@ -54,6 +54,7 @@ import com.chat.base.entity.BottomSheetItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.IConversationContext
 import com.chat.base.msg.model.WKGifContent
+import com.chat.base.msg.ChatContentSpanType
 import com.chat.base.msgitem.WKChannelMemberRole
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.net.HttpResponseCode
@@ -1437,26 +1438,29 @@ class ChatPanelManager(
                         }
                     }
                 }
-                val allEntities = editText.allEntity
-                val list = editText.allUIDs
-                val hasMentions = list != null && list.isNotEmpty()
+                val allEntities = editText.allEntity.toMutableList()
+                val list = editText.allUIDs.toMutableList()
 
-                // 有 mention 时使用 WKMentionTextContent，将 entities 写入 mention 对象
+                // 扫描纯文本中的 @mention，匹配群成员后自动补上 entity
+                if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+                    iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    scanPlainTextMentions(content, allEntities, list)
+                }
+
+                val hasMentions = list.isNotEmpty()
+
                 val textMsgModel = if (hasMentions)
                     WKMentionTextContent(content) else WKTextContent(content)
 
                 if (hasMentions) {
                     val mMentionInfo = WKMentionInfo()
                     val uidList: MutableList<String> = ArrayList()
-                    var i = 0
-                    val size = list!!.size
-                    while (i < size) {
-                        if (list[i].equals("-1", ignoreCase = true)) {
-                            textMsgModel.mentionAll = 1 //remind all
+                    for (uid in list) {
+                        if (uid.equals("-1", ignoreCase = true)) {
+                            textMsgModel.mentionAll = 1
                         } else {
-                            uidList.add(list[i])
+                            uidList.add(uid)
                         }
-                        i++
                     }
                     mMentionInfo.uids = uidList
                     textMsgModel.mentionInfo = mMentionInfo
@@ -1530,55 +1534,57 @@ class ChatPanelManager(
                     return
                 }
 
-                var text = s.toString().substring(start, start + count)
-                if (start + count == s.toString().length) {
-                    if (count == 0 || TextUtils.isEmpty(text)) {
-                        // 删除了字符串
-//                        text = s.toString().substring(0, selectionStart)
-                        if (s.toString().lastIndexOf("@") >= 0) {
-                            val index = s.toString().lastIndexOf("@")
-                            val remindText = s.toString().substring(index, s.toString().length)
-                            if (!TextUtils.isEmpty(remindText)) text = remindText
-                        }
-                    } else {
-                        if (s.toString().startsWith("@") && s.toString().contains(" ")) {
-                            text = s.toString()
-                        } else {
-                            if (s.toString().lastIndexOf("@") >= 0) {
-                                val index = s.toString().lastIndexOf("@")
-                                val remindText = s.toString().substring(index, s.toString().length)
+                try {
+                    val fullStr = s.toString()
+                    var text = fullStr.substring(start, start + count)
+                    if (start + count == fullStr.length) {
+                        if (count == 0 || TextUtils.isEmpty(text)) {
+                            if (fullStr.lastIndexOf("@") >= 0) {
+                                val index = fullStr.lastIndexOf("@")
+                                val remindText = fullStr.substring(index, fullStr.length)
                                 if (!TextUtils.isEmpty(remindText)) text = remindText
                             }
-                        }
-                    }
-                } else {
-                    val temp = s.toString().substring(0, start)
-                    if (!TextUtils.isEmpty(temp) && temp.contains("@")) {
-                        val index = temp.lastIndexOf("@")
-
-                        if (count == 0) {
-                            // 点击删除
-                            val endIndex = editText.selectionEnd
-                            val str = s.toString().substring(index, endIndex) + text
-                            if (!TextUtils.isEmpty(str)) {
-                                text = str
-                            }
                         } else {
-                            text = s.toString().substring(index, index + count) + text
+                            if (fullStr.startsWith("@") && fullStr.contains(" ")) {
+                                text = fullStr
+                            } else {
+                                if (fullStr.lastIndexOf("@") >= 0) {
+                                    val index = fullStr.lastIndexOf("@")
+                                    val remindText = fullStr.substring(index, fullStr.length)
+                                    if (!TextUtils.isEmpty(remindText)) text = remindText
+                                }
+                            }
+                        }
+                    } else {
+                        val temp = fullStr.substring(0, start)
+                        if (!TextUtils.isEmpty(temp) && temp.contains("@")) {
+                            val index = temp.lastIndexOf("@")
+
+                            if (count == 0) {
+                                val endIndex = editText.selectionEnd
+                                if (endIndex <= fullStr.length) {
+                                    val str = fullStr.substring(index, endIndex) + text
+                                    if (!TextUtils.isEmpty(str)) {
+                                        text = str
+                                    }
+                                }
+                            } else {
+                                val end = (index + count).coerceAtMost(fullStr.length)
+                                text = fullStr.substring(index, end) + text
+                            }
                         }
                     }
-                }
-                //  text = s.toString().substring(0, selectionStart)
-                if (!TextUtils.isEmpty(text) && (mentionDisplay(text) || text.startsWith("@"))) {
-                    // 搜索成员
-                    searchInputText(text)
-                } else {
+                    if (!TextUtils.isEmpty(text) && (mentionDisplay(text) || text.startsWith("@"))) {
+                        searchInputText(text)
+                    } else {
+                        hideRemindView()
+                        hideRobotView()
+                        CommonAnim.getInstance().showOrHide(hitTv, false, true)
+                        CommonAnim.getInstance().showOrHide(sendIV, true, true)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatPanelMention", "onTextChanged error: s='$s' start=$start count=$count selStart=$selectionStart", e)
                     hideRemindView()
-                    hideRobotView()
-                    CommonAnim.getInstance().showOrHide(hitTv, false, true)
-//                    CommonAnim.getInstance()
-//                        .showOrHide(closeSearchLottieIV, false, true)
-                    CommonAnim.getInstance().showOrHide(sendIV, true, true)
                 }
             }
 
@@ -1649,7 +1655,59 @@ class ChatPanelManager(
         })
     }
 
-    private
+    private fun scanPlainTextMentions(
+        content: String,
+        entities: MutableList<WKMsgEntity>,
+        uidList: MutableList<String>
+    ) {
+        val pattern = java.util.regex.Pattern.compile("@([^@\\s]+)")
+        val matcher = pattern.matcher(content)
+        val channelId = iConversationContext.chatChannelInfo.channelID
+        val channelType = iConversationContext.chatChannelInfo.channelType
+
+        val members = WKIM.getInstance().channelMembersManager
+            .getMembers(channelId, channelType)
+        if (members == null || members.isEmpty()) return
+
+        while (matcher.find()) {
+            val offset = matcher.start()
+            val fullMatch = matcher.group()
+            val alreadyCovered = entities.any { e ->
+                e.type == ChatContentSpanType.mention && e.offset == offset
+            }
+            if (alreadyCovered) continue
+
+            val candidateName = matcher.group(1) ?: continue
+
+            var matchedMember: WKChannelMember? = null
+            for (m in members) {
+                val memberName = m.memberName ?: ""
+                val memberRemark = m.memberRemark ?: ""
+                val channel = WKIM.getInstance().channelManager
+                    .getChannel(m.memberUID, WKChannelType.PERSONAL)
+                val channelName = channel?.channelName ?: ""
+                val channelRemark = channel?.channelRemark ?: ""
+
+                if (candidateName == memberName || candidateName == memberRemark
+                    || candidateName == channelName || candidateName == channelRemark) {
+                    matchedMember = m
+                    break
+                }
+            }
+            if (matchedMember != null) {
+                val entity = WKMsgEntity()
+                entity.type = ChatContentSpanType.mention
+                entity.offset = offset
+                entity.length = fullMatch.length
+                entity.value = matchedMember.memberUID
+                entities.add(entity)
+                if (!uidList.contains(matchedMember.memberUID)) {
+                    uidList.add(matchedMember.memberUID)
+                }
+            }
+        }
+    }
+
     fun searchInputText(content: String) {
         var isSearchGroupMembers = true
         if (content.startsWith("@")) {
@@ -1670,7 +1728,7 @@ class ChatPanelManager(
             }
 
             // 搜索机器人
-            username = username.replace("@".toRegex(), "").replace(" ".toRegex(), "")
+            username = username.replace("@", "").replace(" ", "")
             if (!TextUtils.isEmpty(username)) {
 //                if (!content.endsWith("@")) {
 //                    isSearchGroupMembers = false
@@ -1685,7 +1743,7 @@ class ChatPanelManager(
                     hideRemindView()
                     inlineQueryOffset = ""
                     val searchKey: String =
-                        content.substring(index, content.length).replace(" ".toRegex(), "")
+                        content.substring(index, content.length).replace(" ", "")
                     if (!TextUtils.isEmpty(searchKey) && mRobot.username.lowercase(Locale.getDefault())
                             .equals(
                                 "gif",
@@ -1759,7 +1817,7 @@ class ChatPanelManager(
         if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && isSearchGroupMembers) {
             var remindSearchKey: String = content
 
-            remindSearchKey = remindSearchKey.replace("@".toRegex(), "")
+            remindSearchKey = remindSearchKey.replace("@", "")
 //            val keyword = mentionEnd(content)
             if (!TextUtils.isEmpty(remindSearchKey) && (content == "@" || content.endsWith("@"))) remindMemberAdapter!!.onNormal() else remindMemberAdapter!!.onSearch(
                 remindSearchKey

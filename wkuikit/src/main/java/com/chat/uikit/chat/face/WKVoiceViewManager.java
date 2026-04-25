@@ -147,7 +147,7 @@ public class WKVoiceViewManager {
      * 构建 chat_context：注入聊天成员名称 + 最近 10 条文本消息
      * 格式：聊天成员：张三,李四,王五\n[张三]: 消息内容
      */
-    private String buildChatContext(IConversationContext context) {
+    public String buildChatContext(IConversationContext context) {
         WKChannel channel = context.getChatChannelInfo();
         String loginUID = WKConfig.getInstance().getUid();
 

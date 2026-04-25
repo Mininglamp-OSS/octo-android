@@ -246,10 +246,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 int pos = helper.getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION) {
                     notifyItemChanged(pos);
-                    if (!wasExpanded && getRecyclerView() != null) {
-                        getRecyclerView().post(() ->
-                                getRecyclerView().smoothScrollToPosition(pos));
-                    }
                 }
             });
             if (isThreadExpanded(item.channelID)) {
@@ -951,7 +947,23 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         });
 
         container.setVisibility(View.VISIBLE);
-        int showCount = Math.min(activeList.size(), 2);
+        // 3天内活跃的子区全部展示，其余折叠（对齐 iOS: conv.lastMsgTimestamp）
+        long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
+        List<ThreadEntity> recentList = new ArrayList<>();
+        List<ThreadEntity> inactiveList = new ArrayList<>();
+        for (ThreadEntity te : activeList) {
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            long lastTs = conv != null ? conv.lastMsgTimestamp : 0;
+            if (lastTs > threeDaysAgoSec) {
+                recentList.add(te);
+            } else {
+                inactiveList.add(te);
+            }
+        }
+        int showCount = recentList.size();
+        if (showCount == 0) showCount = Math.min(activeList.size(), 2);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
         // 内容包装层（卡片 + "+N"），放在 FrameLayout 中和分支线分层
@@ -1043,13 +1055,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         contentWrapper.addView(cardContainer, cardLp);
 
         // "+N 个子区" 放在卡片外部
-        if (activeList.size() > 2) {
-            int moreCount = activeList.size() - 2;
+        if (!inactiveList.isEmpty()) {
+            int moreCount = inactiveList.size();
             // 检查未展示子区是否有 @mention，并汇总未读数
             boolean moreMention = false;
             int moreUnread = 0;
-            for (int i = 2; i < activeList.size(); i++) {
-                ThreadEntity te = activeList.get(i);
+            for (int i = 0; i < inactiveList.size(); i++) {
+                ThreadEntity te = inactiveList.get(i);
                 String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
                 if (hasThreadMentionForChannel(tcId)) {
                     moreMention = true;

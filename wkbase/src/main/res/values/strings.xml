@@ -129,6 +129,12 @@
     <string name="str_file_not_exist">文件不存在</string>
     <string name="str_file_too_large">文件大小超过100MB，无法发送</string>
     <string name="str_file_type_dangerous">不支持发送该类型的文件</string>
+    <string name="str_file_save_to">保存到…</string>
+    <string name="str_file_share">分享</string>
+    <string name="str_file_saved">文件已保存</string>
+    <string name="str_file_save_fail">保存失败</string>
+    <string name="str_file_open_with">打开方式</string>
+    <string name="str_file_no_app">没有可以打开此文件的应用，可尝试保存后用其他方式打开</string>
     <string name="str_text_exceed_limit_tip">字数超出限制无法发送，是否需将消息转为文档发出？</string>
     <string name="str_confirm_send">确认发送</string>
     <string name="str_default_text_file_name">消息</string>

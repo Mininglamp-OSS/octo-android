@@ -167,6 +167,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     @Override
     protected void initView() {
+        MsgModel.getInstance().loadCurrentSpaceId();
         fragCreateTime = android.os.SystemClock.elapsedRealtime();
         wkVBinding.textSwitcher.setTag(-1);
         wkVBinding.textSwitcher.setFactory(() -> {

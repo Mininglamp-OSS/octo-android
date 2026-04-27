@@ -98,5 +98,9 @@
             android:theme="@style/Theme.AppCompat.Light"
             android:label="文件预览" />
 
+        <activity
+            android:name="com.chat.uikit.chat.provider.FileSaveActivity"
+            android:theme="@style/Theme.AppCompat.Translucent" />
+
     </application>
 </manifest>

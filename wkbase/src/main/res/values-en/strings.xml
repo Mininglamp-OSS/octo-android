@@ -129,6 +129,12 @@
     <string name="str_file_not_exist">File does not exist</string>
     <string name="str_file_too_large">File exceeds 100MB size limit</string>
     <string name="str_file_type_dangerous">This file type is not allowed</string>
+    <string name="str_file_save_to">Save to…</string>
+    <string name="str_file_share">Share</string>
+    <string name="str_file_saved">File saved</string>
+    <string name="str_file_save_fail">Save failed</string>
+    <string name="str_file_open_with">Open with</string>
+    <string name="str_file_no_app">No app available to open this file. Try saving it first.</string>
     <string name="str_table">Table</string>
     <string name="str_table_copied">Table content copied</string>
 </resources>

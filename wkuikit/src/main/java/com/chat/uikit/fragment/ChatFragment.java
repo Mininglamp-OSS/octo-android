@@ -129,6 +129,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private boolean pendingSpaceResync = false;
     // 对齐 iOS：仅在首次会话同步完成后调用一次 syncReminder，避免重复网络请求
     private boolean hasInitialReminderSynced = false;
+    // DB 异步查询是否已完成，防止连接成功回调误判 allConversations 为空
+    private boolean dbQueryCompleted = false;
 
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
@@ -771,8 +773,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
                 startPingTimer();
                 // 注册流程补偿：SDK 连接成功时如果列表仍为空（getChatMsg 的 sync 因连接未就绪而未触发），补一次 sync
+                // 必须等 DB 查询完成后再判断，否则查询还在飞行中会误判为空并 clearAll
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
-                if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty()) {
+                if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty() && dbQueryCompleted) {
                     spaceConversationKeys.clear();
                     Schedulers.io().scheduleDirect(() -> {
                         WKIM.getInstance().getConversationManager().clearAll();
@@ -920,6 +923,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             spaceConversationKeys.add(channelKey(conv.channelID, conv.channelType));
                         }
                     }
+                    dbQueryCompleted = true;
                     AndroidUtilities.runOnUIThread(() -> {
                         syncSpaceKeysToGlobal();
                         sortMsg(tempList);
@@ -929,6 +933,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             // Space 变化或首次加载：清空后让 sync 返回新数据
+            dbQueryCompleted = true;
             WKSharedPreferencesUtil.getInstance()
                     .putSPWithUID("last_loaded_space_id", currentSpaceId);
             spaceConversationKeys.clear();
@@ -2714,27 +2719,42 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void loadCurrentSpaceName() {
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (!TextUtils.isEmpty(spaceId)) {
+            // 先从本地缓存立即恢复 Space 名称，避免显示 app_name "Octo"
+            String cachedName = MsgModel.getInstance().getCurrentSpaceName();
+            if (!TextUtils.isEmpty(cachedName)) {
+                currentSpaceName = cachedName;
+                setSpaceSwitcherText(cachedName);
+                updateSpaceAvatar(cachedName);
+            }
+            // 再异步校验最新名称
             SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
                 @Override
                 public void onResult(List<SpaceEntity> list) {
                     if (WKReader.isNotEmpty(list)) {
                         for (SpaceEntity space : list) {
                             if (spaceId.equals(space.space_id)) {
-                                currentSpaceName = space.name;
-                                setSpaceSwitcherText(space.name);
-                                updateSpaceAvatar(space.name);
+                                if (!space.name.equals(currentSpaceName)) {
+                                    currentSpaceName = space.name;
+                                    setSpaceSwitcherText(space.name);
+                                    updateSpaceAvatar(space.name);
+                                    MsgModel.getInstance().setCurrentSpaceId(spaceId, space.name);
+                                }
                                 return;
                             }
                         }
                     }
-                    setSpaceSwitcherText(getString(R.string.app_name));
-                    updateSpaceAvatar(getString(R.string.app_name));
+                    if (TextUtils.isEmpty(currentSpaceName)) {
+                        setSpaceSwitcherText(getString(R.string.app_name));
+                        updateSpaceAvatar(getString(R.string.app_name));
+                    }
                 }
 
                 @Override
                 public void onError(int code, String msg) {
-                    setSpaceSwitcherText(getString(R.string.app_name));
-                    updateSpaceAvatar(getString(R.string.app_name));
+                    if (TextUtils.isEmpty(currentSpaceName)) {
+                        setSpaceSwitcherText(getString(R.string.app_name));
+                        updateSpaceAvatar(getString(R.string.app_name));
+                    }
                 }
             });
         } else {

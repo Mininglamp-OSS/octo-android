@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
         SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
             override fun onResult(list: List<com.chat.uikit.space.SpaceEntity>?) {
                 if (!list.isNullOrEmpty() && !list[0].space_id.isNullOrEmpty()) {
-                    MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
+                    MsgModel.getInstance().setCurrentSpaceId(list[0].space_id, list[0].name ?: "")
                     startActivity(Intent(this@MainActivity, TabActivity::class.java))
                 } else {
                     val intent = Intent(this@MainActivity, WKLoginActivity::class.java)

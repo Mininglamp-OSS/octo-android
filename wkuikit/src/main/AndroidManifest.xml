@@ -39,6 +39,7 @@
         <activity android:name=".contacts.MyGroupsListActivity"
             android:launchMode="singleTop" />
         <activity android:name=".setting.SettingActivity" />
+        <activity android:name=".setting.DestroyAccountActivity" />
         <activity android:name=".group.GroupQrActivity" />
         <activity android:name=".search.SearchAllActivity" />
         <activity android:name=".user.MyInfoActivity" />

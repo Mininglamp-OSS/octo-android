@@ -135,6 +135,29 @@
     <string name="str_file_save_fail">Save failed</string>
     <string name="str_file_open_with">Open with</string>
     <string name="str_file_no_app">No app available to open this file. Try saving it first.</string>
+
+    <string name="destroy_account">Delete Account</string>
+    <string name="destroy_apply_title">Apply for Account Deletion</string>
+    <string name="destroy_apply_subtitle">Please carefully read the following precautions</string>
+    <string name="destroy_warn_1">• After account deletion, you will not be able to log in with this account</string>
+    <string name="destroy_warn_2">• All data in the account will be deleted and cannot be recovered</string>
+    <string name="destroy_warn_3">• After submitting, there is a 7-day cooling period during which you can cancel at any time</string>
+    <string name="destroy_warn_4">• After the cooling period, the account will be permanently deleted</string>
+    <string name="destroy_password_hint">Enter login password to verify identity</string>
+    <string name="destroy_apply_btn">Apply for Deletion</string>
+    <string name="destroy_confirm_msg">Are you sure you want to apply for account deletion? After submission, there will be a 7-day cooling period, after which the account will be permanently deleted.</string>
+    <string name="destroy_confirm_btn">Confirm Deletion</string>
+    <string name="destroy_applied_toast">Deletion request submitted</string>
+    <string name="destroy_applying_title">Account Deletion in Progress</string>
+    <string name="destroy_remaining_days">%d days remaining until permanent deletion</string>
+    <string name="destroy_expire_date">Estimated deletion date: %s</string>
+    <string name="destroy_cooling_tip">Log in during cooling period or tap the button below to cancel</string>
+    <string name="destroy_cancel_btn">Cancel Deletion</string>
+    <string name="destroy_cancel_confirm_msg">Are you sure you want to cancel the deletion? Your account will return to normal use.</string>
+    <string name="destroy_cancel_confirm_btn">Confirm Cancellation</string>
+    <string name="destroy_cancelled_toast">Deletion cancelled</string>
+    <string name="destroy_cooling_bottom_tip">After the cooling period, the account will be permanently deleted and cannot be recovered</string>
+    <string name="str_net_error">Network error, please try again later</string>
     <string name="str_table">Table</string>
     <string name="str_table_copied">Table content copied</string>
 </resources>

@@ -71,4 +71,13 @@ public interface UserService {
 
     @GET("user/devices/{device_id}")
     Observable<Device> device(@Path("device_id") String device_id);
+
+    @GET("user/destroy/status")
+    Observable<JSONObject> getDestroyStatus();
+
+    @POST("user/destroy/apply")
+    Observable<JSONObject> applyDestroy(@Body JSONObject body);
+
+    @POST("user/destroy/cancel")
+    Observable<CommonResponse> cancelDestroy();
 }

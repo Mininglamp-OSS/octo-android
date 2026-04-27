@@ -412,4 +412,63 @@ public class UserModel extends WKBaseModel {
             }
         });
     }
+
+    public interface IDestroyStatusListener {
+        void onResult(int status, int remainingDays, String expireAt);
+        void onError(int code, String msg);
+    }
+
+    public void getDestroyStatus(IDestroyStatusListener listener) {
+        request(createService(UserService.class).getDestroyStatus(), new IRequestResultListener<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                int status = result.getIntValue("destroy_status");
+                int days = result.getIntValue("remaining_days");
+                String expireAt = result.getString("expire_at");
+                listener.onResult(status, days, expireAt != null ? expireAt : "");
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onError(code, msg);
+            }
+        });
+    }
+
+    public void applyDestroy(String password, IDestroyStatusListener listener) {
+        JSONObject body = new JSONObject();
+        body.put("password", password);
+        request(createService(UserService.class).applyDestroy(body), new IRequestResultListener<JSONObject>() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                int status = result.getIntValue("destroy_status");
+                int days = result.getIntValue("remaining_days");
+                String expireAt = result.getString("expire_at");
+                listener.onResult(
+                        status > 0 ? status : 1,
+                        days > 0 ? days : 7,
+                        expireAt != null ? expireAt : ""
+                );
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onError(code, msg);
+            }
+        });
+    }
+
+    public void cancelDestroy(ICommonListener listener) {
+        request(createService(UserService.class).cancelDestroy(), new IRequestResultListener<CommonResponse>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                listener.onResult(result.status, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
+    }
 }

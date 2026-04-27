@@ -9,7 +9,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Gravity;
@@ -205,6 +207,40 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             filterAndDisplay();
         });
 
+        // 左右滑动切换群聊/私聊
+        GestureDetector tabSwipeDetector = new GestureDetector(requireContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    private static final int SWIPE_THRESHOLD = 80;
+                    private static final int SWIPE_VELOCITY_THRESHOLD = 200;
+
+                    @Override
+                    public boolean onFling(MotionEvent e1, MotionEvent e2,
+                                           float velocityX, float velocityY) {
+                        if (e1 == null || e2 == null) return false;
+                        float diffX = e2.getX() - e1.getX();
+                        float diffY = e2.getY() - e1.getY();
+                        if (Math.abs(diffX) > Math.abs(diffY)
+                                && Math.abs(diffX) > SWIPE_THRESHOLD
+                                && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                            if (diffX < 0 && currentTab == 0) {
+                                segmentTabView.selectTab(1);
+                            } else if (diffX > 0 && currentTab == 1) {
+                                segmentTabView.selectTab(0);
+                            }
+                            return true;
+                        }
+                        return false;
+                    }
+                });
+        wkVBinding.recyclerView.addOnItemTouchListener(
+                new RecyclerView.SimpleOnItemTouchListener() {
+                    @Override
+                    public boolean onInterceptTouchEvent(@NonNull RecyclerView rv,
+                                                        @NonNull MotionEvent e) {
+                        tabSwipeDetector.onTouchEvent(e);
+                        return false;
+                    }
+                });
     }
 
     @SuppressLint("ClickableViewAccessibility")

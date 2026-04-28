@@ -2895,9 +2895,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         WKChannel channel = WKIM.getInstance().getChannelManager()
                 .getChannel(uiMsg.channelID, uiMsg.channelType);
-        if (channel == null && uiMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
-            WKIM.getInstance().getChannelManager().fetchChannelInfo(uiMsg.channelID, uiMsg.channelType);
-        }
 
         doShowPixelHint(uiMsg, channel, wkMsg);
     }
@@ -2958,13 +2955,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
 
+        long tipOrderSeq = 0;
+        if (wkMsg.messageSeq > 0) {
+            tipOrderSeq = WKIM.getInstance().getMsgManager()
+                    .getMessageOrderSeq(wkMsg.messageSeq, uiMsg.channelID, uiMsg.channelType);
+        }
+
         String finalContent = content;
         String finalAvatarUrl = avatarUrl;
         String finalName = name;
+        long finalTipOrderSeq = tipOrderSeq;
         ViewGroup parent = (ViewGroup) getView();
         PixelParticleHintView.show(parent, finalAvatarUrl, finalName, finalContent, () ->
             WKIMUtils.getInstance().startChatActivity(
-                    new ChatViewMenu(getActivity(), uiMsg.channelID, uiMsg.channelType, 0, false))
+                    new ChatViewMenu(getActivity(), uiMsg.channelID, uiMsg.channelType, finalTipOrderSeq, false))
         );
     }
 

@@ -2886,6 +2886,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         if (currentTab != 0) return;
         if (!isResumed() || getView() == null) return;
+        if (!isChannelInCurrentSpaceForHint(uiMsg.channelID, uiMsg.channelType)) return;
 
         long msgTimeMs = uiMsg.lastMsgTimestamp > 9999999999L
                 ? uiMsg.lastMsgTimestamp
@@ -2965,6 +2966,33 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             WKIMUtils.getInstance().startChatActivity(
                     new ChatViewMenu(getActivity(), uiMsg.channelID, uiMsg.channelType, 0, false))
         );
+    }
+
+    private boolean isChannelInCurrentSpaceForHint(String channelID, byte channelType) {
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return true;
+
+        for (ChatConversationMsg msg : allConversations) {
+            if (msg.uiConversationMsg != null
+                    && channelID.equals(msg.uiConversationMsg.channelID)
+                    && channelType == msg.uiConversationMsg.channelType) {
+                return true;
+            }
+        }
+
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            String[] parsed = ThreadModel.getInstance().parseChannelId(channelID);
+            if (parsed != null) {
+                for (ChatConversationMsg msg : allConversations) {
+                    if (msg.uiConversationMsg != null
+                            && parsed[0].equals(msg.uiConversationMsg.channelID)
+                            && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private void showThreadMuteMenu(String threadChannelId, String threadName, View anchor) {

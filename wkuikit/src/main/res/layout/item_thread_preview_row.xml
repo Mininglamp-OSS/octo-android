@@ -43,6 +43,14 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <ImageView
+        android:id="@+id/threadMuteIv"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_marginStart="4dp"
+        android:src="@mipmap/msg_mute"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/threadUnreadBadge"
         android:layout_width="wrap_content"

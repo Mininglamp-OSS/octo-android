@@ -297,21 +297,7 @@ public class WKIMUtils {
             if (newMsgNotice && isAlertMsg && (TextUtils.isEmpty(WKUIKitApplication.getInstance().chattingChannelID) || !WKUIKitApplication.getInstance().chattingChannelID.equals(channelID))) {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.mute == 0) {
-                    // 子区额外检查父群免打扰：父群 mute 时子区也静默
-                    boolean parentMuted = false;
-                    if (channelType == WKChannelType.COMMUNITY_TOPIC) {
-                        String[] parsed = ThreadModel.getInstance().parseChannelId(channelID);
-                        if (parsed != null) {
-                            WKChannel parentChannel = WKIM.getInstance().getChannelManager()
-                                    .getChannel(parsed[0], WKChannelType.GROUP);
-                            if (parentChannel != null && parentChannel.mute == 1) {
-                                parentMuted = true;
-                            }
-                        }
-                    }
-                    if (!parentMuted) {
-                        showNotification(msgList.get(msgList.size() - 1), msgShowDetail, channel, playNewMsgMedia, isVibrate);
-                    }
+                    showNotification(msgList.get(msgList.size() - 1), msgShowDetail, channel, playNewMsgMedia, isVibrate);
                 }
             }
 
@@ -353,12 +339,6 @@ public class WKIMUtils {
                             extraMap.put("has_thread_md", entity.has_thread_md);
                             extraMap.put("thread_md_version", entity.thread_md_version);
                             channel.remoteExtraMap = extraMap;
-                            // 对齐 iOS：子区继承父群的免打扰设置
-                            WKChannel parentChannel = WKIM.getInstance().getChannelManager()
-                                    .getChannel(entity.group_no, WKChannelType.GROUP);
-                            if (parentChannel != null) {
-                                channel.mute = parentChannel.mute;
-                            }
                             WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                         }
                     });
@@ -674,13 +654,6 @@ public class WKIMUtils {
                 orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(messageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
                 intent.putExtra("unreadStartMsgOrderSeq", orderSeq);
                 intent.putExtra("redDot", redDot);
-            } else {
-                WKUIConversationMsg uiMsg = WKIM.getInstance().getConversationManager().getUIConversationMsg(chatViewMenu.channelID, chatViewMenu.channelType);
-                if (uiMsg != null && uiMsg.getRemoteMsgExtra() != null && uiMsg.getRemoteMsgExtra().keepMessageSeq != 0) {
-                    long lastPreviewMsgOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(uiMsg.getRemoteMsgExtra().keepMessageSeq, chatViewMenu.channelID, chatViewMenu.channelType);
-                    intent.putExtra("lastPreviewMsgOrderSeq", lastPreviewMsgOrderSeq);
-                    intent.putExtra("keepOffsetY", uiMsg.getRemoteMsgExtra().keepOffsetY);
-                }
             }
         }
         if (chatViewMenu.isNewTask) {

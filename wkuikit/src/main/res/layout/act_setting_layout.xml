@@ -219,6 +219,22 @@
                         android:background="@color/homeColor" />
 
                     <LinearLayout
+                        android:id="@+id/destroyAccountLayout"
+                        style="@style/layoutBg">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/destroy_account" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="10dp"
+                        android:background="@color/homeColor" />
+
+                    <LinearLayout
                         android:id="@+id/aboutLayout"
                         style="@style/layoutBg">
 

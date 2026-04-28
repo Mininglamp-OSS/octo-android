@@ -1,6 +1,7 @@
 package com.chat.uikit.chat.adapter;
 
 import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
@@ -100,6 +101,17 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Set<String> collapsedSections = new HashSet<>();
     // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
+
+    public String findThreadName(String threadChannelId) {
+        for (List<ThreadEntity> threads : threadDataCache.values()) {
+            for (ThreadEntity t : threads) {
+                if (threadChannelId.equals(t.channel_id)) {
+                    return t.name;
+                }
+            }
+        }
+        return null;
+    }
     // 标记正在加载的 groupNo，避免重复请求
     private final Set<String> threadLoadingSet = Collections.synchronizedSet(new HashSet<>());
     // 子区展开状态（默认折叠，在此集合中的表示已展开，对齐 iOS expandedThreadGroups）
@@ -1016,8 +1028,26 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (threadConv != null) {
                 unread = threadConv.unreadCount;
             }
+
+            // 子区独立 mute 状态
+            WKChannel threadChannel = WKIM.getInstance().getChannelManager()
+                    .getChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            boolean threadMute = threadChannel != null && threadChannel.mute == 1;
+            ImageView muteIv = rowView.findViewById(R.id.threadMuteIv);
+            if (threadMute) {
+                muteIv.setVisibility(View.VISIBLE);
+                Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+            } else {
+                muteIv.setVisibility(View.GONE);
+            }
+
             if (unread > 0) {
                 unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                GradientDrawable badgeBg = new GradientDrawable();
+                badgeBg.setCornerRadius(AndroidUtilities.dp(9f));
+                badgeBg.setColor(ContextCompat.getColor(getContext(),
+                        threadMute ? R.color.color999 : R.color.reminderColor));
+                unreadBadge.setBackground(badgeBg);
                 unreadBadge.setVisibility(View.VISIBLE);
             } else {
                 unreadBadge.setVisibility(View.GONE);
@@ -1047,6 +1077,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo, entity.short_id, entity.is_joined);
                 }
             });
+            // 长按弹出通知开关菜单
+            boolean finalThreadMute = threadMute;
+            List<PopupMenuItem> menuItems = new ArrayList<>();
+            menuItems.add(new PopupMenuItem(
+                    getContext().getString(finalThreadMute ? R.string.open_channel_notice : R.string.close_channel_notice),
+                    finalThreadMute ? R.mipmap.msg_unmute : R.mipmap.msg_mute,
+                    () -> {
+                        if (threadPreviewClickListener != null) {
+                            threadPreviewClickListener.onThreadLongPress(finalThreadChannelId, entity.name, rowView);
+                        }
+                    }));
+            WKDialogUtils.getInstance().setViewLongClickPopup(rowView, menuItems);
 
             cardContainer.addView(rowView);
             rowViews.add(rowView);
@@ -1554,6 +1596,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     public interface IThreadPreviewClickListener {
         void onThreadClick(String channelId, String groupNo, String shortId, int isJoined);
         void onMoreThreadsClick(String groupNo);
+        default void onThreadLongPress(String threadChannelId, String threadName, View anchor) {}
     }
 
     public enum ItemMenu {

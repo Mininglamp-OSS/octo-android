@@ -1,5 +1,7 @@
 package com.chat.uikit.chat.provider
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.text.TextUtils
 import android.view.LayoutInflater
@@ -23,6 +25,7 @@ import com.chat.base.utils.WKFileUtils
 import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.File
 import java.util.Locale
 
@@ -190,8 +193,40 @@ class WKFileProvider : WKChatBaseProvider() {
     }
 
     private fun openFile(file: File) {
+        showFileOptionsSheet(file)
+    }
+
+    private fun showFileOptionsSheet(file: File) {
+        val activity = context as? Activity ?: return
+        if (activity.isFinishing || activity.isDestroyed) return
+        val dialog = BottomSheetDialog(activity)
+        val sheetView = LayoutInflater.from(activity).inflate(R.layout.bottom_sheet_file_actions, null)
+
+        sheetView.findViewById<View>(R.id.actionOpen).setOnClickListener {
+            dialog.dismiss()
+            openFileDirectly(file)
+        }
+        sheetView.findViewById<View>(R.id.actionSave).setOnClickListener {
+            dialog.dismiss()
+            saveFileWithSAF(file)
+        }
+        sheetView.findViewById<View>(R.id.actionShare).setOnClickListener {
+            dialog.dismiss()
+            shareFile(file)
+        }
+        sheetView.findViewById<View>(R.id.actionCancel).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        val fileNameTv = sheetView.findViewById<TextView>(R.id.sheetFileName)
+        fileNameTv?.text = file.name
+
+        dialog.setContentView(sheetView)
+        dialog.show()
+    }
+
+    private fun openFileDirectly(file: File) {
         val ext = file.extension.lowercase(Locale.getDefault())
-        // 文本类文件：内置预览
         if (isTextFile(ext)) {
             openTextPreview(file)
             return
@@ -207,9 +242,39 @@ class WKFileProvider : WKChatBaseProvider() {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
-        } catch (e: Exception) {
-            // 没有应用能打开 → 保存到下载目录
-            saveToDownloads(file)
+        } catch (e: ActivityNotFoundException) {
+            WKToastUtils.getInstance()
+                .showToastNormal(context.getString(R.string.str_file_no_app))
+        } catch (_: Exception) {
+            WKToastUtils.getInstance()
+                .showToastNormal(context.getString(R.string.str_file_not_exist))
+        }
+    }
+
+    private fun saveFileWithSAF(file: File) {
+        val intent = Intent(context, FileSaveActivity::class.java)
+        intent.putExtra("sourceFilePath", file.absolutePath)
+        intent.putExtra("fileName", file.name)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
+    private fun shareFile(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileProvider",
+                file
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = getMimeType(file.name)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, file.name)
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        } catch (_: Exception) {
         }
     }
 
@@ -235,22 +300,8 @@ class WKFileProvider : WKChatBaseProvider() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         } catch (e: Exception) {
-            saveToDownloads(file)
-        }
-    }
-
-    private fun saveToDownloads(file: File) {
-        try {
-            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                android.os.Environment.DIRECTORY_DOWNLOADS
-            )
-            val destFile = File(downloadsDir, file.name)
-            file.copyTo(destFile, overwrite = true)
             WKToastUtils.getInstance()
-                .showToastNormal("已保存到下载目录: ${file.name}")
-        } catch (e: Exception) {
-            WKToastUtils.getInstance()
-                .showToastNormal("保存失败: ${e.message}")
+                .showToastNormal(context.getString(R.string.str_file_not_exist))
         }
     }
 

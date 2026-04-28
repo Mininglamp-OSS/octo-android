@@ -39,6 +39,7 @@
         <activity android:name=".contacts.MyGroupsListActivity"
             android:launchMode="singleTop" />
         <activity android:name=".setting.SettingActivity" />
+        <activity android:name=".setting.DestroyAccountActivity" />
         <activity android:name=".group.GroupQrActivity" />
         <activity android:name=".search.SearchAllActivity" />
         <activity android:name=".user.MyInfoActivity" />
@@ -97,6 +98,10 @@
             android:name="com.chat.uikit.chat.provider.TextPreviewActivity"
             android:theme="@style/Theme.AppCompat.Light"
             android:label="文件预览" />
+
+        <activity
+            android:name="com.chat.uikit.chat.provider.FileSaveActivity"
+            android:theme="@style/Theme.AppCompat.Translucent" />
 
     </application>
 </manifest>

@@ -339,12 +339,6 @@ public class WKIMUtils {
                             extraMap.put("has_thread_md", entity.has_thread_md);
                             extraMap.put("thread_md_version", entity.thread_md_version);
                             channel.remoteExtraMap = extraMap;
-                            // 对齐 iOS：子区继承父群的免打扰设置
-                            WKChannel parentChannel = WKIM.getInstance().getChannelManager()
-                                    .getChannel(entity.group_no, WKChannelType.GROUP);
-                            if (parentChannel != null) {
-                                channel.mute = parentChannel.mute;
-                            }
                             WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
                         }
                     });

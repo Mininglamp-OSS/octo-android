@@ -17,11 +17,13 @@ import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActThreadDetailLayoutBinding;
 import com.chat.uikit.group.GroupMdActivity;
+import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.chat.uikit.thread.service.entity.ThreadMember;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBinding> {
@@ -52,6 +54,7 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
     }
 
     private boolean isCreator;
+    private boolean isGroupAdmin;
 
     @Override
     protected void initListener() {
@@ -113,7 +116,7 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
             intent.putExtra("shortId", shortId);
             intent.putExtra("channelId", channelId);
             intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-            intent.putExtra("canEdit", isCreator);
+            intent.putExtra("canEdit", isCreator || isGroupAdmin);
             startActivity(intent);
         });
 
@@ -166,6 +169,12 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                     }
                 }
 
+                WKChannelMember groupMember = WKIM.getInstance().getChannelMembersManager()
+                        .getMember(groupNo, WKChannelType.GROUP, currentUid);
+                isGroupAdmin = groupMember != null
+                        && (groupMember.role == WKChannelMemberRole.admin
+                        || groupMember.role == WKChannelMemberRole.manager);
+
                 // 通过成员列表判断当前用户是否已加入子区
                 checkMembership(currentUid);
             }
@@ -213,4 +222,5 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
             wkVBinding.leaveBtn.setVisibility(isMember ? View.VISIBLE : View.GONE);
         });
     }
+
 }

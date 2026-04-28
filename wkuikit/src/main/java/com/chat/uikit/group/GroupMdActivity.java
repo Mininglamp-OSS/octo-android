@@ -122,22 +122,22 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
             shortId = getIntent().getStringExtra("shortId");
             channelId = getIntent().getStringExtra("channelId");
             canEdit = getIntent().getBooleanExtra("canEdit", false);
+            if (!canEdit) {
+                WKChannelMember groupMember = WKIM.getInstance().getChannelMembersManager()
+                        .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+                canEdit = groupMember != null
+                        && (groupMember.role == WKChannelMemberRole.admin
+                        || groupMember.role == WKChannelMemberRole.manager);
+            }
         } else {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
                     .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
-            canEdit = member != null && member.role != WKChannelMemberRole.normal;
+            canEdit = member != null
+                    && (member.role == WKChannelMemberRole.admin
+                    || member.role == WKChannelMemberRole.manager);
         }
 
-        if (canEdit) {
-            titleRightTv.setVisibility(View.VISIBLE);
-            wkVBinding.contentEt.setEnabled(true);
-            wkVBinding.byteCountTv.setVisibility(View.VISIBLE);
-        } else {
-            titleRightTv.setVisibility(View.GONE);
-            wkVBinding.contentEt.setFocusableInTouchMode(false);
-            wkVBinding.contentEt.setEnabled(true);
-            wkVBinding.byteCountTv.setVisibility(View.GONE);
-        }
+        applyEditMode();
 
         if (loadingPopup != null) loadingPopup.show();
         GroupModel.IGroupMdListener mdListener = (code, msg, entity) -> {
@@ -164,6 +164,20 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
             ThreadModel.getInstance().getThreadMd(groupNo, shortId, mdListener);
         } else {
             GroupModel.getInstance().getGroupMd(groupNo, mdListener);
+        }
+    }
+
+    private void applyEditMode() {
+        if (canEdit) {
+            if (titleRightTv != null) titleRightTv.setVisibility(View.VISIBLE);
+            wkVBinding.contentEt.setEnabled(true);
+            wkVBinding.contentEt.setFocusableInTouchMode(true);
+            wkVBinding.byteCountTv.setVisibility(View.VISIBLE);
+        } else {
+            if (titleRightTv != null) titleRightTv.setVisibility(View.GONE);
+            wkVBinding.contentEt.setFocusableInTouchMode(false);
+            wkVBinding.contentEt.setEnabled(true);
+            wkVBinding.byteCountTv.setVisibility(View.GONE);
         }
     }
 

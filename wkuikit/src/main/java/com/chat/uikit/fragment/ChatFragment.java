@@ -105,6 +105,7 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+import com.chat.uikit.view.PixelParticleHintView;
 
 /**
  * 2019-11-12 14:55
@@ -387,6 +388,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 intent.putExtra("groupNo", groupNo);
                 startActivity(intent);
             }
+
+            @Override
+            public void onThreadLongPress(String threadChannelId, String threadName, View anchor) {
+                showThreadMuteMenu(threadChannelId, threadName, anchor);
+            }
         });
         // 恢复用户折叠状态
         restoreCollapsedSections();
@@ -629,6 +635,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return;
             }
             if (list.size() == 1) {
+                showPixelHintIfNeeded(list.get(0));
                 resetData(list.get(0), true);
                 return;
             }
@@ -640,6 +647,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (msg.channelType != WKChannelType.COMMUNITY_TOPIC) {
                     filteredList.add(msg);
                 } else {
+                    showPixelHintIfNeeded(msg);
                     String[] parsed = ThreadModel.getInstance().parseChannelId(msg.channelID);
                     if (parsed != null) {
                         threadParentGroups.add(parsed[0]);
@@ -679,6 +687,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             List<ChatConversationMsg> uiList = new ArrayList<>();
             // 多条
             for (WKUIConversationMsg uiConversationMsg : list) {
+                if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                    showPixelHintIfNeeded(uiConversationMsg);
+                }
                 boolean isAdd = true;
                 // 先检查 allConversations（含未在当前 tab 显示的会话）
                 for (ChatConversationMsg allMsg : allConversations) {
@@ -2848,6 +2859,134 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 linearLayoutManager.scrollToPositionWithOffset(firstIndex, 0);
             }
         }
+    }
+
+    private final HashSet<String> shownHintMsgIds = new HashSet<>();
+
+    private void showPixelHintIfNeeded(WKUIConversationMsg uiMsg) {
+        if (uiMsg.channelType != WKChannelType.GROUP
+                && uiMsg.channelType != WKChannelType.COMMUNITY_TOPIC) return;
+
+        WKMsg wkMsg = uiMsg.getWkMsg();
+        if (wkMsg == null) return;
+
+        String loginUid = WKConfig.getInstance().getUid();
+        if (!TextUtils.isEmpty(wkMsg.fromUID) && wkMsg.fromUID.equals(loginUid)) return;
+
+        if (wkMsg.type >= 15) return;
+
+        if (TextUtils.isEmpty(wkMsg.messageID) || "0".equals(wkMsg.messageID)) return;
+        String msgIdStr = wkMsg.messageID;
+        if (shownHintMsgIds.contains(msgIdStr)) return;
+        shownHintMsgIds.add(msgIdStr);
+        if (shownHintMsgIds.size() > 500) {
+            shownHintMsgIds.clear();
+            shownHintMsgIds.add(msgIdStr);
+        }
+
+        if (currentTab != 0) return;
+        if (!isResumed() || getView() == null) return;
+
+        long msgTimeMs = uiMsg.lastMsgTimestamp > 9999999999L
+                ? uiMsg.lastMsgTimestamp
+                : uiMsg.lastMsgTimestamp * 1000;
+        if (connectedAtMs > 0 && msgTimeMs < connectedAtMs) return;
+
+        WKChannel channel = WKIM.getInstance().getChannelManager()
+                .getChannel(uiMsg.channelID, uiMsg.channelType);
+        if (channel == null && uiMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            WKIM.getInstance().getChannelManager().fetchChannelInfo(uiMsg.channelID, uiMsg.channelType);
+        }
+
+        doShowPixelHint(uiMsg, channel, wkMsg);
+    }
+
+    private void doShowPixelHint(WKUIConversationMsg uiMsg, WKChannel channel, WKMsg wkMsg) {
+        if (channel != null && channel.mute == 1) return;
+
+        String[] parsedThread = null;
+        if (uiMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            parsedThread = ThreadModel.getInstance().parseChannelId(uiMsg.channelID);
+        }
+
+        String name = null;
+        String avatarUrl = null;
+
+        if (uiMsg.channelType == WKChannelType.GROUP) {
+            if (channel != null) {
+                name = !TextUtils.isEmpty(channel.channelRemark)
+                        ? channel.channelRemark : channel.channelName;
+            }
+            avatarUrl = WKApiConfig.getShowAvatar(uiMsg.channelID, uiMsg.channelType);
+        } else if (uiMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            // 1) channelInfo
+            if (channel != null) {
+                name = !TextUtils.isEmpty(channel.channelRemark)
+                        ? channel.channelRemark : channel.channelName;
+            }
+            // 2) threadPreviews 缓存
+            if (TextUtils.isEmpty(name)) {
+                name = chatConversationAdapter.findThreadName(uiMsg.channelID);
+            }
+            // 3) 父群名 + /#子区
+            if (TextUtils.isEmpty(name) && parsedThread != null) {
+                WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                        .getChannel(parsedThread[0], WKChannelType.GROUP);
+                if (parentChannel != null) {
+                    String parentName = !TextUtils.isEmpty(parentChannel.channelRemark)
+                            ? parentChannel.channelRemark : parentChannel.channelName;
+                    name = parentName + "/#子区";
+                    avatarUrl = WKApiConfig.getShowAvatar(parsedThread[0], WKChannelType.GROUP);
+                }
+            }
+        }
+        if (TextUtils.isEmpty(name)) return;
+
+        String digest = wkMsg.baseContentMsgModel != null
+                ? wkMsg.baseContentMsgModel.getDisplayContent() : null;
+        String content = digest;
+        if (!TextUtils.isEmpty(digest) && !TextUtils.isEmpty(wkMsg.fromUID)) {
+            WKChannel sender = WKIM.getInstance().getChannelManager()
+                    .getChannel(wkMsg.fromUID, WKChannelType.PERSONAL);
+            if (sender != null) {
+                String senderName = !TextUtils.isEmpty(sender.channelRemark)
+                        ? sender.channelRemark : sender.channelName;
+                if (!TextUtils.isEmpty(senderName)) {
+                    content = senderName + ": " + digest;
+                }
+            }
+        }
+
+        String finalContent = content;
+        String finalAvatarUrl = avatarUrl;
+        String finalName = name;
+        ViewGroup parent = (ViewGroup) getView();
+        PixelParticleHintView.show(parent, finalAvatarUrl, finalName, finalContent, () ->
+            WKIMUtils.getInstance().startChatActivity(
+                    new ChatViewMenu(getActivity(), uiMsg.channelID, uiMsg.channelType, 0, false))
+        );
+    }
+
+    private void showThreadMuteMenu(String threadChannelId, String threadName, View anchor) {
+        if (getActivity() == null) return;
+        WKChannel threadChannel = WKIM.getInstance().getChannelManager()
+                .getChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+        boolean isMuted = threadChannel != null && threadChannel.mute == 1;
+        int newMute = isMuted ? 0 : 1;
+
+        if (threadChannel != null) {
+            threadChannel.mute = newMute;
+            WKIM.getInstance().getChannelManager().saveOrUpdateChannel(threadChannel);
+        } else {
+            WKChannel ch = new WKChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            ch.channelName = threadName;
+            ch.mute = newMute;
+            WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
+        }
+        filterAndDisplay();
+
+        GroupModel.getInstance().updateGroupSetting(threadChannelId, "mute", newMute, (code, msg) -> {
+        });
     }
 
 }

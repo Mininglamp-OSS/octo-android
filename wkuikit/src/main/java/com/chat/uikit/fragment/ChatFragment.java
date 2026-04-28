@@ -9,7 +9,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Gravity;
@@ -129,6 +131,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private boolean pendingSpaceResync = false;
     // 对齐 iOS：仅在首次会话同步完成后调用一次 syncReminder，避免重复网络请求
     private boolean hasInitialReminderSynced = false;
+    // DB 异步查询是否已完成，防止连接成功回调误判 allConversations 为空
+    private boolean dbQueryCompleted = false;
 
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
@@ -203,6 +207,40 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             filterAndDisplay();
         });
 
+        // 左右滑动切换群聊/私聊
+        GestureDetector tabSwipeDetector = new GestureDetector(requireContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    private static final int SWIPE_THRESHOLD = 80;
+                    private static final int SWIPE_VELOCITY_THRESHOLD = 200;
+
+                    @Override
+                    public boolean onFling(MotionEvent e1, MotionEvent e2,
+                                           float velocityX, float velocityY) {
+                        if (e1 == null || e2 == null) return false;
+                        float diffX = e2.getX() - e1.getX();
+                        float diffY = e2.getY() - e1.getY();
+                        if (Math.abs(diffX) > Math.abs(diffY)
+                                && Math.abs(diffX) > SWIPE_THRESHOLD
+                                && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                            if (diffX < 0 && currentTab == 0) {
+                                segmentTabView.selectTab(1);
+                            } else if (diffX > 0 && currentTab == 1) {
+                                segmentTabView.selectTab(0);
+                            }
+                            return true;
+                        }
+                        return false;
+                    }
+                });
+        wkVBinding.recyclerView.addOnItemTouchListener(
+                new RecyclerView.SimpleOnItemTouchListener() {
+                    @Override
+                    public boolean onInterceptTouchEvent(@NonNull RecyclerView rv,
+                                                        @NonNull MotionEvent e) {
+                        tabSwipeDetector.onTouchEvent(e);
+                        return false;
+                    }
+                });
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -771,8 +809,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
                 startPingTimer();
                 // 注册流程补偿：SDK 连接成功时如果列表仍为空（getChatMsg 的 sync 因连接未就绪而未触发），补一次 sync
+                // 必须等 DB 查询完成后再判断，否则查询还在飞行中会误判为空并 clearAll
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
-                if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty()) {
+                if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty() && dbQueryCompleted) {
                     spaceConversationKeys.clear();
                     Schedulers.io().scheduleDirect(() -> {
                         WKIM.getInstance().getConversationManager().clearAll();
@@ -920,6 +959,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             spaceConversationKeys.add(channelKey(conv.channelID, conv.channelType));
                         }
                     }
+                    dbQueryCompleted = true;
                     AndroidUtilities.runOnUIThread(() -> {
                         syncSpaceKeysToGlobal();
                         sortMsg(tempList);
@@ -929,6 +969,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             // Space 变化或首次加载：清空后让 sync 返回新数据
+            dbQueryCompleted = true;
             WKSharedPreferencesUtil.getInstance()
                     .putSPWithUID("last_loaded_space_id", currentSpaceId);
             spaceConversationKeys.clear();
@@ -1440,7 +1481,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 拷贝一份，避免对 adapter data list 并发修改
         List<ChatConversationMsg> snapshot = new ArrayList<>(list);
         groupMsg(snapshot);
-        Collections.sort(snapshot, (conversationMsg, t1) -> (int) (t1.uiConversationMsg.lastMsgTimestamp - conversationMsg.uiConversationMsg.lastMsgTimestamp));
+        Collections.sort(snapshot, (conversationMsg, t1) -> Long.compare(t1.uiConversationMsg.lastMsgTimestamp, conversationMsg.uiConversationMsg.lastMsgTimestamp));
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
         for (int i = 0, size = snapshot.size(); i < size; i++) {
@@ -2714,27 +2755,42 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void loadCurrentSpaceName() {
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (!TextUtils.isEmpty(spaceId)) {
+            // 先从本地缓存立即恢复 Space 名称，避免显示 app_name "Octo"
+            String cachedName = MsgModel.getInstance().getCurrentSpaceName();
+            if (!TextUtils.isEmpty(cachedName)) {
+                currentSpaceName = cachedName;
+                setSpaceSwitcherText(cachedName);
+                updateSpaceAvatar(cachedName);
+            }
+            // 再异步校验最新名称
             SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
                 @Override
                 public void onResult(List<SpaceEntity> list) {
                     if (WKReader.isNotEmpty(list)) {
                         for (SpaceEntity space : list) {
                             if (spaceId.equals(space.space_id)) {
-                                currentSpaceName = space.name;
-                                setSpaceSwitcherText(space.name);
-                                updateSpaceAvatar(space.name);
+                                if (!space.name.equals(currentSpaceName)) {
+                                    currentSpaceName = space.name;
+                                    setSpaceSwitcherText(space.name);
+                                    updateSpaceAvatar(space.name);
+                                    MsgModel.getInstance().setCurrentSpaceId(spaceId, space.name);
+                                }
                                 return;
                             }
                         }
                     }
-                    setSpaceSwitcherText(getString(R.string.app_name));
-                    updateSpaceAvatar(getString(R.string.app_name));
+                    if (TextUtils.isEmpty(currentSpaceName)) {
+                        setSpaceSwitcherText(getString(R.string.app_name));
+                        updateSpaceAvatar(getString(R.string.app_name));
+                    }
                 }
 
                 @Override
                 public void onError(int code, String msg) {
-                    setSpaceSwitcherText(getString(R.string.app_name));
-                    updateSpaceAvatar(getString(R.string.app_name));
+                    if (TextUtils.isEmpty(currentSpaceName)) {
+                        setSpaceSwitcherText(getString(R.string.app_name));
+                        updateSpaceAvatar(getString(R.string.app_name));
+                    }
                 }
             });
         } else {

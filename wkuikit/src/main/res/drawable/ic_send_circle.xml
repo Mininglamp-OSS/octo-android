@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <!-- Circle background (will be tinted with theme color) -->
+    <path
+        android:fillColor="#6C5CE7"
+        android:pathData="M16,16m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0" />
+    <!-- Up arrow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15.2,8.4L15.2,22c0,0.44 0.36,0.8 0.8,0.8s0.8,-0.36 0.8,-0.8L16.8,8.4l4.3,4.3c0.31,0.31 0.82,0.31 1.13,0 0.31,-0.31 0.31,-0.82 0,-1.13l-5.66,-5.66c-0.31,-0.31 -0.82,-0.31 -1.13,0l-5.66,5.66c-0.31,0.31 -0.31,0.82 0,1.13 0.31,0.31 0.82,0.31 1.13,0L15.2,8.4z" />
+</vector>

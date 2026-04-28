@@ -171,7 +171,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
         // 群聊头像
         AvatarView compactAvatar = helper.getView(R.id.compactAvatarView);
-        compactAvatar.setSize(36);
+        compactAvatar.setSize(52);
         if (item.getWkChannel() != null) {
             compactAvatar.showAvatar(item.getWkChannel());
         } else {
@@ -239,11 +239,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (hasThreads) {
             threadToggleIv.setVisibility(View.VISIBLE);
             threadToggleIv.setColorFilter(new PorterDuffColorFilter(
-                    com.chat.base.ui.Theme.colorAccount, PorterDuff.Mode.SRC_IN));
+                    getThreadToggleColor(item), PorterDuff.Mode.SRC_IN));
             threadToggleIv.setOnClickListener(v -> {
+                boolean wasExpanded = isThreadExpanded(item.channelID);
                 toggleThreadExpanded(item.channelID);
                 int pos = helper.getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos);
+                if (pos != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(pos);
+                }
             });
             if (isThreadExpanded(item.channelID)) {
                 showThreadPreviews(helper, item);
@@ -807,7 +810,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setGone(R.id.groupIV, item.channelType != WKChannelType.GROUP);
         boolean isTop;
         AvatarView avatarView = helper.getView(R.id.avatarView);
-        avatarView.setSize(50);
+        avatarView.setSize(52);
         if (item.getWkChannel() != null) {
             if (item.channelType == WKChannelType.COMMUNITY) {
                 EndpointManager.getInstance().invoke("show_community_avatar", new ShowCommunityAvatarMenu(getContext(), avatarView, item.getWkChannel()));
@@ -944,7 +947,23 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         });
 
         container.setVisibility(View.VISIBLE);
-        int showCount = Math.min(activeList.size(), 2);
+        // 3天内活跃的子区全部展示，其余折叠（对齐 iOS: conv.lastMsgTimestamp）
+        long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
+        List<ThreadEntity> recentList = new ArrayList<>();
+        List<ThreadEntity> inactiveList = new ArrayList<>();
+        for (ThreadEntity te : activeList) {
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            long lastTs = conv != null ? conv.lastMsgTimestamp : 0;
+            if (lastTs > threeDaysAgoSec) {
+                recentList.add(te);
+            } else {
+                inactiveList.add(te);
+            }
+        }
+        int showCount = recentList.size();
+        if (showCount == 0) showCount = Math.min(activeList.size(), 2);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
         // 内容包装层（卡片 + "+N"），放在 FrameLayout 中和分支线分层
@@ -1036,13 +1055,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         contentWrapper.addView(cardContainer, cardLp);
 
         // "+N 个子区" 放在卡片外部
-        if (activeList.size() > 2) {
-            int moreCount = activeList.size() - 2;
+        if (!inactiveList.isEmpty()) {
+            int moreCount = inactiveList.size();
             // 检查未展示子区是否有 @mention，并汇总未读数
             boolean moreMention = false;
             int moreUnread = 0;
-            for (int i = 2; i < activeList.size(); i++) {
-                ThreadEntity te = activeList.get(i);
+            for (int i = 0; i < inactiveList.size(); i++) {
+                ThreadEntity te = inactiveList.get(i);
                 String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
                 if (hasThreadMentionForChannel(tcId)) {
                     moreMention = true;
@@ -1289,6 +1308,34 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 检查指定群组的子区是否有未处理的 @mention 提醒
      */
+    private int getThreadToggleColor(WKUIConversationMsg item) {
+        if (hasThreadMention(item.channelID)) {
+            return 0xFFFF9500; // 橙色 — 有@mention
+        }
+        int unread = getThreadUnreadCount(item.channelID);
+        if (unread > 0) {
+            boolean muted = item.getWkChannel() != null && item.getWkChannel().mute == 1;
+            return muted ? 0xFFA3D6ED : 0xFFFF0000; // 静音浅蓝 / 未静音红色
+        }
+        return com.chat.base.ui.Theme.colorAccount; // 默认主题色
+    }
+
+    private int getThreadUnreadCount(String groupNo) {
+        List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
+        if (cachedList == null || cachedList.isEmpty()) return 0;
+        int total = 0;
+        for (ThreadEntity entity : cachedList) {
+            if (entity.status != 1) continue;
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            if (threadConv != null) {
+                total += threadConv.unreadCount;
+            }
+        }
+        return total;
+    }
+
     public boolean hasThreadMention(String groupNo) {
         List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
         if (cachedList == null || cachedList.isEmpty()) return false;

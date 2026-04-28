@@ -431,7 +431,7 @@ public class WKUIChatMsgItemEntity {
      */
     private void detectAndApplyMentions(IConversationContext conversationContext, WKMsg wkMsg, int mentionColor) {
         String text = displaySpans.toString();
-        Pattern pattern = Pattern.compile("@(\\S+)");
+        Pattern pattern = Pattern.compile("@([^@\\s]+)");
         Matcher m = pattern.matcher(text);
         List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
                 .getMembers(getMemberLookupChannelID(wkMsg), getMemberLookupChannelType(wkMsg));

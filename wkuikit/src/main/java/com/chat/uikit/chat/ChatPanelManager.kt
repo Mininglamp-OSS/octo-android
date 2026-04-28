@@ -54,6 +54,7 @@ import com.chat.base.entity.BottomSheetItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.IConversationContext
 import com.chat.base.msg.model.WKGifContent
+import com.chat.base.msg.ChatContentSpanType
 import com.chat.base.msgitem.WKChannelMemberRole
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.net.HttpResponseCode
@@ -76,6 +77,7 @@ import com.chat.base.views.FullyGridLayoutManager
 import com.chat.base.views.NoEventRecycleView
 import com.chat.uikit.R
 import com.chat.uikit.chat.adapter.WKChatToolBarAdapter
+import com.chat.uikit.view.voice.HoldToTalkManager
 import com.chat.uikit.chat.manager.SendMsgEntity
 import com.chat.uikit.chat.manager.WKSendMsgUtils
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent
@@ -150,6 +152,23 @@ class ChatPanelManager(
     private val panelView: FrameLayout = parentView.findViewById(R.id.panelView)
     private val chatView: LinearLayout = parentView.findViewById(R.id.chatView)
     private val chatTopLayout: FrameLayout = parentView.findViewById(R.id.chatTopLayout)
+    private val voiceToggleBtn: AppCompatImageView = parentView.findViewById(R.id.voiceToggleBtn)
+    private val holdToTalkBtn: View = parentView.findViewById(R.id.holdToTalkBtn)
+    private val editTextContainer: RelativeLayout = parentView.findViewById(R.id.editTextContainer)
+    private var isVoiceMode = false
+    private var holdToTalkManager: HoldToTalkManager? = null
+    private var isResultMode = false
+    private var resultBubbleEditText: android.widget.EditText? = null
+    private var appendOverlay: View? = null
+    private var appendWaveBars: List<View>? = null
+    private var appendHintLabel: AppCompatTextView? = null
+    private var appendWaveTimer: Timer? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var thinkingOverlayView: View? = null
+    private var thinkingDots: List<View>? = null
+    private var thinkingAnimator: ValueAnimator? = null
+    private var resultBottomViews: List<View>? = null
+    private var resultBubbleContainer: FrameLayout? = null
     private var flameLayout: LinearLayout? = null
 
     // 相册有新图
@@ -211,6 +230,7 @@ class ChatPanelManager(
         initChatTopView()
         initFlame()
         initNewImageView()
+        initHoldToTalk()
         EndpointManager.getInstance().invoke(
             "initInputPanel",
             InitInputPanelMenu(
@@ -279,6 +299,10 @@ class ChatPanelManager(
     }
 
     fun isCanBack(): Boolean {
+        if (isResultMode) {
+            holdToTalkManager?.cancelResult()
+            return false
+        }
         if (newImageLayout?.visibility == View.VISIBLE) {
             newImageLayout?.visibility = View.GONE
             return false
@@ -490,7 +514,7 @@ class ChatPanelManager(
                 }
                 flame = mChannel.flame
                 CommonAnim.getInstance().showOrHide(flameIV, flame == 1, true)
-                markdownIv.visibility = if (flame == 1) View.GONE else View.VISIBLE
+                markdownIv.visibility = View.GONE
                 showFlame(mChannel.flameSecond)
             }
         }
@@ -783,6 +807,7 @@ class ChatPanelManager(
             timer!!.cancel()
             timer = null
         }
+        releaseHoldToTalk()
         EndpointManager.getInstance().remove("emoji_click")
         WKIM.getInstance().robotManager.removeRefreshRobotMenu(iConversationContext.chatChannelInfo.channelID)
         WKIM.getInstance().channelManager.removeRefreshChannelInfo(this.eventKey)
@@ -798,9 +823,7 @@ class ChatPanelManager(
         if (flame == 1) {
             flameIV.visibility = View.VISIBLE
             CommonAnim.getInstance().showOrHide(flameIV, true, true)
-            markdownIv.visibility = View.GONE
-        } else
-            markdownIv.visibility = View.VISIBLE
+        }
         seekBarView?.setDelegate(object : SeekBarView.SeekBarViewDelegate {
             override fun onSeekBarDrag(stop: Boolean, progress: Float) {
                 if (stop)
@@ -1411,11 +1434,6 @@ class ChatPanelManager(
                     return@setOnClickListener
                 }
 
-                sendIV.colorFilter = PorterDuffColorFilter(
-                    ContextCompat.getColor(
-                        iConversationContext.chatActivity, R.color.popupTextColor
-                    ), PorterDuff.Mode.MULTIPLY
-                )
                 val drawable = EmojiManager.getInstance()
                     .getDrawable(iConversationContext.chatActivity, content)
                 if (drawable != null && iConversationContext.replyMsg == null) {
@@ -1437,26 +1455,29 @@ class ChatPanelManager(
                         }
                     }
                 }
-                val allEntities = editText.allEntity
-                val list = editText.allUIDs
-                val hasMentions = list != null && list.isNotEmpty()
+                val allEntities = editText.allEntity.toMutableList()
+                val list = editText.allUIDs.toMutableList()
 
-                // 有 mention 时使用 WKMentionTextContent，将 entities 写入 mention 对象
+                // 扫描纯文本中的 @mention，匹配群成员后自动补上 entity
+                if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+                    iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                    scanPlainTextMentions(content, allEntities, list)
+                }
+
+                val hasMentions = list.isNotEmpty()
+
                 val textMsgModel = if (hasMentions)
                     WKMentionTextContent(content) else WKTextContent(content)
 
                 if (hasMentions) {
                     val mMentionInfo = WKMentionInfo()
                     val uidList: MutableList<String> = ArrayList()
-                    var i = 0
-                    val size = list!!.size
-                    while (i < size) {
-                        if (list[i].equals("-1", ignoreCase = true)) {
-                            textMsgModel.mentionAll = 1 //remind all
+                    for (uid in list) {
+                        if (uid.equals("-1", ignoreCase = true)) {
+                            textMsgModel.mentionAll = 1
                         } else {
-                            uidList.add(list[i])
+                            uidList.add(uid)
                         }
-                        i++
                     }
                     mMentionInfo.uids = uidList
                     textMsgModel.mentionInfo = mMentionInfo
@@ -1482,37 +1503,26 @@ class ChatPanelManager(
                 this.count = count
                 if (!TextUtils.isEmpty(s.toString())) {
                     val content = StringUtils.replaceBlank(s.toString())
-//                    val content = s.toString().replace("\\s*|\r|\n|\t", "")
-                    if (!isShowSendBtn && !TextUtils.isEmpty(content)) {
-                        CommonAnim.getInstance().animImageView(sendIV)
-                    }
-                    isShowSendBtn = true
-                    if (TextUtils.isEmpty(content)) {
-                        sendIV.colorFilter = PorterDuffColorFilter(
-                            ContextCompat.getColor(
-                                iConversationContext.chatActivity, R.color.popupTextColor
-                            ), PorterDuff.Mode.MULTIPLY
-                        )
+                    if (!TextUtils.isEmpty(content)) {
+                        if (!isShowSendBtn) {
+                            sendIV.clearColorFilter()
+                            sendIV.visibility = View.VISIBLE
+                            CommonAnim.getInstance().animImageView(sendIV)
+                        }
+                        isShowSendBtn = true
                     } else {
-                        sendIV.colorFilter = PorterDuffColorFilter(
-                            Theme.colorAccount, PorterDuff.Mode.MULTIPLY
-                        )
+                        isShowSendBtn = false
+                        sendIV.visibility = View.GONE
                     }
-                    CommonAnim.getInstance().showOrHide(markdownIv, false, true)
                     if (flame == 1) {
                         CommonAnim.getInstance().showOrHide(flameIV, false, true)
                     }
                 } else {
-                    CommonAnim.getInstance().showOrHide(markdownIv, true, true)
                     if (flame == 1) {
                         CommonAnim.getInstance().showOrHide(flameIV, true, true)
                     }
                     isShowSendBtn = false
-                    sendIV.colorFilter = PorterDuffColorFilter(
-                        ContextCompat.getColor(
-                            iConversationContext.chatActivity, R.color.popupTextColor
-                        ), PorterDuff.Mode.MULTIPLY
-                    )
+                    sendIV.visibility = View.GONE
                 }
                 // slash command detection for bot chats
                 val fullText = s.toString()
@@ -1530,55 +1540,57 @@ class ChatPanelManager(
                     return
                 }
 
-                var text = s.toString().substring(start, start + count)
-                if (start + count == s.toString().length) {
-                    if (count == 0 || TextUtils.isEmpty(text)) {
-                        // 删除了字符串
-//                        text = s.toString().substring(0, selectionStart)
-                        if (s.toString().lastIndexOf("@") >= 0) {
-                            val index = s.toString().lastIndexOf("@")
-                            val remindText = s.toString().substring(index, s.toString().length)
-                            if (!TextUtils.isEmpty(remindText)) text = remindText
-                        }
-                    } else {
-                        if (s.toString().startsWith("@") && s.toString().contains(" ")) {
-                            text = s.toString()
-                        } else {
-                            if (s.toString().lastIndexOf("@") >= 0) {
-                                val index = s.toString().lastIndexOf("@")
-                                val remindText = s.toString().substring(index, s.toString().length)
+                try {
+                    val fullStr = s.toString()
+                    var text = fullStr.substring(start, start + count)
+                    if (start + count == fullStr.length) {
+                        if (count == 0 || TextUtils.isEmpty(text)) {
+                            if (fullStr.lastIndexOf("@") >= 0) {
+                                val index = fullStr.lastIndexOf("@")
+                                val remindText = fullStr.substring(index, fullStr.length)
                                 if (!TextUtils.isEmpty(remindText)) text = remindText
                             }
-                        }
-                    }
-                } else {
-                    val temp = s.toString().substring(0, start)
-                    if (!TextUtils.isEmpty(temp) && temp.contains("@")) {
-                        val index = temp.lastIndexOf("@")
-
-                        if (count == 0) {
-                            // 点击删除
-                            val endIndex = editText.selectionEnd
-                            val str = s.toString().substring(index, endIndex) + text
-                            if (!TextUtils.isEmpty(str)) {
-                                text = str
-                            }
                         } else {
-                            text = s.toString().substring(index, index + count) + text
+                            if (fullStr.startsWith("@") && fullStr.contains(" ")) {
+                                text = fullStr
+                            } else {
+                                if (fullStr.lastIndexOf("@") >= 0) {
+                                    val index = fullStr.lastIndexOf("@")
+                                    val remindText = fullStr.substring(index, fullStr.length)
+                                    if (!TextUtils.isEmpty(remindText)) text = remindText
+                                }
+                            }
+                        }
+                    } else {
+                        val temp = fullStr.substring(0, start)
+                        if (!TextUtils.isEmpty(temp) && temp.contains("@")) {
+                            val index = temp.lastIndexOf("@")
+
+                            if (count == 0) {
+                                val endIndex = editText.selectionEnd
+                                if (endIndex <= fullStr.length) {
+                                    val str = fullStr.substring(index, endIndex) + text
+                                    if (!TextUtils.isEmpty(str)) {
+                                        text = str
+                                    }
+                                }
+                            } else {
+                                val end = (index + count).coerceAtMost(fullStr.length)
+                                text = fullStr.substring(index, end) + text
+                            }
                         }
                     }
-                }
-                //  text = s.toString().substring(0, selectionStart)
-                if (!TextUtils.isEmpty(text) && (mentionDisplay(text) || text.startsWith("@"))) {
-                    // 搜索成员
-                    searchInputText(text)
-                } else {
+                    if (!TextUtils.isEmpty(text) && (mentionDisplay(text) || text.startsWith("@"))) {
+                        searchInputText(text)
+                    } else {
+                        hideRemindView()
+                        hideRobotView()
+                        CommonAnim.getInstance().showOrHide(hitTv, false, true)
+                        CommonAnim.getInstance().showOrHide(sendIV, true, true)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatPanelMention", "onTextChanged error: s='$s' start=$start count=$count selStart=$selectionStart", e)
                     hideRemindView()
-                    hideRobotView()
-                    CommonAnim.getInstance().showOrHide(hitTv, false, true)
-//                    CommonAnim.getInstance()
-//                        .showOrHide(closeSearchLottieIV, false, true)
-                    CommonAnim.getInstance().showOrHide(sendIV, true, true)
                 }
             }
 
@@ -1649,7 +1661,69 @@ class ChatPanelManager(
         })
     }
 
-    private
+    private fun scanPlainTextMentions(
+        content: String,
+        entities: MutableList<WKMsgEntity>,
+        uidList: MutableList<String>
+    ) {
+        val pattern = java.util.regex.Pattern.compile("@([^@\\s]+)")
+        val matcher = pattern.matcher(content)
+        var channelId = iConversationContext.chatChannelInfo.channelID
+        var channelType = iConversationContext.chatChannelInfo.channelType
+
+        // 子区成员在父群上，需要用父群的channelID查成员
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            val channel = iConversationContext.chatChannelInfo
+            val parentGroupNo = channel.remoteExtraMap?.get("parentGroupNo") as? String
+            if (!parentGroupNo.isNullOrEmpty()) {
+                channelId = parentGroupNo
+                channelType = WKChannelType.GROUP
+            }
+        }
+
+        val members = WKIM.getInstance().channelMembersManager
+            .getMembers(channelId, channelType)
+        if (members == null || members.isEmpty()) return
+
+        while (matcher.find()) {
+            val offset = matcher.start()
+            val fullMatch = matcher.group()
+            val alreadyCovered = entities.any { e ->
+                e.type == ChatContentSpanType.mention && e.offset == offset
+            }
+            if (alreadyCovered) continue
+
+            val candidateName = matcher.group(1) ?: continue
+
+            var matchedMember: WKChannelMember? = null
+            for (m in members) {
+                val memberName = m.memberName ?: ""
+                val memberRemark = m.memberRemark ?: ""
+                val channel = WKIM.getInstance().channelManager
+                    .getChannel(m.memberUID, WKChannelType.PERSONAL)
+                val channelName = channel?.channelName ?: ""
+                val channelRemark = channel?.channelRemark ?: ""
+
+                if (candidateName == memberName || candidateName == memberRemark
+                    || candidateName == channelName || candidateName == channelRemark) {
+                    matchedMember = m
+                    break
+                }
+            }
+            if (matchedMember != null) {
+                val entity = WKMsgEntity()
+                entity.type = ChatContentSpanType.mention
+                entity.offset = offset
+                entity.length = fullMatch.length
+                entity.value = matchedMember.memberUID
+                entities.add(entity)
+                if (!uidList.contains(matchedMember.memberUID)) {
+                    uidList.add(matchedMember.memberUID)
+                }
+            }
+        }
+    }
+
     fun searchInputText(content: String) {
         var isSearchGroupMembers = true
         if (content.startsWith("@")) {
@@ -1670,7 +1744,7 @@ class ChatPanelManager(
             }
 
             // 搜索机器人
-            username = username.replace("@".toRegex(), "").replace(" ".toRegex(), "")
+            username = username.replace("@", "").replace(" ", "")
             if (!TextUtils.isEmpty(username)) {
 //                if (!content.endsWith("@")) {
 //                    isSearchGroupMembers = false
@@ -1685,7 +1759,7 @@ class ChatPanelManager(
                     hideRemindView()
                     inlineQueryOffset = ""
                     val searchKey: String =
-                        content.substring(index, content.length).replace(" ".toRegex(), "")
+                        content.substring(index, content.length).replace(" ", "")
                     if (!TextUtils.isEmpty(searchKey) && mRobot.username.lowercase(Locale.getDefault())
                             .equals(
                                 "gif",
@@ -1759,7 +1833,7 @@ class ChatPanelManager(
         if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && isSearchGroupMembers) {
             var remindSearchKey: String = content
 
-            remindSearchKey = remindSearchKey.replace("@".toRegex(), "")
+            remindSearchKey = remindSearchKey.replace("@", "")
 //            val keyword = mentionEnd(content)
             if (!TextUtils.isEmpty(remindSearchKey) && (content == "@" || content.endsWith("@"))) remindMemberAdapter!!.onNormal() else remindMemberAdapter!!.onSearch(
                 remindSearchKey
@@ -1962,6 +2036,541 @@ class ChatPanelManager(
         return emojiLayout
     }
 
+
+    private fun initHoldToTalk() {
+        // Voice toggle button click
+        voiceToggleBtn.setOnClickListener {
+            val desc = String.format(
+                iConversationContext.chatActivity.getString(R.string.microphone_permissions_des),
+                iConversationContext.chatActivity.getString(R.string.app_name)
+            )
+            WKPermissions.getInstance().checkPermissions(object : WKPermissions.IPermissionResult {
+                override fun onResult(result: Boolean) {
+                    if (result) toggleVoiceMode()
+                }
+                override fun clickResult(isCancel: Boolean) {}
+            }, iConversationContext.chatActivity, desc, Manifest.permission.RECORD_AUDIO)
+        }
+
+        // Hold to talk touch listener
+        holdToTalkBtn.setOnTouchListener { _, event ->
+            holdToTalkManager?.handleTouch(event) ?: false
+        }
+    }
+
+    private fun toggleVoiceMode() {
+        isVoiceMode = !isVoiceMode
+        if (isVoiceMode) {
+            voiceToggleBtn.setImageResource(R.mipmap.ic_keyboard_toggle)
+            editTextContainer.visibility = View.GONE
+            holdToTalkBtn.visibility = View.VISIBLE
+            sendIV.visibility = View.GONE
+            markdownIv.visibility = View.GONE
+            SoftKeyboardUtils.getInstance().loseFocus(editText)
+            SoftKeyboardUtils.getInstance().hideInput(iConversationContext.chatActivity, editText)
+
+            if (holdToTalkManager == null) {
+                holdToTalkManager = HoldToTalkManager(iConversationContext.chatActivity).apply {
+                    listener = object : HoldToTalkManager.Listener {
+                        override fun onSendText(text: String) {
+                            val allEntities = mutableListOf<WKMsgEntity>()
+                            val list = mutableListOf<String>()
+
+                            if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+                                iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                                scanPlainTextMentions(text, allEntities, list)
+                            }
+
+                            val hasMentions = list.isNotEmpty()
+                            val textMsgModel = if (hasMentions)
+                                WKMentionTextContent(text) else WKTextContent(text)
+                            if (hasMentions) {
+                                val mMentionInfo = WKMentionInfo()
+                                val uidList: MutableList<String> = ArrayList()
+                                for (uid in list) {
+                                    if (uid.equals("-1", ignoreCase = true)) {
+                                        textMsgModel.mentionAll = 1
+                                    } else {
+                                        uidList.add(uid)
+                                    }
+                                }
+                                mMentionInfo.uids = uidList
+                                textMsgModel.mentionInfo = mMentionInfo
+                            }
+                            textMsgModel.entities = allEntities
+                            iConversationContext.sendMessage(textMsgModel)
+                        }
+
+                        override fun onSendVoice(audioPath: String, seconds: Int, waveform: String) {
+                            val voiceContent = com.xinbida.wukongim.msgmodel.WKVoiceContent(audioPath, seconds)
+                            voiceContent.waveform = waveform
+                            iConversationContext.sendMessage(voiceContent)
+                        }
+
+                        override fun onRecordingStarted() {}
+                        override fun onRecordingStopped() {}
+
+                        override fun getCurrentInputText(): String? {
+                            return editText.text?.toString()
+                        }
+
+                        override fun getChatContext(): String? {
+                            return com.chat.uikit.chat.face.WKVoiceViewManager.getInstance()
+                                .buildChatContext(iConversationContext)
+                        }
+
+                        override fun onShowResultUI(text: String) {
+                            showResultMode(text)
+                        }
+
+                        override fun onDismissResultUI() {
+                            dismissResultMode()
+                        }
+
+                        override fun onAppendText(text: String) {
+                            resultBubbleEditText?.let { et ->
+                                val current = et.text?.toString() ?: ""
+                                val newText = if (current.isEmpty()) text else "$current$text"
+                                et.setText(newText)
+                                et.setSelection(newText.length)
+                            }
+                        }
+
+                        override fun onAppendThinkingStart() {
+                            showBubbleThinking()
+                        }
+
+                        override fun onAppendThinkingEnd() {
+                            hideBubbleThinking()
+                        }
+                    }
+                }
+            }
+        } else {
+            voiceToggleBtn.setImageResource(R.mipmap.ic_voice_toggle)
+            editTextContainer.visibility = View.VISIBLE
+            holdToTalkBtn.visibility = View.GONE
+            val hasText = !editText.text.isNullOrBlank()
+            sendIV.visibility = if (hasText) View.VISIBLE else View.GONE
+            holdToTalkManager?.cancelRecording()
+        }
+    }
+
+    private var resultOverlay: FrameLayout? = null
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun showResultMode(text: String) {
+        isResultMode = true
+        val ctx = iConversationContext.chatActivity
+        val sw = ctx.resources.displayMetrics.widthPixels
+        val sh = ctx.resources.displayMetrics.heightPixels
+
+        // Full-screen overlay (iOS: 65% black)
+        val overlay = FrameLayout(ctx).apply {
+            setBackgroundColor(android.graphics.Color.argb(166, 0, 0, 0))
+            isClickable = true
+        }
+
+        // "自研引擎 ▾" label (iOS: centered, 40pt above bubble)
+        val engineLabel = AppCompatTextView(ctx).apply {
+            this.text = "自研引擎 ▾"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+            setPadding(AndroidUtilities.dp(14f), AndroidUtilities.dp(5f), AndroidUtilities.dp(14f), AndroidUtilities.dp(5f))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = AndroidUtilities.dp(14f).toFloat()
+                setColor(Theme.colorAccount)
+            }
+            isClickable = true
+            setOnClickListener { /* consume */ }
+        }
+        val bubbleY = (sh * 0.15f).toInt()
+        val engineLp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, AndroidUtilities.dp(28f)
+        ).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            topMargin = bubbleY - AndroidUtilities.dp(36f)
+        }
+        overlay.addView(engineLabel, engineLp)
+
+        // Bubble (iOS: light blue RGB(224,240,255), 16pt radius, sw-40 width)
+        val bubble = FrameLayout(ctx).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = AndroidUtilities.dp(16f).toFloat()
+                setColor(android.graphics.Color.argb(255, 224, 240, 255))
+            }
+        }
+        val bubbleEt = android.widget.EditText(ctx).apply {
+            setText(text)
+            setSelection(text.length)
+            setTextColor(android.graphics.Color.BLACK)
+            textSize = 17f
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            setPadding(AndroidUtilities.dp(12f), AndroidUtilities.dp(10f), AndroidUtilities.dp(12f), AndroidUtilities.dp(10f))
+            minHeight = AndroidUtilities.dp(80f)
+            maxHeight = AndroidUtilities.dp(300f)
+            gravity = android.view.Gravity.START or android.view.Gravity.TOP
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        bubble.addView(bubbleEt, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ))
+        val bubbleLp = FrameLayout.LayoutParams(sw - AndroidUtilities.dp(40f), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            topMargin = bubbleY
+        }
+        overlay.addView(bubble, bubbleLp)
+        resultBubbleEditText = bubbleEt
+
+        // Bottom button bar (iOS: 80pt tall, 40pt from bottom)
+        val spacing = sw / 4
+        val btnSize = AndroidUtilities.dp(52f)
+        val barH = AndroidUtilities.dp(80f)
+        val barY = sh - barH - AndroidUtilities.dp(40f)
+
+        // Cancel button (iOS: 52pt circle, gray 0.3)
+        val cancelContainer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setOnClickListener { holdToTalkManager?.cancelResult() }
+        }
+        val cancelIcon = AppCompatImageView(ctx).apply {
+            setImageResource(R.mipmap.ic_htt_cancel)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.argb(255, 77, 77, 77))
+            }
+            setPadding(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), AndroidUtilities.dp(12f))
+        }
+        cancelContainer.addView(cancelIcon, LinearLayout.LayoutParams(btnSize, btnSize).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        })
+        val cancelLabel = AppCompatTextView(ctx).apply {
+            this.text = "取消"
+            setTextColor(android.graphics.Color.argb(255, 204, 204, 204))
+            textSize = 11f
+            gravity = android.view.Gravity.CENTER
+        }
+        cancelContainer.addView(cancelLabel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = AndroidUtilities.dp(6f) })
+        val cancelLp = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            leftMargin = spacing - btnSize / 2
+            topMargin = barY
+        }
+        overlay.addView(cancelContainer, cancelLp)
+
+        // Mic/continue button (iOS: 52pt circle, gray 0.3)
+        val micContainer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        }
+        val micIcon = AppCompatImageView(ctx).apply {
+            setImageResource(R.mipmap.ic_htt_mic)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.argb(255, 77, 77, 77))
+            }
+            setPadding(AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), AndroidUtilities.dp(12f), AndroidUtilities.dp(12f))
+        }
+        micContainer.addView(micIcon, LinearLayout.LayoutParams(btnSize, btnSize).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        })
+        val micLabel = AppCompatTextView(ctx).apply {
+            this.text = "按住继续"
+            setTextColor(android.graphics.Color.argb(255, 204, 204, 204))
+            textSize = 11f
+            gravity = android.view.Gravity.CENTER
+        }
+        micContainer.addView(micLabel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = AndroidUtilities.dp(6f) })
+        micContainer.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    showAppendRecordingUI()
+                    holdToTalkManager?.startAppendRecording()
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    hideAppendRecordingUI()
+                    holdToTalkManager?.stopAppendRecording()
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    hideAppendRecordingUI()
+                    holdToTalkManager?.cancelAppendRecording()
+                    true
+                }
+                else -> true
+            }
+        }
+        val micLp = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+            leftMargin = spacing * 2 - btnSize / 2
+            topMargin = barY
+        }
+        overlay.addView(micContainer, micLp)
+
+        // Send button (iOS: 72x52pt pill, gray 0.92 bg, 16pt semibold)
+        val sendBtn = AppCompatTextView(ctx).apply {
+            this.text = "发送"
+            setTextColor(android.graphics.Color.argb(255, 38, 38, 51))
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = AndroidUtilities.dp(26f).toFloat()
+                setColor(android.graphics.Color.argb(255, 234, 234, 234))
+            }
+            setOnClickListener {
+                val resultText = resultBubbleEditText?.text?.toString()?.trim() ?: ""
+                if (resultText.isNotEmpty()) {
+                    holdToTalkManager?.sendResultText(resultText)
+                }
+            }
+        }
+        val sendW = AndroidUtilities.dp(72f)
+        val sendH = AndroidUtilities.dp(52f)
+        val sendLp = FrameLayout.LayoutParams(sendW, sendH).apply {
+            leftMargin = spacing * 3 - sendW / 2
+            topMargin = barY + (btnSize - sendH) / 2
+        }
+        overlay.addView(sendBtn, sendLp)
+
+        resultBottomViews = listOf(cancelContainer, micContainer, sendBtn)
+        resultBubbleContainer = bubble
+        resultOverlay = overlay
+        val contentView = ctx.findViewById<FrameLayout>(android.R.id.content)
+        contentView.addView(overlay, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+    }
+
+    private fun showAppendRecordingUI() {
+        val overlay = resultOverlay ?: return
+        val ctx = iConversationContext.chatActivity
+        val sw = ctx.resources.displayMetrics.widthPixels
+        val sh = ctx.resources.displayMetrics.heightPixels
+
+        // Semi-transparent overlay (iOS: 45% black)
+        val appendBg = FrameLayout(ctx).apply {
+            setBackgroundColor(android.graphics.Color.argb(115, 0, 0, 0))
+            isClickable = true
+        }
+
+        // Bubble (iOS: 55% width, 70pt height, at 35% from top)
+        val abW = (sw * 0.55f).toInt()
+        val abH = AndroidUtilities.dp(70f)
+        val abY = (sh * 0.35f).toInt()
+        val bubble = FrameLayout(ctx).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = AndroidUtilities.dp(14f).toFloat()
+                setColor(android.graphics.Color.argb(255, 225, 240, 255))
+            }
+        }
+
+        // 24 waveform bars
+        val barCount = 24
+        val barW = AndroidUtilities.dp(3f)
+        val barGap = AndroidUtilities.dp(2.5f)
+        val totalBarsW = barCount * barW + (barCount - 1) * barGap
+        val barsStartX = (abW - totalBarsW) / 2
+        val barBaseH = AndroidUtilities.dp(6f)
+        val barsY = (abH - AndroidUtilities.dp(40f)) / 2
+        val bars = mutableListOf<View>()
+
+        for (i in 0 until barCount) {
+            val bar = View(ctx).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = AndroidUtilities.dp(1.5f).toFloat()
+                    setColor(android.graphics.Color.argb(179, 89, 141, 217))
+                }
+            }
+            val barLp = FrameLayout.LayoutParams(barW, barBaseH).apply {
+                leftMargin = barsStartX + i * (barW + barGap)
+                topMargin = barsY + (AndroidUtilities.dp(40f) - barBaseH) / 2
+            }
+            bubble.addView(bar, barLp)
+            bars.add(bar)
+        }
+
+        val bubbleLp = FrameLayout.LayoutParams(abW, abH).apply {
+            leftMargin = (sw - abW) / 2
+            topMargin = abY
+        }
+        appendBg.addView(bubble, bubbleLp)
+
+        // Hint label (iOS: "松手 转文字，上滑取消", white, 14sp medium)
+        val hint = AppCompatTextView(ctx).apply {
+            this.text = "松手 转文字"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+        }
+        val hintLp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = abY + abH + AndroidUtilities.dp(16f)
+        }
+        appendBg.addView(hint, hintLp)
+
+        overlay.addView(appendBg, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        appendOverlay = appendBg
+        appendWaveBars = bars
+        appendHintLabel = hint
+
+        // Start waveform animation timer
+        appendWaveTimer = Timer().apply {
+            scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    mainHandler.post { updateAppendWaveform() }
+                }
+            }, 100, 100)
+        }
+    }
+
+    private fun updateAppendWaveform() {
+        val bars = appendWaveBars ?: return
+        val amplitude = holdToTalkManager?.smoothedPower ?: 0f
+
+        val barCount = bars.size
+        val center = barCount / 2f
+        val maxBarH = AndroidUtilities.dp(28f)
+        val baseH = AndroidUtilities.dp(6f)
+        val containerH = AndroidUtilities.dp(40f)
+
+        for (i in bars.indices) {
+            val dist = kotlin.math.abs(i - center) / center
+            val attenuation = 1f - dist * 0.6f
+            val noise = 0.3f + (Math.random().toFloat() * 0.7f)
+            val h = (baseH + amplitude * maxBarH * attenuation * noise).toInt()
+                .coerceIn(baseH, containerH - AndroidUtilities.dp(4f))
+            val lp = bars[i].layoutParams as FrameLayout.LayoutParams
+            lp.height = h
+            lp.topMargin = (AndroidUtilities.dp(70f) - AndroidUtilities.dp(40f)) / 2 + (containerH - h) / 2
+            bars[i].layoutParams = lp
+        }
+    }
+
+    private fun showBubbleThinking() {
+        val bubbleContainer = resultBubbleContainer ?: return
+
+        // Hide bottom buttons
+        resultBottomViews?.forEach { it.visibility = View.INVISIBLE }
+
+        // Make text non-editable
+        resultBubbleEditText?.isFocusable = false
+        resultBubbleEditText?.isFocusableInTouchMode = false
+
+        // Semi-transparent overlay on bubble (iOS: light blue 0.75 alpha)
+        val thinkingBg = FrameLayout(iConversationContext.chatActivity).apply {
+            setBackgroundColor(android.graphics.Color.argb(191, 224, 240, 255))
+        }
+        bubbleContainer.addView(thinkingBg, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        thinkingOverlayView = thinkingBg
+
+        // 3 animated dots (iOS: 10pt, blue, cycling at 0.35s)
+        val dotSize = AndroidUtilities.dp(10f)
+        val dotGap = AndroidUtilities.dp(12f)
+        val totalW = dotSize * 3 + dotGap * 2
+        val dots = mutableListOf<View>()
+        for (i in 0..2) {
+            val dot = View(iConversationContext.chatActivity).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(android.graphics.Color.argb(200, 89, 140, 217))
+                }
+                alpha = 0.8f
+            }
+            val lp = FrameLayout.LayoutParams(dotSize, dotSize).apply {
+                gravity = android.view.Gravity.CENTER
+                leftMargin = (i - 1) * (dotSize + dotGap)
+            }
+            thinkingBg.addView(dot, lp)
+            dots.add(dot)
+        }
+        thinkingDots = dots
+
+        // Animate dots (scale 1.0 → 1.4 → 1.0, cycling)
+        thinkingAnimator = ValueAnimator.ofFloat(0f, 3f).apply {
+            duration = 1050
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { anim ->
+                val v = anim.animatedValue as Float
+                for (i in dots.indices) {
+                    val phase = ((v - i + 3) % 3)
+                    val scale = if (phase < 0.5f) 1f + 0.4f * (phase / 0.5f)
+                    else if (phase < 1f) 1.4f - 0.4f * ((phase - 0.5f) / 0.5f)
+                    else 1f
+                    dots[i].scaleX = scale
+                    dots[i].scaleY = scale
+                    dots[i].alpha = if (phase < 1f) 1f else 0.8f
+                }
+            }
+            start()
+        }
+    }
+
+    private fun hideBubbleThinking() {
+        thinkingAnimator?.cancel()
+        thinkingAnimator = null
+
+        thinkingOverlayView?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
+        thinkingOverlayView = null
+        thinkingDots = null
+
+        // Restore bottom buttons
+        resultBottomViews?.forEach { it.visibility = View.VISIBLE }
+
+        // Restore text editable
+        resultBubbleEditText?.isFocusable = true
+        resultBubbleEditText?.isFocusableInTouchMode = true
+    }
+
+    private fun hideAppendRecordingUI() {
+        appendWaveTimer?.cancel()
+        appendWaveTimer = null
+        appendOverlay?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
+        appendOverlay = null
+        appendWaveBars = null
+        appendHintLabel = null
+    }
+
+    private fun dismissResultMode() {
+        isResultMode = false
+        hideBubbleThinking()
+        hideAppendRecordingUI()
+        resultOverlay?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
+        resultOverlay = null
+        resultBubbleEditText = null
+        resultBubbleContainer = null
+        resultBottomViews = null
+    }
+
+    fun releaseHoldToTalk() {
+        holdToTalkManager?.release()
+        holdToTalkManager = null
+    }
 
     private fun checkPermission(
         activity: FragmentActivity, mChatToolBarMenu: ChatToolBarMenu,

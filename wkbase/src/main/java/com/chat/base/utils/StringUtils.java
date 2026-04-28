@@ -314,7 +314,7 @@ public class StringUtils {
      */
     public static SpannableString findSearch(int color, String text, String keyword) {
         SpannableString s = new SpannableString(text);
-        Pattern p = Pattern.compile(keyword);
+        Pattern p = Pattern.compile(Pattern.quote(keyword));
         Matcher m = p.matcher(s);
         while (m.find()) {
             int start = m.start();

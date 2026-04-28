@@ -176,7 +176,19 @@
                                 </LinearLayout>
                             </LinearLayout>
 
+                            <androidx.appcompat.widget.AppCompatImageView
+                                android:id="@+id/voiceToggleBtn"
+                                android:layout_width="36dp"
+                                android:layout_height="36dp"
+                                android:layout_gravity="bottom"
+                                android:layout_marginEnd="6dp"
+                                android:layout_marginBottom="1dp"
+                                android:padding="4dp"
+                                android:scaleType="fitCenter"
+                                android:src="@mipmap/ic_voice_toggle" />
+
                             <RelativeLayout
+                                android:id="@+id/editTextContainer"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
@@ -239,10 +251,22 @@
                                         android:layout_marginEnd="10dp"
                                         android:layout_marginBottom="3dp"
                                         android:src="@mipmap/ic_a"
-                                        android:visibility="visible" />
+                                        android:visibility="gone" />
                                 </LinearLayout>
 
                             </RelativeLayout>
+
+                            <TextView
+                                android:id="@+id/holdToTalkBtn"
+                                android:layout_width="0dp"
+                                android:layout_height="35dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/hold_to_talk_bg"
+                                android:gravity="center"
+                                android:text="按住 说话"
+                                android:textColor="#666666"
+                                android:textSize="14sp"
+                                android:visibility="gone" />
 
                             <View
                                 android:id="@+id/emotionView"
@@ -259,12 +283,10 @@
 
                                 <androidx.appcompat.widget.AppCompatImageView
                                     android:id="@+id/sendIV"
-                                    android:layout_width="35dp"
-                                    android:layout_height="35dp"
-                                    android:padding="5dp"
-                                    android:src="@mipmap/icon_chat_send"
-                                    android:tint="@color/popupTextColor"
-                                    android:visibility="visible" />
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:src="@drawable/ic_send_circle"
+                                    android:visibility="gone" />
                             </FrameLayout>
                         </LinearLayout>
                     </FrameLayout>

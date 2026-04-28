@@ -70,7 +70,8 @@
                     android:gravity="center"
                     android:text="@string/space_guide_create_team"
                     android:textColor="#374151"
-                    android:textSize="15sp" />
+                    android:textSize="15sp"
+                    android:visibility="gone" />
 
             </LinearLayout>
 

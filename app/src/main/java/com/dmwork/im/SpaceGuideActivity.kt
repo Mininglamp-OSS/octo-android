@@ -74,7 +74,7 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
         SpaceModel.getInstance().getMySpaces(object : SpaceModel.ISpaceListListener {
             override fun onResult(list: List<SpaceEntity>?) {
                 if (!list.isNullOrEmpty()) {
-                    MsgModel.getInstance().setCurrentSpaceId(list[0].space_id)
+                    MsgModel.getInstance().setCurrentSpaceId(list[0].space_id, list[0].name ?: "")
                     goToTab()
                 } else {
                     showToast("加入失败，请重试")
@@ -91,7 +91,7 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
         val dialog = SpaceCreateDialog(this)
         dialog.setOnSpaceCreatedListener { space ->
             if (space != null) {
-                MsgModel.getInstance().setCurrentSpaceId(space.space_id)
+                MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name ?: "")
             }
             goToTab()
         }

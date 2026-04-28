@@ -346,6 +346,7 @@ public class MsgModel extends WKBaseModel {
      * @param version       最大版本号
      */
     private String currentSpaceId = "";
+    private String currentSpaceName = "";
 
     public void setCurrentSpaceId(String spaceId) {
         setCurrentSpaceId(spaceId, "");
@@ -353,17 +354,24 @@ public class MsgModel extends WKBaseModel {
 
     public void setCurrentSpaceId(String spaceId, String spaceName) {
         this.currentSpaceId = spaceId != null ? spaceId : "";
+        this.currentSpaceName = spaceName != null ? spaceName : "";
         WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_id", this.currentSpaceId);
-        WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_name", spaceName != null ? spaceName : "");
+        WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_name", this.currentSpaceName);
     }
 
     public void loadCurrentSpaceId() {
         this.currentSpaceId = WKSharedPreferencesUtil.getInstance().getSPWithUID("current_space_id");
         if (this.currentSpaceId == null) this.currentSpaceId = "";
+        this.currentSpaceName = WKSharedPreferencesUtil.getInstance().getSPWithUID("current_space_name");
+        if (this.currentSpaceName == null) this.currentSpaceName = "";
     }
 
     public String getCurrentSpaceId() {
         return currentSpaceId;
+    }
+
+    public String getCurrentSpaceName() {
+        return currentSpaceName;
     }
 
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {

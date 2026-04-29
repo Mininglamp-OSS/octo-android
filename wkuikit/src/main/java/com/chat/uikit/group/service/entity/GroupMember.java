@@ -24,4 +24,12 @@ public class GroupMember {
     public int is_external;
     public String source_space_id;
     public String source_space_name;
+    // 成员 Home Space（YUJ-63 / YUJ-87，web #997 / dmworkim #1208）— viewer-relative 外部判定用。
+    // 与 source_space_* 的语义区分：
+    // - source_space_*: 成员通过哪个 Space 加入了当前群（可能为空，表示同 Space）。
+    // - home_space_*:   成员真正归属的 Space（始终有值）。外部成员 home = source_space_id；
+    //                   内部成员 home = group.space_id。
+    // 前端用 home_space_id 与当前 viewer 的 Space 比较，决定是否渲染「@SpaceName」后缀。
+    public String home_space_id;
+    public String home_space_name;
 }

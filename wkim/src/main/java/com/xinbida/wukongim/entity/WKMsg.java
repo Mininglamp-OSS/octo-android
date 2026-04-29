@@ -237,4 +237,77 @@ public class WKMsg implements Parcelable {
     public void setMemberOfFrom(WKChannelMember memberOfFrom) {
         this.memberOfFrom = memberOfFrom;
     }
+
+    // ---------------------------------------------------------------
+    // 外部群 Phase 1 — msg-level 便捷 getter（YUJ-86 EP1）
+    //
+    // 对齐 web PR #982 (from_is_external / from_source_space_name) 与
+    // PR #997 (from_home_space_id / from_home_space_name) 的 MessageWrap
+    // getter 语义。数据来源是当前消息发送者对应的 WKChannelMember.extraMap，
+    // 在 GroupModel.serialize 阶段由 /group/members 响应写入。
+    //
+    // UI 层直接调这些 getter，避免在消息气泡里散落 extraMap 取值逻辑。
+    // web YUJ-53 的静默失败教训：model 层未透传字段会导致 UI 节点数归零，
+    // 所以这里只返回原始字段，不做 viewer-relative 业务判定；viewer 比较
+    // 逻辑（判断当前 viewer 的 Space 与 from_home_space_id 是否一致）
+    // 由后续 EP 在 UI/ViewModel 层完成。
+    // ---------------------------------------------------------------
+
+    /**
+     * 消息发送者是否为外部成员（来自其他 Space）。
+     *
+     * @return 1 表示外部；0 表示同 Space 或信息缺失。
+     */
+    public int getFromIsExternal() {
+        WKChannelMember m = getMemberOfFrom();
+        if (m == null || m.extraMap == null) return 0;
+        Object v = m.extraMap.get(WKChannelMemberExtras.isExternal);
+        if (v == null) return 0;
+        if (v instanceof Integer) return (Integer) v;
+        if (v instanceof Number) return ((Number) v).intValue();
+        try {
+            return Integer.parseInt(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** 发送者通过哪个 Space 加入当前群的 Space 名（可能为空）。 */
+    public String getFromSourceSpaceName() {
+        WKChannelMember m = getMemberOfFrom();
+        if (m == null || m.extraMap == null) return null;
+        Object v = m.extraMap.get(WKChannelMemberExtras.sourceSpaceName);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    /**
+     * 发送者通过哪个 Space 加入当前群的 Space ID（可能为空）。
+     *
+     * 说明：issue 原文 MessageWrap getter 清单是 4 个（不含 source_space_id），但
+     * GroupModel.serialize 与 WKMultiForwardContent.decodeMsg 都把 source_space_id
+     * 写进了 extraMap。为避免 UI 层绕过 getter 直接访问裸 key（YUJ-53 静默失败
+     * 模式），这里补上对称的 getter。参见 YUJ-86 EP1 claude review round-2 P2。
+     */
+    public String getFromSourceSpaceID() {
+        WKChannelMember m = getMemberOfFrom();
+        if (m == null || m.extraMap == null) return null;
+        Object v = m.extraMap.get(WKChannelMemberExtras.sourceSpaceID);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    /** 发送者的 Home Space ID — viewer-relative 外部判定用（YUJ-63 / web #997）。 */
+    public String getFromHomeSpaceID() {
+        WKChannelMember m = getMemberOfFrom();
+        if (m == null || m.extraMap == null) return null;
+        Object v = m.extraMap.get(WKChannelMemberExtras.homeSpaceID);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    /** 发送者的 Home Space 显示名 — 用于 @SpaceName 后缀展示（YUJ-63 / web #997）。 */
+    public String getFromHomeSpaceName() {
+        WKChannelMember m = getMemberOfFrom();
+        if (m == null || m.extraMap == null) return null;
+        Object v = m.extraMap.get(WKChannelMemberExtras.homeSpaceName);
+        return v == null ? null : String.valueOf(v);
+    }
 }

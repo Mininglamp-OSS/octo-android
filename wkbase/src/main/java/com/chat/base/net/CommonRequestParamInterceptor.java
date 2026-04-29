@@ -5,6 +5,7 @@ import android.text.TextUtils;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKConfig;
+import com.chat.base.space.SpaceFilter;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -19,8 +20,14 @@ import okhttp3.Response;
 /**
  * 2020-07-17 15:08
  * 公共请求参数
+ *
+ * <p>EP3 · YUJ-88：动态注入 {@code X-Space-Id} header，Space 切换时实时生效。
+ * 对齐 dmwork-web PR #1039，后端 {@code YUJ-41} 过滤分支强依赖该 header。
  */
 public class CommonRequestParamInterceptor implements Interceptor {
+
+    /** 当前生效 Space header 名（与 dmwork-web {@code APIClient} / 后端 {@code SetEffectiveSpaceID} 对齐）。 */
+    public static final String HEADER_SPACE_ID = "X-Space-Id";
 
     @NotNull
     @Override
@@ -33,6 +40,15 @@ public class CommonRequestParamInterceptor implements Interceptor {
                 builder.addHeader(entry.getKey(), entry.getValue());
             }
         }
+
+        // 每次请求动态读取当前 Space，Space 切换后立即生效；空串不注入。
+        String currentSpaceId = SpaceFilter.getCurrentSpaceId();
+        if (!TextUtils.isEmpty(currentSpaceId)) {
+            // removeHeader 防止业务层显式覆盖后重复注入
+            builder.removeHeader(HEADER_SPACE_ID);
+            builder.addHeader(HEADER_SPACE_ID, currentSpaceId);
+        }
+
         request = builder.build();
         return chain.proceed(request);
     }

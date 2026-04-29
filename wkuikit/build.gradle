@@ -33,6 +33,10 @@ android {
         dataBinding true
     }
     namespace 'com.chat.uikit'
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 //    kotlin {
 //        experimental {
 //            coroutines 'enable'
@@ -42,4 +46,11 @@ android {
 dependencies {
     api project(':wkbase')
 //    implementation "androidx.work:work-runtime:2.8.1"
+
+    // Unit tests (YUJ-86 EP1 数据层透传强制单元测试 + YUJ-90 EP5 外部群 Tag 字段透传覆盖)
+    // 显式带入 org.json 真实实现：Android mockable jar 下的 org.json.JSONObject
+    // 会被 returnDefaultValues stub 成空操作，encode/decode 单测就会形同虚设
+    // （参见 YUJ-86 EP1 codex review round-3 P2）。
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }

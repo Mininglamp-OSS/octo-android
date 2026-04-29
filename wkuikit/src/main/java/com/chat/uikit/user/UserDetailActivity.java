@@ -31,6 +31,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.UserDetailViewMenu;
 import com.chat.base.entity.PopupMenuItem;
+import com.chat.base.external.ExternalViewerResolver;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.utils.StringUtils;
@@ -359,11 +360,13 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.identityLayout.setVisibility(View.VISIBLE);
                         wkVBinding.appIdNumTv.setText(userInfo.short_no);
                     }
-                    if (!TextUtils.isEmpty(userInfo.source_desc)) {
-                        wkVBinding.sourceFromTv.setText(userInfo.source_desc);
-                        wkVBinding.fromLayout.setVisibility(View.VISIBLE);
-                    } else {
-                        wkVBinding.fromLayout.setVisibility(View.GONE);
+                    if (!applyExternalSourceRow(userInfo)) {
+                        if (!TextUtils.isEmpty(userInfo.source_desc)) {
+                            wkVBinding.sourceFromTv.setText(userInfo.source_desc);
+                            wkVBinding.fromLayout.setVisibility(View.VISIBLE);
+                        } else {
+                            wkVBinding.fromLayout.setVisibility(View.GONE);
+                        }
                     }
 
                     if (userInfo.status == 2) {
@@ -608,5 +611,80 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             showCopy(textView, location[0], textView.getText().toString());
             return true;
         });
+    }
+
+    /**
+     * 外部群视角下刷新「来源」行（YUJ-87 / 对齐 web #976）：
+     *   - 当前在群内打开 UserInfo（groupID 非空）且 viewer-relative 判定为外部 →
+     *     整行显示成员 home/source Space 名，替代老的 source_desc。
+     *   - 同 Space / 自看 / 无 home_space_id 的非外部成员 → 整行隐藏，继续用上层 source_desc 逻辑。
+     * 返回 true 表示「来源」行已经由本方法处理，调用方不应再覆盖。
+     */
+    private boolean applyExternalSourceRow(com.chat.uikit.enity.UserInfo userInfo) {
+        if (userInfo == null) return false;
+        if (TextUtils.isEmpty(groupID)) return false;
+        // 自看直接走老逻辑（不会是外部）
+        if (uid != null && uid.equals(WKConfig.getInstance().getUid())) return false;
+
+        java.util.Map<String, Object> extras = null;
+        // 数据源优先级（codex review P2 修复）：
+        //   1) 新字段优先 —— 后端刚返回的 userInfo.group_member（若带 home_space_id）
+        //   2) WKIM 成员缓存 extraMap（历史路径，可能是 home-space 上线前的陈旧条目）
+        //   3) 退化 userInfo.group_member（没有 home_space_id 的老响应）
+        //
+        // 反面案例：cache 里只有 is_external=1 / source_space_name=OldSpace（上线前写入），
+        // 后端已经返回 home_space_id=viewer 的新视角相对数据 —— 若无条件复用 cache
+        // 就会把已经不是外部的成员误标为外部。改成「API 新响应带 home_space_id 必定覆盖 cache」。
+        com.chat.uikit.group.service.entity.GroupMember fresh = userInfo.group_member;
+        boolean freshHasHomeSpace = fresh != null && !TextUtils.isEmpty(fresh.home_space_id);
+
+        WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
+                .getMember(groupID, WKChannelType.GROUP, uid);
+
+        if (freshHasHomeSpace) {
+            // 新字段权威路径：以响应为主，cache 仅作兜底不会反向污染 home 字段
+            extras = new java.util.HashMap<>();
+            if (member != null && member.extraMap != null) {
+                extras.putAll(member.extraMap);
+            }
+            extras.put(WKChannelMemberExtras.homeSpaceID, fresh.home_space_id);
+            if (!TextUtils.isEmpty(fresh.home_space_name)) {
+                extras.put(WKChannelMemberExtras.homeSpaceName, fresh.home_space_name);
+            } else {
+                extras.remove(WKChannelMemberExtras.homeSpaceName);
+            }
+            extras.put(WKChannelMemberExtras.isExternal, fresh.is_external);
+            if (!TextUtils.isEmpty(fresh.source_space_name)) {
+                extras.put(WKChannelMemberExtras.sourceSpaceName, fresh.source_space_name);
+            }
+        } else if (member != null && member.extraMap != null && !member.extraMap.isEmpty()) {
+            extras = member.extraMap;
+        } else if (fresh != null) {
+            extras = new java.util.HashMap<>();
+            if (fresh.is_external != 0) {
+                extras.put(WKChannelMemberExtras.isExternal, fresh.is_external);
+            }
+            if (!TextUtils.isEmpty(fresh.source_space_name)) {
+                extras.put(WKChannelMemberExtras.sourceSpaceName, fresh.source_space_name);
+            }
+        }
+        if (extras == null || extras.isEmpty()) return false;
+
+        String viewerSpaceId = com.chat.uikit.message.MsgModel.getInstance().getCurrentSpaceId();
+        ExternalViewerResolver.Resolution res =
+                ExternalViewerResolver.resolveFromExtras(extras, viewerSpaceId);
+        if (!res.isExternal()) {
+            // 同 Space（或未命中外部判定）→ 按产品规格「整行隐藏」，让上层 source_desc 不再抢占此行
+            wkVBinding.fromLayout.setVisibility(View.GONE);
+            return true;
+        }
+        if (TextUtils.isEmpty(res.getSourceSpaceName())) {
+            // 是外部但没拿到 Space 名 —— 不渲染空「来源」，直接隐藏避免 UI 抖动
+            wkVBinding.fromLayout.setVisibility(View.GONE);
+            return true;
+        }
+        wkVBinding.sourceFromTv.setText(res.getSourceSpaceName());
+        wkVBinding.fromLayout.setVisibility(View.VISIBLE);
+        return true;
     }
 }

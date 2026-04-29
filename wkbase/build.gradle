@@ -40,6 +40,9 @@ android {
     }
     namespace 'com.chat.base'
 
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 repositories {
 //    flatDir {
@@ -117,4 +120,7 @@ dependencies {
         exclude group: 'org.jetbrains', module: 'annotations-java5'
     }
     annotationProcessor 'io.noties:prism4j-bundler:2.0.0'
+
+    // Unit tests (YUJ-86 EP1 channel extras key 契约锁 + YUJ-87 EP2 viewer-relative resolver + YUJ-88 EP3 SpaceFilter 单元测试)
+    testImplementation 'junit:junit:4.13.2'
 }

@@ -2,6 +2,8 @@ package com.chat.uikit.group.service;
 
 import android.text.TextUtils;
 
+import androidx.annotation.VisibleForTesting;
+
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
@@ -226,7 +228,13 @@ public class GroupModel extends WKBaseModel {
 
     }
 
-    private List<WKChannelMember> serialize(List<GroupMember> list) {
+    // 注：package-private + static，便于单元测试直接调用。
+    // 历史上此方法是 `private`，YUJ-86 EP1 的"强制单元测试覆盖解析层字段非空透传"
+    // 需要在不实例化 GroupModel（会触发 HTTP 客户端初始化）的情况下验证外部群
+    // 字段透传。逻辑本身是纯数据转换，没有 this 依赖，提升为 static 不改变行为。
+    // @VisibleForTesting 显式声明"本意应是 private"，保留 IDE/Lint 提示。
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static List<WKChannelMember> serialize(List<GroupMember> list) {
         List<WKChannelMember> members = new ArrayList<>();
         if (WKReader.isEmpty(list)) {
             return members;
@@ -252,13 +260,31 @@ public class GroupModel extends WKBaseModel {
             member.createdAt = list.get(i).created_at;
             HashMap<String, Object> hashMap = new HashMap<>();
             hashMap.put(WKChannelMemberExtras.WKCode, list.get(i).vercode);
-            // 外部成员标识：来自其他 Space 的成员（后端 PR #1167-#1169 提供的字段）
+            // 外部成员标识：来自其他 Space 的成员（后端 PR #1167-#1169 提供的字段）。
+            // 注：这里用纯 Java null+empty 判空，而不是 TextUtils.isEmpty。
+            // 原因：serialize 是解析层核心，需在 JVM 单测里直接跑，而 host JVM
+            // 的 android.jar stub 对 TextUtils.isEmpty 返回默认 false，会把
+            // null/"" 当成非空，反而把空字段塞进 extraMap。参见 YUJ-86 EP1
+            // codex review P1。
             hashMap.put(WKChannelMemberExtras.isExternal, list.get(i).is_external);
-            if (!TextUtils.isEmpty(list.get(i).source_space_id)) {
-                hashMap.put(WKChannelMemberExtras.sourceSpaceID, list.get(i).source_space_id);
+            String sourceSpaceId = list.get(i).source_space_id;
+            if (sourceSpaceId != null && !sourceSpaceId.isEmpty()) {
+                hashMap.put(WKChannelMemberExtras.sourceSpaceID, sourceSpaceId);
             }
-            if (!TextUtils.isEmpty(list.get(i).source_space_name)) {
-                hashMap.put(WKChannelMemberExtras.sourceSpaceName, list.get(i).source_space_name);
+            String sourceSpaceName = list.get(i).source_space_name;
+            if (sourceSpaceName != null && !sourceSpaceName.isEmpty()) {
+                hashMap.put(WKChannelMemberExtras.sourceSpaceName, sourceSpaceName);
+            }
+            // Home Space（YUJ-63 / web #997）— viewer-relative 外部判定字段。
+            // 与 source_space_* 不同：home_space_* 是成员归属的 Space，客户端用它
+            // 跟当前 viewer 的 Space 比较来判断是否外部，不完全信任后端 is_external。
+            String homeSpaceId = list.get(i).home_space_id;
+            if (homeSpaceId != null && !homeSpaceId.isEmpty()) {
+                hashMap.put(WKChannelMemberExtras.homeSpaceID, homeSpaceId);
+            }
+            String homeSpaceName = list.get(i).home_space_name;
+            if (homeSpaceName != null && !homeSpaceName.isEmpty()) {
+                hashMap.put(WKChannelMemberExtras.homeSpaceName, homeSpaceName);
             }
             member.extraMap = hashMap;
             members.add(member);

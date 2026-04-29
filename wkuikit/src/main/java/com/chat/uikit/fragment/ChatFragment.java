@@ -1384,33 +1384,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 判断消息是否来自其他 Space（非当前 Space）。
      * 用于过滤跨 Space 的实时消息更新，避免错误的未读计数。
+     *
+     * <p>EP3 · YUJ-88：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipMessageForSpace(WKMsg)}
+     * 以便与 web shouldSkipMessageForSpace 判定对齐。
      */
     private boolean isMessageFromOtherSpace(WKMsg msg) {
-        if (msg == null) return false;
-        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        if (TextUtils.isEmpty(currentSpaceId)) return false;
-        String msgSpaceId = extractSpaceId(msg);
-        return msgSpaceId != null && !msgSpaceId.equals(currentSpaceId);
+        return com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(msg);
     }
 
     /**
      * 判断频道是否属于当前 Space。
-     * 通过 channel 的 remoteExtraMap 中存储的 space_id 精确判断（服务端提供）。
      * 用于群聊过滤：群消息 payload 不含 space_id，无法用 isMessageFromOtherSpace 判断。
+     *
+     * <p>EP3 · YUJ-88：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipChannelForSpace(String, byte)}
+     * 实现 web 双路径判定（含外部群兜底：我以当前 Space 身份加入外部群时放行）。
      */
     private boolean isChannelInCurrentSpace(String channelID, byte channelType) {
-        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        if (TextUtils.isEmpty(currentSpaceId)) return true; // 非 Space 模式，不过滤
-
-        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
-        if (channel != null && channel.remoteExtraMap != null) {
-            Object spaceIdObj = channel.remoteExtraMap.get("space_id");
-            if (spaceIdObj != null) {
-                return currentSpaceId.equals(spaceIdObj.toString());
-            }
-        }
-        // channel 信息未加载或旧数据无 space_id，无法判断，放行让下次 sync 校准
-        return true;
+        return !com.chat.base.space.SpaceFilter.shouldSkipChannelForSpace(channelID, channelType);
     }
 
     // 系统 Bot（如 BotFather）：跨 Space 共享，需要按消息 space_id 过滤（参考 iOS shouldShowConversation）

@@ -33,6 +33,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.AvatarOtherViewMenu;
 import com.chat.base.endpoint.entity.ShowCommunityAvatarMenu;
 import com.chat.base.entity.PopupMenuItem;
+import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKChannelState;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
@@ -205,6 +206,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
         }
         helper.setText(R.id.nameTv, showName);
+        applyExternalGroupTag(helper, item);
 
         // 未读数
         setUnreadCount(helper, conversationMsg, false);
@@ -901,6 +903,34 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
         }
         helper.setText(R.id.nameTv, showName);
+        applyExternalGroupTag(helper, item);
+    }
+
+    /**
+     * 设置「外部」Tag 显隐（EP5 · YUJ-90）。
+     *
+     * 规则（对齐 dmwork-web PR #980）：
+     * - 仅 ChannelTypeGroup 生效；私聊 / 子区 永远隐藏
+     * - 读取 channel.remoteExtraMap[is_external_group]，Number==1 或 Boolean==true → 显示
+     * - channel 或 extraMap 为 null 时隐藏
+     *
+     * 风险提示（R1）：单元测试必须覆盖字段透传，防止模型层缺失导致 UI 静默失败。
+     */
+    private void applyExternalGroupTag(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
+        View tag = helper.getView(R.id.externalGroupTagTv);
+        if (tag == null) return;
+        boolean show = item != null
+                && item.channelType == WKChannelType.GROUP
+                && isExternalGroup(item.getWkChannel());
+        tag.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    static boolean isExternalGroup(WKChannel channel) {
+        if (channel == null || channel.remoteExtraMap == null) return false;
+        Object v = channel.remoteExtraMap.get(WKChannelCustomerExtras.isExternalGroup);
+        if (v instanceof Number) return ((Number) v).intValue() == 1;
+        if (v instanceof Boolean) return (Boolean) v;
+        return false;
     }
 
     private boolean hasActiveThreads(String groupNo) {

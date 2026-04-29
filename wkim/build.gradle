@@ -36,6 +36,10 @@ android {
     }
     buildFeatures.buildConfig = true
     namespace 'com.xinbida.wukongim'
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 configurations {
@@ -59,6 +63,9 @@ dependencies {
     
     // multidex 通常不需要打包进去，保持 implementation
     implementation 'com.android.support:multidex:1.0.3'
+
+    // Unit tests (YUJ-86 EP1 — 外部群 Phase 1 数据层透传强制单元测试)
+    testImplementation 'junit:junit:4.13.2'
 }
 
 afterEvaluate {

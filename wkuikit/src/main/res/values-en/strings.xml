@@ -343,5 +343,7 @@
     <string name="external_group_tag">External</string>
     <string name="external_member_badge">External</string>
     <string name="external_member_source_format">From %1$s</string>
+    <!-- v2 viewer-relative @SpaceName suffix (YUJ-66/YUJ-87) — matches web PR #1013 -->
+    <string name="external_member_space_suffix">\@%1$s</string>
 </resources>
 

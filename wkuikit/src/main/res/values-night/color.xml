@@ -8,8 +8,8 @@
     <color name="category_org_text">#96b3ed</color>
     <color name="category_community_bg">#30283E</color>
     <color name="category_community_text">#8DEC59D8</color>
-    <!-- 外部群标识：暗色模式下稍降亮度，保留辨识度 -->
-    <color name="external_group_tag_bg">#E08400</color>
+    <!-- 外部群标识：暗色模式下稍提亮度，保留紫色辨识度（对齐 web Semi purple） -->
+    <color name="external_group_tag_bg">#9B6DDF</color>
     <color name="external_group_tag_text">#FFFFFF</color>
     <color name="external_member_badge_bg">#7B1FA2</color>
     <color name="external_member_badge_text">#FFFFFF</color>

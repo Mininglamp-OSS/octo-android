@@ -70,12 +70,31 @@
                         android:textColor="@color/colorDark"
                         android:textSize="16sp"
                         app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintEnd_toStartOf="@id/categoryLayout"
+                        app:layout_constraintEnd_toStartOf="@id/externalGroupTagTv"
                         app:layout_constraintHorizontal_bias="0"
                         app:layout_constraintHorizontal_chainStyle="packed"
                         app:layout_constraintStart_toEndOf="@id/groupIV"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintWidth_default="wrap" />
+
+                    <TextView
+                        android:id="@+id/externalGroupTagTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_external_group_tag"
+                        android:paddingStart="5dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="5dp"
+                        android:paddingBottom="1dp"
+                        android:text="@string/external_group_tag"
+                        android:textColor="@color/external_group_tag_text"
+                        android:textSize="10sp"
+                        android:visibility="gone"
+                        app:layout_constraintBottom_toBottomOf="@id/nameTv"
+                        app:layout_constraintEnd_toStartOf="@id/categoryLayout"
+                        app:layout_constraintStart_toEndOf="@id/nameTv"
+                        app:layout_constraintTop_toTopOf="@id/nameTv" />
 
                     <LinearLayout
                         android:id="@+id/categoryLayout"
@@ -86,7 +105,7 @@
                         android:orientation="horizontal"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintStart_toEndOf="@id/nameTv"
+                        app:layout_constraintStart_toEndOf="@id/externalGroupTagTv"
                         app:layout_constraintTop_toTopOf="parent" />
 
                 </androidx.constraintlayout.widget.ConstraintLayout>

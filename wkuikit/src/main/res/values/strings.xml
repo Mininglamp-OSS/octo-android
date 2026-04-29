@@ -454,5 +454,7 @@
     <string name="external_group_tag">外部群</string>
     <string name="external_member_badge">外部</string>
     <string name="external_member_source_format">来自 %1$s</string>
+    <!-- v2 视角相对「@SpaceName」后缀（YUJ-66/YUJ-87）。web PR #1013 等价渲染 -->
+    <string name="external_member_space_suffix">\@%1$s</string>
 </resources>
 

@@ -3,7 +3,9 @@ package com.chat.uikit.group.adapter;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -13,6 +15,7 @@ import androidx.core.content.ContextCompat;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
+import com.chat.base.external.ExternalViewerResolver;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
@@ -22,8 +25,8 @@ import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.enity.AllGroupMemberEntity;
+import com.chat.uikit.message.MsgModel;
 import com.xinbida.wukongim.entity.WKChannelMember;
-import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import org.jetbrains.annotations.NotNull;
@@ -31,6 +34,11 @@ import org.jetbrains.annotations.NotNull;
 /**
  * 2020-12-11 15:23
  * 所有成员
+ *
+ * 外部成员标识 v2（YUJ-87 / 对齐 web #1013）：
+ *   成员名后内联「@SpaceName」后缀（灰色、同一行），取代 v1 紫色「外部」角标 +
+ *   「来自 XX」副标题。当 viewer 当前 Space == 成员 home Space 时不渲染后缀。
+ *   判定委托 {@link ExternalViewerResolver}，保证与 web / iOS 语义一致。
  */
 public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, BaseViewHolder> {
     private String searchKey;
@@ -47,12 +55,19 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
         if (TextUtils.isEmpty(showName)) {
             showName = TextUtils.isEmpty(channelMember.memberRemark) ? channelMember.memberName : channelMember.memberRemark;
         }
-        if (!TextUtils.isEmpty(searchKey)) {
-            SpannableString key = StringUtils.findSearch(Theme.colorAccount, showName, searchKey);
-            baseViewHolder.setText(R.id.nameTv, key);
-        } else {
-            baseViewHolder.setText(R.id.nameTv, showName);
+
+        // v2 「@SpaceName」后缀（viewer-relative）—— 灰色、同行；空串即不渲染
+        String viewerSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        ExternalViewerResolver.Resolution external =
+                ExternalViewerResolver.resolveFromExtras(channelMember.extraMap, viewerSpaceId);
+        String suffix = "";
+        if (external.isExternal() && !TextUtils.isEmpty(external.getSourceSpaceName())) {
+            suffix = getContext().getString(R.string.external_member_space_suffix, external.getSourceSpaceName());
         }
+
+        CharSequence nameCs = buildNameWithSuffix(showName, suffix);
+        baseViewHolder.setText(R.id.nameTv, nameCs);
+
         AvatarView avatarView = baseViewHolder.getView(R.id.avatarView);
         avatarView.setSize(45);
         if (entity.getOnLine() == 1) {
@@ -72,7 +87,6 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
                 baseViewHolder.setGone(R.id.timeTv, TextUtils.isEmpty(entity.getLastOfflineTime()));
             }
         }
-        //   baseViewHolder.setText(R.id.nameTv, showName);
         RoundTextView roleTv = baseViewHolder.getView(R.id.roleTv);
         avatarView.showAvatar(channelMember.memberUID, WKChannelType.PERSONAL, channelMember.memberAvatarCacheKey);
         if (channelMember.role == WKChannelMemberRole.admin) {
@@ -107,49 +121,36 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
                     Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
         }
 
-        // 外部成员标识：紫色「外部」角标 + 「来自 {source_space_name}」副标题
+        // v1 紫色「外部」角标 + 「来自 XX」副标题已被 v2 @SpaceName 后缀替代（YUJ-87）。
+        // 清理历史可能残留的 v1 View，保证复用 ViewHolder 不出现幽灵角标/副标题。
         View oldExternalBadge = nameRow.findViewWithTag("external_badge");
         if (oldExternalBadge != null) nameRow.removeView(oldExternalBadge);
         TextView sourceSpaceTv = baseViewHolder.getView(R.id.sourceSpaceTv);
-        if (isExternalMember(channelMember)) {
-            TextView externalBadge = new TextView(getContext());
-            externalBadge.setTag("external_badge");
-            externalBadge.setText(R.string.external_member_badge);
-            externalBadge.setTextColor(ContextCompat.getColor(getContext(), R.color.external_member_badge_text));
-            externalBadge.setTextSize(10f);
-            externalBadge.setTypeface(Typeface.DEFAULT_BOLD);
-            externalBadge.setBackgroundResource(R.drawable.bg_external_member_badge);
-            int hPad = AndroidUtilities.dp(5f);
-            int vPad = AndroidUtilities.dp(1f);
-            externalBadge.setPadding(hPad, vPad, hPad, vPad);
-            nameRow.addView(externalBadge, LayoutHelper.createLinear(
-                    LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
-                    Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
+        if (sourceSpaceTv != null) sourceSpaceTv.setVisibility(View.GONE);
+    }
 
-            String sourceSpaceName = sourceSpaceName(channelMember);
-            if (!TextUtils.isEmpty(sourceSpaceName)) {
-                sourceSpaceTv.setText(getContext().getString(R.string.external_member_source_format, sourceSpaceName));
-                sourceSpaceTv.setVisibility(View.VISIBLE);
-            } else {
-                sourceSpaceTv.setVisibility(View.GONE);
-            }
+    /**
+     * 拼装「{昵称}{searchHighlight} @SpaceName」——  suffix 部分用 color999 灰色 span。
+     * 搜索高亮只作用于昵称段，不染后缀。
+     */
+    private CharSequence buildNameWithSuffix(String showName, String suffix) {
+        CharSequence namePart;
+        if (!TextUtils.isEmpty(searchKey)) {
+            namePart = StringUtils.findSearch(Theme.colorAccount, showName, searchKey);
         } else {
-            sourceSpaceTv.setVisibility(View.GONE);
+            namePart = new SpannableString(showName == null ? "" : showName);
         }
-    }
+        if (TextUtils.isEmpty(suffix)) return namePart;
 
-    private static boolean isExternalMember(WKChannelMember member) {
-        if (member == null || member.extraMap == null) return false;
-        Object v = member.extraMap.get(WKChannelMemberExtras.isExternal);
-        if (v instanceof Number) return ((Number) v).intValue() == 1;
-        if (v instanceof Boolean) return (Boolean) v;
-        return false;
-    }
-
-    private static String sourceSpaceName(WKChannelMember member) {
-        if (member == null || member.extraMap == null) return null;
-        Object v = member.extraMap.get(WKChannelMemberExtras.sourceSpaceName);
-        return v == null ? null : v.toString();
+        SpannableStringBuilder ssb = new SpannableStringBuilder();
+        ssb.append(namePart);
+        int start = ssb.length();
+        // 前导空格
+        ssb.append(' ').append(suffix);
+        int grey = ContextCompat.getColor(getContext(), R.color.color999);
+        ssb.setSpan(new ForegroundColorSpan(grey), start, ssb.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return ssb;
     }
 
     public void setSearchKey(String searchKey) {

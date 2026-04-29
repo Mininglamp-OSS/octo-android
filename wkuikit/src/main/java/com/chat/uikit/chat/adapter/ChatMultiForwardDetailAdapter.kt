@@ -27,7 +27,9 @@ import android.widget.TableLayout
 import android.widget.TableRow
 import android.graphics.drawable.GradientDrawable
 import com.chat.base.config.WKApiConfig
+import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.MoonUtil
+import com.chat.base.external.ExternalSourceResolver
 import com.chat.base.markdown.WKMarkwonProvider
 import com.chat.base.markdown.WKTableData
 import com.chat.base.markdown.WKTablePlugin
@@ -65,7 +67,17 @@ import java.io.File
 
 class ChatMultiForwardDetailAdapter(
     private val showDetailTime: Boolean,
-    val list: List<ChatMultiForwardEntity>
+    val list: List<ChatMultiForwardEntity>,
+    /**
+     * The `users[]` entries from the enclosing merge-forward payload. Each entry
+     * carries per-user external-source fields (is_external / source_space_name /
+     * home_space_id / home_space_name) parsed by
+     * [com.chat.uikit.chat.msgmodel.WKMultiForwardContent]. Typed nullable
+     * because the upstream [com.chat.uikit.chat.msgmodel.WKMultiForwardContent.userList]
+     * field itself may be null when the payload omits users[].
+     * See YUJ-89 / web PR #981.
+     */
+    private val users: List<WKChannel>?
 ) :
     BaseMultiItemQuickAdapter<ChatMultiForwardEntity, BaseViewHolder>() {
     init {
@@ -101,10 +113,12 @@ class ChatMultiForwardDetailAdapter(
                         item.msg.fromUID,
                         WKChannelType.PERSONAL
                     )
+                    val displayName = buildDisplayName(item.msg, channel?.channelName)
                     if (channel != null) {
-                        holder.setText(R.id.nameTv, channel.channelName)
+                        holder.setText(R.id.nameTv, displayName)
                         avatarView.showAvatar(channel)
                     } else {
+                        holder.setText(R.id.nameTv, displayName)
                         avatarView.showAvatar(
                             item.msg.fromUID,
                             WKChannelType.PERSONAL
@@ -650,4 +664,46 @@ class ChatMultiForwardDetailAdapter(
         }
         return ssb
     }
+
+    /**
+     * YUJ-89 / web PR #981: build the per-row merge-forward display name with an
+     * inline "@SpaceName" suffix when the original sender is external relative
+     * to the current viewer. The resolution prefers per-msg fields (populated
+     * from the merge-forward `msgs[].home_space_*` fields) and falls back
+     * to the per-user `users[]` entry. Users whose home Space matches the
+     * current viewer get no suffix so same-Space conversations stay visually
+     * unchanged.
+     */
+    private fun buildDisplayName(
+        msg: com.xinbida.wukongim.entity.WKMsg,
+        fallbackName: String?
+    ): CharSequence {
+        val baseName = fallbackName ?: msg.fromUID ?: ""
+        val viewerHomeSpaceId = WKSharedPreferencesUtil.getInstance()
+            .getSPWithUID("current_space_id") ?: ""
+        // 1) prefer msg-level fields so per-forwarded-msg external metadata wins
+        var sourceSpaceName =
+            ExternalSourceResolver.resolveSourceSpaceName(msg, viewerHomeSpaceId)
+        if (sourceSpaceName.isNullOrEmpty() && users != null) {
+            val matched = users.firstOrNull {
+                !TextUtils.isEmpty(it.channelID) && it.channelID == msg.fromUID
+            }
+            if (matched != null) {
+                sourceSpaceName = ExternalSourceResolver
+                    .resolveMergeForwardUserSpaceName(matched, viewerHomeSpaceId)
+            }
+        }
+        if (sourceSpaceName.isNullOrEmpty()) return baseName
+        val builder = android.text.SpannableStringBuilder(baseName)
+        val start = builder.length
+        builder.append(" @").append(sourceSpaceName)
+        builder.setSpan(
+            android.text.style.ForegroundColorSpan(0xFF8B5CF6.toInt()),
+            start,
+            builder.length,
+            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        return builder
+    }
+
 }

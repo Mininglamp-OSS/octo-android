@@ -8,6 +8,7 @@ import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
+import com.chat.base.external.ExternalMsgExtras;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
@@ -63,6 +64,15 @@ public class WKMultiForwardContent extends WKMessageContent {
 //                        msg.baseContentMsgModel.fromUID = msg.fromUID;
 //                    }
                 }
+                // Inherit the origin channel type from the wrapper so downstream
+                // consumers (notably ExternalSourceResolver's group guard) can
+                // reason about the forwarded msg. decodeMsg previously left
+                // channelType == 0, which silently disabled msg-level
+                // external-source resolution in the merge-forward detail view
+                // (caught by /codex review on YUJ-89).
+                msg.channelType = channelType;
+                // YUJ-89 / web PR #981: per-message external source fields inside merge-forward.
+                copyExternalFieldsToLocalExtra(msg, msgJson);
                 msgList.add(msg);
             }
         }
@@ -151,6 +161,7 @@ public class WKMultiForwardContent extends WKMessageContent {
                 json.put("timestamp", msgList.get(i).timestamp);
                 json.put("message_id", msgList.get(i).messageID);
                 json.put("from_uid", msgList.get(i).fromUID);
+                writeExternalFieldsFromLocalExtra(json, msgList.get(i).localExtraMap);
                 jsonArray.put(json);
             }
             jsonObject.put("msgs", jsonArray);
@@ -204,6 +215,54 @@ public class WKMultiForwardContent extends WKMessageContent {
             WKLogUtils.e("编码合并转发消息错误");
         }
         return jsonObject;
+    }
+
+    /**
+     * YUJ-89 external-source passthrough: copy the five viewer-relative fields
+     * from a merge-forward JSON entry into {@code msg.localExtraMap} so the
+     * downstream bubble renderer can resolve the "@SpaceName" suffix without
+     * another round trip. Visible for testing.
+     *
+     * <p>Wire keys have no {@code from_} prefix, matching web PR #981.
+     */
+    static void copyExternalFieldsToLocalExtra(WKMsg msg, JSONObject msgJson) {
+        if (msg == null || msgJson == null) return;
+        HashMap<String, Object> extras = null;
+        String[] keys = new String[]{
+                ExternalMsgExtras.IS_EXTERNAL,
+                ExternalMsgExtras.SOURCE_SPACE_ID,
+                ExternalMsgExtras.SOURCE_SPACE_NAME,
+                ExternalMsgExtras.HOME_SPACE_ID,
+                ExternalMsgExtras.HOME_SPACE_NAME,
+        };
+        for (String key : keys) {
+            if (msgJson.has(key) && !msgJson.isNull(key)) {
+                if (extras == null) {
+                    extras = msg.localExtraMap != null ? new HashMap<>(msg.localExtraMap) : new HashMap<>();
+                }
+                extras.put(key, msgJson.opt(key));
+            }
+        }
+        if (extras != null) {
+            msg.localExtraMap = extras;
+        }
+    }
+
+    private static void writeExternalFieldsFromLocalExtra(JSONObject json, java.util.Map<?, ?> extras) throws JSONException {
+        if (json == null || extras == null || extras.isEmpty()) return;
+        String[] keys = new String[]{
+                ExternalMsgExtras.IS_EXTERNAL,
+                ExternalMsgExtras.SOURCE_SPACE_ID,
+                ExternalMsgExtras.SOURCE_SPACE_NAME,
+                ExternalMsgExtras.HOME_SPACE_ID,
+                ExternalMsgExtras.HOME_SPACE_NAME,
+        };
+        for (String key : keys) {
+            Object v = extras.get(key);
+            if (v != null) {
+                json.put(key, v);
+            }
+        }
     }
 
     @Override

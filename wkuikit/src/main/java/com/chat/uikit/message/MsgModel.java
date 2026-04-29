@@ -21,6 +21,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.external.ExternalMsgExtras;
 import com.xinbida.wukongim.db.ReminderDBManager;
 import com.chat.base.net.ud.WKDownloader;
 import com.chat.base.net.ud.WKProgressManager;
@@ -56,6 +57,7 @@ import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import org.json.JSONException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -331,11 +333,58 @@ public class MsgModel extends WKBaseModel {
             if (typeObject != null)
                 msg.type = (int) typeObject;
         }
+        // YUJ-89 / EP1: 透传消息级外部来源字段到 localExtraMap，供消息气泡
+        // 和合并转发渲染 "@SpaceName" 后缀（见 ExternalSourceResolver）。
+        // 字段缺失时不写入 map，保持降级链语义。
+        copyExternalSourceExtras(msg, syncMsg);
         WKSyncMsg.wkMsg = msg;
         WKSyncMsg.red_dot = syncMsg.header.red_dot;
         WKSyncMsg.sync_once = syncMsg.header.sync_once;
         WKSyncMsg.no_persist = syncMsg.header.no_persist;
         return WKSyncMsg;
+    }
+
+    /**
+     * Copy the external-source fields from the sync DTO into the msg's
+     * {@code localExtraMap}. Package-private for unit testing the passthrough
+     * — YUJ-53 was caused by a silent passthrough failure on web, so this hop
+     * is explicitly covered by {@code MsgModelExternalPassthroughTest}.
+     *
+     * <p>Uses plain Java null/empty checks (not {@code TextUtils.isEmpty}) so
+     * the method can execute under the standard JVM unit-test runtime without
+     * Robolectric.
+     */
+    static void copyExternalSourceExtras(WKMsg msg, SyncMsg syncMsg) {
+        if (msg == null || syncMsg == null) return;
+        if (syncMsg.is_external == null
+                && isBlank(syncMsg.source_space_id)
+                && isBlank(syncMsg.source_space_name)
+                && isBlank(syncMsg.home_space_id)
+                && isBlank(syncMsg.home_space_name)) {
+            return;
+        }
+        if (msg.localExtraMap == null) {
+            msg.localExtraMap = new HashMap();
+        }
+        if (syncMsg.is_external != null) {
+            msg.localExtraMap.put(ExternalMsgExtras.IS_EXTERNAL, syncMsg.is_external);
+        }
+        if (!isBlank(syncMsg.source_space_id)) {
+            msg.localExtraMap.put(ExternalMsgExtras.SOURCE_SPACE_ID, syncMsg.source_space_id);
+        }
+        if (!isBlank(syncMsg.source_space_name)) {
+            msg.localExtraMap.put(ExternalMsgExtras.SOURCE_SPACE_NAME, syncMsg.source_space_name);
+        }
+        if (!isBlank(syncMsg.home_space_id)) {
+            msg.localExtraMap.put(ExternalMsgExtras.HOME_SPACE_ID, syncMsg.home_space_id);
+        }
+        if (!isBlank(syncMsg.home_space_name)) {
+            msg.localExtraMap.put(ExternalMsgExtras.HOME_SPACE_NAME, syncMsg.home_space_name);
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isEmpty();
     }
 
     /**

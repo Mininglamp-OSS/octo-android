@@ -21,4 +21,13 @@ public class SyncMsg {
     public long extra_version;
     public Map payload;
     public SyncMsgHeader header;
+    // 外部群来源字段（YUJ-89 / web PR #981 + #982 对齐）。服务端在外部群场景下随
+    // 每条消息下发发送者的 home/source Space，以便客户端视角相对渲染
+    // 「@SpaceName」后缀。wire 约定：无 from_ 前缀（与 web PR #981 统一）。
+    // 任何字段缺失时走降级链（见 ExternalSourceResolver）。
+    public Integer is_external;
+    public String source_space_id;
+    public String source_space_name;
+    public String home_space_id;
+    public String home_space_name;
 }

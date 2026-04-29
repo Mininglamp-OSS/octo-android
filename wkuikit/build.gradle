@@ -35,6 +35,9 @@ android {
     namespace 'com.chat.uikit'
 
     testOptions {
+        // YUJ-89: stub unresolved Android framework calls (e.g. TextUtils) to
+        // default values so the merge-forward passthrough unit tests can run
+        // under plain JVM without Robolectric.
         unitTests.returnDefaultValues = true
     }
 //    kotlin {
@@ -47,7 +50,8 @@ dependencies {
     api project(':wkbase')
 //    implementation "androidx.work:work-runtime:2.8.1"
 
-    // Unit tests (YUJ-86 EP1 数据层透传强制单元测试 + YUJ-90 EP5 外部群 Tag 字段透传覆盖)
+    // Unit tests (YUJ-86 EP1 数据层透传强制单元测试 + YUJ-89 external-source field-passthrough
+    // coverage + YUJ-90 EP5 外部群 Tag 字段透传覆盖)
     // 显式带入 org.json 真实实现：Android mockable jar 下的 org.json.JSONObject
     // 会被 returnDefaultValues stub 成空操作，encode/decode 单测就会形同虚设
     // （参见 YUJ-86 EP1 codex review round-3 P2）。

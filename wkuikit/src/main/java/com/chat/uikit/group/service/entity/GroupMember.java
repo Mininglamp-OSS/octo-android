@@ -24,4 +24,9 @@ public class GroupMember {
     public int is_external;
     public String source_space_id;
     public String source_space_name;
+    // 成员 Home Space（YUJ-63，web #997）— viewer-relative 外部判定用，
+    // 与 source_space_* 区分：home_space_* 是成员真正归属的 Space，
+    // 与 viewer 所在 Space 比较即可判断是否外部。
+    public String home_space_id;
+    public String home_space_name;
 }

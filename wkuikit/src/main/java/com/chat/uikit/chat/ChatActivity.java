@@ -2144,6 +2144,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             } else {
                 wkReply.root_mid = wkReply.message_id;
             }
+            // YUJ-132: 透传被回复消息发送者的 home/source Space 字段，让接收端的 Reply 预览
+            // 能够渲染 "@SpaceName"。字段位于 localExtraMap（见 YUJ-89 MsgModel.copyExternalSourceExtras）。
+            copyReplyExternalExtras(replyWKMsg, wkReply);
             messageContent.reply = wkReply;
         }
         sendMsg(messageContent);
@@ -3253,5 +3256,50 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private boolean isAddedSpanEmptyView() {
         return WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView;
+    }
+
+    /**
+     * YUJ-132: copy the replied-to sender's home/source Space fields from the
+     * source {@link WKMsg} onto the outgoing {@link WKReply} so the receivers'
+     * reply-preview can render "@SpaceName" via {@link com.chat.base.external.ExternalSourceResolver}.
+     *
+     * <p>Fields are stored on {@link WKMsg#localExtraMap} per YUJ-89 / EP1
+     * ({@code MsgModel.copyExternalSourceExtras}). Keys match
+     * {@link com.chat.base.external.ExternalMsgExtras}. All fields are optional:
+     * missing values leave the reply defaults untouched.
+     */
+    private void copyReplyExternalExtras(WKMsg src, WKReply dst) {
+        if (src == null || dst == null || src.localExtraMap == null) return;
+        Object isExternal = src.localExtraMap.get(com.chat.base.external.ExternalMsgExtras.IS_EXTERNAL);
+        if (isExternal instanceof Number) {
+            dst.from_is_external = ((Number) isExternal).intValue();
+        } else if (isExternal instanceof Boolean) {
+            dst.from_is_external = ((Boolean) isExternal) ? 1 : 0;
+        } else if (isExternal != null) {
+            String s = String.valueOf(isExternal).trim();
+            if ("1".equals(s) || "true".equalsIgnoreCase(s)) {
+                dst.from_is_external = 1;
+            } else {
+                try {
+                    dst.from_is_external = Integer.parseInt(s);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        Object sourceName = src.localExtraMap.get(com.chat.base.external.ExternalMsgExtras.SOURCE_SPACE_NAME);
+        if (sourceName != null) {
+            String v = String.valueOf(sourceName);
+            if (!v.isEmpty()) dst.from_source_space_name = v;
+        }
+        Object homeId = src.localExtraMap.get(com.chat.base.external.ExternalMsgExtras.HOME_SPACE_ID);
+        if (homeId != null) {
+            String v = String.valueOf(homeId);
+            if (!v.isEmpty()) dst.from_home_space_id = v;
+        }
+        Object homeName = src.localExtraMap.get(com.chat.base.external.ExternalMsgExtras.HOME_SPACE_NAME);
+        if (homeName != null) {
+            String v = String.valueOf(homeName);
+            if (!v.isEmpty()) dst.from_home_space_name = v;
+        }
     }
 }

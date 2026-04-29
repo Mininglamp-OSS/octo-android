@@ -137,6 +137,55 @@ public final class ExternalSourceResolver {
         return null;
     }
 
+    /**
+     * Reply-preview variant (YUJ-132 · aligned with web PR #1073 / iOS).
+     *
+     * <p>The reply object (carried inside a message's payload) packs the replied-to
+     * sender's home/source Space directly on the JSON object, not on a {@code WKMsg}.
+     * This overload accepts the four optional fields as primitives so callers don't
+     * have to synthesise a {@code WKMsg} just to reuse the priority chain.
+     *
+     * <p>Priority chain mirrors {@link #resolveSourceSpaceName(WKMsg, String)}:
+     * <ol>
+     *   <li>{@code fromHomeSpaceId} + {@code fromHomeSpaceName} → viewer-relative;
+     *       returns {@code null} when the replied-to user's home Space matches the
+     *       viewer's current Space.</li>
+     *   <li>{@code fromIsExternal != 0} + {@code fromSourceSpaceName} → absolute fallback.</li>
+     * </ol>
+     *
+     * <p>No group/topic guard here — the reply preview is always rendered as part of a
+     * message bubble that already passed its own scope check.
+     *
+     * @param fromHomeSpaceId     replied-to user's home Space id ({@code null} when absent)
+     * @param fromHomeSpaceName   replied-to user's home Space display name ({@code null} when absent)
+     * @param fromIsExternal      1 when the replied-to user is external, 0 otherwise
+     * @param fromSourceSpaceName replied-to user's source Space display name ({@code null} when absent)
+     * @param viewerHomeSpaceId   viewer's current Space id ({@code null}/empty degrades to
+     *                            "always render when home_space_name present")
+     * @return display name to append after the nickname, or {@code null} when no suffix
+     */
+    public static String resolveSourceSpaceName(
+            String fromHomeSpaceId,
+            String fromHomeSpaceName,
+            int fromIsExternal,
+            String fromSourceSpaceName,
+            String viewerHomeSpaceId) {
+        // Priority 1: viewer-relative home_space_id/name
+        if (!isNullOrEmpty(fromHomeSpaceId)) {
+            if (!isNullOrEmpty(viewerHomeSpaceId) && fromHomeSpaceId.equals(viewerHomeSpaceId)) {
+                return null;
+            }
+            if (!isNullOrEmpty(fromHomeSpaceName)) {
+                return fromHomeSpaceName;
+            }
+        }
+        // Priority 2: absolute is_external + source_space_name
+        if (fromIsExternal != 0 && !isNullOrEmpty(fromSourceSpaceName)) {
+            return fromSourceSpaceName;
+        }
+        return null;
+    }
+
     private static String getExtraString(Map<?, ?> map, String key) {
         if (map == null) {
             return null;

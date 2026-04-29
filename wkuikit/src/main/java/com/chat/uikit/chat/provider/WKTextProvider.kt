@@ -38,6 +38,7 @@ import androidx.emoji2.widget.EmojiTextView
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
 import com.chat.base.config.WKApiConfig
+import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.emoji.EmojiManager
 import com.chat.base.emoji.MoonUtil
 import com.chat.base.endpoint.EndpointManager
@@ -57,6 +58,7 @@ import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
+import com.chat.base.external.ExternalSourceResolver
 import com.chat.base.ui.components.AlignImageSpan
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.ui.components.NormalClickableContent
@@ -1394,7 +1396,33 @@ open class WKTextProvider : WKChatBaseProvider() {
                 if (TextUtils.isEmpty(mChannel.channelRemark)) {
                     mChannel.channelName
                 } else mChannel.channelRemark
-            userNameTv.text = showName
+            // YUJ-132: Reply 引用预览外部来源 "@SpaceName" 后缀。
+            // 字段来自被回复消息发送者的 home/source Space（见 WKReply#decodeMsg），
+            // 由 ExternalSourceResolver 按 viewer-relative → absolute 优先级决策。
+            val reply = textModel.reply
+            val viewerSpaceId = WKSharedPreferencesUtil.getInstance()
+                .getSPWithUID("current_space_id") ?: ""
+            val sourceSpaceName = ExternalSourceResolver.resolveSourceSpaceName(
+                reply.from_home_space_id,
+                reply.from_home_space_name,
+                reply.from_is_external,
+                reply.from_source_space_name,
+                viewerSpaceId
+            )
+            if (!sourceSpaceName.isNullOrEmpty()) {
+                val builder = SpannableStringBuilder(showName ?: "")
+                val start = builder.length
+                builder.append(" @").append(sourceSpaceName)
+                builder.setSpan(
+                    ForegroundColorSpan(0xFF8B5CF6.toInt()),
+                    start,
+                    builder.length,
+                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                userNameTv.text = builder
+            } else {
+                userNameTv.text = showName
+            }
             avatarView.showAvatar(mChannel)
         }
         if (!TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.fromUID)) {

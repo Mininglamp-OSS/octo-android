@@ -176,4 +176,59 @@ public class ExternalSourceResolverTest {
         com.xinbida.wukongim.entity.WKChannel user = new com.xinbida.wukongim.entity.WKChannel();
         assertNull(ExternalSourceResolver.resolveMergeForwardUserSpaceName(user, "viewer_space"));
     }
+
+    // ===== YUJ-132 · Reply 预览 overload（primitive 参数） =====
+
+    @Test
+    public void replyOverload_viewerRelativeHomeSpacePriority() {
+        // viewer 在 space_A，被回复用户 home=space_B → 渲染 "Space B"
+        assertEquals("Space B",
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        "space_B", "Space B", 0, null, "space_A"));
+    }
+
+    @Test
+    public void replyOverload_sameHomeSpaceReturnsNull() {
+        // 被回复用户 home == viewer 当前 Space → 不加后缀，即便 source_space_name 非空
+        assertNull(
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        "space_A", "Space A", 1, "Space Alt", "space_A"));
+    }
+
+    @Test
+    public void replyOverload_fallsBackToAbsoluteWhenHomeSpaceMissing() {
+        // 老数据：只有 from_is_external + from_source_space_name
+        assertEquals("Vendor",
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        null, null, 1, "Vendor", "space_A"));
+    }
+
+    @Test
+    public void replyOverload_allFieldsAbsentReturnsNull() {
+        assertNull(
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        null, null, 0, null, "space_A"));
+        assertNull(
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        "", "", 0, "", ""));
+    }
+
+    @Test
+    public void replyOverload_isExternalZeroWithNamePresentReturnsNull() {
+        // from_is_external=0 表示同 Space，即便 source name 非空也不应渲染
+        assertNull(
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        null, null, 0, "Some Space", "space_A"));
+    }
+
+    @Test
+    public void replyOverload_viewerSpaceIdEmptyStillRenders() {
+        // 尚未切 Space（viewerSpaceId 为空）→ 没有参照系，降级为 "有 home_space_name 就渲染"
+        assertEquals("Space B",
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        "space_B", "Space B", 0, null, ""));
+        assertEquals("Space B",
+                ExternalSourceResolver.resolveSourceSpaceName(
+                        "space_B", "Space B", 0, null, null));
+    }
 }

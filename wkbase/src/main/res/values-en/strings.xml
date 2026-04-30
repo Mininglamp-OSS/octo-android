@@ -160,4 +160,10 @@
     <string name="str_net_error">Network error, please try again later</string>
     <string name="str_table">Table</string>
     <string name="str_table_copied">Table content copied</string>
+    <!-- Cross-Space join group notice (aligned with dmwork-web PR#1068 · YUJ-100/YUJ-140) -->
+    <string name="join_success_same_space">Joined \"%1$s\"</string>
+    <string name="join_success_cross_line1">Joined \"%1$s\"</string>
+    <string name="join_success_cross_line2">This group belongs to %1$s Space</string>
+    <string name="join_success_switch">Switch over</string>
+    <string name="join_success_cancel">Dismiss</string>
 </resources>

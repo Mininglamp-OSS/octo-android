@@ -50,6 +50,8 @@
     <color name="code_block_bg">#0D000000</color>
     <color name="code_text_color">#333333</color>
     <color name="blockquote_color">#CCCCCC</color>
+    <!-- 跨 Space 加群 Toast「切换过去」按钮紫色（对齐 EP5 三端 dmwork-web PR#1068） -->
+    <color name="join_success_switch_purple">#722ED1</color>
     <array name="name_colors">
         <item>#8C8DFF</item>
         <item>#7983C2</item>

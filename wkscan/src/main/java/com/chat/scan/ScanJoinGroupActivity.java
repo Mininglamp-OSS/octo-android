@@ -10,6 +10,8 @@ import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.net.BaseObserver;
 import com.chat.base.net.RetrofitUtils;
+import com.chat.base.space.JoinSuccessHelper;
+import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.utils.WKToastUtils;
@@ -28,6 +30,9 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
     private String groupNo;
     private String authCode;
     private boolean isMember;
+    private String groupName;
+    private String targetSpaceId;
+    private String targetSpaceName;
 
     @Override
     protected ActScanJoinGroupLayoutBinding getViewBinding() {
@@ -44,9 +49,11 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
         groupNo = getIntent().getStringExtra("group_no");
         authCode = getIntent().getStringExtra("auth_code");
         isMember = getIntent().getBooleanExtra("is_member", false);
-        String groupName = getIntent().getStringExtra("group_name");
+        groupName = getIntent().getStringExtra("group_name");
         String avatar = getIntent().getStringExtra("avatar");
         int memberCount = getIntent().getIntExtra("member_count", 0);
+        targetSpaceId = getIntent().getStringExtra("space_id");
+        targetSpaceName = getIntent().getStringExtra("space_name");
 
         // 群头像：用后端 avatar 或标准群头像 URL，加时间戳跳过 Glide 缓存
         AvatarView avatarView = wkVBinding.avatarView;
@@ -97,6 +104,21 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                     .subscribe(new BaseObserver<ResponseBody>() {
                         @Override
                         protected void onSuccess(ResponseBody result) {
+                            // YUJ-140 · 跨 Space 加群 Toast：
+                            // crossSpace 时把 notice 持久化（对齐 web sessionStorage 桥接）并 finish，
+                            // 由主页面 onResume → consumeNotice 弹 Dialog，用户显式点「切换过去」才切换。
+                            // 同 Space / 非 Space 模式保留原 toast + 自动进群行为以保持既有 UX。
+                            String viewerSpaceId = SpaceFilter.getCurrentSpaceId();
+                            boolean crossSpace = !TextUtils.isEmpty(targetSpaceId)
+                                    && !TextUtils.isEmpty(viewerSpaceId)
+                                    && !targetSpaceId.equals(viewerSpaceId);
+
+                            if (crossSpace) {
+                                JoinSuccessHelper.computeAndSave(groupNo, groupName, targetSpaceId, targetSpaceName);
+                                finish();
+                                return;
+                            }
+
                             WKToastUtils.getInstance().showToast(getString(R.string.scan_join_group_success));
                             ChatViewMenu chatViewMenu = new ChatViewMenu(ScanJoinGroupActivity.this, groupNo, WKChannelType.GROUP, 0, true);
                             EndpointManager.getInstance().invoke(EndpointSID.chatView, chatViewMenu);

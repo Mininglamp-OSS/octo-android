@@ -125,6 +125,9 @@ dependencies {
     annotationProcessor 'io.noties:prism4j-bundler:2.0.0'
 
     // Unit tests (YUJ-86 EP1 channel extras key 契约锁 + YUJ-87 EP2 viewer-relative resolver
-    // + YUJ-88 EP3 SpaceFilter 单元测试 + YUJ-89 external-source field-passthrough coverage)
+    // + YUJ-88 EP3 SpaceFilter 单元测试 + YUJ-89 external-source field-passthrough coverage
+    // + YUJ-140 JoinSuccessHelper JSON round-trip tests)
     testImplementation 'junit:junit:4.13.2'
+    // YUJ-140: 提供真实 org.json 实现，避免 Android stub 对 host-side JSON 测试返回默认值
+    testImplementation 'org.json:json:20231013'
 }

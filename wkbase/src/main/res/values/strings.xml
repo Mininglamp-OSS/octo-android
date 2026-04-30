@@ -175,4 +175,10 @@
     <string name="api_url_dialog_unreachable">服务器地址不可达，请检查地址是否正确</string>
     <string name="str_table">表格</string>
     <string name="str_table_copied">表格内容已复制</string>
+    <!-- 跨 Space 加群提示（对齐 dmwork-web PR#1068 · YUJ-100/YUJ-140） -->
+    <string name="join_success_same_space">已加入「%1$s」</string>
+    <string name="join_success_cross_line1">已加入「%1$s」</string>
+    <string name="join_success_cross_line2">此群位于 %1$s Space</string>
+    <string name="join_success_switch">切换过去</string>
+    <string name="join_success_cancel">取消</string>
 </resources>

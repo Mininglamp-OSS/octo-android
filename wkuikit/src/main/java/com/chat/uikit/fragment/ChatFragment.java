@@ -261,36 +261,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         wkVBinding.spaceHeaderLayout.setOnClickListener(v -> {
             SpacePopupWindow popup = new SpacePopupWindow(requireContext());
-            popup.setOnSpaceSelectedListener(space -> {
-                currentSpaceName = space.name;
-                MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
-                setSpaceSwitcherText(space.name);
-                updateSpaceAvatar(space.name);
-
-                // 清除成员缓存
-                SpaceModel.getInstance().invalidateMembersCache();
-                CategoryModel.getInstance().invalidateCache();
-                loadCategories();
-
-                // 参考 iOS：先立即清空 UI（给用户即时反馈），再异步清 DB
-                spaceConversationKeys.clear();
-                allConversations.clear();
-                chatConversationAdapter.setList(new ArrayList<>());
-
-                // DB 清理 + 会话同步放到后台线程（iOS 用 serial DB queue，不阻塞主线程）
-                Schedulers.io().scheduleDirect(() -> {
-                    WKIM.getInstance().getConversationManager().clearAll();
-
-                    // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
-                    // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                    });
-                    // 通知联系人列表刷新
-                    new Handler(Looper.getMainLooper()).post(() ->
-                        EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
-                    );
-                });
-            });
+            popup.setOnSpaceSelectedListener(this::performSpaceSwitch);
             popup.show(wkVBinding.spaceHeaderLayout);
         });
         chatConversationAdapter.addChildClickViewIds(R.id.contentLayout);
@@ -1478,6 +1449,75 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         pingHandler.postDelayed(spaceResyncRunnable, 500);
     }
 
+    /**
+     * 执行 Space 切换（用户手动点 Space 列表 / 跨 Space 加群 Dialog「切换过去」共享路径）。
+     *
+     * <p>与 iOS 的 serial DB queue 对齐：先立即清空 UI 给用户即时反馈，再把 DB 清理 + sync
+     * 放到 IO 线程，避免与主线程的 adapter 刷新争抢 SDK 数据库锁（历史 ANR 源）。
+     *
+     * <p>对齐 dmwork-web PR#1068：跨 Space 加群「切换过去」按钮复用这条切换路径，
+     * 保证手动切换与加群后切换的 UI/数据行为完全一致。
+     */
+    private void performSpaceSwitch(@NotNull SpaceEntity space) {
+        if (space == null || space.space_id == null) return;
+        currentSpaceName = space.name;
+        MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
+        setSpaceSwitcherText(space.name);
+        updateSpaceAvatar(space.name);
+
+        SpaceModel.getInstance().invalidateMembersCache();
+        CategoryModel.getInstance().invalidateCache();
+        loadCategories();
+
+        spaceConversationKeys.clear();
+        allConversations.clear();
+        chatConversationAdapter.setList(new ArrayList<>());
+
+        Schedulers.io().scheduleDirect(() -> {
+            WKIM.getInstance().getConversationManager().clearAll();
+            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            });
+            new Handler(Looper.getMainLooper()).post(() ->
+                    EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
+            );
+        });
+    }
+
+    /**
+     * 消费「加群成功」通知（YUJ-140，对齐 dmwork-web PR#1068）。
+     *
+     * <p>在 {@link #onResume()} 调用：如果上个界面（扫码加群 / 邀请落地页）保存了 notice，
+     * 根据 {@code crossSpace} 走普通 toast 或弹两行 Dialog；用户点「切换过去」才真正切 Space。
+     *
+     * <p>防重入：{@link com.chat.base.space.JoinSuccessHelper#consumeNotice()} 读完即清，
+     * 多次 resume 或多 Fragment 同时 consume 都只会触发一次。
+     */
+    private void consumeJoinSuccessNoticeIfAny() {
+        final androidx.fragment.app.FragmentActivity activity = getActivity();
+        if (activity == null || activity.isFinishing()) return;
+        com.chat.base.space.JoinSuccessHelper.JoinNotice notice =
+                com.chat.base.space.JoinSuccessHelper.consumeNotice();
+        if (notice == null) return;
+
+        com.chat.base.space.JoinSuccessDialog.showFromNotice(activity, notice, switched -> {
+            // 点「切换过去」→ 切 Space + 进入目标群
+            if (android.text.TextUtils.isEmpty(switched.targetSpaceId)) return;
+            SpaceEntity target = new SpaceEntity();
+            target.space_id = switched.targetSpaceId;
+            target.name = switched.targetSpaceName;
+            performSpaceSwitch(target);
+            if (!android.text.TextUtils.isEmpty(switched.groupNo)) {
+                // 等 Space 切换完成的 UI 清理安顿后再打开群聊，避免 adapter.setList(empty) 抢布局
+                pingHandler.postDelayed(() -> {
+                    androidx.fragment.app.FragmentActivity act = getActivity();
+                    if (act == null || act.isFinishing()) return;
+                    WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(
+                            act, switched.groupNo, WKChannelType.GROUP, 0, true));
+                }, 250);
+            }
+        });
+    }
+
     //排序消息
     private void sortMsg(List<ChatConversationMsg> list) {
         // 拷贝一份，避免对 adapter data list 并发修改
@@ -2485,6 +2525,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 刷新分组数据，确保新建群聊等操作后分组列表及时更新
         CategoryModel.getInstance().invalidateCache();
         loadCategories();
+        // YUJ-140 · 跨 Space 加群 Toast：消费上个界面（扫码 / 邀请加群）留下的 notice
+        consumeJoinSuccessNoticeIfAny();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
         wkVBinding.deviceLayout.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
 //        String appLoginType = String.format(getString(R.string.pc_login), getString(R.string.app_name));

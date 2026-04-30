@@ -111,7 +111,12 @@ class ScanUtils extends WKBaseModel {
                     String avatar = dataJson.optString("avatar", "");
                     int memberCount = dataJson.optInt("member_count", 0);
                     boolean isMember = dataJson.optBoolean("is_member", false);
-                    openJoinGroupPage(activity, groupNo, authCode, groupName, avatar, memberCount, isMember);
+                    // YUJ-140 · 跨 Space 加群 Toast：后端在群级 payload 中带 space_id / space_name
+                    // 用于本地判定 crossSpace。缺字段时 fail-open 成同 Space 行为。
+                    String spaceId = dataJson.optString("space_id", "");
+                    String spaceName = dataJson.optString("space_name", "");
+                    openJoinGroupPage(activity, groupNo, authCode, groupName, avatar, memberCount, isMember,
+                            spaceId, spaceName);
                 }
 
             } else {
@@ -132,7 +137,8 @@ class ScanUtils extends WKBaseModel {
         }
     }
 
-    private void openJoinGroupPage(AppCompatActivity activity, String groupNo, String authCode, String groupName, String avatar, int memberCount, boolean isMember) {
+    private void openJoinGroupPage(AppCompatActivity activity, String groupNo, String authCode, String groupName, String avatar, int memberCount, boolean isMember,
+                                    String spaceId, String spaceName) {
         Intent intent = new Intent(activity, ScanJoinGroupActivity.class);
         intent.putExtra("group_no", groupNo);
         intent.putExtra("auth_code", authCode);
@@ -140,6 +146,8 @@ class ScanUtils extends WKBaseModel {
         intent.putExtra("avatar", avatar);
         intent.putExtra("member_count", memberCount);
         intent.putExtra("is_member", isMember);
+        intent.putExtra("space_id", spaceId);
+        intent.putExtra("space_name", spaceName);
         activity.startActivity(intent);
         iHandleScanResult.dismissView();
     }

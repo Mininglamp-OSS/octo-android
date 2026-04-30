@@ -26,4 +26,6 @@
     <color name="code_block_bg">#1AFFFFFF</color>
     <color name="code_text_color">#E0E0E0</color>
     <color name="blockquote_color">#555555</color>
+    <!-- 跨 Space 加群 Toast「切换过去」按钮紫色（夜间模式保持一致紫色）-->
+    <color name="join_success_switch_purple">#722ED1</color>
 </resources>

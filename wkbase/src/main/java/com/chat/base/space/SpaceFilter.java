@@ -199,16 +199,24 @@ public final class SpaceFilter {
                                                     @Nullable String currentSpaceId,
                                                     @NonNull ChannelInfoProvider provider) {
         // 1. space-empty-pass
-        if (isBlank(currentSpaceId)) return false;
+        if (isBlank(currentSpaceId)) {
+            diagLog(channelID, channelType, currentSpaceId, null, null, null, null,
+                    "space-empty-pass", false);
+            return false;
+        }
 
         // 2. space-prefix Keep 快速路径（匹配即放行；不匹配 fall-through 给外部成员兜底机会）
         String prefix = extractSpacePrefix(channelID);
         if (prefix != null && currentSpaceId.equals(prefix)) {
-            return false; // space-prefix-keep
+            diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                    "space-prefix-keep", false);
+            return false;
         }
 
         // 3. person-pass（旧兼容：私聊过滤交给 shouldSkipMessageForSpace）
         if (channelType == WKChannelType.PERSONAL) {
+            diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                    "person-pass", false);
             return false;
         }
 
@@ -220,23 +228,78 @@ public final class SpaceFilter {
         }
 
         if (!isBlank(groupSpaceId)) {
-            if (currentSpaceId.equals(groupSpaceId)) return false; // cached-match
+            if (currentSpaceId.equals(groupSpaceId)) {
+                diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, null, null,
+                        "cached-match", false);
+                return false;
+            }
 
             // P2 #2: 我自己的 subscriber 行未缓存时 fail-open，避免竞态错杀
-            if (!provider.isMyMembershipCached(channelID, channelType)) {
-                return false; // my-row-not-cached-fail-open
+            boolean myCached = provider.isMyMembershipCached(channelID, channelType);
+            if (!myCached) {
+                diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, null, Boolean.FALSE,
+                        "my-row-not-cached-fail-open", false);
+                return false;
             }
 
             String mySourceSpaceId = provider.getMyMembershipSourceSpaceId(channelID, channelType);
             if (!isBlank(mySourceSpaceId) && currentSpaceId.equals(mySourceSpaceId)) {
-                return false; // cached-external-member
+                diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, mySourceSpaceId, Boolean.TRUE,
+                        "cached-external-member", false);
+                return false;
             }
+            diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, mySourceSpaceId, Boolean.TRUE,
+                    "cached-mismatch", true);
             return true; // cached-mismatch（我的 row 已 sync 且非外部成员）
         }
 
         // 8. fail-open: 无任何 Space 信息
+        diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                "fail-open", false);
         return false;
     }
+
+    /**
+     * 外部群漏显诊断日志（YUJ-178 / dmwork-android#134 问题 1）。
+     *
+     * <p>debug build 打印过滤决策全部关键变量：群 id / 归属 Space / 我自己的
+     * source_space_id / 我的 row 是否已缓存 / 最终分支。用来定位「同账号
+     * Web 端 2 个外部群全显示，Android 只显示 1 个」的数据缺失路径——
+     * 不猜逻辑，先让日志说话。Release build 自动 no-op（{@code WKLogUtils.d}
+     * 里判 {@code WKBinder.isDebug}）。
+     *
+     * <p>容错：{@code WKLogUtils.d} 依赖 Android framework（{@code Log}、
+     * {@code TextUtils}），在 host-side 单元测试里会抛 "Stub!"；用 try/catch
+     * 包住保证测试不被日志破坏（SpaceFilter 的纯函数路径必须保持 JVM-runnable）。
+     */
+    private static void diagLog(String channelID,
+                                 byte channelType,
+                                 @Nullable String currentSpaceId,
+                                 @Nullable String groupSpaceId,
+                                 @Nullable String prefix,
+                                 @Nullable String mySourceSpaceId,
+                                 @Nullable Boolean myCached,
+                                 @NonNull String branch,
+                                 boolean skip) {
+        try {
+            String line = "SpaceFilter#"
+                    + " branch=" + branch
+                    + " skip=" + skip
+                    + " channelID=" + channelID
+                    + " channelType=" + channelType
+                    + " currentSpaceId=" + currentSpaceId
+                    + " groupSpaceId=" + groupSpaceId
+                    + " prefix=" + prefix
+                    + " mySourceSpaceId=" + mySourceSpaceId
+                    + " myMembershipCached=" + myCached;
+            com.chat.base.utils.WKLogUtils.d(LOG_TAG, line);
+        } catch (Throwable ignored) {
+            // 忽略日志异常（host-side 单测或 Android stub 环境）
+        }
+    }
+
+    private static final String LOG_TAG = "SpaceFilter";
+
 
     /**
      * 私聊消息级 Space 过滤（对齐 web {@code shouldSkipMessageForSpace}）。

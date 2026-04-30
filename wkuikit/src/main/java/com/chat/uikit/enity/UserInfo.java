@@ -41,8 +41,17 @@ public class UserInfo {
     public String join_group_invite_name;
     public String join_group_time;
     public GroupMember group_member;
-    // YUJ-146-2 (对齐 web YUJ-144)：后端在 /users/{uid} 顶层返回成员的 home Space 及
-    // legacy is_external，用于 UserInfo 面板隐藏「解除好友 / 拉黑」按钮（同 Space 用户）。
+
+    // 外部成员 viewer-relative 标识字段。
+    // - YUJ-146-2（对齐 web YUJ-144）：后端在 /users/{uid} 顶层返回 home_space_id
+    //   和 legacy is_external，用于 UserInfo 面板隐藏「解除好友 / 拉黑」按钮。
+    // - YUJ-155（对齐 Web YUJ-138 PR#1088 & @Mention 候选菜单 YUJ-134）：
+    //   `/user/search` 返回的 UserInfo 也携带这些可选字段，搜索 adapter
+    //   由此判定「对当前 viewer 而言，这个人是不是外部成员？」并在昵称后
+    //   拼 " @SpaceName" 灰紫色后缀。降级兼容旧后端：缺 home_space_id 时
+    //   回落到 is_external + source_space_name。
     public String home_space_id;
-    public int is_external;  // legacy fallback
+    public String home_space_name;
+    public int is_external;
+    public String source_space_name;
 }

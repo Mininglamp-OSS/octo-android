@@ -391,7 +391,13 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                             userInfo.follow == 1 && !hideSendMsgForExternal
                                     ? View.VISIBLE : View.GONE);
                     wkVBinding.applyBtn.setVisibility(userInfo.follow == 1 ? View.GONE : View.VISIBLE);
-                    wkVBinding.deleteLayout.setVisibility(userInfo.follow == 1 ? View.VISIBLE : View.GONE);
+                    // YUJ-146-2 (对齐 web PR YUJ-144)：同 Space 成员隐藏「解除好友 / 拉黑」，
+                    // 跨 Space 成员保持原逻辑（delete 受 follow 控制，blacklist 常驻）。
+                    boolean isExternalUser = isExternalUser(userInfo, externalRes);
+                    wkVBinding.deleteLayout.setVisibility(
+                            isExternalUser && userInfo.follow == 1 ? View.VISIBLE : View.GONE);
+                    wkVBinding.pushBlackLayout.setVisibility(
+                            isExternalUser ? View.VISIBLE : View.GONE);
                     wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
                     if (userInfo.follow == 0) {
                         wkVBinding.applyBtn.setVisibility(TextUtils.isEmpty(vercode) ? View.GONE : View.VISIBLE);
@@ -657,5 +663,31 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         wkVBinding.sourceFromTv.setText(res.getSourceSpaceName());
         wkVBinding.fromLayout.setVisibility(View.VISIBLE);
         return true;
+    }
+
+    /**
+     * YUJ-146-2 (对齐 web PR YUJ-144)：判定 UserInfo 面板当前展示的成员对 viewer 是否为外部。
+     *
+     * <p>优先使用群上下文下的 viewer-relative resolver（与 YUJ-136 同源）；resolver 无输入
+     * （无 groupID / 自看 / 无 extras）时，回退到 UserInfo 自身字段：
+     * <ul>
+     *   <li>{@code home_space_id} vs 当前 viewer Space：不相等视为外部；</li>
+     *   <li>{@code home_space_id} 不可用 → legacy {@code is_external == 1}。</li>
+     * </ul>
+     * 同 Space（或判定不出外部）的成员在 UI 上应隐藏「解除好友 / 拉黑」按钮。
+     */
+    private boolean isExternalUser(
+            com.chat.uikit.enity.UserInfo userInfo,
+            ExternalViewerResolver.Resolution res) {
+        if (res != null) {
+            return res.isExternal();
+        }
+        if (userInfo == null) return false;
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        String home = userInfo.home_space_id;
+        if (!TextUtils.isEmpty(home) && !TextUtils.isEmpty(currentSpaceId)) {
+            return !home.equals(currentSpaceId);
+        }
+        return userInfo.is_external == 1;
     }
 }

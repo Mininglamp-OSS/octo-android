@@ -151,6 +151,43 @@ public class UserDetailExternalHelperTest {
         assertFalse(UserDetailExternalHelper.shouldHideSendMessageButton(res));
     }
 
+    // --- YUJ-177：applyBtn 跨 Space 边界（对齐 web PR#1013/1091 · iOS YUJ-136） ---
+
+    /** 跨 Space 外部成员：无论 follow / vercode，都必须隐藏「申请加好友」按钮。 */
+    @Test
+    public void applyBtn_externalUser_alwaysHidden() {
+        // 陌生 + 持 vercode 本是老逻辑下的「可申请」入口，外部成员也不放行
+        assertFalse("外部 + follow=0 + vercode 非空 仍必须隐藏 (YUJ-177 Space 边界)",
+                UserDetailExternalHelper.shouldShowApplyButton(
+                        /* isExternalUser */ true, /* follow */ 0, /* hasVercode */ true));
+        assertFalse("外部 + follow=0 + 无 vercode → 仍隐藏",
+                UserDetailExternalHelper.shouldShowApplyButton(true, 0, false));
+        assertFalse("外部 + follow=1 → 仍隐藏",
+                UserDetailExternalHelper.shouldShowApplyButton(true, 1, false));
+    }
+
+    /** 同 Space 陌生用户（非外部、follow=0、持 vercode）：保留老路径，可申请加好友。 */
+    @Test
+    public void applyBtn_sameSpaceStrangerWithVercode_shown() {
+        assertTrue("同 Space 陌生用户仍可申请加好友 (非回归)",
+                UserDetailExternalHelper.shouldShowApplyButton(
+                        /* isExternalUser */ false, /* follow */ 0, /* hasVercode */ true));
+    }
+
+    /** 同 Space 陌生用户但无 vercode（无申请入场券）：保持老逻辑隐藏。 */
+    @Test
+    public void applyBtn_sameSpaceStrangerNoVercode_hidden() {
+        assertFalse("无 vercode 时老逻辑即隐藏 applyBtn，helper 必须保一致",
+                UserDetailExternalHelper.shouldShowApplyButton(false, 0, false));
+    }
+
+    /** 已是好友：无论是否外部、是否持 vercode，都隐藏「申请加好友」按钮。 */
+    @Test
+    public void applyBtn_alreadyFollowed_hidden() {
+        assertFalse(UserDetailExternalHelper.shouldShowApplyButton(false, 1, true));
+        assertFalse(UserDetailExternalHelper.shouldShowApplyButton(false, 1, false));
+    }
+
     // --- helpers ---
 
     private static UserInfo userInfo(String uid) {

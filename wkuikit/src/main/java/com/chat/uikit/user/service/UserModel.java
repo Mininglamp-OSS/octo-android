@@ -3,6 +3,8 @@ package com.chat.uikit.user.service;
 import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -26,12 +28,15 @@ import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
 import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
+import com.chat.uikit.group.service.entity.GroupMember;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
+import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -345,24 +350,7 @@ public class UserModel extends WKBaseModel {
             @Override
             public void onSuccess(UserInfo result) {
                 if (result.group_member != null) {
-                    WKChannelMember member = new WKChannelMember();
-                    member.memberUID = result.group_member.uid;
-                    member.memberRemark = result.group_member.remark;
-                    member.memberName = result.group_member.name;
-                    member.channelID = result.group_member.group_no;
-                    member.channelType = WKChannelType.GROUP;
-                    member.isDeleted = result.group_member.is_deleted;
-                    member.version = result.group_member.version;
-                    member.role = result.group_member.role;
-                    member.status = result.group_member.status;
-                    member.memberInviteUID = result.group_member.invite_uid;
-                    member.robot = result.group_member.robot;
-                    member.forbiddenExpirationTime = result.group_member.forbidden_expir_time;
-                    if (member.robot == 1 && !TextUtils.isEmpty(result.group_member.username)) {
-                        member.memberName = result.group_member.username;
-                    }
-                    member.updatedAt = result.group_member.updated_at;
-                    member.createdAt = result.group_member.created_at;
+                    WKChannelMember member = buildMemberFromUserInfo(result.group_member);
                     WKIM.getInstance().getChannelMembersManager().save(member);
                 }
                 if (iUserInfo != null) {
@@ -377,6 +365,75 @@ public class UserModel extends WKBaseModel {
                 }
             }
         });
+    }
+
+    /**
+     * 从 {@code /users/{uid}?group_no=} 响应里的 {@link GroupMember} 构造一个
+     * 可写入 WKIM 本地缓存的 {@link WKChannelMember}，<b>关键：把外部群相关字段
+     * 完整透传到 {@code extraMap}</b>。
+     *
+     * <p>bug（YUJ-178 / dmwork-android#134 问题 2）：历史实现漏掉 extraMap 赋值，
+     * 导致随后 {@code ChannelMembersManager.save(member)} 走 INSERT OR REPLACE 路径时，
+     * 目标 row 的 {@code extra} 列被清空。再次打开成员列表读本地 DB 时就失去
+     * {@code home_space_id / source_space_name} 等字段，{@code @SpaceName} 后缀丢失。
+     *
+     * <p>透传字段清单与 {@code GroupModel.serialize}（YUJ-86 EP1）保持一致，集中在这里
+     * 有两个好处：
+     * <ol>
+     *     <li>避免 {@code GroupModel.serialize} / {@code UserModel.getUserInfo} 双路径漂移；</li>
+     *     <li>纯 Java null/empty 判空以便 JVM 单测，不依赖 Android framework。</li>
+     * </ol>
+     *
+     * @param gm 后端 {@code group_member} 节点，允许为 {@code null}（调用方应提前判空）
+     * @return 新建的 {@link WKChannelMember}；外部群字段全部非空时会写入 {@code extraMap}
+     */
+    @VisibleForTesting
+    @NonNull
+    static WKChannelMember buildMemberFromUserInfo(@NonNull GroupMember gm) {
+        WKChannelMember member = new WKChannelMember();
+        member.memberUID = gm.uid;
+        member.memberRemark = gm.remark;
+        member.memberName = gm.name;
+        member.channelID = gm.group_no;
+        member.channelType = WKChannelType.GROUP;
+        member.isDeleted = gm.is_deleted;
+        member.version = gm.version;
+        member.role = gm.role;
+        member.status = gm.status;
+        member.memberInviteUID = gm.invite_uid;
+        member.robot = gm.robot;
+        member.forbiddenExpirationTime = gm.forbidden_expir_time;
+        if (member.robot == 1 && !isNullOrEmpty(gm.username)) {
+            member.memberName = gm.username;
+        }
+        member.updatedAt = gm.updated_at;
+        member.createdAt = gm.created_at;
+        // 外部群字段写入 extraMap（YUJ-178 修复点，对齐 GroupModel.serialize 的清单）。
+        // 注：这里用纯 Java null+empty 判空而不是 TextUtils.isEmpty — 解析层需在 JVM
+        // 单测里跑，而 host JVM 的 android.jar stub 对 TextUtils.isEmpty 返回默认 false。
+        HashMap<String, Object> extras = new HashMap<>();
+        if (!isNullOrEmpty(gm.vercode)) {
+            extras.put(WKChannelMemberExtras.WKCode, gm.vercode);
+        }
+        extras.put(WKChannelMemberExtras.isExternal, gm.is_external);
+        if (!isNullOrEmpty(gm.source_space_id)) {
+            extras.put(WKChannelMemberExtras.sourceSpaceID, gm.source_space_id);
+        }
+        if (!isNullOrEmpty(gm.source_space_name)) {
+            extras.put(WKChannelMemberExtras.sourceSpaceName, gm.source_space_name);
+        }
+        if (!isNullOrEmpty(gm.home_space_id)) {
+            extras.put(WKChannelMemberExtras.homeSpaceID, gm.home_space_id);
+        }
+        if (!isNullOrEmpty(gm.home_space_name)) {
+            extras.put(WKChannelMemberExtras.homeSpaceName, gm.home_space_name);
+        }
+        member.extraMap = extras;
+        return member;
+    }
+
+    private static boolean isNullOrEmpty(@Nullable String s) {
+        return s == null || s.isEmpty();
     }
 
     public void quit(ICommonListener iCommonListener) {

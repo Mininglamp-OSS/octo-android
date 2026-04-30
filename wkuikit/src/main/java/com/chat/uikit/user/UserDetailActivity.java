@@ -390,7 +390,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     wkVBinding.sendMsgBtn.setVisibility(
                             userInfo.follow == 1 && !hideSendMsgForExternal
                                     ? View.VISIBLE : View.GONE);
-                    wkVBinding.applyBtn.setVisibility(userInfo.follow == 1 ? View.GONE : View.VISIBLE);
+                    // YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：跨 Space 外部成员不允许申请加好友。
                     // YUJ-146-2 (对齐 web PR YUJ-144)：同 Space 成员隐藏「解除好友 / 拉黑」，
                     // 跨 Space 成员保持原逻辑（delete 受 follow 控制，blacklist 常驻）。
                     boolean isExternalUser = isExternalUser(userInfo, externalRes);
@@ -399,11 +399,10 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     wkVBinding.pushBlackLayout.setVisibility(
                             isExternalUser ? View.VISIBLE : View.GONE);
                     wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
-                    if (userInfo.follow == 0) {
-                        wkVBinding.applyBtn.setVisibility(TextUtils.isEmpty(vercode) ? View.GONE : View.VISIBLE);
-                    } else {
-                        wkVBinding.applyBtn.setVisibility(View.GONE);
-                    }
+                    wkVBinding.applyBtn.setVisibility(
+                            UserDetailExternalHelper.shouldShowApplyButton(
+                                    isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode))
+                                    ? View.VISIBLE : View.GONE);
 
                     // Bot-specific UI
                     isBot = userInfo.robot == 1;
@@ -423,7 +422,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         showBotInfo(userInfo);
 
                         // Change apply button text for Bot
-                        if (userInfo.follow == 0) {
+                        if (userInfo.follow == 0 && !isExternalUser) {
                             wkVBinding.applyBtn.setText(R.string.bot_add_friend);
                             wkVBinding.applyBtn.setVisibility(View.VISIBLE);
                         }

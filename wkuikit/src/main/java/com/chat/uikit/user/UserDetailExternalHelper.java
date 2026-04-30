@@ -72,6 +72,24 @@ public final class UserDetailExternalHelper {
     }
 
     /**
+     * YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：决定 UserInfo 页「申请加好友」
+     * 按钮是否可见。跨 Space 外部成员必须强制隐藏，阻断 Space 边界越权入口；
+     * 同 Space / 自看 / 非群路径回退到原有 {@code follow} + {@code vercode} 逻辑。
+     *
+     * @param isExternalUser 上游 {@code UserDetailActivity.isExternalUser} 判定结果
+     * @param follow         {@code UserInfo.follow}（0 = 陌生，1 = 已加好友）
+     * @param hasVercode     是否持有 {@code vercode}（进入用户详情携带的申请入场券）
+     * @return {@code true} 表示 applyBtn 应设为 {@code View.VISIBLE}；
+     *         {@code false} 表示 {@code View.GONE}
+     */
+    public static boolean shouldShowApplyButton(
+            boolean isExternalUser, int follow, boolean hasVercode) {
+        if (isExternalUser) return false;
+        if (follow != 0) return false;
+        return hasVercode;
+    }
+
+    /**
      * Data-source merge extracted from {@code UserDetailActivity.applyExternalSourceRow}:
      * fresh response with home_space_id wins, else fall back to WKIM cache, else
      * use legacy fields from the fresh response. See codex review P2 for rationale.

@@ -103,12 +103,13 @@ public class ThreadMembersActivity extends WKBaseActivity<ActAllMemberLayoutBind
                     AllGroupMemberEntity entity = new AllGroupMemberEntity(member, 0, "", "");
                     allList.add(entity);
                 }
+                allList.sort((a, b) -> b.getChannelMember().role - a.getChannelMember().role);
                 if (page == 1) {
                     adapter.setList(allList);
                 } else {
                     adapter.addData(allList);
                 }
-                wkVBinding.refreshLayout.setEnableLoadMore(true);
+                wkVBinding.refreshLayout.setEnableLoadMore(list.size() >= 50);
             } else {
                 if (page == 1) {
                     adapter.setList(new ArrayList<>());

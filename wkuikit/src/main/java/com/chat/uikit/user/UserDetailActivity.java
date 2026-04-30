@@ -360,7 +360,18 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.identityLayout.setVisibility(View.VISIBLE);
                         wkVBinding.appIdNumTv.setText(userInfo.short_no);
                     }
-                    if (!applyExternalSourceRow(userInfo)) {
+                    // YUJ-136 (对齐 web PR#1021)：先算 viewer-relative 外部判定，
+                    // 同时驱动「来源」行 (YUJ-87) 与「发送消息」按钮是否隐藏 (本任务)。
+                    ExternalViewerResolver.Resolution externalRes =
+                            UserDetailExternalHelper.resolve(
+                                    userInfo,
+                                    WKIM.getInstance().getChannelMembersManager()
+                                            .getMember(groupID, WKChannelType.GROUP, uid),
+                                    WKConfig.getInstance().getUid(),
+                                    MsgModel.getInstance().getCurrentSpaceId(),
+                                    groupID);
+
+                    if (!applyExternalSourceRow(userInfo, externalRes)) {
                         if (!TextUtils.isEmpty(userInfo.source_desc)) {
                             wkVBinding.sourceFromTv.setText(userInfo.source_desc);
                             wkVBinding.fromLayout.setVisibility(View.VISIBLE);
@@ -374,7 +385,11 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     } else {
                         wkVBinding.blacklistTv.setText(R.string.push_black_list);
                     }
-                    wkVBinding.sendMsgBtn.setVisibility(userInfo.follow == 1 ? View.VISIBLE : View.GONE);
+                    boolean hideSendMsgForExternal =
+                            UserDetailExternalHelper.shouldHideSendMessageButton(externalRes);
+                    wkVBinding.sendMsgBtn.setVisibility(
+                            userInfo.follow == 1 && !hideSendMsgForExternal
+                                    ? View.VISIBLE : View.GONE);
                     wkVBinding.applyBtn.setVisibility(userInfo.follow == 1 ? View.GONE : View.VISIBLE);
                     wkVBinding.deleteLayout.setVisibility(userInfo.follow == 1 ? View.VISIBLE : View.GONE);
                     wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
@@ -619,60 +634,16 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
      *     整行显示成员 home/source Space 名，替代老的 source_desc。
      *   - 同 Space / 自看 / 无 home_space_id 的非外部成员 → 整行隐藏，继续用上层 source_desc 逻辑。
      * 返回 true 表示「来源」行已经由本方法处理，调用方不应再覆盖。
+     *
+     * <p>YUJ-136：判定抽入 {@link UserDetailExternalHelper}（可单测），本方法只负责把
+     * {@link ExternalViewerResolver.Resolution} 映射到 fromLayout 的可见性 / 文案，
+     * 同一条 resolution 也喂给「发送消息」按钮隐藏逻辑，确保两处视觉判断完全一致。
      */
-    private boolean applyExternalSourceRow(com.chat.uikit.enity.UserInfo userInfo) {
+    private boolean applyExternalSourceRow(
+            com.chat.uikit.enity.UserInfo userInfo,
+            ExternalViewerResolver.Resolution res) {
         if (userInfo == null) return false;
-        if (TextUtils.isEmpty(groupID)) return false;
-        // 自看直接走老逻辑（不会是外部）
-        if (uid != null && uid.equals(WKConfig.getInstance().getUid())) return false;
-
-        java.util.Map<String, Object> extras = null;
-        // 数据源优先级（codex review P2 修复）：
-        //   1) 新字段优先 —— 后端刚返回的 userInfo.group_member（若带 home_space_id）
-        //   2) WKIM 成员缓存 extraMap（历史路径，可能是 home-space 上线前的陈旧条目）
-        //   3) 退化 userInfo.group_member（没有 home_space_id 的老响应）
-        //
-        // 反面案例：cache 里只有 is_external=1 / source_space_name=OldSpace（上线前写入），
-        // 后端已经返回 home_space_id=viewer 的新视角相对数据 —— 若无条件复用 cache
-        // 就会把已经不是外部的成员误标为外部。改成「API 新响应带 home_space_id 必定覆盖 cache」。
-        com.chat.uikit.group.service.entity.GroupMember fresh = userInfo.group_member;
-        boolean freshHasHomeSpace = fresh != null && !TextUtils.isEmpty(fresh.home_space_id);
-
-        WKChannelMember member = WKIM.getInstance().getChannelMembersManager()
-                .getMember(groupID, WKChannelType.GROUP, uid);
-
-        if (freshHasHomeSpace) {
-            // 新字段权威路径：以响应为主，cache 仅作兜底不会反向污染 home 字段
-            extras = new java.util.HashMap<>();
-            if (member != null && member.extraMap != null) {
-                extras.putAll(member.extraMap);
-            }
-            extras.put(WKChannelMemberExtras.homeSpaceID, fresh.home_space_id);
-            if (!TextUtils.isEmpty(fresh.home_space_name)) {
-                extras.put(WKChannelMemberExtras.homeSpaceName, fresh.home_space_name);
-            } else {
-                extras.remove(WKChannelMemberExtras.homeSpaceName);
-            }
-            extras.put(WKChannelMemberExtras.isExternal, fresh.is_external);
-            if (!TextUtils.isEmpty(fresh.source_space_name)) {
-                extras.put(WKChannelMemberExtras.sourceSpaceName, fresh.source_space_name);
-            }
-        } else if (member != null && member.extraMap != null && !member.extraMap.isEmpty()) {
-            extras = member.extraMap;
-        } else if (fresh != null) {
-            extras = new java.util.HashMap<>();
-            if (fresh.is_external != 0) {
-                extras.put(WKChannelMemberExtras.isExternal, fresh.is_external);
-            }
-            if (!TextUtils.isEmpty(fresh.source_space_name)) {
-                extras.put(WKChannelMemberExtras.sourceSpaceName, fresh.source_space_name);
-            }
-        }
-        if (extras == null || extras.isEmpty()) return false;
-
-        String viewerSpaceId = com.chat.uikit.message.MsgModel.getInstance().getCurrentSpaceId();
-        ExternalViewerResolver.Resolution res =
-                ExternalViewerResolver.resolveFromExtras(extras, viewerSpaceId);
+        if (res == null) return false;
         if (!res.isExternal()) {
             // 同 Space（或未命中外部判定）→ 按产品规格「整行隐藏」，让上层 source_desc 不再抢占此行
             wkVBinding.fromLayout.setVisibility(View.GONE);

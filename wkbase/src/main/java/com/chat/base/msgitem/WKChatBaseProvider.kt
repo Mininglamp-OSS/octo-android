@@ -44,6 +44,7 @@ import com.chat.base.R
 import com.chat.base.WKBaseApplication
 import com.chat.base.config.WKConfig
 import com.chat.base.config.WKConstants
+import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.EndpointSID
@@ -58,6 +59,7 @@ import com.chat.base.endpoint.entity.ReadMsgDetailMenu
 import com.chat.base.endpoint.entity.ShowMsgReactionMenu
 import com.chat.base.endpoint.entity.WithdrawMsgMenu
 import com.chat.base.entity.PopupMenuItem
+import com.chat.base.external.ExternalSourceResolver
 import com.chat.base.msg.ChatAdapter
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.ActionBarMenuSubItem
@@ -652,6 +654,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     String.format("%s/%s", showName, os)
                 }
 
+                val externalSpaceName = resolveExternalSpaceSuffix(uiChatMsgItemEntity.wkMsg)
                 val isBot = uiChatMsgItemEntity.wkMsg.from != null && uiChatMsgItemEntity.wkMsg.from.robot == 1
                 if (isBot) {
                     val density = receivedNameTv.resources.displayMetrics.density
@@ -669,6 +672,13 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                         ),
                         badgeStart, builder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
+                    if (!externalSpaceName.isNullOrEmpty()) {
+                        appendExternalSpaceSuffix(builder, externalSpaceName)
+                    }
+                    receivedNameTv.text = builder
+                } else if (!externalSpaceName.isNullOrEmpty()) {
+                    val builder = SpannableStringBuilder(nameText)
+                    appendExternalSpaceSuffix(builder, externalSpaceName)
                     receivedNameTv.text = builder
                 } else {
                     receivedNameTv.text = nameText
@@ -693,6 +703,41 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             }
         } else receivedNameTv.visibility = GONE
 
+    }
+
+    /**
+     * YUJ-89: resolve the viewer-relative "@SpaceName" suffix for a message bubble
+     * nickname. Returns null when the message is not external for the current
+     * viewer, or when required fields are missing (bubble renders nickname only).
+     *
+     * <p>This routes through [ExternalSourceResolver] so the resolution logic is
+     * shared with the merge-forward detail screen. Keeping it here (rather than
+     * inline) keeps the formatting + span layering in one place and makes the
+     * "YUJ-53-style silent failure" path easy to unit test.
+     */
+    protected fun resolveExternalSpaceSuffix(wkMsg: WKMsg?): String? {
+        if (wkMsg == null) return null
+        val viewerHomeSpaceId = WKSharedPreferencesUtil.getInstance()
+            .getSPWithUID("current_space_id") ?: ""
+        return ExternalSourceResolver.resolveSourceSpaceName(wkMsg, viewerHomeSpaceId)
+    }
+
+    /**
+     * Append " @SpaceName" to the nickname spannable using a muted gray style so
+     * the Space label does not visually compete with the nickname color.
+     */
+    protected fun appendExternalSpaceSuffix(
+        builder: SpannableStringBuilder,
+        spaceName: String
+    ) {
+        val start = builder.length
+        builder.append(" @").append(spaceName)
+        builder.setSpan(
+            android.text.style.ForegroundColorSpan(0xFF8B5CF6.toInt()),
+            start,
+            builder.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
     }
 
     private fun setCheckBox(

@@ -121,7 +121,7 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
         ChatMultiForwardEntity view = new ChatMultiForwardEntity();
         view.itemType = 2;
         list.add(view);
-        ChatMultiForwardDetailAdapter adapter = new ChatMultiForwardDetailAdapter(showDetailTime, list);
+        ChatMultiForwardDetailAdapter adapter = new ChatMultiForwardDetailAdapter(showDetailTime, list, WKMultiForwardContent.userList);
         initAdapter(wkVBinding.recyclerView, adapter);
     }
 

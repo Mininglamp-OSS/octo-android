@@ -42,10 +42,10 @@ public class GroupPresenter implements GroupContract.GroupPresenter {
 
     @Override
     public void getQrData(String groupNo) {
-        GroupModel.getInstance().getGroupQr(groupNo, (code, msg, day, qrCode, expire) -> {
+        GroupModel.getInstance().getGroupQr(groupNo, (code, msg, day, qrCode, expire, inviteUrl) -> {
             if (groupView.get() != null) {
                 if (code == HttpResponseCode.success) {
-                    groupView.get().setQrData(day, qrCode, expire);
+                    groupView.get().setQrData(day, qrCode, expire, inviteUrl);
                 } else {
                     WKToastUtils.getInstance().showToastNormal(msg);
                 }

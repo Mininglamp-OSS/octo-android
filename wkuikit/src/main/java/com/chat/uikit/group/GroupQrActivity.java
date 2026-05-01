@@ -1,5 +1,8 @@
 package com.chat.uikit.group;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.text.TextUtils;
 import android.view.View;
@@ -12,6 +15,7 @@ import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActGroupQrLayoutBinding;
 import com.chat.uikit.group.service.GroupContract;
@@ -114,7 +118,7 @@ public class GroupQrActivity extends WKBaseActivity<ActGroupQrLayoutBinding> imp
     }
 
     @Override
-    public void setQrData(int day, String qrcode, String expire) {
+    public void setQrData(int day, String qrcode, String expire, String inviteUrl) {
         if (TextUtils.isEmpty(qrcode)) {
             wkVBinding.qrIv.setImageResource(R.mipmap.icon_no_qr);
         } else {
@@ -123,6 +127,20 @@ public class GroupQrActivity extends WKBaseActivity<ActGroupQrLayoutBinding> imp
             wkVBinding.qrIv.setImageBitmap(mBitmap);
             String content = String.format(getString(R.string.group_qr_desc), day, expire);
             wkVBinding.qrTv.setText(content);
+        }
+        // 外部群·EP8：仅当后端返回 invite_url 时展示「复制邀请链接」按钮，
+        // 复制内容是 invite_url（不是 qrcode 图片 URL）。
+        if (!TextUtils.isEmpty(inviteUrl)) {
+            wkVBinding.copyInviteLinkBtn.setVisibility(View.VISIBLE);
+            wkVBinding.copyInviteLinkBtn.setOnClickListener(v -> {
+                ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm == null) return;
+                cm.setPrimaryClip(ClipData.newPlainText("invite_url", inviteUrl));
+                WKToastUtils.getInstance().showToastNormal(getString(R.string.group_invite_link_copied));
+            });
+        } else {
+            wkVBinding.copyInviteLinkBtn.setVisibility(View.GONE);
+            wkVBinding.copyInviteLinkBtn.setOnClickListener(null);
         }
     }
 

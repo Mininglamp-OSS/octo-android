@@ -31,7 +31,7 @@ public class GroupContract {
 
         void onRefreshGroupSetting(String key, int value);
 
-        void setQrData(int day, String qrCode, String expire);
+        void setQrData(int day, String qrCode, String expire, String inviteUrl);
 
         void setMyGroups(List<GroupEntity> list);
     }

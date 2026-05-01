@@ -95,6 +95,20 @@
                         android:text="@string/group_qr_desc"
                         android:textColor="@color/color999"
                         android:textSize="14sp" />
+
+                    <Button
+                        android:id="@+id/copyInviteLinkBtn"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="20dp"
+                        android:layout_marginBottom="20dp"
+                        android:background="@drawable/bg_dialog_btn_create"
+                        android:text="@string/group_copy_invite_link"
+                        android:textAllCaps="false"
+                        android:textColor="@color/white"
+                        android:textSize="15sp"
+                        android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>

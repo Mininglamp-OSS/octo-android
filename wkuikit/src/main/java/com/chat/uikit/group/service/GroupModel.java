@@ -523,19 +523,19 @@ public class GroupModel extends WKBaseModel {
         request(createService(GroupService.class).getGroupQr(groupID), new IRequestResultListener<>() {
             @Override
             public void onSuccess(GroupQr result) {
-                iGroupQr.onResult(HttpResponseCode.success, "", result.day, result.qrcode, result.expire);
+                iGroupQr.onResult(HttpResponseCode.success, "", result.day, result.qrcode, result.expire, result.invite_url);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iGroupQr.onResult(code, msg, 0, "", "");
+                iGroupQr.onResult(code, msg, 0, "", "", "");
             }
         });
 
     }
 
     public interface IGroupQr {
-        void onResult(int code, String msg, int day, String qrCode, String expire);
+        void onResult(int code, String msg, int day, String qrCode, String expire, String inviteUrl);
     }
 
     /**

@@ -706,20 +706,70 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     /**
-     * YUJ-89: resolve the viewer-relative "@SpaceName" suffix for a message bubble
-     * nickname. Returns null when the message is not external for the current
-     * viewer, or when required fields are missing (bubble renders nickname only).
+     * YUJ-89 + YUJ-189: resolve the viewer-relative "@SpaceName" suffix for a
+     * message bubble nickname. Returns null when the message is not external
+     * for the current viewer, or when required fields are missing (bubble
+     * renders nickname only).
      *
-     * <p>This routes through [ExternalSourceResolver] so the resolution logic is
-     * shared with the merge-forward detail screen. Keeping it here (rather than
-     * inline) keeps the formatting + span layering in one place and makes the
-     * "YUJ-53-style silent failure" path easy to unit test.
+     * <p>Priority order (aligned with web PR#997/#1013/#1069):
+     * <ol>
+     *   <li>[ExternalSourceResolver] on the message itself
+     *       (msg.localExtraMap home_space_id / is_external / source_space_name
+     *       → channel.remoteExtraMap fallback).</li>
+     *   <li>YUJ-189 new fallback: the sender's cached [WKChannelMember] in
+     *       this group — {@code extraMap} carries home_space_id / is_external /
+     *       source_space_name after YUJ-87 / YUJ-178 data-layer pass-through.
+     *       This plugs the gap when messages synced before YUJ-89 have empty
+     *       msg-level external fields but the member cache has them (or vice
+     *       versa after a stale incremental sync).</li>
+     * </ol>
+     *
+     * <p>Keeping the fallback in this wrapper (rather than inside
+     * [ExternalSourceResolver]) keeps the msg-level resolver algorithm
+     * untouched — we only broaden the data entry.
      */
     protected fun resolveExternalSpaceSuffix(wkMsg: WKMsg?): String? {
         if (wkMsg == null) return null
         val viewerHomeSpaceId = WKSharedPreferencesUtil.getInstance()
             .getSPWithUID("current_space_id") ?: ""
-        return ExternalSourceResolver.resolveSourceSpaceName(wkMsg, viewerHomeSpaceId)
+        val msgLevel = ExternalSourceResolver.resolveSourceSpaceName(wkMsg, viewerHomeSpaceId)
+        if (!msgLevel.isNullOrEmpty()) return msgLevel
+        return resolveFromSenderMemberCache(wkMsg, viewerHomeSpaceId)
+    }
+
+    /**
+     * YUJ-189 · fallback data source: look up the sender's cached
+     * [WKChannelMember] in the same group and feed its extras through the
+     * viewer-relative resolver. Scoped to group chats (matches
+     * [ExternalSourceResolver]'s guard), null-safe and try/catch-wrapped
+     * so unit tests that don't bootstrap WKIM never explode.
+     */
+    private fun resolveFromSenderMemberCache(
+        wkMsg: WKMsg,
+        viewerHomeSpaceId: String,
+    ): String? {
+        if (wkMsg.channelType != WKChannelType.GROUP) return null
+        val channelId = wkMsg.channelID ?: return null
+        if (channelId.isEmpty()) return null
+        val fromUid = wkMsg.fromUID ?: return null
+        if (fromUid.isEmpty()) return null
+        if (!wkMsg.topicID.isNullOrEmpty()) return null
+        return try {
+            val member = WKIM.getInstance().channelMembersManager
+                .getMember(channelId, WKChannelType.GROUP, fromUid) ?: return null
+            val rawExtras = member.extraMap ?: return null
+            @Suppress("UNCHECKED_CAST")
+            val extras = rawExtras as Map<String, Any?>
+            val resolution = com.chat.base.external.ExternalViewerResolver
+                .resolveFromExtras(extras, viewerHomeSpaceId)
+            if (resolution.isExternal && resolution.sourceSpaceName.isNotEmpty()) {
+                resolution.sourceSpaceName
+            } else {
+                null
+            }
+        } catch (ignored: Throwable) {
+            null
+        }
     }
 
     /**

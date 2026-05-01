@@ -167,6 +167,7 @@
     <string name="enabled">已开启</string>
     <string name="scan_user_qr">扫描二维码名片</string>
     <string name="show_all_members">查看全部成员</string>
+    <string name="show_all_members_with_count">查看全部成员 (%1$d)</string>
     <string name="group_members">群成员(%s)</string>
     <string name="last_msg_draft">[草稿]</string>
     <string name="last_msg_remind">[有人@我]</string>

@@ -684,28 +684,45 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**
-     * YUJ-146-2 (对齐 web PR YUJ-144)：判定 UserInfo 面板当前展示的成员对 viewer 是否为外部。
+     * YUJ-146-2 (对齐 web PR YUJ-144) + YUJ-189 (对齐 web PR#1021 `isExternalToViewer`)：
+     * 判定 UserInfo 面板当前展示的成员对 viewer 是否为外部。
      *
-     * <p>优先使用群上下文下的 viewer-relative resolver（与 YUJ-136 同源）；resolver 无输入
-     * （无 groupID / 自看 / 无 extras）时，回退到 UserInfo 自身字段：
-     * <ul>
-     *   <li>{@code home_space_id} vs 当前 viewer Space：不相等视为外部；</li>
-     *   <li>{@code home_space_id} 不可用 → legacy {@code is_external == 1}。</li>
-     * </ul>
-     * 同 Space（或判定不出外部）的成员在 UI 上应隐藏「解除好友 / 拉黑」按钮。
+     * <p>对齐 web 的「多源 OR」语义 — web 的 {@code UserInfoVM.isExternalToViewer} 会
+     * 依次试 {@code fromSubscriberOfUser.orgData}（群成员 subscriber）和
+     * {@code channelInfo.orgData}（/users/{uid}?group_no 顶层），只要**任一**路径
+     * 判定为外部即返回 true；Android 对应的两个数据源分别是：
+     * <ol>
+     *   <li>群 context 下的 viewer-relative resolver（读 group_member / WKIM 成员缓存 extras） —
+     *       等价于 web 的 subscriber；</li>
+     *   <li>UserInfo 顶层 {@code home_space_id} / legacy {@code is_external} —
+     *       等价于 web 的 channelInfo.orgData。</li>
+     * </ol>
+     * 任一路径判定为外部就按外部处理；两个路径都说「不是外部」才返回 false。
+     *
+     * <p>这样当后端只在 {@code group_member} 或只在顶层回填外部字段、或 WKIM 成员缓存
+     * 因增量 sync 缺字段时，应用层依然能命中隐藏规则（YUJ-183 根因下的兜底）。
      */
     private boolean isExternalUser(
             com.chat.uikit.enity.UserInfo userInfo,
             ExternalViewerResolver.Resolution res) {
-        if (res != null) {
-            return res.isExternal();
+        // 源 1：resolver（group_member DTO / 成员缓存 extras）
+        if (res != null && res.isExternal()) {
+            return true;
         }
+        // 源 2：UserInfo 顶层字段（/users/{uid} 顶层 — 对齐 web channelInfo.orgData）
         if (userInfo == null) return false;
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         String home = userInfo.home_space_id;
-        if (!TextUtils.isEmpty(home) && !TextUtils.isEmpty(currentSpaceId)) {
-            return !home.equals(currentSpaceId);
+        if (!TextUtils.isEmpty(home)) {
+            if (!TextUtils.isEmpty(currentSpaceId)) {
+                if (!home.equals(currentSpaceId)) return true;
+            } else {
+                // viewer Space 未知时与 resolver 对齐：home 非空即按外部处理
+                return true;
+            }
+        } else if (userInfo.is_external == 1) {
+            return true;
         }
-        return userInfo.is_external == 1;
+        return false;
     }
 }

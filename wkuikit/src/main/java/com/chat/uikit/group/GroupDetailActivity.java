@@ -507,9 +507,17 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 wkVBinding.groupManageLayout.setVisibility(View.VISIBLE);
             }
             groupMemberAdapter.setList(temp);
-            if (list.size() >= 18) {
-                wkVBinding.showAllMembersTv.setVisibility(View.VISIBLE);
-            } else wkVBinding.showAllMembersTv.setVisibility(View.GONE);
+            // YUJ-189 #3：对齐企微 — 缩略图网格里外部成员 @SpaceName 按单行 ellipsize
+            // 截断不折断，完整 @SpaceName 在「查看全部成员 (N)」一人一行的列表页展示。
+            // 入口总是显示并拼上真实成员总数（从 WKIM 本地缓存读，比分页 list.size() 更准）。
+            int totalMemberCount = WKIM.getInstance().getChannelMembersManager()
+                    .getMemberCount(groupNo, WKChannelType.GROUP);
+            if (totalMemberCount <= 0) {
+                totalMemberCount = list.size();
+            }
+            wkVBinding.showAllMembersTv.setText(
+                    getString(R.string.show_all_members_with_count, totalMemberCount));
+            wkVBinding.showAllMembersTv.setVisibility(View.VISIBLE);
         }
     }
 

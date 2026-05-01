@@ -413,6 +413,17 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     boolean showExternalHint = UserDetailExternalHelper.shouldShowExternalHint(isExternalUser);
                     wkVBinding.externalHintTv.setVisibility(showExternalHint ? View.VISIBLE : View.GONE);
 
+                    // YUJ-206（对齐 web UserInfo/index.tsx:52-55 / 企微）：Space 模式
+                    // 下同 Space 非好友（人类）直接「发送消息」，跳过「申请加好友」。
+                    // 嘉伟 2026-05-01 Android 真机实测：外部群点成员误显 applyBtn 的
+                    // 根因之二。Bot 走独立的 bot_add_friend 审批流，所以此分支不接管 bot。
+                    boolean spaceModeSendMsg =
+                            UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                                    isExternalUser,
+                                    MsgModel.getInstance().getCurrentSpaceId(),
+                                    userInfo.robot == 1,
+                                    userInfo.follow);
+
                     if (hideBottomPanel) {
                         wkVBinding.sendMsgBtn.setVisibility(View.GONE);
                         wkVBinding.deleteLayout.setVisibility(View.GONE);
@@ -422,16 +433,20 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     } else {
                         boolean hideSendMsgForExternal =
                                 UserDetailExternalHelper.shouldHideSendMessageButton(externalRes);
+                        // YUJ-206：follow=1 || Space 模式 + 非好友 + 非 bot → 显示 sendMsg。
                         wkVBinding.sendMsgBtn.setVisibility(
-                                userInfo.follow == 1 && !hideSendMsgForExternal
+                                ((userInfo.follow == 1 && !hideSendMsgForExternal) || spaceModeSendMsg)
                                         ? View.VISIBLE : View.GONE);
                         // YUJ-146-2：同 Space 成员隐藏「解除好友 / 拉黑」。
                         wkVBinding.deleteLayout.setVisibility(View.GONE);
                         wkVBinding.pushBlackLayout.setVisibility(View.GONE);
                         wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
+                        // YUJ-206：Space 模式下 applyBtn 让位给 sendMsgBtn，
+                        // 仅在非 Space 模式 + 陌生人 + 持 vercode 时才展示（保持老语义）。
                         wkVBinding.applyBtn.setVisibility(
-                                UserDetailExternalHelper.shouldShowApplyButton(
-                                        isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode))
+                                (!spaceModeSendMsg
+                                        && UserDetailExternalHelper.shouldShowApplyButton(
+                                                isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode)))
                                         ? View.VISIBLE : View.GONE);
                     }
 

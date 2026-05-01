@@ -90,6 +90,39 @@ public final class UserDetailExternalHelper {
     }
 
     /**
+     * YUJ-206（对齐 web {@code UserInfo/index.tsx:52-55} / 企微语义）：
+     * Space 模式下同 Space 非好友 → 直接「发送消息」，跳过「申请加好友」。
+     *
+     * <p>嘉伟 2026-05-01 Android 真机实测复现：外部群里点成员显示「申请加好友」。
+     * 根因之一是 UserDetailActivity 对 {@code isExternalUser=false} 的分支
+     * 未区分 Space 模式，同 Space 非好友回落到 {@link #shouldShowApplyButton}，
+     * 结果当 UserInfo 携带 vercode 时错误显示 applyBtn。
+     *
+     * <p>按任务描述锁定的优先级（external hint &gt; self &gt; Space-mode 非bot
+     * → sendMsg &gt; Space-mode bot &gt; 非Space-mode follow）：
+     * <ul>
+     *   <li>{@code isExternalUser=true} → 返回 false（交给 bottomPanel 隐藏分支）</li>
+     *   <li>{@code follow=1} → 返回 false（原有「已是好友 → sendMsg」分支仍生效）</li>
+     *   <li>{@code isBot=true} → 返回 false（保留 bot_add_friend 审批流，即使在 Space 模式）</li>
+     *   <li>{@code viewerSpaceId} 为空 → 返回 false（非 Space 模式，走 follow + vercode 老路径）</li>
+     *   <li>其它 → true（Space 模式 + 非好友 + 人类 → 直接 sendMsg，隐藏 applyBtn）</li>
+     * </ul>
+     *
+     * @param isExternalUser 上游已判定的「相对 viewer 是否跨 Space 外部成员」
+     * @param viewerSpaceId  {@code MsgModel.getInstance().getCurrentSpaceId()}（
+     *                       空串 / null 视为非 Space 模式）
+     * @param isBot          {@code UserInfo.robot == 1}
+     * @param follow         {@code UserInfo.follow}（0 = 陌生，1 = 已加好友）
+     */
+    public static boolean shouldUseSpaceModeSendMessage(
+            boolean isExternalUser, String viewerSpaceId, boolean isBot, int follow) {
+        if (isExternalUser) return false;
+        if (follow != 0) return false;
+        if (isBot) return false;
+        return !isNullOrEmpty(viewerSpaceId);
+    }
+
+    /**
      * YUJ-204（对齐 web PR#1021 `UserInfo/index.tsx:29-48` — isExternalToViewer=true
      * 时整个 bottomPanel 被 `.wk-userinfo-footer-external-hint` 替换）：
      * 外部成员视角下 UserInfo 页底部所有交互按钮（applyBtn / sendMsgBtn /

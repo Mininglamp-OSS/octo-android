@@ -740,7 +740,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     adjustPersonalForSpace(uiConversationMsg);
                     // Space 过滤：只添加属于当前 Space 的会话
                     String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-                    if (spaceConversationKeys.isEmpty() || spaceConversationKeys.contains(key)) {
+                    // YUJ-208：去掉 spaceConversationKeys.isEmpty() 短路 —— 白名单为空
+                    // （首次加载 / Space 切换瞬态）时依然必须走 SpaceFilter，否则来自
+                    // 其他 Space 的外部群新消息会污染当前会话列表。
+                    if (spaceConversationKeys.contains(key)) {
                         uiList.add(new ChatConversationMsg(uiConversationMsg));
                         spaceConversationKeys.add(key);
                     } else {
@@ -1283,7 +1286,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             adjustPersonalForSpace(uiConversationMsg);
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-            if (!spaceConversationKeys.isEmpty() && !spaceConversationKeys.contains(key)) {
+            // YUJ-208：不再以 spaceConversationKeys.isEmpty() 作为短路条件。
+            // 只要 channel 不在已验证白名单中，就必须过一遍 SpaceFilter —— 否则新消息到达
+            // 会在 spaceConversationKeys 尚未被 sync 回填时（首次加载 / 切 Space 瞬态 /
+            // 连接重建等窗口）错挂到当前 Space。SpaceFilter 自身带 fail-open 兜底，
+            // 因此在非 Space 模式或 race 窗口依然安全（不会误杀）。
+            if (!spaceConversationKeys.contains(key)) {
                 // 不在白名单中：精确判断是否属于当前 Space
                 if (uiConversationMsg.channelType == WKChannelType.GROUP) {
                     // 群聊：用 channel 级别的 space_id 判断（群消息 payload 不含 space_id）

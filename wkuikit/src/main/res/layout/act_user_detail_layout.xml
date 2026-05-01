@@ -409,6 +409,22 @@
                     android:visibility="gone"
                     app:cornerRadius="@dimen/button_radian" />
 
+                <!-- YUJ-204：外部成员 viewer 下替代整个 bottomPanel 的提示文案，
+                     对齐 web `.wk-userinfo-footer-external-hint`。默认隐藏，
+                     UserDetailActivity 在 isExternalUser=true 时显示。 -->
+                <TextView
+                    android:id="@+id/externalHintTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="15dp"
+                    android:layout_marginTop="30dp"
+                    android:layout_marginEnd="15dp"
+                    android:gravity="center"
+                    android:text="@string/external_member_only_in_group_hint"
+                    android:textColor="@color/color999"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+
                 <Space
                     android:layout_width="match_parent"
                     android:layout_height="30dp" />

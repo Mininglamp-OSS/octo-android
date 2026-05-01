@@ -206,6 +206,64 @@ public class SpaceFilterTest {
     }
 
     // ------------------------------------------------------------------
+    // YUJ-208 — 新消息到达路径：外部群 + 非当前 Space 必须被跳过
+    //
+    // 场景：用户停留在 Space A，来自 Space B 的外部群 G 收到新消息 → 在 A 的
+    // 会话列表 onNewMessage / recent-update 路径必须经由 SpaceFilter 判定为 skip，
+    // 否则 G 会错挂到 A 的列表（污染当前视图）。
+    //
+    // 该测试锁定 SpaceFilter 对「新消息 + 外部群 + 非当前 Space」场景的决策合约；
+    // ChatFragment 侧已移除 spaceConversationKeys.isEmpty() 短路，保证
+    // 白名单空态（首次加载 / 切 Space 瞬态）下依然会调用本函数。
+    // ------------------------------------------------------------------
+
+    @Test
+    public void yuj208_newMessage_externalGroupFromOtherSpace_skips_viaRemoteExtra() {
+        // 场景 A：channel.remoteExtraMap.space_id=B 可读 → cached-mismatch → skip
+        // 我在 Space A，非该群外部成员（未以 A 身份加入），my row 已缓存
+        StubProvider p = new StubProvider(
+                /*groupSpaceId=*/SPACE_B,
+                /*mySourceSpaceId=*/null,
+                /*mineCached=*/true);
+        assertTrue(SpaceFilter.shouldSkipChannelForSpace("group_any", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void yuj208_newMessage_externalGroupFromOtherSpace_skips_viaPrefixFallback() {
+        // 场景 B：channelInfo 还没同步（groupSpaceId=null），但 channelID 带 sB_ 前缀，
+        // 回退到前缀识别归属 Space B → cached-mismatch → skip
+        String cid = "s" + SPACE_B + "_external_group";
+        StubProvider p = new StubProvider(
+                /*groupSpaceId=*/null,
+                /*mySourceSpaceId=*/null,
+                /*mineCached=*/true);
+        assertTrue(SpaceFilter.shouldSkipChannelForSpace(cid, GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void yuj208_newMessage_externalGroupWhereIAmExternalMember_doesNotSkip() {
+        // 对照：我在 Space A 以外部成员身份加入 Space B 的群 G（source_space_id=A）
+        // → 此时 G 的新消息应当出现在 A 的列表（这是外部群放行约定）
+        StubProvider p = new StubProvider(
+                /*groupSpaceId=*/SPACE_B,
+                /*mySourceSpaceId=*/SPACE_A,
+                /*mineCached=*/true);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group_any", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void yuj208_newMessage_memberExtraNotLoaded_failOpen() {
+        // 约束「🟡 若 SpaceFilter 需要 source_space_id 但 WKSDK member extra 未加载，
+        // 按 fail-open 原则降级」—— my row 未缓存时不得直接判 skip，避免启动/切 Space
+        // 竞态窗口错杀外部群（由 eventual consistency 在下一次校准修正）。
+        StubProvider p = new StubProvider(
+                /*groupSpaceId=*/SPACE_B,
+                /*mySourceSpaceId=*/null,
+                /*mineCached=*/false);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group_any", GROUP, SPACE_A, p));
+    }
+
+    // ------------------------------------------------------------------
     // hasSpacePrefix / extractSpacePrefix
     // ------------------------------------------------------------------
 

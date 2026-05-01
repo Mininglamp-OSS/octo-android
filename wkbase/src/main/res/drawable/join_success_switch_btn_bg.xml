@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 跨 Space 切换按钮：对齐 EP5 三端紫色 #722ED1 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/join_success_switch_purple" />
-    <corners android:radius="6dp" />
-</shape>

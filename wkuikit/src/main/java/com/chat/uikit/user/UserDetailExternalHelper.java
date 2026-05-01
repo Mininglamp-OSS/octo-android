@@ -90,6 +90,92 @@ public final class UserDetailExternalHelper {
     }
 
     /**
+     * YUJ-206（对齐 web {@code UserInfo/index.tsx:52-55} / 企微语义）：
+     * Space 模式下同 Space 非好友 → 直接「发送消息」，跳过「申请加好友」。
+     *
+     * <p>嘉伟 2026-05-01 Android 真机实测复现：外部群里点成员显示「申请加好友」。
+     * 根因之一是 UserDetailActivity 对 {@code isExternalUser=false} 的分支
+     * 未区分 Space 模式，同 Space 非好友回落到 {@link #shouldShowApplyButton}，
+     * 结果当 UserInfo 携带 vercode 时错误显示 applyBtn。
+     *
+     * <p>按任务描述锁定的优先级（external hint &gt; self &gt; Space-mode 非bot
+     * → sendMsg &gt; Space-mode bot &gt; 非Space-mode follow）：
+     * <ul>
+     *   <li>{@code isExternalUser=true} → 返回 false（交给 bottomPanel 隐藏分支）</li>
+     *   <li>{@code follow=1} → 返回 false（原有「已是好友 → sendMsg」分支仍生效）</li>
+     *   <li>{@code isBot=true} → 返回 false（保留 bot_add_friend 审批流，即使在 Space 模式）</li>
+     *   <li>{@code viewerSpaceId} 为空 → 返回 false（非 Space 模式，走 follow + vercode 老路径）</li>
+     *   <li>其它 → true（Space 模式 + 非好友 + 人类 → 直接 sendMsg，隐藏 applyBtn）</li>
+     * </ul>
+     *
+     * @param isExternalUser 上游已判定的「相对 viewer 是否跨 Space 外部成员」
+     * @param viewerSpaceId  {@code MsgModel.getInstance().getCurrentSpaceId()}（
+     *                       空串 / null 视为非 Space 模式）
+     * @param isBot          {@code UserInfo.robot == 1}
+     * @param follow         {@code UserInfo.follow}（0 = 陌生，1 = 已加好友）
+     */
+    public static boolean shouldUseSpaceModeSendMessage(
+            boolean isExternalUser, String viewerSpaceId, boolean isBot, int follow) {
+        if (isExternalUser) return false;
+        if (follow != 0) return false;
+        if (isBot) return false;
+        return !isNullOrEmpty(viewerSpaceId);
+    }
+
+    /**
+     * YUJ-204（对齐 web PR#1021 `UserInfo/index.tsx:29-48` — isExternalToViewer=true
+     * 时整个 bottomPanel 被 `.wk-userinfo-footer-external-hint` 替换）：
+     * 外部成员视角下 UserInfo 页底部所有交互按钮（applyBtn / sendMsgBtn /
+     * deleteLayout / pushBlackLayout）必须一起隐藏。单一判定入口方便单测覆盖。
+     */
+    public static boolean shouldHideBottomPanel(boolean isExternalUser) {
+        return isExternalUser;
+    }
+
+    /**
+     * YUJ-204：与 {@link #shouldHideBottomPanel(boolean)} 对偶 —
+     * 外部成员必须显示「仅可在群内交流」提示文案，语义上是 bottomPanel 的替代物。
+     * 独立一个 helper 是为了让 activity 端不用重复写条件，也方便单测对齐 web 行为。
+     */
+    public static boolean shouldShowExternalHint(boolean isExternalUser) {
+        return isExternalUser;
+    }
+
+    /**
+     * YUJ-204（对齐 web Subscribers/list.tsx:320 `@<SourceSpaceName>`）：
+     * 决定 UserInfo 页「姓名旁 / 来源行」要渲染的 Space 名。
+     *
+     * <p>非外部成员一律返回 null（不渲染）。外部成员按优先级：
+     * <ol>
+     *   <li>viewer-relative resolver 拿到的 {@code sourceSpaceName}（来自
+     *       group_member / WKIM 成员缓存 extras）—— 最贴近 web subscriber.orgData；</li>
+     *   <li>UserInfo 顶层 {@code home_space_name}（对齐 web channelInfo.orgData，
+     *       老后端/缺 group_member 时的兜底）；</li>
+     *   <li>legacy {@code source_space_name}（最老的字段，仅在 is_external=1 路径下
+     *       有效）。</li>
+     * </ol>
+     * 三路径都空时返回 null，activity 端走「只显示 hint 不渲染 @SpaceName」的降级。
+     */
+    public static String resolveSourceSpaceLabel(
+            boolean isExternalUser,
+            ExternalViewerResolver.Resolution resolution,
+            UserInfo userInfo) {
+        if (!isExternalUser) return null;
+        if (resolution != null && resolution.isExternal()) {
+            String name = resolution.getSourceSpaceName();
+            if (name != null && !name.isEmpty()) return name;
+        }
+        if (userInfo == null) return null;
+        if (!isNullOrEmpty(userInfo.home_space_name)) {
+            return userInfo.home_space_name;
+        }
+        if (!isNullOrEmpty(userInfo.source_space_name)) {
+            return userInfo.source_space_name;
+        }
+        return null;
+    }
+
+    /**
      * Data-source merge extracted from {@code UserDetailActivity.applyExternalSourceRow}:
      * fresh response with home_space_id wins, else fall back to WKIM cache, else
      * use legacy fields from the fresh response. See codex review P2 for rationale.

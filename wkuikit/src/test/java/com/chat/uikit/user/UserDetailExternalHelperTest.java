@@ -188,6 +188,148 @@ public class UserDetailExternalHelperTest {
         assertFalse(UserDetailExternalHelper.shouldShowApplyButton(false, 1, false));
     }
 
+    // --- YUJ-204：外部 viewer 下 UserInfo 底部 bottomPanel 全隐 + 「仅可在群内交流」hint + 姓名旁 @SpaceName。
+    // 对齐 web PR#1021 `UserInfo/index.tsx:29-48` 与 `Subscribers/list.tsx:320`。 ---
+
+    /** shouldHideBottomPanel：外部成员 viewer → 隐藏整个底部面板；同 Space → 保持可见。 */
+    @Test
+    public void shouldHideBottomPanel() {
+        assertTrue("外部成员 viewer 必须隐藏 applyBtn / sendMsgBtn / deleteLayout / pushBlackLayout",
+                UserDetailExternalHelper.shouldHideBottomPanel(true));
+        assertFalse("同 Space / 非外部 → 保留老 bottomPanel 逻辑",
+                UserDetailExternalHelper.shouldHideBottomPanel(false));
+    }
+
+    /** shouldShowExternalHint：外部成员 viewer → 显示「仅可在群内交流」；同 Space → 隐藏。 */
+    @Test
+    public void shouldShowExternalHint() {
+        assertTrue("外部成员 viewer 必须显示 externalHintTv（对齐 web wk-userinfo-footer-external-hint）",
+                UserDetailExternalHelper.shouldShowExternalHint(true));
+        assertFalse("同 Space / 非外部 viewer 下 externalHintTv 必须隐藏，避免与 bottomPanel 同屏",
+                UserDetailExternalHelper.shouldShowExternalHint(false));
+    }
+
+    /**
+     * shouldShowSourceSpaceRow：resolveSourceSpaceLabel 的三源优先级覆盖 —
+     * resolver > UserInfo.home_space_name > UserInfo.source_space_name。
+     */
+    @Test
+    public void shouldShowSourceSpaceRow() {
+        UserInfo info = userInfo("other_uid");
+        info.home_space_name = "HomeSpace";
+        info.source_space_name = "SourceSpace";
+        info.is_external = 1;
+
+        ExternalViewerResolver.Resolution resolverRes =
+                new ExternalViewerResolver.Resolution(true, "ResolverSpace");
+
+        // 非外部 → null，不渲染
+        assertNull("非外部成员不应渲染 @SpaceName / 来源行",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(false, resolverRes, info));
+
+        // resolver 拿到 space name → 优先用 resolver
+        org.junit.Assert.assertEquals("ResolverSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, resolverRes, info));
+
+        // resolver=null（group_member 缺字段） → 兜底 UserInfo.home_space_name
+        org.junit.Assert.assertEquals("HomeSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, info));
+
+        // resolver 是外部但没 Space 名 → 也要走 UserInfo 兜底
+        org.junit.Assert.assertEquals("HomeSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(
+                        true, new ExternalViewerResolver.Resolution(true, ""), info));
+
+        // 只剩 legacy source_space_name
+        UserInfo legacy = userInfo("other_uid");
+        legacy.is_external = 1;
+        legacy.source_space_name = "LegacySpace";
+        org.junit.Assert.assertEquals("LegacySpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, legacy));
+
+        // 三路径都空 → null
+        UserInfo empty = userInfo("other_uid");
+        assertNull(UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, empty));
+    }
+
+    // --- YUJ-206 Space 模式免好友分支（shouldUseSpaceModeSendMessage）---
+    // 优先级锁定：external hint > self > Space-mode 非bot → sendMsg >
+    //            Space-mode bot > 非Space-mode follow 逻辑
+
+    /** Space 模式 + 非好友 + 人类 → 直接 sendMsg（核心新增场景，对齐 web YUJ-206）。 */
+    @Test
+    public void spaceModeSendMsg_humanNonFriend_returnsTrue() {
+        assertTrue("同 Space 非好友人类应走 sendMsg 分支，跳过 applyBtn",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ false,
+                        /* viewerSpaceId  */ VIEWER_SPACE,
+                        /* isBot          */ false,
+                        /* follow         */ 0));
+    }
+
+    /** 外部成员 → 由 bottomPanel 隐藏接管，Space 模式分支必须让路。 */
+    @Test
+    public void spaceModeSendMsg_externalUser_returnsFalse() {
+        assertFalse("跨 Space 外部成员不能走 sendMsg 分支（交给 bottomPanel 全隐 + 外部 hint）",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ true,
+                        /* viewerSpaceId  */ VIEWER_SPACE,
+                        /* isBot          */ false,
+                        /* follow         */ 0));
+    }
+
+    /** Space 模式 + bot 非好友 → 走 bot_add_friend 审批流，Space 分支让路。 */
+    @Test
+    public void spaceModeSendMsg_bot_returnsFalse() {
+        assertFalse("Space 模式下 bot 仍需保留 bot_add_friend 审批流",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ false,
+                        /* viewerSpaceId  */ VIEWER_SPACE,
+                        /* isBot          */ true,
+                        /* follow         */ 0));
+    }
+
+    /** 非 Space 模式（陌生人 + vercode 老场景） → 保持 applyBtn 原有语义。 */
+    @Test
+    public void spaceModeSendMsg_nonSpaceMode_returnsFalse() {
+        assertFalse("viewer 未进入 Space 模式时应保留原有「申请加好友」分支",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ false,
+                        /* viewerSpaceId  */ "",
+                        /* isBot          */ false,
+                        /* follow         */ 0));
+        assertFalse("null viewerSpaceId 也视为非 Space 模式",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        false, null, false, 0));
+    }
+
+    /** follow=1 → 原有「已是好友 → sendMsg」分支处理，此 helper 不抢接管。 */
+    @Test
+    public void spaceModeSendMsg_alreadyFriend_returnsFalse() {
+        assertFalse("follow=1 由原 sendMsg 分支处理，此 helper 应短路返回 false",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ false,
+                        /* viewerSpaceId  */ VIEWER_SPACE,
+                        /* isBot          */ false,
+                        /* follow         */ 1));
+    }
+
+    /**
+     * 嘉伟 bot 硬约束（产品决策）：bot + friend + Space 模式 → 原 sendMsg 分支处理。
+     * 优先级 #4：helper 短路返回 false（follow=1 在 isBot 检查之前），让活动层
+     * 既有 {@code follow == 1 && !hideSendMsgForExternal} 分支统一走 sendMsgBtn，
+     * 不干扰 bot add-friend 审批流（只对 follow=0 生效）。
+     */
+    @Test
+    public void spaceModeSendMsg_botFriendInSpace_returnsFalse() {
+        assertFalse("bot+friend+Space：helper 让路给原 sendMsg 分支，优先级 #4",
+                UserDetailExternalHelper.shouldUseSpaceModeSendMessage(
+                        /* isExternalUser */ false,
+                        /* viewerSpaceId  */ VIEWER_SPACE,
+                        /* isBot          */ true,
+                        /* follow         */ 1));
+    }
+
     // --- helpers ---
 
     private static UserInfo userInfo(String uid) {

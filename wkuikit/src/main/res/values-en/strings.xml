@@ -163,6 +163,7 @@
     <string name="enabled">Enabled</string>
     <string name="scan_user_qr">Scan QR code business card</string>
     <string name="show_all_members">All Members</string>
+    <string name="show_all_members_with_count">All Members (%1$d)</string>
     <string name="group_members">Group Members(%s)</string>
     <string name="last_msg_draft">[Draft]</string>
     <string name="last_msg_remind">[Mentioned me]</string>
@@ -347,5 +348,7 @@
     <string name="external_member_source_format">From %1$s</string>
     <!-- v2 viewer-relative @SpaceName suffix (YUJ-66/YUJ-87) — matches web PR #1013 -->
     <string name="external_member_space_suffix">\@%1$s</string>
+    <!-- YUJ-204: UserInfo external-viewer bottom hint (aligns web .wk-userinfo-footer-external-hint) -->
+    <string name="external_member_only_in_group_hint">You can only communicate in this group</string>
 </resources>
 

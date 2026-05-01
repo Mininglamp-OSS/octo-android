@@ -3,6 +3,8 @@ package com.chat.scan;
 import android.text.TextUtils;
 import android.widget.TextView;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.endpoint.EndpointManager;
@@ -11,12 +13,15 @@ import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.net.BaseObserver;
 import com.chat.base.net.RetrofitUtils;
 import com.chat.base.space.JoinSuccessHelper;
+import com.chat.base.space.ScanJoinEffectiveResolver;
 import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.scan.databinding.ActScanJoinGroupLayoutBinding;
 import com.xinbida.wukongim.entity.WKChannelType;
+
+import java.io.IOException;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -104,17 +109,48 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                     .subscribe(new BaseObserver<ResponseBody>() {
                         @Override
                         protected void onSuccess(ResponseBody result) {
-                            // YUJ-140 · 跨 Space 加群 Toast：
-                            // crossSpace 时把 notice 持久化（对齐 web sessionStorage 桥接）并 finish，
-                            // 由主页面 onResume → consumeNotice 弹 Dialog，用户显式点「切换过去」才切换。
-                            // 同 Space / 非 Space 模式保留原 toast + 自动进群行为以保持既有 UX。
-                            String viewerSpaceId = SpaceFilter.getCurrentSpaceId();
-                            boolean crossSpace = !TextUtils.isEmpty(targetSpaceId)
-                                    && !TextUtils.isEmpty(viewerSpaceId)
-                                    && !targetSpaceId.equals(viewerSpaceId);
+                            // YUJ-212 / YUJ-200 Path B：scanjoin 响应以 space_id/space_name/group_name
+                            // 作为权威字段（PR#1250 新增），二维码预扫 payload 仅用作 fallback。
+                            // is_external=1 时此 Toast 分支跳过（外部群走既有 UX 路径）。
+                            String respSpaceId = null;
+                            String respSpaceName = null;
+                            String respGroupName = null;
+                            int respIsExternal = 0;
+                            try {
+                                if (result != null) {
+                                    String body = result.string();
+                                    if (!TextUtils.isEmpty(body)) {
+                                        JSONObject j = JSON.parseObject(body);
+                                        if (j != null) {
+                                            respSpaceId = j.getString("space_id");
+                                            respSpaceName = j.getString("space_name");
+                                            respGroupName = j.getString("group_name");
+                                            // 后端可能以 int 或 bool 下发；fastjson 对缺字段返回 0，够用
+                                            Integer iv = j.getInteger("is_external");
+                                            if (iv != null) respIsExternal = iv;
+                                        }
+                                    }
+                                }
+                            } catch (IOException | RuntimeException ignored) {
+                                // 响应体不可解析时 fail-open：回退到 intent 的 pre-scan 字段
+                            }
 
-                            if (crossSpace) {
-                                JoinSuccessHelper.computeAndSave(groupNo, groupName, targetSpaceId, targetSpaceName);
+                            // round-2（Jerry-Xin review）：区分 null（字段缺失，用 pre-scan fallback）
+                            // 与 ""（后端显式返回，表示「这是公共群」），避免把公共群误判为跨 Space。
+                            // 解析逻辑抽到 ScanJoinEffectiveResolver 以便 host-side 单测覆盖。
+                            String effectiveSpaceId = ScanJoinEffectiveResolver.resolve(respSpaceId, targetSpaceId);
+                            String effectiveSpaceName = ScanJoinEffectiveResolver.resolve(respSpaceName, targetSpaceName);
+                            String effectiveGroupName = ScanJoinEffectiveResolver.resolve(respGroupName, groupName);
+
+                            String viewerSpaceId = SpaceFilter.getCurrentSpaceId();
+                            boolean crossSpace = ScanJoinEffectiveResolver.isCrossSpace(effectiveSpaceId, viewerSpaceId);
+
+                            // 硬约束：
+                            //   1) 公共群(space_id='')/同 Space → 走常规 toast，不持久化跨空间通知
+                            //   2) is_external=1 → 外部群不走此 Toast 路径，保持既有行为
+                            if (crossSpace && respIsExternal != 1) {
+                                JoinSuccessHelper.computeAndSave(groupNo, effectiveGroupName,
+                                        effectiveSpaceId, effectiveSpaceName);
                                 finish();
                                 return;
                             }

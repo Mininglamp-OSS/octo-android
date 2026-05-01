@@ -90,7 +90,12 @@ android {
             signingConfig signingConfigs.release
         }
         debug {
-            signingConfig signingConfigs.release
+            // 仅当 my-app.jks 实际存在时才使用 release 签名配置；
+            // 否则让 AGP 回退到默认 ~/.android/debug.keystore（CI 未配置
+            // MY_APP_JKS_BASE64 secret 时的 dev-debug 场景）。
+            if (file('my-app.jks').exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     applicationVariants.all { variant ->

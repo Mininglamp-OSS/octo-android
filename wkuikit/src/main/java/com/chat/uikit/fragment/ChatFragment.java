@@ -641,6 +641,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 for (WKUIConversationMsg uiConversationMsg : list) {
                     // 私聊 Space 未读数适配：跨 Space 消息不计入未读（参考 iOS）
                     adjustPersonalForSpace(uiConversationMsg);
+                    // YUJ-217 Fix A（对齐 iOS PR#95 Defense-in-Depth）：
+                    // 冷启动 sync 结果必须先过 SpaceFilter 再回填白名单。
+                    // 否则服务端返回的跨 Space 会话（尤其是 botfather 之类的私聊系统 Bot 或
+                    // 时序 race 下的外部群）会被无差别写入白名单，后续新消息路径即使走 Fix B
+                    // 的 filter 也会因「白名单已含」而被误放行。此分层在 iOS PR#95 等价于
+                    // `filterConversationsBySpace FailOpen 分支先 strip 非白名单残留`。
+                    String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                    boolean reject;
+                    if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                        reject = !isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                    } else {
+                        // 私聊：用消息 payload space_id 判定；系统 Bot（SYSTEM_BOTS）
+                        // 跨 Space 共享——即使消息 space 不匹配也保留展示条目，避免
+                        // botfather 在某 Space 彻底消失。
+                        reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg())
+                                && !com.chat.base.space.SystemBotsFallback.isSystemBot(uiConversationMsg.channelID);
+                    }
+                    if (reject) {
+                        continue;
+                    }
                     // sync 结果不含 conversation_extra（草稿等），从本地 DB 补充
                     WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
                             .getMsgExtraWithChannel(uiConversationMsg.channelID, uiConversationMsg.channelType);
@@ -649,8 +669,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                     ChatConversationMsg msg = new ChatConversationMsg(uiConversationMsg);
                     uiList.add(msg);
-                    spaceConversationKeys.add(channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType));
+                    spaceConversationKeys.add(key);
                 }
+                // Fix C：冷启动 sync 后确保 botfather 等系统 Bot 本地可见（SYSTEM_BOTS 兜底）
+                ensureSystemBotsVisible(uiList);
                 sortMsg(uiList);
                 setAllCount();
                 return;
@@ -740,29 +762,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     adjustPersonalForSpace(uiConversationMsg);
                     // Space 过滤：只添加属于当前 Space 的会话
                     String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-                    // YUJ-208：去掉 spaceConversationKeys.isEmpty() 短路 —— 白名单为空
-                    // （首次加载 / Space 切换瞬态）时依然必须走 SpaceFilter，否则来自
-                    // 其他 Space 的外部群新消息会污染当前会话列表。
-                    if (spaceConversationKeys.contains(key)) {
-                        uiList.add(new ChatConversationMsg(uiConversationMsg));
-                        spaceConversationKeys.add(key);
+                    // YUJ-217 Fix B（对齐 iOS PR#95 Defense-in-Depth）：
+                    // 不再以 `spaceConversationKeys.contains(key)` 作为短路放行条件。
+                    // 白名单可能被冷启动 race / Fix A 前历史污染留下残留 entry，信任其
+                    // 短路会让来自其他 Space 的新消息错挂当前 Space。始终过一遍 filter，
+                    // 由 SpaceFilter 自身的 fail-open 兜底保证非 Space 模式 / race 窗口不误杀。
+                    boolean reject;
+                    if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                        reject = !isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType);
                     } else {
-                        // 不在白名单中：精确判断是否属于当前 Space
-                        boolean reject;
-                        if (uiConversationMsg.channelType == WKChannelType.GROUP) {
-                            // 群聊：用 channel 级别的 space_id 判断
-                            reject = !isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType);
-                        } else {
-                            // 私聊：用消息 payload 中的 space_id 判断
-                            reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg());
-                        }
-                        if (reject) {
-                            continue;
-                        }
-                        // 属于当前 Space，放行并加入白名单
-                        uiList.add(new ChatConversationMsg(uiConversationMsg));
-                        spaceConversationKeys.add(key);
+                        // 私聊：消息 payload space_id；系统 Bot 跨 Space 共享，不做 channel 级剔除
+                        reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg())
+                                && !com.chat.base.space.SystemBotsFallback.isSystemBot(uiConversationMsg.channelID);
                     }
+                    if (reject) {
+                        // 同步清理白名单残留（对齐 iOS Skip 清残留 pattern）
+                        spaceConversationKeys.remove(key);
+                        continue;
+                    }
+                    uiList.add(new ChatConversationMsg(uiConversationMsg));
+                    spaceConversationKeys.add(key);
                 }
             }
             if (WKReader.isNotEmpty(uiList)) {
@@ -1286,23 +1305,25 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             adjustPersonalForSpace(uiConversationMsg);
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-            // YUJ-208：不再以 spaceConversationKeys.isEmpty() 作为短路条件。
-            // 只要 channel 不在已验证白名单中，就必须过一遍 SpaceFilter —— 否则新消息到达
-            // 会在 spaceConversationKeys 尚未被 sync 回填时（首次加载 / 切 Space 瞬态 /
-            // 连接重建等窗口）错挂到当前 Space。SpaceFilter 自身带 fail-open 兜底，
-            // 因此在非 Space 模式或 race 窗口依然安全（不会误杀）。
-            if (!spaceConversationKeys.contains(key)) {
-                // 不在白名单中：精确判断是否属于当前 Space
-                if (uiConversationMsg.channelType == WKChannelType.GROUP) {
-                    // 群聊：用 channel 级别的 space_id 判断（群消息 payload 不含 space_id）
-                    if (!isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType)) {
-                        return;
-                    }
-                } else {
-                    // 私聊：用消息 payload 中的 space_id 判断
-                    if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
-                        return;
-                    }
+            // YUJ-217 Fix B（对齐 iOS PR#95 Defense-in-Depth）：
+            // 不再以 `spaceConversationKeys.contains(key)` 作为短路条件——新消息路径始终过 filter。
+            // 白名单可能被冷启动 race / Fix A 前历史污染留下残留 entry；信任短路会让
+            // 来自其他 Space 的新消息错挂当前 Space（YUJ-208/209/215 同源 bug）。
+            // SpaceFilter 自身带 fail-open 兜底，非 Space 模式 / race 窗口不会误杀。
+            if (uiConversationMsg.channelType == WKChannelType.GROUP) {
+                if (!isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType)) {
+                    // 对齐 iOS Skip 清残留 pattern：白名单同步剔除，避免 sort/refresh 重新浮现
+                    spaceConversationKeys.remove(key);
+                    syncSpaceKeysToGlobal();
+                    return;
+                }
+            } else {
+                // 私聊：用消息 payload 中的 space_id 判断；系统 Bot（botfather）跨 Space 共享
+                if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())
+                        && !com.chat.base.space.SystemBotsFallback.isSystemBot(uiConversationMsg.channelID)) {
+                    spaceConversationKeys.remove(key);
+                    syncSpaceKeysToGlobal();
+                    return;
                 }
             }
             spaceConversationKeys.add(key);
@@ -1458,6 +1479,122 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
+     * YUJ-217 Fix C · 本地兜底合成缺失的系统 Bot（botfather）占位会话。
+     *
+     * <p>背景：botfather 跨 Space 共享，但后端 sync 在某些 Space 下不返回其 conversation
+     * entry（时序 / 索引问题），导致 botfather 在该 Space 彻底不显示。
+     *
+     * <p>硬约束（与 iOS 对齐）：只影响 in-memory 展示，不调 WKSDK 写入 API，不污染
+     * 真正的后端同步结果。一旦后端下发真实 entry，后续 RefreshMsgList 路径会用真实
+     * 数据覆盖占位（channelID 匹配，时间戳更新）。
+     *
+     * @param list 当前正要送入 sortMsg/allConversations 的列表；会 <b>in-place</b> 追加缺失的占位项
+     */
+    private void ensureSystemBotsVisible(@NonNull List<ChatConversationMsg> list) {
+        // 收集现有 channelID，供 SystemBotsFallback 判断缺失哪些 Bot
+        Set<String> existingIds = new HashSet<>();
+        for (ChatConversationMsg m : list) {
+            if (m == null || m.uiConversationMsg == null) continue;
+            if (m.isSectionHeader) continue;
+            if (!TextUtils.isEmpty(m.uiConversationMsg.channelID)) {
+                existingIds.add(m.uiConversationMsg.channelID);
+            }
+        }
+        Set<String> missing = com.chat.base.space.SystemBotsFallback.findMissingBotIds(existingIds);
+        if (missing.isEmpty()) return;
+        for (String botId : missing) {
+            WKUIConversationMsg placeholder = com.chat.base.space.SystemBotsFallback.buildPlaceholder(botId);
+            list.add(new ChatConversationMsg(placeholder));
+            // 白名单同步：让后续新消息路径不再重复判定（botfather 是 SYSTEM_BOTS，本身
+            // 也会被 Fix B 的 isSystemBot 分支放行，这里主要是保持状态一致）
+            spaceConversationKeys.add(channelKey(botId, WKChannelType.PERSONAL));
+        }
+    }
+
+    /**
+     * YUJ-217 Fix D · 全量兜底清扫：从 {@link #allConversations} 和 {@link #spaceConversationKeys}
+     * 中剔除所有不属于当前 Space 的 GROUP 会话。
+     *
+     * <p>对齐 iOS PR#95 {@code pruneNonCurrentSpaceGroups}：在 Space 切换 / 连接后 sync /
+     * DB 回放等状态变化点调用，作为冷启动 race / 白名单污染的最后一道防线。
+     *
+     * <p>硬约束：不触碰 WKSDK 持久化，只裁 in-memory 数据结构；PERSONAL 不 prune
+     * （系统 Bot 跨 Space 共享，由消息级过滤 + SYSTEM_BOTS 兜底处理）。
+     *
+     * @return 被剔除的会话数量，供诊断 / 日志使用
+     */
+    private int pruneNonCurrentSpaceGroups() {
+        int removed = pruneNonCurrentSpaceGroupsInMemoryOnly();
+        if (removed > 0) {
+            syncSpaceKeysToGlobal();
+            filterAndDisplay();
+            setAllCount();
+        }
+        return removed;
+    }
+
+    /**
+     * 裸内存版本：只更新 {@link #allConversations} 和 {@link #spaceConversationKeys}，
+     * 不触发 UI 刷新。供 {@link #sortMsg(List)} 在进 adapter 之前做一次最终一致性兜底用。
+     */
+    private int pruneNonCurrentSpaceGroupsInMemoryOnly() {
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) return 0;
+        int removed = 0;
+        for (int i = allConversations.size() - 1; i >= 0; i--) {
+            ChatConversationMsg msg = allConversations.get(i);
+            if (msg == null || msg.uiConversationMsg == null || msg.isSectionHeader) continue;
+            String cid = msg.uiConversationMsg.channelID;
+            byte ct = msg.uiConversationMsg.channelType;
+            if (com.chat.base.space.SpaceConversationPruner.shouldPrune(cid, ct)) {
+                allConversations.remove(i);
+                spaceConversationKeys.remove(channelKey(cid, ct));
+                removed++;
+            }
+        }
+        // 清理白名单中 allConversations 里没有但 key 还在的污染项（冷启动 race 残留）
+        com.chat.base.space.SpaceConversationPruner.pruneWhitelist(
+                spaceConversationKeys, currentSpaceId, SpaceFilter_DefaultProviderAdapter.INSTANCE);
+        return removed;
+    }
+
+    /**
+     * 生产默认 provider 的简易适配器——SpaceFilter 的 DEFAULT_PROVIDER 是 package-private，
+     * 这里通过调用其对外封装好的静态 API 重建等价实现，保持 Fragment 不直接依赖内部字段。
+     */
+    private static final class SpaceFilter_DefaultProviderAdapter
+            implements com.chat.base.space.SpaceFilter.ChannelInfoProvider {
+        static final SpaceFilter_DefaultProviderAdapter INSTANCE = new SpaceFilter_DefaultProviderAdapter();
+
+        @Override
+        public String getChannelSpaceId(String channelID, byte channelType) {
+            return com.chat.base.space.SpaceFilter.getChannelSpaceId(channelID, channelType);
+        }
+
+        @Override
+        public String getMyMembershipSourceSpaceId(String channelID, byte channelType) {
+            return com.chat.base.space.SpaceFilter.getMyMembershipSourceSpaceId(channelID, channelType);
+        }
+
+        @Override
+        public boolean isMyMembershipCached(String channelID, byte channelType) {
+            // SpaceFilter 的 DEFAULT_PROVIDER.isMyMembershipCached 没有对外静态方法暴露；
+            // 这里复用 getMyMembershipSourceSpaceId 的查询路径：能查到 source_space_id 说明 my row 已缓存。
+            // 查不到时退化为 fail-open 语义（与 shouldSkipChannelForSpace 主路径的「my-row 未缓存 fail-open」对齐）。
+            try {
+                String myUid = com.chat.base.config.WKConfig.getInstance().getUid();
+                if (android.text.TextUtils.isEmpty(myUid)) return false;
+                com.xinbida.wukongim.entity.WKChannelMember me =
+                        com.xinbida.wukongim.WKIM.getInstance().getChannelMembersManager()
+                                .getMember(channelID, channelType, myUid);
+                return me != null;
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+    }
+
+    /**
      * 执行 Space 切换（用户手动点 Space 列表 / 跨 Space 加群 Dialog「切换过去」共享路径）。
      *
      * <p>与 iOS 的 serial DB queue 对齐：先立即清空 UI 给用户即时反馈，再把 DB 清理 + sync
@@ -1547,6 +1684,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         AndroidUtilities.runOnUIThread(() -> {
             allConversations.clear();
             allConversations.addAll(tempList);
+            // YUJ-217 Fix D · 状态变化回扫：每次进 allConversations 前扫一遍，剔除
+            // 不属于当前 Space 的 GROUP 会话。对齐 iOS PR#95 pruneNonCurrentSpaceGroups。
+            // O(n) 开销，n 通常 < 100；但保证 Fix A/B 留下的 edge case（比如 resetData
+            // 单 msg 路径在白名单被污染时仍可能写入 allConversations）有最终一致性兜底。
+            pruneNonCurrentSpaceGroupsInMemoryOnly();
+            // YUJ-217 Fix C · SYSTEM_BOTS 本地兜底：确保 botfather 等跨 Space 共享 Bot 可见
+            ensureSystemBotsVisible(allConversations);
             filterAndDisplay();
             setAllCount();
             scrollToPositionIfNearTop(0);

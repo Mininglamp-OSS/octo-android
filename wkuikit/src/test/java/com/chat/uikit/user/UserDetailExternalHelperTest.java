@@ -188,6 +188,70 @@ public class UserDetailExternalHelperTest {
         assertFalse(UserDetailExternalHelper.shouldShowApplyButton(false, 1, false));
     }
 
+    // --- YUJ-204：外部 viewer 下 UserInfo 底部 bottomPanel 全隐 + 「仅可在群内交流」hint + 姓名旁 @SpaceName。
+    // 对齐 web PR#1021 `UserInfo/index.tsx:29-48` 与 `Subscribers/list.tsx:320`。 ---
+
+    /** shouldHideBottomPanel：外部成员 viewer → 隐藏整个底部面板；同 Space → 保持可见。 */
+    @Test
+    public void shouldHideBottomPanel() {
+        assertTrue("外部成员 viewer 必须隐藏 applyBtn / sendMsgBtn / deleteLayout / pushBlackLayout",
+                UserDetailExternalHelper.shouldHideBottomPanel(true));
+        assertFalse("同 Space / 非外部 → 保留老 bottomPanel 逻辑",
+                UserDetailExternalHelper.shouldHideBottomPanel(false));
+    }
+
+    /** shouldShowExternalHint：外部成员 viewer → 显示「仅可在群内交流」；同 Space → 隐藏。 */
+    @Test
+    public void shouldShowExternalHint() {
+        assertTrue("外部成员 viewer 必须显示 externalHintTv（对齐 web wk-userinfo-footer-external-hint）",
+                UserDetailExternalHelper.shouldShowExternalHint(true));
+        assertFalse("同 Space / 非外部 viewer 下 externalHintTv 必须隐藏，避免与 bottomPanel 同屏",
+                UserDetailExternalHelper.shouldShowExternalHint(false));
+    }
+
+    /**
+     * shouldShowSourceSpaceRow：resolveSourceSpaceLabel 的三源优先级覆盖 —
+     * resolver > UserInfo.home_space_name > UserInfo.source_space_name。
+     */
+    @Test
+    public void shouldShowSourceSpaceRow() {
+        UserInfo info = userInfo("other_uid");
+        info.home_space_name = "HomeSpace";
+        info.source_space_name = "SourceSpace";
+        info.is_external = 1;
+
+        ExternalViewerResolver.Resolution resolverRes =
+                new ExternalViewerResolver.Resolution(true, "ResolverSpace");
+
+        // 非外部 → null，不渲染
+        assertNull("非外部成员不应渲染 @SpaceName / 来源行",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(false, resolverRes, info));
+
+        // resolver 拿到 space name → 优先用 resolver
+        org.junit.Assert.assertEquals("ResolverSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, resolverRes, info));
+
+        // resolver=null（group_member 缺字段） → 兜底 UserInfo.home_space_name
+        org.junit.Assert.assertEquals("HomeSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, info));
+
+        // resolver 是外部但没 Space 名 → 也要走 UserInfo 兜底
+        org.junit.Assert.assertEquals("HomeSpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(
+                        true, new ExternalViewerResolver.Resolution(true, ""), info));
+
+        // 只剩 legacy source_space_name
+        UserInfo legacy = userInfo("other_uid");
+        legacy.is_external = 1;
+        legacy.source_space_name = "LegacySpace";
+        org.junit.Assert.assertEquals("LegacySpace",
+                UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, legacy));
+
+        // 三路径都空 → null
+        UserInfo empty = userInfo("other_uid");
+        assertNull(UserDetailExternalHelper.resolveSourceSpaceLabel(true, null, empty));
+    }
+
     // --- helpers ---
 
     private static UserInfo userInfo(String uid) {

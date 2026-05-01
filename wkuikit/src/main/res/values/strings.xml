@@ -459,5 +459,7 @@
     <string name="external_member_source_format">来自 %1$s</string>
     <!-- v2 视角相对「@SpaceName」后缀（YUJ-66/YUJ-87）。web PR #1013 等价渲染 -->
     <string name="external_member_space_suffix">\@%1$s</string>
+    <!-- YUJ-204：UserInfo 底部外部成员提示（对齐 web .wk-userinfo-footer-external-hint） -->
+    <string name="external_member_only_in_group_hint">仅可在群内交流</string>
 </resources>
 

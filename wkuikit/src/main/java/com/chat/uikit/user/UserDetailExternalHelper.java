@@ -90,6 +90,59 @@ public final class UserDetailExternalHelper {
     }
 
     /**
+     * YUJ-204（对齐 web PR#1021 `UserInfo/index.tsx:29-48` — isExternalToViewer=true
+     * 时整个 bottomPanel 被 `.wk-userinfo-footer-external-hint` 替换）：
+     * 外部成员视角下 UserInfo 页底部所有交互按钮（applyBtn / sendMsgBtn /
+     * deleteLayout / pushBlackLayout）必须一起隐藏。单一判定入口方便单测覆盖。
+     */
+    public static boolean shouldHideBottomPanel(boolean isExternalUser) {
+        return isExternalUser;
+    }
+
+    /**
+     * YUJ-204：与 {@link #shouldHideBottomPanel(boolean)} 对偶 —
+     * 外部成员必须显示「仅可在群内交流」提示文案，语义上是 bottomPanel 的替代物。
+     * 独立一个 helper 是为了让 activity 端不用重复写条件，也方便单测对齐 web 行为。
+     */
+    public static boolean shouldShowExternalHint(boolean isExternalUser) {
+        return isExternalUser;
+    }
+
+    /**
+     * YUJ-204（对齐 web Subscribers/list.tsx:320 `@<SourceSpaceName>`）：
+     * 决定 UserInfo 页「姓名旁 / 来源行」要渲染的 Space 名。
+     *
+     * <p>非外部成员一律返回 null（不渲染）。外部成员按优先级：
+     * <ol>
+     *   <li>viewer-relative resolver 拿到的 {@code sourceSpaceName}（来自
+     *       group_member / WKIM 成员缓存 extras）—— 最贴近 web subscriber.orgData；</li>
+     *   <li>UserInfo 顶层 {@code home_space_name}（对齐 web channelInfo.orgData，
+     *       老后端/缺 group_member 时的兜底）；</li>
+     *   <li>legacy {@code source_space_name}（最老的字段，仅在 is_external=1 路径下
+     *       有效）。</li>
+     * </ol>
+     * 三路径都空时返回 null，activity 端走「只显示 hint 不渲染 @SpaceName」的降级。
+     */
+    public static String resolveSourceSpaceLabel(
+            boolean isExternalUser,
+            ExternalViewerResolver.Resolution resolution,
+            UserInfo userInfo) {
+        if (!isExternalUser) return null;
+        if (resolution != null && resolution.isExternal()) {
+            String name = resolution.getSourceSpaceName();
+            if (name != null && !name.isEmpty()) return name;
+        }
+        if (userInfo == null) return null;
+        if (!isNullOrEmpty(userInfo.home_space_name)) {
+            return userInfo.home_space_name;
+        }
+        if (!isNullOrEmpty(userInfo.source_space_name)) {
+            return userInfo.source_space_name;
+        }
+        return null;
+    }
+
+    /**
      * Data-source merge extracted from {@code UserDetailActivity.applyExternalSourceRow}:
      * fresh response with home_space_id wins, else fall back to WKIM cache, else
      * use legacy fields from the fresh response. See codex review P2 for rationale.

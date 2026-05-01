@@ -7,8 +7,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.text.InputFilter;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -81,6 +83,12 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     private boolean isBot;
     private String botDescription;
     private String botCreatorName;
+
+    /**
+     * YUJ-204：外部成员 " @SpaceName" 后缀的灰紫色（对齐 GroupMemberAdapter /
+     * SearchUserAdapter / RemindMemberAdapter 的 0xFF8B5CF6，避免各处渲染色号漂移）。
+     */
+    private static final int EXTERNAL_SPACE_SUFFIX_COLOR = 0xFF8B5CF6;
 
     @Override
     protected ActUserDetailLayoutBinding getViewBinding() {
@@ -351,17 +359,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     if (!TextUtils.isEmpty(userInfo.vercode)) {
                         vercode = userInfo.vercode;
                     }
-                    wkVBinding.nameTv.setText(TextUtils.isEmpty(userInfo.remark) ? userInfo.name : userInfo.remark);
-                    wkVBinding.nickNameTv.setText(userInfo.name);
-                    wkVBinding.nickNameLayout.setVisibility(TextUtils.isEmpty(userInfo.remark) ? View.GONE : View.VISIBLE);
-                    if (TextUtils.isEmpty(userInfo.short_no)) {
-                        wkVBinding.identityLayout.setVisibility(View.GONE);
-                    } else {
-                        wkVBinding.identityLayout.setVisibility(View.VISIBLE);
-                        wkVBinding.appIdNumTv.setText(userInfo.short_no);
-                    }
                     // YUJ-136 (对齐 web PR#1021)：先算 viewer-relative 外部判定，
-                    // 同时驱动「来源」行 (YUJ-87) 与「发送消息」按钮是否隐藏 (本任务)。
+                    // 同时驱动「来源」行 (YUJ-87) 与「发送消息」按钮是否隐藏，
+                    // 以及 YUJ-204 的 bottomPanel 全隐 + 来源 Space 后缀。
                     ExternalViewerResolver.Resolution externalRes =
                             UserDetailExternalHelper.resolve(
                                     userInfo,
@@ -370,8 +370,27 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                                     WKConfig.getInstance().getUid(),
                                     MsgModel.getInstance().getCurrentSpaceId(),
                                     groupID);
+                    // YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：跨 Space 外部成员不允许申请加好友。
+                    // YUJ-146-2 (对齐 web PR YUJ-144)：同 Space 成员隐藏「解除好友 / 拉黑」，
+                    // 跨 Space 成员由 YUJ-204 统一走 bottomPanel 全隐。
+                    boolean isExternalUser = isExternalUser(userInfo, externalRes);
 
-                    if (!applyExternalSourceRow(userInfo, externalRes)) {
+                    // YUJ-204：name 旁拼 " @SpaceName" 灰紫色后缀（对齐 web Subscribers/list.tsx:320）。
+                    // 必须先于下方的 setText 分支，否则 nameTv 会被 userInfo.name / remark 覆盖。
+                    String baseName = TextUtils.isEmpty(userInfo.remark) ? userInfo.name : userInfo.remark;
+                    String sourceSpaceLabel = UserDetailExternalHelper.resolveSourceSpaceLabel(
+                            isExternalUser, externalRes, userInfo);
+                    wkVBinding.nameTv.setText(buildNameWithExternalSuffix(baseName, sourceSpaceLabel));
+                    wkVBinding.nickNameTv.setText(userInfo.name);
+                    wkVBinding.nickNameLayout.setVisibility(TextUtils.isEmpty(userInfo.remark) ? View.GONE : View.VISIBLE);
+                    if (TextUtils.isEmpty(userInfo.short_no)) {
+                        wkVBinding.identityLayout.setVisibility(View.GONE);
+                    } else {
+                        wkVBinding.identityLayout.setVisibility(View.VISIBLE);
+                        wkVBinding.appIdNumTv.setText(userInfo.short_no);
+                    }
+
+                    if (!applyExternalSourceRow(userInfo, externalRes, isExternalUser, sourceSpaceLabel)) {
                         if (!TextUtils.isEmpty(userInfo.source_desc)) {
                             wkVBinding.sourceFromTv.setText(userInfo.source_desc);
                             wkVBinding.fromLayout.setVisibility(View.VISIBLE);
@@ -385,42 +404,35 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     } else {
                         wkVBinding.blacklistTv.setText(R.string.push_black_list);
                     }
-                    boolean hideSendMsgForExternal =
-                            UserDetailExternalHelper.shouldHideSendMessageButton(externalRes);
-                    wkVBinding.sendMsgBtn.setVisibility(
-                            userInfo.follow == 1 && !hideSendMsgForExternal
-                                    ? View.VISIBLE : View.GONE);
-                    // YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：跨 Space 外部成员不允许申请加好友。
-                    // YUJ-146-2 (对齐 web PR YUJ-144)：同 Space 成员隐藏「解除好友 / 拉黑」，
-                    // 跨 Space 成员保持原逻辑（delete 受 follow 控制，blacklist 常驻）。
-                    boolean isExternalUser = isExternalUser(userInfo, externalRes);
-                    wkVBinding.deleteLayout.setVisibility(
-                            isExternalUser && userInfo.follow == 1 ? View.VISIBLE : View.GONE);
-                    wkVBinding.pushBlackLayout.setVisibility(
-                            isExternalUser ? View.VISIBLE : View.GONE);
-                    wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
-                    wkVBinding.applyBtn.setVisibility(
-                            UserDetailExternalHelper.shouldShowApplyButton(
-                                    isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode))
-                                    ? View.VISIBLE : View.GONE);
 
-                    // YUJ-188 临时诊断：记录申请加好友按钮可见性相关输入，便于定位
-                    // isExternalUser == false 的根因。上线前会随 revert PR 移除。
-                    if (com.chat.base.BuildConfig.DEBUG) {
-                        android.util.Log.d("YUJ188", "apply-btn-diag"
-                                + " entry_groupID=" + groupID
-                                + " viewerUid=" + WKConfig.getInstance().getUid()
-                                + " viewerSpaceId=" + MsgModel.getInstance().getCurrentSpaceId()
-                                + " userInfo.uid=" + userInfo.uid
-                                + " userInfo.home_space_id=" + userInfo.home_space_id
-                                + " userInfo.is_external=" + userInfo.is_external
-                                + " userInfo.follow=" + userInfo.follow
-                                + " vercode=" + (!TextUtils.isEmpty(vercode))
-                                + " externalRes=" + (externalRes == null
-                                        ? "null"
-                                        : ("isExternal=" + externalRes.isExternal()))
-                                + " isExternalUser=" + isExternalUser
-                                + " shouldShowApplyButton=" + wkVBinding.applyBtn.getVisibility());
+                    // YUJ-204（对齐 web PR#1021 UserInfo/index.tsx:29-48）：
+                    // 外部成员 viewer 下整个 bottomPanel（applyBtn / sendMsgBtn /
+                    // deleteLayout / pushBlackLayout / blacklistDesc）一起隐藏，
+                    // 用 externalHintTv「仅可在群内交流」替代。
+                    boolean hideBottomPanel = UserDetailExternalHelper.shouldHideBottomPanel(isExternalUser);
+                    boolean showExternalHint = UserDetailExternalHelper.shouldShowExternalHint(isExternalUser);
+                    wkVBinding.externalHintTv.setVisibility(showExternalHint ? View.VISIBLE : View.GONE);
+
+                    if (hideBottomPanel) {
+                        wkVBinding.sendMsgBtn.setVisibility(View.GONE);
+                        wkVBinding.deleteLayout.setVisibility(View.GONE);
+                        wkVBinding.pushBlackLayout.setVisibility(View.GONE);
+                        wkVBinding.blacklistDescTv.setVisibility(View.GONE);
+                        wkVBinding.applyBtn.setVisibility(View.GONE);
+                    } else {
+                        boolean hideSendMsgForExternal =
+                                UserDetailExternalHelper.shouldHideSendMessageButton(externalRes);
+                        wkVBinding.sendMsgBtn.setVisibility(
+                                userInfo.follow == 1 && !hideSendMsgForExternal
+                                        ? View.VISIBLE : View.GONE);
+                        // YUJ-146-2：同 Space 成员隐藏「解除好友 / 拉黑」。
+                        wkVBinding.deleteLayout.setVisibility(View.GONE);
+                        wkVBinding.pushBlackLayout.setVisibility(View.GONE);
+                        wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
+                        wkVBinding.applyBtn.setVisibility(
+                                UserDetailExternalHelper.shouldShowApplyButton(
+                                        isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode))
+                                        ? View.VISIBLE : View.GONE);
                     }
 
                     // Bot-specific UI
@@ -653,34 +665,57 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**
-     * 外部群视角下刷新「来源」行（YUJ-87 / 对齐 web #976）：
-     *   - 当前在群内打开 UserInfo（groupID 非空）且 viewer-relative 判定为外部 →
-     *     整行显示成员 home/source Space 名，替代老的 source_desc。
-     *   - 同 Space / 自看 / 无 home_space_id 的非外部成员 → 整行隐藏，继续用上层 source_desc 逻辑。
+     * 外部群视角下刷新「来源」行（YUJ-87 / YUJ-204 · 对齐 web #976 / #1021）：
+     *   - viewer-relative 判定为外部 → 整行显示成员 home/source Space 名，替代老的 source_desc。
+     *   - 同 Space / 自看 / 未命中外部判定 → 整行隐藏，继续用上层 source_desc 逻辑。
+     *   - YUJ-204 修复：当 viewer-relative resolver 返回 null（group_member 缺字段且无
+     *     WKIM 成员缓存）但 UserInfo 顶层字段判定为外部时，也要渲染「来源」行 —— 否则
+     *     外部 UserInfo 页底部显示了「仅可在群内交流」但用户看不到 Space 名，上下文丢失。
      * 返回 true 表示「来源」行已经由本方法处理，调用方不应再覆盖。
-     *
-     * <p>YUJ-136：判定抽入 {@link UserDetailExternalHelper}（可单测），本方法只负责把
-     * {@link ExternalViewerResolver.Resolution} 映射到 fromLayout 的可见性 / 文案，
-     * 同一条 resolution 也喂给「发送消息」按钮隐藏逻辑，确保两处视觉判断完全一致。
      */
     private boolean applyExternalSourceRow(
             com.chat.uikit.enity.UserInfo userInfo,
-            ExternalViewerResolver.Resolution res) {
+            ExternalViewerResolver.Resolution res,
+            boolean isExternalUser,
+            String sourceSpaceLabel) {
         if (userInfo == null) return false;
-        if (res == null) return false;
-        if (!res.isExternal()) {
-            // 同 Space（或未命中外部判定）→ 按产品规格「整行隐藏」，让上层 source_desc 不再抢占此行
+        // 同 Space / 未命中外部 → 产品规格「整行隐藏」，让上层 source_desc 不再抢占此行。
+        // 但只有当我们已经确定「不是外部」时才接管；若 isExternalUser=true 但 res=null
+        // 也当作接管，避免走回老 source_desc 分支覆盖 Space 名兜底。
+        if (!isExternalUser) {
+            if (res == null) {
+                // 没有任何 viewer-relative 信号，且上游也判断非外部 —— 交还 source_desc
+                return false;
+            }
             wkVBinding.fromLayout.setVisibility(View.GONE);
             return true;
         }
-        if (TextUtils.isEmpty(res.getSourceSpaceName())) {
+        if (TextUtils.isEmpty(sourceSpaceLabel)) {
             // 是外部但没拿到 Space 名 —— 不渲染空「来源」，直接隐藏避免 UI 抖动
             wkVBinding.fromLayout.setVisibility(View.GONE);
             return true;
         }
-        wkVBinding.sourceFromTv.setText(res.getSourceSpaceName());
+        wkVBinding.sourceFromTv.setText(sourceSpaceLabel);
         wkVBinding.fromLayout.setVisibility(View.VISIBLE);
         return true;
+    }
+
+    /**
+     * YUJ-204（对齐 web Subscribers/list.tsx:320）：外部成员 UserInfo 姓名旁拼
+     * " @SpaceName" 灰紫色后缀，确保一眼看出对方归属的 Space。非外部 / 无 Space 名
+     * 场景下返回原始昵称，保持老样式。
+     */
+    private CharSequence buildNameWithExternalSuffix(String baseName, String sourceSpaceLabel) {
+        String safeName = baseName == null ? "" : baseName;
+        if (TextUtils.isEmpty(sourceSpaceLabel)) {
+            return safeName;
+        }
+        SpannableStringBuilder ssb = new SpannableStringBuilder(safeName);
+        int start = ssb.length();
+        ssb.append(' ').append(getString(R.string.external_member_space_suffix, sourceSpaceLabel));
+        ssb.setSpan(new ForegroundColorSpan(EXTERNAL_SPACE_SUFFIX_COLOR),
+                start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return ssb;
     }
 
     /**

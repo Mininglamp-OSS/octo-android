@@ -383,6 +383,12 @@ public class WKIMUtils {
             }
         });
 
+        // YUJ-183 · Fix B Step 2：老用户外部群 extra 字段回填迁移。
+        // 安装了本修复 APK 的老用户首次启动时跑一次，把所有 GROUP 会话的 member
+        // sync 重跑一遍（Step 1 判定内部会决定是走增量还是强制全量）。幂等 —— SharedPreferences
+        // per-uid 标记完成后再次启动立即返回。新用户冷启动时 groupNos 为空，直接 mark done。
+        GroupModel.getInstance().runExternalFieldsMigrationIfNeeded();
+
         WKIM.getInstance().getCMDManager().addCmdListener("system", cmd -> {
             if (!TextUtils.isEmpty(cmd.cmdKey)) {
                 switch (cmd.cmdKey) {

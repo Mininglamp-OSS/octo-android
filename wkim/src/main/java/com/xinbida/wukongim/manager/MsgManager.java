@@ -1164,8 +1164,55 @@ public class MsgManager extends BaseManager {
         if (WKCommonUtils.isNotEmpty(wkSyncRecent.reactions)) {
             msg.reactionList = getMsgReaction(wkSyncRecent);
         }
+        // YUJ-183 · 外部群来源字段透传到 localExtraMap（对齐 wkuikit
+        // MsgModel.copyExternalSourceExtras 的 SyncMsg cmd 同步路径）。
+        // 之前 WKSyncRecent 缺字段声明 → retrofit/fastjson 静默丢掉服务端 wire
+        // 里的 is_external/source_space_*/home_space_* → WKMsg.localExtraMap
+        // 始终为空 → 气泡右边 "@SpaceName" 后缀永远不渲染。
+        // 现在 DTO 补字段 + 这里复用同口径（非空/非空串才 put）拷进 localExtraMap。
+        copyExternalSourceExtrasIntoMsg(msg, wkSyncRecent);
         msg = MessageHandler.getInstance().parsingMsg(msg);
         return msg;
+    }
+
+    /**
+     * 把 WKSyncRecent 携带的外部群来源字段拷到 WKMsg.localExtraMap。与
+     * {@code com.chat.uikit.message.MsgModel.copyExternalSourceExtras} 保持
+     * 同样的 wire key（无 from_ 前缀）和同样的 null/empty-string skip 口径，
+     * 避免空字段污染 localExtraMap（参考 YUJ-86 EP1 codex review P1）。
+     */
+    private static void copyExternalSourceExtrasIntoMsg(WKMsg msg, WKSyncRecent wkSyncRecent) {
+        if (msg == null || wkSyncRecent == null) return;
+        boolean any = wkSyncRecent.is_external != null
+                || isNotBlank(wkSyncRecent.source_space_id)
+                || isNotBlank(wkSyncRecent.source_space_name)
+                || isNotBlank(wkSyncRecent.home_space_id)
+                || isNotBlank(wkSyncRecent.home_space_name);
+        if (!any) {
+            return;
+        }
+        if (msg.localExtraMap == null) {
+            msg.localExtraMap = new HashMap<>();
+        }
+        if (wkSyncRecent.is_external != null) {
+            msg.localExtraMap.put("is_external", wkSyncRecent.is_external);
+        }
+        if (isNotBlank(wkSyncRecent.source_space_id)) {
+            msg.localExtraMap.put("source_space_id", wkSyncRecent.source_space_id);
+        }
+        if (isNotBlank(wkSyncRecent.source_space_name)) {
+            msg.localExtraMap.put("source_space_name", wkSyncRecent.source_space_name);
+        }
+        if (isNotBlank(wkSyncRecent.home_space_id)) {
+            msg.localExtraMap.put("home_space_id", wkSyncRecent.home_space_id);
+        }
+        if (isNotBlank(wkSyncRecent.home_space_name)) {
+            msg.localExtraMap.put("home_space_name", wkSyncRecent.home_space_name);
+        }
+    }
+
+    private static boolean isNotBlank(String s) {
+        return s != null && !s.isEmpty();
     }
 
     private List<WKMsgReaction> getMsgReaction(WKSyncRecent wkSyncRecent) {

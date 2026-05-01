@@ -1612,6 +1612,61 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
+     * 为任意 ChatConversationMsg 列表计算未读总数。
+     *
+     * <p>YUJ-183：未分组 section 包含服务端 defaultCategory 的群 + 客户端兜底的
+     * orphan 群（典型为外部群），无法复用 {@link #getUnreadCountInCategory} 的
+     * CategoryEntity 入参版本。与父版本保持一致的口径（有 childList 走
+     * {@link ChatConversationMsg#getUnReadCount()}，否则用自身 unreadCount），
+     * 但不再为未分组 section 额外查 SDK 的 COMMUNITY_TOPIC 子区（Android 现行
+     * 分组行为：子区未读只计入其所属的用户自建 category，默认组不聚合）。
+     */
+    private int computeUnreadCountForItems(List<ChatConversationMsg> items) {
+        int total = 0;
+        if (items == null) return 0;
+        for (ChatConversationMsg msg : items) {
+            if (msg == null || msg.uiConversationMsg == null) continue;
+            if (WKReader.isNotEmpty(msg.childList)) {
+                total += msg.getUnReadCount();
+            } else {
+                total += msg.uiConversationMsg.unreadCount;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * 为任意 ChatConversationMsg 列表判定是否存在未处理的 @mention 提醒。
+     *
+     * <p>YUJ-183：未分组 section orphan 合并路径的对应版本。保持与
+     * {@link #hasMentionInCategory} 一致的判定口径（SDK DB 查提醒 + 子区前缀查）。
+     */
+    private boolean computeHasMentionForItems(List<ChatConversationMsg> items) {
+        if (items == null || items.isEmpty()) return false;
+        String loginUID = WKConfig.getInstance().getUid();
+        for (ChatConversationMsg msg : items) {
+            if (msg == null || msg.uiConversationMsg == null) continue;
+            String cid = msg.uiConversationMsg.channelID;
+            if (TextUtils.isEmpty(cid)) continue;
+            List<WKReminder> reminders = WKIM.getInstance().getReminderManager()
+                    .getReminders(cid, WKChannelType.GROUP);
+            if (WKReader.isNotEmpty(reminders)) {
+                for (WKReminder r : reminders) {
+                    if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0
+                            && (TextUtils.isEmpty(r.publisher) || !r.publisher.equals(loginUID))) {
+                        return true;
+                    }
+                }
+            }
+            if (ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
+                    cid, WKMentionType.WKReminderTypeMentionMe)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 根据当前 tab 过滤 allConversations 并刷新 adapter。
      * 群聊 tab (0): channelType == GROUP，按 category 分组显示
      * 私聊 tab (1): channelType == PERSONAL，无分组
@@ -1676,22 +1731,45 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
 
-            // 4. 未分组（服务端返回的 category_id == null 的分组）放在最后
-            if (defaultCategory != null && !defaultCategory.groups.isEmpty()) {
+            // 4. 未分组：服务端 defaultCategory.groups + 客户端兜底 orphan 群
+            // YUJ-183 P1 修复：外部群（group.space_id != currentSpace 但我以外部成员
+            // 身份加入，source_space_id == currentSpace）已通过 SpaceFilter 校验进入
+            // allConversations，但不在服务端 /spaces/{spaceId}/categories 任一
+            // category.groups 里（后端 categories 仅列 group.space_id == current
+            // space 的群）。提交 c215fa5a 删除客户端 orphan 兜底后这类群消失，
+            // 这里把未被任何 category 覆盖的群并入「未分组」兜底展示。
+            List<ChatConversationMsg> ungroupedItems = new ArrayList<>();
+            Set<String> ungroupedAddedIds = new HashSet<>();
+            if (defaultCategory != null && defaultCategory.groups != null) {
+                for (CategoryEntity.CategoryGroup cg : defaultCategory.groups) {
+                    if (cg == null || cg.group_no == null) continue;
+                    ChatConversationMsg msg = channelMap.get(cg.group_no);
+                    if (msg != null && ungroupedAddedIds.add(cg.group_no)) {
+                        ungroupedItems.add(msg);
+                    }
+                }
+            }
+            // 客户端兜底：allConversations 中未被任何 category 覆盖的群聊（典型为外部群）。
+            List<String> orphanIds = com.chat.uikit.fragment.CategoryDisplayHelper
+                    .findOrphanGroupNos(channelMap.keySet(), categories);
+            for (String cid : orphanIds) {
+                ChatConversationMsg msg = channelMap.get(cid);
+                if (msg != null && ungroupedAddedIds.add(cid)) {
+                    ungroupedItems.add(msg);
+                }
+            }
+
+            if (!ungroupedItems.isEmpty()) {
                 String sectionId = "ungrouped";
-                String sectionTitle = defaultCategory.name != null ? defaultCategory.name : getString(R.string.default_group);
+                String sectionTitle = (defaultCategory != null && defaultCategory.name != null)
+                        ? defaultCategory.name
+                        : getString(R.string.default_group);
                 ChatConversationMsg ungroupedHeader = new ChatConversationMsg(sectionId, sectionTitle);
-                ungroupedHeader.sectionUnreadCount = getUnreadCountInCategory(defaultCategory, channelMap);
-                ungroupedHeader.sectionHasMention = hasMentionInCategory(defaultCategory, channelMap);
+                ungroupedHeader.sectionGroupCount = ungroupedItems.size();
+                ungroupedHeader.sectionUnreadCount = computeUnreadCountForItems(ungroupedItems);
+                ungroupedHeader.sectionHasMention = computeHasMentionForItems(ungroupedItems);
                 displayList.add(ungroupedHeader);
                 if (!chatConversationAdapter.isSectionCollapsed(sectionId)) {
-                    List<ChatConversationMsg> ungroupedItems = new ArrayList<>();
-                    for (CategoryEntity.CategoryGroup cg : defaultCategory.groups) {
-                        ChatConversationMsg msg = channelMap.get(cg.group_no);
-                        if (msg != null) {
-                            ungroupedItems.add(msg);
-                        }
-                    }
                     ungroupedItems.sort((a, b) -> {
                         int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
                         int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;

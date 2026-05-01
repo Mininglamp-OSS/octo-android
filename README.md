@@ -4,6 +4,17 @@
 
 ### **DMWork 悟空IM提供动力** （[悟空IM](https://githubim.com/ "文档")）
 
+## 📱 下载测试 APK
+
+每次 master 有新提交时，CI 会自动构建最新的 dev APK 并发布到：
+
+- **最新版（latest symlink）**: https://api-test.example.com/apk/dmwork-dev-latest.apk
+- **特定 commit**: https://api-test.example.com/apk/dmwork-dev-{short-sha}.apk（8 位 git sha）
+- **Build 历史**: GitHub Actions → Android Build workflow
+
+> dev flavor 连接 im-test 测试环境（api-test.example.com）。
+> 如果之前装过不同签名的 APK，先 `adb uninstall com.dmwork.im`。
+
 DMWork基于底层通讯框架`悟空IM`实现聊天功能。已实现`文本`，`图片`，`语音`，`名片`，`emoji`，群聊`@某人`，消息`链接`，`手机号`，`邮箱`识别等功能。聊天设置支持`名称修改`，`头像修改`，`公告编辑`，`消息免打扰`，`置顶`，`保存到通讯录`，`聊天内昵称`，`群内成员昵称显示`等丰富的设置功能。由于项目是模块化开发，开发者可完全按自己的开发习惯进行二次开发。
 
 ### DMWork特点

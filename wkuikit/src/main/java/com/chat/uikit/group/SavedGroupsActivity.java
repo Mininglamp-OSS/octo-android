@@ -100,7 +100,7 @@ public class SavedGroupsActivity extends WKBaseActivity<ActCommonListLayoutBindi
     }
 
     @Override
-    public void setQrData(int day, String qrCode, String expire) {
+    public void setQrData(int day, String qrCode, String expire, String inviteUrl) {
 
     }
 

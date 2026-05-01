@@ -28,6 +28,7 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.interfaces.IChannelMemberListResult;
 
 import java.util.ArrayList;
@@ -203,10 +204,22 @@ public class GroupModel extends WKBaseModel {
     /**
      * 同步群成员
      *
-     * @param groupNo 群编号
+     * <p>YUJ-183 · Fix B Step 1：对缺失外部群 extra 字段的本地 row 强制全量重拉。
+     *
+     * <p>根因（Coda 定位）：后端 membersync 是 {@code WHERE version > $clientVersion}
+     * 的增量接口。老用户本地 DB 里该群 {@code maxVersion} 早已超过"外部群字段首次下发"
+     * 时的 version bump 点，之后若该群成员 row 没再被 bump → 客户端永远拉不到
+     * {@code is_external / source_space_* / home_space_*} 字段，
+     * {@code WKChannelMember.extraMap} 永远残缺，4 个下游 bug 全部触发。
+     *
+     * <p>修法：进入该方法时先看我自己这一行的 extraMap 有没有外部群字段痕迹
+     * （{@code home_space_id} / {@code is_external}）。缺就用 {@code version=0}
+     * 强制全量重拉一次，让后端把所有 row 重新下发一遍，{@code serialize} 就能
+     * 正确写全 extraMap。单次强制后 {@code save} 走 CONFLICT_REPLACE，
+     * 本地 DB 整行刷新，下次再进群自然走正常增量路径（因为 extra 已经完整了）。
      */
     public synchronized void groupMembersSync(String groupNo, final ICommonListener iCommonListener) {
-        long version = WKIM.getInstance().getChannelMembersManager().getMaxVersion(groupNo, WKChannelType.GROUP);
+        long version = resolveSyncVersion(groupNo);
         request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> list) {
@@ -226,6 +239,68 @@ public class GroupModel extends WKBaseModel {
             }
         });
 
+    }
+
+    /**
+     * 计算当前请求应该用的 sync version。
+     * <p>正常：读 SDK 本地 DB 的 max version（增量）。
+     * <p>YUJ-183 Fix B Step 1：如果本地我这一行的 extraMap 缺外部群字段
+     * （{@code home_space_id} / {@code is_external} 都没有），返回 0 强制全量重拉。
+     * <p>{@code groupMembersSync} 是 synchronized 的，且全量后 {@code save} 走
+     * CONFLICT_REPLACE 立即补齐 extra，第二次调用这个判定就不会再命中 0 分支 →
+     * 不会死循环。<br>
+     * {@code @VisibleForTesting} 以便 JVM 单测验证判定矩阵。
+     */
+    @VisibleForTesting
+    long resolveSyncVersion(String groupNo) {
+        long version = WKIM.getInstance().getChannelMembersManager().getMaxVersion(groupNo, WKChannelType.GROUP);
+        if (version <= 0) {
+            return 0; // first sync 就是全量，原路径
+        }
+        boolean needForceFull = isMyExtraMissingExternalFields(groupNo);
+        if (needForceFull) {
+            return 0;
+        }
+        return version;
+    }
+
+    /**
+     * 判断本地我自己这一行 WKChannelMember 的 extraMap 是否缺外部群标记。
+     * <p>返回 true 表示缺，需要触发 Fix B Step 1 的强制全量重拉。
+     * <p>判定条件：my row 存在 + 两个关键 key（{@code home_space_id}、{@code is_external}）都不在 extraMap。
+     * <ul>
+     *     <li>my row 不存在：交给正常首次同步（version=0 已经是 0）。</li>
+     *     <li>只要任一 key 在 → 假定 extraMap 已被后端正确写过，不重拉（避免每次都强制全量导致流量爆炸）。</li>
+     * </ul>
+     */
+    private static boolean isMyExtraMissingExternalFields(String groupNo) {
+        try {
+            String myUid = WKConfig.getInstance().getUid();
+            if (TextUtils.isEmpty(myUid)) return false;
+            WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
+                    .getMember(groupNo, WKChannelType.GROUP, myUid);
+            if (me == null) return false;
+            return isExtraMissingExternalFields(me.extraMap);
+        } catch (Throwable ignored) {
+            return false; // 异常环境 fail-safe：不强制重拉，不制造额外流量风险
+        }
+    }
+
+    /**
+     * 纯函数：判断给定的 extraMap 是否缺少外部群标记字段。
+     *
+     * <p>拆成 package-private + static 是为了在 JVM 单元测试里直接校验判定矩阵
+     * （同 {@code serialize} 的 YUJ-86 EP1 pattern）。
+     *
+     * @param extras member 行的 extraMap（可能为 null）
+     * @return true = 缺字段，需要强制 full sync；false = 已有外部群标记，可走增量
+     */
+    @VisibleForTesting
+    static boolean isExtraMissingExternalFields(java.util.HashMap<String, Object> extras) {
+        if (extras == null || extras.isEmpty()) return true;
+        boolean hasHome = extras.containsKey(WKChannelMemberExtras.homeSpaceID);
+        boolean hasIsExternal = extras.containsKey(WKChannelMemberExtras.isExternal);
+        return !hasHome && !hasIsExternal;
     }
 
     // 注：package-private + static，便于单元测试直接调用。
@@ -448,19 +523,19 @@ public class GroupModel extends WKBaseModel {
         request(createService(GroupService.class).getGroupQr(groupID), new IRequestResultListener<>() {
             @Override
             public void onSuccess(GroupQr result) {
-                iGroupQr.onResult(HttpResponseCode.success, "", result.day, result.qrcode, result.expire);
+                iGroupQr.onResult(HttpResponseCode.success, "", result.day, result.qrcode, result.expire, result.invite_url);
             }
 
             @Override
             public void onFail(int code, String msg) {
-                iGroupQr.onResult(code, msg, 0, "", "");
+                iGroupQr.onResult(code, msg, 0, "", "", "");
             }
         });
 
     }
 
     public interface IGroupQr {
-        void onResult(int code, String msg, int day, String qrCode, String expire);
+        void onResult(int code, String msg, int day, String qrCode, String expire, String inviteUrl);
     }
 
     /**
@@ -532,5 +607,105 @@ public class GroupModel extends WKBaseModel {
                 listener.onResult(code, msg);
             }
         });
+    }
+
+    // ------------------------------------------------------------------
+    // YUJ-183 · Fix B Step 2 · one-time 老用户外部群 extra 字段回填迁移
+    // ------------------------------------------------------------------
+
+    /**
+     * 迁移标记 SharedPreferences key（per-uid）。true 表示此 uid 已做过本次迁移。
+     * 版本号带在 key 里方便将来再加一次迁移时独立跟踪（不影响已完成的 v1）。
+     */
+    private static final String MIGRATION_KEY_V1 = "yuj183_external_fields_migration_v1_done";
+
+    /**
+     * 迁移调度间隔（ms）—— sequential dispatch 避免一次打出几十个 HTTP 请求。
+     * {@code groupMembersSync} 本身是 synchronized 的，但若一下投递 100 个 callback 链，
+     * 后端 / 客户端线程池都会有短时压力。
+     */
+    private static final long MIGRATION_DISPATCH_INTERVAL_MS = 300L;
+
+    /**
+     * Fix B Step 2：一次性批量迁移 —— 老用户首次启动带修复代码的 APK 时，
+     * 把本地所有 GROUP 会话依次触发 {@link #groupMembersSync(String, ICommonListener)}。
+     *
+     * <p>Step 1 的 {@link #resolveSyncVersion} 会判定该群我的 row 是否缺字段，缺就用
+     * version=0 强制全量重拉；所以这里只是"帮用户主动触发一遍"，不主动决定每个群
+     * 用不用全量。好处：
+     * <ul>
+     *     <li>不用遍历每个群逐一判断 "是否外部群"（客户端无可靠 signal）。</li>
+     *     <li>内部群 + extra 已完整的群：resolveSyncVersion 返回本地 maxVersion，
+     *         后端返回空列表，零数据 round-trip，代价接近 0。</li>
+     *     <li>外部群 + extra 残缺的群：resolveSyncVersion 返回 0 全量重拉，extraMap 被写全。</li>
+     * </ul>
+     *
+     * <p>幂等：用 {@link WKSharedPreferencesUtil#getBooleanWithUID} 标记完成，再次调用
+     * 立即返回。调用方通常在 {@code WKIMUtils.initIMListener()} 末尾挂一次即可。
+     *
+     * <p>失败语义：单个群 sync 失败不阻塞整体迁移（下一个继续），整体完成（不管子任务成败）
+     * 后 mark done。下一次 APK 启动就不再重跑——失败群的 extra 会在用户进入群时由
+     * Step 1 兜底触发。
+     */
+    public void runExternalFieldsMigrationIfNeeded() {
+        try {
+            // 未登录 / uid 为空：跳过，等登录后 WKIMUtils.initIMListener 再调一次。
+            if (TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
+                return;
+            }
+            boolean done = com.chat.base.config.WKSharedPreferencesUtil.getInstance()
+                    .getBoolean(WKConfig.getInstance().getUid() + "_" + MIGRATION_KEY_V1, false);
+            if (done) {
+                return;
+            }
+        } catch (Throwable ignored) {
+            return;
+        }
+        // 后台线程收集 group 列表：DB 查询不要阻塞主线程。
+        new Thread(() -> {
+            try {
+                List<String> groupNos = collectLocalGroupNos();
+                AndroidUtilities.runOnUIThread(() -> dispatchMigrationNext(groupNos, 0));
+            } catch (Throwable ignored) {
+            }
+        }, "yuj183-migration-collect").start();
+    }
+
+    /**
+     * 从 SDK 本地 conversation DB 收集所有群会话号（含当前用户所在但不含子区 COMMUNITY_TOPIC）。
+     * <p>{@code @VisibleForTesting} 是为了在后续扩展单测时能直接注入 stub 会话列表。
+     */
+    @VisibleForTesting
+    List<String> collectLocalGroupNos() {
+        List<String> groupNos = new ArrayList<>();
+        try {
+            List<WKConversationMsg> allConvs = WKIM.getInstance().getConversationManager()
+                    .getWithChannelType(WKChannelType.GROUP);
+            if (WKReader.isNotEmpty(allConvs)) {
+                for (WKConversationMsg conv : allConvs) {
+                    if (conv == null || TextUtils.isEmpty(conv.channelID)) continue;
+                    if (conv.channelType != WKChannelType.GROUP) continue;
+                    groupNos.add(conv.channelID);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return groupNos;
+    }
+
+    /**
+     * Sequential dispatch：一个接一个 sync，间隔 {@link #MIGRATION_DISPATCH_INTERVAL_MS}。
+     * 末尾（index 越界）把 MIGRATION_KEY_V1 写成 true。
+     */
+    private void dispatchMigrationNext(List<String> groupNos, int index) {
+        if (groupNos == null || index >= groupNos.size()) {
+            com.chat.base.config.WKSharedPreferencesUtil.getInstance().putBooleanWithUID(
+                    MIGRATION_KEY_V1, true);
+            return;
+        }
+        final String groupNo = groupNos.get(index);
+        groupMembersSync(groupNo, (code, msg) -> AndroidUtilities.runOnUIThread(
+                () -> dispatchMigrationNext(groupNos, index + 1),
+                MIGRATION_DISPATCH_INTERVAL_MS));
     }
 }

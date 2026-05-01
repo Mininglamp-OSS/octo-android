@@ -524,7 +524,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
     }
 
     @Override
-    public void setQrData(int day, String qrCode, String expire) {
+    public void setQrData(int day, String qrCode, String expire, String inviteUrl) {
 
     }
 

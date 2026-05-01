@@ -1,10 +1,8 @@
 package com.chat.uikit.group.adapter;
 
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
 import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
 import android.view.View;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,9 +25,9 @@ import java.util.List;
  * 2019-12-06 15:21
  * 群成员适配器（群详情顶部缩略图网格）
  *
- * 外部成员标识 v2（YUJ-87）：昵称后追加「@SpaceName」灰色后缀，viewer-relative
- * 通过 {@link ExternalViewerResolver} 判定。缩略图格子很窄，后缀会随昵称一起
- * 按 ellipsize("end") 截断，保持单行不破版。
+ * 外部成员标识 v2.1（YUJ-184）：缩略图格子很窄，单行后缀会被 ellipsize 截断（只看到 "张三 @"），
+ * 改为双行 —— nameTv 放昵称，spaceNameTv 放 @SpaceName（10sp 灰色，visibility=gone for 非外部），
+ * 对齐企微样式。viewer-relative 判定仍通过 {@link ExternalViewerResolver}。
  */
 public class GroupMemberAdapter extends BaseQuickAdapter<WKChannelMember, BaseViewHolder> {
     public GroupMemberAdapter(@Nullable List<WKChannelMember> data) {
@@ -54,7 +52,8 @@ public class GroupMemberAdapter extends BaseQuickAdapter<WKChannelMember, BaseVi
             }
             AvatarView avatarView = helper.getView(R.id.avatarView);
             avatarView.setSize(50f);
-            helper.setText(R.id.nameTv, buildNameWithExternalSuffix(showName, item));
+            helper.setText(R.id.nameTv, showName == null ? "" : showName);
+            bindExternalSpaceName(helper, item);
             avatarView.showAvatar(item.memberUID, WKChannelType.PERSONAL, item.memberAvatarCacheKey);
             helper.setGone(R.id.handlerIv, true);
             helper.setGone(R.id.userLayout, false);
@@ -76,21 +75,20 @@ public class GroupMemberAdapter extends BaseQuickAdapter<WKChannelMember, BaseVi
         }
     }
 
-    private CharSequence buildNameWithExternalSuffix(String showName, WKChannelMember item) {
+    private void bindExternalSpaceName(@NonNull BaseViewHolder helper, WKChannelMember item) {
+        TextView spaceNameTv = helper.getView(R.id.spaceNameTv);
         String viewerSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         ExternalViewerResolver.Resolution res = ExternalViewerResolver.resolveFromExtras(
                 item == null ? null : item.extraMap, viewerSpaceId);
         if (!res.isExternal() || TextUtils.isEmpty(res.getSourceSpaceName())) {
-            return showName == null ? "" : showName;
+            spaceNameTv.setVisibility(View.GONE);
+            spaceNameTv.setText("");
+            return;
         }
         String suffix = getContext().getString(
                 R.string.external_member_space_suffix, res.getSourceSpaceName());
-        SpannableStringBuilder ssb = new SpannableStringBuilder();
-        ssb.append(showName == null ? "" : showName);
-        int start = ssb.length();
-        ssb.append(' ').append(suffix);
-        ssb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(getContext(), R.color.color999)),
-                start, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return ssb;
+        spaceNameTv.setText(suffix);
+        spaceNameTv.setVisibility(View.VISIBLE);
     }
 }
+

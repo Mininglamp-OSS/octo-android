@@ -404,6 +404,25 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                                     isExternalUser, userInfo.follow, !TextUtils.isEmpty(vercode))
                                     ? View.VISIBLE : View.GONE);
 
+                    // YUJ-188 临时诊断：记录申请加好友按钮可见性相关输入，便于定位
+                    // isExternalUser == false 的根因。上线前会随 revert PR 移除。
+                    if (com.chat.base.BuildConfig.DEBUG) {
+                        android.util.Log.d("YUJ188", "apply-btn-diag"
+                                + " entry_groupID=" + groupID
+                                + " viewerUid=" + WKConfig.getInstance().getUid()
+                                + " viewerSpaceId=" + MsgModel.getInstance().getCurrentSpaceId()
+                                + " userInfo.uid=" + userInfo.uid
+                                + " userInfo.home_space_id=" + userInfo.home_space_id
+                                + " userInfo.is_external=" + userInfo.is_external
+                                + " userInfo.follow=" + userInfo.follow
+                                + " vercode=" + (!TextUtils.isEmpty(vercode))
+                                + " externalRes=" + (externalRes == null
+                                        ? "null"
+                                        : ("isExternal=" + externalRes.isExternal()))
+                                + " isExternalUser=" + isExternalUser
+                                + " shouldShowApplyButton=" + wkVBinding.applyBtn.getVisibility());
+                    }
+
                     // Bot-specific UI
                     isBot = userInfo.robot == 1;
                     botDescription = userInfo.bot_description;

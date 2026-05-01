@@ -60,6 +60,8 @@
     <string name="add_friends">Add Contacts</string>
     <string name="scan">Scan</string>
     <string name="group_qr_discontinue_use">The group has been turned on group verification\nCan only join the group by invitation</string>
+    <string name="group_copy_invite_link">Copy Invite Link</string>
+    <string name="group_invite_link_copied">Invite link copied</string>
     <string name="find_user">Find users：</string>
     <string name="contacts">Contacts</string>
     <string name="group_chat">Group Chat</string>

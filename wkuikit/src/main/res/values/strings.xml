@@ -64,6 +64,8 @@
     <string name="add_friends">添加好友</string>
     <string name="scan">扫 一 扫</string>
     <string name="group_qr_discontinue_use">该群已开启进群验证\n只可通过邀请进群</string>
+    <string name="group_copy_invite_link">复制邀请链接</string>
+    <string name="group_invite_link_copied">邀请链接已复制</string>
     <string name="find_user">查找用户：</string>
     <string name="contacts">联系人</string>
     <string name="group_chat">群聊</string>

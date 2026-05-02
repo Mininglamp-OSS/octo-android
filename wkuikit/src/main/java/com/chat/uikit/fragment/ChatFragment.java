@@ -88,7 +88,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1142,16 +1141,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
             String[] parsed = ThreadModel.getInstance().parseChannelId(uiConversationMsg.channelID);
             if (parsed != null) {
+                // YUJ-219-B · 子区路径跨 Space 父群 bump 防护。
+                // refreshThreadPreviews 只影响当前 adapter 中可见的父群 entry（跨
+                // Space 父群本就不在 adapter 里，刷新是 no-op），保留调用；
+                // 但父群的 lastMsgTimestamp 写入 allConversations 是跨 Space 污染 —
+                // 对齐后端 filterThreadConv：按父群 space 判定，不是当前 Space 就跳过 bump。
                 chatConversationAdapter.refreshThreadPreviews(parsed[0]);
-                // 更新父群的 lastMsgTimestamp，使其在分组内上浮（对齐 iOS addOrUpdateChildren）
-                for (ChatConversationMsg msg : allConversations) {
-                    if (msg.uiConversationMsg != null
-                            && parsed[0].equals(msg.uiConversationMsg.channelID)
-                            && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
-                        if (uiConversationMsg.lastMsgTimestamp > msg.uiConversationMsg.lastMsgTimestamp) {
-                            msg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                boolean parentInCurrentSpace = isChannelInCurrentSpace(parsed[0], WKChannelType.GROUP);
+                if (parentInCurrentSpace) {
+                    // 更新父群的 lastMsgTimestamp，使其在分组内上浮（对齐 iOS addOrUpdateChildren）
+                    for (ChatConversationMsg msg : allConversations) {
+                        if (msg.uiConversationMsg != null
+                                && parsed[0].equals(msg.uiConversationMsg.channelID)
+                                && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
+                            if (uiConversationMsg.lastMsgTimestamp > msg.uiConversationMsg.lastMsgTimestamp) {
+                                msg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -1175,6 +1182,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
         if (!TextUtils.isEmpty(uiConversationMsg.parentChannelID)) {
             resetChildData(uiConversationMsg, isEnd);
+            return;
+        }
+
+        // YUJ-219-B · Layer 4½ gate（push 路径单条更新的跨 Space 兜底）。
+        //
+        // 批量路径（L693）已有 isMessageFromOtherSpace 检查，但单条路径 L1193 第一个
+        // 循环直接裸更新 allConversations（共享对象 → adapter 同步被污染 → 随后的
+        // sortMsg 按污染后 timestamp 冒顶）。resetData 被 size==1 分支直接调用，是
+        // "其它 Space 群/DM/子区新消息串到当前 Space" 的唯一入口。
+        //
+        // 这里在写入 allConversations 之前做一次前置 gate，命中即直接 return：
+        //   - 不 bump lastMsgTimestamp / unreadCount
+        //   - 不加入 adapter，不排序
+        //   - 不改 SpaceFilter 纯函数；不触碰 WKSDK 持久化
+        //   - 与批量路径 L693 / 新增路径 L1313 语义对齐（含 COMMUNITY_TOPIC 新分支）
+        //
+        // 严格按任务要求：gate 命中 → return，不写 allConversations、不 bump、不 sort。
+        if (isCrossSpaceRealtimePush(uiConversationMsg)) {
             return;
         }
 
@@ -1404,7 +1429,96 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     // 系统 Bot（如 BotFather / u_10000 / fileHelper）：跨 Space 共享，白名单由
-    // appconfig system_bot_uids 下发，客户端统一走 SystemBotsFallback.isSystemBot(...)。
+    // appconfig system_bot_uids 下发（YUJ-219-A3），客户端统一走
+    // {@link com.chat.base.space.SystemBotsFallback#getSystemBotIds()} /
+    // {@link com.chat.base.space.SystemBotsFallback#isSystemBot(String)}，消除三端硬编码漂移。
+
+    /**
+     * YUJ-219-B · Layer 4½ gate · 判断这条 push 是不是应该被拒绝的跨 Space 污染。
+     *
+     * <p>与批量路径（L693）/ 新增路径（L1313）的 reject 语义对齐，集中在一处判定，
+     * 避免「单条路径漏检 → 冒顶 + 切换后消失」的回归。
+     *
+     * <p>决策（跨端统一口径）：
+     * <ol>
+     *     <li>非 Space 模式（currentSpaceId 为空）→ 放行</li>
+     *     <li>SystemBot（botfather / u_10000 / fileHelper）→ 委托
+     *         {@link #isSystemBotCrossSpaceBump(WKUIConversationMsg, String)}
+     *         判定当前 Space 是否需要抑制 bump（conversation entry 跨 Space 共享
+     *         是设计，但「Space A 看到 Space B 的 botfather 消息冒顶 + 红点」是 bug）</li>
+     *     <li>GROUP → {@code !isChannelInCurrentSpace}</li>
+     *     <li>COMMUNITY_TOPIC → 按父群 space 判定，对齐后端 {@code filterThreadConv}；
+     *         解析失败 fail-open（由 ThreadModel 后续补救）</li>
+     *     <li>PERSONAL → {@code isMessageFromOtherSpace && !isSystemBot}</li>
+     * </ol>
+     *
+     * <p>gate 为 true 时调用方必须 {@code return}：不写 allConversations、不 bump、不 sort。
+     */
+    private boolean isCrossSpaceRealtimePush(WKUIConversationMsg uc) {
+        if (uc == null) return false;
+        String currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId();
+        if (TextUtils.isEmpty(currentSpaceId)) {
+            return false;
+        }
+
+        // SystemBot 跨 Space 共享 entry，但需要防止别 Space 消息 bump 当前 Space
+        if (com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID)) {
+            return isSystemBotCrossSpaceBump(uc, currentSpaceId);
+        }
+
+        if (uc.channelType == WKChannelType.GROUP) {
+            return !isChannelInCurrentSpace(uc.channelID, uc.channelType);
+        }
+
+        if (uc.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            // 子区消息本身不进 conversation list（resetData 顶部 L1142 已拦截并
+            // return），但保留此分支让 gate 语义完整，方便其他调用方复用。
+            // 按父群 space 判定 —— 与后端 filterThreadConv 对齐。
+            String[] parsed = ThreadModel.getInstance().parseChannelId(uc.channelID);
+            if (parsed == null || parsed.length == 0 || TextUtils.isEmpty(parsed[0])) {
+                // 解析失败 fail-open：让旧有子区兜底 refreshThreadPreviews 处理
+                return false;
+            }
+            return !isChannelInCurrentSpace(parsed[0], WKChannelType.GROUP);
+        }
+
+        // PERSONAL（非 SystemBot）
+        return isMessageFromOtherSpace(uc.getWkMsg())
+                && !com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID);
+    }
+
+    /**
+     * YUJ-219-B · 系统 Bot 跨 Space bump 保护。
+     *
+     * <p>SystemBot 的 conversation entry 跨 Space 共享是<b>设计</b>（否则 botfather
+     * 在非默认 Space 下会彻底消失）；但「在 Space A 看到 Space B 的 botfather
+     * 消息冒顶 + 红点」是 bug。
+     *
+     * <p>判定规则（与 ChatActivity#filterSystemBotMessages 的隐藏口径一致）：
+     * <ul>
+     *     <li>{@code msg.payload.space_id == currentSpaceId} → 允许 bump（return false）</li>
+     *     <li>{@code msg.payload.space_id != currentSpaceId} → 污染，抑制 bump（return true）</li>
+     *     <li>{@code msg.payload.space_id == null/空}（SystemBot 老消息）→ 视为污染，
+     *         对齐 {@code filterSystemBotMessages} 的"系统 Bot 无 space_id 在 Space
+     *         模式下隐藏"口径 → return true</li>
+     * </ul>
+     */
+    private boolean isSystemBotCrossSpaceBump(WKUIConversationMsg uc, String currentSpaceId) {
+        if (uc == null || TextUtils.isEmpty(currentSpaceId)) {
+            return false;
+        }
+        WKMsg msg = uc.getWkMsg();
+        if (msg == null) {
+            // 没有 wkMsg（比如 SystemBotsFallback 的占位）→ 无法判定 → 放行
+            return false;
+        }
+        String msgSpaceId = com.chat.base.space.SpaceFilter.extractSpaceIdFromMsg(msg);
+        if (TextUtils.isEmpty(msgSpaceId)) {
+            // SystemBot 无 space_id 消息 → 视为跨 Space 污染（对齐隐藏口径）
+            return true;
+        }
+        return !currentSpaceId.equals(msgSpaceId);
+    }
 
     /**
      * 对所有 PERSONAL 类型会话（包括系统 Bot）进行 Space 适配：

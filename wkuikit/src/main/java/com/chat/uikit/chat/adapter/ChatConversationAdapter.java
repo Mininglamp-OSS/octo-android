@@ -77,7 +77,6 @@ import com.chat.uikit.thread.service.entity.ThreadEntity;
 import android.view.animation.DecelerateInterpolator;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -587,7 +586,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void setUnreadCount(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg item, boolean isAnimated) {
-        int unread = item.getUnReadCount();
+        // YUJ-219-B · Layer B · 渲染层 Space 过滤兜底（对齐 Web Model.tsx :: unread getter
+        // + iOS WKConversationWrapModel.spaceFilteredLastMessage 的 unread 清零语义）：
+        // 即使 push-path Layer A gate 挡住了 bump，WKSDK 本地 DB 在冷启动回放时仍可能
+        // 给 allConversations 带进跨 Space 的 unreadCount。这里做最后一层擦除。
+        int unread = getRenderUnreadCount(item);
         View view = baseViewHolder.getView(R.id.msgCountTv);
         if (view instanceof CounterView) {
             // 普通布局（私聊）：CounterView
@@ -611,17 +614,28 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void showTime(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
-        long msgTimestamp = item.lastMsgTimestamp;
-        if (item.getWkMsg() != null) {
-            if (item.getWkMsg().remoteExtra.editedAt != 0) {
-                msgTimestamp = item.getWkMsg().remoteExtra.editedAt;
+        // YUJ-219-B · Layer B · 渲染层时间戳 Space 过滤。跨 Space 消息污染时返回 0
+        // （即不显示最近时间），避免列表因被跨 Space push bump 而冒顶排序。
+        long msgTimestamp;
+        if (com.chat.base.space.ConversationPreviewFilter.isMessageCrossSpace(item)) {
+            msgTimestamp = 0;
+        } else {
+            msgTimestamp = item.lastMsgTimestamp;
+            if (item.getWkMsg() != null) {
+                if (item.getWkMsg().remoteExtra.editedAt != 0) {
+                    msgTimestamp = item.getWkMsg().remoteExtra.editedAt;
+                }
             }
         }
-        String chatTime = WKTimeUtils.getInstance().getNewChatTime(msgTimestamp * 1000);
+        String chatTime = msgTimestamp > 0
+                ? WKTimeUtils.getInstance().getNewChatTime(msgTimestamp * 1000)
+                : "";
         helper.setText(R.id.timeTv, chatTime);
     }
 
-    // 系统 Bot：会话列表预览需按 Space 过滤（动态白名单见 SystemBotsFallback.getSystemBotIds）
+    // 系统 Bot：会话列表预览需按 Space 过滤（YUJ-219-A3 / YUJ-219-B：集合改走
+    // {@link com.chat.base.space.SystemBotsFallback#isSystemBot} 消除三端硬编码漂移，
+    // 动态白名单见 SystemBotsFallback.getSystemBotIds）
 
     /**
      * 从消息中提取 space_id
@@ -685,18 +699,41 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 返回 Space 感知的未读数。
      * Person 频道在 Space 模式下，若最后一条消息不属于当前 Space，返回 0。
+     *
+     * <p>YUJ-219-B：委托给 {@link com.chat.base.space.ConversationPreviewFilter#getSpaceFilteredUnread(WKUIConversationMsg)}
+     * 以覆盖 SystemBot + 无 space_id 隐藏口径 / GROUP 跨 Space 兜底 / TOPIC 分支。
      */
     public int getEffectiveUnreadCount(ChatConversationMsg item) {
-        if (item.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
-            String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-            if (!TextUtils.isEmpty(currentSpaceId)) {
-                String msgSpaceId = getSpaceIdFromMsg(item.uiConversationMsg.getWkMsg());
-                if (!TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId)) {
-                    return 0;
-                }
-            }
+        if (item == null || item.uiConversationMsg == null) return 0;
+        return com.chat.base.space.ConversationPreviewFilter
+                .getSpaceFilteredUnread(item.uiConversationMsg);
+    }
+
+    /**
+     * YUJ-219-B · Layer B · 渲染层未读数：集合子区 + Space 过滤双兜底。
+     *
+     * <p>{@link ChatConversationMsg#getUnReadCount()} 现有实现会把 childList（子区）
+     * 的 unread 汇总到父群；但裸读 {@code uiConversationMsg.unreadCount} 不过 Space
+     * 过滤。此处对顶层 entry 再过一次 {@link com.chat.base.space.ConversationPreviewFilter}：
+     * 顶层（父群 / DM / SystemBot）若判定为跨 Space 污染 → 直接返回 0；
+     * 否则维持现有（含子区）汇总语义。
+     */
+    private int getRenderUnreadCount(ChatConversationMsg item) {
+        if (item == null || item.uiConversationMsg == null) return 0;
+        if (com.chat.base.space.ConversationPreviewFilter.isMessageCrossSpace(item.uiConversationMsg)) {
+            return 0;
         }
-        return item.uiConversationMsg.unreadCount;
+        return item.getUnReadCount();
+    }
+
+    /**
+     * YUJ-219-B · Layer B · 渲染层 wkMsg 获取：跨 Space 污染时返回 null，避免
+     * {@link #getContent(WKMsg)} 直接渲染出另一 Space 的原文。
+     * 对齐 iOS {@code spaceFilteredLastMessage} / Web {@code getSpaceFilteredLastMessage}。
+     */
+    @Nullable
+    private WKMsg getRenderWkMsg(@Nullable WKUIConversationMsg item) {
+        return com.chat.base.space.ConversationPreviewFilter.getSpaceFilteredWkMsg(item);
     }
 
     /**
@@ -723,8 +760,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         contentTv.setVisibility(View.VISIBLE);
         String mentionTag = getContext().getString(R.string.last_msg_remind);
         WKUIConversationMsg item = conversationMsg.uiConversationMsg;
-        String msgContent = getContent(item.getWkMsg());
-        String fromName = getFromName(item.channelType, item.getWkMsg());
+        // YUJ-219-B · Layer B · 跨 Space 污染时用 null wkMsg，getContent 返回空串
+        WKMsg renderMsg = getRenderWkMsg(item);
+        String msgContent = getContent(renderMsg);
+        String fromName = getFromName(item.channelType, renderMsg);
         String preview = TextUtils.isEmpty(fromName) ? msgContent : fromName + "：" + msgContent;
         // 整行高亮（对齐子区 threadMentionTv 样式）
         contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
@@ -745,8 +784,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             // 聊天密码
             content = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         } else {
-            content = getContent(item.getWkMsg());
-            String fromName = getFromName(item.channelType, item.getWkMsg());
+            // YUJ-219-B · Layer B · 非 SystemBot 分支也过 render-time Space 过滤兜底。
+            // SystemBot 走 findSystemBotSpaceContent（含 DB 回查当前 Space 历史）；
+            // 其它频道类型若判定为跨 Space 污染（冷启动 race / DB 回放），
+            // getRenderWkMsg 返回 null 后 getContent 返回空串 → preview 为空。
+            WKMsg renderMsg = getRenderWkMsg(item);
+            content = getContent(renderMsg);
+            String fromName = getFromName(item.channelType, renderMsg);
             if (!TextUtils.isEmpty(fromName)) {
                 content = fromName + "：" + content;
             }

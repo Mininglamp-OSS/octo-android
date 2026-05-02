@@ -36,10 +36,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.content.ContextCompat;
 import androidx.databinding.DataBindingUtil;
-import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
 
 import com.chat.base.common.WKCommonModel;
 import com.chat.uikit.chat.face.WKVoiceViewManager;
@@ -296,6 +299,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onResume() {
         super.onResume();
+        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
+        // Glide 会永远停住。onResume 主动恢复，消除生命周期死锁。
+        try {
+            Glide.with(this).resumeRequests();
+        } catch (IllegalArgumentException ignored) {
+            // Activity 销毁竞态
+        }
         isShowChatActivity = true;
         WKUIKitApplication.getInstance().chattingChannelID = channelId;
         isUploadReadMsg = true;
@@ -457,18 +467,27 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         CommonAnim.getInstance().showOrHide(numberTextView, false, false);
 
-        //去除刷新条目闪动动画
-        ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
+        // YUJ-240 review fix (Jerry-Xin W#2): 旧 DefaultItemAnimator 配置代码已死 — MyItemAnimator 在下面立即替换它，移除以清理死代码与 import。
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
+        // YUJ-236 perf: RV 容器 match_parent，setHasFixedSize(true) 跳过 Adapter 变化触发的 requestLayout。
+        wkVBinding.recyclerView.setHasFixedSize(true);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
-        wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
+        // YUJ-236 perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
+        MyItemAnimator itemAnimator = new MyItemAnimator();
+        itemAnimator.setSupportsChangeAnimations(false);
+        wkVBinding.recyclerView.setItemAnimator(itemAnimator);
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
+        // YUJ-236 phase2 perf (A4) + YUJ-240 round3 fix (Jerry-Xin W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
+        // 原先还有 richText (14)，但 WKUIKitApplication 未注册该 provider，ChatAdapter.getItemType 不会返回 14，配置池是 no-op，删除。
+        RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
+        msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
+        msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
     }
 
     private void initListener() {
@@ -617,6 +636,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
+                // YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
+                // DRAGGING 保持加载（慢滑手指在屏不应看到占位符）；IDLE 恢复。
+                try {
+                    RequestManager glideMgr = Glide.with(ChatActivity.this);
+                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                        glideMgr.pauseRequests();
+                    } else if (newState == SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
+                    }
+                    // DRAGGING: 不变
+                } catch (IllegalArgumentException ignored) {
+                    // Activity 已销毁的竞态保护
+                }
                 // 简化日志：仅在 IDLE 时输出详情
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
                 isShowHistory = lastItemPosition < chatAdapter.getItemCount() - 1;

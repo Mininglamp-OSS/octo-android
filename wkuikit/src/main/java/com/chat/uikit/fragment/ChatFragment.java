@@ -28,6 +28,10 @@ import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
+
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
@@ -227,10 +231,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return textView;
         });
         loadCurrentSpaceName();
-        //去除刷新条目闪动动画
-        ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
+        // YUJ-240 review fix (Jerry-Xin blocking): 会话列表 RV 容器是 match_parent/match_parent（见 frag_chat_conversation_layout.xml），
+        // 尺寸固定，在此处显式开启 setHasFixedSize(true)（已从 WKBaseFragment.initAdapter 移除）。
+        wkVBinding.recyclerView.setHasFixedSize(true);
+        // YUJ-240 review fix (Jerry-Xin W#5): setSupportsChangeAnimations 必须在 setAdapter 之后调用才稳定生效，移到 initAdapter 之后。
+        RecyclerView.ItemAnimator itemAnimator = wkVBinding.recyclerView.getItemAnimator();
+        if (itemAnimator instanceof DefaultItemAnimator) {
+            ((DefaultItemAnimator) itemAnimator).setSupportsChangeAnimations(false);
+        }
+        // YUJ-236 phase2 perf (A2): 会话列表 off-screen 缓存 2 → 15，减少快速滑动时 ViewHolder 重建。
+        wkVBinding.recyclerView.setItemViewCacheSize(15);
         chatConversationAdapter.restoreExpandedState();
         chatConversationAdapter.setAnimationEnable(false);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
@@ -286,6 +298,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         return false;
                     }
                 });
+
+        // YUJ-236 phase2 perf (A3) + YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1):
+        // 仅 SETTLING (fling) 时 pause，DRAGGING 不动（慢滑手指在屏不应看到占位符），IDLE 恢复。
+        wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                if (!isAdded() || isDetached()) return;
+                try {
+                    RequestManager glideMgr = Glide.with(ChatFragment.this);
+                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                        glideMgr.pauseRequests();
+                    } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
+                    }
+                    // DRAGGING: 保持加载
+                } catch (IllegalArgumentException ignored) {
+                    // Fragment 已 detach 的竞态保护
+                }
+            }
+        });
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -2929,6 +2961,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
+        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台切换时 RV 停在 DRAGGING/SETTLING，IDLE 回调不会到，Glide 会永远停住。
+        try {
+            Glide.with(this).resumeRequests();
+        } catch (IllegalArgumentException ignored) {
+            // Fragment 未 attach 竞态
+        }
         // 子区数据缓存清除并重新加载，返回时实时更新
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上

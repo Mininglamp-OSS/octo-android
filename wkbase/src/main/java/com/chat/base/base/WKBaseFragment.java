@@ -177,6 +177,8 @@ public abstract class WKBaseFragment<WKVBinding extends ViewBinding> extends Fra
     protected void initAdapter(RecyclerView recyclerView, BaseQuickAdapter<?, ?> adapter) {
         if (recyclerView == null || adapter == null) return;
         recyclerView.setLayoutManager(new LinearLayoutManager(getActivity(), LinearLayoutManager.VERTICAL, false));
+        // YUJ-240 review fix (Jerry-Xin blocking): setHasFixedSize(true) 不再放这里，
+        // 共享到 wrap_content RV 会抑制必要的 remeasure。各调用方自行决定。
         recyclerView.setAdapter(adapter);
         adapter.setAnimationFirstOnly(true);
     }

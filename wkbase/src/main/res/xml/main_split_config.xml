@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  折叠屏 L3-A Activity Embedding split rules.
+
+  Phase 1 scope (YUJ-248, GH #176):
+  - 5 SplitPairRule: TabActivity as primary, 5 secondary destinations open in a
+    side-by-side split when the device is wide enough (600dp+).
+  - 4 ActivityRule alwaysExpand: full-bleed activities that must NOT be pinned to
+    a 0.4-ratio pane (launcher / login / onboarding / share sheet).
+
+  Note: SplashActivity does NOT exist in this repo. Real entry points are
+  MainActivity (launcher router), WKLoginActivity (login), PerfectUserInfoActivity
+  (onboarding), and ShareReceiveActivity (translucent share sheet). See YUJ-247 F1/F2.
+-->
+<resources xmlns:window="http://schemas.android.com/apk/res-auto">
+
+    <!-- ============================================================ -->
+    <!-- SplitPairRule × 5                                              -->
+    <!-- Primary = TabActivity; Secondary = chat / user / global / search -->
+    <!-- ============================================================ -->
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always"
+        window:clearTop="false">
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.chat.ChatActivity" />
+    </SplitPairRule>
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always"
+        window:clearTop="false">
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.chat.ChatPersonalActivity" />
+    </SplitPairRule>
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always"
+        window:clearTop="false">
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.user.UserDetailActivity" />
+    </SplitPairRule>
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always"
+        window:clearTop="false">
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.search.remote.GlobalActivity" />
+    </SplitPairRule>
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always"
+        window:clearTop="false">
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.search.SearchAllActivity" />
+    </SplitPairRule>
+
+    <!-- ============================================================ -->
+    <!-- ActivityRule × 4                                               -->
+    <!-- Full-bleed: launcher / login / onboarding / share sheet.        -->
+    <!-- ============================================================ -->
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.dmwork.im.MainActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.chat.login.ui.WKLoginActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.chat.login.ui.PerfectUserInfoActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.dmwork.im.ShareReceiveActivity" />
+    </ActivityRule>
+
+</resources>

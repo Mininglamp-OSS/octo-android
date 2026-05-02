@@ -115,6 +115,27 @@
         android:usesCleartextTraffic="true"
         tools:ignore="GoogleAppIndexingWarning">
 
+        <!-- YUJ-248 (#176): enable Activity Embedding splits (foldable/tablet L3-A). -->
+        <property
+            android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED"
+            android:value="true" />
+
+        <!--
+          YUJ-248 (#176): App Startup provider wires SplitInitializer (wkbase) so
+          RuleController is populated before the first Activity is created.
+          tools:node="merge" keeps this compatible with any library-provided
+          InitializationProvider entry.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="com.chat.base.foldable.SplitInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

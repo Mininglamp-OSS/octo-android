@@ -80,6 +80,35 @@ public class WKBaseApplication {
         this.context = new WeakReference<>(context);
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
+
+        // YUJ-248 (#176) — L1 stale-cache fix:
+        // After the P0 patch (#175) unlocked landscape + configChanges for TabActivity /
+        // ChatActivity, configuration changes no longer destroy those Activities, so the
+        // one-shot AndroidUtilities.setDensity() above never re-ran and cached
+        // density/screenWidth values could go stale (e.g. after unfold on a Pixel Fold).
+        // Registering a ComponentCallbacks2 on the Application refreshes them globally
+        // whenever the system config changes, which covers every getScreenWidth()
+        // consumer (including the 6 audited sites) provided they read at use-time.
+        context.registerComponentCallbacks(new android.content.ComponentCallbacks2() {
+            @Override
+            public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+                try {
+                    float d = application.getResources().getDisplayMetrics().density;
+                    AndroidUtilities.setDensity(d);
+                } catch (Throwable ignored) {
+                    // defensive — never let a config-change callback crash the app
+                }
+            }
+
+            @Override
+            public void onLowMemory() {
+            }
+
+            @Override
+            public void onTrimMemory(int level) {
+            }
+        });
+
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
 
         // Bugly + Emoji + RLottie 合并到一个后台线程，减少 CPU 争抢

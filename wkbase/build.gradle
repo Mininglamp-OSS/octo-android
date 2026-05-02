@@ -55,6 +55,11 @@ repositories {
 dependencies {
     api fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
     implementation 'androidx.appcompat:appcompat:1.7.0'
+    // YUJ-248 / GH #176: Activity Embedding (L3-A) — foldable/tablet dual-pane.
+    // Declared at wkbase (widest visibility) so wkuikit + app can both see the
+    // SplitInitializer registered via androidx.startup.
+    api 'androidx.window:window:1.5.1'
+    api 'androidx.startup:startup-runtime:1.1.1'
     api "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     api "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 

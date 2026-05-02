@@ -152,14 +152,6 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
-    /**
-     * @deprecated YUJ-219-A3 / YUJ-219-B：SystemBot 集合全部改走
-     * {@link com.chat.base.space.SystemBotsFallback#isSystemBot(String)}
-     * （后端 appconfig {@code system_bot_uids} 下发 + 冷启动 fallback）。
-     * 本字段保留做 grep 锚点，空集合确保旧 {@code contains()} 调用路径不会误判。
-     */
-    @Deprecated
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>();
     private static final int MAX_ADAPTER_SIZE = 300;
     private static final int TRIM_BATCH_SIZE = 60;
     private RecyclerView.EdgeEffectFactory edgeEffectFactory; // 用于清除 EdgeEffect

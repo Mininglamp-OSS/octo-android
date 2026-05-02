@@ -294,14 +294,21 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 //        setContentView(R.layout.act_chat_layout1);
         // YUJ-252 / GH #182 Bug 1 — In Activity Embedding expanded mode the
         // secondary pane does not reliably receive adjustResize behavior, so the
-        // IME can overlap the message input area. Manually consume IME insets
-        // and translate them into bottom padding on the root view. On phone
-        // (single-pane) the IME insets are still dispatched correctly, so this
-        // behaves identically to the adjustResize default. See issue #182.
+        // IME can overlap the message input area. Manually translate IME insets
+        // into bottom padding on the root view. On phone (single-pane) the IME
+        // insets are still dispatched correctly, so this behaves identically to
+        // the adjustResize default.
+        //
+        // YUJ-253 / GH #184 — MUST return `insets` (not WindowInsetsCompat.CONSUMED).
+        // Returning CONSUMED interrupts insets propagation to child views and
+        // regressed PR#181's pane-aware bubble auto-resize (BubbleLayout /
+        // descendants stopped getting layout/insets callbacks when the divider
+        // was dragged). IME occlusion is already handled by the setPadding above,
+        // so we do not need to consume; just keep the chain alive.
         ViewCompat.setOnApplyWindowInsetsListener(wkVBinding.rootView, (v, insets) -> {
             Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
             v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), imeInsets.bottom);
-            return WindowInsetsCompat.CONSUMED;
+            return insets;
         });
         initParam();
         initView();

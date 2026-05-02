@@ -299,6 +299,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onResume() {
         super.onResume();
+        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
+        // Glide 会永远停住。onResume 主动恢复，消除生命周期死锁。
+        try {
+            Glide.with(this).resumeRequests();
+        } catch (IllegalArgumentException ignored) {
+            // Activity 销毁竞态
+        }
         isShowChatActivity = true;
         WKUIKitApplication.getInstance().chattingChannelID = channelId;
         isUploadReadMsg = true;
@@ -476,11 +483,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
-        // YUJ-236 phase2 perf (A4): Text/Image/RichText 三类高频 viewType 回收池上限 5 → 20，其他保持默认。
+        // YUJ-236 phase2 perf (A4) + YUJ-240 round3 fix (Jerry-Xin W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
+        // 原先还有 richText (14)，但 WKUIKitApplication 未注册该 provider，ChatAdapter.getItemType 不会返回 14，配置池是 no-op，删除。
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
         msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
-        msgPool.setMaxRecycledViews(WKContentType.richText, 20);
     }
 
     private void initListener() {
@@ -629,14 +636,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
-                // YUJ-236 phase2 perf (A3): fling 时暂停 Glide，IDLE 恢复。绑 Activity 生命周期，非 Application。
+                // YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
+                // DRAGGING 保持加载（慢滑手指在屏不应看到占位符）；IDLE 恢复。
                 try {
                     RequestManager glideMgr = Glide.with(ChatActivity.this);
-                    if (newState == SCROLL_STATE_IDLE) {
-                        glideMgr.resumeRequests();
-                    } else {
+                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
                         glideMgr.pauseRequests();
+                    } else if (newState == SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
                     }
+                    // DRAGGING: 不变
                 } catch (IllegalArgumentException ignored) {
                     // Activity 已销毁的竞态保护
                 }

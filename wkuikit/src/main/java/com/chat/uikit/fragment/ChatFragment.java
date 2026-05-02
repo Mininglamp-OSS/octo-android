@@ -299,18 +299,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 });
 
-        // YUJ-236 phase2 perf (A3): fling 时暂停 Glide，IDLE 恢复。绑 Fragment 生命周期。
+        // YUJ-236 phase2 perf (A3) + YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1):
+        // 仅 SETTLING (fling) 时 pause，DRAGGING 不动（慢滑手指在屏不应看到占位符），IDLE 恢复。
         wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
                 if (!isAdded() || isDetached()) return;
                 try {
                     RequestManager glideMgr = Glide.with(ChatFragment.this);
-                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                        glideMgr.resumeRequests();
-                    } else {
+                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
                         glideMgr.pauseRequests();
+                    } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
                     }
+                    // DRAGGING: 保持加载
                 } catch (IllegalArgumentException ignored) {
                     // Fragment 已 detach 的竞态保护
                 }
@@ -2959,6 +2961,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
+        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台切换时 RV 停在 DRAGGING/SETTLING，IDLE 回调不会到，Glide 会永远停住。
+        try {
+            Glide.with(this).resumeRequests();
+        } catch (IllegalArgumentException ignored) {
+            // Fragment 未 attach 竞态
+        }
         // 子区数据缓存清除并重新加载，返回时实时更新
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上

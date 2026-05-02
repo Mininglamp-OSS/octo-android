@@ -22,6 +22,7 @@ import com.bumptech.glide.request.target.Target;
 import com.chat.base.R;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
+import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.config.WKConstants;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.EditImgMenu;
@@ -171,13 +172,16 @@ public class GlideUtils {
                     // key 为空时用 url 本身作为唯一标识，避免所有无 cacheKey 的头像共享同一缓存。
                     String cacheKey = TextUtils.isEmpty(key) ? url : key;
                     // YUJ-236 phase2 perf (A8): 读 ImageView.layoutParams 做 override + thumbnail(0.1f)。
+                    // YUJ-240 round3 fix (Jerry-Xin W2/R2-avatar-fallback): WRAP_CONTENT(-2) / MATCH_PARENT(-1) / 0
+                    // → 兜底 96dp 方形，避免退化到 Target.SIZE_ORIGINAL 解码原图。
                     int targetW = imageView.getLayoutParams() != null
                             ? imageView.getLayoutParams().width : 0;
                     int targetH = imageView.getLayoutParams() != null
                             ? imageView.getLayoutParams().height : 0;
-                    RequestOptions avatarOpts = (targetW > 0 && targetH > 0)
-                            ? GlideRequestOptions.getInstance().headRequestOption(targetW, targetH)
-                            : GlideRequestOptions.getInstance().headRequestOption();
+                    if (targetW <= 0) targetW = AndroidUtilities.dp(96);
+                    if (targetH <= 0) targetH = AndroidUtilities.dp(96);
+                    RequestOptions avatarOpts = GlideRequestOptions.getInstance()
+                            .headRequestOption(targetW, targetH);
                     Glide.with(context).load(new MyGlideUrlWithId(url, cacheKey)).dontAnimate()
                             .thumbnail(0.1f)
                             .apply(avatarOpts)

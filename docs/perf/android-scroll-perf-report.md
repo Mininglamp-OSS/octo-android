@@ -519,6 +519,15 @@ Phase 1（YUJ-236）的追加 Quick Win，全部低风险改动，聚焦"滑动�
 ### 6.4 已知剩余成本（延后）
 
 - **`WKTimeUtils.getNewChatTime`** 仍每次 `Calendar.getInstance()`（两次分配/调用）。ThreadLocal `Calendar` 复用有 `.clear()` / timezone 切换的 foot-gun，Phase 2 不动。Phase 1 的 SDF 缓存已拿掉更大的一块开销，剩余 `Calendar` 分配延后单独评估。
+- **`SDF_CACHE` locale 切换** — `Locale.getDefault()` 可运行时切换（语言设置），旧 locale 条目留在 ThreadLocal map 里，不是泄漏（pattern × locale 有限），仅记录。
+
+### 6.5 Round 3 修正 (Jerry-Xin Round 2 + Round 3 @ 2026-05-02)
+
+- **🔴 B1 · Glide 生命周期死锁** — 若用户在 `SCROLL_STATE_DRAGGING/SETTLING` 时切后台/来电/跳 Activity，`onScrollStateChanged(IDLE)` 不会触发，`pauseRequests()` 永远不被 `resumeRequests()` 解掉；回前台后所有图片加载静默死亡。修正：`ChatActivity.onResume()` / `ChatFragment.onResume()` 主动调 `Glide.with(this).resumeRequests()`（try/catch IAE 兜底）。
+- **🟡 Glide pause DRAGGING UX 回退** — 原实现把所有非 IDLE 状态当 pause，DRAGGING（手指慢滑）也会看占位符。改成仅 `SETTLING`（fling）pause、`IDLE` resume、`DRAGGING` 不变；性能收益集中在 fling，UX 无退化。
+- **🟡 W1 · `setMaxRecycledViews(richText, 20)` no-op** — `WKContentType.richText (14)` 没在 `WKUIKitApplication` 注册 provider，`ChatAdapter.getItemType()` 永远不返回 14，该行不会命中任何 ViewHolder。直接删除；不猜测替换 viewType，Phase 3 基于 perfetto profile 再加。
+- **🟡 W2 / Round 2 🔵 · Avatar override fallback** — `GlideUtils.showAvatarImg` 原先 `layoutParams.width/height <= 0`（WRAP_CONTENT=-2 / MATCH_PARENT=-1 / null / 未测量）会 fallback 到无 override 的 `headRequestOption()`，Glide 退化到 `Target.SIZE_ORIGINAL` 解码原图。改为兜底 `AndroidUtilities.dp(96)` 方形，彻底避免该退化路径。
+- **Round 2 🔴 · `setHasFixedSize` blanket** — Jerry Round 2 的 blocking 是基于 commit `12643200` 之前的视图做的审查；`d48f2ef5`（Round 2 fix commit）已把 `setHasFixedSize(true)` 从 `WKBaseActivity/Fragment.initAdapter` 挪到 `ChatActivity.initView` / `ChatFragment.initView` 两个 match_parent 调用点，Round 3 不重复处理。
 
 ## 7. 不做的事
 

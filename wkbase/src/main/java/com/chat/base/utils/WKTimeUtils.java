@@ -32,14 +32,8 @@ public class WKTimeUtils {
     }
 
     /**
-     * YUJ-236 perf：SimpleDateFormat ThreadLocal 缓存。
-     * <p>
-     * 背景：{@code showTime} 被会话列表 / 消息列表 {@code onBindViewHolder}
-     * 每条 item 都调用一次，原实现每次都 {@code new SimpleDateFormat(...)} +
-     * {@code Calendar.getInstance()}，pattern 解析 + locale 数据加载累计可达 0.3–1ms/次，
-     * 快速 fling 时 60 条 item × 多次 format 直接吃满主线程预算。
-     * <p>
-     * SDF 非线程安全，用 ThreadLocal 避免同步开销；key 把 pattern + locale 拼起来。
+     * YUJ-236 perf: SDF ThreadLocal 缓存 — 避免 onBindViewHolder 每次 new SimpleDateFormat。
+     * key = pattern + '|' + locale。
      */
     private static final ThreadLocal<HashMap<String, SimpleDateFormat>> SDF_CACHE =
             ThreadLocal.withInitial(HashMap::new);

@@ -120,8 +120,7 @@ public class GlideUtils {
             Context context = weakReference.get();
             if (context instanceof Activity activity) {
                 if (!activity.isDestroyed()) {
-                    // YUJ-236 phase2 perf (A8): 消息图已按气泡尺寸 override（width/height），
-                    // 追加 thumbnail(0.1f) 先渲染缩略图，再替换原图，降低滑动期间解码峰值。
+                    // YUJ-236 phase2 perf (A8): +thumbnail(0.1f) 先绘制缩略图降低解码峰值。
                     Glide.with(context).load(url)
                             .thumbnail(0.1f)
                             .apply(GlideRequestOptions.getInstance().normalRequestOption(width, height))
@@ -171,9 +170,7 @@ public class GlideUtils {
                     // 始终使用 MyGlideUrlWithId，cache key 包含 APP_LAUNCH_ID，确保冷启动时磁盘缓存失效。
                     // key 为空时用 url 本身作为唯一标识，避免所有无 cacheKey 的头像共享同一缓存。
                     String cacheKey = TextUtils.isEmpty(key) ? url : key;
-                    // YUJ-236 phase2 perf (A8): 读 ImageView.layoutParams 的已知像素尺寸做 override，
-                    // 避免 Glide 回退到 ImageView 测量尺寸触发额外一次布局等待；
-                    // 追加 thumbnail(0.1f) 先绘制缩略图，滑动时观感更平滑。
+                    // YUJ-236 phase2 perf (A8): 读 ImageView.layoutParams 做 override + thumbnail(0.1f)。
                     int targetW = imageView.getLayoutParams() != null
                             ? imageView.getLayoutParams().width : 0;
                     int targetH = imageView.getLayoutParams() != null

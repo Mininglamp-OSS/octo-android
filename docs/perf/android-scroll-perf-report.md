@@ -491,39 +491,43 @@ python systrace.py -t 10 -b 32768 -o jank.html view gfx rv wm sched freq
 
 ---
 
-## 6. 不做的事
+## 6. Phase 2 日志 (YUJ-240)
+
+Phase 1（YUJ-236）的追加 Quick Win，全部低风险改动，聚焦"滑动时减少无效工作量 + Glide 尺寸/缓存策略收敛"。
+
+### 6.1 落地项
+
+| 代号 | 项目 | 位置 |
+|------|------|------|
+| A2 | `setItemViewCacheSize` | `ChatActivity` 20（Phase 1 已调）；`ChatFragment` 2→15 |
+| A3 | 滑动暂停 Glide，IDLE 恢复 | `ChatActivity` 原 OnScrollListener 追加；`ChatFragment` 新增独立 OnScrollListener |
+| A4 | `RecycledViewPool.setMaxRecycledViews` | `ChatActivity.initView` — `WK_TEXT` / `WK_IMAGE` / `richText` 5→20 |
+| A8 | Glide override + thumbnail + `DiskCacheStrategy.AUTOMATIC` | `GlideRequestOptions` / `GlideUtils` — 头像按 `ImageView.layoutParams` 推导 override；`showImg(w,h,…)` / `showAvatarImg` 追加 `.thumbnail(0.1f)` |
+
+### 6.2 跳过项
+
+- **A5 `setHasStableIds`** — `ChatAdapter` 存在本地占位消息（`messageID` 可能为空）+ 三索引并存，stable ids 有 duplicate 风险。留给 Phase 3 与 DiffUtil 改造一并做。
+- **A6 嵌套 RV 预取** — 审计确认无实际目标：`reactionsView` 是 `FrameLayout`；`chat_item_card` 里的 RV `visibility=gone` 且 `WKCardProvider` 未绑 Adapter；thread preview 走 `inflater.inflate + addView`。
+- **Refactor-B `showThreadPreviews` per-bind inflate 替换** — 行数动态 + per-row listener 重绑，非 1-stub+visibility 能替代，超 Phase 2 scope，留给 YUJ-237。
+
+### 6.3 Review 修正 (Jerry-Xin @ 2026-05-02)
+
+- **Blocking**：从 `WKBaseActivity.initAdapter` / `WKBaseFragment.initAdapter` 移除了 Phase 1 的 blanket `setHasFixedSize(true)` — 会抑制 `SearchAllActivity` 里三个 `wrap_content` RV（NestedScrollView 内）的 remeasure。该 flag 只保留在 `ChatActivity.initView`（message list）和 `ChatFragment.initView`（conversation list）两处，父容器均为 `match_parent`，显式开启。
+- **W#2** 删除 `ChatActivity` 中已失效的 `DefaultItemAnimator.setSupportsChangeAnimations(false)` 配置（紧接着就被 `MyItemAnimator` 覆盖了）以及随之变成死 import 的 `androidx.recyclerview.widget.DefaultItemAnimator`。
+- **W#5** `ChatFragment` 的 `setSupportsChangeAnimations(false)` 相对 `setAdapter` 的顺序模糊 — 移到 `initAdapter(...)` 之后并加 `instanceof DefaultItemAnimator` 守卫。
+
+### 6.4 已知剩余成本（延后）
+
+- **`WKTimeUtils.getNewChatTime`** 仍每次 `Calendar.getInstance()`（两次分配/调用）。ThreadLocal `Calendar` 复用有 `.clear()` / timezone 切换的 foot-gun，Phase 2 不动。Phase 1 的 SDF 缓存已拿掉更大的一块开销，剩余 `Calendar` 分配延后单独评估。
+
+## 7. 不做的事
 
 - UI 视觉风格 / Material 3 切换 - 不动。
 - WuKongIM 协议层 / 端到端加密 - 不动。
 
-## 7. 下一步建议
+## 8. 下一步建议
 
 建议先起 Quick Win PR（§4.1 的 1–4）做基线验证；若 perfetto 跑出来 jank 下降明显，再推 Refactor-A / Refactor-B。High 级三项（§1.1 §1.2 §2.1）都是"代码已经这么写了就是卡"类问题，改完能直接体感。
 
 ---
-
-## 8. Phase 2 日志 (YUJ-240)
-
-Phase 1（YUJ-236, PR #172）落地之后追加的第二批 Quick Win。全部为低风险改动，聚焦
-"滑动时减少无效工作量 + 提前切尺寸"。
-
-### 落地项
-
-| 代号 | 项目 | 位置 | 说明 |
-|------|------|------|------|
-| A2 | `setItemViewCacheSize` | `ChatActivity.initView`（已经 20，维持）<br>`ChatFragment.initView`（新增 15）| 会话列表默认 2 过小；聊天页 Phase 1 已调为 20，会话列表补齐。 |
-| A3 | 滑动暂停 Glide | `ChatActivity` 原 OnScrollListener 内追加；<br>`ChatFragment` 新增独立 OnScrollListener | 用 `Glide.with(Activity/Fragment)` 绑生命周期，IDLE 恢复、其他状态暂停。try/catch 兜底 Activity 销毁/Fragment detach 的竞态。 |
-| A4 | `setMaxRecycledViews` | `ChatActivity.initView` setAdapter 之后 | 对 `WK_TEXT`、`WK_IMAGE`、`richText` 三类高频 viewType 从默认 5 提到 20；其他保持默认。 |
-| A8 | Glide override + thumbnail + DiskCacheStrategy | `GlideRequestOptions`、`GlideUtils.showImg(W,H,…)`、`GlideUtils.showAvatarImg(…)` | DiskCacheStrategy 从 `ALL` → `AUTOMATIC`；头像读 `ImageView.layoutParams` 推导 override 尺寸（40dp/36dp 远小于服务端原图）；所有 bubble 图加 `.thumbnail(0.1f)`。 |
-
-### 跳过项与原因
-
-- **A5 `setHasStableIds(true) + itemId = msgId`**：当前 `ChatAdapter` 继承自 `BaseProviderMultiAdapter`，插入/删除/去重路径较多（rebuildIndex、clientMsgNo/messageId/orderSeq 三索引并存），且存在本地占位消息（`clientMsgNO` 未回服，`messageID` 为空）— 贸然启用 stable ids 可能在这些路径上出现 duplicate id 冲突。留待 Phase 3 在 DiffUtil 改造时一并评估。
-- **A6 嵌套 RV 预取**：扫描后确认 `chat_item_base_layout.xml` 的 `reactionsView` 是 FrameLayout（非 RV），`chat_item_card.xml` 内虽有一个 `RecyclerView id=recyclerView`，但在 `WKCardProvider.kt` 中 `visibility=gone` 未真正绑 Adapter；thread preview 走 `item_thread_preview_row.xml` 直接 `inflate + addView`，同样没有内嵌 RV。因此 A6 无落点，跳过。
-- **Refactor-B `showThreadPreviews` per-bind inflate 替换**：评估后发现不是"1 个 XML stub + visibility" 能搞定的 — thread row 数量动态（cardContainer.addView N 次 + 带 more row + 点击/长按 listener 重绑），属于 Refactor 级别，超 Phase 2 scope。留给 YUJ-237。
-
-### 合规
-
-- 所有改动行内已加注释 `// YUJ-236 phase2 perf (AX): ...`。
-- 未触碰 PrecomputedText / Baseline Profile / showData 子树缓存 / ChatConversationAdapter 布局扁平化。
 

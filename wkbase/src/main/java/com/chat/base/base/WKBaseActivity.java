@@ -323,10 +323,9 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
     protected void initAdapter(RecyclerView recyclerView, BaseQuickAdapter<?, ?> adapter) {
         if (recyclerView == null || adapter == null) return;
         recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
-        // YUJ-236 perf: RV 容器尺寸不随 Adapter 改变（父布局 match_parent / 固定高度），
-        // 打开 setHasFixedSize(true) 可以跳过 Adapter 数据变化时多余的 RV requestLayout，
-        // 减少滑动中的布局传播开销。
-        recyclerView.setHasFixedSize(true);
+        // YUJ-240 review fix (Jerry-Xin blocking): setHasFixedSize(true) 不再放这里，
+        // SearchAllActivity 的 3 个 wrap_content RV 在 NestedScrollView 内必须能 remeasure。
+        // 各调用方若 RV 容器尺寸固定，自行在调用处显式开启。
         adapter.setAnimationFirstOnly(true);
         recyclerView.setAdapter(adapter);
     }

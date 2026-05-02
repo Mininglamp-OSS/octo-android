@@ -231,12 +231,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return textView;
         });
         loadCurrentSpaceName();
-        //去除刷新条目闪动动画
-        ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
-        // YUJ-236 phase2 perf (A2): 会话列表快速滑动场景，默认 off-screen 缓存 2 太小，
-        // 提到 15 减少 ViewHolder 重复创建；仅 Fragment 独占的 RV，不修改 WKBaseFragment.initAdapter 共享逻辑。
+        // YUJ-240 review fix (Jerry-Xin blocking): 会话列表 RV 容器是 match_parent/match_parent（见 frag_chat_conversation_layout.xml），
+        // 尺寸固定，在此处显式开启 setHasFixedSize(true)（已从 WKBaseFragment.initAdapter 移除）。
+        wkVBinding.recyclerView.setHasFixedSize(true);
+        // YUJ-240 review fix (Jerry-Xin W#5): setSupportsChangeAnimations 必须在 setAdapter 之后调用才稳定生效，移到 initAdapter 之后。
+        RecyclerView.ItemAnimator itemAnimator = wkVBinding.recyclerView.getItemAnimator();
+        if (itemAnimator instanceof DefaultItemAnimator) {
+            ((DefaultItemAnimator) itemAnimator).setSupportsChangeAnimations(false);
+        }
+        // YUJ-236 phase2 perf (A2): 会话列表 off-screen 缓存 2 → 15，减少快速滑动时 ViewHolder 重建。
         wkVBinding.recyclerView.setItemViewCacheSize(15);
         chatConversationAdapter.restoreExpandedState();
         chatConversationAdapter.setAnimationEnable(false);
@@ -294,8 +299,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 });
 
-        // YUJ-236 phase2 perf (A3): 滑动期间暂停 Glide，IDLE 后恢复头像/缩略图请求。
-        // 绑定到 Fragment（Glide.with(this)）以正确响应生命周期，避免 Application 作用域。
+        // YUJ-236 phase2 perf (A3): fling 时暂停 Glide，IDLE 恢复。绑 Fragment 生命周期。
         wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {

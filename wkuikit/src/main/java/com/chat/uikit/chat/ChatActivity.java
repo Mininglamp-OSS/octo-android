@@ -36,7 +36,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.content.ContextCompat;
 import androidx.databinding.DataBindingUtil;
-import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -461,18 +460,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         CommonAnim.getInstance().showOrHide(numberTextView, false, false);
 
-        //去除刷新条目闪动动画
-        ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
+        // YUJ-240 review fix (Jerry-Xin W#2): 旧 DefaultItemAnimator 配置代码已死 — MyItemAnimator 在下面立即替换它，移除以清理死代码与 import。
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
-        // YUJ-236 perf: RV 自身尺寸随父布局 match_parent，不会被 Adapter 数据改变，
-        // 打开 setHasFixedSize(true) 跳过 Adapter 数据变化时多余的 requestLayout 传播。
+        // YUJ-236 perf: RV 容器 match_parent，setHasFixedSize(true) 跳过 Adapter 变化触发的 requestLayout。
         wkVBinding.recyclerView.setHasFixedSize(true);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
-        // YUJ-236 perf: MyItemAnimator 默认 supportsChangeAnimations = true，
-        // 而本页 notify 刷新（已读回执/reaction/background）都走 ChatAdapter.notify(...) 直接改 View，
-        // 不需要 change 动画叠加，否则滑动中会出现 cross-fade 导致掉帧。
+        // YUJ-236 perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
         MyItemAnimator itemAnimator = new MyItemAnimator();
         itemAnimator.setSupportsChangeAnimations(false);
         wkVBinding.recyclerView.setItemAnimator(itemAnimator);
@@ -481,10 +476,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
-        // YUJ-236 phase2 perf (A4): 针对高频 viewType 提高 RecycledViewPool 上限，
-        // 快速滑动时可复用更多 ViewHolder，降低 onCreateViewHolder 峰值开销。
-        // 默认每个 viewType 池大小为 5；聊天列表中 Text/Image/RichText 出现最频繁，
-        // 其他 viewType（语音/视频/卡片/系统消息等）维持默认值，避免不必要的内存驻留。
+        // YUJ-236 phase2 perf (A4): Text/Image/RichText 三类高频 viewType 回收池上限 5 → 20，其他保持默认。
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
         msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
@@ -637,9 +629,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
-                // YUJ-236 phase2 perf (A3): 滑动期间暂停 Glide 解码/网络请求，
-                // IDLE 后恢复。Glide.with(ChatActivity.this) 绑定在本 Activity 生命周期，
-                // 避免使用 Application context 导致请求在后台持续执行。
+                // YUJ-236 phase2 perf (A3): fling 时暂停 Glide，IDLE 恢复。绑 Activity 生命周期，非 Application。
                 try {
                     RequestManager glideMgr = Glide.with(ChatActivity.this);
                     if (newState == SCROLL_STATE_IDLE) {

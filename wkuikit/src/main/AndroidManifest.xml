@@ -79,10 +79,13 @@
         <activity android:name=".setting.ErrorLogsActivity" />
         <activity
             android:name="com.chat.uikit.TabActivity"
-            android:screenOrientation="portrait"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="adjustPan"
             android:launchMode="singleTask"/>
         <activity android:name="com.chat.uikit.chat.ChatActivity"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
         <activity android:name="com.chat.uikit.search.remote.GlobalActivity" />
         <activity android:name="com.chat.uikit.chat.search.MessageRecordActivity" />

@@ -8,6 +8,8 @@
     <dimen name="msg_item_margin">4dp</dimen>
     <dimen name="chat_bubble_padding_lr">15dp</dimen>
     <dimen name="chat_bubble_padding_tb">5dp</dimen>
+    <!-- 聊天气泡最大宽度（P0 止血，见 #174）。默认手机值；>=sw600dp 覆盖为展开态值 -->
+    <dimen name="chat_bubble_max_width">280dp</dimen>
     <!--字体大小 及倍数-->
 
     <dimen name="font_size_10">10sp</dimen>

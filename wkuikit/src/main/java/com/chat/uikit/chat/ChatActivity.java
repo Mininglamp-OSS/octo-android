@@ -2086,17 +2086,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        // 折叠屏 P0 止血（#174）：加了 configChanges 后本回调会真触发。
+        // 刷新一次屏宽/density 缓存供依赖该值的 UI 计算；不再对全量消息做
+        // notifyItemRangeChanged，历史消息量大时会明显卡顿（L1/L2 再做精细化刷新）。
         float density = getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            // 横屏
-            AndroidUtilities.isPORTRAIT = false;
-            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            // 竖屏
-            AndroidUtilities.isPORTRAIT = true;
-            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
-        }
+        AndroidUtilities.isPORTRAIT = newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE;
     }
 
     @Override

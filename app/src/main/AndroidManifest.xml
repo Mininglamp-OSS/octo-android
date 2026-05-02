@@ -110,7 +110,6 @@
         android:preserveLegacyExternalStorage="true"
         android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher"
-        android:screenOrientation="portrait"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"
@@ -119,7 +118,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:theme="@style/Theme.FullscreenTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -294,6 +294,45 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         initListener();
         //initData();
         ActManagerUtils.getInstance().addActivity(this);
+        // YUJ-251 / GH #180 — L2 pane-aware: when the Embedding pane resizes (divider
+        // drag, unfold, rotation), re-bind only the currently-visible messages so the
+        // bubble max-width cap (driven by PaneMetrics) refreshes without re-creating
+        // unrelated ViewHolders. BubbleLayout auto-caps on every measure, so this is
+        // belt-and-suspenders — it guarantees TextView wrapping is recomputed for all
+        // visible rows immediately on the first layout after a resize.
+        setupPaneResizeObserver();
+    }
+
+    /** Last-observed RecyclerView width, used to filter spurious layout passes. */
+    private int lastRecyclerViewWidth = 0;
+
+    private void setupPaneResizeObserver() {
+        if (wkVBinding == null || wkVBinding.recyclerView == null) return;
+        wkVBinding.recyclerView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int left, int top, int right, int bottom,
+                                       int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                int newWidth = right - left;
+                if (newWidth <= 0 || newWidth == lastRecyclerViewWidth) return;
+                int prev = lastRecyclerViewWidth;
+                lastRecyclerViewWidth = newWidth;
+                if (prev == 0) return; // first layout — nothing to refresh
+                if (chatAdapter == null || linearLayoutManager == null) return;
+                // Post so we don't mutate the adapter in the middle of the current pass.
+                wkVBinding.recyclerView.post(() -> {
+                    if (chatAdapter == null || linearLayoutManager == null) return;
+                    int first = linearLayoutManager.findFirstVisibleItemPosition();
+                    int last = linearLayoutManager.findLastVisibleItemPosition();
+                    if (first < 0 || last < 0 || last < first) return;
+                    int count = last - first + 1;
+                    try {
+                        chatAdapter.notifyItemRangeChanged(first, count);
+                    } catch (Throwable ignored) {
+                        // Defensive — never crash on adapter churn during a resize race.
+                    }
+                });
+            }
+        });
     }
 
     @Override

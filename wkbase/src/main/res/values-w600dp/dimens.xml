@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      YUJ-251 / GH #180 — 折叠屏 L2 pane-aware 响应式.
+      `values-w600dp/` gates on the current *window* width (not smallest device width), so this
+      kicks in whenever the Activity is at least 600dp wide — including the secondary pane of an
+      Activity-Embedding split. Phones in portrait stay on the default 280dp cap.
+      Fallback only: runtime PaneMetrics.bubbleMaxWidthPx() overrides this when the BubbleLayout
+      is hosted inside an Activity. This value is for the initial inflate pass and for contexts
+      where the runtime cap is unreachable (Service/Application).
+    -->
+    <dimen name="chat_bubble_max_width">600dp</dimen>
+</resources>

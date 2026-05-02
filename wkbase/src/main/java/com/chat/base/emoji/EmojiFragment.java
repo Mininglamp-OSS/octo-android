@@ -13,6 +13,7 @@ import com.chat.base.R;
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.databinding.FragEmojiLayoutBinding;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKReader;
@@ -36,7 +37,9 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
 
     @Override
     protected void initView() {
-        width = AndroidUtilities.getScreenWidth() - (AndroidUtilities.dp(30) * 8);
+        // YUJ-251: use pane width (Activity-visible bounds) so the emoji grid tracks
+        // the current Embedding pane instead of the full device width.
+        width = PaneMetrics.widthPx(requireContext()) - (AndroidUtilities.dp(30) * 8);
         Theme.setColorFilter(getContext(), wkVBinding.deleteIv, R.color.popupTextColor);
         List<EmojiEntry> emojiIndexs = new ArrayList<>();
         List<EmojiEntry> customList = EmojiManager.getInstance().getEmojiWithType("custom_");

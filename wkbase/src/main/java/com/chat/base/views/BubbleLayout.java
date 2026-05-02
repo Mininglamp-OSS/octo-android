@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat;
 import com.chat.base.R;
 import com.chat.base.msgitem.WKChatIteMsgFromType;
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.msgitem.WKMsgBgType;
 import com.chat.base.utils.AndroidUtilities;
 
@@ -35,6 +36,25 @@ import com.chat.base.utils.AndroidUtilities;
  */
 public class BubbleLayout extends LinearLayout {
     public boolean isSelected;
+
+    /**
+     * YUJ-251 / GH #180 — pane-aware max width cap.
+     *
+     * [LinearLayout]'s default [View.onMeasure] does not respect the `android:maxWidth`
+     * attribute (it uses `resolveSize(largestChildWidth, widthMeasureSpec)`). Before this
+     * change, the XML `android:maxWidth="@dimen/chat_bubble_max_width"` on `contentTvLayout`
+     * was a no-op — the visible cap came from the parent's [MeasureSpec.AT_MOST] plus the
+     * bubble's horizontal margins. Once Activity Embedding (PR#177) narrowed the pane, that
+     * implicit cap still scaled with the full device width, so bubbles overran on tablets
+     * and on the expanded pane of foldables.
+     *
+     * We explicitly clamp the incoming width spec in [onMeasure]. [setMaxWidth] takes
+     * precedence; when unset, we pull the current value from [PaneMetrics] so the cap
+     * tracks live pane resizes (Embedding divider drag / unfold / rotation) without any
+     * adapter re-bind. A value of `-1` or `0` disables the cap.
+     */
+    private int mRuntimeMaxWidth = -1;
+    private boolean mPaneAwareMaxWidthEnabled = true;
     private final Paint mPaint;
     private final Path mPath;
     private Look mLook;
@@ -187,6 +207,49 @@ public class BubbleLayout extends LinearLayout {
         a.recycle();
     }
 
+
+    /**
+     * Set the runtime max-width cap in px. Pass a non-positive value to clear it and
+     * fall back to the pane-aware cap from {@link PaneMetrics}. See class Javadoc for
+     * rationale. Triggers {@link #requestLayout()} when the value changes.
+     *
+     * Note: intentionally not {@code @Override} — {@code View.setMaxWidth(int)} is
+     * {@code @UnsupportedAppUsage} / {@code @hide} on the framework class, and
+     * {@code LinearLayout} does not expose a public override. We provide this as a
+     * first-class public API on the bubble instead.
+     */
+    public void setMaxWidth(int maxWidth) {
+        if (mRuntimeMaxWidth != maxWidth) {
+            mRuntimeMaxWidth = maxWidth;
+            requestLayout();
+        }
+    }
+
+    /** Opt a specific BubbleLayout out of pane-aware auto-capping (e.g. link-card inner). */
+    public void setPaneAwareMaxWidthEnabled(boolean enabled) {
+        if (mPaneAwareMaxWidthEnabled != enabled) {
+            mPaneAwareMaxWidthEnabled = enabled;
+            requestLayout();
+        }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int cap = mRuntimeMaxWidth;
+        if (cap <= 0 && mPaneAwareMaxWidthEnabled) {
+            // Derive from the hosting Activity's current window bounds. Returns the full
+            // display when Embedding is inactive, so phone-mode behavior is preserved.
+            cap = PaneMetrics.bubbleMaxWidthPx(getContext());
+        }
+        if (cap > 0) {
+            int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+            int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+            if (widthMode == MeasureSpec.UNSPECIFIED || widthSize > cap) {
+                widthMeasureSpec = MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST);
+            }
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {

@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
@@ -60,7 +61,8 @@ public class SearchWithDateActivity extends WKBaseActivity<ActSearchMsgWithDateL
 
     @Override
     protected void initView() {
-        int wH = (AndroidUtilities.getScreenWidth() - AndroidUtilities.dp( 30)) / 7;
+        // YUJ-251: pane-aware date grid cell size.
+        int wH = (PaneMetrics.widthPx(this) - AndroidUtilities.dp( 30)) / 7;
         adapter = new DateAdapter(wH, channelID, channelType);
         initAdapter(wkVBinding.recyclerView, adapter);
     }

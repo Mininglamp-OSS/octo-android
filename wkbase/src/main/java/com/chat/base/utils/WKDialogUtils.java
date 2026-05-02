@@ -40,6 +40,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.R;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.endpoint.EndpointManager;
@@ -401,7 +402,7 @@ public class WKDialogUtils {
         Window window = alertDialog.getWindow();
         assert window != null;
         WindowManager.LayoutParams param = window.getAttributes();
-        param.width = AndroidUtilities.getScreenWidth() / 5 * 4;
+        param.width = (int) (PaneMetrics.widthPx(context) * 0.85f);
         if (versionEntity.is_force == 1) {
             cancelTv.setVisibility(GONE);
         }

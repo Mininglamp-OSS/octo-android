@@ -621,8 +621,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         helper.setText(R.id.timeTv, chatTime);
     }
 
-    // 系统 Bot：会话列表预览需按 Space 过滤
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+    // 系统 Bot：会话列表预览需按 Space 过滤（动态白名单见 SystemBotsFallback.getSystemBotIds）
 
     /**
      * 从消息中提取 space_id
@@ -654,7 +653,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 近期大量其他 Space 消息可能将当前 Space 消息挤出默认搜索范围。
      */
     private String findSystemBotSpaceContent(WKUIConversationMsg item) {
-        if (!SYSTEM_BOTS.contains(item.channelID)) return null;
+        if (!com.chat.base.space.SystemBotsFallback.isSystemBot(item.channelID)) return null;
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (TextUtils.isEmpty(currentSpaceId)) return null;
 

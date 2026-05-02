@@ -141,11 +141,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -155,7 +152,6 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
     private static final int MAX_ADAPTER_SIZE = 300;
     private static final int TRIM_BATCH_SIZE = 60;
     private RecyclerView.EdgeEffectFactory edgeEffectFactory; // 用于清除 EdgeEffect
@@ -1325,7 +1321,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
         if (unreadStartMsgOrderSeq != 0) contain = true;
         // 系统 Bot 跨 Space 共享：加大加载量，确保过滤后有足够的当前 Space 消息
-        int loadLimit = SYSTEM_BOTS.contains(channelId) ? Math.max(limit, 500) : limit;
+        int loadLimit = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId) ? Math.max(limit, 500) : limit;
         WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, loadLimit, aroundMsgOrderSeq, new IGetOrSyncHistoryMsgBack() {
             @Override
             public void onSyncing() {
@@ -2534,7 +2530,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void finish() {
-        if (SYSTEM_BOTS.contains(channelId)) {
+        if (com.chat.base.space.SystemBotsFallback.isSystemBot(channelId)) {
             SpaceModel.getInstance().invalidateMembersCache();
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
         }
@@ -2823,7 +2819,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (TextUtils.isEmpty(currentSpaceId)) {
             return messages;
         }
-        boolean isSystemBot = SYSTEM_BOTS.contains(channelId);
+        boolean isSystemBot = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId);
         List<WKMsg> filtered = new ArrayList<>();
         for (WKMsg msg : messages) {
             String msgSpaceId = getSpaceIdFromMsg(msg);

@@ -1403,8 +1403,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         return !com.chat.base.space.SpaceFilter.shouldSkipChannelForSpace(channelID, channelType);
     }
 
-    // 系统 Bot（如 BotFather）：跨 Space 共享，需要按消息 space_id 过滤（参考 iOS shouldShowConversation）
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+    // 系统 Bot（如 BotFather / u_10000 / fileHelper）：跨 Space 共享，白名单由
+    // appconfig system_bot_uids 下发，客户端统一走 SystemBotsFallback.isSystemBot(...)。
 
     /**
      * 对所有 PERSONAL 类型会话（包括系统 Bot）进行 Space 适配：

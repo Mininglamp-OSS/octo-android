@@ -70,11 +70,8 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -627,7 +624,7 @@ public class WKIMUtils {
                 if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
                     redDot = 0;
                     // 系统 Bot（如 BotFather）：找到当前 Space 的最新消息作为起始位置
-                    if (SYSTEM_BOTS.contains(chatViewMenu.channelID)) {
+                    if (com.chat.base.space.SystemBotsFallback.isSystemBot(chatViewMenu.channelID)) {
                         WKMsg spaceMsg = findLatestMsgForSpace(chatViewMenu.channelID, chatViewMenu.channelType, currentSpaceId);
                         if (spaceMsg != null) {
                             msg = spaceMsg;
@@ -762,8 +759,6 @@ public class WKIMUtils {
         WKIM.getInstance().getMsgManager().removeNewMsgListener("system");
     }
 
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
-
     /**
      * 在本地 DB 中搜索指定 Space 的最新消息。
      * 用于系统 Bot（BotFather）跨 Space 共享场景，确保聊天窗口从正确的位置加载。
@@ -794,7 +789,7 @@ public class WKIMUtils {
         if (msg == null) return;
         // 仅处理个人频道中的系统 Bot
         if (msg.channelType != WKChannelType.PERSONAL) return;
-        if (!SYSTEM_BOTS.contains(msg.channelID)) return;
+        if (!com.chat.base.space.SystemBotsFallback.isSystemBot(msg.channelID)) return;
         // 仅处理非自己发送的消息（Bot 回复）
         String loginUID = WKConfig.getInstance().getUid();
         if (!TextUtils.isEmpty(loginUID) && loginUID.equals(msg.fromUID)) return;

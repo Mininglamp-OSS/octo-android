@@ -1,10 +1,12 @@
 package com.chat.uikit.user;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.text.InputFilter;
 import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
@@ -23,6 +25,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
+import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -34,6 +37,9 @@ import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.UserDetailViewMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.external.ExternalViewerResolver;
+import com.chat.base.glide.ChooseMimeType;
+import com.chat.base.glide.ChooseResult;
+import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.utils.StringUtils;
@@ -44,6 +50,7 @@ import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKPermissions;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
@@ -83,6 +90,13 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     private boolean isBot;
     private String botDescription;
     private String botCreatorName;
+    /**
+     * YUJ-238 (对齐 web PR#1092 BotDetailModal)：从 /users/{uid} 拿到的 bot 创建者 uid，
+     * 用于判定当前登录者是否为该 bot 的 owner（可编辑头像 / 简介）。
+     */
+    private String botCreatorUid;
+    /** YUJ-238：当前页面的 bot 是否归属当前登录者。showBotInfo() 内计算并缓存。 */
+    private boolean isBotOwner;
 
     /**
      * YUJ-204：外部成员 " @SpaceName" 后缀的灰紫色（对齐 GroupMemberAdapter /
@@ -454,6 +468,8 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     isBot = userInfo.robot == 1;
                     botDescription = userInfo.bot_description;
                     botCreatorName = userInfo.bot_creator_name;
+                    // YUJ-238：缓存 bot_creator_uid 给 showBotInfo() / 编辑回调读取。
+                    botCreatorUid = userInfo.bot_creator_uid;
                     if (isBot) {
                         // Show AI badge
                         wkVBinding.aiBadgeTv.setVisibility(View.VISIBLE);
@@ -505,14 +521,39 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
 
 
     private void showBotInfo(com.chat.uikit.enity.UserInfo userInfo) {
+        // YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者 = 当前登录者时
+        // 切到「可编辑」UI 分支（头像右下铅笔 + 简介右侧铅笔）；非 owner 保持只读。
+        String loginUid = WKConfig.getInstance().getUid();
+        isBotOwner = !TextUtils.isEmpty(userInfo.bot_creator_uid)
+                && !TextUtils.isEmpty(loginUid)
+                && userInfo.bot_creator_uid.equals(loginUid);
+
         boolean hasDesc = !TextUtils.isEmpty(userInfo.bot_description);
         boolean hasCreator = !TextUtils.isEmpty(userInfo.bot_creator_name);
         boolean hasCommands = false;
 
-        // Bot description
-        wkVBinding.botDescLayout.setVisibility(hasDesc ? View.VISIBLE : View.GONE);
-        if (hasDesc) {
-            wkVBinding.botDescTv.setText(userInfo.bot_description);
+        // Bot description — owner 分支下即使简介为空也展示整行，让 owner 可以首次添加。
+        boolean showDescRow = hasDesc || isBotOwner;
+        wkVBinding.botDescLayout.setVisibility(showDescRow ? View.VISIBLE : View.GONE);
+        if (showDescRow) {
+            wkVBinding.botDescTv.setText(hasDesc
+                    ? userInfo.bot_description
+                    : getString(R.string.bot_no_description));
+        }
+        // YUJ-238：简介右侧「编辑」铅笔。
+        wkVBinding.botDescEditIv.setVisibility(isBotOwner ? View.VISIBLE : View.GONE);
+        if (isBotOwner) {
+            wkVBinding.botDescEditIv.setOnClickListener(v -> showEditBotDescriptionDialog());
+        } else {
+            wkVBinding.botDescEditIv.setOnClickListener(null);
+        }
+
+        // YUJ-238：头像右下角「编辑」铅笔。
+        wkVBinding.botAvatarEditIv.setVisibility(isBotOwner ? View.VISIBLE : View.GONE);
+        if (isBotOwner) {
+            wkVBinding.botAvatarEditIv.setOnClickListener(v -> chooseBotAvatar());
+        } else {
+            wkVBinding.botAvatarEditIv.setOnClickListener(null);
         }
 
         // Bot creator
@@ -555,7 +596,8 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             wkVBinding.botCommandsLayout.setVisibility(View.GONE);
         }
 
-        boolean hasAnyInfo = hasDesc || hasCreator || hasCommands;
+        // YUJ-238：owner 永远展示 bot_info 卡片（至少有 desc 行 + 头像编辑入口）。
+        boolean hasAnyInfo = hasDesc || hasCreator || hasCommands || isBotOwner;
         wkVBinding.botInfoLayout.setVisibility(hasAnyInfo ? View.VISIBLE : View.GONE);
     }
 
@@ -663,6 +705,124 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             getUserInfo();
         }
     });
+
+    // ==================== YUJ-238 Bot owner edit avatar/description ====================
+    //
+    // 对齐 web PR#1092 BotDetailModal 的 handleAvatarUpload / handleSaveDescription：
+    // 1. isBotOwner = (bot_creator_uid == currentLoginUid)，在 showBotInfo() 内计算。
+    // 2. 头像：owner 点铅笔 → ImagePicker → WKCropImageActivity 裁切 →
+    //    UserModel.uploadAvatar(targetBotUid, path) → 本地刷新 avatarCacheKey。
+    //    关键差异：uid 参数传 bot uid，而不是沿用 MyHeadPortraitActivity 里写死的
+    //    WKConfig.getUid()；后端 POST /users/:uid/avatar 有 creator_uid 校验。
+    // 3. 简介：owner 点铅笔 → showInputDialog(预填旧值, maxLength=200) →
+    //    UserModel.updateBotDescription(botUid, newDesc) → 本地刷新 + toast。
+
+    /** 头像编辑铅笔入口：打开相册选择一张图后跳 WKCropImageActivity。 */
+    private void chooseBotAvatar() {
+        if (!isBotOwner) return; // 防御：非 owner 不应到达这里，但双保险避免越权请求。
+        String desc = String.format(getString(R.string.file_permissions_des), getString(R.string.app_name));
+        String[] permissions;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions = new String[]{Manifest.permission.CAMERA};
+        } else {
+            permissions = new String[]{
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE};
+        }
+        WKPermissions.getInstance().checkPermissions(new WKPermissions.IPermissionResult() {
+            @Override
+            public void onResult(boolean result) {
+                if (!result) return;
+                GlideUtils.getInstance().chooseIMG(UserDetailActivity.this, 1, true, ChooseMimeType.img, false, false, new GlideUtils.ISelectBack() {
+                    @Override
+                    public void onBack(List<ChooseResult> paths) {
+                        if (!WKReader.isNotEmpty(paths)) return;
+                        String path = paths.get(0).path;
+                        if (TextUtils.isEmpty(path)) return;
+                        Intent intent = new Intent(UserDetailActivity.this, WKCropImageActivity.class);
+                        intent.putExtra("path", path);
+                        botAvatarCropLauncher.launch(intent);
+                    }
+
+                    @Override
+                    public void onCancel() {
+                    }
+                });
+            }
+
+            @Override
+            public void clickResult(boolean isCancel) {
+            }
+        }, this, desc, permissions);
+    }
+
+    private final ActivityResultLauncher<Intent> botAvatarCropLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+                String path = result.getData().getStringExtra("path");
+                if (TextUtils.isEmpty(path)) return;
+                // YUJ-238 关键点：uid 必须是 targetBotUid（this.uid），而不是 loginUid。
+                UserModel.getInstance().uploadAvatar(uid, path, code -> {
+                    if (code == HttpResponseCode.success) {
+                        refreshBotAvatarInPlace();
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.upload_success));
+                    } else {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.upload_fail));
+                    }
+                });
+            });
+
+    /**
+     * 对齐 web PR#1098 "refresh bot avatar in-place after upload"：
+     * 成功上传后不重新拉接口，仅本地刷新 avatarCacheKey，让 AvatarView 走
+     * 新缓存 key 重新请求 CDN。避免 CDN 仍缓存旧头像导致视觉无变化。
+     */
+    private void refreshBotAvatarInPlace() {
+        WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
+        String newKey = UUID.randomUUID().toString().replace("-", "");
+        if (channel == null || TextUtils.isEmpty(channel.channelID)) {
+            channel = new WKChannel();
+            channel.channelID = uid;
+            channel.channelType = WKChannelType.PERSONAL;
+            WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
+        }
+        channel.avatarCacheKey = newKey;
+        WKIM.getInstance().getChannelManager().updateAvatarCacheKey(uid, WKChannelType.PERSONAL, newKey);
+        wkVBinding.avatarView.showAvatar(uid, WKChannelType.PERSONAL);
+    }
+
+    /** 简介编辑铅笔入口：预填旧值，保存后 PUT /robot/:uid/description。 */
+    private void showEditBotDescriptionDialog() {
+        if (!isBotOwner) return;
+        String oldDesc = botDescription == null ? "" : botDescription;
+        WKDialogUtils.getInstance().showInputDialog(
+                this,
+                getString(R.string.bot_edit_description_title),
+                "",
+                oldDesc,
+                getString(R.string.bot_edit_description_hint),
+                200,
+                text -> {
+                    String newDesc = text == null ? "" : text.trim();
+                    if (newDesc.equals(oldDesc)) return; // 未改动不走接口
+                    UserModel.getInstance().updateBotDescription(uid, newDesc, (code, msg) -> {
+                        if (code == HttpResponseCode.success) {
+                            botDescription = newDesc;
+                            // 本地刷新：保持「空值显示 bot_no_description」的语义一致。
+                            wkVBinding.botDescTv.setText(
+                                    TextUtils.isEmpty(newDesc)
+                                            ? getString(R.string.bot_no_description)
+                                            : newDesc);
+                            WKToastUtils.getInstance().showToastNormal(
+                                    getString(R.string.bot_description_update_success));
+                        } else {
+                            WKToastUtils.getInstance().showToastNormal(
+                                    TextUtils.isEmpty(msg) ? getString(R.string.upload_fail) : msg);
+                        }
+                    });
+                });
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     private void setonLongClick(View view, TextView textView) {

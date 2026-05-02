@@ -32,6 +32,10 @@ public class UserInfo {
     public int robot;
     public String bot_description;
     public String bot_creator_name;
+    // YUJ-238 (对齐 web PR#1092 BotDetailModal)：后端 /users/{uid} 顶层回传
+    // 的 bot 创建者 uid；Android 用它在 UserDetailActivity 判定当前登录者
+    // 是否为该 bot 的 owner，从而决定是否渲染「编辑头像 / 编辑简介」入口。
+    public String bot_creator_uid;
     public String bot_commands;  // JSON: [{"cmd":"xxx","remark":"xxx"}]
     public int be_deleted;
     public int be_blacklist;

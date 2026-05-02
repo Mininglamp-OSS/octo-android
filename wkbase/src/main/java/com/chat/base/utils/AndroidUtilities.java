@@ -38,15 +38,23 @@ import java.util.Locale;
 public class AndroidUtilities {
     public static DecelerateInterpolator decelerateInterpolator = new DecelerateInterpolator();
     private static final Hashtable<String, Typeface> typefaceCache = new Hashtable<>();
-    public static DisplayMetrics displayMetrics = new DisplayMetrics();
-    public static float density = 1;
+    // YUJ-250 B3: volatile — setDensity() is invoked from MainThread via
+    // ComponentCallbacks2.onConfigurationChanged (see WKBaseApplication.init)
+    // and these fields are read from render / background threads. volatile
+    // guarantees safe publication of the new DisplayMetrics ref and density
+    // so readers never see a stale / partially-initialized value.
+    public static volatile DisplayMetrics displayMetrics = new DisplayMetrics();
+    public static volatile float density = 1;
     public static boolean isRTL = false;
     public static boolean isPORTRAIT = true;
     public static final Rect rectTmp2 = new Rect();
     public static final RectF rectTmp = new RectF();
     public static Point displaySize = new Point();
     public static float screenRefreshRate = 60;
-    public static Paint chat_actionBackgroundGradientDarkenPaint;
+    // YUJ-250 B1+B3: Paint is now allocated lazily once (not on every
+    // config-change callback) and published via volatile for safe read
+    // from draw threads (see CounterView#onDraw consumers).
+    public static volatile Paint chat_actionBackgroundGradientDarkenPaint;
     public static int statusBarHeight = 0;
     private static final boolean useSoftLight = Build.VERSION.SDK_INT >= 29;
 
@@ -57,7 +65,13 @@ public class AndroidUtilities {
         density = density1;
         Resources resources = WKBaseApplication.getInstance().getContext().getResources();
         displayMetrics = resources.getDisplayMetrics();
-        chat_actionBackgroundGradientDarkenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        // YUJ-250 B1: avoid re-allocating the Paint on every config change
+        // (onConfigurationChanged can fire repeatedly — rotate / fold / theme /
+        // font-scale). Allocate once, then just refresh properties. This also
+        // prevents any stale Paint ref from leaking through draw calls.
+        if (chat_actionBackgroundGradientDarkenPaint == null) {
+            chat_actionBackgroundGradientDarkenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        }
         chat_actionBackgroundGradientDarkenPaint.setColor(0x2a000000);
     }
 

@@ -462,8 +462,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
+        // YUJ-236 perf: RV 自身尺寸随父布局 match_parent，不会被 Adapter 数据改变，
+        // 打开 setHasFixedSize(true) 跳过 Adapter 数据变化时多余的 requestLayout 传播。
+        wkVBinding.recyclerView.setHasFixedSize(true);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
-        wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
+        // YUJ-236 perf: MyItemAnimator 默认 supportsChangeAnimations = true，
+        // 而本页 notify 刷新（已读回执/reaction/background）都走 ChatAdapter.notify(...) 直接改 View，
+        // 不需要 change 动画叠加，否则滑动中会出现 cross-fade 导致掉帧。
+        MyItemAnimator itemAnimator = new MyItemAnimator();
+        itemAnimator.setSupportsChangeAnimations(false);
+        wkVBinding.recyclerView.setItemAnimator(itemAnimator);
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销

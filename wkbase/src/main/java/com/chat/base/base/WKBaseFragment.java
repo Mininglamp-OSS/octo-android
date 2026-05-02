@@ -177,6 +177,9 @@ public abstract class WKBaseFragment<WKVBinding extends ViewBinding> extends Fra
     protected void initAdapter(RecyclerView recyclerView, BaseQuickAdapter<?, ?> adapter) {
         if (recyclerView == null || adapter == null) return;
         recyclerView.setLayoutManager(new LinearLayoutManager(getActivity(), LinearLayoutManager.VERTICAL, false));
+        // YUJ-236 perf: 同 WKBaseActivity.initAdapter，打开 setHasFixedSize(true)
+        // 跳过 Adapter 数据变化时多余的 RV requestLayout。
+        recyclerView.setHasFixedSize(true);
         recyclerView.setAdapter(adapter);
         adapter.setAnimationFirstOnly(true);
     }

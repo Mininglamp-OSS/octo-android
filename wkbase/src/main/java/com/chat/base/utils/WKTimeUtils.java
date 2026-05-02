@@ -11,6 +11,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -30,9 +31,33 @@ public class WKTimeUtils {
         return TimeUtilsBinder.utils;
     }
 
+    /**
+     * YUJ-236 perf：SimpleDateFormat ThreadLocal 缓存。
+     * <p>
+     * 背景：{@code showTime} 被会话列表 / 消息列表 {@code onBindViewHolder}
+     * 每条 item 都调用一次，原实现每次都 {@code new SimpleDateFormat(...)} +
+     * {@code Calendar.getInstance()}，pattern 解析 + locale 数据加载累计可达 0.3–1ms/次，
+     * 快速 fling 时 60 条 item × 多次 format 直接吃满主线程预算。
+     * <p>
+     * SDF 非线程安全，用 ThreadLocal 避免同步开销；key 把 pattern + locale 拼起来。
+     */
+    private static final ThreadLocal<HashMap<String, SimpleDateFormat>> SDF_CACHE =
+            ThreadLocal.withInitial(HashMap::new);
+
+    private static SimpleDateFormat formatFor(String pattern, Locale locale) {
+        HashMap<String, SimpleDateFormat> m = SDF_CACHE.get();
+        String key = pattern + '|' + locale.toString();
+        SimpleDateFormat sdf = m.get(key);
+        if (sdf == null) {
+            sdf = new SimpleDateFormat(pattern, locale);
+            m.put(key, sdf);
+        }
+        return sdf;
+    }
+
     public String getTimeSpace(long time) {
         Date date = new Date(time);
-        SimpleDateFormat df = new SimpleDateFormat("HH", Locale.getDefault());
+        SimpleDateFormat df = formatFor("HH", Locale.getDefault());
         String str = df.format(date);
         int a = Integer.parseInt(str);
         if (a <= 12) {
@@ -153,7 +178,7 @@ public class WKTimeUtils {
     }
 
     public String getYearTime(long time, String yearTimeFormat) {
-        SimpleDateFormat format = new SimpleDateFormat(yearTimeFormat, Locale.getDefault());
+        SimpleDateFormat format = formatFor(yearTimeFormat, Locale.getDefault());
         return format.format(new Date(time));
     }
 
@@ -163,7 +188,7 @@ public class WKTimeUtils {
     }
 
     private String dateFormat(Date date, String pattern) {
-        SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.getDefault());
+        SimpleDateFormat format = formatFor(pattern, Locale.getDefault());
         return format.format(date);
     }
 
@@ -171,22 +196,22 @@ public class WKTimeUtils {
         if (String.valueOf(timeStamp).length() < 13) {
             timeStamp = timeStamp * 1000;
         }
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy-MM-dd", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
     public String time2Day(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("MM-dd", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
     public String time2YearMonth(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy-MM", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
     public String time2DataDay1(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy年MM月dd日", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
@@ -194,7 +219,7 @@ public class WKTimeUtils {
         String temp_str;
         Date dt = new Date();
         //最后的aa表示“上午”或“下午”    HH表示24小时制    如果换成hh表示12小时制
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy-MM-dd", Locale.getDefault());
         temp_str = sdf.format(dt);
         return temp_str;
     }
@@ -203,19 +228,19 @@ public class WKTimeUtils {
         String temp_str;
         Date dt = new Date();
         //最后的aa表示“上午”或“下午”    HH表示24小时制    如果换成hh表示12小时制
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
         temp_str = sdf.format(dt);
         return temp_str;
     }
 
     public String time2DateStr1(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
     public long date2TimeStamp(String date_str, String format) {
         try {
-            SimpleDateFormat sdf = new SimpleDateFormat(format, Locale.getDefault());
+            SimpleDateFormat sdf = formatFor(format, Locale.getDefault());
             return sdf.parse(date_str).getTime() / 1000;
         } catch (Exception e) {
             e.printStackTrace();
@@ -224,7 +249,7 @@ public class WKTimeUtils {
     }
 
     public String time2DateStr(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("HH:mm:ss", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
@@ -238,11 +263,11 @@ public class WKTimeUtils {
             if (now.get(Calendar.DAY_OF_YEAR) == msg.get(Calendar.DAY_OF_YEAR)) {
                 return timeStr;
             } else {
-                String dateStr = new SimpleDateFormat("M/d", Locale.getDefault()).format(new Date(timeStamp));
+                String dateStr = formatFor("M/d", Locale.getDefault()).format(new Date(timeStamp));
                 return dateStr + " " + timeStr;
             }
         } else {
-            String dateStr = new SimpleDateFormat("yyyy/M/d", Locale.getDefault()).format(new Date(timeStamp));
+            String dateStr = formatFor("yyyy/M/d", Locale.getDefault()).format(new Date(timeStamp));
             return dateStr + " " + timeStr;
         }
     }
@@ -250,15 +275,15 @@ public class WKTimeUtils {
     public String time2HourStr(long timeStamp) {
         SimpleDateFormat sdf;
         if (is24Hour()) {
-            sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+            sdf = formatFor("HH:mm", Locale.getDefault());
         } else {
-            sdf = new SimpleDateFormat("a hh:mm", Locale.CHINESE);
+            sdf = formatFor("a hh:mm", Locale.CHINESE);
         }
         return sdf.format(new Date(timeStamp));
     }
 
     public String time2DateStr4(long timeStamp) {
-        SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor("MM-dd HH:mm", Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 

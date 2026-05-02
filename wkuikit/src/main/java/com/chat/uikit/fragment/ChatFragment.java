@@ -92,6 +92,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Timer;
@@ -123,6 +124,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
     private final List<ChatConversationMsg> allConversations = new ArrayList<>();
+    // YUJ-229 · key-based 去重索引：和 {@link #allConversations} 一一对应，
+    // key = channelKey(channelID, channelType)。所有对 allConversations 的
+    // 新增 / 删除 / 清空 / 批量替换都必须走 {@link #upsertConversation(ChatConversationMsg)} /
+    // {@link #removeConversationByKey(String)} / {@link #clearAllConversations()} /
+    // {@link #rebuildConversationIndex()}，否则会出现同一账号多 Space 下 SystemBot
+    // (u_10000 / botfather / fileHelper) 重复条目的 UI 回归。
+    // 对齐 iOS {@code WKConversationListVM.channelIndex} 语义。
+    private final Map<String, ChatConversationMsg> conversationIndex = new HashMap<>();
     private List<CategoryEntity> categoryList = new ArrayList<>();
 
     // Space 会话过滤：记录当前 Space 下已确认的会话 channel key，
@@ -136,6 +145,41 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
+    }
+
+    /**
+     * YUJ-229 · 以 key 插入会话（幂等）：如果 {@link #conversationIndex} 已有同 key
+     * entry，直接返回现有 entry，不插入重复；否则追加到 {@link #allConversations}
+     * 末尾并写入索引。字段级 merge（unreadCount / lastMsgTimestamp / 刷新 flag 等）
+     * 由调用方在调用前完成，本方法只保证 key 级别的唯一性。
+     *
+     * @return 现有 entry 或新插入的 entry；{@code msg == null} 时返回 null
+     */
+    private ChatConversationMsg upsertConversation(ChatConversationMsg msg) {
+        return ConversationIndexOps.upsert(allConversations, conversationIndex, msg);
+    }
+
+    /**
+     * YUJ-229 · 按 channel key 移除会话：同步清 {@link #allConversations} 和
+     * {@link #conversationIndex}。调用方仍需自行 notifyItemRemoved / setAllCount 等 UI 动作。
+     */
+    private boolean removeConversationByKey(String key) {
+        return ConversationIndexOps.removeByKey(allConversations, conversationIndex, key);
+    }
+
+    /** YUJ-229 · 清空列表 + 索引。供 Space 切换 / resync / cold-start 清空路径统一调用。 */
+    private void clearAllConversations() {
+        ConversationIndexOps.clearAll(allConversations, conversationIndex);
+    }
+
+    /**
+     * YUJ-229 · 列表批量替换后根据当前 {@link #allConversations} 重建索引。
+     *
+     * <p>适用于 {@code sortMsg} 的 {@code clear + addAll} 语义以及
+     * {@code ensureSystemBotsVisible(allConversations)} 直接向列表追加的场景。
+     */
+    private void rebuildConversationIndex() {
+        ConversationIndexOps.rebuildIndex(allConversations, conversationIndex);
     }
 
     /**
@@ -422,9 +466,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //监听移除最近会话
         WKIM.getInstance().getConversationManager().addOnDeleteMsgListener("chat_fragment", (s, b) -> {
             if (!TextUtils.isEmpty(s)) {
-                // 从 allConversations 移除
-                allConversations.removeIf(msg ->
-                        msg.uiConversationMsg != null && msg.uiConversationMsg.channelID.equals(s) && msg.uiConversationMsg.channelType == b);
+                // YUJ-229 · 从 allConversations + conversationIndex 同步移除
+                removeConversationByKey(channelKey(s, b));
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                     if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(s) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == b) {
@@ -860,11 +903,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
-                // 从 allConversations 移除
-                allConversations.removeIf(msg ->
-                        msg.uiConversationMsg != null
-                                && msg.uiConversationMsg.channelID.equals(channel.channelID)
-                                && msg.uiConversationMsg.channelType == channel.channelType);
+                // YUJ-229 · 从 allConversations + conversationIndex 同步移除
+                removeConversationByKey(channelKey(channel.channelID, channel.channelType));
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                     if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                     if (chatConversationAdapter.getData().get(i).uiConversationMsg.channelID.equals(channel.channelID) && chatConversationAdapter.getData().get(i).uiConversationMsg.channelType == channel.channelType) {
@@ -1354,22 +1394,36 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             spaceConversationKeys.add(key);
             syncSpaceKeysToGlobal();
             ChatConversationMsg newMsg = new ChatConversationMsg(uiConversationMsg);
-            // 始终添加到全量列表
-            allConversations.add(newMsg);
-            // 仅在匹配当前 tab 时添加到 adapter 显示
-            if (matchesCurrentTab) {
-                if (currentTab == 0) {
-                    // 群聊 tab：有 section header，用 filterAndDisplay 重建列表
+            // YUJ-229 · key-based 去重：若已有同 (channelID, channelType) 的
+            // allConversations entry（比如前面 L687 批量路径 / L1218 本方法前置循环
+            // 都漏 match，但索引里还有），upsert 直接返回现有 entry 不再插入重复。
+            // 对齐 iOS channelIndex 语义。
+            ChatConversationMsg inserted = upsertConversation(newMsg);
+            if (inserted != newMsg) {
+                // 索引命中（防御分支，正常 flow 应该在 L1218 / L1266 循环里已被 match）：
+                // 不再把 newMsg 塞进 adapter，否则会出现「UI 里有 newMsg，但 allConversations
+                // 持有另一个 existing 引用」的双飞实例。直接走整页刷新，让 filterAndDisplay
+                // 从 allConversations（里面是 existing）重建 adapter 数据。
+                if (matchesCurrentTab) {
                     filterAndDisplay();
-                } else if (!isEnd) {
-                    chatConversationAdapter.addData(newMsg);
-                } else {
-                    int insertIndex = getInsertIndex(uiConversationMsg);
-                    chatConversationAdapter.addData(insertIndex, newMsg);
-                    scrollToPositionIfNearTop(insertIndex);
                 }
+                setAllCount();
+            } else {
+                // 仅在匹配当前 tab 时添加到 adapter 显示
+                if (matchesCurrentTab) {
+                    if (currentTab == 0) {
+                        // 群聊 tab：有 section header，用 filterAndDisplay 重建列表
+                        filterAndDisplay();
+                    } else if (!isEnd) {
+                        chatConversationAdapter.addData(newMsg);
+                    } else {
+                        int insertIndex = getInsertIndex(uiConversationMsg);
+                        chatConversationAdapter.addData(insertIndex, newMsg);
+                        scrollToPositionIfNearTop(insertIndex);
+                    }
+                }
+                setAllCount();
             }
-            setAllCount();
         }
         if (isEnd) {
             if (isSort && msgCount == 0) {
@@ -1575,7 +1629,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private final Runnable spaceResyncRunnable = () -> {
         pendingSpaceResync = false;
         spaceConversationKeys.clear();
-        allConversations.clear();
+        // YUJ-229 · 同步清 allConversations + conversationIndex
+        clearAllConversations();
         chatConversationAdapter.setList(new ArrayList<>());
         Schedulers.io().scheduleDirect(() -> {
             WKIM.getInstance().getConversationManager().clearAll();
@@ -1661,7 +1716,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             String cid = msg.uiConversationMsg.channelID;
             byte ct = msg.uiConversationMsg.channelType;
             if (com.chat.base.space.SpaceConversationPruner.shouldPrune(cid, ct)) {
+                // YUJ-229 · 在向后逐个 remove 的循环里直接用 list.remove(i) + index.remove：
+                // 不用 removeConversationByKey 的批量清 key 残留语义——那里面自带的
+                // 倒序扫列表会和当前循环的 index 重叠，产生 off-by-one。
+                // 历史污染留下的多条同 key duplicate 交给 sortMsg() 结尾的
+                // rebuildConversationIndex() 做最终收敛（它会按首次出现保留）。
                 allConversations.remove(i);
+                conversationIndex.remove(channelKey(cid, ct));
                 spaceConversationKeys.remove(channelKey(cid, ct));
                 removed++;
             }
@@ -1729,7 +1790,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         loadCategories();
 
         spaceConversationKeys.clear();
-        allConversations.clear();
+        // YUJ-229 · 同步清 allConversations + conversationIndex
+        clearAllConversations();
         chatConversationAdapter.setList(new ArrayList<>());
 
         Schedulers.io().scheduleDirect(() -> {
@@ -1796,7 +1858,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         tempList.addAll(normalList);
         tempList.addAll(0, topList);
         AndroidUtilities.runOnUIThread(() -> {
-            allConversations.clear();
+            // YUJ-229 · 先清 allConversations + conversationIndex，再 addAll 写入，
+            // 最后重建索引 —— 批量替换路径统一口径，保证索引不漏新 entry 也不留陈旧残留。
+            clearAllConversations();
             allConversations.addAll(tempList);
             // YUJ-217 Fix D · 状态变化回扫：每次进 allConversations 前扫一遍，剔除
             // 不属于当前 Space 的 GROUP 会话。对齐 iOS PR#95 pruneNonCurrentSpaceGroups。
@@ -1805,6 +1869,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             pruneNonCurrentSpaceGroupsInMemoryOnly();
             // YUJ-217 Fix C · SYSTEM_BOTS 本地兜底：确保 botfather 等跨 Space 共享 Bot 可见
             ensureSystemBotsVisible(allConversations);
+            // YUJ-229 · 在所有对 allConversations 的 mutation 完成之后一次性重建索引，
+            // 同时收敛可能的历史 duplicate entry（rebuildIndex 会倒序去重、保留最先出现的）。
+            rebuildConversationIndex();
             filterAndDisplay();
             setAllCount();
             scrollToPositionIfNearTop(0);

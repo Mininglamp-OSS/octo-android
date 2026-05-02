@@ -41,6 +41,10 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
+
 import com.chat.base.common.WKCommonModel;
 import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.base.config.WKBinder;
@@ -477,6 +481,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
+        // YUJ-236 phase2 perf (A4): 针对高频 viewType 提高 RecycledViewPool 上限，
+        // 快速滑动时可复用更多 ViewHolder，降低 onCreateViewHolder 峰值开销。
+        // 默认每个 viewType 池大小为 5；聊天列表中 Text/Image/RichText 出现最频繁，
+        // 其他 viewType（语音/视频/卡片/系统消息等）维持默认值，避免不必要的内存驻留。
+        RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
+        msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
+        msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
+        msgPool.setMaxRecycledViews(WKContentType.richText, 20);
     }
 
     private void initListener() {
@@ -625,6 +637,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
+                // YUJ-236 phase2 perf (A3): 滑动期间暂停 Glide 解码/网络请求，
+                // IDLE 后恢复。Glide.with(ChatActivity.this) 绑定在本 Activity 生命周期，
+                // 避免使用 Application context 导致请求在后台持续执行。
+                try {
+                    RequestManager glideMgr = Glide.with(ChatActivity.this);
+                    if (newState == SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
+                    } else {
+                        glideMgr.pauseRequests();
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Activity 已销毁的竞态保护
+                }
                 // 简化日志：仅在 IDLE 时输出详情
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
                 isShowHistory = lastItemPosition < chatAdapter.getItemCount() - 1;

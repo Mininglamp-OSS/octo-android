@@ -28,6 +28,10 @@ import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
+
 import com.chat.base.base.WKBaseFragment;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
@@ -231,6 +235,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
+        // YUJ-236 phase2 perf (A2): 会话列表快速滑动场景，默认 off-screen 缓存 2 太小，
+        // 提到 15 减少 ViewHolder 重复创建；仅 Fragment 独占的 RV，不修改 WKBaseFragment.initAdapter 共享逻辑。
+        wkVBinding.recyclerView.setItemViewCacheSize(15);
         chatConversationAdapter.restoreExpandedState();
         chatConversationAdapter.setAnimationEnable(false);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
@@ -286,6 +293,25 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         return false;
                     }
                 });
+
+        // YUJ-236 phase2 perf (A3): 滑动期间暂停 Glide，IDLE 后恢复头像/缩略图请求。
+        // 绑定到 Fragment（Glide.with(this)）以正确响应生命周期，避免 Application 作用域。
+        wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                if (!isAdded() || isDetached()) return;
+                try {
+                    RequestManager glideMgr = Glide.with(ChatFragment.this);
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
+                    } else {
+                        glideMgr.pauseRequests();
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Fragment 已 detach 的竞态保护
+                }
+            }
+        });
     }
 
     @SuppressLint("ClickableViewAccessibility")

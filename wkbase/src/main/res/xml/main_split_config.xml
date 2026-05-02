@@ -43,7 +43,7 @@
         window:splitRatio="0.4"
         window:finishPrimaryWithSecondary="never"
         window:finishSecondaryWithPrimary="always"
-        window:clearTop="false">
+        window:clearTop="true">
         <SplitPairFilter
             window:primaryActivityName="com.chat.uikit.TabActivity"
             window:secondaryActivityName="com.chat.uikit.chat.ChatActivity" />

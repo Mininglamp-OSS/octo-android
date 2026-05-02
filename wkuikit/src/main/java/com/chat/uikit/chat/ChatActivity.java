@@ -35,6 +35,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.databinding.DataBindingUtil;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -289,6 +292,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         initSwipeBackFinish();
         wkVBinding = DataBindingUtil.setContentView(this, R.layout.act_chat_layout);
 //        setContentView(R.layout.act_chat_layout1);
+        // YUJ-252 / GH #182 Bug 1 — In Activity Embedding expanded mode the
+        // secondary pane does not reliably receive adjustResize behavior, so the
+        // IME can overlap the message input area. Manually consume IME insets
+        // and translate them into bottom padding on the root view. On phone
+        // (single-pane) the IME insets are still dispatched correctly, so this
+        // behaves identically to the adjustResize default. See issue #182.
+        ViewCompat.setOnApplyWindowInsetsListener(wkVBinding.rootView, (v, insets) -> {
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), imeInsets.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
         initParam();
         initView();
         initListener();

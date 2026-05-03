@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcelable;
+import android.os.SystemClock;
 import android.os.Vibrator;
 import android.text.TextUtils;
 
@@ -73,12 +74,30 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 /**
  * 2019-11-18 11:30
  * im监听相关处理
  */
 public class WKIMUtils {
+
+    private static final String TAG = "WKIMUtils";
+
+    // YUJ-256 P1-4: short global debounce guarding the startChat entry only.
+    // Per-view SingleClickUtil (300ms) protects the SAME row but cross-row
+    // fast taps (A → B within 300ms) fall through because each row has its
+    // own throttle window. Without a small global gate, Fix 3's async Intent
+    // assembly lets two Observables race and both startActivity() complete,
+    // stacking Activities on the back stack ([tabs, A, B]). 250ms is short
+    // enough to not steal legitimate taps but long enough to collapse the
+    // typical double-tap / two-row flurry into a single chat open.
+    private static final long START_CHAT_DEBOUNCE_MS = 250L;
+    private final AtomicLong lastStartChatMs = new AtomicLong(0L);
 
     private WKIMUtils() {
     }
@@ -603,14 +622,75 @@ public class WKIMUtils {
     }
 
     private void startChat(ChatViewMenu chatViewMenu) {
-        if (WKTimeUtils.isFastDoubleClick()) {
+        // YUJ-242: removed WKTimeUtils.isFastDoubleClick() pre-check. The global
+        // static throttle on top of the per-view SingleClickUtil throttle caused
+        // first-tap-eaten bugs when switching between chats in TabActivity. View
+        // level throttle in SingleClickUtil is sufficient.
+        //
+        // YUJ-242: moved all DB-heavy work (deleteFlameMsg, getWithChannel,
+        // getWithClientMsgNO, findLatestMsgForSpace, getMessageOrderSeq) off the
+        // main thread. startChat now assembles the Intent on an IO worker and
+        // switches back to the main thread only for startActivity. This keeps
+        // the click handler non-blocking (target <20ms) so the UI thread does
+        // not freeze when a DB transaction happens to hold the write lock.
+        if (chatViewMenu == null || chatViewMenu.activity == null
+                || TextUtils.isEmpty(chatViewMenu.channelID)) {
             return;
         }
-        MsgModel.getInstance().deleteFlameMsg();
+        // YUJ-256 P1-4: narrow global debounce at the startChat entry. Per-view
+        // SingleClickUtil (300ms) gates the same row but does not protect
+        // cross-row taps (row A → row B in <300ms). Without this, the Fix 3
+        // async Observables stage in parallel and both startActivity() run,
+        // stacking the back stack as [tabs, A, B]. CAS ensures only one
+        // concurrent caller wins the window.
+        long now = SystemClock.uptimeMillis();
+        long prev = lastStartChatMs.get();
+        if (now - prev < START_CHAT_DEBOUNCE_MS) {
+            return;
+        }
+        if (!lastStartChatMs.compareAndSet(prev, now)) {
+            return;
+        }
+        // Fire-and-forget: deleteFlameMsg is a DB write and is independent from
+        // the Intent assembly below. No need to block chat open on it.
+        Observable.fromCallable(() -> {
+                    MsgModel.getInstance().deleteFlameMsg();
+                    return true;
+                })
+                .subscribeOn(Schedulers.io())
+                .subscribe(v -> { },
+                        err -> WKLogUtils.e(TAG, "startChat deleteFlameMsg failed: " + err));
+
+        final ChatViewMenu menu = chatViewMenu;
+        Observable.fromCallable(() -> buildStartChatIntent(menu))
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(intent -> {
+                    if (intent == null) return;
+                    if (menu.activity == null || menu.activity.isFinishing()
+                            || menu.activity.isDestroyed()) {
+                        return;
+                    }
+                    menu.activity.startActivity(intent);
+                }, err -> {
+                    // YUJ-256 P2-1: surface startChat errors instead of
+                    // silently swallowing them — a dropped Intent build used
+                    // to look like a first-tap-eaten UX bug.
+                    WKLogUtils.e(TAG, "startChat buildIntent failed: " + err);
+                });
+    }
+
+    /**
+     * Assembles the Intent for ChatActivity on a worker thread. All DB reads
+     * (conversation, latest msg, message-seq → order-seq lookups) happen here
+     * so they do not block the UI thread that just handled the click.
+     */
+    private Intent buildStartChatIntent(ChatViewMenu chatViewMenu) {
         Intent intent = new Intent(chatViewMenu.activity, ChatActivity.class);
         intent.putExtra("channelId", chatViewMenu.channelID);
         intent.putExtra("channelType", chatViewMenu.channelType);
-        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager().getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
+        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager()
+                .getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
         WKMsg msg = null;
         int redDot = 0;
         long aroundMsgSeq = 0;
@@ -666,7 +746,7 @@ public class WKIMUtils {
             intent.putParcelableArrayListExtra("msgContentList", (ArrayList<? extends Parcelable>) chatViewMenu.forwardMsgList);
         }
         intent.putExtra("aroundMsgSeq", aroundMsgSeq);
-        chatViewMenu.activity.startActivity(intent);
+        return intent;
     }
 
     private void showChatPwdDialog(ChatViewMenu chatViewMenu, WKChannel channel) {

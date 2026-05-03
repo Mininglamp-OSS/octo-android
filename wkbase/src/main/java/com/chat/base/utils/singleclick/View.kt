@@ -22,11 +22,15 @@ import java.util.concurrent.TimeUnit
  * @param interval Single click interval. Unit is [TimeUnit.MILLISECONDS].
  * @param isShareSingleClick True if this view is share single click interval whit other view
  *   in same Activity, false otherwise.
+ *   YUJ-242: default flipped from true to false. Sharing the throttle window
+ *   on the Activity decorView caused first-click-eaten bugs in TabActivity
+ *   (tap group A, tap group B within 1s → B is dropped). Per-view throttle
+ *   is the safe default; opt-in to shared throttle explicitly if needed.
  * @param listener Single click listener.
  */
 fun View.onSingleClick(
     interval: Int? = SingleClickUtil.singleClickInterval,
-    isShareSingleClick: Boolean? = true,
+    isShareSingleClick: Boolean? = false,
     listener: View.OnClickListener? = null
 ) {
     if (listener == null) {
@@ -35,7 +39,7 @@ fun View.onSingleClick(
 
     setOnClickListener {
         determineTriggerSingleClick(
-            interval ?: SingleClickUtil.singleClickInterval, isShareSingleClick ?: true, listener
+            interval ?: SingleClickUtil.singleClickInterval, isShareSingleClick ?: false, listener
         )
     }
 }
@@ -45,12 +49,12 @@ fun View.onSingleClick(
  *
  * @param interval Single click interval.Unit is [TimeUnit.MILLISECONDS].
  * @param isShareSingleClick True if this view is share single click interval whit other view
- *   in same Activity, false otherwise.
+ *   in same Activity, false otherwise. YUJ-242: default flipped from true to false.
  * @param listener Single click listener.
  */
 fun View.determineTriggerSingleClick(
     interval: Int = SingleClickUtil.singleClickInterval,
-    isShareSingleClick: Boolean = true,
+    isShareSingleClick: Boolean = false,
     listener: View.OnClickListener
 ) {
     val target = if (isShareSingleClick) getActivity(this)?.window?.decorView ?: this else this

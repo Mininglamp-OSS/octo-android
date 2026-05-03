@@ -10,8 +10,14 @@ import java.util.concurrent.TimeUnit
 object SingleClickUtil {
     /**
      * Global single click interval.
+     *
+     * YUJ-242: dropped from 1000ms to 300ms. The previous 1s throttle window
+     * combined with [isShareSingleClick]=true on the Activity decorView caused
+     * conversation taps in TabActivity to feel unresponsive ("first click does
+     * nothing, have to tap again"). 300ms is still enough to block genuine
+     * double-taps but no longer swallows cross-view taps in the same Activity.
      */
-    var singleClickInterval: Int = 1000
+    var singleClickInterval: Int = 300
         set(value) {
             if (value <= 0) {
                 throw IllegalArgumentException("Single click interval must be greater than 0.")

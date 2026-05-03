@@ -174,6 +174,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long lastPreviewMsgOrderSeq = 0; //上次浏览消息
     private long unreadStartMsgOrderSeq = 0; //新消息开始位置
     private long tipsOrderSeq = 0; //需要强提示的msg
+    // YUJ-256 P1-2: snapshot of the initial positioning intents. The existing
+    // fields above (`unreadStartMsgOrderSeq`, `tipsOrderSeq`) are "consumed" —
+    // zeroed out after they drive a scroll. YUJ-242's local-first behavior
+    // now calls applyDataToAdapter twice (preview + sync), and without these
+    // snapshots the second call silently skips the "new messages" divider and
+    // unread scroll because the source fields were cleared on the first call.
+    private long unreadStartSnapshotOrderSeq = 0;
+    private long tipsSnapshotOrderSeq = 0;
+    // YUJ-256 P1-3: flag flipped to true after the first applyDataToAdapter
+    // preview render. Used to suppress scroll-to-end on the second (post-sync)
+    // render so the user's manually-scrolled viewport is not yanked back to
+    // the bottom when sync completes.
+    private boolean hasRenderedPreview = false;
+    // YUJ-256 P1-3: flipped true when the user has actively scrolled the chat
+    // RecyclerView (DRAGGING). Also suppresses the second-render scroll-to-end.
+    private boolean userHasScrolled = false;
+    // YUJ-258 P2-NEW-1: flipped true after the first successful tips highlight
+    // so the second applyDataToAdapter (sync-merge) does not replay the
+    // `isShowTips = true` animation. Reset alongside tipsSnapshotOrderSeq in
+    // every fresh-reload path (initData / clickResult / tipsMsg /
+    // newMsgLayout click / reconnect refresh).
+    private boolean hasShownTips = false;
     private int keepOffsetY = 0; // 上次浏览消息的偏移量
     private int redDot = 0; // 未读消息数量
     private boolean hasPositionedUnread = false; // 是否已完成未读定位
@@ -648,6 +670,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(reminderList.get(0).messageSeq, channelId, channelType);
                     unreadStartMsgOrderSeq = 0;
                     tipsOrderSeq = orderSeq;
+                    // YUJ-256 P1-2: sync snapshots + reset render flags for
+                    // the fresh data load so the second (post-sync) callback
+                    // honours the new tips anchor.
+                    unreadStartSnapshotOrderSeq = 0;
+                    tipsSnapshotOrderSeq = orderSeq;
+                    hasRenderedPreview = false;
+                    userHasScrolled = false;
+                    hasShownTips = false;
                     getData(1, true, orderSeq, false);
                     isCanLoadMore = true;
                 }
@@ -696,6 +726,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
+                // YUJ-256 P1-3: record that the user has actively driven the
+                // RecyclerView. applyDataToAdapter will use this to suppress
+                // its scroll-to-end on the post-sync re-render so we do not
+                // yank the user back to the bottom of an unread chat.
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    userHasScrolled = true;
+                }
                 // YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
                 // DRAGGING 保持加载（慢滑手指在屏不应看到占位符）；IDLE 恢复。
                 try {
@@ -750,6 +787,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.GONE);
                 unreadStartMsgOrderSeq = 0;
                 lastPreviewMsgOrderSeq = 0;
+                // YUJ-258 P1-NEW-1: reset snapshots + render flags so the
+                // fresh reload triggered by the "N new messages" bubble
+                // actually scrolls to end and does not reinsert a stale
+                // unread divider (YUJ-242 regression path).
+                unreadStartSnapshotOrderSeq = 0;
+                tipsSnapshotOrderSeq = 0;
+                hasRenderedPreview = false;
+                userHasScrolled = false;
+                hasShownTips = false;
                 long maxSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
                 new Handler().postDelayed(() -> {
                     getData(0, true, maxSeq, true);
@@ -965,6 +1011,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
                 }
                 if (maxOrderSeq > tempMaxOrderSeq && !hasPositionedUnread) {
+                    // YUJ-258 P1-NEW-2: reset snapshots + render flags before
+                    // the reconnect refresh so the viewport actually scrolls
+                    // to end after airplane/sync-complete, rather than being
+                    // pinned to the previous preview position.
+                    unreadStartSnapshotOrderSeq = 0;
+                    tipsSnapshotOrderSeq = 0;
+                    hasRenderedPreview = false;
+                    userHasScrolled = false;
+                    hasShownTips = false;
                     getData(0, true, maxOrderSeq, true);
                 }
 //                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
@@ -1095,7 +1150,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
         getChannelState();
 
-        chatAdapter.setList(new ArrayList<>());
+        // YUJ-242: do NOT clear the adapter here. The previous setList(empty)
+        // caused a visible white-screen flash while getData() is waiting on
+        // sync. applyDataToAdapter(isSetNewData=true) replaces data anyway,
+        // and on onNewIntent (same Activity reused for a different channel)
+        // the new channel's data will overwrite via setNewInstance(list).
+        // chatAdapter.setList(new ArrayList<>());
         if (WKSystemAccount.isSystemAccount(channelId) || channelType == WKChannelType.CUSTOMER_SERVICE) {
             CommonAnim.getInstance().showOrHide(callIV, false, false);
         }
@@ -1232,6 +1292,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (getIntent().hasExtra("unreadStartMsgOrderSeq")) {
             unreadStartMsgOrderSeq = getIntent().getLongExtra("unreadStartMsgOrderSeq", 0);
         }
+        // YUJ-256 P1-2: take a snapshot of the positioning targets so the
+        // second applyDataToAdapter (after sync) still inserts the divider
+        // and scrolls correctly even though the source fields were zeroed
+        // out during the first (preview) render.
+        unreadStartSnapshotOrderSeq = unreadStartMsgOrderSeq;
+        tipsSnapshotOrderSeq = tipsOrderSeq;
+        hasRenderedPreview = false;
+        userHasScrolled = false;
+        hasShownTips = false;
 
         List<WKReminder> allReminder = WKIM.getInstance().getReminderManager().getReminders(channelId, channelType);
         if (WKReader.isNotEmpty(allReminder)) {
@@ -1542,13 +1611,21 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 将已构建好的 UI list 应用到 adapter（必须在主线程调用）。
      */
     private void applyDataToAdapter(List<WKUIChatMsgItemEntity> list, int pullMode, boolean isSetNewData, boolean isScrollToEnd) {
+        // YUJ-256 P1-3: once we have already rendered the local-first preview,
+        // the second (post-sync) render must NOT yank the user's viewport.
+        // Same if the user has manually scrolled during the sync window.
+        final boolean effectiveScrollToEnd = isScrollToEnd && !hasRenderedPreview && !userHasScrolled;
         if (isSetNewData) {
             int unreadScrollIndex = -1;
-            if (unreadStartMsgOrderSeq != 0) {
+            // YUJ-256 P1-2: use the non-zeroed snapshot so the divider is
+            // inserted on every applyDataToAdapter call (preview + sync),
+            // not only the first one.
+            final long unreadAnchor = unreadStartSnapshotOrderSeq;
+            if (unreadAnchor != 0) {
                 int bestIndex = -1;
                 for (int i = 0, size = list.size(); i < size; i++) {
                     if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq > 0
-                            && list.get(i).wkMsg.orderSeq >= unreadStartMsgOrderSeq) {
+                            && list.get(i).wkMsg.orderSeq >= unreadAnchor) {
                         bestIndex = i;
                         break;
                     }
@@ -1559,12 +1636,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     list.add(bestIndex, uiChatMsgItemEntity);
                     unreadScrollIndex = bestIndex;
                 }
+                // Consume the legacy one-shot field for other consumers that
+                // still check it; the snapshot survives so subsequent
+                // applyDataToAdapter calls re-insert the divider.
                 unreadStartMsgOrderSeq = 0;
             }
             chatAdapter.resetData(list);
             chatAdapter.setNewInstance(list);
             chatAdapter.rebuildIndex();
-            if (unreadScrollIndex >= 0) {
+            // Only scroll to the unread anchor when the user has not taken
+            // over the viewport (YUJ-256 P1-3).
+            if (unreadScrollIndex >= 0 && !userHasScrolled) {
                 final int scrollTarget = unreadScrollIndex;
                 linearLayoutManager.scrollToPositionWithOffset(scrollTarget, AndroidUtilities.dp(50));
                 hasPositionedUnread = true;
@@ -1609,25 +1691,39 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 clearEdgeEffects();
             }
         }
-        if (tipsOrderSeq != 0 || lastPreviewMsgOrderSeq != 0) {
+        // YUJ-256 P1-2: use the tips snapshot so the second applyDataToAdapter
+        // call (after sync completes) still scrolls to and highlights the
+        // target message, even though `tipsOrderSeq` was zeroed in the first
+        // call.
+        final long tipsAnchor = tipsSnapshotOrderSeq;
+        if (tipsAnchor != 0 || lastPreviewMsgOrderSeq != 0) {
             wkVBinding.recyclerView.setVisibility(View.VISIBLE);
-            if (tipsOrderSeq != 0) {
-                int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsOrderSeq);
+            // Only auto-scroll to the tips anchor on the first render, or if
+            // the user has not yet taken over the viewport (YUJ-256 P1-3).
+            if (tipsAnchor != 0 && !userHasScrolled) {
+                int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsAnchor);
                 if (tipsIndex >= 0) {
                     linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
-                    chatAdapter.getItem(tipsIndex).isShowTips = true;
-                    chatAdapter.notifyItemChanged(tipsIndex);
+                    // YUJ-258 P2-NEW-1: only trigger the tips highlight once.
+                    // The snapshot still drives the second (post-sync) scroll
+                    // so the target stays in view, but the flash animation
+                    // must not replay.
+                    if (!hasShownTips) {
+                        chatAdapter.getItem(tipsIndex).isShowTips = true;
+                        chatAdapter.notifyItemChanged(tipsIndex);
+                        hasShownTips = true;
+                    }
                     tipsOrderSeq = 0;
                 }
             }
-            if (lastPreviewMsgOrderSeq != 0) {
+            if (lastPreviewMsgOrderSeq != 0 && !userHasScrolled) {
                 int previewIndex = chatAdapter.findPositionByOrderSeq(lastPreviewMsgOrderSeq);
                 if (previewIndex >= 0) {
                     linearLayoutManager.scrollToPositionWithOffset(previewIndex, keepOffsetY);
                 }
             }
         } else {
-            if (isScrollToEnd)
+            if (effectiveScrollToEnd)
                 wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
             else wkVBinding.recyclerView.setVisibility(View.VISIBLE);
         }
@@ -1636,6 +1732,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg.messageSeq == maxSeq) {
                 isCanLoadMore = false;
             }
+        }
+
+        // YUJ-256 P1-3: mark that the preview/first render has happened so
+        // any subsequent applyDataToAdapter call (e.g. sync-complete second
+        // onResult) does not yank the user's viewport back to the end.
+        if (isSetNewData) {
+            hasRenderedPreview = true;
         }
 
         new Handler().postDelayed(() -> {
@@ -2423,6 +2526,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (msg != null && msg.isDeleted == 0) {
                 unreadStartMsgOrderSeq = 0;
                 tipsOrderSeq = msg.orderSeq;
+                // YUJ-256 P1-2: sync snapshots + reset render flags for the
+                // tipsMsg jump so the second (post-sync) callback still
+                // positions on the target message.
+                unreadStartSnapshotOrderSeq = 0;
+                tipsSnapshotOrderSeq = msg.orderSeq;
+                hasRenderedPreview = false;
+                userHasScrolled = false;
+                hasShownTips = false;
                 // keepMessageSeq = msg.orderSeq;
                 getData(0, true, msg.orderSeq, true);
                 isCanLoadMore = true;

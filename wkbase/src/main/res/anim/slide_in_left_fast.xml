@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  YUJ-278 · 窄屏返回的「入场」动画（旧 Activity 从左侧回来）。与
+  slide_in_right_fast.xml / slide_out_left_fast.xml 对称，把非 swipe
+  返回的默认过渡（~250-350ms）压到 120ms，解决「快进慢出」不对称。
+  配合 slide_out_right_fast.xml 使用。
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <translate
+        android:duration="120"
+        android:fromXDelta="-30%p"
+        android:interpolator="@android:anim/decelerate_interpolator"
+        android:toXDelta="0" />
+</set>

@@ -14,6 +14,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.Log;
@@ -50,6 +51,7 @@ import com.bumptech.glide.RequestManager;
 import com.chat.base.common.WKCommonModel;
 import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.base.config.WKBinder;
+import com.chat.base.foldable.NarrowTransition;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
@@ -310,9 +312,23 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        // YUJ-276 · diagnostic trace：窄屏冷启 breakdown 最大的一段发生在 onCreate
+        // （DataBindingUtil.setContentView 膨胀 act_chat_layout.xml ≈ 80-200ms）+
+        // onStart 里的 PanelSwitchHelper.Builder(this).build() ≈ 50-100ms + initData
+        // 同步 DB 读。grep "YUJ276-trace" 可以和 WKIMUtils 里的 T_CLICK /
+        // T_START_ACTIVITY 串起整条链路。
+        long t0 = SystemClock.uptimeMillis();
         super.onCreate(savedInstanceState);
+        // YUJ-278 P1-1（Fix D 自我覆盖版）：把窄屏 120ms 快过渡下沉到 ChatActivity
+        // 自己注册，不再依赖 WKIMUtils.startChat。这样 WKThreadCreatedProvider
+        // （子区卡片点击）/ SearchAllActivity / CreateThreadActivity 这些直接
+        // startActivity(ChatActivity) 的调用方也能吃到快动画，和会话列表点击一致。
+        // 在 API 34+ 上内部会同时注册 CLOSE override（见 NarrowTransition javadoc），
+        // finish() 里的 applyFastClose 只影响 pre-34 设备。
+        NarrowTransition.applyFastOpen(this);
         initSwipeBackFinish();
         wkVBinding = DataBindingUtil.setContentView(this, R.layout.act_chat_layout);
+        long tInflate = SystemClock.uptimeMillis();
 //        setContentView(R.layout.act_chat_layout1);
         // YUJ-252 / GH #182 Bug 1 — In Activity Embedding expanded mode the
         // secondary pane does not reliably receive adjustResize behavior, so the
@@ -344,6 +360,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // belt-and-suspenders — it guarantees TextView wrapping is recomputed for all
         // visible rows immediately on the first layout after a resize.
         setupPaneResizeObserver();
+        if (WKBinder.isDebug) {
+            long tEnd = SystemClock.uptimeMillis();
+            Log.d("YUJ276-trace", "[T_ON_CREATE_END] channel=" + channelId
+                    + " inflate=" + (tInflate - t0) + "ms"
+                    + " total=" + (tEnd - t0) + "ms");
+        }
     }
 
     /** Last-observed RecyclerView width, used to filter spurious layout passes. */
@@ -380,6 +402,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     protected void onResume() {
+        // YUJ-276 · diagnostic trace：onResume 是「用户看到 Activity 首帧」的最后
+        // 一个生命周期节点，和 T_CLICK 的 delta 就是感知延迟。真正的像素出现时间还
+        // 要加一帧（~16ms）的 measure/layout/draw，但这条 log 足够定位 P90/P99。
+        long tOnResume = SystemClock.uptimeMillis();
         super.onResume();
         // YUJ-240 round3 fix (Jerry-Xin B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
         // Glide 会永远停住。onResume 主动恢复，消除生命周期死锁。
@@ -395,11 +421,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().invoke("start_screen_shot", this);
         // 从子区返回时重新拉取消息数量
         fetchThreadMessageCounts();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_RESUME_END] channel=" + channelId
+                    + " total=" + (SystemClock.uptimeMillis() - tOnResume) + "ms");
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        // YUJ-276 · diagnostic trace：onStart 负责首次建 PanelSwitchHelper +
+        // ChatPanelManager + 首轮 initData。这是 onCreate 之后第二大耗时段。
+        long tOnStart = SystemClock.uptimeMillis();
         if (mHelper == null) {
             mHelper = new PanelSwitchHelper.Builder(this)
                     //可选
@@ -501,7 +534,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 previewNewImgResultLac.launch(intent);
                 return null;
             });
+            long tInitDataStart = SystemClock.uptimeMillis();
             initData();
+            if (WKBinder.isDebug) {
+                long tEnd = SystemClock.uptimeMillis();
+                Log.d("YUJ276-trace", "[T_ON_START_END] channel=" + channelId
+                        + " initData=" + (tEnd - tInitDataStart) + "ms"
+                        + " total=" + (tEnd - tOnStart) + "ms");
+            }
+        } else if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_START_END] channel=" + channelId
+                    + " reused=true total=" + (SystemClock.uptimeMillis() - tOnStart) + "ms");
         }
     }
 
@@ -899,6 +942,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
+        // YUJ-276 · diagnostic trace：singleTop 复用路径。只有当 ChatActivity 已经
+        // 在栈顶时才会走这里。窄屏下从 TabActivity 返回后 ChatActivity 通常已被
+        // finish，所以窄屏再点只会跑 onCreate 冷路径；看到这条 log 本身就是验证
+        // 复用生效（多见于分屏态 / 同 Activity 切不同群）。
+        long tNewIntent = SystemClock.uptimeMillis();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_NEW_INTENT] previousChannel=" + channelId
+                    + " newChannel=" + intent.getStringExtra("channelId"));
+        }
         // YUJ-267 · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
         // onDestroy → onCreate，省掉 XML 膨胀 / PanelSwitchHelper 首建 / Activity
         // transition，目标感知延迟 < 200ms（原 500-800ms）。
@@ -936,6 +988,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 保证任意在 onResume 前触发的业务都看到新 channel）。
         WKUIKitApplication.getInstance().chattingChannelID = channelId;
         initData();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_NEW_INTENT_END] channel=" + channelId
+                    + " total=" + (SystemClock.uptimeMillis() - tNewIntent) + "ms");
+        }
     }
 
     /**
@@ -2952,6 +3008,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
         }
         super.finish();
+        // YUJ-278 P1-3：快进慢出对称。入场 120ms 后，非 swipe 返回（系统 back /
+        // 工具栏返回按钮 / finish() 直调）若不覆盖仍走系统默认 ~250-350ms。
+        // 这里用反向 slide pair 把返回也压到 120ms。pre-34 走 overridePendingTransition
+        // 必须在 super.finish() 之后调；API 34+ 已由 NarrowTransition.applyFastOpen()
+        // 在 onCreate 里一次性注册过 CLOSE override，这里是 no-op。
+        NarrowTransition.applyFastClose(this);
         SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
         EndpointManager.getInstance().remove(channelId);
         EndpointManager.getInstance().invoke("stop_screen_shot", this);

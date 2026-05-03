@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  YUJ-318 · 根节点从 LinearLayout 升级为 FrameLayout，支持在会话列表之上叠加
+  Space 切换 Loading Overlay（对照 iOS `pendingSpaceSwitchLoad` + spinner 行为）。
+  原 LinearLayout 结构整体作为 FrameLayout 第一个子节点保留，内部 id 一律不变，
+  ViewBinding 生成的字段访问保持向后兼容。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/title_bg"
-    android:orientation="vertical"
-    android:paddingTop="40dp">
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/title_bg"
+        android:orientation="vertical"
+        android:paddingTop="40dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -176,4 +186,48 @@
             tools:listitem="@layout/item_chat_conv_layout" />
     </com.scwang.smart.refresh.layout.SmartRefreshLayout>
 
-</LinearLayout>
+    </LinearLayout>
+
+    <!--
+      YUJ-318 · Space 切换 Loading Overlay。仅在 performSpaceSwitch 期间显示，
+      半透明遮挡列表旧内容（避免空列表 + 闪烁）。sync 完成 / 首帧 sortMsg 回来立即
+      隐藏；5s 仍未回来则显示 fallback 文案，提示用户不是 App 卡死。
+      点击拦截（clickable=true）防止用户误点穿透到底下列表引发二次状态变更。
+    -->
+    <FrameLayout
+        android:id="@+id/spaceSwitchOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ProgressBar
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:indeterminate="true"
+                android:indeterminateTint="@color/white" />
+
+            <TextView
+                android:id="@+id/spaceSwitchOverlayFallbackTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:maxWidth="260dp"
+                android:text="@string/yuj_318_space_switch_slow_hint"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </FrameLayout>
+
+</FrameLayout>

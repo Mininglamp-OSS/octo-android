@@ -466,5 +466,9 @@
     <string name="external_member_space_suffix">\@%1$s</string>
     <!-- YUJ-204：UserInfo 底部外部成员提示（对齐 web .wk-userinfo-footer-external-hint） -->
     <string name="external_member_only_in_group_hint">仅可在群内交流</string>
+    <!-- YUJ-318：Space 切换 Loading Overlay 超过 5s 仍未完成的兜底文案 -->
+    <string name="yuj_318_space_switch_slow_hint">正在同步会话，网络较慢…请稍候</string>
+    <!-- YUJ-321（fixing YUJ-318 ReviewBot P0-#1）：Overlay 10s 硬超时的 toast 文案 -->
+    <string name="yuj_321_space_switch_timeout_toast">同步较慢，请稍候</string>
 </resources>
 

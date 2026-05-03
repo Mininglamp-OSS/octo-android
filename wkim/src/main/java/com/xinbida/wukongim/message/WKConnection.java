@@ -28,6 +28,7 @@ import com.xinbida.wukongim.message.type.WKSendingMsg;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
+import com.xinbida.wukongim.sync.SyncGate;
 import com.xinbida.wukongim.protocol.WKBaseMsg;
 import com.xinbida.wukongim.protocol.WKConnectAckMsg;
 import com.xinbida.wukongim.protocol.WKConnectMsg;
@@ -625,12 +626,18 @@ public class WKConnection {
                         }
                     });
                 } else {
-                    WKIM.getInstance().getConversationManager().setSyncConversationListener(syncChat -> {
+                    // YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · 这里是 PR#217 原 body
+                    // 宣称「5 条 sync 路径」里漏掉的第 5 条：连接成功 + READ 模式会在此触发
+                    // conversation sync。走统一的 SyncGate，让 SpaceSyncCoordinator 能
+                    // debounce 与 performSpaceSwitch / spaceResync 并发的冗余 sync。
+                    // 注意：即使守卫拒绝 sync，仍要执行连接状态更新（connectStatus /
+                    // sendAck / resendMsg），否则连接会「语义上没有成功」。
+                    final Runnable markConnected = () -> {
                         boolean innerLocked = false;
                         try {
                             innerLocked = tryLockWithTimeout();
                             if (!innerLocked) {
-                                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，setSyncConversationListener回调处理失败");
+                                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，setSyncConversationListener 连接态更新失败");
                                 return;
                             }
                             if (connection != null && !isClosing.get()) {
@@ -645,7 +652,22 @@ public class WKConnection {
                                 connectionLock.unlock();
                             }
                         }
-                    });
+                    };
+
+                    if (!SyncGate.allow("wkConnectionSync")) {
+                        // 守卫已被上层注册且拒绝本次 sync（已有 sync 进行中 / 500ms 内
+                        // 重复触发）。不调 setSyncConversationListener，避免 saveSyncChat 与
+                        // 在途 sync 并发写 DB；但连接态必须立即推进，否则 UI 永远停在「连接中」。
+                        markConnected.run();
+                    } else {
+                        WKIM.getInstance().getConversationManager().setSyncConversationListener(syncChat -> {
+                            try {
+                                markConnected.run();
+                            } finally {
+                                SyncGate.done();
+                            }
+                        });
+                    }
                 }
             } else if (status == WKConnectStatus.kicked) {
                 WKLoggerUtils.getInstance().e(TAG, "Received kick message");

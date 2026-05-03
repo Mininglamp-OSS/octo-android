@@ -183,6 +183,11 @@ public class WKUIKitApplication {
         // 避免与 ChatActivity 产生竞态导致 NPE
         initKitModuleListener();
 
+        // YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · 绑定 SpaceSyncCoordinator 到
+        // wkim 层的 SyncGate，让 WKConnection 连接成功后的 sync 也走 debounce 守卫。
+        // 必须在 WKIM 的首次连接成功回调之前完成——放到同步 init 段开头最安全。
+        com.chat.uikit.chat.SpaceSyncCoordinator.installSyncGate();
+
         // YUJ-295 (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步，上面已完成）：initKitModuleListener——纯内存映射，必须在
         //       Intent 到达 ChatActivity 之前就绪。

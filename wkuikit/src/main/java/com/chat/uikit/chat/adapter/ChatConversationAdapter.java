@@ -44,6 +44,7 @@ import com.chat.base.ui.components.CounterView;
 import com.chat.base.ui.components.TypingView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
+import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
@@ -266,6 +267,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 container.removeAllViews();
                 container.setVisibility(View.GONE);
+                // YUJ-261 · 折叠时清空签名 tag，下次展开走全量重建。
+                container.setTag(R.id.threadPreviewContainer, null);
             }
         } else {
             threadToggleIv.setVisibility(View.GONE);
@@ -996,20 +999,28 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 展示子区预览（最多 2 个最近活跃子区 + "+N 个子区" 折叠行）
      * 参考 iOS WKConversationGroupThreadCell：带分支线 + 圆角卡片容器 + 未读数气泡
+     *
+     * YUJ-261 · 数据签名 skip-rebuild：对当前 groupNo 的子区活跃集 + 未读 + mute + mention
+     * 组合生成签名，若 container 已渲染过相同签名则直接跳过 removeAllViews() + inflate，
+     * 避免 notifyItemChanged 时 rowView 被替换导致 touch 链路被 cancel。
      */
     private void showThreadPreviews(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         FrameLayout container = helper.getView(R.id.threadPreviewContainer);
-        container.removeAllViews();
-        container.setVisibility(View.GONE);
 
         if (item.channelType != WKChannelType.GROUP
                 || WKConfig.getInstance().getAppConfig().thread_on != 1) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
 
         String groupNo = item.channelID;
         List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
         if (cachedList == null) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             loadThreadPreviews(groupNo);
             return;
         }
@@ -1022,6 +1033,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
         }
         if (activeList.isEmpty()) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
         // updated_at 是 ISO 格式字符串，可直接用字符串比较排序
@@ -1031,7 +1045,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             return ub.compareTo(ua);
         });
 
-        container.setVisibility(View.VISIBLE);
         // 3天内活跃的子区全部展示，其余折叠（对齐 iOS: conv.lastMsgTimestamp）
         long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         List<ThreadEntity> recentList = new ArrayList<>();
@@ -1049,6 +1062,20 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         int showCount = recentList.size();
         if (showCount == 0) showCount = Math.min(activeList.size(), 2);
+
+        // YUJ-261 · 生成数据签名；若同一 ViewHolder 的 container 已渲染过该签名，
+        // 则跳过所有 removeAllViews() + inflate，避免 onClickListener 持有的 rowView
+        // 被替换导致 ACTION_DOWN → CANCEL。
+        String newSig = buildThreadPreviewSignature(groupNo, activeList, inactiveList, showCount);
+        Object existingSig = container.getTag(R.id.threadPreviewContainer);
+        if (newSig.equals(existingSig) && container.getChildCount() > 0) {
+            container.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        // 数据变化或首次渲染 → 重建。
+        container.removeAllViews();
+        container.setVisibility(View.VISIBLE);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
         // 内容包装层（卡片 + "+N"），放在 FrameLayout 中和分支线分层
@@ -1144,10 +1171,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 mentionTv.setVisibility(View.GONE);
             }
 
-            String finalThreadChannelId = threadChannelId;
-            rowView.setOnClickListener(v -> {
+            // YUJ-261 · 子区行点击走 SingleClickUtil（per-view 300ms，PR#187 已修为默认模式）。
+            // 与 filterAndDisplay debounce 叠加彻底消除「点一次没反应」。
+            final String finalThreadChannelId = threadChannelId;
+            final ThreadEntity finalEntity = entity;
+            SingleClickUtil.onSingleClick(rowView, v -> {
                 if (threadPreviewClickListener != null) {
-                    threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo, entity.short_id, entity.is_joined);
+                    threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo,
+                            finalEntity.short_id, finalEntity.is_joined);
                 }
             });
             // 长按弹出通知开关菜单
@@ -1158,7 +1189,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     finalThreadMute ? R.mipmap.msg_unmute : R.mipmap.msg_mute,
                     () -> {
                         if (threadPreviewClickListener != null) {
-                            threadPreviewClickListener.onThreadLongPress(finalThreadChannelId, entity.name, rowView);
+                            threadPreviewClickListener.onThreadLongPress(finalThreadChannelId, finalEntity.name, rowView);
                         }
                     }));
             WKDialogUtils.getInstance().setViewLongClickPopup(rowView, menuItems);
@@ -1240,7 +1271,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 moreRow.addView(unreadBadge, badgeLp);
             }
 
-            moreRow.setOnClickListener(v -> {
+            SingleClickUtil.onSingleClick(moreRow, v -> {
                 if (threadPreviewClickListener != null) {
                     threadPreviewClickListener.onMoreThreadsClick(groupNo);
                 }
@@ -1271,6 +1302,52 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 branchView.setRowCenterYs(centerYs);
             }
         });
+
+        // YUJ-261 · 记录本次签名，下次同 ViewHolder 同签名直接跳过重建。
+        container.setTag(R.id.threadPreviewContainer, newSig);
+    }
+
+    /**
+     * YUJ-261 · 子区预览数据签名：覆盖所有影响 UI 展示的字段（子区列表 + 未读 + mute +
+     * mention + showCount + inactiveList 聚合），用于 skip-rebuild 对比。
+     */
+    private String buildThreadPreviewSignature(String groupNo,
+                                               List<ThreadEntity> activeList,
+                                               List<ThreadEntity> inactiveList,
+                                               int showCount) {
+        StringBuilder sb = new StringBuilder(64);
+        sb.append(groupNo).append('#').append(showCount).append('|');
+        for (int i = 0; i < showCount && i < activeList.size(); i++) {
+            ThreadEntity t = activeList.get(i);
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            int unread = conv != null ? conv.unreadCount : t.unread_count;
+            WKChannel ch = WKIM.getInstance().getChannelManager()
+                    .getChannel(tcId, WKChannelType.COMMUNITY_TOPIC);
+            boolean mute = ch != null && ch.mute == 1;
+            boolean mention = hasThreadMentionForChannel(tcId);
+            sb.append(t.short_id).append(':')
+              .append(t.name != null ? t.name : "").append(':')
+              .append(unread).append(':')
+              .append(mute ? 1 : 0).append(':')
+              .append(mention ? 1 : 0).append(':')
+              .append(t.last_message_content != null ? t.last_message_content.hashCode() : 0).append(':')
+              .append(t.is_joined).append('|');
+        }
+        // "+N 个子区" 行的聚合未读 + mention
+        int moreUnread = 0;
+        boolean moreMention = false;
+        for (ThreadEntity t : inactiveList) {
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            moreUnread += conv != null ? conv.unreadCount : t.unread_count;
+            if (hasThreadMentionForChannel(tcId)) moreMention = true;
+        }
+        sb.append("+").append(inactiveList.size()).append(':')
+          .append(moreUnread).append(':').append(moreMention ? 1 : 0);
+        return sb.toString();
     }
 
     /**

@@ -13,6 +13,7 @@ import android.graphics.drawable.Drawable;
 import android.text.InputFilter;
 import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -504,18 +505,44 @@ public class WKDialogUtils {
 
     @SuppressLint("ClickableViewAccessibility")
     public void setViewLongClickPopup(View view, List<PopupMenuItem> list) {
-        final float[][] location = {new float[2]};
+        // YUJ-261 · 改用 GestureDetector 识别长按，OnTouchListener 返回 false 让 click 链路
+        // 继续传递。之前同一 view 同时挂 OnTouchListener + OnLongClickListener，view 在
+        // RecyclerView 刷新时重建会出现竞争，导致「长按被识别为点击被吞掉」或「点击落到 CANCEL」。
+        //
+        // YUJ-264 · Fix 5 加固：因为没有 setOnLongClickListener，框架的 long-click machinery
+        // 不会 set mHasPerformedLongPress=true，ACTION_UP 仍会触发 performClick()。结果是
+        // 长按 500ms 弹 popup + 用户松手同时跑 OnClickListener（同时进入会话 + 弹出菜单）。
+        // 这里用 longPressFired 标记在长按触发后消费 ACTION_UP，阻止 performClick。
+        final float[] downRaw = new float[2];
+        final boolean[] longPressFired = {false};
+        final GestureDetector detector = new GestureDetector(view.getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDown(MotionEvent e) {
+                        longPressFired[0] = false;
+                        downRaw[0] = e.getRawX();
+                        downRaw[1] = e.getRawY();
+                        return false; // 不消费，click 继续
+                    }
+
+                    @Override
+                    public void onLongPress(MotionEvent e) {
+                        longPressFired[0] = true;
+                        showScreenPopup(view, new float[]{downRaw[0], downRaw[1]}, list, null);
+                    }
+                });
         view.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                location[0] = new float[]{event.getRawX(), event.getRawY()};
+            detector.onTouchEvent(event);
+            // YUJ-264: consume ACTION_UP after a long-press so the framework
+            // does NOT also fire performClick() on release. Without this,
+            // long-press → popup AND click → open chat both happen.
+            int action = event.getActionMasked();
+            if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+                    && longPressFired[0]) {
+                longPressFired[0] = false;
+                return true; // 消费 UP，阻止 performClick
             }
-            return false;
-        });
-        view.setOnLongClickListener(view1 -> {
-            if (location[0] != null) {
-                showScreenPopup(view, location[0], list, null);
-            }
-            return true;
+            return false; // 关键：不消费，click / RecyclerView scroll 继续链路
         });
     }
 

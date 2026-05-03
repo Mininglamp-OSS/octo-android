@@ -25,6 +25,7 @@ import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
 import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -147,6 +148,53 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     // DB 异步查询是否已完成，防止连接成功回调误判 allConversations 为空
     private boolean dbQueryCompleted = false;
 
+    // YUJ-261 · filterAndDisplay 的 50ms 合并刷新：消息到达 / reminder / typing / calling
+    // 等会在短时间内触发多次，DiffUtil 仍然是全量遍历，合并后仅执行一次。
+    private final Handler filterDebounceHandler = new Handler(Looper.getMainLooper());
+    private final Runnable filterRunnable = this::filterAndDisplayInternal;
+    private static final long FILTER_DEBOUNCE_MS = 50L;
+    // 诊断：每 10s 汇总一次 filterAndDisplay 触发次数（Fix 6），便于 Yu / ReviewBot 观察
+    // debounce 合并效果。
+    private long lastFilterLogMs = 0;
+    private int filterCallCount = 0;
+    private static final String TAG_FILTER = "ChatFragment.filter";
+
+    /**
+     * YUJ-261 · DiffUtil callback。
+     * - areItemsTheSame: section 用 sectionId，普通行用 channelID+channelType 作稳定 id
+     * - areContentsTheSame: 走 {@link ChatConversationMsg#contentHash()}，覆盖所有 UI 字段
+     * - getChangePayload: 本期返回 null（让 BRVAH rebind 变化行，而非整页 notifyDataSetChanged），
+     *   未变化的 ViewHolder 不被 invalidate，onTouch 期间不会触发 ACTION_CANCEL。
+     */
+    private static final DiffUtil.ItemCallback<ChatConversationMsg> DIFF_CALLBACK =
+            new DiffUtil.ItemCallback<ChatConversationMsg>() {
+                @Override
+                public boolean areItemsTheSame(@androidx.annotation.NonNull ChatConversationMsg a,
+                                               @androidx.annotation.NonNull ChatConversationMsg b) {
+                    if (a.isSectionHeader && b.isSectionHeader) {
+                        return TextUtils.equals(a.sectionId, b.sectionId);
+                    }
+                    if (a.isSectionHeader != b.isSectionHeader) return false;
+                    if (a.uiConversationMsg == null || b.uiConversationMsg == null) return false;
+                    return TextUtils.equals(a.uiConversationMsg.channelID, b.uiConversationMsg.channelID)
+                            && a.uiConversationMsg.channelType == b.uiConversationMsg.channelType;
+                }
+
+                @Override
+                public boolean areContentsTheSame(@androidx.annotation.NonNull ChatConversationMsg a,
+                                                  @androidx.annotation.NonNull ChatConversationMsg b) {
+                    return a.contentHash() == b.contentHash();
+                }
+
+                @Override
+                public Object getChangePayload(@androidx.annotation.NonNull ChatConversationMsg oldItem,
+                                               @androidx.annotation.NonNull ChatConversationMsg newItem) {
+                    // 本期返回 null，让 BRVAH 对变化行走 full rebind。未变化行不被 invalidate，
+                    // 根治 touch event 在 filterAndDisplay 期间被 cancel 的问题。
+                    return null;
+                }
+            };
+
     private String channelKey(String channelID, byte channelType) {
         return channelID + "_" + channelType;
     }
@@ -232,6 +280,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         loadCurrentSpaceName();
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
+        // YUJ-261 · 注册 DiffUtil callback，后续 filterAndDisplay 走 setDiffNewData 增量更新，
+        // 不再使用 setList（内部 notifyDataSetChanged）导致的全 ViewHolder rebind。
+        chatConversationAdapter.setDiffCallback(DIFF_CALLBACK);
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
         // YUJ-240 review fix (Jerry-Xin blocking): 会话列表 RV 容器是 match_parent/match_parent（见 frag_chat_conversation_layout.xml），
         // 尺寸固定，在此处显式开启 setHasFixedSize(true)（已从 WKBaseFragment.initAdapter 移除）。
@@ -2035,8 +2086,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 根据当前 tab 过滤 allConversations 并刷新 adapter。
      * 群聊 tab (0): channelType == GROUP，按 category 分组显示
      * 私聊 tab (1): channelType == PERSONAL，无分组
+     *
+     * YUJ-261 · 外层封装为 50ms debounce：同一 UI 帧内的多次触发（消息到达 + reminder +
+     * channel 刷新 + typing/calling 变化）合并为一次 DiffUtil 遍历，避免 ACTION_DOWN
+     * 和 ACTION_UP 之间发生多次 notifyDataSetChanged 导致 ViewHolder detach → touch cancel。
      */
     private void filterAndDisplay() {
+        filterDebounceHandler.removeCallbacks(filterRunnable);
+        filterDebounceHandler.postDelayed(filterRunnable, FILTER_DEBOUNCE_MS);
+    }
+
+    private void filterAndDisplayInternal() {
+        // 诊断日志（Fix 6）：每 10s 汇总调用次数，便于观察 debounce 合并效果。
+        long nowMs = System.currentTimeMillis();
+        filterCallCount++;
+        if (nowMs - lastFilterLogMs > 10_000) {
+            android.util.Log.d(TAG_FILTER, "filterAndDisplay runs in last 10s: " + filterCallCount);
+            filterCallCount = 0;
+            lastFilterLogMs = nowMs;
+        }
+
         if (chatConversationAdapter == null || getActivity() == null) return;
         if (currentTab == 0) {
             // 群聊 tab：按 category 分组显示
@@ -2145,7 +2214,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
 
-            chatConversationAdapter.setList(displayList);
+            chatConversationAdapter.setDiffNewData(displayList);
         } else {
             // 私聊 tab：无分组
             List<ChatConversationMsg> filtered = new ArrayList<>();
@@ -2154,7 +2223,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     filtered.add(msg);
                 }
             }
-            chatConversationAdapter.setList(filtered);
+            chatConversationAdapter.setDiffNewData(filtered);
         }
     }
 
@@ -2955,7 +3024,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         EndpointManager.getInstance().remove("refresh_conversation_calling");
         EndpointManager.getInstance().remove("scroll_to_unread_channel");
         pingHandler.removeCallbacks(spaceResyncRunnable);
+        // YUJ-261 · 清理 filterAndDisplay debounce handler，防止 Fragment 销毁后 Runnable 回调。
+        filterDebounceHandler.removeCallbacks(filterRunnable);
         stopPingTimer();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // YUJ-264 · onDestroyView 也清 debounce：若 Fragment 在 onDestroyView 之后
+        // onDestroy 之前有 50ms runnable 命中，filterAndDisplayInternal 的 guard 虽然
+        // 能挡住，但 removeCallbacks 更严谨 —— 避免任何 view-dependent code path 被触达。
+        filterDebounceHandler.removeCallbacks(filterRunnable);
     }
 
     @Override

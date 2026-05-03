@@ -8,6 +8,7 @@ import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKey;
 
 import com.chat.base.WKBaseApplication;
+import com.chat.base.utils.AppExecutors;
 
 
 /**
@@ -23,8 +24,13 @@ import com.chat.base.WKBaseApplication;
  * <p>YUJ-284 冷启预热：首次访问 {@link EncryptedSharedPreferences} 需要同步
  * 完成 Android KeyStore AES256-GCM MasterKey 握手，耗时 50-150ms 且阻塞
  * 首个调用线程。{@link #prewarm()} 在 {@code WKBaseApplication.init} 早期
- * spawn 一个后台线程强制构造单例并预读主线程冷启路径上的高频 Key，
+ * 投递到 {@link com.chat.base.utils.AppExecutors#io() AppExecutors.io()}
+ * 强制构造单例并预读主线程冷启路径上的高频 Key，
  * 将 KeyStore 初始化与首批磁盘读取都搬出主线程。
+ *
+ * <p>YUJ-294 merge-time hotfix：原实现 {@code new Thread(...).start()} 与
+ * YUJ-283 P-11 的 {@code scripts/check-no-new-thread.sh} guard 冲突，现统一到
+ * {@code AppExecutors.io()} 池（2×CPU、daemon、app-io-N 命名、priority NORM-1）。
  */
 public class WKSharedPreferencesUtil {
 
@@ -99,7 +105,11 @@ public class WKSharedPreferencesUtil {
      * 赋值之后调用（{@link SingletonEnum} 构造需要它）。
      */
     public static void prewarm() {
-        Thread t = new Thread(() -> {
+        // YUJ-294 · merge-time hotfix：PR#201 (YUJ-284 P-01) 的 `new Thread()` 与
+        // PR#202 (YUJ-283 P-11) 在 develop 上撞车。prewarm 语义 = EncryptedSP 单例
+        // 构造 + KeyStore 握手 + 首批磁盘预读，是典型 I/O，直接走 AppExecutors.io()
+        // （2×CPU 池、app-io-N 命名、priority NORM-1），与其它 I/O 预热同调度。
+        AppExecutors.io().execute(() -> {
             try {
                 // 强制触发 SingletonEnum 初始化：EncryptedSharedPreferences +
                 // MasterKey.Builder + KeyStore 握手全部搬到此后台线程。
@@ -117,10 +127,7 @@ public class WKSharedPreferencesUtil {
                 // 防御：prewarm 失败绝不 crash —— 主线程首次访问时会走
                 // 原有懒加载 + KeyStore fallback 路径，行为与改动前一致。
             }
-        }, "wk-sp-prewarm");
-        // 低于 NORM，避免抢占启动主线程 & Bugly/RLottie/Emoji 那条后台链。
-        t.setPriority(Thread.NORM_PRIORITY - 1);
-        t.start();
+        });
     }
 
     public void putSPWithUID(String key, String value) {

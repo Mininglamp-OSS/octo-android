@@ -16,6 +16,7 @@ import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.startup.AppStartup;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKDialogUtils;
@@ -63,8 +64,8 @@ public class WKPushApplication {
         addListener();
 
         // Push token 获取移到后台线程，不阻塞启动
-        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()（Firebase 网络握手 / 厂商 SDK I/O）
-        AppExecutors.io().execute(this::initPush);
+        // YUJ-295 (P-04) · Phase-B —— Firebase 网络握手 / 厂商 SDK I/O 立即异步。
+        AppStartup.postPhaseB("push-token", this::initPush);
 
         EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
     }

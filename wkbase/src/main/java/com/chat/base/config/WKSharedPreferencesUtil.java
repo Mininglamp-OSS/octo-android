@@ -144,6 +144,26 @@ public class WKSharedPreferencesUtil {
         mEditor.apply();
     }
 
+    /**
+     * YUJ-310 · 同步落盘写入（仅用于写完立即 {@code Runtime.exit(0)} / 杀进程
+     * 的极少数路径，例如登录页隐藏入口切换 API base URL 后的 App 重启）。
+     *
+     * <p>{@link #putSP(String, String)} 走 {@code apply()} 异步落盘，是 YUJ-284
+     * (P-01, PR#201) 的性能优化；但对于「写 SP → 立即 {@code Runtime.exit(0)}」
+     * 这条同步 call chain，{@code apply()} 的 QueuedWork 还没 flush 进程已被杀，
+     * 冷启动读回旧值，用户表现为切换到正式服后重启仍是测试服（YUJ-310 P0）。
+     *
+     * <p>该变体用 {@code commit()} 同步写盘，阻塞调用线程（~50-150ms，叠加
+     * {@link EncryptedSharedPreferences} AES-GCM 加密），但保证进程被杀前数据已落盘。
+     *
+     * <p>⚠️ 仅用于重启前落盘场景，不要替换正常写入路径 —— 否则会把 YUJ-284 的
+     * 主线程 stall 重新带回来。
+     */
+    public boolean putSPSync(String key, String value) {
+        mEditor.putString(key, value);
+        return mEditor.commit();
+    }
+
     // 获取数据
     public String getSP(String key) {
         return mPreferences.getString(key, "");

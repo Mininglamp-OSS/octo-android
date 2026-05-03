@@ -175,7 +175,11 @@ public class ApiUrlDialog extends Dialog {
                     confirmBtn.setEnabled(true);
                     confirmBtn.setText(R.string.api_url_dialog_confirm);
                     if (reachable) {
-                        WKSharedPreferencesUtil.getInstance().putSP("api_base_url", finalUrl);
+                        // YUJ-310 · 必须用同步 commit 落盘：onConfirm 回调会立刻
+                        // 触发 restartApp() → Runtime.exit(0)，apply() 的异步
+                        // QueuedWork 还没 flush 进程就被杀，冷启动读回旧值
+                        // （用户切换到正式服后重启仍看到测试服）。
+                        WKSharedPreferencesUtil.getInstance().putSPSync("api_base_url", finalUrl);
                         dismiss();
                         if (listener != null) {
                             listener.onConfirm(finalUrl);

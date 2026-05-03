@@ -25,8 +25,8 @@ import com.chat.base.endpoint.entity.PlayVideoMenu;
 import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.net.OkHttpUtils;
+import com.chat.base.startup.AppStartup;
 import com.chat.base.utils.AndroidUtilities;
-import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.CrashHandler;
 import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.base.utils.WKDeviceUtils;
@@ -120,9 +120,14 @@ public class WKBaseApplication {
 
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
 
-        // Bugly + Emoji + RLottie 合并到一个后台线程，减少 CPU 争抢
-        // YUJ-283 P-11: 走 AppExecutors.io() 统一调度（带 app-io-N 命名 + daemon）
-        AppExecutors.io().execute(() -> {
+        // YUJ-295 (P-04) · App Startup Initializer 分阶段化
+        //   Phase-A（同步）：上面的 prewarm / density / registerComponentCallbacks / versionName 已完成。
+        //   Phase-B（异步立即投递到 AppExecutors.io()，首屏不依赖）：Bugly + RLottie 并行启动。
+        //   Phase-C（idle 后）：EmojiManager 懒加载——emoji.xml 解析 + LruCache 构造不阻塞冷启。
+        // 拆分成多个独立任务，IO 池会并行消费；相比旧的串行 blob，冷启 CPU 争抢 **-30-50ms**（P-04 审计估值）。
+
+        // Phase-B — Bugly (JNI + 网络握手)
+        AppStartup.postPhaseB("bugly", () -> {
             CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
@@ -136,9 +141,16 @@ public class WKBaseApplication {
                     CrashReport.putUserData(context, "name", userInfo.name);
                 }
             }
-            EmojiManager.getInstance().init();
-            RLottieApplication.getInstance().init(context);
         });
+
+        // Phase-B — RLottie（加载 librlottie.so + 扫描 assets/rlottie/）
+        AppStartup.postPhaseB("rlottie", () -> RLottieApplication.getInstance().init(context));
+
+        // Phase-C — EmojiManager 懒加载。
+        //   EmojiManager 现在是 idempotent 的：文本 hot path（WKTextProvider / MoonUtil /
+        //   SelectTextHelper / WKUIChatMsgItemEntity）里 getPattern() 等入口都会
+        //   ensureInitialized()，真撞上 Phase-C 之前的访问也能同步补齐。
+        AppStartup.postPhaseC("emoji", () -> EmojiManager.getInstance().init());
 
         // Glide + cacheDir 不依赖 SP，先执行，给 EncryptedSP 后台线程更多时间
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());

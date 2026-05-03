@@ -353,6 +353,29 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         initListener();
         //initData();
         ActManagerUtils.getInstance().addActivity(this);
+        // YUJ-305 P1-A · 预测性返回（Predictive Back，API 33+）不走 onKeyDown → onBackPressed
+        // 分发链，而是走 OnBackInvokedDispatcher / OnBackPressedDispatcher。若不注册回调，
+        // 系统手势返回会直接 finish()，绕过 setBackListener() → goBackToList 的 soft-back
+        // 优化路径。这里注册一个 OnBackPressedCallback，把预测性返回统一路由回 setBackListener()。
+        // AndroidX 的 OnBackPressedDispatcher 在 API 33+ 会自动桥接到 OnBackInvokedDispatcher，
+        // 在 33 以下也是 onBackPressed 的标准入口，所以单一注册点覆盖所有版本。
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // setBackListener 已处理：多选态退出 / 面板收起 / soft-back（返回 false 表示
+                // 已消费但不 finish；分屏 / 非窄屏走内置的 150ms postDelayed finish）。如果
+                // 走到 soft-back 成功分支，ChatActivity 仍留在栈里，回调保持 enabled，下次
+                // back 仍会命中本分支。此处不需要再调 finish()。
+                //
+                // YUJ-311 防御 · OnBackPressedCallback 通过 LifecycleOwner(this) 绑定，
+                // 正常情况下在 STARTED 以下会自动 disable；但 Activity Embedding 快速
+                // 切副栏 / finish 中的极端时序下 callback 可能在 isFinishing=true
+                // 时短暂被调度到。setBackListener 会访问 chatAdapter / chatPanelManager，
+                // 后两者在 super.finish() 之后 onDestroy 里被清理，先 guard 避免 NPE。
+                if (isFinishing() || isDestroyed()) return;
+                setBackListener();
+            }
+        });
         // YUJ-251 / GH #180 — L2 pane-aware: when the Embedding pane resizes (divider
         // drag, unfold, rotation), re-bind only the currently-visible messages so the
         // bubble max-width cap (driven by PaneMetrics) refreshes without re-creating
@@ -943,13 +966,44 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
         // YUJ-276 · diagnostic trace：singleTop 复用路径。只有当 ChatActivity 已经
-        // 在栈顶时才会走这里。窄屏下从 TabActivity 返回后 ChatActivity 通常已被
-        // finish，所以窄屏再点只会跑 onCreate 冷路径；看到这条 log 本身就是验证
-        // 复用生效（多见于分屏态 / 同 Activity 切不同群）。
+        // 在栈顶时才会走这里。YUJ-298 Fix A 之后，窄屏从 TabActivity 返回不再 finish，
+        // 实例保活在任务栈里 —— 下一次 startActivity 通过 FLAG_ACTIVITY_REORDER_TO_FRONT
+        // + FLAG_ACTIVITY_SINGLE_TOP 命中这里，彻底规避 recreate。
         long tNewIntent = SystemClock.uptimeMillis();
+        String newChannelId = intent.getStringExtra("channelId");
         if (WKBinder.isDebug) {
             Log.d("YUJ276-trace", "[T_ON_NEW_INTENT] previousChannel=" + channelId
-                    + " newChannel=" + intent.getStringExtra("channelId"));
+                    + " newChannel=" + newChannelId);
+        }
+        // YUJ-298 · Fix A 同频道短路：窄屏用户常常 back → 回到列表 → 再点同一个会话
+        // 进入；此时 oldChannelId == newChannelId，走完整 detach/reset/attach 会造成
+        // chatAdapter.setList([]) 闪烁 + 重新读 DB。直接短路掉，保持原画面。
+        //
+        // YUJ-305 P0-1 · 短路路径必须处理"跳消息 / 转发 / 搜索定位"类 extras，否则
+        //   - 点同会话 @ mention 通知 → 不跳消息
+        //   - 转发到当前会话 → 不弹确认框
+        //   - 搜索结果定位同会话某条消息 → 不滚动高亮
+        // 抽出 applyIntentExtrasForReuse()，同时被同频道短路分支和 onDestroy → onCreate
+        // 冷路径之间的中间态（可能仍由其它系统事件驱动）复用。
+        //
+        // YUJ-305 P0-2 · 短路路径必须主动持久化当前 channel 编辑态。Fix A 之前 soft-back
+        // 不 finish → onDestroy 不触发 → saveEditContent 不执行 → 草稿 / 浏览位置 / 阅后
+        // 即焚清理全部丢失。即使在短路路径（未 back，也未切群）也要 flush 一次，避免
+        // 从其他入口（deeplink / 通知）携带新 extras 打断输入时草稿丢失。
+        if (newChannelId != null && newChannelId.equals(channelId)) {
+            // 先 flush 当前 channel 的编辑态 / 未读 / readMsg 上报，之后的 applyIntentExtras
+            // 可能改变可见消息集合，编辑态需要基于"现在的"视图状态落盘。
+            persistCurrentChannelEditState();
+            // 更新 Intent 以保留新的 extras（tipsOrderSeq / msgContentList / aroundMsgSeq 等）。
+            setIntent(intent);
+            WKUIKitApplication.getInstance().chattingChannelID = channelId;
+            // 分发跳消息 / 转发 payload / 搜索定位 extras 给当前 UI。
+            applyIntentExtrasForReuse(intent);
+            if (WKBinder.isDebug) {
+                Log.d("YUJ276-trace", "[T_ON_NEW_INTENT_END] channel=" + channelId
+                        + " sameChannel=true total=" + (SystemClock.uptimeMillis() - tNewIntent) + "ms");
+            }
+            return;
         }
         // YUJ-267 · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
         // onDestroy → onCreate，省掉 XML 膨胀 / PanelSwitchHelper 首建 / Activity
@@ -1046,6 +1100,190 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (WKReader.isNotEmpty(readMsgIds)) {
             EndpointManager.getInstance().invoke("read_msg", new ReadMsgMenu(oldChannelId, oldChannelType, readMsgIds));
             readMsgIds.clear();
+        }
+    }
+
+    /**
+     * YUJ-298 / YUJ-305 P0-2：持久化<b>当前</b> channel 的编辑态。与
+     * {@link #persistOldChannelEditState(String, byte)} 的区别：这里读的是 Activity
+     * 字段（channelId / channelType / readMsgIds / redDot / editText），不接入参 —
+     * 调用时必须保证还没切 channel（soft-back / 同频道短路 / finish 前都是这种状态）。
+     *
+     * <p>触发场景：
+     * <ul>
+     *   <li>soft-back：{@link #setBackListener()} → goBackToList 之前（不走 onDestroy）。</li>
+     *   <li>同频道短路：{@link #onNewIntent(Intent)} 里 oldChannelId == newChannelId 分支，
+     *       进入前 flush 一次，避免被新 extras（转发 payload / 跳消息 seq）打断时草稿丢失。</li>
+     *   <li>{@link #finish()} 兜底：swipe-back 不走 onBackPressed 分发链会直接 finish，
+     *       saveEditContent 放在 super.finish() 之后可能赶不上 onStop 清 chattingChannelID
+     *       的竞态；这里在 super.finish() 之前再 flush 一次，双保险。</li>
+     * </ul>
+     *
+     * <p>和 {@link #saveEditContent()} 的区别：
+     * <ul>
+     *   <li>saveEditContent 只落盘草稿 / 浏览位置 / 未读清理，不处理 readMsgIds。</li>
+     *   <li>本方法同时 flush readMsgIds（避免 soft-back 路径阅后上报积压）。</li>
+     *   <li>本方法在 chatAdapter 为空时仍会 flush 草稿（没有可见消息但用户在输入框打过字）。</li>
+     * </ul>
+     *
+     * 幂等：多次调用对同一时刻状态无副作用。
+     */
+    private void persistCurrentChannelEditState() {
+        if (TextUtils.isEmpty(channelId)) return;
+
+        // 浏览位置 / 草稿需要 adapter 有数据才能计算 keepMsgSeq；但草稿本身和 readMsgIds
+        // 在 adapter 空时也应落盘（用户可能刚开会话、还没消息就打了字）。
+        long keepMsgSeq = 0;
+        int offsetY = 0;
+        String content = chatPanelManager != null && chatPanelManager.getEditText() != null
+                && chatPanelManager.getEditText().getText() != null
+                ? chatPanelManager.getEditText().getText().toString() : "";
+
+        if (chatAdapter != null && WKReader.isNotEmpty(chatAdapter.getData()) && linearLayoutManager != null) {
+            int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+            int endItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+            if (endItemPosition != chatAdapter.getData().size() - 1) {
+                WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
+                if (msg != null) {
+                    keepMsgSeq = msg.messageSeq;
+                    int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
+                    View view = linearLayoutManager.findViewByPosition(index);
+                    if (view != null) {
+                        offsetY = view.getTop();
+                    }
+                }
+            }
+        }
+
+        MsgModel.getInstance().clearUnread(channelId, channelType, redDot, null);
+        MsgModel.getInstance().updateCoverExtra(channelId, channelType, browseTo, keepMsgSeq, offsetY, content);
+        MsgModel.getInstance().deleteFlameMsg();
+        if (WKReader.isNotEmpty(readMsgIds)) {
+            EndpointManager.getInstance().invoke("read_msg", new ReadMsgMenu(channelId, channelType, readMsgIds));
+            readMsgIds.clear();
+        }
+    }
+
+    /**
+     * YUJ-305 P0-1：把 Intent 上挂的"跳消息 / 转发 payload / 搜索定位"类 extras 分发到
+     * 当前 UI。仅在 {@link #onNewIntent(Intent)} 的同频道短路路径使用 —— 跨频道路径会
+     * 走完整的 resetPerChannelState + initData，extras 被 {@link #initParam()} /
+     * {@link #initData()} 自然读走，不需要本方法。
+     *
+     * <p>覆盖矩阵（与冷路径 {@link #initParam()} / {@link #initData()} 对齐）：
+     * <ul>
+     *   <li>{@code msgContentList}：转发到当前会话 → 弹 {@code showChatConfirmDialog}。</li>
+     *   <li>{@code tipsOrderSeq} / {@code aroundMsgSeq}：通知点击 / 搜索结果定位 →
+     *       滚动到目标 orderSeq 并高亮。若目标已在 adapter 内走 scrollToPositionWithOffset；
+     *       不在则调 {@link #getData(int, boolean, long, boolean)} 以 aroundMsgSeq 拉取。</li>
+     * </ul>
+     *
+     * <p>处理完后从 Intent 里移除这些 extras（consume 语义），避免后续如果再次走短路
+     * 路径（多次打开同会话）时重复弹框 / 重复滚动到陈旧 seq。
+     */
+    private void applyIntentExtrasForReuse(@NonNull Intent intent) {
+        // 1. 转发 payload —— 对齐 initParam() 里的 msgContentList 分支。
+        if (intent.hasExtra("msgContentList")) {
+            List<WKMessageContent> msgContentList = intent.getParcelableArrayListExtra("msgContentList");
+            // YUJ-311 防御 · 消费 extras 必须无条件，否则同频道短路再次触发时会 replay
+            // 一个我们本应丢弃的 payload。改成先 consume 再决定是否分发。
+            intent.removeExtra("msgContentList");
+            if (WKReader.isNotEmpty(msgContentList)) {
+                // YUJ-311 防御 · getChannel 可能返回 null（SDK cache 未热 / channel 被
+                // evict / 跨 Space 冷启 race）。baseline 直接把 null 塞 channelList
+                // 进 showChatConfirmDialog，对话框的 adapter 在 bind 头像 / 名字时
+                // 会触发 NPE。短路路径放弃弹框比闪退好——用户再点一次该 extras
+                // 已 consume，会重新从业务入口带完整 channel 对象走冷路径。
+                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
+                if (channel != null) {
+                    List<WKChannel> channelList = new ArrayList<>();
+                    channelList.add(channel);
+                    WKUIKitApplication.getInstance().showChatConfirmDialog(this, channelList, msgContentList, (list1, messageContentList) -> {
+                        List<SendMsgEntity> msgList = new ArrayList<>();
+                        WKSendOptions options = new WKSendOptions();
+                        options.setting.receipt = getChatChannelInfo().receipt;
+                        for (int i = 0, size = messageContentList.size(); i < size; i++) {
+                            msgList.add(new SendMsgEntity(messageContentList.get(i), channel, options));
+                        }
+                        WKSendMsgUtils.getInstance().sendMessages(msgList);
+                    });
+                }
+            }
+        }
+
+        // 2. 跳转 / 定位目标消息 —— tipsOrderSeq 优先，退化到 aroundMsgSeq。
+        long targetOrderSeq = 0;
+        if (intent.hasExtra("tipsOrderSeq")) {
+            targetOrderSeq = intent.getLongExtra("tipsOrderSeq", 0);
+        }
+        if (targetOrderSeq == 0 && intent.hasExtra("aroundMsgSeq")) {
+            targetOrderSeq = intent.getLongExtra("aroundMsgSeq", 0);
+        }
+        if (targetOrderSeq > 0) {
+            scrollToMessageForReuse(targetOrderSeq);
+            intent.removeExtra("tipsOrderSeq");
+            intent.removeExtra("aroundMsgSeq");
+        }
+    }
+
+    /**
+     * YUJ-305 P0-1：同频道短路路径下"滚动到目标消息"。
+     *
+     * <p>目标若已在 adapter 缓存内，直接 scrollToPositionWithOffset + 高亮，
+     * 不触发 DB 重读。否则按冷路径对齐，更新 tipsOrderSeq snapshot + 清 render
+     * flag，让 getData(... aroundMsgSeq ...) 接手拉取并由 applyDataToAdapter
+     * 完成滚动和高亮（复用 YUJ-256 snapshot 机制）。
+     */
+    private void scrollToMessageForReuse(long targetOrderSeq) {
+        if (chatAdapter == null || linearLayoutManager == null) return;
+        int index = chatAdapter.findPositionByOrderSeq(targetOrderSeq);
+        if (index >= 0) {
+            // 快路径：目标在当前窗口内，直接滚动并高亮。对齐 tipsMsg() 的 UX。
+            final int targetIndex = index;
+            // YUJ-311 防御 · findPositionByOrderSeq 返回的 index 是「当前可见
+            // snapshot」，但在同一主线程调用里 adapter 已经不能被其它线程改动；
+            // 这里先做 size guard 只是为了对齐 postDelayed 里的守卫口径，
+            // 防 adapter 内部在 bind 过程中触发异步 remove 造成 off-by-one。
+            if (targetIndex >= chatAdapter.getItemCount()) return;
+            WKUIChatMsgItemEntity targetItem = chatAdapter.getItem(targetIndex);
+            if (targetItem == null) return;
+            targetItem.isShowTips = true;
+            if (mHelper != null) {
+                mHelper.hookSystemBackByPanelSwitcher();
+            }
+            wkVBinding.recyclerView.postDelayed(() -> {
+                // YUJ-311 防御 · 120ms 窗口期间可能发生：
+                //   1) Activity finishing / destroyed（swipe-back / Embedding 关副栏）
+                //   2) 同频道再来一次短路 applyIntentExtrasForReuse（adapter 数据
+                //      稳定但 targetIndex 已过期）
+                //   3) 跨频道 onNewIntent → chatAdapter.setList([]) 后 targetIndex
+                //      指向空 adapter 的越界位置
+                // 命中任一就静默退出，滚动/高亮让正常 onNewIntent 流程覆盖。
+                if (isFinishing() || isDestroyed()) return;
+                if (chatAdapter == null || linearLayoutManager == null) return;
+                if (targetIndex < 0 || targetIndex >= chatAdapter.getItemCount()) return;
+                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+                int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+                if (targetIndex < firstItemPosition || targetIndex > lastItemPosition) {
+                    linearLayoutManager.scrollToPositionWithOffset(targetIndex, AndroidUtilities.dp(50));
+                }
+                chatAdapter.notifyItemChanged(targetIndex);
+            }, 120);
+        } else {
+            // 慢路径：目标不在当前窗口，按 aroundMsgSeq 重新拉取。对齐 tipsMsg() 的
+            // fallback 分支与 initData() 的 getData(aroundMsgSeq) 入参语义。
+            unreadStartMsgOrderSeq = 0;
+            tipsOrderSeq = targetOrderSeq;
+            unreadStartSnapshotOrderSeq = 0;
+            tipsSnapshotOrderSeq = targetOrderSeq;
+            hasRenderedPreview = false;
+            userHasScrolled = false;
+            hasShownTips = false;
+            if (mHelper != null) {
+                mHelper.hookSystemBackByPanelSwitcher();
+            }
+            getData(0, true, targetOrderSeq, true);
+            isCanLoadMore = true;
         }
     }
 
@@ -2466,6 +2704,25 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 CommonAnim.getInstance().showOrHide(numberTextView, false, true);
             } else {
                 if (chatPanelManager.isCanBack()) {
+                    // YUJ-298 · Fix A：窄屏下不 finish —— 通过 ChatReuseNavigator.goBackToList
+                    // 把 TabActivity reorder 到栈顶，保留 ChatActivity 实例，下一次点击
+                    // 会话命中 onNewIntent 热路径（~50-100ms），不用重建。
+                    //
+                    // 之前的 postDelayed 150ms finish 是为了等 IME / 面板收起动画，
+                    // 但实测主线程已经在 isCanBack 时完成 panel 切换；真正的延迟来自
+                    // Activity transition 本身（被 NarrowTransition applyFastClose 压到
+                    // 120ms）+ recreate（现在被复用消除）。这里直接立即处理，去掉 150ms
+                    // 感知延迟。
+                    //
+                    // YUJ-305 P0-2 · soft-back 不走 finish → onDestroy 不触发 →
+                    // saveEditContent 不执行。必须在进入 soft-back 前主动 flush 一次，
+                    // 否则草稿 / 浏览位置 / 阅后即焚 / readMsg 上报全丢。
+                    persistCurrentChannelEditState();
+                    if (com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
+                        return false;
+                    }
+                    // 非窄屏 / 复用路径失败 → 回退到原来的 finish 路径。保留 150ms
+                    // postDelayed 兼容原有分屏 / 折叠屏的 panel 收起动画时序。
                     new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(this::finish, 150);
                 }
             }
@@ -3003,6 +3260,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void finish() {
+        // YUJ-305 P1-A · swipe-back 兜底：系统 / 第三方 SwipeBackLayout 的侧滑返回不走
+        // onBackPressed 分发链，会直接调 Activity.finish()，绕过 setBackListener() →
+        // persistCurrentChannelEditState() 的主动落盘点。这里在 super.finish() 之前再
+        // flush 一次编辑态（幂等），保证草稿 / 浏览位置 / 阅后即焚 / readMsg 上报不丢。
+        // 正常的 soft-back / 非 swipe 返回路径已经在 setBackListener 里 flush 过，此处
+        // 再调一次也是 no-op（读到空 diff、写一遍 DB，可以接受）。
+        persistCurrentChannelEditState();
         if (com.chat.base.space.SystemBotsFallback.isSystemBot(channelId)) {
             SpaceModel.getInstance().invalidateMembersCache();
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);

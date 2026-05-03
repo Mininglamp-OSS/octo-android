@@ -76,7 +76,8 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
                 val intent = Intent(context, ChatActivity::class.java)
                 intent.putExtra("channelId", channelId)
                 intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                context.startActivity(intent)
+                // YUJ-298 · Fix A：走 ChatReuseNavigator，窄屏复用 ChatActivity。
+                com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
                 return@setOnClickListener
             }
             val groupNo = parsed[0]
@@ -91,7 +92,8 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
                         val intent = Intent(context, ChatActivity::class.java)
                         intent.putExtra("channelId", channelId)
                         intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                        context.startActivity(intent)
+                        // YUJ-298 · Fix A：走 ChatReuseNavigator。
+                        com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
                     }
                 } else {
                     // API 错误，检查是否包含删除相关信息
@@ -103,7 +105,8 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
                         val intent = Intent(context, ChatActivity::class.java)
                         intent.putExtra("channelId", channelId)
                         intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                        context.startActivity(intent)
+                        // YUJ-298 · Fix A：走 ChatReuseNavigator。
+                        com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
                     }
                 }
             }

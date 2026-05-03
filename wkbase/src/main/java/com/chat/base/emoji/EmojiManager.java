@@ -40,6 +40,8 @@ public class EmojiManager {
     private final int CACHE_MAX_SIZE = 1024;
 
     private Pattern pattern;
+    // YUJ-295 (P-04) — init() 幂等标记，供 ensureInitialized() 使用。
+    private volatile boolean initialized = false;
 
     // default entries
     private final List<Entry> defaultEntries = new ArrayList<>();
@@ -62,9 +64,31 @@ public class EmojiManager {
         return EmojiManagerBinder.emoji;
     }
 
-    public void init() {
-
+    /**
+     * YUJ-295 (P-04) · 空载 / 重复调用幂等化。
+     *
+     * 旧路径是 {@code WKBaseApplication.init} 里把本方法塞进同一个 {@code new Thread()}
+     * 跟 Bugly / RLottie 抢 CPU。新 AppStartup 把它挪到 Phase-C（idle 后），
+     * 但文本渲染（{@code WKTextProvider}、{@code MoonUtil}、{@code SelectTextHelper}、
+     * {@code WKUIChatMsgItemEntity}）在 Phase-C 之前就可能读 {@link #getPattern()}，
+     * 所以这里做 double-checked locking：
+     *
+     * <ul>
+     *   <li>Phase-C 主动调用一次 {@link #init()}；</li>
+     *   <li>任何 hot path 在需要 {@code pattern} / entries 之前调用
+     *       {@link #ensureInitialized()}，若 Phase-C 还没跑就同步补齐，
+     *       否则直接 no-op。</li>
+     * </ul>
+     */
+    public synchronized void init() {
+        if (initialized) {
+            return;
+        }
         Context context = WKBaseApplication.getInstance().getContext();
+        if (context == null) {
+            // Application 还没 attach（极罕见）——下一次再补。
+            return;
+        }
 
         load(context, EMOT_DIR + "emoji.xml");
         pattern = makePattern();
@@ -75,8 +99,17 @@ public class EmojiManager {
                     oldValue.recycle();
             }
         };
+        initialized = true;
+    }
 
-
+    /**
+     * Hot path 守卫：文本渲染 / emoji 面板在 Phase-C 之前就可能触达 EmojiManager，
+     * 该方法用 double-checked locking 做懒初始化。常态（已初始化）下是一个 volatile 读。
+     */
+    public void ensureInitialized() {
+        if (!initialized) {
+            init();
+        }
     }
 
     private static class Entry {
@@ -92,25 +125,30 @@ public class EmojiManager {
     }
 
     public int getDisplayCount() {
+        ensureInitialized();
         return defaultEntries.size();
     }
 
     public Drawable getDisplayDrawable(Context context, int index) {
+        ensureInitialized();
         String text = (index >= 0 && index < defaultEntries.size() ?
                 defaultEntries.get(index).text : null);
         return text == null ? null : getDrawable(context, text);
     }
 
     public String getDisplayText(int index) {
+        ensureInitialized();
         return index >= 0 && index < defaultEntries.size() ? defaultEntries
                 .get(index).text : null;
     }
 
     public Pattern getPattern() {
+        ensureInitialized();
         return pattern;
     }
 
     public Drawable getDrawableWithTag(Context context, String tag) {
+        ensureInitialized();
         Drawable drawable = null;
         for (int i = 0; i < defaultEntries.size(); i++) {
             if (defaultEntries.get(i).id.equals(tag)) {
@@ -121,6 +159,7 @@ public class EmojiManager {
         return drawable;
     }
     public EmojiEntry getEmojiWithTag(String tag){
+        ensureInitialized();
         EmojiEntry entry = null;
         for (int i = 0; i < defaultEntries.size(); i++) {
             if (defaultEntries.get(i).id.equals(tag)) {
@@ -131,6 +170,7 @@ public class EmojiManager {
         return entry;
     }
     public EmojiEntry getEmojiEntry(String text) {
+        ensureInitialized();
         Entry entry = text2entry.get(text);
         if (entry == null) {
             return null;
@@ -139,6 +179,7 @@ public class EmojiManager {
     }
 
     public Drawable getDrawable(Context context, String text) {
+        ensureInitialized();
         Entry entry = text2entry.get(text);
         if (entry == null) {
             return null;
@@ -274,6 +315,7 @@ public class EmojiManager {
 
 
     public List<EmojiEntry> getEmojiWithType(String type) {
+        ensureInitialized();
         List<EmojiEntry> list = new ArrayList<>();
         for (int i = 0, size = defaultEntries.size(); i < size; i++) {
             if (defaultEntries.get(i).id.contains("color")) {

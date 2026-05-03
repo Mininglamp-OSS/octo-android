@@ -5,7 +5,6 @@ import android.annotation.SuppressLint;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.text.TextUtils;
@@ -321,14 +320,30 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         setContactCount(totalCount, showDot);
     }
 
+    /**
+     * YUJ-283 P-05: fontScale 一次性在 attachBaseContext 里通过 createConfigurationContext
+     * 生效，避免每次 getResources() 都走一遍已 deprecated 的 updateConfiguration() 热路径。
+     * getResources() 在 View inflate、theme 查询、getString()、ContextCompat.getColor() 等
+     * 场景下被高频访问，原实现每次都会读 SP + 改 Configuration + updateConfiguration，
+     * 在 Android U/14 还会触发 StrictMode 告警。
+     *
+     * 父类 WKBaseActivity.attachBaseContext 只做 locale 包装，这里在其基础上再叠一层
+     * fontScale 的 Configuration，仍保留原有的语言切换行为；fontScale 变更走
+     * WKSetFontSizeActivity → "main_show_home_view" 重启流程，重启后 attachBaseContext 再
+     * 执行一次，不需要在运行时重复更新。
+     */
     @Override
-    public Resources getResources() {
+    protected void attachBaseContext(Context newBase) {
+        Context localeCtx = WKMultiLanguageUtil.getInstance().attachBaseContext(newBase);
         float fontScale = WKConstants.getFontScale();
-        Resources res = super.getResources();
-        Configuration config = res.getConfiguration();
-        config.fontScale = fontScale; //1 设置正常字体大小的倍数
-        res.updateConfiguration(config, res.getDisplayMetrics());
-        return res;
+        if (fontScale > 0f) {
+            Configuration overrideConfig = new Configuration(localeCtx.getResources().getConfiguration());
+            if (Math.abs(overrideConfig.fontScale - fontScale) > 0.0001f) {
+                overrideConfig.fontScale = fontScale;
+                localeCtx = localeCtx.createConfigurationContext(overrideConfig);
+            }
+        }
+        super.attachBaseContext(localeCtx);
     }
 
     @Override

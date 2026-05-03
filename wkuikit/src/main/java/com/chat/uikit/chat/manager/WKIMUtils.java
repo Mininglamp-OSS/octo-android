@@ -711,12 +711,20 @@ public class WKIMUtils {
                         Log.d(TRACE_TAG, "[T_START_ACTIVITY] sinceClick="
                                 + (SystemClock.uptimeMillis() - tClickMs) + "ms");
                     }
-                    menu.activity.startActivity(intent);
+                    // YUJ-298 · Fix A：窄屏路径上走 ChatReuseNavigator，把
+                    // FLAG_ACTIVITY_REORDER_TO_FRONT | FLAG_ACTIVITY_SINGLE_TOP 合并进
+                    // Intent。任务栈里若已有 ChatActivity 实例（被 goBackToList 留在
+                    // 栈中），AMS 会 reorder 到栈顶并走 onNewIntent 热路径（~50-100ms
+                    // 切频道），没有实例则正常新建（和 PR#195 冷启动一致）。
+                    // 分屏态 isNarrow=false，此处不加 flag，由 Activity Embedding 的
+                    // onNewIntent（YUJ-267）负责。
                     // YUJ-278 P1-1：Fix D 的 overridePendingTransition 调用已下沉到
                     // ChatActivity.onCreate（见 com.chat.base.foldable.NarrowTransition.
                     // applyFastOpen）。这样子区卡片、SearchAllActivity、CreateThreadActivity
                     // 等直接 startActivity(ChatActivity) 的路径也能吃到 120ms 快过渡，
                     // 不再和此处 helper 耦合。
+                    com.chat.uikit.chat.ChatReuseNavigator.launchChat(
+                            menu.activity, intent, menu.activity);
                 }, err -> {
                     // YUJ-256 P2-1: surface startChat errors instead of
                     // silently swallowing them — a dropped Intent build used

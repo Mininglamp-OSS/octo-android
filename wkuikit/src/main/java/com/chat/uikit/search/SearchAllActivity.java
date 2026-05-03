@@ -101,7 +101,9 @@ public class SearchAllActivity extends WKBaseActivity<ActSearchAllLayoutBinding>
                 Intent intent = new Intent(SearchAllActivity.this, ChatActivity.class);
                 intent.putExtra("channelId", result.wkChannel.channelID);
                 intent.putExtra("channelType", result.wkChannel.channelType);
-                startActivity(intent);
+                // YUJ-298 · Fix A：走 ChatReuseNavigator，窄屏复用 ChatActivity。
+                com.chat.uikit.chat.ChatReuseNavigator.launchChat(
+                        SearchAllActivity.this, intent, SearchAllActivity.this);
                 SoftKeyboardUtils.getInstance().hideInput(this, wkVBinding.searchEt);
             }
         }));

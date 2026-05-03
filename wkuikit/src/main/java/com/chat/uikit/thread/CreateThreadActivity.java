@@ -136,7 +136,9 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
                 Intent intent = new Intent(this, ChatActivity.class);
                 intent.putExtra("channelId", channelId);
                 intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
-                startActivity(intent);
+                // YUJ-298 · Fix A：走 ChatReuseNavigator，窄屏下若栈中已有
+                // ChatActivity 会 reorder 到栈顶走 onNewIntent 热路径。
+                com.chat.uikit.chat.ChatReuseNavigator.launchChat(this, intent, this);
                 finish();
             } else {
                 WKToastUtils.getInstance().showToast(msg);

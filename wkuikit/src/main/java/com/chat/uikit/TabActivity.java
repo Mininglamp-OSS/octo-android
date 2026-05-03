@@ -68,6 +68,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     private TextView chatTV, contactsTV, meTV;
     private long lastClickChatTabTime = 0L;
     private final boolean isShowTabText = true;
+    // YUJ-287: 记录当前选中 tab，避免 playAnimation 重复 setImageResource / tint。
+    // 初始 -1 保证首帧 playAnimation(0) 必定执行一次着色。
+    private int currentTabIndex = -1;
 
     @Override
     protected ActTabMainBinding getViewBinding() {
@@ -91,6 +94,12 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         chatIV = new RLottieImageView(this);
         contactsIV = new RLottieImageView(this);
         meIV = new RLottieImageView(this);
+        // YUJ-287: drawable 只在 ViewHolder 初始化时 setImageResource 一次；
+        // 后续切 tab 只通过 tintTab 改 ColorFilter，避免 RLottieImageView
+        // 每次 setImageResource 都重新解析 drawable + invalidate。
+        chatIV.setImageResource(R.drawable.ic_tab_message);
+        contactsIV.setImageResource(R.drawable.ic_tab_contacts);
+        meIV.setImageResource(R.drawable.ic_tab_me);
         chatTV = new TextView(this);
         contactsTV = new TextView(this);
         meTV = new TextView(this);
@@ -220,6 +229,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         });
         wkVBinding.bottomNavigation.setItemIconTintList(null);
         wkVBinding.bottomNavigation.setOnItemSelectedListener(item -> {
+            // YUJ-287: 只在真正需要切页时调 setCurrentItem；
+            // 切页后 ViewPager2 的 onPageSelected 会回调 playAnimation，
+            // 这里不再重复调用，避免一次 tab 点击触发两次 playAnimation。
             if (item.getItemId() == R.id.i_chat) {
                 long nowTime = WKTimeUtils.getInstance().getCurrentMills();
                 if (wkVBinding.vp.getCurrentItem() == 0) {
@@ -230,13 +242,14 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
                     return true;
                 }
                 wkVBinding.vp.setCurrentItem(0);
-                playAnimation(0);
             } else if (item.getItemId() == R.id.i_contacts) {
-                wkVBinding.vp.setCurrentItem(1);
-                playAnimation(1);
+                if (wkVBinding.vp.getCurrentItem() != 1) {
+                    wkVBinding.vp.setCurrentItem(1);
+                }
             } else {
-                wkVBinding.vp.setCurrentItem(2);
-                playAnimation(2);
+                if (wkVBinding.vp.getCurrentItem() != 2) {
+                    wkVBinding.vp.setCurrentItem(2);
+                }
             }
             return true;
         });
@@ -351,14 +364,21 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     }
 
     private void playAnimation(int index) {
-        chatIV.setImageResource(R.drawable.ic_tab_message);
-        contactsIV.setImageResource(R.drawable.ic_tab_contacts);
-        meIV.setImageResource(R.drawable.ic_tab_me);
-
+        // YUJ-287: i_chat 顶部双击滚动逻辑依赖 lastClickChatTabTime 在首次进入聊天 tab 时置 0；
+        // 即便 tab 未变也需要走这一行，因此放在 early-return 之前。
         if (index == 0) {
             lastClickChatTabTime = 0;
         }
 
+        // YUJ-287: tab 未变时跳过重复 tint / setImageResource / setTextColor。
+        // ViewPager2 onPageSelected 与 BottomNavigationView OnItemSelectedListener
+        // 有时会对同一次切换双重回调，这里保证每次真正的切换只着色一次。
+        if (currentTabIndex == index) {
+            return;
+        }
+        currentTabIndex = index;
+
+        // drawable 已在 initView 阶段 setImageResource 一次，这里只更新 ColorFilter。
         tintTab(chatIV, index == 0);
         tintTab(contactsIV, index == 1);
         tintTab(meIV, index == 2);

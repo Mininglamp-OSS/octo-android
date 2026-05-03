@@ -168,7 +168,8 @@ public class GlideUtils {
             Context context = weakReference.get();
             if (context instanceof Activity activity) {
                 if (!activity.isDestroyed()) {
-                    // 始终使用 MyGlideUrlWithId，cache key 包含 APP_LAUNCH_ID，确保冷启动时磁盘缓存失效。
+                    // YUJ-283-P-03: 始终使用 MyGlideUrlWithId，cache key 仅依赖服务端 avatarCacheKey，
+                    // 头像变更时由后端翻版本号触发失效，长期命中磁盘缓存。
                     // key 为空时用 url 本身作为唯一标识，避免所有无 cacheKey 的头像共享同一缓存。
                     String cacheKey = TextUtils.isEmpty(key) ? url : key;
                     // YUJ-236 phase2 perf (A8): 读 ImageView.layoutParams 做 override + thumbnail(0.1f)。

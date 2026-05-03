@@ -77,6 +77,39 @@ object PaneMetrics {
     fun bubbleMaxWidthPx(context: Context): Int =
         (widthPx(context) * BUBBLE_WIDTH_FRACTION).toInt()
 
+    /**
+     * Device / display maximum window width in px, **ignoring** Activity Embedding pane
+     * splits. Use this when the caller needs the full-device "would this fit two panes"
+     * semantic — e.g. [main_split_config.xml]'s `splitMinWidthDp` gate, which is evaluated
+     * against `computeMaximumWindowMetrics` by the Jetpack Embedding library itself.
+     *
+     * Why not [widthPx]? In split mode the primary (chat-list) pane only sees its own
+     * bounds (~336-480dp for the foldables / tablets we target), so comparing that to
+     * 600dp is **always false** and the selected-row background never renders. See
+     * YUJ-270 P0-1 for the full failure matrix.
+     *
+     * Falls back to `resources.displayMetrics.widthPixels` if no hosting Activity is
+     * reachable or the Window metrics call throws.
+     */
+    @JvmStatic
+    fun maxWidthPx(activity: Activity): Int {
+        return try {
+            WindowMetricsCalculator.getOrCreate()
+                .computeMaximumWindowMetrics(activity)
+                .bounds
+                .width()
+        } catch (t: Throwable) {
+            activity.resources.displayMetrics.widthPixels
+        }
+    }
+
+    /** Generic [Context] overload of [maxWidthPx]. See [widthPx] for the unwrap rules. */
+    @JvmStatic
+    fun maxWidthPx(context: Context): Int {
+        val activity = findActivity(context)
+        return if (activity != null) maxWidthPx(activity) else context.resources.displayMetrics.widthPixels
+    }
+
     private fun findActivity(context: Context?): Activity? {
         var ctx = context
         while (ctx is ContextWrapper) {

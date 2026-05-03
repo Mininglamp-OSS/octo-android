@@ -42,8 +42,14 @@
         window:splitMinWidthDp="600"
         window:splitRatio="0.4"
         window:finishPrimaryWithSecondary="never"
-        window:finishSecondaryWithPrimary="always"
-        window:clearTop="true">
+        window:finishSecondaryWithPrimary="always">
+        <!--
+          YUJ-267 · clearTop="true" 已移除。原来该属性在副栏 Activity 切换时
+          会 finish() 旧 secondary 再新建 secondary，导致 ChatActivity 每次点不同
+          群都冷启（XML 膨胀 + PanelSwitchHelper.Builder + Activity transition
+          ~500-800ms 感知延迟）。配合 ChatActivity launchMode=singleTop +
+          onNewIntent 路径，同 Activity 实例会在副栏直接重用，目标感知延迟 <200ms。
+        -->
         <SplitPairFilter
             window:primaryActivityName="com.chat.uikit.TabActivity"
             window:secondaryActivityName="com.chat.uikit.chat.ChatActivity" />

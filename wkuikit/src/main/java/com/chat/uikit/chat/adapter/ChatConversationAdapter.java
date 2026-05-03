@@ -95,6 +95,12 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private static final int TYPE_COMPACT = 1;  // 群聊：紧凑频道列表风格
     private static final int TYPE_SECTION_HEADER = 2; // 分组 header
 
+    /**
+     * YUJ-267 · 选中态 payload：点击群/子区后只刷 contentLayout 背景，不全 rebind，
+     * 避免 DiffUtil contentHash 恒等设计引发的卡片替换链路打断。
+     */
+    public static final int PAYLOAD_SELECTED = 1;
+
     private IListener iListener;
     private IThreadPreviewClickListener threadPreviewClickListener;
     private ISectionToggleListener sectionToggleListener;
@@ -121,6 +127,136 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final android.os.Handler threadRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Map<String, Runnable> pendingRefreshTasks = new ConcurrentHashMap<>();
     private static final long THREAD_REFRESH_DELAY_MS = 1000;
+
+    // ── YUJ-267 · 折叠屏分屏态选中态 ─────────────────────────────────
+    // 仅在 splitMode=true（sw >= 600dp 且 Activity Embedding 激活）时渲染选中背景。
+    // 手机形态 splitMode=false → 维持无选中态行为。
+    private boolean splitMode;
+    private String selectedChannelId;
+    private byte selectedChannelType;
+    private String selectedThreadChannelId;
+
+    /**
+     * 进入/离开折叠屏分屏态时调用；切换时清选中并全量刷新（分屏态下才启用）。
+     */
+    public void setSplitMode(boolean splitMode) {
+        if (this.splitMode == splitMode) return;
+        this.splitMode = splitMode;
+        if (!splitMode) {
+            // 离开分屏态时清掉选中标记，避免 rotate 回手机态仍有选中 bg
+            selectedChannelId = null;
+            selectedChannelType = 0;
+            selectedThreadChannelId = null;
+        }
+        notifyDataSetChanged();
+    }
+
+    public boolean isSplitMode() {
+        return splitMode;
+    }
+
+    /**
+     * 设置群/私聊的选中态；只刷影响到的两行（旧选中 + 新选中），走 PAYLOAD_SELECTED
+     * 增量更新，不触碰内容/子区卡片。splitMode=false 时仅记录值但不触发 UI 刷新。
+     */
+    public void setSelected(String channelId, byte channelType) {
+        String oldId = selectedChannelId;
+        byte oldType = selectedChannelType;
+        if (TextUtils.equals(oldId, channelId) && oldType == channelType && selectedThreadChannelId == null) {
+            return;
+        }
+        selectedChannelId = channelId;
+        selectedChannelType = channelType;
+        // 选中群时若之前选中的是子区，自动清掉子区选中
+        selectedThreadChannelId = null;
+        if (!splitMode) return;
+        refreshSelectionRow(oldId, oldType);
+        refreshSelectionRow(channelId, channelType);
+    }
+
+    /**
+     * 设置子区选中态。子区点击时：父群保持不选，只高亮子区行。这个语义对齐 iOS——
+     * 分屏右侧是子区时，左侧父群卡片仍是普通背景，子区 rowView 单独标选中。
+     */
+    public void setSelectedThread(String threadChannelId) {
+        if (TextUtils.equals(selectedThreadChannelId, threadChannelId)
+                && selectedChannelId == null) {
+            return;
+        }
+        String oldThreadId = selectedThreadChannelId;
+        String oldGroupId = selectedChannelId;
+        byte oldGroupType = selectedChannelType;
+        selectedThreadChannelId = threadChannelId;
+        // 子区选中时，若之前整行选中的是群/私聊，也要刷掉那行
+        selectedChannelId = null;
+        selectedChannelType = 0;
+        if (!splitMode) return;
+        if (oldGroupId != null) refreshSelectionRow(oldGroupId, oldGroupType);
+        // 刷新子区所属父群那一行（子区签名变更需走重建）
+        refreshParentGroupForThread(oldThreadId);
+        refreshParentGroupForThread(threadChannelId);
+    }
+
+    /**
+     * 清掉选中态（切 Space / 切 tab / 进入详情页 back 回来不匹配时调用）。
+     */
+    public void clearSelected() {
+        if (selectedChannelId == null && selectedThreadChannelId == null) return;
+        String oldId = selectedChannelId;
+        byte oldType = selectedChannelType;
+        String oldThreadId = selectedThreadChannelId;
+        selectedChannelId = null;
+        selectedChannelType = 0;
+        selectedThreadChannelId = null;
+        if (!splitMode) return;
+        if (oldId != null) refreshSelectionRow(oldId, oldType);
+        if (oldThreadId != null) refreshParentGroupForThread(oldThreadId);
+    }
+
+    public boolean isRowSelected(String channelId, byte channelType) {
+        return splitMode && channelId != null
+                && channelId.equals(selectedChannelId)
+                && channelType == selectedChannelType;
+    }
+
+    public boolean isThreadRowSelected(String threadChannelId) {
+        return splitMode && threadChannelId != null
+                && threadChannelId.equals(selectedThreadChannelId);
+    }
+
+    /** 定向刷新选中行（走 PAYLOAD_SELECTED，只改 background）。 */
+    private void refreshSelectionRow(String channelId, byte channelType) {
+        if (channelId == null) return;
+        for (int i = 0, size = getData().size(); i < size; i++) {
+            ChatConversationMsg item = getData().get(i);
+            if (item == null || item.isSectionHeader || item.uiConversationMsg == null) continue;
+            WKUIConversationMsg ui = item.uiConversationMsg;
+            if (channelId.equals(ui.channelID) && channelType == ui.channelType) {
+                notifyItemChanged(i + getHeaderLayoutCount(), PAYLOAD_SELECTED);
+                break;
+            }
+        }
+    }
+
+    /** 子区选中/取消时刷其父群 compact 行（子区卡片依赖 signature 重建）。 */
+    private void refreshParentGroupForThread(String threadChannelId) {
+        if (threadChannelId == null) return;
+        // threadChannelId 形如 "{groupNo}____{shortId}"，父群号即前缀
+        int idx = threadChannelId.indexOf("____");
+        String parentGroupNo = idx > 0 ? threadChannelId.substring(0, idx) : null;
+        if (parentGroupNo == null) return;
+        for (int i = 0, size = getData().size(); i < size; i++) {
+            ChatConversationMsg item = getData().get(i);
+            if (item == null || item.isSectionHeader || item.uiConversationMsg == null) continue;
+            WKUIConversationMsg ui = item.uiConversationMsg;
+            if (parentGroupNo.equals(ui.channelID) && ui.channelType == WKChannelType.GROUP) {
+                // 清掉本 ViewHolder 缓存签名，强制下一次 convertCompact 重建子区 card
+                // （因为选中态影响 rowView background，但不在现有 signature 里）
+                notifyItemChanged(i + getHeaderLayoutCount(), PAYLOAD_SELECTED);
+                break;
+            }
+        }
+    }
 
     public ChatConversationAdapter(@Nullable List<ChatConversationMsg> data) {
         super(R.layout.item_chat_conv_layout, data);
@@ -177,6 +313,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         showTyping(helper, conversationMsg);
         showCalling(helper, conversationMsg);
         showThreadPreviews(helper, item);
+        // YUJ-267 · showChannel 已根据 top 覆盖过 contentLayout 背景；最后再走选中态
+        // 覆写，保证 selected > top > normal 的优先级。
+        applySelectedBackground(helper, item);
     }
 
     private void convertCompact(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
@@ -214,6 +353,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 置顶背景
         boolean isTop = item.getWkChannel() != null && item.getWkChannel().top == 1;
         helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+        // YUJ-267 · 分屏态下被选中的群覆盖为 selected_bg
+        applySelectedBackground(helper, item);
 
         // 免打扰图标
         ImageView muteIv = helper.getView(R.id.muteIv);
@@ -324,6 +465,36 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
             return;
         }
+        // YUJ-267 · 选中态 payload：只刷背景，不整 rebind（DiffUtil contentHash
+        // 对普通行恒等设计要求选中变化必须靠显式 payload 驱动）。
+        for (Object p : payloads) {
+            if (p instanceof Integer && ((Integer) p) == PAYLOAD_SELECTED) {
+                WKUIConversationMsg ui = uiConversationMsg != null ? uiConversationMsg.uiConversationMsg : null;
+                if (ui != null) {
+                    // 先恢复非选中状态下的默认 bg（top=home_bg vs normal=layout_bg），
+                    // 若当前行是新选中则 applySelectedBackground 再覆盖为 selected_bg。
+                    // 不做这一步的话取消选中后背景不会恢复。
+                    boolean isTop = ui.getWkChannel() != null && ui.getWkChannel().top == 1;
+                    baseViewHolder.setBackgroundResource(R.id.contentLayout,
+                            isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+                    applySelectedBackground(baseViewHolder, ui);
+                    if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
+                        // 紧凑行：清 threadPreviewContainer signature tag 让子区签名
+                        // 在下轮展开时包含 isThreadRowSelected 状态（子区选中态靠
+                        // rowView bg 驱动，必须重建）。
+                        FrameLayout threadContainer = baseViewHolder.getView(R.id.threadPreviewContainer);
+                        if (threadContainer != null) {
+                            threadContainer.setTag(R.id.threadPreviewContainer, null);
+                            // 直接触发重建（若展开）
+                            if (isThreadExpanded(ui.channelID)) {
+                                showThreadPreviews(baseViewHolder, ui);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+        }
         ChatConversationMsg chatConversationMsg = (ChatConversationMsg) payloads.get(0);
         if (chatConversationMsg != null && chatConversationMsg.uiConversationMsg != null) {
             if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
@@ -331,6 +502,17 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 convertNormalPayloads(baseViewHolder, chatConversationMsg);
             }
+        }
+    }
+
+    /**
+     * YUJ-267 · 根据分屏态 + 当前选中 channel 覆盖 contentLayout 背景。
+     * 优先级：selected > top > normal。splitMode=false 时此方法无副作用。
+     */
+    private void applySelectedBackground(@NonNull BaseViewHolder helper, WKUIConversationMsg item) {
+        if (!splitMode || item == null) return;
+        if (isRowSelected(item.channelID, item.channelType)) {
+            helper.setBackgroundResource(R.id.contentLayout, R.drawable.chat_conv_selected_bg);
         }
     }
 
@@ -1194,6 +1376,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     }));
             WKDialogUtils.getInstance().setViewLongClickPopup(rowView, menuItems);
 
+            // YUJ-267 · 子区行选中态：当前右侧正在看此子区时高亮。
+            // 仅分屏态生效；手机态 isThreadRowSelected 恒为 false。
+            if (isThreadRowSelected(threadChannelId)) {
+                rowView.setBackgroundResource(R.drawable.chat_conv_selected_bg);
+            } else {
+                rowView.setBackground(null);
+            }
+
             cardContainer.addView(rowView);
             rowViews.add(rowView);
         }
@@ -1327,11 +1517,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     .getChannel(tcId, WKChannelType.COMMUNITY_TOPIC);
             boolean mute = ch != null && ch.mute == 1;
             boolean mention = hasThreadMentionForChannel(tcId);
+            boolean selected = isThreadRowSelected(tcId);
             sb.append(t.short_id).append(':')
               .append(t.name != null ? t.name : "").append(':')
               .append(unread).append(':')
               .append(mute ? 1 : 0).append(':')
               .append(mention ? 1 : 0).append(':')
+              .append(selected ? 1 : 0).append(':')
               .append(t.last_message_content != null ? t.last_message_content.hashCode() : 0).append(':')
               .append(t.is_joined).append('|');
         }

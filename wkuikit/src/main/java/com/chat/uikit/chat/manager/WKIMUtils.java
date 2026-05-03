@@ -651,6 +651,12 @@ public class WKIMUtils {
         if (!lastStartChatMs.compareAndSet(prev, now)) {
             return;
         }
+        // YUJ-267 · Fix C：点击瞬间（debounce 通过后）就把全局 chattingChannelID 切
+        // 到目标 channel，不等 onResume。对齐 push 通知去重 / Space 上下文等依赖该
+        // 字段的逻辑——即使 Fix B 的 Activity 复用/新建还在走 IO 组装 Intent，
+        // 状态已经切过去。放在 debounce 之后避免「B 被 debounce 挡住 → chatting
+        // 仍指 A 生效开启 → chattingChannelID 却被误改成 B」的不一致。
+        WKUIKitApplication.getInstance().chattingChannelID = chatViewMenu.channelID;
         // Fire-and-forget: deleteFlameMsg is a DB write and is independent from
         // the Intent assembly below. No need to block chat open on it.
         Observable.fromCallable(() -> {

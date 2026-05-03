@@ -38,6 +38,7 @@ import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
@@ -312,6 +313,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         FrameLayout.LayoutParams.WRAP_CONTENT));
         segmentTabView.setOnTabSelectedListener(index -> {
             currentTab = index;
+            // YUJ-267 · 切 tab 时清选中态（新 tab 的列表上下文不同）。
+            if (chatConversationAdapter != null) {
+                chatConversationAdapter.clearSelected();
+            }
             filterAndDisplay();
         });
 
@@ -397,8 +402,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (view.getId() == R.id.contentLayout) {
                     if (uiConversationMsg.uiConversationMsg.channelType == WKChannelType.COMMUNITY) {
                         EndpointManager.getInstance().invoke("show_community", uiConversationMsg.uiConversationMsg.channelID);
-                    } else
+                    } else {
+                        // YUJ-267 · Fix A：分屏态下先立即更新选中态让用户看到反馈，
+                        // 再走 startChatActivity（后者走 IO 组装 Intent，存在几十到
+                        // 几百 ms 的延迟，没有选中态 UI 会显得卡）。
+                        chatConversationAdapter.setSelected(
+                                uiConversationMsg.uiConversationMsg.channelID,
+                                uiConversationMsg.uiConversationMsg.channelType);
                         WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(getActivity(), uiConversationMsg.uiConversationMsg.channelID, uiConversationMsg.uiConversationMsg.channelType, 0, false));
+                    }
                 }
             }
         }));
@@ -466,6 +478,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         chatConversationAdapter.setThreadPreviewClickListener(new ChatConversationAdapter.IThreadPreviewClickListener() {
             @Override
             public void onThreadClick(String channelId, String groupNo, String shortId, int isJoined) {
+                // YUJ-267 · Fix A：子区点击瞬间更新选中态（分屏态下），再 joinThread / navigate。
+                chatConversationAdapter.setSelectedThread(channelId);
                 if (isJoined == 0) {
                     ThreadModel.getInstance().joinThread(groupNo, shortId, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
@@ -1863,6 +1877,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      */
     private void performSpaceSwitch(@NotNull SpaceEntity space) {
         if (space == null || space.space_id == null) return;
+        // YUJ-267 · 切 Space 清掉选中态（Space 维度不同，旧选中 channel 可能已不在新列表）。
+        // 必须在调用链最顶层做，避免 adapter.setList(empty) 之后再清（先后顺序不重要但一次调用即可）。
+        if (chatConversationAdapter != null) {
+            chatConversationAdapter.clearSelected();
+        }
+
         currentSpaceName = space.name;
         MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
         setSpaceSwitcherText(space.name);
@@ -1885,6 +1905,73 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
             );
         });
+    }
+
+    /**
+     * YUJ-267 · Fix A：同步 splitMode 并从 {@link WKUIKitApplication#chattingChannelID}
+     * 恢复选中态。时机：onResume（正常生命周期）、Space/tab 切换完成后。
+     *
+     * <p>splitMode 判定：{@link PaneMetrics#maxWidthPx}（device 最大窗口，不受 Embedding
+     * pane 拆分影响）≥ 600dp。与 main_split_config.xml 的 splitMinWidthDp=600 对齐，保证
+     * 左右两栏同屏时才显示选中态，普通手机 portrait / 折叠关闭都不显示。
+     *
+     * <p>历史坑（YUJ-270 P0-1）：初版用 {@code PaneMetrics.widthPx}（pane 宽度），在
+     * Embedding 下 primary pane 约 336-480dp，恒 {@code < 600dp}，{@code splitMode} 永远
+     * false，选中背景永不渲染。此版本改用 device 整机宽度。
+     */
+    private void syncSplitModeAndSelection() {
+        if (chatConversationAdapter == null || getContext() == null) return;
+        boolean split = isSplitModeNow();
+        chatConversationAdapter.setSplitMode(split);
+        if (!split) return;
+        // 分屏态下：根据全局 chattingChannelID 恢复选中态（onResume / 切 Space 后）。
+        String chattingId = WKUIKitApplication.getInstance().chattingChannelID;
+        if (TextUtils.isEmpty(chattingId)) {
+            chatConversationAdapter.clearSelected();
+            return;
+        }
+        // 子区 channelId 约定：{groupNo}____{shortId}
+        if (chattingId.contains("____")) {
+            chatConversationAdapter.setSelectedThread(chattingId);
+        } else {
+            // 先尝试 GROUP 再 PERSONAL，由 Adapter 内的行匹配自己过滤；若都不在列表
+            // 则 refreshSelectionRow 直接 no-op，无副作用。
+            // 这里没有 channelType 的精确来源，取 WKIM 缓存的 channel。
+            byte type = WKChannelType.PERSONAL;
+            WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(chattingId, WKChannelType.GROUP);
+            if (ch != null) {
+                type = WKChannelType.GROUP;
+            } else {
+                WKChannel ch2 = WKIM.getInstance().getChannelManager().getChannel(chattingId, WKChannelType.COMMUNITY);
+                if (ch2 != null) type = WKChannelType.COMMUNITY;
+            }
+            chatConversationAdapter.setSelected(chattingId, type);
+        }
+    }
+
+    /**
+     * 判断当前是否处于分屏态（设备最大窗口宽度 ≥ 600dp）。
+     *
+     * <p><b>为什么用 {@link PaneMetrics#maxWidthPx}？</b>（YUJ-270 P0-1）
+     * Activity Embedding 激活后 {@link PaneMetrics#widthPx} 返回 <b>primary pane</b> 宽度（
+     * 左栏），约 336-480dp（Fold5 884dp × splitRatio 0.4 ≈ 354dp；1200dp 平板 ≈ 480dp）。
+     * 与 {@code dp(600)} 比永远 false → {@code splitMode=false} → 选中背景永不渲染。
+     *
+     * <p>这里需要的是 <b>device / display 最大窗口</b>（由 {@code main_split_config.xml}
+     * 的 {@code splitMinWidthDp="600"} 语义决定），用 {@code computeMaximumWindowMetrics}
+     * 读整机可用宽度，与 Embedding 库自身的分屏门槛对齐。
+     */
+    private boolean isSplitModeNow() {
+        Context ctx = getContext();
+        if (ctx == null) return false;
+        int maxWidthPx = PaneMetrics.maxWidthPx(ctx);
+        int dp600 = AndroidUtilities.dp(600);
+        boolean split = maxWidthPx >= dp600;
+        // YUJ-270 P0-1 · 真机 smoke 证据日志：PR description 需贴这条 logcat 输出，
+        // 证明分屏展开态下 maxWidthPx ≥ dp600（grep 关键词：YUJ270-splitMode）。
+        android.util.Log.d("YUJ270-splitMode",
+                "isSplitModeNow maxWidthPx=" + maxWidthPx + " dp600=" + dp600 + " split=" + split);
+        return split;
     }
 
     /**
@@ -3047,6 +3134,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         } catch (IllegalArgumentException ignored) {
             // Fragment 未 attach 竞态
         }
+        // YUJ-267 · Fix A：根据当前 pane 宽度判定 splitMode，恢复 selection。
+        // 折叠态 ↔ 展开态切换 / 旋转时也会重新 resume，所以 splitMode 在这里同步。
+        syncSplitModeAndSelection();
         // 子区数据缓存清除并重新加载，返回时实时更新
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上

@@ -810,6 +810,282 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             isCanLoadMore = false;
         });
 
+        // YUJ-267 · Fix B：所有以 channelId 为 key 的 SDK 监听 / EndpointManager
+        // setMethod 都挪到 attachChannelListeners()，配合 onNewIntent 做 detach →
+        // initParam → attach 复用流程。initListener 只负责装配一次性的 UI click /
+        // 非 channel-keyed endpoint method。
+        attachChannelListeners();
+        EndpointManager.getInstance().setMethod("hide_pinned_view", object -> {
+            if (!isShowPinnedView) return null;
+            isShowPinnedView = false;
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
+            wkVBinding.timeTv.setVisibility(View.GONE);
+            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
+            animator.setDuration(200);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    wkVBinding.pinnedLayout.clearAnimation();
+                    wkVBinding.pinnedLayout.setVisibility(View.GONE);
+                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
+                        if (!isShowCallingView) {
+                            chatAdapter.getData().remove(0);
+                            chatAdapter.notifyItemRemoved(0);
+                        }
+                        //chatAdapter.notifyDataSetChanged();
+                    }
+                }
+
+                public void onAnimationStart(Animator animation) {
+                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+                }
+            });
+            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+            animator.start();
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("show_pinned_view", object -> {
+            if (isShowPinnedView) {
+                return null;
+            }
+            isShowPinnedView = true;
+
+            if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type != WKContentType.spanEmptyView) {
+                WKMsg msg = getSpanEmptyMsg();
+                chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
+            }
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
+            wkVBinding.timeTv.setVisibility(View.GONE);
+            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", -wkVBinding.pinnedLayout.getHeight(), 0);
+            animator.setDuration(200);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    // wkVBinding.pinnedLayout.clearAnimation();
+                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+                }
+            });
+            animator.start();
+            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("tip_msg_in_chat", object -> {
+            tipsMsg((String) object);
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("reset_channel_all_pinned_msg", object -> {
+            resetHideChannelAllPinnedMessage();
+            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                if (hideChannelAllPinnedMessage == 1) {
+                    if (chatAdapter.getData().get(i).isPinned == 1) {
+                        chatAdapter.getData().get(i).isPinned = 0;
+                        chatAdapter.notifyStatus(i);
+                    }
+                } else {
+                    if (chatAdapter.getData().get(i).isPinned == 0) {
+                        if (chatAdapter.getData().get(i).wkMsg.remoteExtra != null && chatAdapter.getData().get(i).wkMsg.remoteExtra.isPinned == 1) {
+                            chatAdapter.getData().get(i).isPinned = 1;
+                            chatAdapter.notifyStatus(i);
+                        }
+                    }
+                }
+            }
+            return null;
+        });
+    }
+
+    @Override
+    protected void onNewIntent(@NonNull Intent intent) {
+        super.onNewIntent(intent);
+        // YUJ-267 · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
+        // onDestroy → onCreate，省掉 XML 膨胀 / PanelSwitchHelper 首建 / Activity
+        // transition，目标感知延迟 < 200ms（原 500-800ms）。
+        //
+        // 流程（YUJ-270 P0-2 修正：persist 必须在 reset 之前！）：
+        // 1. 快照 oldChannelId / oldChannelType —— 两者在 initParam 后都会变；
+        // 2. 用旧 channelId 做 key 卸所有 channel-keyed 监听；
+        // 3. **先 persist 旧 channel 的草稿 / 已读 / 未读**（此时实例字段仍是旧值，
+        //    editText.getText / readMsgIds / redDot 未被 reset 清零）；
+        // 4. setIntent + initParam 更新 channelId / channelType + maxMsgSeq/OrderSeq；
+        // 5. resetPerChannelState 清 per-channel 一次性状态（reminder / redDot /
+        //    snapshot / userHasScrolled / disposable / isRefreshLoading 等）；
+        // 6. 显式清 chatAdapter，避免新群首帧闪一下旧消息；
+        // 7. attachChannelListeners 用新 channelId 重装；
+        // 8. initData 读新 channel 的 DB + 同步头像 / title / membership。
+        //
+        // 历史坑（YUJ-269 ReviewBot P0-2）：R1 版本先 reset 再 persist，editText 被
+        // setText("") 后 persist 读到空串 → 草稿被空覆写；readMsgIds.clear() 后 persist
+        // 检查 isNotEmpty 失败 → 已读回执永不触发；redDot=0 导致 clearUnread 失效。
+        String oldChannelId = channelId;
+        byte oldChannelType = channelType;
+
+        detachChannelListeners(oldChannelId);
+
+        // 先持久化旧 channel 编辑态（此时 editText / readMsgIds / redDot 还是旧值）。
+        persistOldChannelEditState(oldChannelId, oldChannelType);
+
+        setIntent(intent);
+        initParam();
+        // 再 reset 实例字段到新 channel 初值。
+        resetPerChannelState();
+        chatAdapter.setList(new ArrayList<>());
+        attachChannelListeners();
+        // Space / push 去重字段对齐当前 channel（onResume 仍会再设一次，此处先落地
+        // 保证任意在 onResume 前触发的业务都看到新 channel）。
+        WKUIKitApplication.getInstance().chattingChannelID = channelId;
+        initData();
+    }
+
+    /**
+     * YUJ-267 · Fix B：持久化上一个 channel 的编辑态（草稿 / 阅后即焚 / 浏览位置），
+     * 对齐 {@link #onDestroy()}.{@code saveEditContent()} 的行为，避免复用时旧群
+     * 的输入内容丢失。与 saveEditContent 的差别：这里不 dispose Activity 级资源，
+     * 不 release 语音，只做 per-channel 数据落盘。
+     *
+     * <p>YUJ-270 P0-2：必须在 {@link #resetPerChannelState()} <b>之前</b>调用 —— 否则
+     * editText / readMsgIds / redDot 都已被 reset 清零，persist 读到零值。
+     *
+     * <p>YUJ-270 P1-1：必须从 {@link #onNewIntent} 顶部把 {@code oldChannelType} 作为
+     * 入参传下来 —— 不能在方法内用 {@code WKChannelManager.getChannel()} 探测，否则
+     * 子区（{@link WKChannelType#COMMUNITY_TOPIC}）在 PERSONAL/GROUP 都查不到，会兜底
+     * 到 {@code this.channelType}（initParam 已改成新值）→ 对旧子区用错类型写
+     * coverExtra / clearUnread。
+     *
+     * @param oldChannelId   旧 channelId（onNewIntent 入口快照）
+     * @param oldChannelType 旧 channelType（onNewIntent 入口快照，<b>不要</b>从 SDK 探测）
+     */
+    private void persistOldChannelEditState(String oldChannelId, byte oldChannelType) {
+        if (TextUtils.isEmpty(oldChannelId)) return;
+
+        // 草稿 / 浏览位置需要 adapter 有数据才有意义；没数据就只处理 unread / read-msg。
+        long keepMsgSeq = 0;
+        int offsetY = 0;
+        String content = chatPanelManager != null && chatPanelManager.getEditText() != null
+                && chatPanelManager.getEditText().getText() != null
+                ? chatPanelManager.getEditText().getText().toString() : "";
+
+        if (chatAdapter != null && WKReader.isNotEmpty(chatAdapter.getData()) && linearLayoutManager != null) {
+            int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+            int endItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+            if (endItemPosition != chatAdapter.getData().size() - 1) {
+                WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
+                if (msg != null) {
+                    keepMsgSeq = msg.messageSeq;
+                    int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
+                    View view = linearLayoutManager.findViewByPosition(index);
+                    if (view != null) {
+                        offsetY = view.getTop();
+                    }
+                }
+            }
+        }
+
+        // 关键：用入参 oldChannelType，不探测 SDK。子区类型不会被误降成 GROUP/PERSONAL。
+        MsgModel.getInstance().clearUnread(oldChannelId, oldChannelType, redDot, null);
+        MsgModel.getInstance().updateCoverExtra(oldChannelId, oldChannelType, browseTo, keepMsgSeq, offsetY, content);
+        MsgModel.getInstance().deleteFlameMsg();
+        // 复用前清 read msg 上报（onDestroy 会做一次，此处提前做一次）。
+        if (WKReader.isNotEmpty(readMsgIds)) {
+            EndpointManager.getInstance().invoke("read_msg", new ReadMsgMenu(oldChannelId, oldChannelType, readMsgIds));
+            readMsgIds.clear();
+        }
+    }
+
+    /**
+     * YUJ-267 · Fix B · reset matrix：per-channel 一次性状态必须在切换时清零。
+     * 遗漏会导致跨群串红点 / 串未读分割线 / 串 reminder / 串键盘高度等。
+     *
+     * 参见 issue / onDestroy 的 saveEditContent 流程 — 所有初始化值来自 onCreate
+     * 初值或 initData 从 intent 读入的快照。
+     */
+    private void resetPerChannelState() {
+        // scroll / preview 相关
+        isShowHistory = false;
+        isSyncLastMsg = false;
+        isToEnd = true;
+        isViewingPicture = false;
+        hasRenderedPreview = false;
+        userHasScrolled = false;
+        hasShownTips = false;
+        hasPositionedUnread = false;
+        // unread 位置定位 snapshot（initData 会从 intent 重写；此处先清零避免上一个
+        // channel 残留的 snapshot 命中新 channel 的 applyDataToAdapter）
+        unreadStartSnapshotOrderSeq = 0;
+        tipsSnapshotOrderSeq = 0;
+        unreadStartMsgOrderSeq = 0;
+        tipsOrderSeq = 0;
+        lastPreviewMsgOrderSeq = 0;
+        // 红点 / 滚动 / 展示标记
+        redDot = 0;
+        keepOffsetY = 0;
+        lastVisibleMsgSeq = 0;
+        isCanLoadMore = false;
+        isUpdateRedDot = true;
+        // time divider 去重
+        lastShowTimeUpdate = 0;
+        lastShowTimeIndex = -1;
+        // pinned / calling / tip 条幅
+        isShowPinnedView = false;
+        isShowCallingView = false;
+        isTipMessage = false;
+        // thread
+        hasJoinedThread = false;
+        // group meta
+        count = 0;
+        groupType = WKGroupType.normalGroup;
+        // 编辑态
+        replyWKMsg = null;
+        editMsg = null;
+        // per-channel 集合
+        reminderList.clear();
+        groupApproveList.clear();
+        reminderIds.clear();
+        readMsgIds.clear();
+        // upload gate
+        isUploadReadMsg = true;
+        // rendering frame state
+        isShowChatActivity = true;
+
+        // YUJ-270 P2-1 · SwipeRefresh / LoadMore 忙位：旧 channel 刷新中途切群时必须清，
+        // 否则新 channel 的 loadMsgs / loadMoreMsgs 首帧会被 `isRefreshLoading || !isCanRefresh`
+        // 门禁挡掉，滚到顶 / 到底不再触发请求。
+        isRefreshLoading = false;
+        isMoreLoading = false;
+        isCanRefresh = true;
+
+        // YUJ-270 P2-2 · RxJava subscription：旧 channel 的 media 下载 / 任务订阅如果不
+        // dispose，切到新 channel 后订阅叠加 → 回调错绑（新 channel 收到旧 channel 的
+        // onNext）+ 内存 leak。
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+        disposable = null;
+
+        // YUJ-270 P2-3 · 空态补白：unfilledHeight 是按当前 channel 的列表高度 - 消息总高
+        // 算出来的，跨 channel 直接残留会让空态滚动距离算错（上下错位几行高）。
+        unfilledHeight = 0;
+
+        // 重置红点 UI（彻底清）
+        wkVBinding.chatUnreadLayout.newMsgLayout.setVisibility(View.GONE);
+        numberTextView.setNumber(0, false);
+        CommonAnim.getInstance().showOrHide(numberTextView, false, false);
+        // 键盘 / panel：新 channel 不残留旧键盘
+        if (chatPanelManager != null) {
+            chatPanelManager.resetToolBar();
+            if (chatPanelManager.getEditText() != null) {
+                chatPanelManager.getEditText().setText("");
+            }
+        }
+    }
+
+    /**
+     * YUJ-267 · Fix B · 注册所有以 channelId 为 key 的 SDK 监听 + EndpointManager
+     * setMethod。onCreate → initListener() 走一次；onNewIntent 复用路径 detach →
+     * attach 走一次。
+     */
+    private void attachChannelListeners() {
         //监听频道改变通知
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo(channelId, (channel, isEnd) -> {
             if (channel == null) return;
@@ -1022,21 +1298,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     hasShownTips = false;
                     getData(0, true, maxOrderSeq, true);
                 }
-//                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
-//                if (firstItemPosition == -1) return;
-//                if (WKReader.isNotEmpty(chatAdapter.getData())) {
-//                    WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
-//                    if (msg != null) {
-////                            keepMsgSeq = msg.messageSeq;
-//                        lastPreviewMsgOrderSeq = msg.orderSeq;
-//                        int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
-//                        View view = linearLayoutManager.findViewByPosition(index);
-//                        if (view != null) {
-//                            keepOffsetY = view.getTop();
-//                        }
-//                    }
-//                }
-//                getData(1, true, lastPreviewMsgOrderSeq, false);
             }
         });
         EndpointManager.getInstance().setMethod(channelId, EndpointCategory.refreshProhibitWord, object -> {
@@ -1052,93 +1313,29 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             return 1;
         });
-        EndpointManager.getInstance().setMethod("hide_pinned_view", object -> {
-            if (!isShowPinnedView) return null;
-            isShowPinnedView = false;
-            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
-            wkVBinding.timeTv.setVisibility(View.GONE);
-            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
-            animator.setDuration(200);
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    wkVBinding.pinnedLayout.clearAnimation();
-                    wkVBinding.pinnedLayout.setVisibility(View.GONE);
-                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
-                        if (!isShowCallingView) {
-                            chatAdapter.getData().remove(0);
-                            chatAdapter.notifyItemRemoved(0);
-                        }
-                        //chatAdapter.notifyDataSetChanged();
-                    }
-                }
-
-                public void onAnimationStart(Animator animation) {
-                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-                }
-            });
-            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-            animator.start();
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("show_pinned_view", object -> {
-            if (isShowPinnedView) {
-                return null;
-            }
-            isShowPinnedView = true;
-
-            if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type != WKContentType.spanEmptyView) {
-                WKMsg msg = getSpanEmptyMsg();
-                chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
-            }
-            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
-            wkVBinding.timeTv.setVisibility(View.GONE);
-            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", -wkVBinding.pinnedLayout.getHeight(), 0);
-            animator.setDuration(200);
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    // wkVBinding.pinnedLayout.clearAnimation();
-                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-                }
-            });
-            animator.start();
-            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("tip_msg_in_chat", object -> {
-            tipsMsg((String) object);
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("reset_channel_all_pinned_msg", object -> {
-            resetHideChannelAllPinnedMessage();
-            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                if (hideChannelAllPinnedMessage == 1) {
-                    if (chatAdapter.getData().get(i).isPinned == 1) {
-                        chatAdapter.getData().get(i).isPinned = 0;
-                        chatAdapter.notifyStatus(i);
-                    }
-                } else {
-                    if (chatAdapter.getData().get(i).isPinned == 0) {
-                        if (chatAdapter.getData().get(i).wkMsg.remoteExtra != null && chatAdapter.getData().get(i).wkMsg.remoteExtra.isPinned == 1) {
-                            chatAdapter.getData().get(i).isPinned = 1;
-                            chatAdapter.notifyStatus(i);
-                        }
-                    }
-                }
-            }
-            return null;
-        });
     }
 
-    @Override
-    protected void onNewIntent(@NonNull Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        initParam();
-        initData();
+    /**
+     * YUJ-267 · Fix B · 用旧 channelId 作 key 卸所有 channel-keyed 监听。与
+     * {@link #onDestroy()} 里的 remove 块保持同步——onDestroy 调用的是当前 channelId；
+     * onNewIntent 调用此方法时 channelId 尚未更新，传入的 oldChannelId 即当前值。
+     */
+    private void detachChannelListeners(String oldChannelId) {
+        if (TextUtils.isEmpty(oldChannelId)) return;
+        WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(oldChannelId);
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeRefreshChannelMemberInfo(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeRemoveChannelMemberListener(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeDeleteMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeRefreshMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeSendMsgCallBack(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + oldChannelId);
+        WKIM.getInstance().getMsgManager().removeClearMsg(oldChannelId);
+        WKIM.getInstance().getCMDManager().removeCmdListener(oldChannelId);
+        WKIM.getInstance().getReminderManager().removeNewReminderListener(oldChannelId);
+        EndpointManager.getInstance().remove(oldChannelId);
     }
 
     private void initData() {
@@ -2756,22 +2953,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     protected void onDestroy() {
         super.onDestroy();
         chatPanelManager.onDestroy();
-        // 移除 WKIM 各 Manager 的监听，防止单例持有 Activity 引用导致泄漏
-        WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(channelId);
-        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeRefreshChannelMemberInfo(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeRemoveChannelMemberListener(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener(channelId);
-        WKIM.getInstance().getMsgManager().removeDeleteMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeRefreshMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeSendMsgCallBack(channelId);
-        WKIM.getInstance().getMsgManager().removeNewMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + channelId);
-        WKIM.getInstance().getMsgManager().removeClearMsg(channelId);
-        WKIM.getInstance().getCMDManager().removeCmdListener(channelId);
-        WKIM.getInstance().getReminderManager().removeNewReminderListener(channelId);
+        // YUJ-267 · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
+        // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，
+        // 避免两条路径清理矩阵漂移。
+        detachChannelListeners(channelId);
         WKVoiceViewManager.getInstance().release();
-        EndpointManager.getInstance().remove(channelId);
         EndpointManager.getInstance().remove("hide_pinned_view");
         EndpointManager.getInstance().remove("show_pinned_view");
         EndpointManager.getInstance().remove("tip_msg_in_chat");

@@ -94,6 +94,7 @@
             android:windowSoftInputMode="adjustPan"
             android:launchMode="singleTask"/>
         <activity android:name="com.chat.uikit.chat.ChatActivity"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />

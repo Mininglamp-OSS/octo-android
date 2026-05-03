@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  YUJ-276 · 窄屏点群/子区 Activity 过渡动画（快）。配合 slide_in_right_fast.xml。
+  旧 Activity 左移 30%，与 iOS push 过渡视觉对齐。
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <translate
+        android:duration="120"
+        android:fromXDelta="0"
+        android:interpolator="@android:anim/decelerate_interpolator"
+        android:toXDelta="-30%p" />
+</set>

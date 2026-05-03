@@ -26,6 +26,7 @@ import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.CrashHandler;
 import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.base.utils.WKDeviceUtils;
@@ -78,12 +79,50 @@ public class WKBaseApplication {
         this.packageName = packageName;
         this.application = context;
         this.context = new WeakReference<>(context);
+
+        // YUJ-284 (P-01) · 冷启预热 —— 必须在 this.application 赋值之后、主线程
+        // 首次触达 WKSharedPreferencesUtil 之前调用（本方法尾部
+        // getBoolean("show_agreement_dialog") 即首个主线程 SP 访问点）。
+        // 在后台线程上预建 EncryptedSharedPreferences 单例，把 MasterKey
+        // AES256-GCM / KeyStore 握手（50-150ms）搬出主线程。
+        WKSharedPreferencesUtil.prewarm();
+
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
+
+        // YUJ-248 (#176) — L1 stale-cache fix:
+        // After the P0 patch (#175) unlocked landscape + configChanges for TabActivity /
+        // ChatActivity, configuration changes no longer destroy those Activities, so the
+        // one-shot AndroidUtilities.setDensity() above never re-ran and cached
+        // density/screenWidth values could go stale (e.g. after unfold on a Pixel Fold).
+        // Registering a ComponentCallbacks2 on the Application refreshes them globally
+        // whenever the system config changes, which covers every getScreenWidth()
+        // consumer (including the 6 audited sites) provided they read at use-time.
+        context.registerComponentCallbacks(new android.content.ComponentCallbacks2() {
+            @Override
+            public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+                try {
+                    float d = application.getResources().getDisplayMetrics().density;
+                    AndroidUtilities.setDensity(d);
+                } catch (Throwable ignored) {
+                    // defensive — never let a config-change callback crash the app
+                }
+            }
+
+            @Override
+            public void onLowMemory() {
+            }
+
+            @Override
+            public void onTrimMemory(int level) {
+            }
+        });
+
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
 
         // Bugly + Emoji + RLottie 合并到一个后台线程，减少 CPU 争抢
-        new Thread(() -> {
+        // YUJ-283 P-11: 走 AppExecutors.io() 统一调度（带 app-io-N 命名 + daemon）
+        AppExecutors.io().execute(() -> {
             CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
@@ -99,7 +138,7 @@ public class WKBaseApplication {
             }
             EmojiManager.getInstance().init();
             RLottieApplication.getInstance().init(context);
-        }).start();
+        });
 
         // Glide + cacheDir 不依赖 SP，先执行，给 EncryptedSP 后台线程更多时间
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());

@@ -4,16 +4,18 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
-import android.util.Log;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcelable;
+import android.os.SystemClock;
 import android.os.Vibrator;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.common.WKCommonModel;
+import com.chat.base.config.WKBinder;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.db.ApplyDB;
@@ -25,6 +27,7 @@ import com.chat.base.entity.WKGroupType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
+import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.NotificationCompatUtil;
@@ -41,7 +44,6 @@ import com.chat.uikit.chat.ChatActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.enity.ProhibitWord;
-import com.chat.base.net.HttpResponseCode;
 import com.chat.uikit.group.service.GroupModel;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.thread.service.ThreadModel;
@@ -70,18 +72,44 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 /**
  * 2019-11-18 11:30
  * im监听相关处理
  */
 public class WKIMUtils {
+
+    private static final String TAG = "WKIMUtils";
+
+    // YUJ-256 P1-4: short global debounce guarding the startChat entry only.
+    // Per-view SingleClickUtil (300ms) protects the SAME row but cross-row
+    // fast taps (A → B within 300ms) fall through because each row has its
+    // own throttle window. Without a small global gate, Fix 3's async Intent
+    // assembly lets two Observables race and both startActivity() complete,
+    // stacking Activities on the back stack ([tabs, A, B]). 250ms is short
+    // enough to not steal legitimate taps but long enough to collapse the
+    // typical double-tap / two-row flurry into a single chat open.
+    private static final long START_CHAT_DEBOUNCE_MS = 250L;
+    private final AtomicLong lastStartChatMs = new AtomicLong(0L);
+
+    // YUJ-276: debug-only trace tag for narrow-screen chat-open breakdown.
+    // Grep logcat for "YUJ276-trace" to line up:
+    //   [click]→[intent-build]→[startActivity]→[ChatActivity.onCreate]→[onStart]
+    //   →[onResume]. Gated behind WKBinder.isDebug (= BuildConfig.DEBUG) so
+    // release APKs never emit these entries.
+    public static final String TRACE_TAG = "YUJ276-trace";
+
+    // YUJ-278 P1-1：Fix D 已下沉到 ChatActivity.onCreate + finish()（见
+    // com.chat.base.foldable.NarrowTransition）。这里不再持有 NARROW_MODE_DP /
+    // applyFastTransitionIfNarrow。保留 TRACE_TAG 供 trace log 串联。
 
     private WKIMUtils() {
     }
@@ -606,14 +634,108 @@ public class WKIMUtils {
     }
 
     private void startChat(ChatViewMenu chatViewMenu) {
-        if (WKTimeUtils.isFastDoubleClick()) {
+        // YUJ-242: removed WKTimeUtils.isFastDoubleClick() pre-check. The global
+        // static throttle on top of the per-view SingleClickUtil throttle caused
+        // first-tap-eaten bugs when switching between chats in TabActivity. View
+        // level throttle in SingleClickUtil is sufficient.
+        //
+        // YUJ-242: moved all DB-heavy work (deleteFlameMsg, getWithChannel,
+        // getWithClientMsgNO, findLatestMsgForSpace, getMessageOrderSeq) off the
+        // main thread. startChat now assembles the Intent on an IO worker and
+        // switches back to the main thread only for startActivity. This keeps
+        // the click handler non-blocking (target <20ms) so the UI thread does
+        // not freeze when a DB transaction happens to hold the write lock.
+        if (chatViewMenu == null || chatViewMenu.activity == null
+                || TextUtils.isEmpty(chatViewMenu.channelID)) {
             return;
         }
-        MsgModel.getInstance().deleteFlameMsg();
+        // YUJ-256 P1-4: narrow global debounce at the startChat entry. Per-view
+        // SingleClickUtil (300ms) gates the same row but does not protect
+        // cross-row taps (row A → row B in <300ms). Without this, the Fix 3
+        // async Observables stage in parallel and both startActivity() run,
+        // stacking the back stack as [tabs, A, B]. CAS ensures only one
+        // concurrent caller wins the window.
+        long now = SystemClock.uptimeMillis();
+        long prev = lastStartChatMs.get();
+        if (now - prev < START_CHAT_DEBOUNCE_MS) {
+            return;
+        }
+        if (!lastStartChatMs.compareAndSet(prev, now)) {
+            return;
+        }
+        // YUJ-278 P2-4：T_CLICK 必须打在 debounce **之后**。打在 debounce 前的话，
+        // 跨行快点（A→B <250ms）场景会多出一条被 debounce 丢弃的 T_CLICK，没
+        // 对应的 T_START_ACTIVITY，统计时分母偏大、P50/P90 被拉低，误导选型。
+        // 这里 tClickMs 作为「真正进入 startChat 流程」的 t0，所有后续阶段
+        // 的 delta 都以它为基准。
+        final long tClickMs = SystemClock.uptimeMillis();
+        if (WKBinder.isDebug) {
+            Log.d(TRACE_TAG, "[T_CLICK] startChat enter channel=" + chatViewMenu.channelID
+                    + " type=" + chatViewMenu.channelType);
+        }
+        // YUJ-267 · Fix C：点击瞬间（debounce 通过后）就把全局 chattingChannelID 切
+        // 到目标 channel，不等 onResume。对齐 push 通知去重 / Space 上下文等依赖该
+        // 字段的逻辑——即使 Fix B 的 Activity 复用/新建还在走 IO 组装 Intent，
+        // 状态已经切过去。放在 debounce 之后避免「B 被 debounce 挡住 → chatting
+        // 仍指 A 生效开启 → chattingChannelID 却被误改成 B」的不一致。
+        WKUIKitApplication.getInstance().chattingChannelID = chatViewMenu.channelID;
+        // Fire-and-forget: deleteFlameMsg is a DB write and is independent from
+        // the Intent assembly below. No need to block chat open on it.
+        Observable.fromCallable(() -> {
+                    MsgModel.getInstance().deleteFlameMsg();
+                    return true;
+                })
+                .subscribeOn(Schedulers.io())
+                .subscribe(v -> { },
+                        err -> WKLogUtils.e(TAG, "startChat deleteFlameMsg failed: " + err));
+
+        final ChatViewMenu menu = chatViewMenu;
+        Observable.fromCallable(() -> {
+                    long ioStart = SystemClock.uptimeMillis();
+                    Intent i = buildStartChatIntent(menu);
+                    if (WKBinder.isDebug) {
+                        Log.d(TRACE_TAG, "[T_INTENT_BUILT] io=" + (SystemClock.uptimeMillis() - ioStart)
+                                + "ms sinceClick=" + (SystemClock.uptimeMillis() - tClickMs) + "ms");
+                    }
+                    return i;
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(intent -> {
+                    if (intent == null) return;
+                    if (menu.activity == null || menu.activity.isFinishing()
+                            || menu.activity.isDestroyed()) {
+                        return;
+                    }
+                    if (WKBinder.isDebug) {
+                        Log.d(TRACE_TAG, "[T_START_ACTIVITY] sinceClick="
+                                + (SystemClock.uptimeMillis() - tClickMs) + "ms");
+                    }
+                    menu.activity.startActivity(intent);
+                    // YUJ-278 P1-1：Fix D 的 overridePendingTransition 调用已下沉到
+                    // ChatActivity.onCreate（见 com.chat.base.foldable.NarrowTransition.
+                    // applyFastOpen）。这样子区卡片、SearchAllActivity、CreateThreadActivity
+                    // 等直接 startActivity(ChatActivity) 的路径也能吃到 120ms 快过渡，
+                    // 不再和此处 helper 耦合。
+                }, err -> {
+                    // YUJ-256 P2-1: surface startChat errors instead of
+                    // silently swallowing them — a dropped Intent build used
+                    // to look like a first-tap-eaten UX bug.
+                    WKLogUtils.e(TAG, "startChat buildIntent failed: " + err);
+                });
+    }
+
+    /**
+     * Assembles the Intent for ChatActivity on a worker thread. All DB reads
+     * (conversation, latest msg, message-seq → order-seq lookups) happen here
+     * so they do not block the UI thread that just handled the click.
+     */
+    private Intent buildStartChatIntent(ChatViewMenu chatViewMenu) {
         Intent intent = new Intent(chatViewMenu.activity, ChatActivity.class);
         intent.putExtra("channelId", chatViewMenu.channelID);
         intent.putExtra("channelType", chatViewMenu.channelType);
-        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager().getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
+        WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager()
+                .getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
         WKMsg msg = null;
         int redDot = 0;
         long aroundMsgSeq = 0;
@@ -627,7 +749,7 @@ public class WKIMUtils {
                 if (msgSpaceId != null && !msgSpaceId.equals(currentSpaceId)) {
                     redDot = 0;
                     // 系统 Bot（如 BotFather）：找到当前 Space 的最新消息作为起始位置
-                    if (SYSTEM_BOTS.contains(chatViewMenu.channelID)) {
+                    if (com.chat.base.space.SystemBotsFallback.isSystemBot(chatViewMenu.channelID)) {
                         WKMsg spaceMsg = findLatestMsgForSpace(chatViewMenu.channelID, chatViewMenu.channelType, currentSpaceId);
                         if (spaceMsg != null) {
                             msg = spaceMsg;
@@ -669,7 +791,7 @@ public class WKIMUtils {
             intent.putParcelableArrayListExtra("msgContentList", (ArrayList<? extends Parcelable>) chatViewMenu.forwardMsgList);
         }
         intent.putExtra("aroundMsgSeq", aroundMsgSeq);
-        chatViewMenu.activity.startActivity(intent);
+        return intent;
     }
 
     private void showChatPwdDialog(ChatViewMenu chatViewMenu, WKChannel channel) {
@@ -762,8 +884,6 @@ public class WKIMUtils {
         WKIM.getInstance().getMsgManager().removeNewMsgListener("system");
     }
 
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
-
     /**
      * 在本地 DB 中搜索指定 Space 的最新消息。
      * 用于系统 Bot（BotFather）跨 Space 共享场景，确保聊天窗口从正确的位置加载。
@@ -794,7 +914,7 @@ public class WKIMUtils {
         if (msg == null) return;
         // 仅处理个人频道中的系统 Bot
         if (msg.channelType != WKChannelType.PERSONAL) return;
-        if (!SYSTEM_BOTS.contains(msg.channelID)) return;
+        if (!com.chat.base.space.SystemBotsFallback.isSystemBot(msg.channelID)) return;
         // 仅处理非自己发送的消息（Bot 回复）
         String loginUID = WKConfig.getInstance().getUid();
         if (!TextUtils.isEmpty(loginUID) && loginUID.equals(msg.fromUID)) return;

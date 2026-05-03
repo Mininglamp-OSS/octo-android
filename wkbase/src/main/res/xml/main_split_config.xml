@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  折叠屏 L3-A Activity Embedding split rules.
+
+  Phase 1 scope (YUJ-248, GH #176):
+  - 5 SplitPairFilter: TabActivity as primary, 5 secondary destinations open in a
+    side-by-side split when the device is wide enough (600dp+).
+  - 4 ActivityRule alwaysExpand: full-bleed activities that must NOT be pinned to
+    a 0.4-ratio pane (launcher / login / onboarding / share sheet).
+
+  Note: SplashActivity does NOT exist in this repo. Real entry points are
+  MainActivity (launcher router), WKLoginActivity (login), PerfectUserInfoActivity
+  (onboarding), and ShareReceiveActivity (translucent share sheet). See YUJ-247 F1/F2.
+
+  Phase 2 polish (YUJ-250, GH #178):
+  - B2: 5 SplitPairRule with identical attributes collapsed into 1 rule that
+    hosts 5 SplitPairFilter children. Schema allows multiple filters per rule;
+    see https://developer.android.com/develop/ui/views/layout/activity-embedding
+  - A: DividerAttributes embeddingDividerType="draggable" added to the merged
+    rule. AndroidX Window 1.4.0+ renders a 1dp draggable divider the user can
+    drag within the 0.2-0.8 ratio range; isDraggingToFullscreenAllowed=true
+    lets a drag to either edge expand that pane to full-width (Gmail / Google
+    Messages parity). We use 1.5.1 (wkbase/build.gradle).
+
+    Attribute naming: the AndroidX Window library declares these as
+    embeddingDividerType / embeddingDividerWidthDp / embeddingDividerColor /
+    dragRangeMinRatio / dragRangeMaxRatio / isDraggingToFullscreenAllowed in
+    its declare-styleable. Issue #178 used the shorthand dividerType /
+    dividerWidthDp / dividerDragRange… form from prose docs — the actual
+    res-auto attrs below must match the library's declare-styleable or AAPT
+    rejects them.
+-->
+<resources xmlns:window="http://schemas.android.com/apk/res-auto">
+
+    <!-- ============================================================ -->
+    <!-- SplitPairRule — merged (5 filters share identical behavior)    -->
+    <!-- Primary = TabActivity; Secondary = chat / user / global / search -->
+    <!-- Divider = draggable within 0.2-0.8 ratio (YUJ-250 Part A).      -->
+    <!-- ============================================================ -->
+
+    <SplitPairRule
+        window:splitMinWidthDp="600"
+        window:splitRatio="0.4"
+        window:finishPrimaryWithSecondary="never"
+        window:finishSecondaryWithPrimary="always">
+        <!--
+          YUJ-267 · clearTop="true" 已移除。原来该属性在副栏 Activity 切换时
+          会 finish() 旧 secondary 再新建 secondary，导致 ChatActivity 每次点不同
+          群都冷启（XML 膨胀 + PanelSwitchHelper.Builder + Activity transition
+          ~500-800ms 感知延迟）。配合 ChatActivity launchMode=singleTop +
+          onNewIntent 路径，同 Activity 实例会在副栏直接重用，目标感知延迟 <200ms。
+        -->
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.chat.ChatActivity" />
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.chat.ChatPersonalActivity" />
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.user.UserDetailActivity" />
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.search.remote.GlobalActivity" />
+        <SplitPairFilter
+            window:primaryActivityName="com.chat.uikit.TabActivity"
+            window:secondaryActivityName="com.chat.uikit.search.SearchAllActivity" />
+        <DividerAttributes
+            window:embeddingDividerType="draggable"
+            window:embeddingDividerWidthDp="1"
+            window:embeddingDividerColor="#E0E0E0"
+            window:dragRangeMinRatio="0.2"
+            window:dragRangeMaxRatio="0.8"
+            window:isDraggingToFullscreenAllowed="true" />
+    </SplitPairRule>
+
+    <!-- ============================================================ -->
+    <!-- ActivityRule × 4                                               -->
+    <!-- Full-bleed: launcher / login / onboarding / share sheet.        -->
+    <!-- ============================================================ -->
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.dmwork.im.MainActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.chat.login.ui.WKLoginActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.chat.login.ui.PerfectUserInfoActivity" />
+    </ActivityRule>
+
+    <ActivityRule window:alwaysExpand="true">
+        <ActivityFilter window:activityName="com.dmwork.im.ShareReceiveActivity" />
+    </ActivityRule>
+
+</resources>

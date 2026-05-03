@@ -150,7 +150,21 @@ public class UserModel extends WKBaseModel {
 
 
     public void uploadAvatar(String filePath, final IUploadBack iUploadBack) {
-        String url = WKApiConfig.baseUrl + "users/" + WKConfig.getInstance().getUid() + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
+        uploadAvatar(WKConfig.getInstance().getUid(), filePath, iUploadBack);
+    }
+
+    /**
+     * YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者为自己管理的
+     * bot 更新头像时需要显式指定 {@code targetUid}，而不是沿用老实现里
+     * 写死的 {@code WKConfig.getUid()}。后端 {@code POST /users/:uid/avatar}
+     * 内置 {@code creator_uid} 校验，非 owner 请求会 403 —— 这里只负责把
+     * 目标 uid 拼进 URL，权限门槛由服务端兜底。
+     *
+     * @param uid      被上传头像的目标用户（登录者自己或本人管理的 bot）
+     * @param filePath 本地图片路径
+     */
+    public void uploadAvatar(String uid, String filePath, final IUploadBack iUploadBack) {
+        String url = WKApiConfig.baseUrl + "users/" + uid + "/avatar?uuid=" + WKTimeUtils.getInstance().getCurrentMills();
         WKUploader.getInstance().upload(url, filePath, new WKUploader.IUploadBack() {
             @Override
             public void onSuccess(String url) {
@@ -160,6 +174,27 @@ public class UserModel extends WKBaseModel {
             @Override
             public void onError() {
                 iUploadBack.onResult(HttpResponseCode.error);
+            }
+        });
+    }
+
+    /**
+     * YUJ-238 (对齐 web PR#1092 BotDetailModal handleSaveDescription)：
+     * bot 创建者更新 bot 简介。后端 {@code PUT /robot/:uid/description}
+     * 已内置 creator_uid 校验，非 owner 直接 403。
+     */
+    public void updateBotDescription(String uid, String description, final ICommonListener iCommonListener) {
+        JSONObject body = new JSONObject();
+        body.put("description", description == null ? "" : description);
+        request(createService(UserService.class).updateBotDescription(uid, body), new IRequestResultListener<CommonResponse>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                iCommonListener.onResult(result.status, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iCommonListener.onResult(code, msg);
             }
         });
     }

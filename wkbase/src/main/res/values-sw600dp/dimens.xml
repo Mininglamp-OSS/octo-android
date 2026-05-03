@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 折叠展开态 / 平板（>=sw600dp）聊天气泡最大宽度（P0 止血，见 #174） -->
+    <dimen name="chat_bubble_max_width">420dp</dimen>
+</resources>

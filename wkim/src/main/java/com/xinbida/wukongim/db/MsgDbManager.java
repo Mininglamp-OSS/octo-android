@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 5/21/21 12:20 PM
@@ -64,10 +65,33 @@ public class MsgDbManager {
     private int requestCount;
     //    private int more = 1;
     private final HashMap<String, Long> channelMinMsgSeqs = new HashMap<>();
+    // YUJ-256 P1-1: per-channel preview gate. Without this, a channel-level
+    // preview flag shared across channels let channel B's preview be silently
+    // eaten when A's sync was still in flight (requestCount != 0), which
+    // would re-trigger the original YUJ-242 symptom on fast channel switch.
+    // Keyed by channelId + channelType + oldestOrderSeq so every distinct
+    // load (first-open / paging) gets its own one-shot gate.
+    private final ConcurrentHashMap<String, Boolean> previewPosted = new ConcurrentHashMap<>();
 
     public void queryOrSyncHistoryMessages(String channelId, byte channelType, long oldestOrderSeq, boolean contain, int pullMode, int limit, final IGetOrSyncHistoryMsgBack iGetOrSyncHistoryMsgBack) {
         //获取原始数据
         List<WKMsg> list = queryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit);
+        // YUJ-242: local-first. When the local DB already has messages, push
+        // them to the UI immediately so ChatActivity does not show a white
+        // screen while the 5-round sync finishes. The sync-completed callback
+        // below will post onResult(list) again with the merged/updated list;
+        // ChatActivity.applyDataToAdapter handles the repeat call.
+        //
+        // YUJ-256 P1-1: gate on a per-channel key instead of the singleton
+        // `requestCount` field so overlapping loads of different channels
+        // (fast channel switch) do not cannibalize each other's preview.
+        final String previewKey = channelId + "_" + channelType + "_" + oldestOrderSeq;
+        if (!list.isEmpty() && previewPosted.putIfAbsent(previewKey, Boolean.TRUE) == null) {
+            // Snapshot the current local list; the recursion below may mutate
+            // `list` via subsequent queries when sync writes to the DB.
+            final List<WKMsg> preview = new ArrayList<>(list);
+            new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(preview));
+        }
 //        if (more == 0) {
 //            new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
 //            more = 1;
@@ -183,6 +207,8 @@ public class MsgDbManager {
             if (minMessageSeq == minSeq) {
                 requestCount = 0;
 //                more = 1;
+                // YUJ-256 P1-1: clear the preview gate on terminal callback
+                previewPosted.remove(previewKey);
                 new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 return;
             }
@@ -221,12 +247,16 @@ public class MsgDbManager {
                 } else {
                     requestCount = 0;
 //                    more = 1;
+                    // YUJ-256 P1-1: clear the preview gate on terminal callback
+                    previewPosted.remove(previewKey);
                     new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 }
             });
         } else {
             requestCount = 0;
 //            more = 1;
+            // YUJ-256 P1-1: clear the preview gate on terminal callback
+            previewPosted.remove(previewKey);
             new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
         }
     }

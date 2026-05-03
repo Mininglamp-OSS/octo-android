@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.ItemTouchHelper.*
 import androidx.recyclerview.widget.RecyclerView
 import com.chat.base.msg.ChatAdapter
+import com.chat.base.foldable.PaneMetrics
 import com.chat.base.utils.AndroidUtilities
 import com.chat.uikit.R
 import kotlin.math.abs
@@ -177,7 +178,9 @@ class MessageSwipeController(
                 isVibrate = true
             }
         }
-        val maxWidth = AndroidUtilities.getScreenWidth()
+        // YUJ-251: anchor swipe-reply icon to the right edge of the *pane*, not the device.
+        // Falls back to device width when the host context isn't an Activity.
+        val maxWidth = PaneMetrics.widthPx(mView.context)
         val x: Int = if (abs(mView.translationX) > AndroidUtilities.dp(130f)) {
             maxWidth - AndroidUtilities.dp(130f) / 2
         } else {

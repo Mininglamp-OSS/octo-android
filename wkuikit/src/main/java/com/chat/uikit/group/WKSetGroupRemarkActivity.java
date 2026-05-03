@@ -7,6 +7,7 @@ import android.text.TextWatcher;
 import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
@@ -64,7 +65,9 @@ public class WKSetGroupRemarkActivity extends WKBaseActivity<ActUpdateGroupRemar
             wkVBinding.remarkEt.setText(channel.channelName);
             wkVBinding.remarkEt.setSelection(channel.channelName.length());
         });
-        wkVBinding.groupNameTv.setMaxWidth(AndroidUtilities.getScreenWidth() - AndroidUtilities.dp(135));
+        // YUJ-251: pane-aware maxWidth so the group name TextView doesn't overrun the
+        // action-bar right cluster on a narrow Embedding pane.
+        wkVBinding.groupNameTv.setMaxWidth(PaneMetrics.widthPx(this) - AndroidUtilities.dp(135));
         wkVBinding.remarkEt.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {

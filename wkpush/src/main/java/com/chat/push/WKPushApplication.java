@@ -17,6 +17,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.systembar.WKOSUtils;
@@ -62,7 +63,8 @@ public class WKPushApplication {
         addListener();
 
         // Push token 获取移到后台线程，不阻塞启动
-        new Thread(this::initPush).start();
+        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()（Firebase 网络握手 / 厂商 SDK I/O）
+        AppExecutors.io().execute(this::initPush);
 
         EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
     }
@@ -110,7 +112,8 @@ public class WKPushApplication {
 
     private void initOPPO() {
         HeytapPushManager.init(mContext.get(), true);
-        new Thread(() -> HeytapPushManager.register(mContext.get(), PushKeys.oppoAppKey, PushKeys.oppoAppSecret, new ICallBackResultService() {
+        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()
+        AppExecutors.io().execute(() -> HeytapPushManager.register(mContext.get(), PushKeys.oppoAppKey, PushKeys.oppoAppSecret, new ICallBackResultService() {
             @Override
             public void onRegister(int i, String s) {
                 if (i == 0) {
@@ -143,7 +146,7 @@ public class WKPushApplication {
             public void onError(int i, String s) {
 
             }
-        })).start();
+        }));
 
     }
 
@@ -212,7 +215,8 @@ public class WKPushApplication {
         }else {
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 if (OsUtils.isEmui()) {
-                    new Thread(() -> getHuaWeiToken(mContext.get())).start();
+                    // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()
+                    AppExecutors.io().execute(() -> getHuaWeiToken(mContext.get()));
                 } else if (OsUtils.isMiui()) {
                     initXiaoMiPush(mContext.get());
                 } else if (OsUtils.isOppo()) {

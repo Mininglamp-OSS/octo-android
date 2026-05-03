@@ -7,6 +7,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.base.WKBaseModel;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.IRequestResultListener;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKReader;
 import com.chat.uikit.robot.entity.BotStoreEntity;
 import com.chat.uikit.robot.entity.WKRobotEntity;
@@ -37,7 +38,8 @@ public class WKRobotModel extends WKBaseModel {
     }
 
     public void syncRobotData(WKChannel channel) {
-        new Thread(() -> sync(channel)).start();
+        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()（WKIM DB 查询走 I/O）
+        AppExecutors.io().execute(() -> sync(channel));
     }
 
     private void sync(WKChannel channel) {

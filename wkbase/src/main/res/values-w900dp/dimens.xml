@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      YUJ-251 / GH #180 — wider tablets / fully expanded foldable pane.
+      See values-w600dp/dimens.xml for the rationale and fallback semantics.
+    -->
+    <dimen name="chat_bubble_max_width">800dp</dimen>
+</resources>

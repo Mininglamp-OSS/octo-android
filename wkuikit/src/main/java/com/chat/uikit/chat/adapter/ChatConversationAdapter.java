@@ -44,6 +44,7 @@ import com.chat.base.ui.components.CounterView;
 import com.chat.base.ui.components.TypingView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
+import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
@@ -77,7 +78,6 @@ import com.chat.uikit.thread.service.entity.ThreadEntity;
 import android.view.animation.DecelerateInterpolator;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +94,12 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private static final int TYPE_NORMAL = 0;   // 私聊：传统 IM 风格
     private static final int TYPE_COMPACT = 1;  // 群聊：紧凑频道列表风格
     private static final int TYPE_SECTION_HEADER = 2; // 分组 header
+
+    /**
+     * YUJ-267 · 选中态 payload：点击群/子区后只刷 contentLayout 背景，不全 rebind，
+     * 避免 DiffUtil contentHash 恒等设计引发的卡片替换链路打断。
+     */
+    public static final int PAYLOAD_SELECTED = 1;
 
     private IListener iListener;
     private IThreadPreviewClickListener threadPreviewClickListener;
@@ -121,6 +127,136 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final android.os.Handler threadRefreshHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Map<String, Runnable> pendingRefreshTasks = new ConcurrentHashMap<>();
     private static final long THREAD_REFRESH_DELAY_MS = 1000;
+
+    // ── YUJ-267 · 折叠屏分屏态选中态 ─────────────────────────────────
+    // 仅在 splitMode=true（sw >= 600dp 且 Activity Embedding 激活）时渲染选中背景。
+    // 手机形态 splitMode=false → 维持无选中态行为。
+    private boolean splitMode;
+    private String selectedChannelId;
+    private byte selectedChannelType;
+    private String selectedThreadChannelId;
+
+    /**
+     * 进入/离开折叠屏分屏态时调用；切换时清选中并全量刷新（分屏态下才启用）。
+     */
+    public void setSplitMode(boolean splitMode) {
+        if (this.splitMode == splitMode) return;
+        this.splitMode = splitMode;
+        if (!splitMode) {
+            // 离开分屏态时清掉选中标记，避免 rotate 回手机态仍有选中 bg
+            selectedChannelId = null;
+            selectedChannelType = 0;
+            selectedThreadChannelId = null;
+        }
+        notifyDataSetChanged();
+    }
+
+    public boolean isSplitMode() {
+        return splitMode;
+    }
+
+    /**
+     * 设置群/私聊的选中态；只刷影响到的两行（旧选中 + 新选中），走 PAYLOAD_SELECTED
+     * 增量更新，不触碰内容/子区卡片。splitMode=false 时仅记录值但不触发 UI 刷新。
+     */
+    public void setSelected(String channelId, byte channelType) {
+        String oldId = selectedChannelId;
+        byte oldType = selectedChannelType;
+        if (TextUtils.equals(oldId, channelId) && oldType == channelType && selectedThreadChannelId == null) {
+            return;
+        }
+        selectedChannelId = channelId;
+        selectedChannelType = channelType;
+        // 选中群时若之前选中的是子区，自动清掉子区选中
+        selectedThreadChannelId = null;
+        if (!splitMode) return;
+        refreshSelectionRow(oldId, oldType);
+        refreshSelectionRow(channelId, channelType);
+    }
+
+    /**
+     * 设置子区选中态。子区点击时：父群保持不选，只高亮子区行。这个语义对齐 iOS——
+     * 分屏右侧是子区时，左侧父群卡片仍是普通背景，子区 rowView 单独标选中。
+     */
+    public void setSelectedThread(String threadChannelId) {
+        if (TextUtils.equals(selectedThreadChannelId, threadChannelId)
+                && selectedChannelId == null) {
+            return;
+        }
+        String oldThreadId = selectedThreadChannelId;
+        String oldGroupId = selectedChannelId;
+        byte oldGroupType = selectedChannelType;
+        selectedThreadChannelId = threadChannelId;
+        // 子区选中时，若之前整行选中的是群/私聊，也要刷掉那行
+        selectedChannelId = null;
+        selectedChannelType = 0;
+        if (!splitMode) return;
+        if (oldGroupId != null) refreshSelectionRow(oldGroupId, oldGroupType);
+        // 刷新子区所属父群那一行（子区签名变更需走重建）
+        refreshParentGroupForThread(oldThreadId);
+        refreshParentGroupForThread(threadChannelId);
+    }
+
+    /**
+     * 清掉选中态（切 Space / 切 tab / 进入详情页 back 回来不匹配时调用）。
+     */
+    public void clearSelected() {
+        if (selectedChannelId == null && selectedThreadChannelId == null) return;
+        String oldId = selectedChannelId;
+        byte oldType = selectedChannelType;
+        String oldThreadId = selectedThreadChannelId;
+        selectedChannelId = null;
+        selectedChannelType = 0;
+        selectedThreadChannelId = null;
+        if (!splitMode) return;
+        if (oldId != null) refreshSelectionRow(oldId, oldType);
+        if (oldThreadId != null) refreshParentGroupForThread(oldThreadId);
+    }
+
+    public boolean isRowSelected(String channelId, byte channelType) {
+        return splitMode && channelId != null
+                && channelId.equals(selectedChannelId)
+                && channelType == selectedChannelType;
+    }
+
+    public boolean isThreadRowSelected(String threadChannelId) {
+        return splitMode && threadChannelId != null
+                && threadChannelId.equals(selectedThreadChannelId);
+    }
+
+    /** 定向刷新选中行（走 PAYLOAD_SELECTED，只改 background）。 */
+    private void refreshSelectionRow(String channelId, byte channelType) {
+        if (channelId == null) return;
+        for (int i = 0, size = getData().size(); i < size; i++) {
+            ChatConversationMsg item = getData().get(i);
+            if (item == null || item.isSectionHeader || item.uiConversationMsg == null) continue;
+            WKUIConversationMsg ui = item.uiConversationMsg;
+            if (channelId.equals(ui.channelID) && channelType == ui.channelType) {
+                notifyItemChanged(i + getHeaderLayoutCount(), PAYLOAD_SELECTED);
+                break;
+            }
+        }
+    }
+
+    /** 子区选中/取消时刷其父群 compact 行（子区卡片依赖 signature 重建）。 */
+    private void refreshParentGroupForThread(String threadChannelId) {
+        if (threadChannelId == null) return;
+        // threadChannelId 形如 "{groupNo}____{shortId}"，父群号即前缀
+        int idx = threadChannelId.indexOf("____");
+        String parentGroupNo = idx > 0 ? threadChannelId.substring(0, idx) : null;
+        if (parentGroupNo == null) return;
+        for (int i = 0, size = getData().size(); i < size; i++) {
+            ChatConversationMsg item = getData().get(i);
+            if (item == null || item.isSectionHeader || item.uiConversationMsg == null) continue;
+            WKUIConversationMsg ui = item.uiConversationMsg;
+            if (parentGroupNo.equals(ui.channelID) && ui.channelType == WKChannelType.GROUP) {
+                // 清掉本 ViewHolder 缓存签名，强制下一次 convertCompact 重建子区 card
+                // （因为选中态影响 rowView background，但不在现有 signature 里）
+                notifyItemChanged(i + getHeaderLayoutCount(), PAYLOAD_SELECTED);
+                break;
+            }
+        }
+    }
 
     public ChatConversationAdapter(@Nullable List<ChatConversationMsg> data) {
         super(R.layout.item_chat_conv_layout, data);
@@ -177,6 +313,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         showTyping(helper, conversationMsg);
         showCalling(helper, conversationMsg);
         showThreadPreviews(helper, item);
+        // YUJ-267 · showChannel 已根据 top 覆盖过 contentLayout 背景；最后再走选中态
+        // 覆写，保证 selected > top > normal 的优先级。
+        applySelectedBackground(helper, item);
     }
 
     private void convertCompact(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
@@ -214,6 +353,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 置顶背景
         boolean isTop = item.getWkChannel() != null && item.getWkChannel().top == 1;
         helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+        // YUJ-267 · 分屏态下被选中的群覆盖为 selected_bg
+        applySelectedBackground(helper, item);
 
         // 免打扰图标
         ImageView muteIv = helper.getView(R.id.muteIv);
@@ -267,6 +408,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 container.removeAllViews();
                 container.setVisibility(View.GONE);
+                // YUJ-261 · 折叠时清空签名 tag，下次展开走全量重建。
+                container.setTag(R.id.threadPreviewContainer, null);
             }
         } else {
             threadToggleIv.setVisibility(View.GONE);
@@ -322,6 +465,36 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
             return;
         }
+        // YUJ-267 · 选中态 payload：只刷背景，不整 rebind（DiffUtil contentHash
+        // 对普通行恒等设计要求选中变化必须靠显式 payload 驱动）。
+        for (Object p : payloads) {
+            if (p instanceof Integer && ((Integer) p) == PAYLOAD_SELECTED) {
+                WKUIConversationMsg ui = uiConversationMsg != null ? uiConversationMsg.uiConversationMsg : null;
+                if (ui != null) {
+                    // 先恢复非选中状态下的默认 bg（top=home_bg vs normal=layout_bg），
+                    // 若当前行是新选中则 applySelectedBackground 再覆盖为 selected_bg。
+                    // 不做这一步的话取消选中后背景不会恢复。
+                    boolean isTop = ui.getWkChannel() != null && ui.getWkChannel().top == 1;
+                    baseViewHolder.setBackgroundResource(R.id.contentLayout,
+                            isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+                    applySelectedBackground(baseViewHolder, ui);
+                    if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
+                        // 紧凑行：清 threadPreviewContainer signature tag 让子区签名
+                        // 在下轮展开时包含 isThreadRowSelected 状态（子区选中态靠
+                        // rowView bg 驱动，必须重建）。
+                        FrameLayout threadContainer = baseViewHolder.getView(R.id.threadPreviewContainer);
+                        if (threadContainer != null) {
+                            threadContainer.setTag(R.id.threadPreviewContainer, null);
+                            // 直接触发重建（若展开）
+                            if (isThreadExpanded(ui.channelID)) {
+                                showThreadPreviews(baseViewHolder, ui);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+        }
         ChatConversationMsg chatConversationMsg = (ChatConversationMsg) payloads.get(0);
         if (chatConversationMsg != null && chatConversationMsg.uiConversationMsg != null) {
             if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
@@ -329,6 +502,17 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 convertNormalPayloads(baseViewHolder, chatConversationMsg);
             }
+        }
+    }
+
+    /**
+     * YUJ-267 · 根据分屏态 + 当前选中 channel 覆盖 contentLayout 背景。
+     * 优先级：selected > top > normal。splitMode=false 时此方法无副作用。
+     */
+    private void applySelectedBackground(@NonNull BaseViewHolder helper, WKUIConversationMsg item) {
+        if (!splitMode || item == null) return;
+        if (isRowSelected(item.channelID, item.channelType)) {
+            helper.setBackgroundResource(R.id.contentLayout, R.drawable.chat_conv_selected_bg);
         }
     }
 
@@ -587,7 +771,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void setUnreadCount(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg item, boolean isAnimated) {
-        int unread = item.getUnReadCount();
+        // YUJ-219-B · Layer B · 渲染层 Space 过滤兜底（对齐 Web Model.tsx :: unread getter
+        // + iOS WKConversationWrapModel.spaceFilteredLastMessage 的 unread 清零语义）：
+        // 即使 push-path Layer A gate 挡住了 bump，WKSDK 本地 DB 在冷启动回放时仍可能
+        // 给 allConversations 带进跨 Space 的 unreadCount。这里做最后一层擦除。
+        int unread = getRenderUnreadCount(item);
         View view = baseViewHolder.getView(R.id.msgCountTv);
         if (view instanceof CounterView) {
             // 普通布局（私聊）：CounterView
@@ -611,18 +799,28 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void showTime(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
-        long msgTimestamp = item.lastMsgTimestamp;
-        if (item.getWkMsg() != null) {
-            if (item.getWkMsg().remoteExtra.editedAt != 0) {
-                msgTimestamp = item.getWkMsg().remoteExtra.editedAt;
+        // YUJ-219-B · Layer B · 渲染层时间戳 Space 过滤。跨 Space 消息污染时返回 0
+        // （即不显示最近时间），避免列表因被跨 Space push bump 而冒顶排序。
+        long msgTimestamp;
+        if (com.chat.base.space.ConversationPreviewFilter.isMessageCrossSpace(item)) {
+            msgTimestamp = 0;
+        } else {
+            msgTimestamp = item.lastMsgTimestamp;
+            if (item.getWkMsg() != null) {
+                if (item.getWkMsg().remoteExtra.editedAt != 0) {
+                    msgTimestamp = item.getWkMsg().remoteExtra.editedAt;
+                }
             }
         }
-        String chatTime = WKTimeUtils.getInstance().getNewChatTime(msgTimestamp * 1000);
+        String chatTime = msgTimestamp > 0
+                ? WKTimeUtils.getInstance().getNewChatTime(msgTimestamp * 1000)
+                : "";
         helper.setText(R.id.timeTv, chatTime);
     }
 
-    // 系统 Bot：会话列表预览需按 Space 过滤
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
+    // 系统 Bot：会话列表预览需按 Space 过滤（YUJ-219-A3 / YUJ-219-B：集合改走
+    // {@link com.chat.base.space.SystemBotsFallback#isSystemBot} 消除三端硬编码漂移，
+    // 动态白名单见 SystemBotsFallback.getSystemBotIds）
 
     /**
      * 从消息中提取 space_id
@@ -654,7 +852,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 近期大量其他 Space 消息可能将当前 Space 消息挤出默认搜索范围。
      */
     private String findSystemBotSpaceContent(WKUIConversationMsg item) {
-        if (!SYSTEM_BOTS.contains(item.channelID)) return null;
+        if (!com.chat.base.space.SystemBotsFallback.isSystemBot(item.channelID)) return null;
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (TextUtils.isEmpty(currentSpaceId)) return null;
 
@@ -686,18 +884,41 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 返回 Space 感知的未读数。
      * Person 频道在 Space 模式下，若最后一条消息不属于当前 Space，返回 0。
+     *
+     * <p>YUJ-219-B：委托给 {@link com.chat.base.space.ConversationPreviewFilter#getSpaceFilteredUnread(WKUIConversationMsg)}
+     * 以覆盖 SystemBot + 无 space_id 隐藏口径 / GROUP 跨 Space 兜底 / TOPIC 分支。
      */
     public int getEffectiveUnreadCount(ChatConversationMsg item) {
-        if (item.uiConversationMsg.channelType == WKChannelType.PERSONAL) {
-            String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-            if (!TextUtils.isEmpty(currentSpaceId)) {
-                String msgSpaceId = getSpaceIdFromMsg(item.uiConversationMsg.getWkMsg());
-                if (!TextUtils.isEmpty(msgSpaceId) && !msgSpaceId.equals(currentSpaceId)) {
-                    return 0;
-                }
-            }
+        if (item == null || item.uiConversationMsg == null) return 0;
+        return com.chat.base.space.ConversationPreviewFilter
+                .getSpaceFilteredUnread(item.uiConversationMsg);
+    }
+
+    /**
+     * YUJ-219-B · Layer B · 渲染层未读数：集合子区 + Space 过滤双兜底。
+     *
+     * <p>{@link ChatConversationMsg#getUnReadCount()} 现有实现会把 childList（子区）
+     * 的 unread 汇总到父群；但裸读 {@code uiConversationMsg.unreadCount} 不过 Space
+     * 过滤。此处对顶层 entry 再过一次 {@link com.chat.base.space.ConversationPreviewFilter}：
+     * 顶层（父群 / DM / SystemBot）若判定为跨 Space 污染 → 直接返回 0；
+     * 否则维持现有（含子区）汇总语义。
+     */
+    private int getRenderUnreadCount(ChatConversationMsg item) {
+        if (item == null || item.uiConversationMsg == null) return 0;
+        if (com.chat.base.space.ConversationPreviewFilter.isMessageCrossSpace(item.uiConversationMsg)) {
+            return 0;
         }
-        return item.uiConversationMsg.unreadCount;
+        return item.getUnReadCount();
+    }
+
+    /**
+     * YUJ-219-B · Layer B · 渲染层 wkMsg 获取：跨 Space 污染时返回 null，避免
+     * {@link #getContent(WKMsg)} 直接渲染出另一 Space 的原文。
+     * 对齐 iOS {@code spaceFilteredLastMessage} / Web {@code getSpaceFilteredLastMessage}。
+     */
+    @Nullable
+    private WKMsg getRenderWkMsg(@Nullable WKUIConversationMsg item) {
+        return com.chat.base.space.ConversationPreviewFilter.getSpaceFilteredWkMsg(item);
     }
 
     /**
@@ -724,8 +945,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         contentTv.setVisibility(View.VISIBLE);
         String mentionTag = getContext().getString(R.string.last_msg_remind);
         WKUIConversationMsg item = conversationMsg.uiConversationMsg;
-        String msgContent = getContent(item.getWkMsg());
-        String fromName = getFromName(item.channelType, item.getWkMsg());
+        // YUJ-219-B · Layer B · 跨 Space 污染时用 null wkMsg，getContent 返回空串
+        WKMsg renderMsg = getRenderWkMsg(item);
+        String msgContent = getContent(renderMsg);
+        String fromName = getFromName(item.channelType, renderMsg);
         String preview = TextUtils.isEmpty(fromName) ? msgContent : fromName + "：" + msgContent;
         // 整行高亮（对齐子区 threadMentionTv 样式）
         contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
@@ -746,8 +969,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             // 聊天密码
             content = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         } else {
-            content = getContent(item.getWkMsg());
-            String fromName = getFromName(item.channelType, item.getWkMsg());
+            // YUJ-219-B · Layer B · 非 SystemBot 分支也过 render-time Space 过滤兜底。
+            // SystemBot 走 findSystemBotSpaceContent（含 DB 回查当前 Space 历史）；
+            // 其它频道类型若判定为跨 Space 污染（冷启动 race / DB 回放），
+            // getRenderWkMsg 返回 null 后 getContent 返回空串 → preview 为空。
+            WKMsg renderMsg = getRenderWkMsg(item);
+            content = getContent(renderMsg);
+            String fromName = getFromName(item.channelType, renderMsg);
             if (!TextUtils.isEmpty(fromName)) {
                 content = fromName + "：" + content;
             }
@@ -953,20 +1181,28 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 展示子区预览（最多 2 个最近活跃子区 + "+N 个子区" 折叠行）
      * 参考 iOS WKConversationGroupThreadCell：带分支线 + 圆角卡片容器 + 未读数气泡
+     *
+     * YUJ-261 · 数据签名 skip-rebuild：对当前 groupNo 的子区活跃集 + 未读 + mute + mention
+     * 组合生成签名，若 container 已渲染过相同签名则直接跳过 removeAllViews() + inflate，
+     * 避免 notifyItemChanged 时 rowView 被替换导致 touch 链路被 cancel。
      */
     private void showThreadPreviews(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         FrameLayout container = helper.getView(R.id.threadPreviewContainer);
-        container.removeAllViews();
-        container.setVisibility(View.GONE);
 
         if (item.channelType != WKChannelType.GROUP
                 || WKConfig.getInstance().getAppConfig().thread_on != 1) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
 
         String groupNo = item.channelID;
         List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
         if (cachedList == null) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             loadThreadPreviews(groupNo);
             return;
         }
@@ -979,6 +1215,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             }
         }
         if (activeList.isEmpty()) {
+            container.removeAllViews();
+            container.setVisibility(View.GONE);
+            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
         // updated_at 是 ISO 格式字符串，可直接用字符串比较排序
@@ -988,7 +1227,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             return ub.compareTo(ua);
         });
 
-        container.setVisibility(View.VISIBLE);
         // 3天内活跃的子区全部展示，其余折叠（对齐 iOS: conv.lastMsgTimestamp）
         long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         List<ThreadEntity> recentList = new ArrayList<>();
@@ -1006,6 +1244,20 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         int showCount = recentList.size();
         if (showCount == 0) showCount = Math.min(activeList.size(), 2);
+
+        // YUJ-261 · 生成数据签名；若同一 ViewHolder 的 container 已渲染过该签名，
+        // 则跳过所有 removeAllViews() + inflate，避免 onClickListener 持有的 rowView
+        // 被替换导致 ACTION_DOWN → CANCEL。
+        String newSig = buildThreadPreviewSignature(groupNo, activeList, inactiveList, showCount);
+        Object existingSig = container.getTag(R.id.threadPreviewContainer);
+        if (newSig.equals(existingSig) && container.getChildCount() > 0) {
+            container.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        // 数据变化或首次渲染 → 重建。
+        container.removeAllViews();
+        container.setVisibility(View.VISIBLE);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
         // 内容包装层（卡片 + "+N"），放在 FrameLayout 中和分支线分层
@@ -1101,10 +1353,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 mentionTv.setVisibility(View.GONE);
             }
 
-            String finalThreadChannelId = threadChannelId;
-            rowView.setOnClickListener(v -> {
+            // YUJ-261 · 子区行点击走 SingleClickUtil（per-view 300ms，PR#187 已修为默认模式）。
+            // 与 filterAndDisplay debounce 叠加彻底消除「点一次没反应」。
+            final String finalThreadChannelId = threadChannelId;
+            final ThreadEntity finalEntity = entity;
+            SingleClickUtil.onSingleClick(rowView, v -> {
                 if (threadPreviewClickListener != null) {
-                    threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo, entity.short_id, entity.is_joined);
+                    threadPreviewClickListener.onThreadClick(finalThreadChannelId, groupNo,
+                            finalEntity.short_id, finalEntity.is_joined);
                 }
             });
             // 长按弹出通知开关菜单
@@ -1115,10 +1371,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     finalThreadMute ? R.mipmap.msg_unmute : R.mipmap.msg_mute,
                     () -> {
                         if (threadPreviewClickListener != null) {
-                            threadPreviewClickListener.onThreadLongPress(finalThreadChannelId, entity.name, rowView);
+                            threadPreviewClickListener.onThreadLongPress(finalThreadChannelId, finalEntity.name, rowView);
                         }
                     }));
             WKDialogUtils.getInstance().setViewLongClickPopup(rowView, menuItems);
+
+            // YUJ-267 · 子区行选中态：当前右侧正在看此子区时高亮。
+            // 仅分屏态生效；手机态 isThreadRowSelected 恒为 false。
+            if (isThreadRowSelected(threadChannelId)) {
+                rowView.setBackgroundResource(R.drawable.chat_conv_selected_bg);
+            } else {
+                rowView.setBackground(null);
+            }
 
             cardContainer.addView(rowView);
             rowViews.add(rowView);
@@ -1197,7 +1461,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 moreRow.addView(unreadBadge, badgeLp);
             }
 
-            moreRow.setOnClickListener(v -> {
+            SingleClickUtil.onSingleClick(moreRow, v -> {
                 if (threadPreviewClickListener != null) {
                     threadPreviewClickListener.onMoreThreadsClick(groupNo);
                 }
@@ -1228,6 +1492,54 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 branchView.setRowCenterYs(centerYs);
             }
         });
+
+        // YUJ-261 · 记录本次签名，下次同 ViewHolder 同签名直接跳过重建。
+        container.setTag(R.id.threadPreviewContainer, newSig);
+    }
+
+    /**
+     * YUJ-261 · 子区预览数据签名：覆盖所有影响 UI 展示的字段（子区列表 + 未读 + mute +
+     * mention + showCount + inactiveList 聚合），用于 skip-rebuild 对比。
+     */
+    private String buildThreadPreviewSignature(String groupNo,
+                                               List<ThreadEntity> activeList,
+                                               List<ThreadEntity> inactiveList,
+                                               int showCount) {
+        StringBuilder sb = new StringBuilder(64);
+        sb.append(groupNo).append('#').append(showCount).append('|');
+        for (int i = 0; i < showCount && i < activeList.size(); i++) {
+            ThreadEntity t = activeList.get(i);
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            int unread = conv != null ? conv.unreadCount : t.unread_count;
+            WKChannel ch = WKIM.getInstance().getChannelManager()
+                    .getChannel(tcId, WKChannelType.COMMUNITY_TOPIC);
+            boolean mute = ch != null && ch.mute == 1;
+            boolean mention = hasThreadMentionForChannel(tcId);
+            boolean selected = isThreadRowSelected(tcId);
+            sb.append(t.short_id).append(':')
+              .append(t.name != null ? t.name : "").append(':')
+              .append(unread).append(':')
+              .append(mute ? 1 : 0).append(':')
+              .append(mention ? 1 : 0).append(':')
+              .append(selected ? 1 : 0).append(':')
+              .append(t.last_message_content != null ? t.last_message_content.hashCode() : 0).append(':')
+              .append(t.is_joined).append('|');
+        }
+        // "+N 个子区" 行的聚合未读 + mention
+        int moreUnread = 0;
+        boolean moreMention = false;
+        for (ThreadEntity t : inactiveList) {
+            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
+            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            moreUnread += conv != null ? conv.unreadCount : t.unread_count;
+            if (hasThreadMentionForChannel(tcId)) moreMention = true;
+        }
+        sb.append("+").append(inactiveList.size()).append(':')
+          .append(moreUnread).append(':').append(moreMention ? 1 : 0);
+        return sb.toString();
     }
 
     /**

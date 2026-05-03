@@ -13,6 +13,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.DataCleanManager;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
@@ -119,7 +120,8 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     //获取缓存大小
     private void getCacheSize() {
-        new Thread(() -> {
+        // YUJ-283 P-11: AppExecutors.io() 替代 new Thread()（磁盘统计属 I/O）
+        AppExecutors.io().execute(() -> {
             try {
                 str = DataCleanManager.getTotalCacheSize(SettingActivity.this);
                 if (str.equalsIgnoreCase("0.0Byte")) {
@@ -129,7 +131,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
             } catch (Exception e) {
                 WKLogUtils.e("获取图片缓存大小错误");
             }
-        }).start();
+        });
 
     }
 

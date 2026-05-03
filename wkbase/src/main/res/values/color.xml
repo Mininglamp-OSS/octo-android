@@ -37,6 +37,9 @@
     <color name="layoutColorSelected">#DAD9D9</color>
     <color name="homeColor">#f6f6f6</color>
     <color name="homeColorSelected">#E7E7E7</color>
+    <!-- YUJ-267 · 折叠屏分屏态选中背景（colorAccent 14% / 24% alpha）。 -->
+    <color name="chat_conv_selected_bg">#247761F4</color>
+    <color name="chat_conv_selected_bg_pressed">#4D7761F4</color>
     <color name="colorDark">#313131</color>
     <color name="colorLine">#cccccc</color>
     <color name="popupTextColor">#676a6f</color>

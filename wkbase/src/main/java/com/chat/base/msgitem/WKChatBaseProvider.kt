@@ -48,6 +48,7 @@ import com.chat.base.config.WKSharedPreferencesUtil
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.EndpointSID
+import com.chat.base.foldable.PaneMetrics
 import com.chat.base.endpoint.entity.CanReactionMenu
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChatItemPopupMenu
@@ -1746,8 +1747,24 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         fromType: WKChatIteMsgFromType,
         msgItemEntity: WKUIChatMsgItemEntity
     ): Int {
+        // YUJ-279 · phone→unfold 右侧消息宽度不自适应修复：
+        // 旧实现读 AndroidUtilities.getScreenWidth()（device displayMetrics.widthPixels），
+        // 在 Activity Embedding 下返回整机宽度（两栏总和）而非 ChatActivity 所在 pane 的
+        // 可见宽度。phone 启动时 pane = 整机（窄）；unfold 后 pane 变成 secondary（约 480dp），
+        // 整机宽度却变成 ~800dp。re-bind 后 layoutParams.width 基于整机宽度计算→溢出 pane，
+        // 与 phone 态保留的窄值形成"宽度不跟随 pane 变化"观感。
+        //
+        // 改成 read-at-use 的 PaneMetrics.widthPx(context)：Embedding 关闭时 fallback 到
+        // displayMetrics.widthPixels，与旧行为一致；Embedding 开启时返回当前 Activity
+        // 可见窗口宽度，正是我们需要的自适应值。
+        //
+        // 横屏分支保留：Embedding 下 pane bounds 的 width 已经是当前方向的"视觉水平"，
+        // 无需再在 landscape 用 screenHeight 兜 hack；但保留原分支以避免 configuration
+        // race 时 PaneMetrics 尚未拿到最新 metrics（极端 fallback）。
+        val paneWidth = PaneMetrics.widthPx(context)
         val maxWidth =
-            if (AndroidUtilities.isPORTRAIT) AndroidUtilities.getScreenWidth() else AndroidUtilities.getScreenHeight()
+            if (AndroidUtilities.isPORTRAIT) paneWidth
+            else maxOf(paneWidth, context.resources.displayMetrics.heightPixels)
         val width: Int
         val checkBoxMargin = 34
         var flameWidth = 0

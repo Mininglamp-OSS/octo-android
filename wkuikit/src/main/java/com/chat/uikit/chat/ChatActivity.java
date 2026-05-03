@@ -14,6 +14,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.TextUtils;
 import android.util.Log;
@@ -35,15 +36,22 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.databinding.DataBindingUtil;
-import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
+
 import com.chat.base.common.WKCommonModel;
 import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.base.config.WKBinder;
+import com.chat.base.foldable.NarrowTransition;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
@@ -141,11 +149,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -155,7 +160,6 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class ChatActivity extends SwipeBackActivity implements IConversationContext {
-    private static final Set<String> SYSTEM_BOTS = new HashSet<>(Arrays.asList("botfather"));
     private static final int MAX_ADAPTER_SIZE = 300;
     private static final int TRIM_BATCH_SIZE = 60;
     private RecyclerView.EdgeEffectFactory edgeEffectFactory; // 用于清除 EdgeEffect
@@ -172,6 +176,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long lastPreviewMsgOrderSeq = 0; //上次浏览消息
     private long unreadStartMsgOrderSeq = 0; //新消息开始位置
     private long tipsOrderSeq = 0; //需要强提示的msg
+    // YUJ-256 P1-2: snapshot of the initial positioning intents. The existing
+    // fields above (`unreadStartMsgOrderSeq`, `tipsOrderSeq`) are "consumed" —
+    // zeroed out after they drive a scroll. YUJ-242's local-first behavior
+    // now calls applyDataToAdapter twice (preview + sync), and without these
+    // snapshots the second call silently skips the "new messages" divider and
+    // unread scroll because the source fields were cleared on the first call.
+    private long unreadStartSnapshotOrderSeq = 0;
+    private long tipsSnapshotOrderSeq = 0;
+    // YUJ-256 P1-3: flag flipped to true after the first applyDataToAdapter
+    // preview render. Used to suppress scroll-to-end on the second (post-sync)
+    // render so the user's manually-scrolled viewport is not yanked back to
+    // the bottom when sync completes.
+    private boolean hasRenderedPreview = false;
+    // YUJ-256 P1-3: flipped true when the user has actively scrolled the chat
+    // RecyclerView (DRAGGING). Also suppresses the second-render scroll-to-end.
+    private boolean userHasScrolled = false;
+    // YUJ-258 P2-NEW-1: flipped true after the first successful tips highlight
+    // so the second applyDataToAdapter (sync-merge) does not replay the
+    // `isShowTips = true` animation. Reset alongside tipsSnapshotOrderSeq in
+    // every fresh-reload path (initData / clickResult / tipsMsg /
+    // newMsgLayout click / reconnect refresh).
+    private boolean hasShownTips = false;
     private int keepOffsetY = 0; // 上次浏览消息的偏移量
     private int redDot = 0; // 未读消息数量
     private boolean hasPositionedUnread = false; // 是否已完成未读定位
@@ -286,20 +312,108 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        // YUJ-276 · diagnostic trace：窄屏冷启 breakdown 最大的一段发生在 onCreate
+        // （DataBindingUtil.setContentView 膨胀 act_chat_layout.xml ≈ 80-200ms）+
+        // onStart 里的 PanelSwitchHelper.Builder(this).build() ≈ 50-100ms + initData
+        // 同步 DB 读。grep "YUJ276-trace" 可以和 WKIMUtils 里的 T_CLICK /
+        // T_START_ACTIVITY 串起整条链路。
+        long t0 = SystemClock.uptimeMillis();
         super.onCreate(savedInstanceState);
+        // YUJ-278 P1-1（Fix D 自我覆盖版）：把窄屏 120ms 快过渡下沉到 ChatActivity
+        // 自己注册，不再依赖 WKIMUtils.startChat。这样 WKThreadCreatedProvider
+        // （子区卡片点击）/ SearchAllActivity / CreateThreadActivity 这些直接
+        // startActivity(ChatActivity) 的调用方也能吃到快动画，和会话列表点击一致。
+        // 在 API 34+ 上内部会同时注册 CLOSE override（见 NarrowTransition javadoc），
+        // finish() 里的 applyFastClose 只影响 pre-34 设备。
+        NarrowTransition.applyFastOpen(this);
         initSwipeBackFinish();
         wkVBinding = DataBindingUtil.setContentView(this, R.layout.act_chat_layout);
+        long tInflate = SystemClock.uptimeMillis();
 //        setContentView(R.layout.act_chat_layout1);
+        // YUJ-252 / GH #182 Bug 1 — In Activity Embedding expanded mode the
+        // secondary pane does not reliably receive adjustResize behavior, so the
+        // IME can overlap the message input area. Manually translate IME insets
+        // into bottom padding on the root view. On phone (single-pane) the IME
+        // insets are still dispatched correctly, so this behaves identically to
+        // the adjustResize default.
+        //
+        // YUJ-253 / GH #184 — MUST return `insets` (not WindowInsetsCompat.CONSUMED).
+        // Returning CONSUMED interrupts insets propagation to child views and
+        // regressed PR#181's pane-aware bubble auto-resize (BubbleLayout /
+        // descendants stopped getting layout/insets callbacks when the divider
+        // was dragged). IME occlusion is already handled by the setPadding above,
+        // so we do not need to consume; just keep the chain alive.
+        ViewCompat.setOnApplyWindowInsetsListener(wkVBinding.rootView, (v, insets) -> {
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), imeInsets.bottom);
+            return insets;
+        });
         initParam();
         initView();
         initListener();
         //initData();
         ActManagerUtils.getInstance().addActivity(this);
+        // YUJ-251 / GH #180 — L2 pane-aware: when the Embedding pane resizes (divider
+        // drag, unfold, rotation), re-bind only the currently-visible messages so the
+        // bubble max-width cap (driven by PaneMetrics) refreshes without re-creating
+        // unrelated ViewHolders. BubbleLayout auto-caps on every measure, so this is
+        // belt-and-suspenders — it guarantees TextView wrapping is recomputed for all
+        // visible rows immediately on the first layout after a resize.
+        setupPaneResizeObserver();
+        if (WKBinder.isDebug) {
+            long tEnd = SystemClock.uptimeMillis();
+            Log.d("YUJ276-trace", "[T_ON_CREATE_END] channel=" + channelId
+                    + " inflate=" + (tInflate - t0) + "ms"
+                    + " total=" + (tEnd - t0) + "ms");
+        }
+    }
+
+    /** Last-observed RecyclerView width, used to filter spurious layout passes. */
+    private int lastRecyclerViewWidth = 0;
+
+    private void setupPaneResizeObserver() {
+        if (wkVBinding == null || wkVBinding.recyclerView == null) return;
+        wkVBinding.recyclerView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int left, int top, int right, int bottom,
+                                       int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                int newWidth = right - left;
+                if (newWidth <= 0 || newWidth == lastRecyclerViewWidth) return;
+                int prev = lastRecyclerViewWidth;
+                lastRecyclerViewWidth = newWidth;
+                if (prev == 0) return; // first layout — nothing to refresh
+                if (chatAdapter == null || linearLayoutManager == null) return;
+                // Post so we don't mutate the adapter in the middle of the current pass.
+                wkVBinding.recyclerView.post(() -> {
+                    if (chatAdapter == null || linearLayoutManager == null) return;
+                    int first = linearLayoutManager.findFirstVisibleItemPosition();
+                    int last = linearLayoutManager.findLastVisibleItemPosition();
+                    if (first < 0 || last < 0 || last < first) return;
+                    int count = last - first + 1;
+                    try {
+                        chatAdapter.notifyItemRangeChanged(first, count);
+                    } catch (Throwable ignored) {
+                        // Defensive — never crash on adapter churn during a resize race.
+                    }
+                });
+            }
+        });
     }
 
     @Override
     protected void onResume() {
+        // YUJ-276 · diagnostic trace：onResume 是「用户看到 Activity 首帧」的最后
+        // 一个生命周期节点，和 T_CLICK 的 delta 就是感知延迟。真正的像素出现时间还
+        // 要加一帧（~16ms）的 measure/layout/draw，但这条 log 足够定位 P90/P99。
+        long tOnResume = SystemClock.uptimeMillis();
         super.onResume();
+        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
+        // Glide 会永远停住。onResume 主动恢复，消除生命周期死锁。
+        try {
+            Glide.with(this).resumeRequests();
+        } catch (IllegalArgumentException ignored) {
+            // Activity 销毁竞态
+        }
         isShowChatActivity = true;
         WKUIKitApplication.getInstance().chattingChannelID = channelId;
         isUploadReadMsg = true;
@@ -307,11 +421,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().invoke("start_screen_shot", this);
         // 从子区返回时重新拉取消息数量
         fetchThreadMessageCounts();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_RESUME_END] channel=" + channelId
+                    + " total=" + (SystemClock.uptimeMillis() - tOnResume) + "ms");
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        // YUJ-276 · diagnostic trace：onStart 负责首次建 PanelSwitchHelper +
+        // ChatPanelManager + 首轮 initData。这是 onCreate 之后第二大耗时段。
+        long tOnStart = SystemClock.uptimeMillis();
         if (mHelper == null) {
             mHelper = new PanelSwitchHelper.Builder(this)
                     //可选
@@ -413,7 +534,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 previewNewImgResultLac.launch(intent);
                 return null;
             });
+            long tInitDataStart = SystemClock.uptimeMillis();
             initData();
+            if (WKBinder.isDebug) {
+                long tEnd = SystemClock.uptimeMillis();
+                Log.d("YUJ276-trace", "[T_ON_START_END] channel=" + channelId
+                        + " initData=" + (tEnd - tInitDataStart) + "ms"
+                        + " total=" + (tEnd - tOnStart) + "ms");
+            }
+        } else if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_START_END] channel=" + channelId
+                    + " reused=true total=" + (SystemClock.uptimeMillis() - tOnStart) + "ms");
         }
     }
 
@@ -461,18 +592,27 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         CommonAnim.getInstance().showOrHide(numberTextView, false, false);
 
-        //去除刷新条目闪动动画
-        ((DefaultItemAnimator) Objects.requireNonNull(wkVBinding.recyclerView.getItemAnimator())).setSupportsChangeAnimations(false);
+        // YUJ-240 review fix (Jerry-Xin W#2): 旧 DefaultItemAnimator 配置代码已死 — MyItemAnimator 在下面立即替换它，移除以清理死代码与 import。
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
+        // YUJ-236 perf: RV 容器 match_parent，setHasFixedSize(true) 跳过 Adapter 变化触发的 requestLayout。
+        wkVBinding.recyclerView.setHasFixedSize(true);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
-        wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
+        // YUJ-236 perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
+        MyItemAnimator itemAnimator = new MyItemAnimator();
+        itemAnimator.setSupportsChangeAnimations(false);
+        wkVBinding.recyclerView.setItemAnimator(itemAnimator);
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
+        // YUJ-236 phase2 perf (A4) + YUJ-240 round3 fix (Jerry-Xin W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
+        // 原先还有 richText (14)，但 WKUIKitApplication 未注册该 provider，ChatAdapter.getItemType 不会返回 14，配置池是 no-op，删除。
+        RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
+        msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
+        msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
     }
 
     private void initListener() {
@@ -573,6 +713,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(reminderList.get(0).messageSeq, channelId, channelType);
                     unreadStartMsgOrderSeq = 0;
                     tipsOrderSeq = orderSeq;
+                    // YUJ-256 P1-2: sync snapshots + reset render flags for
+                    // the fresh data load so the second (post-sync) callback
+                    // honours the new tips anchor.
+                    unreadStartSnapshotOrderSeq = 0;
+                    tipsSnapshotOrderSeq = orderSeq;
+                    hasRenderedPreview = false;
+                    userHasScrolled = false;
+                    hasShownTips = false;
                     getData(1, true, orderSeq, false);
                     isCanLoadMore = true;
                 }
@@ -621,6 +769,26 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
+                // YUJ-256 P1-3: record that the user has actively driven the
+                // RecyclerView. applyDataToAdapter will use this to suppress
+                // its scroll-to-end on the post-sync re-render so we do not
+                // yank the user back to the bottom of an unread chat.
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    userHasScrolled = true;
+                }
+                // YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
+                // DRAGGING 保持加载（慢滑手指在屏不应看到占位符）；IDLE 恢复。
+                try {
+                    RequestManager glideMgr = Glide.with(ChatActivity.this);
+                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                        glideMgr.pauseRequests();
+                    } else if (newState == SCROLL_STATE_IDLE) {
+                        glideMgr.resumeRequests();
+                    }
+                    // DRAGGING: 不变
+                } catch (IllegalArgumentException ignored) {
+                    // Activity 已销毁的竞态保护
+                }
                 // 简化日志：仅在 IDLE 时输出详情
                 int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
                 isShowHistory = lastItemPosition < chatAdapter.getItemCount() - 1;
@@ -662,6 +830,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.GONE);
                 unreadStartMsgOrderSeq = 0;
                 lastPreviewMsgOrderSeq = 0;
+                // YUJ-258 P1-NEW-1: reset snapshots + render flags so the
+                // fresh reload triggered by the "N new messages" bubble
+                // actually scrolls to end and does not reinsert a stale
+                // unread divider (YUJ-242 regression path).
+                unreadStartSnapshotOrderSeq = 0;
+                tipsSnapshotOrderSeq = 0;
+                hasRenderedPreview = false;
+                userHasScrolled = false;
+                hasShownTips = false;
                 long maxSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
                 new Handler().postDelayed(() -> {
                     getData(0, true, maxSeq, true);
@@ -676,6 +853,295 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             isCanLoadMore = false;
         });
 
+        // YUJ-267 · Fix B：所有以 channelId 为 key 的 SDK 监听 / EndpointManager
+        // setMethod 都挪到 attachChannelListeners()，配合 onNewIntent 做 detach →
+        // initParam → attach 复用流程。initListener 只负责装配一次性的 UI click /
+        // 非 channel-keyed endpoint method。
+        attachChannelListeners();
+        EndpointManager.getInstance().setMethod("hide_pinned_view", object -> {
+            if (!isShowPinnedView) return null;
+            isShowPinnedView = false;
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
+            wkVBinding.timeTv.setVisibility(View.GONE);
+            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
+            animator.setDuration(200);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    wkVBinding.pinnedLayout.clearAnimation();
+                    wkVBinding.pinnedLayout.setVisibility(View.GONE);
+                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
+                        if (!isShowCallingView) {
+                            chatAdapter.getData().remove(0);
+                            chatAdapter.notifyItemRemoved(0);
+                        }
+                        //chatAdapter.notifyDataSetChanged();
+                    }
+                }
+
+                public void onAnimationStart(Animator animation) {
+                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+                }
+            });
+            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+            animator.start();
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("show_pinned_view", object -> {
+            if (isShowPinnedView) {
+                return null;
+            }
+            isShowPinnedView = true;
+
+            if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type != WKContentType.spanEmptyView) {
+                WKMsg msg = getSpanEmptyMsg();
+                chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
+            }
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
+            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
+            wkVBinding.timeTv.setVisibility(View.GONE);
+            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", -wkVBinding.pinnedLayout.getHeight(), 0);
+            animator.setDuration(200);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    // wkVBinding.pinnedLayout.clearAnimation();
+                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+                }
+            });
+            animator.start();
+            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("tip_msg_in_chat", object -> {
+            tipsMsg((String) object);
+            return null;
+        });
+        EndpointManager.getInstance().setMethod("reset_channel_all_pinned_msg", object -> {
+            resetHideChannelAllPinnedMessage();
+            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                if (hideChannelAllPinnedMessage == 1) {
+                    if (chatAdapter.getData().get(i).isPinned == 1) {
+                        chatAdapter.getData().get(i).isPinned = 0;
+                        chatAdapter.notifyStatus(i);
+                    }
+                } else {
+                    if (chatAdapter.getData().get(i).isPinned == 0) {
+                        if (chatAdapter.getData().get(i).wkMsg.remoteExtra != null && chatAdapter.getData().get(i).wkMsg.remoteExtra.isPinned == 1) {
+                            chatAdapter.getData().get(i).isPinned = 1;
+                            chatAdapter.notifyStatus(i);
+                        }
+                    }
+                }
+            }
+            return null;
+        });
+    }
+
+    @Override
+    protected void onNewIntent(@NonNull Intent intent) {
+        super.onNewIntent(intent);
+        // YUJ-276 · diagnostic trace：singleTop 复用路径。只有当 ChatActivity 已经
+        // 在栈顶时才会走这里。窄屏下从 TabActivity 返回后 ChatActivity 通常已被
+        // finish，所以窄屏再点只会跑 onCreate 冷路径；看到这条 log 本身就是验证
+        // 复用生效（多见于分屏态 / 同 Activity 切不同群）。
+        long tNewIntent = SystemClock.uptimeMillis();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_NEW_INTENT] previousChannel=" + channelId
+                    + " newChannel=" + intent.getStringExtra("channelId"));
+        }
+        // YUJ-267 · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
+        // onDestroy → onCreate，省掉 XML 膨胀 / PanelSwitchHelper 首建 / Activity
+        // transition，目标感知延迟 < 200ms（原 500-800ms）。
+        //
+        // 流程（YUJ-270 P0-2 修正：persist 必须在 reset 之前！）：
+        // 1. 快照 oldChannelId / oldChannelType —— 两者在 initParam 后都会变；
+        // 2. 用旧 channelId 做 key 卸所有 channel-keyed 监听；
+        // 3. **先 persist 旧 channel 的草稿 / 已读 / 未读**（此时实例字段仍是旧值，
+        //    editText.getText / readMsgIds / redDot 未被 reset 清零）；
+        // 4. setIntent + initParam 更新 channelId / channelType + maxMsgSeq/OrderSeq；
+        // 5. resetPerChannelState 清 per-channel 一次性状态（reminder / redDot /
+        //    snapshot / userHasScrolled / disposable / isRefreshLoading 等）；
+        // 6. 显式清 chatAdapter，避免新群首帧闪一下旧消息；
+        // 7. attachChannelListeners 用新 channelId 重装；
+        // 8. initData 读新 channel 的 DB + 同步头像 / title / membership。
+        //
+        // 历史坑（YUJ-269 ReviewBot P0-2）：R1 版本先 reset 再 persist，editText 被
+        // setText("") 后 persist 读到空串 → 草稿被空覆写；readMsgIds.clear() 后 persist
+        // 检查 isNotEmpty 失败 → 已读回执永不触发；redDot=0 导致 clearUnread 失效。
+        String oldChannelId = channelId;
+        byte oldChannelType = channelType;
+
+        detachChannelListeners(oldChannelId);
+
+        // 先持久化旧 channel 编辑态（此时 editText / readMsgIds / redDot 还是旧值）。
+        persistOldChannelEditState(oldChannelId, oldChannelType);
+
+        setIntent(intent);
+        initParam();
+        // 再 reset 实例字段到新 channel 初值。
+        resetPerChannelState();
+        chatAdapter.setList(new ArrayList<>());
+        attachChannelListeners();
+        // Space / push 去重字段对齐当前 channel（onResume 仍会再设一次，此处先落地
+        // 保证任意在 onResume 前触发的业务都看到新 channel）。
+        WKUIKitApplication.getInstance().chattingChannelID = channelId;
+        initData();
+        if (WKBinder.isDebug) {
+            Log.d("YUJ276-trace", "[T_ON_NEW_INTENT_END] channel=" + channelId
+                    + " total=" + (SystemClock.uptimeMillis() - tNewIntent) + "ms");
+        }
+    }
+
+    /**
+     * YUJ-267 · Fix B：持久化上一个 channel 的编辑态（草稿 / 阅后即焚 / 浏览位置），
+     * 对齐 {@link #onDestroy()}.{@code saveEditContent()} 的行为，避免复用时旧群
+     * 的输入内容丢失。与 saveEditContent 的差别：这里不 dispose Activity 级资源，
+     * 不 release 语音，只做 per-channel 数据落盘。
+     *
+     * <p>YUJ-270 P0-2：必须在 {@link #resetPerChannelState()} <b>之前</b>调用 —— 否则
+     * editText / readMsgIds / redDot 都已被 reset 清零，persist 读到零值。
+     *
+     * <p>YUJ-270 P1-1：必须从 {@link #onNewIntent} 顶部把 {@code oldChannelType} 作为
+     * 入参传下来 —— 不能在方法内用 {@code WKChannelManager.getChannel()} 探测，否则
+     * 子区（{@link WKChannelType#COMMUNITY_TOPIC}）在 PERSONAL/GROUP 都查不到，会兜底
+     * 到 {@code this.channelType}（initParam 已改成新值）→ 对旧子区用错类型写
+     * coverExtra / clearUnread。
+     *
+     * @param oldChannelId   旧 channelId（onNewIntent 入口快照）
+     * @param oldChannelType 旧 channelType（onNewIntent 入口快照，<b>不要</b>从 SDK 探测）
+     */
+    private void persistOldChannelEditState(String oldChannelId, byte oldChannelType) {
+        if (TextUtils.isEmpty(oldChannelId)) return;
+
+        // 草稿 / 浏览位置需要 adapter 有数据才有意义；没数据就只处理 unread / read-msg。
+        long keepMsgSeq = 0;
+        int offsetY = 0;
+        String content = chatPanelManager != null && chatPanelManager.getEditText() != null
+                && chatPanelManager.getEditText().getText() != null
+                ? chatPanelManager.getEditText().getText().toString() : "";
+
+        if (chatAdapter != null && WKReader.isNotEmpty(chatAdapter.getData()) && linearLayoutManager != null) {
+            int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
+            int endItemPosition = linearLayoutManager.findLastVisibleItemPosition();
+            if (endItemPosition != chatAdapter.getData().size() - 1) {
+                WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
+                if (msg != null) {
+                    keepMsgSeq = msg.messageSeq;
+                    int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
+                    View view = linearLayoutManager.findViewByPosition(index);
+                    if (view != null) {
+                        offsetY = view.getTop();
+                    }
+                }
+            }
+        }
+
+        // 关键：用入参 oldChannelType，不探测 SDK。子区类型不会被误降成 GROUP/PERSONAL。
+        MsgModel.getInstance().clearUnread(oldChannelId, oldChannelType, redDot, null);
+        MsgModel.getInstance().updateCoverExtra(oldChannelId, oldChannelType, browseTo, keepMsgSeq, offsetY, content);
+        MsgModel.getInstance().deleteFlameMsg();
+        // 复用前清 read msg 上报（onDestroy 会做一次，此处提前做一次）。
+        if (WKReader.isNotEmpty(readMsgIds)) {
+            EndpointManager.getInstance().invoke("read_msg", new ReadMsgMenu(oldChannelId, oldChannelType, readMsgIds));
+            readMsgIds.clear();
+        }
+    }
+
+    /**
+     * YUJ-267 · Fix B · reset matrix：per-channel 一次性状态必须在切换时清零。
+     * 遗漏会导致跨群串红点 / 串未读分割线 / 串 reminder / 串键盘高度等。
+     *
+     * 参见 issue / onDestroy 的 saveEditContent 流程 — 所有初始化值来自 onCreate
+     * 初值或 initData 从 intent 读入的快照。
+     */
+    private void resetPerChannelState() {
+        // scroll / preview 相关
+        isShowHistory = false;
+        isSyncLastMsg = false;
+        isToEnd = true;
+        isViewingPicture = false;
+        hasRenderedPreview = false;
+        userHasScrolled = false;
+        hasShownTips = false;
+        hasPositionedUnread = false;
+        // unread 位置定位 snapshot（initData 会从 intent 重写；此处先清零避免上一个
+        // channel 残留的 snapshot 命中新 channel 的 applyDataToAdapter）
+        unreadStartSnapshotOrderSeq = 0;
+        tipsSnapshotOrderSeq = 0;
+        unreadStartMsgOrderSeq = 0;
+        tipsOrderSeq = 0;
+        lastPreviewMsgOrderSeq = 0;
+        // 红点 / 滚动 / 展示标记
+        redDot = 0;
+        keepOffsetY = 0;
+        lastVisibleMsgSeq = 0;
+        isCanLoadMore = false;
+        isUpdateRedDot = true;
+        // time divider 去重
+        lastShowTimeUpdate = 0;
+        lastShowTimeIndex = -1;
+        // pinned / calling / tip 条幅
+        isShowPinnedView = false;
+        isShowCallingView = false;
+        isTipMessage = false;
+        // thread
+        hasJoinedThread = false;
+        // group meta
+        count = 0;
+        groupType = WKGroupType.normalGroup;
+        // 编辑态
+        replyWKMsg = null;
+        editMsg = null;
+        // per-channel 集合
+        reminderList.clear();
+        groupApproveList.clear();
+        reminderIds.clear();
+        readMsgIds.clear();
+        // upload gate
+        isUploadReadMsg = true;
+        // rendering frame state
+        isShowChatActivity = true;
+
+        // YUJ-270 P2-1 · SwipeRefresh / LoadMore 忙位：旧 channel 刷新中途切群时必须清，
+        // 否则新 channel 的 loadMsgs / loadMoreMsgs 首帧会被 `isRefreshLoading || !isCanRefresh`
+        // 门禁挡掉，滚到顶 / 到底不再触发请求。
+        isRefreshLoading = false;
+        isMoreLoading = false;
+        isCanRefresh = true;
+
+        // YUJ-270 P2-2 · RxJava subscription：旧 channel 的 media 下载 / 任务订阅如果不
+        // dispose，切到新 channel 后订阅叠加 → 回调错绑（新 channel 收到旧 channel 的
+        // onNext）+ 内存 leak。
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+        disposable = null;
+
+        // YUJ-270 P2-3 · 空态补白：unfilledHeight 是按当前 channel 的列表高度 - 消息总高
+        // 算出来的，跨 channel 直接残留会让空态滚动距离算错（上下错位几行高）。
+        unfilledHeight = 0;
+
+        // 重置红点 UI（彻底清）
+        wkVBinding.chatUnreadLayout.newMsgLayout.setVisibility(View.GONE);
+        numberTextView.setNumber(0, false);
+        CommonAnim.getInstance().showOrHide(numberTextView, false, false);
+        // 键盘 / panel：新 channel 不残留旧键盘
+        if (chatPanelManager != null) {
+            chatPanelManager.resetToolBar();
+            if (chatPanelManager.getEditText() != null) {
+                chatPanelManager.getEditText().setText("");
+            }
+        }
+    }
+
+    /**
+     * YUJ-267 · Fix B · 注册所有以 channelId 为 key 的 SDK 监听 + EndpointManager
+     * setMethod。onCreate → initListener() 走一次；onNewIntent 复用路径 detach →
+     * attach 走一次。
+     */
+    private void attachChannelListeners() {
         //监听频道改变通知
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo(channelId, (channel, isEnd) -> {
             if (channel == null) return;
@@ -877,23 +1343,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
                 }
                 if (maxOrderSeq > tempMaxOrderSeq && !hasPositionedUnread) {
+                    // YUJ-258 P1-NEW-2: reset snapshots + render flags before
+                    // the reconnect refresh so the viewport actually scrolls
+                    // to end after airplane/sync-complete, rather than being
+                    // pinned to the previous preview position.
+                    unreadStartSnapshotOrderSeq = 0;
+                    tipsSnapshotOrderSeq = 0;
+                    hasRenderedPreview = false;
+                    userHasScrolled = false;
+                    hasShownTips = false;
                     getData(0, true, maxOrderSeq, true);
                 }
-//                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
-//                if (firstItemPosition == -1) return;
-//                if (WKReader.isNotEmpty(chatAdapter.getData())) {
-//                    WKMsg msg = chatAdapter.getFirstVisibleItem(firstItemPosition);
-//                    if (msg != null) {
-////                            keepMsgSeq = msg.messageSeq;
-//                        lastPreviewMsgOrderSeq = msg.orderSeq;
-//                        int index = chatAdapter.getFirstVisibleItemIndex(firstItemPosition);
-//                        View view = linearLayoutManager.findViewByPosition(index);
-//                        if (view != null) {
-//                            keepOffsetY = view.getTop();
-//                        }
-//                    }
-//                }
-//                getData(1, true, lastPreviewMsgOrderSeq, false);
             }
         });
         EndpointManager.getInstance().setMethod(channelId, EndpointCategory.refreshProhibitWord, object -> {
@@ -909,93 +1369,29 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             return 1;
         });
-        EndpointManager.getInstance().setMethod("hide_pinned_view", object -> {
-            if (!isShowPinnedView) return null;
-            isShowPinnedView = false;
-            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
-            wkVBinding.timeTv.setVisibility(View.GONE);
-            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", 0, -AndroidUtilities.dp(53));
-            animator.setDuration(200);
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    wkVBinding.pinnedLayout.clearAnimation();
-                    wkVBinding.pinnedLayout.setVisibility(View.GONE);
-                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
-                        if (!isShowCallingView) {
-                            chatAdapter.getData().remove(0);
-                            chatAdapter.notifyItemRemoved(0);
-                        }
-                        //chatAdapter.notifyDataSetChanged();
-                    }
-                }
-
-                public void onAnimationStart(Animator animation) {
-                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-                }
-            });
-            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-            animator.start();
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("show_pinned_view", object -> {
-            if (isShowPinnedView) {
-                return null;
-            }
-            isShowPinnedView = true;
-
-            if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type != WKContentType.spanEmptyView) {
-                WKMsg msg = getSpanEmptyMsg();
-                chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
-            }
-            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) wkVBinding.timeTv.getLayoutParams();
-            lp.topMargin = AndroidUtilities.dp(10) + getTopPinViewHeight();
-            wkVBinding.timeTv.setVisibility(View.GONE);
-            ObjectAnimator animator = ObjectAnimator.ofFloat(wkVBinding.pinnedLayout, "translationY", -wkVBinding.pinnedLayout.getHeight(), 0);
-            animator.setDuration(200);
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    // wkVBinding.pinnedLayout.clearAnimation();
-                    wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-                }
-            });
-            animator.start();
-            wkVBinding.pinnedLayout.setVisibility(View.VISIBLE);
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("tip_msg_in_chat", object -> {
-            tipsMsg((String) object);
-            return null;
-        });
-        EndpointManager.getInstance().setMethod("reset_channel_all_pinned_msg", object -> {
-            resetHideChannelAllPinnedMessage();
-            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                if (hideChannelAllPinnedMessage == 1) {
-                    if (chatAdapter.getData().get(i).isPinned == 1) {
-                        chatAdapter.getData().get(i).isPinned = 0;
-                        chatAdapter.notifyStatus(i);
-                    }
-                } else {
-                    if (chatAdapter.getData().get(i).isPinned == 0) {
-                        if (chatAdapter.getData().get(i).wkMsg.remoteExtra != null && chatAdapter.getData().get(i).wkMsg.remoteExtra.isPinned == 1) {
-                            chatAdapter.getData().get(i).isPinned = 1;
-                            chatAdapter.notifyStatus(i);
-                        }
-                    }
-                }
-            }
-            return null;
-        });
     }
 
-    @Override
-    protected void onNewIntent(@NonNull Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        initParam();
-        initData();
+    /**
+     * YUJ-267 · Fix B · 用旧 channelId 作 key 卸所有 channel-keyed 监听。与
+     * {@link #onDestroy()} 里的 remove 块保持同步——onDestroy 调用的是当前 channelId；
+     * onNewIntent 调用此方法时 channelId 尚未更新，传入的 oldChannelId 即当前值。
+     */
+    private void detachChannelListeners(String oldChannelId) {
+        if (TextUtils.isEmpty(oldChannelId)) return;
+        WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(oldChannelId);
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeRefreshChannelMemberInfo(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeRemoveChannelMemberListener(oldChannelId);
+        WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeDeleteMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeRefreshMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeSendMsgCallBack(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener(oldChannelId);
+        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + oldChannelId);
+        WKIM.getInstance().getMsgManager().removeClearMsg(oldChannelId);
+        WKIM.getInstance().getCMDManager().removeCmdListener(oldChannelId);
+        WKIM.getInstance().getReminderManager().removeNewReminderListener(oldChannelId);
+        EndpointManager.getInstance().remove(oldChannelId);
     }
 
     private void initData() {
@@ -1007,7 +1403,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
         getChannelState();
 
-        chatAdapter.setList(new ArrayList<>());
+        // YUJ-242: do NOT clear the adapter here. The previous setList(empty)
+        // caused a visible white-screen flash while getData() is waiting on
+        // sync. applyDataToAdapter(isSetNewData=true) replaces data anyway,
+        // and on onNewIntent (same Activity reused for a different channel)
+        // the new channel's data will overwrite via setNewInstance(list).
+        // chatAdapter.setList(new ArrayList<>());
         if (WKSystemAccount.isSystemAccount(channelId) || channelType == WKChannelType.CUSTOMER_SERVICE) {
             CommonAnim.getInstance().showOrHide(callIV, false, false);
         }
@@ -1144,6 +1545,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (getIntent().hasExtra("unreadStartMsgOrderSeq")) {
             unreadStartMsgOrderSeq = getIntent().getLongExtra("unreadStartMsgOrderSeq", 0);
         }
+        // YUJ-256 P1-2: take a snapshot of the positioning targets so the
+        // second applyDataToAdapter (after sync) still inserts the divider
+        // and scrolls correctly even though the source fields were zeroed
+        // out during the first (preview) render.
+        unreadStartSnapshotOrderSeq = unreadStartMsgOrderSeq;
+        tipsSnapshotOrderSeq = tipsOrderSeq;
+        hasRenderedPreview = false;
+        userHasScrolled = false;
+        hasShownTips = false;
 
         List<WKReminder> allReminder = WKIM.getInstance().getReminderManager().getReminders(channelId, channelType);
         if (WKReader.isNotEmpty(allReminder)) {
@@ -1325,7 +1735,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
         if (unreadStartMsgOrderSeq != 0) contain = true;
         // 系统 Bot 跨 Space 共享：加大加载量，确保过滤后有足够的当前 Space 消息
-        int loadLimit = SYSTEM_BOTS.contains(channelId) ? Math.max(limit, 500) : limit;
+        int loadLimit = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId) ? Math.max(limit, 500) : limit;
         WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, loadLimit, aroundMsgOrderSeq, new IGetOrSyncHistoryMsgBack() {
             @Override
             public void onSyncing() {
@@ -1454,13 +1864,21 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 将已构建好的 UI list 应用到 adapter（必须在主线程调用）。
      */
     private void applyDataToAdapter(List<WKUIChatMsgItemEntity> list, int pullMode, boolean isSetNewData, boolean isScrollToEnd) {
+        // YUJ-256 P1-3: once we have already rendered the local-first preview,
+        // the second (post-sync) render must NOT yank the user's viewport.
+        // Same if the user has manually scrolled during the sync window.
+        final boolean effectiveScrollToEnd = isScrollToEnd && !hasRenderedPreview && !userHasScrolled;
         if (isSetNewData) {
             int unreadScrollIndex = -1;
-            if (unreadStartMsgOrderSeq != 0) {
+            // YUJ-256 P1-2: use the non-zeroed snapshot so the divider is
+            // inserted on every applyDataToAdapter call (preview + sync),
+            // not only the first one.
+            final long unreadAnchor = unreadStartSnapshotOrderSeq;
+            if (unreadAnchor != 0) {
                 int bestIndex = -1;
                 for (int i = 0, size = list.size(); i < size; i++) {
                     if (list.get(i).wkMsg != null && list.get(i).wkMsg.orderSeq > 0
-                            && list.get(i).wkMsg.orderSeq >= unreadStartMsgOrderSeq) {
+                            && list.get(i).wkMsg.orderSeq >= unreadAnchor) {
                         bestIndex = i;
                         break;
                     }
@@ -1471,12 +1889,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     list.add(bestIndex, uiChatMsgItemEntity);
                     unreadScrollIndex = bestIndex;
                 }
+                // Consume the legacy one-shot field for other consumers that
+                // still check it; the snapshot survives so subsequent
+                // applyDataToAdapter calls re-insert the divider.
                 unreadStartMsgOrderSeq = 0;
             }
             chatAdapter.resetData(list);
             chatAdapter.setNewInstance(list);
             chatAdapter.rebuildIndex();
-            if (unreadScrollIndex >= 0) {
+            // Only scroll to the unread anchor when the user has not taken
+            // over the viewport (YUJ-256 P1-3).
+            if (unreadScrollIndex >= 0 && !userHasScrolled) {
                 final int scrollTarget = unreadScrollIndex;
                 linearLayoutManager.scrollToPositionWithOffset(scrollTarget, AndroidUtilities.dp(50));
                 hasPositionedUnread = true;
@@ -1521,25 +1944,39 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 clearEdgeEffects();
             }
         }
-        if (tipsOrderSeq != 0 || lastPreviewMsgOrderSeq != 0) {
+        // YUJ-256 P1-2: use the tips snapshot so the second applyDataToAdapter
+        // call (after sync completes) still scrolls to and highlights the
+        // target message, even though `tipsOrderSeq` was zeroed in the first
+        // call.
+        final long tipsAnchor = tipsSnapshotOrderSeq;
+        if (tipsAnchor != 0 || lastPreviewMsgOrderSeq != 0) {
             wkVBinding.recyclerView.setVisibility(View.VISIBLE);
-            if (tipsOrderSeq != 0) {
-                int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsOrderSeq);
+            // Only auto-scroll to the tips anchor on the first render, or if
+            // the user has not yet taken over the viewport (YUJ-256 P1-3).
+            if (tipsAnchor != 0 && !userHasScrolled) {
+                int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsAnchor);
                 if (tipsIndex >= 0) {
                     linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
-                    chatAdapter.getItem(tipsIndex).isShowTips = true;
-                    chatAdapter.notifyItemChanged(tipsIndex);
+                    // YUJ-258 P2-NEW-1: only trigger the tips highlight once.
+                    // The snapshot still drives the second (post-sync) scroll
+                    // so the target stays in view, but the flash animation
+                    // must not replay.
+                    if (!hasShownTips) {
+                        chatAdapter.getItem(tipsIndex).isShowTips = true;
+                        chatAdapter.notifyItemChanged(tipsIndex);
+                        hasShownTips = true;
+                    }
                     tipsOrderSeq = 0;
                 }
             }
-            if (lastPreviewMsgOrderSeq != 0) {
+            if (lastPreviewMsgOrderSeq != 0 && !userHasScrolled) {
                 int previewIndex = chatAdapter.findPositionByOrderSeq(lastPreviewMsgOrderSeq);
                 if (previewIndex >= 0) {
                     linearLayoutManager.scrollToPositionWithOffset(previewIndex, keepOffsetY);
                 }
             }
         } else {
-            if (isScrollToEnd)
+            if (effectiveScrollToEnd)
                 wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
             else wkVBinding.recyclerView.setVisibility(View.VISIBLE);
         }
@@ -1548,6 +1985,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (chatAdapter.getData().get(chatAdapter.getData().size() - 1).wkMsg.messageSeq == maxSeq) {
                 isCanLoadMore = false;
             }
+        }
+
+        // YUJ-256 P1-3: mark that the preview/first render has happened so
+        // any subsequent applyDataToAdapter call (e.g. sync-complete second
+        // onResult) does not yank the user's viewport back to the end.
+        if (isSetNewData) {
+            hasRenderedPreview = true;
         }
 
         new Handler().postDelayed(() -> {
@@ -2090,16 +2534,33 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        // 折叠屏 P0 止血（#174）：加了 configChanges 后本回调会真触发。
+        // 刷新一次屏宽/density 缓存供依赖该值的 UI 计算；不再对全量消息做
+        // notifyItemRangeChanged，历史消息量大时会明显卡顿（L1/L2 再做精细化刷新）。
         float density = getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            // 横屏
-            AndroidUtilities.isPORTRAIT = false;
-            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
-            // 竖屏
-            AndroidUtilities.isPORTRAIT = true;
-            chatAdapter.notifyItemRangeChanged(0, chatAdapter.getItemCount());
+        AndroidUtilities.isPORTRAIT = newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE;
+        // YUJ-273 · 折叠屏回归：非折叠态启动→展开时右侧消息区自适应失效。
+        // setupPaneResizeObserver 依赖 RecyclerView 的 onLayoutChange（width 变化）触发
+        // 可见项重绑，但若 ChatActivity 在非折叠态启动时被 Embedding 判为「不分屏」而
+        // 全屏化，随后 unfold：Embedding 会改 Activity 容器尺寸，但某些设备上
+        // onLayoutChange 的 oldWidth 可能因为 lifecycle 时序落空导致 prev==0 被早退
+        // （见 setupPaneResizeObserver 的 prev==0 分支）。这里主动 post 一次可见项重绑，
+        // BubbleLayout.onMeasure 会在下一帧拉到新的 PaneMetrics，保证气泡 maxWidth 跟随
+        // 新 pane 宽度刷新。与 onLayoutChange 路径是幂等兜底。
+        if (wkVBinding != null && wkVBinding.recyclerView != null
+                && chatAdapter != null && linearLayoutManager != null) {
+            wkVBinding.recyclerView.post(() -> {
+                if (chatAdapter == null || linearLayoutManager == null) return;
+                int first = linearLayoutManager.findFirstVisibleItemPosition();
+                int last = linearLayoutManager.findLastVisibleItemPosition();
+                if (first < 0 || last < 0 || last < first) return;
+                try {
+                    chatAdapter.notifyItemRangeChanged(first, last - first + 1);
+                } catch (Throwable ignored) {
+                    // 配置变更路径上的 adapter 竞态兜底
+                }
+            });
         }
     }
 
@@ -2340,6 +2801,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (msg != null && msg.isDeleted == 0) {
                 unreadStartMsgOrderSeq = 0;
                 tipsOrderSeq = msg.orderSeq;
+                // YUJ-256 P1-2: sync snapshots + reset render flags for the
+                // tipsMsg jump so the second (post-sync) callback still
+                // positions on the target message.
+                unreadStartSnapshotOrderSeq = 0;
+                tipsSnapshotOrderSeq = msg.orderSeq;
+                hasRenderedPreview = false;
+                userHasScrolled = false;
+                hasShownTips = false;
                 // keepMessageSeq = msg.orderSeq;
                 getData(0, true, msg.orderSeq, true);
                 isCanLoadMore = true;
@@ -2534,11 +3003,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void finish() {
-        if (SYSTEM_BOTS.contains(channelId)) {
+        if (com.chat.base.space.SystemBotsFallback.isSystemBot(channelId)) {
             SpaceModel.getInstance().invalidateMembersCache();
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
         }
         super.finish();
+        // YUJ-278 P1-3：快进慢出对称。入场 120ms 后，非 swipe 返回（系统 back /
+        // 工具栏返回按钮 / finish() 直调）若不覆盖仍走系统默认 ~250-350ms。
+        // 这里用反向 slide pair 把返回也压到 120ms。pre-34 走 overridePendingTransition
+        // 必须在 super.finish() 之后调；API 34+ 已由 NarrowTransition.applyFastOpen()
+        // 在 onCreate 里一次性注册过 CLOSE override，这里是 no-op。
+        NarrowTransition.applyFastClose(this);
         SoftKeyboardUtils.getInstance().hideSoftKeyboard(this);
         EndpointManager.getInstance().remove(channelId);
         EndpointManager.getInstance().invoke("stop_screen_shot", this);
@@ -2562,22 +3037,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     protected void onDestroy() {
         super.onDestroy();
         chatPanelManager.onDestroy();
-        // 移除 WKIM 各 Manager 的监听，防止单例持有 Activity 引用导致泄漏
-        WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(channelId);
-        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeRefreshChannelMemberInfo(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeRemoveChannelMemberListener(channelId);
-        WKIM.getInstance().getChannelMembersManager().removeAddChannelMemberListener(channelId);
-        WKIM.getInstance().getMsgManager().removeDeleteMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeRefreshMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeSendMsgCallBack(channelId);
-        WKIM.getInstance().getMsgManager().removeNewMsgListener(channelId);
-        WKIM.getInstance().getMsgManager().removeNewMsgListener("thread_count_" + channelId);
-        WKIM.getInstance().getMsgManager().removeClearMsg(channelId);
-        WKIM.getInstance().getCMDManager().removeCmdListener(channelId);
-        WKIM.getInstance().getReminderManager().removeNewReminderListener(channelId);
+        // YUJ-267 · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
+        // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，
+        // 避免两条路径清理矩阵漂移。
+        detachChannelListeners(channelId);
         WKVoiceViewManager.getInstance().release();
-        EndpointManager.getInstance().remove(channelId);
         EndpointManager.getInstance().remove("hide_pinned_view");
         EndpointManager.getInstance().remove("show_pinned_view");
         EndpointManager.getInstance().remove("tip_msg_in_chat");
@@ -2823,7 +3287,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (TextUtils.isEmpty(currentSpaceId)) {
             return messages;
         }
-        boolean isSystemBot = SYSTEM_BOTS.contains(channelId);
+        boolean isSystemBot = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId);
         List<WKMsg> filtered = new ArrayList<>();
         for (WKMsg msg : messages) {
             String msgSpaceId = getSpaceIdFromMsg(msg);

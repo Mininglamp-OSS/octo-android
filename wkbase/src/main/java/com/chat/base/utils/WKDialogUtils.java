@@ -13,6 +13,7 @@ import android.graphics.drawable.Drawable;
 import android.text.InputFilter;
 import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -40,6 +41,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.request.transition.Transition;
 import com.chat.base.R;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.endpoint.EndpointManager;
@@ -222,7 +224,8 @@ public class WKDialogUtils {
         });
         qrCodeCell.setVisibility(GONE);
         if (!TextUtils.isEmpty(path)) {
-            new Thread(() -> Glide.with(context)
+            // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()，Glide 解码属 I/O
+            AppExecutors.io().execute(() -> Glide.with(context)
                     .asBitmap()
                     .load(path)
                     .into(new CustomTarget<Bitmap>(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL) {
@@ -245,7 +248,7 @@ public class WKDialogUtils {
                         @Override
                         public void onLoadCleared(@Nullable Drawable placeholder) {
                         }
-                    })).start();
+                    }));
 //
         }
 
@@ -401,11 +404,37 @@ public class WKDialogUtils {
         Window window = alertDialog.getWindow();
         assert window != null;
         WindowManager.LayoutParams param = window.getAttributes();
-        param.width = AndroidUtilities.getScreenWidth() / 5 * 4;
+        param.width = (int) (PaneMetrics.widthPx(context) * 0.85f);
         if (versionEntity.is_force == 1) {
             cancelTv.setVisibility(GONE);
         }
         window.setAttributes(param);
+
+        // YUJ-279 · 折叠屏 phone→unfold 右侧自适应修复：
+        // 历史写法只在 show 时一次性读 PaneMetrics（show-at-use），已经在显的
+        // 升级 Dialog 不会跟随 pane 变化。注册一个 ComponentCallbacks 让 dialog
+        // 在 configuration change（unfold/fold/rotate）时重新按当前 pane 宽度
+        // 重设 window.attributes，dismiss 时解注册避免泄漏。
+        final android.content.ComponentCallbacks cfgListener = new android.content.ComponentCallbacks() {
+            @Override
+            public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+                try {
+                    if (!alertDialog.isShowing()) return;
+                    Window w = alertDialog.getWindow();
+                    if (w == null) return;
+                    WindowManager.LayoutParams p = w.getAttributes();
+                    p.width = (int) (PaneMetrics.widthPx(context) * 0.85f);
+                    w.setAttributes(p);
+                } catch (Throwable ignored) {
+                    // 配置变更路径上的 Dialog 竞态兜底
+                }
+            }
+
+            @Override
+            public void onLowMemory() {
+            }
+        };
+        context.registerComponentCallbacks(cfgListener);
 
         Handler handler = new Handler(Looper.getMainLooper());
         Runnable[] progressPoller = new Runnable[1];
@@ -433,7 +462,14 @@ public class WKDialogUtils {
             handler.postDelayed(progressPoller[0], 500);
         };
 
-        alertDialog.setOnDismissListener(d -> handler.removeCallbacks(progressPoller[0]));
+        alertDialog.setOnDismissListener(d -> {
+            handler.removeCallbacks(progressPoller[0]);
+            // YUJ-279 · 解注册 ComponentCallbacks 防止 leak
+            try {
+                context.unregisterComponentCallbacks(cfgListener);
+            } catch (Throwable ignored) {
+            }
+        });
 
         cancelTv.setOnClickListener(view1 -> {
             if (versionEntity.is_force == 0) {
@@ -503,18 +539,44 @@ public class WKDialogUtils {
 
     @SuppressLint("ClickableViewAccessibility")
     public void setViewLongClickPopup(View view, List<PopupMenuItem> list) {
-        final float[][] location = {new float[2]};
+        // YUJ-261 · 改用 GestureDetector 识别长按，OnTouchListener 返回 false 让 click 链路
+        // 继续传递。之前同一 view 同时挂 OnTouchListener + OnLongClickListener，view 在
+        // RecyclerView 刷新时重建会出现竞争，导致「长按被识别为点击被吞掉」或「点击落到 CANCEL」。
+        //
+        // YUJ-264 · Fix 5 加固：因为没有 setOnLongClickListener，框架的 long-click machinery
+        // 不会 set mHasPerformedLongPress=true，ACTION_UP 仍会触发 performClick()。结果是
+        // 长按 500ms 弹 popup + 用户松手同时跑 OnClickListener（同时进入会话 + 弹出菜单）。
+        // 这里用 longPressFired 标记在长按触发后消费 ACTION_UP，阻止 performClick。
+        final float[] downRaw = new float[2];
+        final boolean[] longPressFired = {false};
+        final GestureDetector detector = new GestureDetector(view.getContext(),
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDown(MotionEvent e) {
+                        longPressFired[0] = false;
+                        downRaw[0] = e.getRawX();
+                        downRaw[1] = e.getRawY();
+                        return false; // 不消费，click 继续
+                    }
+
+                    @Override
+                    public void onLongPress(MotionEvent e) {
+                        longPressFired[0] = true;
+                        showScreenPopup(view, new float[]{downRaw[0], downRaw[1]}, list, null);
+                    }
+                });
         view.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                location[0] = new float[]{event.getRawX(), event.getRawY()};
+            detector.onTouchEvent(event);
+            // YUJ-264: consume ACTION_UP after a long-press so the framework
+            // does NOT also fire performClick() on release. Without this,
+            // long-press → popup AND click → open chat both happen.
+            int action = event.getActionMasked();
+            if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+                    && longPressFired[0]) {
+                longPressFired[0] = false;
+                return true; // 消费 UP，阻止 performClick
             }
-            return false;
-        });
-        view.setOnLongClickListener(view1 -> {
-            if (location[0] != null) {
-                showScreenPopup(view, location[0], list, null);
-            }
-            return true;
+            return false; // 关键：不消费，click / RecyclerView scroll 继续链路
         });
     }
 

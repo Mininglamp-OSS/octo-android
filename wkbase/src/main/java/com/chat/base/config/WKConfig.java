@@ -68,6 +68,8 @@ public class WKConfig {
     public void saveAppConfig(WKAPPConfig WKAPPConfig) {
         String json = new Gson().toJson(WKAPPConfig);
         WKSharedPreferencesUtil.getInstance().putSP("app_config", json);
+        // YUJ-219 · A3：appconfig 更新后清掉系统 Bot 白名单缓存，下次读取走最新值
+        com.chat.base.space.SystemBotsFallback.invalidateCache();
     }
 
     public WKAPPConfig getAppConfig() {

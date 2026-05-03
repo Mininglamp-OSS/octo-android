@@ -23,7 +23,11 @@
             android:name=".chat.ChooseChatActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity android:name=".search.SearchUserActivity" />
-        <activity android:name=".chat.ChatPersonalActivity" />
+        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <activity
+            android:name=".chat.ChatPersonalActivity"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
         <activity
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
@@ -41,13 +45,19 @@
         <activity android:name=".setting.SettingActivity" />
         <activity android:name=".setting.DestroyAccountActivity" />
         <activity android:name=".group.GroupQrActivity" />
-        <activity android:name=".search.SearchAllActivity" />
+        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <activity android:name=".search.SearchAllActivity"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
         <activity android:name=".user.MyInfoActivity" />
         <activity android:name=".user.UserQrActivity" />
         <activity android:name=".user.MyHeadPortraitActivity" />
         <activity android:name=".setting.MsgNoticesSettingActivity" />
+        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
         <activity
             android:name=".user.UserDetailActivity"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:launchMode="singleTop" />
         <activity android:name=".user.UpdateUserInfoActivity" />
         <activity android:name=".user.SetUserRemarkActivity" />
@@ -79,12 +89,19 @@
         <activity android:name=".setting.ErrorLogsActivity" />
         <activity
             android:name="com.chat.uikit.TabActivity"
-            android:screenOrientation="portrait"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="adjustPan"
             android:launchMode="singleTask"/>
         <activity android:name="com.chat.uikit.chat.ChatActivity"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
-        <activity android:name="com.chat.uikit.search.remote.GlobalActivity" />
+        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <activity android:name="com.chat.uikit.search.remote.GlobalActivity"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
         <activity android:name="com.chat.uikit.chat.search.MessageRecordActivity" />
         <activity android:name="com.chat.uikit.chat.search.member.SearchWithMemberActivity" />
         <activity android:name="com.chat.uikit.chat.search.date.SearchWithDateActivity" />

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  YUJ-278 · 窄屏返回的「出场」动画（当前 Activity 向右滑出）。与
+  slide_in_right_fast.xml 对称的 iOS pop 过渡。配合 slide_in_left_fast.xml。
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <translate
+        android:duration="120"
+        android:fromXDelta="0"
+        android:interpolator="@android:anim/decelerate_interpolator"
+        android:toXDelta="100%p" />
+</set>

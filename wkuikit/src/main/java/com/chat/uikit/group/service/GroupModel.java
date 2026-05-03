@@ -16,6 +16,7 @@ import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.uikit.group.GroupEntity;
@@ -662,13 +663,15 @@ public class GroupModel extends WKBaseModel {
             return;
         }
         // 后台线程收集 group 列表：DB 查询不要阻塞主线程。
-        new Thread(() -> {
+        // YUJ-283 P-11: AppExecutors.io() 替代 new Thread()（统一命名：app-io-N）；
+        // 命名诊断日志仍按旧 tag yuj183-migration-collect 打印，不依赖线程名。
+        AppExecutors.io().execute(() -> {
             try {
                 List<String> groupNos = collectLocalGroupNos();
                 AndroidUtilities.runOnUIThread(() -> dispatchMigrationNext(groupNos, 0));
             } catch (Throwable ignored) {
             }
-        }, "yuj183-migration-collect").start();
+        });
     }
 
     /**

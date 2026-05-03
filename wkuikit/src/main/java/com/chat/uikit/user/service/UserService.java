@@ -80,4 +80,9 @@ public interface UserService {
 
     @POST("user/destroy/cancel")
     Observable<CommonResponse> cancelDestroy();
+
+    // YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者更新 bot 简介。
+    // 后端 PUT /robot/:uid/description 内置 creator_uid 校验，非 owner 返回 403。
+    @PUT("robot/{uid}/description")
+    Observable<CommonResponse> updateBotDescription(@Path("uid") String uid, @Body JSONObject body);
 }

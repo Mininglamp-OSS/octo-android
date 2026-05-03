@@ -377,6 +377,11 @@
     <string name="bot_creator_label">创建者</string>
     <string name="bot_commands_label">命令</string>
     <string name="bot_id_label">Bot ID</string>
+
+    <!-- YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot owner 编辑简介/头像提示文案。 -->
+    <string name="bot_edit_description_title">编辑简介</string>
+    <string name="bot_edit_description_hint">请输入 Bot 简介</string>
+    <string name="bot_description_update_success">简介已更新</string>
     <string name="bot_add_friend">添加好友</string>
 
     <string name="voice_input">语音输入</string>

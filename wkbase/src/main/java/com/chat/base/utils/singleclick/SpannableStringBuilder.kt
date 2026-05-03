@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 inline fun SpannableStringBuilder.onSingleClick(
     listener: View.OnClickListener,
     interval: Int = SingleClickUtil.singleClickInterval,
-    isShareSingleClick: Boolean = true,
+    isShareSingleClick: Boolean = false,
     noinline updateDrawStateAction: ((TextPaint) -> Unit)? = null,
     builderAction: SpannableStringBuilder .() -> Unit
 ): SpannableStringBuilder = inSpans(
@@ -46,7 +46,7 @@ inline fun SpannableStringBuilder.onSingleClick(
 class SingleClickableSpan(
     private val listener: View.OnClickListener,
     private val interval: Int = SingleClickUtil.singleClickInterval,
-    private val isShareSingleClick: Boolean = true,
+    private val isShareSingleClick: Boolean = false,
     private val updateDrawStateAction: ((TextPaint) -> Unit)? = null,
 ) : ClickableSpan() {
 

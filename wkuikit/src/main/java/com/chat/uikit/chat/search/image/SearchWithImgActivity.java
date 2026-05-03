@@ -19,6 +19,7 @@ import com.chat.base.endpoint.entity.ChooseChatMenu;
 import com.chat.base.entity.GlobalMessage;
 import com.chat.base.entity.GlobalSearchReq;
 import com.chat.base.entity.ImagePopupBottomSheetItem;
+import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.search.GlobalSearchModel;
 import com.chat.base.ui.Theme;
@@ -75,7 +76,8 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     @Override
     protected void initView() {
         PinnedHeaderItemDecoration mHeaderItemDecoration = new PinnedHeaderItemDecoration.Builder(1).enableDivider(false).create();
-        int wH = (AndroidUtilities.getScreenWidth() - AndroidUtilities.dp(6)) / 4;
+        // YUJ-251: image grid cell sizes against current pane, not full device width.
+        int wH = (PaneMetrics.widthPx(this) - AndroidUtilities.dp(6)) / 4;
         FullyGridLayoutManager layoutManager = new FullyGridLayoutManager(this, 4);
         wkVBinding.recyclerView.setLayoutManager(layoutManager);
         adapter = new SearchWithImgAdapter(wH, new SearchWithImgAdapter.ICLick() {

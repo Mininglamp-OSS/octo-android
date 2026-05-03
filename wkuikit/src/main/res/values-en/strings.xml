@@ -350,5 +350,10 @@
     <string name="external_member_space_suffix">\@%1$s</string>
     <!-- YUJ-204: UserInfo external-viewer bottom hint (aligns web .wk-userinfo-footer-external-hint) -->
     <string name="external_member_only_in_group_hint">You can only communicate in this group</string>
+
+    <!-- YUJ-238: Bot owner edit-description dialog strings -->
+    <string name="bot_edit_description_title">Edit description</string>
+    <string name="bot_edit_description_hint">Enter bot description</string>
+    <string name="bot_description_update_success">Description updated</string>
 </resources>
 

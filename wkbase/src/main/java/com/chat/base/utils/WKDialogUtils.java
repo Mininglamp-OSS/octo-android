@@ -409,6 +409,32 @@ public class WKDialogUtils {
         }
         window.setAttributes(param);
 
+        // YUJ-279 · 折叠屏 phone→unfold 右侧自适应修复：
+        // 历史写法只在 show 时一次性读 PaneMetrics（show-at-use），已经在显的
+        // 升级 Dialog 不会跟随 pane 变化。注册一个 ComponentCallbacks 让 dialog
+        // 在 configuration change（unfold/fold/rotate）时重新按当前 pane 宽度
+        // 重设 window.attributes，dismiss 时解注册避免泄漏。
+        final android.content.ComponentCallbacks cfgListener = new android.content.ComponentCallbacks() {
+            @Override
+            public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+                try {
+                    if (!alertDialog.isShowing()) return;
+                    Window w = alertDialog.getWindow();
+                    if (w == null) return;
+                    WindowManager.LayoutParams p = w.getAttributes();
+                    p.width = (int) (PaneMetrics.widthPx(context) * 0.85f);
+                    w.setAttributes(p);
+                } catch (Throwable ignored) {
+                    // 配置变更路径上的 Dialog 竞态兜底
+                }
+            }
+
+            @Override
+            public void onLowMemory() {
+            }
+        };
+        context.registerComponentCallbacks(cfgListener);
+
         Handler handler = new Handler(Looper.getMainLooper());
         Runnable[] progressPoller = new Runnable[1];
         progressPoller[0] = () -> {
@@ -435,7 +461,14 @@ public class WKDialogUtils {
             handler.postDelayed(progressPoller[0], 500);
         };
 
-        alertDialog.setOnDismissListener(d -> handler.removeCallbacks(progressPoller[0]));
+        alertDialog.setOnDismissListener(d -> {
+            handler.removeCallbacks(progressPoller[0]);
+            // YUJ-279 · 解注册 ComponentCallbacks 防止 leak
+            try {
+                context.unregisterComponentCallbacks(cfgListener);
+            } catch (Throwable ignored) {
+            }
+        });
 
         cancelTv.setOnClickListener(view1 -> {
             if (versionEntity.is_force == 0) {

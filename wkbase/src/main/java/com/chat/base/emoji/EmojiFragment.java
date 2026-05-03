@@ -1,11 +1,13 @@
 package com.chat.base.emoji;
 
+import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
@@ -27,6 +29,10 @@ import java.util.List;
  */
 public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     EmojiAdapter emojiAdapter;
+    // YUJ-282 · twin of emojiAdapter: the "常用表情" header strip. Kept as a field
+    // so onConfigurationChanged can push the new pane width into it as well —
+    // same show-at-use one-shot-width bug as the main grid, same fix.
+    private EmojiAdapter headerAdapter;
     private IEmojiClick iEmojiClick;
     int width = 0;
 
@@ -89,6 +95,37 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
         getCommonEmoji();
     }
 
+    /**
+     * YUJ-279 · 折叠屏 phone→unfold 右侧自适应修复：
+     * EmojiFragment 在正显示时（panel 已打开）unfold 到展开态，原先 {@link #initView()}
+     * 里的 {@code width = PaneMetrics.widthPx(ctx) - dp(30)*8} 是 show-at-use 一次性计算，
+     * pane 宽度变化后不会重算，导致 emoji 间距与新 pane 不匹配。
+     *
+     * <p>FragmentActivity 会把 {@code onConfigurationChanged} 派发给所有添加的 Fragment
+     * （host Activity 的 {@code configChanges} manifest 属性 + super.onConfigurationChanged
+     * 由 PR#175 / PR#177 覆盖），这里重新从 PaneMetrics 读一次当前 pane 宽度，推到
+     * {@link EmojiAdapter} 并触发重新绑定，margin 即跟随 pane 变化。
+     */
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (emojiAdapter == null || !isAdded() || getContext() == null) return;
+        int newWidth =
+                PaneMetrics.widthPx(requireContext()) - (AndroidUtilities.dp(30) * 8);
+        if (newWidth == width) return;
+        width = newWidth;
+        emojiAdapter.setWidth(newWidth);
+        emojiAdapter.notifyDataSetChanged();
+        // YUJ-282 · twin path: the common-emoji header strip shares the same
+        // one-shot width; refresh it alongside the main grid so margins match
+        // the new pane after unfold/fold. null-guarded: header only exists
+        // when the user has recently-used emoji.
+        if (headerAdapter != null) {
+            headerAdapter.setWidth(newWidth);
+            headerAdapter.notifyDataSetChanged();
+        }
+    }
+
     @Override
     protected void setTitle(TextView titleTv) {
 
@@ -131,7 +168,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
         emojiAdapter.removeAllHeaderView();
         View headerView = LayoutInflater.from(getContext()).inflate(R.layout.common_used_emoji_header_layout, null);
         RecyclerView recyclerView = headerView.findViewById(R.id.recyclerView);
-        EmojiAdapter headerAdapter = new EmojiAdapter(new ArrayList<>(), width);
+        headerAdapter = new EmojiAdapter(new ArrayList<>(), width);
         headerAdapter.addData(list);
         recyclerView.setLayoutManager(new StaggeredGridLayoutManager(8, StaggeredGridLayoutManager.VERTICAL));
         recyclerView.setAdapter(headerAdapter);

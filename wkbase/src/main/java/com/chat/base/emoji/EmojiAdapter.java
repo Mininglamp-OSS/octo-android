@@ -18,11 +18,21 @@ import java.util.List;
  * emoji表情适配器
  */
 public class EmojiAdapter extends BaseQuickAdapter<EmojiEntry, BaseViewHolder> {
-    private final int width;
+    // YUJ-279: mutable so EmojiFragment can refresh on unfold while panel is visible.
+    // Was `final int width`; made writable through setWidth() + convert() reads live value.
+    private int width;
 
     public EmojiAdapter(@Nullable List<EmojiEntry> data, int _width) {
         super(R.layout.item_emoji_layout, data);
         this.width = _width;
+    }
+
+    /**
+     * YUJ-279 · refresh the per-item margin to match the new pane width on unfold/fold.
+     * Caller must invoke {@link #notifyDataSetChanged()} afterwards to rebind visible cells.
+     */
+    public void setWidth(int width) {
+        this.width = width;
     }
 
     @Override

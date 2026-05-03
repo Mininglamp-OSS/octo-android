@@ -16,6 +16,7 @@ import com.chat.base.glide.ChooseMimeType;
 import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.systembar.WKStatusBarUtils;
@@ -77,7 +78,8 @@ public class WKScanActivity extends BarcodeCameraScanActivity {
             public void onBack(List<ChooseResult> paths) {
                 if (WKReader.isNotEmpty(paths)) {
                     Bitmap bitmap = BitmapFactory.decodeFile(paths.get(0).path);
-                    new Thread(() -> {
+                    // YUJ-283 P-11: AppExecutors.background() 取代 new Thread()（QR 解码是 CPU）
+                    AppExecutors.background().execute(() -> {
                         final String result = CodeUtils.parseCode(bitmap);
                         runOnUiThread(() -> {
                             if (TextUtils.isEmpty(result)) {
@@ -86,7 +88,7 @@ public class WKScanActivity extends BarcodeCameraScanActivity {
                             }
                             handleResult(result);
                         });
-                    }).start();
+                    });
                 }
             }
 

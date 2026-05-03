@@ -70,6 +70,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDeviceUtils;
@@ -183,7 +184,8 @@ public class WKUIKitApplication {
         initKitModuleListener();
 
         // WKIM.init + 监听注册 + sensitiveWords 放后台线程（涉及数据库 I/O）
-        new Thread(() -> {
+        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()，走 app-io-N 统一池
+        AppExecutors.io().execute(() -> {
             initIM();
 
             // sensitiveWords 解析放在 WKIM 线程，避免争抢主线程 CPU
@@ -199,7 +201,7 @@ public class WKUIKitApplication {
             MsgModel.getInstance().syncSensitiveWords();
             ProhibitWordModel.Companion.getInstance().sync();
             MsgModel.getInstance().deleteFlameMsg();
-        }).start();
+        });
     }
 
     public Context getContext() {

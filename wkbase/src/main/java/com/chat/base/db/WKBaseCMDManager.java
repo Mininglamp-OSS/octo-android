@@ -7,6 +7,7 @@ import android.text.TextUtils;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.xinbida.wukongim.WKIM;
@@ -308,7 +309,8 @@ public class WKBaseCMDManager {
                         tempList.addAll(list);
                 }
                 if (WKReader.isNotEmpty(tempList)) {
-                    new Thread(() -> handleRevokeCmd(tempList)).start();
+                    // YUJ-283 P-11: AppExecutors.background()（CMD 撤回处理是 CPU/DB 的混合，放背景池）
+                    AppExecutors.background().execute(() -> handleRevokeCmd(tempList));
                 }
             }
         }

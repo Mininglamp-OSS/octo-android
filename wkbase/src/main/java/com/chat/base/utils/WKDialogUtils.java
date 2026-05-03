@@ -224,7 +224,8 @@ public class WKDialogUtils {
         });
         qrCodeCell.setVisibility(GONE);
         if (!TextUtils.isEmpty(path)) {
-            new Thread(() -> Glide.with(context)
+            // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()，Glide 解码属 I/O
+            AppExecutors.io().execute(() -> Glide.with(context)
                     .asBitmap()
                     .load(path)
                     .into(new CustomTarget<Bitmap>(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL) {
@@ -247,7 +248,7 @@ public class WKDialogUtils {
                         @Override
                         public void onLoadCleared(@Nullable Drawable placeholder) {
                         }
-                    })).start();
+                    }));
 //
         }
 

@@ -106,6 +106,8 @@ public class CrashHandler implements Thread.UncaughtExceptionHandler {
             return false;
         }
         // 使用Toast来显示异常信息
+        // YUJ-283 P-11 白名单：Crash 路径需要独立 Looper 线程承载 Toast（主 Looper 即将退出），
+        // 不能走 AppExecutors。保留 new Thread() 写法并在 check-no-new-thread.sh 白名单内。
         new Thread() {
             @Override
             public void run() {

@@ -26,6 +26,7 @@ import com.chat.base.entity.AppModule;
 import com.chat.base.glide.OkHttpUrlLoader;
 import com.chat.base.net.OkHttpUtils;
 import com.chat.base.utils.AndroidUtilities;
+import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.CrashHandler;
 import com.tencent.bugly.crashreport.CrashReport;
 import com.chat.base.utils.WKDeviceUtils;
@@ -120,7 +121,8 @@ public class WKBaseApplication {
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
 
         // Bugly + Emoji + RLottie 合并到一个后台线程，减少 CPU 争抢
-        new Thread(() -> {
+        // YUJ-283 P-11: 走 AppExecutors.io() 统一调度（带 app-io-N 命名 + daemon）
+        AppExecutors.io().execute(() -> {
             CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
@@ -136,7 +138,7 @@ public class WKBaseApplication {
             }
             EmojiManager.getInstance().init();
             RLottieApplication.getInstance().init(context);
-        }).start();
+        });
 
         // Glide + cacheDir 不依赖 SP，先执行，给 EncryptedSP 后台线程更多时间
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());

@@ -78,6 +78,14 @@ public class WKBaseApplication {
         this.packageName = packageName;
         this.application = context;
         this.context = new WeakReference<>(context);
+
+        // YUJ-284 (P-01) · 冷启预热 —— 必须在 this.application 赋值之后、主线程
+        // 首次触达 WKSharedPreferencesUtil 之前调用（本方法尾部
+        // getBoolean("show_agreement_dialog") 即首个主线程 SP 访问点）。
+        // 在后台线程上预建 EncryptedSharedPreferences 单例，把 MasterKey
+        // AES256-GCM / KeyStore 握手（50-150ms）搬出主线程。
+        WKSharedPreferencesUtil.prewarm();
+
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
 

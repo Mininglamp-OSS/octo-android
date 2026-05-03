@@ -70,7 +70,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
-import com.chat.base.utils.AppExecutors;
+import com.chat.base.startup.AppStartup;
 import com.chat.base.utils.ImageUtils;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDeviceUtils;
@@ -183,25 +183,58 @@ public class WKUIKitApplication {
         // 避免与 ChatActivity 产生竞态导致 NPE
         initKitModuleListener();
 
-        // WKIM.init + 监听注册 + sensitiveWords 放后台线程（涉及数据库 I/O）
-        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()，走 app-io-N 统一池
-        AppExecutors.io().execute(() -> {
+        // YUJ-295 (P-04) · App Startup Initializer 分阶段化
+        //   Phase-A（同步，上面已完成）：initKitModuleListener——纯内存映射，必须在
+        //       Intent 到达 ChatActivity 之前就绪。
+        //   Phase-B（首屏依赖，立即异步）：WKIM.init + IMListener 注册——会话列表/
+        //       聊天页面都必须等这步完成才能读数据。
+        //       本地 sensitiveWords 缓存解析（SP → SensitiveWords）也归此阶段，
+        //       必须在 initIMListener 之前完成，保证 WKIM 入站消息过滤不出现冷启
+        //       窗口内敏感词失效的短暂窗口（YUJ-304 / ReviewBot P2-1）。
+        //   Phase-C（idle 后执行）：sensitive_words / prohibit words 的 **网络同步**
+        //       + 阅后即焚清理——纯远端拉新，首屏不依赖，延迟到首帧之后不影响体验。
+
+        // Phase-B — 本地 sensitiveWords 解析 + WKIM 初始化 + 监听绑定（首屏必须）
+        //
+        // 顺序约束（必须在同一个 Runnable 内串行）：
+        //   1) parseLocalSensitiveWords() —— 纯内存 JSON 反序列化，毫秒级
+        //   2) initIM() —— 构建 WKIM singleton
+        //   3) initIMListener() —— 注册入站消息监听；此前 (1) 必须完成，
+        //      否则第一条消息到达时 WKUIKitApplication.sensitiveWords 可能还是 null，
+        //      造成敏感词过滤短暂失效（最坏 5s fallback 窗口）。
+        AppStartup.postPhaseB("wkim", () -> {
+            parseLocalSensitiveWords();
             initIM();
-
-            // sensitiveWords 解析放在 WKIM 线程，避免争抢主线程 CPU
-            String json = WKSharedPreferencesUtil.getInstance().getSP("wk_sensitive_words");
-            if (!TextUtils.isEmpty(json)) {
-                sensitiveWords = JSON.parseObject(json, SensitiveWords.class);
-            }
-
             WKIMUtils.getInstance().initIMListener();
             wkimInitialized = true;
+        });
 
-            // 网络同步 + 阅后即焚清理，紧接着在同一线程执行
+        // Phase-C — sensitive_words / prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
+        AppStartup.postPhaseC("post-wkim-idle", () -> {
             MsgModel.getInstance().syncSensitiveWords();
             ProhibitWordModel.Companion.getInstance().sync();
             MsgModel.getInstance().deleteFlameMsg();
         });
+    }
+
+    /**
+     * 从 SP 读取并反序列化本地 sensitiveWords 缓存（YUJ-304）。
+     *
+     * <p>纯内存操作（SP 已由 YUJ-284 P-01 预热），无网络；抛出异常只打日志、不影响
+     * 后续启动链——与 AppStartup runWithTrace 的 fire-and-forget 语义一致。
+     *
+     * <p>调用方必须保证此方法在 {@code WKIMUtils.initIMListener()} 之前执行，
+     * 否则入站消息过滤可能命中 null sensitiveWords。
+     */
+    private void parseLocalSensitiveWords() {
+        try {
+            String json = WKSharedPreferencesUtil.getInstance().getSP("wk_sensitive_words");
+            if (!TextUtils.isEmpty(json)) {
+                sensitiveWords = JSON.parseObject(json, SensitiveWords.class);
+            }
+        } catch (Throwable t) {
+            Log.e("WKUIKitApplication", "parseLocalSensitiveWords failed", t);
+        }
     }
 
     public Context getContext() {

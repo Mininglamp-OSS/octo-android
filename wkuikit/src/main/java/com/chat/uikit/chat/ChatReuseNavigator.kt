@@ -124,10 +124,16 @@ object ChatReuseNavigator {
             )
             activity.startActivity(intent)
             // TabActivity 已经 reorder 到栈顶，当前 ChatActivity 被压到 onStop。
-            // 保留 applyFastClose 语义：在 pre-34 设备上用对称 slide 动画覆盖系统默认。
-            // API 34+ 的 CLOSE override 已由 NarrowTransition.applyFastOpen 预注册，
-            // 不会重复生效。
-            NarrowTransition.applyFastClose(activity)
+            //
+            // YUJ-317 · 这条路径在 AMS 眼里是 OPEN，不是 CLOSE —— [applyFastOpen]
+            // 预注册的 OVERRIDE_TRANSITION_CLOSE 不会生效。以前这里调
+            // [NarrowTransition.applyFastClose]，在 pre-34 靠 overridePendingTransition
+            // 兜底、在 API 34+ 直接早返回 no-op，导致 Android 14+ 设备点左上角返回
+            // 仍然是默认 PUSH 过渡（新页右滑入 + 旧页左滑出），用户反馈「像又打开了
+            // 一个新页面」。改用 applyFastPopViaStartActivity：无论 SDK 版本都显式
+            // overridePendingTransition，让 TabActivity 从左滑入 + ChatActivity 向
+            // 右滑出，视觉对齐企微 / iOS pop。
+            NarrowTransition.applyFastPopViaStartActivity(activity)
             if (WKBinder.isDebug) {
                 Log.d(TAG, "goBackToList reorder TabActivity to front, ChatActivity kept alive")
                 Log.d(

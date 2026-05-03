@@ -128,4 +128,48 @@ object NarrowTransition {
             if (WKBinder.isDebug) Log.w(TAG, "applyFastClose failed: $t")
         }
     }
+
+    /**
+     * YUJ-317 · 「用 startActivity 代替 finish() 做返回」场景的出场动画。
+     *
+     * 典型路径：[com.chat.uikit.chat.ChatReuseNavigator.goBackToList]，为了复用
+     * ChatActivity 实例，窄屏返回不走 finish()，而是把 TabActivity 用
+     * `FLAG_ACTIVITY_REORDER_TO_FRONT` 带到栈顶、让 ChatActivity 进 onStop 保活。
+     *
+     * 这条路径在 AMS 眼里是 **OPEN**（TabActivity 在打开），不是 CLOSE。所以：
+     *  - [applyFastOpen] 在 onCreate 里用 `overrideActivityTransition(OPEN/CLOSE)`
+     *    注册的 CLOSE 动画 **不会** 被触发（ChatActivity 没在 finish）；
+     *  - 系统默认应用 OPEN 过渡（新页右滑入 + 旧页左滑出），视觉上就是「又打开了
+     *    一个新页面」，用户点击左上角返回按钮会误以为进了更深一层。
+     *
+     * 修复思路：不依赖 [applyFastOpen] 预注册的 OPEN/CLOSE 覆盖，改为在
+     * `startActivity` 之后 **立即** 用 [Activity.overridePendingTransition] 手动
+     * 指定反向 slide pair（旧页右滑出 + 新页左滑入）。overridePendingTransition
+     * 在 API 34 上被标记 deprecated，但依然有效；这里没有更合适的替代——
+     * `overrideActivityTransition` 是绑定到 Activity 自身生命周期的持久覆盖，
+     * 不适合描述「我接下来这一次 startActivity 要看起来像 pop」的瞬时语义。
+     *
+     * 只对窄屏生效；分屏 / 折叠展开态 / 平板直接短路返回 false（这些场景下
+     * goBackToList 本来也不会进这条支路）。
+     */
+    @JvmStatic
+    fun applyFastPopViaStartActivity(activity: Activity) {
+        if (!isNarrow(activity)) return
+        try {
+            @Suppress("DEPRECATION")
+            activity.overridePendingTransition(
+                R.anim.slide_in_left_fast,
+                R.anim.slide_out_right_fast
+            )
+            if (WKBinder.isDebug) {
+                Log.d(
+                    TAG,
+                    "applyFastPopViaStartActivity sdk=${Build.VERSION.SDK_INT} " +
+                            "activity=${activity.javaClass.simpleName}"
+                )
+            }
+        } catch (t: Throwable) {
+            if (WKBinder.isDebug) Log.w(TAG, "applyFastPopViaStartActivity failed: $t")
+        }
+    }
 }

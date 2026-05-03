@@ -2484,6 +2484,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         float density = getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
         AndroidUtilities.isPORTRAIT = newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE;
+        // YUJ-273 · 折叠屏回归：非折叠态启动→展开时右侧消息区自适应失效。
+        // setupPaneResizeObserver 依赖 RecyclerView 的 onLayoutChange（width 变化）触发
+        // 可见项重绑，但若 ChatActivity 在非折叠态启动时被 Embedding 判为「不分屏」而
+        // 全屏化，随后 unfold：Embedding 会改 Activity 容器尺寸，但某些设备上
+        // onLayoutChange 的 oldWidth 可能因为 lifecycle 时序落空导致 prev==0 被早退
+        // （见 setupPaneResizeObserver 的 prev==0 分支）。这里主动 post 一次可见项重绑，
+        // BubbleLayout.onMeasure 会在下一帧拉到新的 PaneMetrics，保证气泡 maxWidth 跟随
+        // 新 pane 宽度刷新。与 onLayoutChange 路径是幂等兜底。
+        if (wkVBinding != null && wkVBinding.recyclerView != null
+                && chatAdapter != null && linearLayoutManager != null) {
+            wkVBinding.recyclerView.post(() -> {
+                if (chatAdapter == null || linearLayoutManager == null) return;
+                int first = linearLayoutManager.findFirstVisibleItemPosition();
+                int last = linearLayoutManager.findLastVisibleItemPosition();
+                if (first < 0 || last < 0 || last < first) return;
+                try {
+                    chatAdapter.notifyItemRangeChanged(first, last - first + 1);
+                } catch (Throwable ignored) {
+                    // 配置变更路径上的 adapter 竞态兜底
+                }
+            });
+        }
     }
 
     @Override

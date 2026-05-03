@@ -3159,6 +3159,29 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
     }
 
+    /**
+     * YUJ-273 · 折叠屏回归：非折叠态启动 → 展开时 splitMode 不刷新。
+     *
+     * <p>TabActivity 声明 {@code configChanges=screenSize|screenLayout|smallestScreenSize}
+     * 屏蔽了 unfold 引发的 recreate，所以 {@link #onResume()} 不会再被触发，
+     * {@link #syncSplitModeAndSelection()} 停留在初次 portrait 窄屏时的
+     * {@code splitMode=false} —— 选中态永远灰、detail pane 不再响应。
+     *
+     * <p>Fragment 的 {@code onConfigurationChanged} 由 FragmentManager 在
+     * Activity 的 {@code super.onConfigurationChanged} 中派发，配合
+     * {@link com.chat.uikit.TabActivity#onConfigurationChanged} 的 super
+     * 调用即可收到。此处 read-at-use 刷新一次 splitMode + selection 即可修复。
+     */
+    @Override
+    public void onConfigurationChanged(@androidx.annotation.NonNull android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        try {
+            syncSplitModeAndSelection();
+        } catch (Throwable ignored) {
+            // 配置变更回调不允许把进程带走
+        }
+    }
+
     private void startConnectTimer() {
         if (connectTimer == null) {
             connectTimer = new Timer();

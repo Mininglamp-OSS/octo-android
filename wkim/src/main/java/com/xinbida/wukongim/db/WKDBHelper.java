@@ -93,6 +93,14 @@ public class WKDBHelper {
             // 业务读写前执行（PRAGMA journal_mode 在有 active txn 时会失效）。
             enableWalIfNeeded();
             WKDBUpgrade.getInstance().onUpgrade(mDb);
+            // YUJ-326 · schema migration（wk_sql/202605040001.sql · ALTER + INDEX）由 WKDBUpgrade
+            // 跑完后，触发 inline space_id 回填。回填不在 migration SQL 里做是为了：
+            // (1) 支持大表分批事务避免 MSG 表 >100 万行时单事务 OOM / 超时
+            // (2) 支持磁盘裕量检查（avail &lt; dbSize × 2.5 推迟回填）
+            // (3) 支持失败重试 + 硬失败降级（MAX_RETRIES 后强制关 SpaceCacheFlag）
+            // 替换 Phase 3b 初版"DELETE FROM conversation 吞全量代价"方案（见 YUJ-326
+            // 2026-05-04 Yu review 04:41Z 风险评审结论）。
+            com.xinbida.wukongim.db.WKDBSpaceIdBackfill.runIfNeeded(ctx, mDb, uid);
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " init WKDBHelper error: " + e.getMessage());
             e.printStackTrace();

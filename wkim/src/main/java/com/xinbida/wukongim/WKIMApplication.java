@@ -21,6 +21,15 @@ import java.util.UUID;
  */
 public class WKIMApplication {
     private final String sharedName = "wk_account_config";
+
+    /**
+     * YUJ-326 · 暴露 SharedPreferences 文件名给同包 / 子类（如
+     * {@link com.xinbida.wukongim.db.WKDBSpaceIdBackfill}）复用同一存储，避免跨文件
+     * 状态发散。历史字段 {@link #sharedName} 保持 private + final 不动以最小化 blast radius。
+     */
+    public String getSharedName() {
+        return sharedName;
+    }
     //协议版本
     public byte protocolVersion = 4;
 

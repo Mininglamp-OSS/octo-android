@@ -51,6 +51,12 @@ public final class SpaceCacheFlag {
     /**
      * 本进程是否启用 per-Space cache 路径。<b>每次 performSpaceSwitch 入口调用一次，
      * 不缓存</b> —— 远程 bucket 改变或 QA 切换 override 可立刻生效，无需重启。
+     *
+     * <p>YUJ-326 Yu review 2026-05-04 04:41Z · 追加 backfill gate：无论 test / SP / remote
+     * 如何打开，若 {@code WKDBSpaceIdBackfill} 尚未完成（磁盘不足推迟 / 重试中 / 硬失败），
+     * 此方法必须返回 false，让上层回落 {@code clearAll()} 老路径。避免在"列已加但数据
+     * 未回填"的 window 内被 {@code clearForSpace} 误清未识别行。测试 override 无视此
+     * gate，方便单测不依赖真实 DB 状态。
      */
     @AnyThread
     public static boolean isEnabled() {
@@ -58,21 +64,34 @@ public final class SpaceCacheFlag {
 
         // Level 3: 本地 QA override（优先级最高，用于 debug 面板 / CI 验证）。
         int override = WKSharedPreferencesUtil.getInstance().getInt(SP_DEBUG_OVERRIDE, -1);
-        if (override == 1) return true;
-        if (override == 0) return false;
-
-        // Level 2: 远程 bucket。拿 uid 稳定 hash 做分桶，同一用户多次判定结果一致。
-        int bucket = WKSharedPreferencesUtil.getInstance().getInt(SP_REMOTE_BUCKET, -1);
-        if (bucket >= 0) {
-            if (bucket >= 100) return true;
-            if (bucket == 0) return false;
-            String uid = safeUid();
-            int h = Math.abs(uid.hashCode());
-            return (h % 100) < bucket;
+        boolean upstreamEnabled;
+        if (override == 1) {
+            upstreamEnabled = true;
+        } else if (override == 0) {
+            upstreamEnabled = false;
+        } else {
+            // Level 2: 远程 bucket。拿 uid 稳定 hash 做分桶，同一用户多次判定结果一致。
+            int bucket = WKSharedPreferencesUtil.getInstance().getInt(SP_REMOTE_BUCKET, -1);
+            if (bucket >= 0) {
+                if (bucket >= 100) {
+                    upstreamEnabled = true;
+                } else if (bucket == 0) {
+                    upstreamEnabled = false;
+                } else {
+                    String uid = safeUid();
+                    int h = Math.abs(uid.hashCode());
+                    upstreamEnabled = (h % 100) < bucket;
+                }
+            } else {
+                // Level 1: 编译期默认值。
+                upstreamEnabled = BuildConfig.DEBUG ? DEFAULT_DEBUG_BUILD : DEFAULT_RELEASE_BUILD;
+            }
         }
 
-        // Level 1: 编译期默认值。
-        return BuildConfig.DEBUG ? DEFAULT_DEBUG_BUILD : DEFAULT_RELEASE_BUILD;
+        if (!upstreamEnabled) return false;
+
+        // Final gate · backfill 必须已完成，否则回落老路径。
+        return com.xinbida.wukongim.db.SpaceCacheBackfillGate.isBackfillDone();
     }
 
     /**

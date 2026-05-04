@@ -8,6 +8,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,11 +44,14 @@ public class MsgModelUpdateLastSyncVersionConcurrencyTest {
 
     @Test
     public void alternatingHighLowWritesKeepMaxInvariant() throws Exception {
-        // 线程 A 按升序写入 1..ROUNDS；线程 B 按降序写入 ROUNDS..1。
+        // Worker A 按升序写入 1..ROUNDS；Worker B 按降序写入 ROUNDS..1。
         // 不管调度如何交错，map[SPACE_A] 必须一直 ≥ 已被 observe 过的最大值。
         // 尾态断言 == ROUNDS（两边写入的最大值）。
+        //
+        // 注：使用 JDK 标准 ExecutorService（非 AppExecutors）承载 2 个 worker，
+        // 遵守 YUJ-283 P-11（仓库禁止裸 `new Thread`）。单测不需要共享线程池，
+        // Future.get(timeout) 取代 Thread.join，try/finally 保证线程池释放。
         CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(2);
         final long[] maxObservedA = {0};
         final long[] maxObservedB = {0};
 
@@ -61,7 +67,6 @@ public class MsgModelUpdateLastSyncVersionConcurrencyTest {
                 }
                 maxObservedA[0] = Math.max(maxObservedA[0], v);
             }
-            done.countDown();
         };
         Runnable down = () -> {
             try { start.await(); } catch (InterruptedException ignored) { return; }
@@ -74,18 +79,21 @@ public class MsgModelUpdateLastSyncVersionConcurrencyTest {
                 }
                 maxObservedB[0] = Math.max(maxObservedB[0], v);
             }
-            done.countDown();
         };
 
-        Thread tA = new Thread(up, "upd-up");
-        Thread tB = new Thread(down, "upd-down");
-        tA.setDaemon(true);
-        tB.setDaemon(true);
-        tA.start();
-        tB.start();
-        start.countDown();
-        assertTrue("threads did not finish in time",
-                done.await(30, TimeUnit.SECONDS));
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> fA = pool.submit(up);
+            Future<?> fB = pool.submit(down);
+            start.countDown();
+            // Future.get(timeout) 代替 Thread.join：超时即 fail，异常(含 AssertionError)透传
+            fA.get(30, TimeUnit.SECONDS);
+            fB.get(30, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+            assertTrue("executor did not terminate",
+                    pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
         assertEquals(ROUNDS, MsgModel.getInstance().getLastSyncVersionForSpace(SPACE_A));
     }
 

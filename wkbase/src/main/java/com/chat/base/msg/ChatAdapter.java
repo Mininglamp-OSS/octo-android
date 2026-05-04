@@ -422,12 +422,9 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         WKChatBaseProvider baseItemProvider = (WKChatBaseProvider) list.get(entity.wkMsg.type);
         if (baseItemProvider != null) {
             WKChatIteMsgFromType from = baseItemProvider.getMsgFromType(entity.wkMsg);
-            // 刷新
             if (refreshType == RefreshType.data) {
                 baseItemProvider.refreshData(position, baseView, entity, from);
-                return;
-            }
-            if (refreshType == RefreshType.reaction) {
+            } else if (refreshType == RefreshType.reaction) {
                 FrameLayout reactionsView = view.findViewById(R.id.reactionsView);
                 EndpointManager.getInstance().invoke(
                         "refresh_msg_reaction", new ShowMsgReactionMenu(
@@ -440,9 +437,7 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 if (avatarView != null) {
                     baseItemProvider.setAvatarLayoutParams(entity, from, avatarView);
                 }
-                return;
-            }
-            if (refreshType == RefreshType.background) {
+            } else if (refreshType == RefreshType.background) {
                 AvatarView avatarView = view.findViewById(R.id.avatarView);
                 if (avatarView != null) {
                     baseItemProvider.setAvatarLayoutParams(entity, from, avatarView);
@@ -456,28 +451,19 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
                 if (viewGroupLayout != null) {
                     baseItemProvider.setItemPadding(position, viewGroupLayout);
                 }
-                return;
-            }
-
-            if (refreshType == RefreshType.status) {
+            } else if (refreshType == RefreshType.status) {
                 baseItemProvider.resetCellListener(position, baseView, entity, from);
                 baseItemProvider.setMsgTimeAndStatus(
                         entity,
                         baseView,
                         from
                 );
-                return;
-            }
-            if (refreshType == RefreshType.listener) {
+            } else if (refreshType == RefreshType.listener) {
                 baseItemProvider.resetCellListener(position, baseView, entity, from);
-                return;
-            }
-
-            if (refreshType == RefreshType.reply) {
+            } else if (refreshType == RefreshType.reply) {
                 baseItemProvider.refreshReply(position, baseView, entity, from);
             }
         }
-
     }
 
     public void refreshReplyMsg(WKMsg wkMsg) {

@@ -1975,6 +1975,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
         spaceConversationKeys.clear();
         clearAllConversations();
+        // YUJ-333 · per-Space 串数据防线：明确用 targetSpaceId 做过滤，而不是
+        // 走 SpaceFilter.getCurrentSpaceId() 的 SP 读取。
+        //
+        // Yu 2026-05-04 11:59Z 真机复现（commit 7495730f）：
+        //   Demo → 其它 Space，切出去的 UI 会短暂显示Demo的群。
+        // 根因之一：虽然 MsgModel.setCurrentSpaceId(target) 在同一线程先写 SP，
+        // 但 getAll() 在 IO 线程取回缓存后 post 回主线程时，`targetSpaceId`
+        // 在 lambda 闭包里与实际“本次切换目标”一一对应——这是我们真正想过滤
+        // 的 Space。用 SP 读取则天然有风险：若用户已开始下一次切换（快速
+        // A→B→C），SP 已被 C 盖写，此时 populate 用 B 的 cached 但按 C 过滤
+        // 会出现数据集不自洽。
+        //
+        // 显式 targetSpaceId 消除这层耦合，保证「哪次切换取到的 cached，就按
+        // 哪个 Space 过滤」。回落路径（targetSpaceId 为空）仍使用旧 SP 行为。
+        final String effectiveSpaceId = TextUtils.isEmpty(targetSpaceId)
+                ? com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+                : targetSpaceId;
         List<ChatConversationMsg> uiList = new ArrayList<>();
         if (WKReader.isNotEmpty(cached)) {
             for (WKUIConversationMsg uc : cached) {
@@ -1984,10 +2001,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 String key = channelKey(uc.channelID, uc.channelType);
                 boolean reject;
                 if (uc.channelType == WKChannelType.GROUP) {
-                    reject = !isChannelInCurrentSpace(uc.channelID, uc.channelType);
+                    // YUJ-333 · 用显式 effectiveSpaceId 走 SpaceFilter 纯函数路径，
+                    // 不依赖 SP 实时读取。
+                    reject = com.chat.base.space.SpaceFilter.shouldSkipChannelForSpace(
+                            uc.channelID, uc.channelType, effectiveSpaceId,
+                            SpaceFilter_DefaultProviderAdapter.INSTANCE);
                 } else {
                     // 私聊：payload space_id 判定；SystemBot 跨 Space 共享放行。
-                    reject = isMessageFromOtherSpace(uc.getWkMsg())
+                    reject = com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(
+                            uc.getWkMsg(), effectiveSpaceId)
                             && !com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID);
                 }
                 if (reject) continue;
@@ -2009,6 +2031,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (BuildConfig.DEBUG) {
             Trace.endSection();
             Log.d("YUJ312", "YUJ332 populateFromCache space=" + targetSpaceId
+                    + " effectiveSpace=" + effectiveSpaceId
                     + " input=" + (cached == null ? -1 : cached.size())
                     + " output=" + uiList.size()
                     + " +" + (SystemClock.elapsedRealtime() - start) + "ms");
@@ -2167,6 +2190,21 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         spaceConversationKeys.clear();
         // YUJ-229 · 同步清 allConversations + conversationIndex
         clearAllConversations();
+        // YUJ-333 · Push-in-gap 数据泄漏防线：本地 Set 清空后必须立刻同步到
+        // WKUIKitApplication.spaceConversationKeys（全局白名单）。
+        //
+        // 历史漏洞（Yu 2026-05-04 11:59Z 真机复现 · commit 7495730f）：
+        //   切出 Space 时，本地 spaceConversationKeys 已 clear，但全局 Set
+        //   仍保留上个 Space（例如 Demo Space）的 channel 白名单。IO 线程
+        //   getAll() + populateConversationsFromCache 间隔内（~几 ms 到 100ms）
+        //   若有旧 Space 的 push（或其它路径命中 isInCurrentSpace）进来，
+        //   全局 Set 还含旧 key → isInCurrentSpace 返回 true → 旧 Space 条目
+        //   被允许进入 adapter，产生视觉上的「切 Space 后串数据」。
+        //
+        // 修复：在 UI 清理同一 tick 里同步把全局 Set 清空。
+        //   populateConversationsFromCache 完成后会再次调 syncSpaceKeysToGlobal()
+        //   把 target Space 的 key 塞回去，无需在此处恢复。
+        syncSpaceKeysToGlobal();
         if (BuildConfig.DEBUG) {
             Trace.endSection();
             Log.d("YUJ312", "clearAllConversations done +"

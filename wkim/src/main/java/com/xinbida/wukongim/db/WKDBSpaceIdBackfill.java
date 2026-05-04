@@ -234,6 +234,8 @@ public final class WKDBSpaceIdBackfill {
 
     /** 估算 DB 占用（主文件 + WAL + SHM）作为 "需要多少磁盘裕量" 的基准。 */
     static long estimateDbFootprint(Context context, String uid) {
+        Long override = dbFootprintOverrideForTest;
+        if (override != null) return override;
         try {
             File dbFile = context.getDatabasePath("wk_" + uid + ".db");
             long size = safeLength(dbFile);
@@ -255,6 +257,8 @@ public final class WKDBSpaceIdBackfill {
 
     /** 当前 DB 目录剩余可用字节，失败返回 0（视作"无法判定"，不阻塞 migration）。 */
     static long availableBytes(Context context) {
+        Long override = availableBytesOverrideForTest;
+        if (override != null) return override;
         try {
             File parent = context.getDatabasePath("probe").getParentFile();
             if (parent == null) return 0L;
@@ -282,6 +286,19 @@ public final class WKDBSpaceIdBackfill {
     }
 
     // ==================== 测试 hook ====================
+
+    /**
+     * @VisibleForTesting 强制覆盖 {@link #availableBytes(Context)} 返回值。
+     * 用于 instrumented 测试低磁盘分支（真实设备无法控制 StatFs 可用字节）。
+     * {@code null} 表示走真实 StatFs 查询。生产代码路径永远不碰此字段。
+     */
+    static volatile Long availableBytesOverrideForTest = null;
+
+    /**
+     * @VisibleForTesting 强制覆盖 {@link #estimateDbFootprint(Context, String)} 返回值。
+     * 用于 instrumented 测试低磁盘分支。{@code null} 表示走真实文件 size 查询。
+     */
+    static volatile Long dbFootprintOverrideForTest = null;
 
     /** @VisibleForTesting 重置状态（仅单测）。 */
     static void clearStateForTest(Context context, String uid) {

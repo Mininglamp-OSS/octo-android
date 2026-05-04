@@ -26,9 +26,21 @@ import java.util.concurrent.Executors;
  */
 public class WKDBHelper {
     private static final String TAG = "WKDBHelper";
+
+    /**
+     * YUJ-316 D · 启用 SQLCipher WAL（Write-Ahead Logging）模式，允许多 reader 与单 writer
+     * 并发。默认 rollback journal 模式下写事务期间任何读都要排队，Space 切换 saveSyncChat
+     * 多个写事务叠加 × 主线程 adapter.convert 大量 DB 读 → ANR 30s 闪退（参见 YUJ-316 根因
+     * 分析）。WAL 模式让 reader 不再阻塞 writer、writer 也不阻塞 reader，消除该路径的锁竞争。
+     *
+     * <p>回滚策略：若某机型出现 WAL 异常（磁盘空间 / 权限 / 特殊 FS），把此常量改为 {@code
+     * false} 重编即可恢复 rollback journal 行为。SQLCipher 4.9.0 已官方支持 WAL。
+     */
+    private static final boolean ENABLE_WAL = true;
+
 //    private DatabaseHelper mDbHelper;
     private SQLiteDatabase mDb;
-    
+
     // 数据库操作线程池（单线程，保证数据库操作的顺序性）
     private static final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     // 主线程 Handler，用于回调
@@ -70,10 +82,47 @@ public class WKDBHelper {
             File databaseFile = ctx.getDatabasePath(myDBName);
             databaseFile.getParentFile().mkdirs();
             mDb = SQLiteDatabase.openOrCreateDatabase(databaseFile, uid, null, null, null);
+            // YUJ-316 D · 启用 WAL，让 reader 与 writer 并发。必须在任何 schema 升级 /
+            // 业务读写前执行（PRAGMA journal_mode 在有 active txn 时会失效）。
+            enableWalIfNeeded();
             WKDBUpgrade.getInstance().onUpgrade(mDb);
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " init WKDBHelper error: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * YUJ-316 D · 切 WAL 并校验实际生效。PRAGMA 在某些特殊 FS（例如 /data/user_de 某些
+     * 厂商 ROM）可能被拒绝，这里捕获异常并记日志，但不阻断数据库初始化——失败回退到
+     * rollback journal 语义，与打此 flag 前行为一致。
+     */
+    private void enableWalIfNeeded() {
+        if (!ENABLE_WAL || mDb == null) return;
+        try (Cursor cursor = mDb.rawQuery("PRAGMA journal_mode=WAL", null)) {
+            String mode = null;
+            if (cursor != null && cursor.moveToFirst()) {
+                mode = cursor.getString(0);
+            }
+            if (mode != null && "wal".equalsIgnoreCase(mode)) {
+                // 开启后建议放宽 synchronous，WAL 下 NORMAL 即可，事务提交更快。
+                mDb.execSQL("PRAGMA synchronous=NORMAL");
+                // YUJ-316 D+ · checkpoint 调优。SQLCipher 默认 wal_autocheckpoint=1000 页
+                // （~4MB 才触发），IM saveSyncChat 写量大时 -wal 文件可涨到 20-50MB，首次
+                // auto-checkpoint 需要把整个 WAL 回写到主 db 文件，会阻塞 reader 100-500ms
+                // —— 实测相当于退化回 ANR 窗口。把 autocheckpoint 调小到 100 页（~400KB）
+                // 让 checkpoint 更频繁、每次更轻。同时用 journal_size_limit 给 -wal 文件
+                // 加硬上限（1MB），防止异常场景下无限增长。
+                // 参考：Zetetic SQLCipher 官方文档 + 多家 IM 生产实践（对齐 iOS WKIM WAL 配置）。
+                mDb.execSQL("PRAGMA wal_autocheckpoint=100");
+                mDb.execSQL("PRAGMA journal_size_limit=1048576");
+                WKLoggerUtils.getInstance().e(TAG, "SQLCipher WAL mode enabled (journal_mode=" + mode
+                        + ", synchronous=NORMAL, wal_autocheckpoint=100, journal_size_limit=1MB)");
+            } else {
+                WKLoggerUtils.getInstance().e(TAG, "SQLCipher WAL mode NOT active, fallback journal_mode=" + mode);
+            }
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG + " enableWalIfNeeded error: " + e.getMessage());
         }
     }
 

@@ -1,6 +1,7 @@
 package com.xinbida.wukongim.manager;
 
 import android.content.ContentValues;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -38,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 5/21/21 12:12 PM
@@ -47,6 +49,22 @@ public class ConversationManager extends BaseManager {
     private final DispatchQueuePool dispatchQueuePool = new DispatchQueuePool(3);
 
     private final String TAG = "ConversationManager";
+
+    /**
+     * YUJ-316 C · SDK 层 sync 去重守卫。Phase 1 诊断识别出 5 条 sync 触发路径
+     * （{@code performSpaceSwitch} / {@code getChatMsg} / {@code connectSuccessCompensate}
+     * / {@code spaceResyncRunnable} / {@code WKConnection.wkConnectionSync}）。
+     * 上层 {@code SpaceSyncCoordinator}（YUJ-318/321）已在 UI 层做了 debounce + 全局重入
+     * 守卫，但 SDK 仍需要自己的 in-flight 防线：其它 SDK 使用方或未来新加的触发点不一定会
+     * 走上层 coordinator，SDK 层 AtomicBoolean 保证任何路径都只能有一条 sync 进行中。
+     *
+     * <p>释放时机：sync 真正完成回调里（成功 / 失败 / 空 syncChat）统一 release。若上游
+     * 网络回调永远不 fire，{@link #SYNC_STUCK_RESET_MS} 超时后允许下次 sync 强制抢占
+     * permit，避免永久卡死。
+     */
+    private final AtomicBoolean syncInFlight = new AtomicBoolean(false);
+    private volatile long syncInFlightSince = 0L;
+    private static final long SYNC_STUCK_RESET_MS = 15_000L;
 
     private ConversationManager() {
     }
@@ -182,9 +200,13 @@ public class ConversationManager extends BaseManager {
 
     public void setOnRefreshMsg(List<WKUIConversationMsg> list, String from) {
         if (WKCommonUtils.isEmpty(list)) return;
-        // 在当前（后台）线程预加载 wkMsg，避免主线程回调中懒加载触发 DB 查询导致 ANR
+        // YUJ-316 H3 · 在当前（后台）线程预加载 wkMsg + wkChannel，避免主线程回调中懒加载
+        // 触发 DB 查询导致 ANR。adapter.convert 每 item 调 getWkChannel 36 次 / getWkMsg 15 次，
+        // Space 切换冷启动时 ChannelManager 缓存为空 → 撞上 saveSyncChat 写事务 → 主线程
+        // 卡死 30s → 系统杀进程（用户感知为闪退）。getWkChannel 单独预加载即可消除该窗口。
         for (int i = 0, size = list.size(); i < size; i++) {
             list.get(i).getWkMsg();
+            list.get(i).getWkChannel();
         }
         if (refreshMsgMap != null && !refreshMsgMap.isEmpty()) {
             runOnMainThread(() -> {
@@ -296,15 +318,56 @@ public class ConversationManager extends BaseManager {
     }
 
     public void setSyncConversationListener(ISyncConversationChatBack iSyncConversationChatBack) {
-        if (iSyncConversationChat != null) {
-            long version = ConversationDbManager.getInstance().queryMaxVersion();
-            String lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
-            runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
-                dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> iSyncConversationChatBack.onBack(syncChat)));
-            }));
-        } else {
+        if (iSyncConversationChat == null) {
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
+            return;
         }
+        // YUJ-316 C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正
+        // 发起 syncConversationChat，其余立即短路——但仍调用 onBack(null)，让上层
+        // SpaceSyncCoordinator / SyncGate 的 complete() 有机会触发，避免协调器状态卡住。
+        final long now = SystemClock.elapsedRealtime();
+        if (!syncInFlight.compareAndSet(false, true)) {
+            long startedAt = syncInFlightSince;
+            if (startedAt > 0 && now - startedAt > SYNC_STUCK_RESET_MS) {
+                // 兜底：上一次 sync 回调从未触发（网络超时 / 崩溃路径），15s 后强制抢占。
+                WKLoggerUtils.getInstance().e(TAG,
+                        "setSyncConversationListener stuck > " + SYNC_STUCK_RESET_MS
+                                + "ms, force reset inFlight");
+                syncInFlight.set(false);
+                if (!syncInFlight.compareAndSet(false, true)) {
+                    // 被其它线程抢先了，按正常 drop 处理
+                    WKLoggerUtils.getInstance().e(TAG,
+                            "setSyncConversationListener drop (lost race after stuck-reset)");
+                    if (iSyncConversationChatBack != null) iSyncConversationChatBack.onBack(null);
+                    return;
+                }
+            } else {
+                WKLoggerUtils.getInstance().e(TAG,
+                        "setSyncConversationListener drop (sync already in-flight, age="
+                                + (startedAt == 0 ? -1 : now - startedAt) + "ms)");
+                if (iSyncConversationChatBack != null) iSyncConversationChatBack.onBack(null);
+                return;
+            }
+        }
+        syncInFlightSince = now;
+        final long version = ConversationDbManager.getInstance().queryMaxVersion();
+        final String lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
+        WKLoggerUtils.getInstance().e(TAG,
+                "setSyncConversationListener begin (version=" + version
+                        + ", lastMsgSeq=" + lastMsgSeqStr + ")");
+        runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
+            dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
+                try {
+                    if (iSyncConversationChatBack != null) {
+                        iSyncConversationChatBack.onBack(syncChat);
+                    }
+                } finally {
+                    // 无论上层回调是否抛，都必须 release permit。
+                    syncInFlightSince = 0L;
+                    syncInFlight.set(false);
+                }
+            }));
+        }));
     }
 
 

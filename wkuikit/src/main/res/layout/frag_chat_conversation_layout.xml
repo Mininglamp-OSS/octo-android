@@ -192,15 +192,22 @@
       YUJ-318 · Space 切换 Loading Overlay。仅在 performSpaceSwitch 期间显示，
       半透明遮挡列表旧内容（避免空列表 + 闪烁）。sync 完成 / 首帧 sortMsg 回来立即
       隐藏；5s 仍未回来则显示 fallback 文案，提示用户不是 App 卡死。
-      点击拦截（clickable=true）防止用户误点穿透到底下列表引发二次状态变更。
+
+      YUJ-312 Phase 2 调整：
+        - 按 Yu 授权在 overlay 主位置显示「正在同步 [Space Name]…」主文案（spaceSwitchOverlayPrimaryTv）
+          代替原先 5s 前纯 spinner 的视觉，让用户立刻知道切换已触发且在同步。
+        - 非阻塞（clickable=false / focusable=false）：Yu 明确要求 UX 不锁输入；
+          注意 performSpaceSwitch 执行期间底下列表已 setList(empty)，空列表无可误触的行，
+          tab / header 等控件允许用户继续交互（含再次切 Space，由 SpaceSyncCoordinator debounce 兜底）。
+        - 背景从 #99000000 降到 #4D000000（30% 黑），强化「提示而非阻断」的视觉语义。
     -->
     <FrameLayout
         android:id="@+id/spaceSwitchOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#99000000"
-        android:clickable="true"
-        android:focusable="true"
+        android:background="#4D000000"
+        android:clickable="false"
+        android:focusable="false"
         android:visibility="gone">
 
         <LinearLayout
@@ -216,16 +223,30 @@
                 android:indeterminate="true"
                 android:indeterminateTint="@color/white" />
 
+            <!-- YUJ-312 Phase 2 · 主文案：始终显示「正在同步「<space name>」…」 -->
             <TextView
-                android:id="@+id/spaceSwitchOverlayFallbackTv"
+                android:id="@+id/spaceSwitchOverlayPrimaryTv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:gravity="center"
                 android:maxWidth="260dp"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                tools:text="正在同步「测试空间」…" />
+
+            <!-- YUJ-318 · 5s 兜底补充文案：仅当 5s 未完成时才出现，提示网络慢 -->
+            <TextView
+                android:id="@+id/spaceSwitchOverlayFallbackTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:maxWidth="260dp"
                 android:text="@string/yuj_318_space_switch_slow_hint"
                 android:textColor="@color/white"
-                android:textSize="13sp"
+                android:textSize="12sp"
+                android:alpha="0.8"
                 android:visibility="gone" />
         </LinearLayout>
     </FrameLayout>

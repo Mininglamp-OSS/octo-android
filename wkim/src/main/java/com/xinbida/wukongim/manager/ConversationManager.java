@@ -377,6 +377,28 @@ public class ConversationManager extends BaseManager {
 
 
     private void saveSyncChat(WKSyncChat syncChat, final ISaveSyncChatBack iSaveSyncChatBack) {
+        // YUJ-312 Phase 2 · T7 埋点：SDK 批量落盘段（conversations + recents + reactions + extras）。
+        // 发生在 dispatchQueuePool（非主线程）。守 BuildConfig.DEBUG 确保 release 无开销。
+        final long yuj312T7Start = com.xinbida.wukongim.BuildConfig.DEBUG
+                ? android.os.SystemClock.elapsedRealtime() : 0L;
+        final int yuj312T7ConvCount = (com.xinbida.wukongim.BuildConfig.DEBUG && syncChat != null
+                && syncChat.conversations != null) ? syncChat.conversations.size() : 0;
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.os.Trace.beginSection("YUJ312-saveSyncChat");
+            android.util.Log.d("YUJ312", "saveSyncChat START convCount=" + yuj312T7ConvCount);
+        }
+        try {
+            saveSyncChatImpl(syncChat, iSaveSyncChatBack);
+        } finally {
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                android.os.Trace.endSection();
+                android.util.Log.d("YUJ312", "saveSyncChat END convCount=" + yuj312T7ConvCount
+                        + " +" + (android.os.SystemClock.elapsedRealtime() - yuj312T7Start) + "ms");
+            }
+        }
+    }
+
+    private void saveSyncChatImpl(WKSyncChat syncChat, final ISaveSyncChatBack iSaveSyncChatBack) {
         if (syncChat == null) {
             iSaveSyncChatBack.onBack();
             return;

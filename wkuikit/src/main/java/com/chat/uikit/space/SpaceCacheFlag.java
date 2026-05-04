@@ -78,9 +78,7 @@ public final class SpaceCacheFlag {
                 } else if (bucket == 0) {
                     upstreamEnabled = false;
                 } else {
-                    String uid = safeUid();
-                    int h = Math.abs(uid.hashCode());
-                    upstreamEnabled = (h % 100) < bucket;
+                    upstreamEnabled = computeBucket(safeUid()) < bucket;
                 }
             } else {
                 // Level 1: 编译期默认值。
@@ -128,5 +126,23 @@ public final class SpaceCacheFlag {
         } catch (Throwable ignored) {
             return "";
         }
+    }
+
+    /**
+     * @VisibleForTesting · 计算 uid 的稳定 bucket（范围 {@code [0, 100)}）。
+     *
+     * <p>Jerry review 2026-05-04 06:49Z · Critical #1：原实现 {@code Math.abs(uid.hashCode())}
+     * 当 {@code hashCode() == Integer.MIN_VALUE} 时溢出回 {@code Integer.MIN_VALUE}（负数），
+     * 再 {@code % 100} 得到负数 → 与 {@code bucket} 的比较恒成立（负数 &lt; 正数）。
+     * 灰度 {@code bucket=0} 明明要"全关"，却对该 uid 变成"强开"，灰度逃逸。
+     *
+     * <p>修法：先与 {@code 0x7FFFFFFF} 做位与清零符号位（纯位运算不溢出），再取模 100。
+     * 对所有 32-bit int 值域都正确，包括 {@code Integer.MIN_VALUE}。
+     *
+     * <p>副作用：提取成包外可见的静态方法，便于单测在不构造 mock 的情况下直接覆盖到
+     * {@code Integer.MIN_VALUE} 分支。生产调用方（{@link #isEnabled}）语义不变。
+     */
+    static int computeBucket(@NonNull String uid) {
+        return (uid.hashCode() & 0x7FFFFFFF) % 100;
     }
 }

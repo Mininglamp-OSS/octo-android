@@ -427,6 +427,102 @@ public class ConversationDbManager {
                 .delete(conversation, null, null);
     }
 
+    // ==================== YUJ-326 per-Space APIs ====================
+
+    /**
+     * YUJ-326 · 只清本 Space 的 conversation 行，切 Space 不再撞全库。
+     *
+     * <p>参数语义：
+     * <ul>
+     *   <li>{@code spaceId == null} → no-op（防御式，未设置 currentSpaceId 的保护）</li>
+     *   <li>{@code spaceId == ""} → 删"空 Space"（无 Space 模式 / 历史 migration 数据）行</li>
+     *   <li>非空 32-hex → 精确匹配 {@code space_id}</li>
+     * </ul>
+     *
+     * <p>硬约束：只清 {@code conversation} 表。{@code message}/{@code channel} 表的
+     * space_id 列保留供后续 Phase 3c 评估 per-Space 消息缓存时使用，本 Phase 不动；
+     * 切 Space 后消息列表/频道信息靠 SpaceFilter 内存 Set + UI filter 层做隔离，DB 层
+     * 老路径不变，避免扩大改动面引入回归。
+     */
+    public synchronized boolean clearForSpace(String spaceId) {
+        if (spaceId == null) return false;
+        if (WKIMApplication.getInstance().getDbHelper() == null
+                || WKIMApplication.getInstance().getDbHelper().getDb() == null) {
+            return false;
+        }
+        return WKIMApplication.getInstance().getDbHelper()
+                .delete(conversation,
+                        WKDBColumns.WKCoverMessageColumns.space_id + "=?",
+                        new String[]{spaceId});
+    }
+
+    /**
+     * YUJ-326 · 本 Space 最大 version（cursor）。
+     *
+     * <p>Server 的 version 是全局单用户最大值（不按 Space 分桶，见 YUJ-325 Coda 分析），
+     * 但客户端维护 {@code lastSyncVersionForSpace[spaceId]} = max(version) WHERE space_id=?
+     * 发请求时带着这个值 + {@code X-Space-ID} header，server 返 {@code version > ?}
+     * filter 过 SpaceMiddleware 剩下本 Space 新增。代价是 B 期间很活跃会让 A 的 cursor
+     * "跨过" B 的 version，下次 A sync 带宽略浪费 —— 正确性 100%（见 YUJ-325 comment
+     * ea086f34 "per-Space version cursor 不需要改 Server"）。
+     *
+     * <p>{@code spaceId == null} 回落 {@link #queryMaxVersion()}（全局最大），保持老行为。
+     */
+    public long queryMaxVersionForSpace(String spaceId) {
+        if (spaceId == null) return queryMaxVersion();
+        if (WKIMApplication.getInstance().getDbHelper() == null
+                || WKIMApplication.getInstance().getDbHelper().getDb() == null) {
+            return 0;
+        }
+        long maxVersion = 0;
+        String sql = "select max(version) version from " + conversation
+                + " where " + WKDBColumns.WKCoverMessageColumns.space_id + "=? limit 0, 1";
+        try (Cursor cursor = WKIMApplication
+                .getInstance()
+                .getDbHelper()
+                .rawQuery(sql, new Object[]{spaceId})) {
+            if (cursor != null && cursor.moveToFirst()) {
+                maxVersion = WKCursor.readLong(cursor, WKDBColumns.WKCoverMessageColumns.version);
+            }
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "queryMaxVersionForSpace error: " + e.getMessage());
+        }
+        return maxVersion;
+    }
+
+    /**
+     * YUJ-326 · 本 Space 的 last_msg_seqs（sync key）。
+     *
+     * <p>原 {@link #queryLastMsgSeqs()} 扫全表构造 sync key，per-Space 路径下会把其它
+     * Space 的 channel:seq 也带给 server，server 做 diff 时按其它 Space 的 seq 计算会
+     * 产生错误增量（本 Space 某 channel 没在全局 max seq 里，被 server 当"落后"再下发
+     * 一次）。此方法按 space_id 过滤后再构造。
+     *
+     * <p>{@code spaceId == null} 回落原实现，保持老路径行为。
+     */
+    public synchronized String queryLastMsgSeqsForSpace(String spaceId) {
+        if (spaceId == null) return queryLastMsgSeqs();
+        String lastMsgSeqs = "";
+        String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey "
+                + "from (select *,(select max(message_seq) from " + message + " where "
+                + message + ".channel_id=" + conversation + ".channel_id and "
+                + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq "
+                + "from " + conversation + " where "
+                + WKDBColumns.WKCoverMessageColumns.space_id + "=?) cn "
+                + "where channel_id<>'' AND is_deleted=0";
+        try (Cursor cursor = WKIMApplication
+                .getInstance()
+                .getDbHelper()
+                .rawQuery(sql, new Object[]{spaceId})) {
+            if (cursor != null && cursor.moveToFirst()) {
+                lastMsgSeqs = WKCursor.readString(cursor, "synckey");
+            }
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "queryLastMsgSeqsForSpace error: " + e.getMessage());
+        }
+        return lastMsgSeqs;
+    }
+
     public WKConversationMsgExtra queryMsgExtraWithChannel(String channelID, byte channelType) {
         WKConversationMsgExtra msgExtra = null;
         String selection = "channel_id=? and channel_type=?";
@@ -572,6 +668,11 @@ public class ConversationDbManager {
         msg.lastMsgSeq = WKCursor.readLong(cursor, WKDBColumns.WKCoverMessageColumns.last_msg_seq);
         msg.parentChannelID = WKCursor.readString(cursor, WKDBColumns.WKCoverMessageColumns.parent_channel_id);
         msg.parentChannelType = WKCursor.readByte(cursor, WKDBColumns.WKCoverMessageColumns.parent_channel_type);
+        // YUJ-326 · 读出 space_id 列（老 DB 升级前此列不存在，column index < 0 则保持默认 ""）
+        if (cursor.getColumnIndex(WKDBColumns.WKCoverMessageColumns.space_id) >= 0) {
+            msg.spaceID = WKCursor.readString(cursor, WKDBColumns.WKCoverMessageColumns.space_id);
+            if (msg.spaceID == null) msg.spaceID = "";
+        }
         String extra = WKCursor.readString(cursor, WKDBColumns.WKCoverMessageColumns.extra);
         if (!TextUtils.isEmpty(extra)) {
             HashMap<String, Object> hashMap = new HashMap<>();

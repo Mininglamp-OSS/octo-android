@@ -79,6 +79,10 @@ class WKSqlContentValues {
             contentValues.put(WKDBColumns.WKCoverMessageColumns.version, wkConversationMsg.version);
         }
         contentValues.put(WKDBColumns.WKCoverMessageColumns.is_deleted, wkConversationMsg.isDeleted);
+        // YUJ-326 · 写入 per-Space 归属列。saveSyncChat 填充 server 响应 space_id 字段；
+        // 非 sync 路径（本地 insert/update）保留既有行为，空字符串做兜底避免 NOT NULL 冲突。
+        contentValues.put(WKDBColumns.WKCoverMessageColumns.space_id,
+                wkConversationMsg.spaceID == null ? "" : wkConversationMsg.spaceID);
         contentValues.put(WKDBColumns.WKCoverMessageColumns.extra, wkConversationMsg.getLocalExtraString());
         return contentValues;
     }

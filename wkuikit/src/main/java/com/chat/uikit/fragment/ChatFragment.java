@@ -2119,6 +2119,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // YUJ-312 Phase 2 · 传入 space.name 渲染主文案「正在同步「xxx」…」（Yu 授权文案）。
         showSpaceSwitchOverlay(space.name);
 
+        // YUJ-326 Phase 3b · per-Space 缓存路径。flag on 时：
+        //   1) IO 线程只清目标 Space 的 DB 行（clearForSpace）而非全库（clearAll）
+        //   2) sync 用 per-Space cursor（max(version) WHERE space_id=?）触发真增量
+        //   3) sync 成功后更新 MsgModel.lastSyncVersionForSpace 快照
+        // flag off 时走 YUJ-312/316/318 老路径（clearAll + 全局 queryMaxVersion）。
+        //
+        // SpaceFilter Round-3 五层防御零改动：spaceConversationKeys.clear() 已在上面执行
+        // （L2 白名单），内存 Set 重建由 saveSyncChat 的 setOnRefreshMsg 回调 + 本 fragment
+        // onRefresh listener 重新塞值，DB 层 space_id 列只为 clearForSpace / per-Space cursor
+        // 服务，不参与 filter 判定。
+        final boolean perSpaceEnabled = com.chat.uikit.space.SpaceCacheFlag.isEnabled();
+        final String targetSpaceId = space.space_id;
+        if (BuildConfig.DEBUG) {
+            Log.d("YUJ312", "YUJ326 perSpaceCache enabled=" + perSpaceEnabled
+                    + " targetSpace=" + targetSpaceId);
+        }
+
         Schedulers.io().scheduleDirect(() -> {
             // YUJ-312 Phase 2 · T4 埋点：IO 线程 WKIM.clearAll（DB DELETE FROM conversation）。
             // section 名称包含 "WKIM-clearAll"，与 SDK 侧 saveSyncChat 区分。
@@ -2126,25 +2143,77 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // per-thread stack 配对正常——不存在 syncChat 的跨线程失效问题。
             long yuj312T4Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
             if (BuildConfig.DEBUG) {
-                Trace.beginSection("YUJ312-WKIM-clearAll");
+                Trace.beginSection(perSpaceEnabled
+                        ? "YUJ326-WKIM-clearForSpace" : "YUJ312-WKIM-clearAll");
             }
-            WKIM.getInstance().getConversationManager().clearAll();
+
+            // YUJ-326 · 快照目标 Space 的 pre-clear cursor，用于绕过 clearForSpace 后
+            // DB max=0 导致的退化全量 resync。
+            //   pre-clear DB max → 若 > 0，说明本 Space 之前被访问过且有实锚点
+            //   SP map           → 持久化快照，保证冷启动后仍能拿到 cursor
+            // 优先级：取 max(DB, SP)，落 SP 持久化。pre-clear last_msg_seqs 一并快照，
+            // 保证 sync 请求里 seqs 字段与 version cursor 对应同一时刻的本地状态，
+            // 避免 server 按 version > N filter 后又按 seqs=""（clear 后）误补 recent msgs。
+            long explicitVersion = -1L;
+            String explicitLastMsgSeqs = null;
+            if (perSpaceEnabled && targetSpaceId != null) {
+                long preDbMax = com.xinbida.wukongim.db.ConversationDbManager.getInstance()
+                        .queryMaxVersionForSpace(targetSpaceId);
+                long preSpMax = MsgModel.getInstance().getLastSyncVersionForSpace(targetSpaceId);
+                explicitVersion = Math.max(preDbMax, preSpMax);
+                if (explicitVersion > 0) {
+                    MsgModel.getInstance().updateLastSyncVersion(targetSpaceId, explicitVersion);
+                }
+                explicitLastMsgSeqs = com.xinbida.wukongim.db.ConversationDbManager.getInstance()
+                        .queryLastMsgSeqsForSpace(targetSpaceId);
+                if (BuildConfig.DEBUG) {
+                    Log.d("YUJ312", "YUJ326 pre-clear snapshot spaceId=" + targetSpaceId
+                            + " preDbMax=" + preDbMax + " preSpMax=" + preSpMax
+                            + " explicitVersion=" + explicitVersion
+                            + " lastMsgSeqs.len=" + (explicitLastMsgSeqs == null ? 0 : explicitLastMsgSeqs.length()));
+                }
+            }
+
+            if (perSpaceEnabled) {
+                // YUJ-326 · 只清目标 Space。其它已访问 Space 的 conversation 行保留在本地 DB，
+                // 下次切回时 SpaceFilter + 内存 Set 重建即可首帧从 DB 出数据。
+                // targetSpaceId 可能为空（无 Space 模式 / 默认域），clearForSpace("")
+                // 清"空 Space"行，等价 iOS 空域逻辑。
+                WKIM.getInstance().getConversationManager()
+                        .clearAllForSpace(targetSpaceId == null ? "" : targetSpaceId);
+            } else {
+                WKIM.getInstance().getConversationManager().clearAll();
+            }
             if (BuildConfig.DEBUG) {
                 Trace.endSection();
-                Log.d("YUJ312", "WKIM.clearAll done +"
-                        + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
+                Log.d("YUJ312", (perSpaceEnabled ? "WKIM.clearForSpace" : "WKIM.clearAll")
+                        + " done +" + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
             }
-            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                // YUJ-318 · sync 完成回调：释放 coordinator permit + 隐藏 overlay
+
+            final long syncExplicitVersion = explicitVersion;
+            final String syncExplicitSeqs = explicitLastMsgSeqs;
+            com.xinbida.wukongim.interfaces.ISyncConversationChatBack syncBack = result -> {
                 if (BuildConfig.DEBUG) {
                     int convCount = (result == null || result.conversations == null)
                             ? 0 : result.conversations.size();
                     Log.d("YUJ312", "sync-listener onBack conversations=" + convCount
                             + " totalElapsed=" + (SystemClock.elapsedRealtime() - yuj312StartMs) + "ms");
                 }
+                // YUJ-326 · sync 完成后把本 Space 最新 version 快照写入 SP，供下次切回用。
+                if (perSpaceEnabled && targetSpaceId != null) {
+                    MsgModel.getInstance().snapshotLastSyncVersion(targetSpaceId);
+                }
                 SpaceSyncCoordinator.getInstance().complete();
                 AndroidUtilities.runOnUIThread(this::hideSpaceSwitchOverlay);
-            });
+            };
+            if (perSpaceEnabled) {
+                WKIM.getInstance().getConversationManager()
+                        .setSyncConversationListener(targetSpaceId, syncExplicitVersion,
+                                syncExplicitSeqs, syncBack);
+            } else {
+                WKIM.getInstance().getConversationManager()
+                        .setSyncConversationListener(syncBack);
+            }
             new Handler(Looper.getMainLooper()).post(() ->
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
             );

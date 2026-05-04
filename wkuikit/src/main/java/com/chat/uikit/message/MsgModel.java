@@ -432,6 +432,116 @@ public class MsgModel extends WKBaseModel {
         return currentSpaceName;
     }
 
+    // ==================== YUJ-326 per-Space last_sync_version ====================
+
+    /**
+     * YUJ-326 · 本地维护的 per-Space sync cursor（map&lt;space_id, version&gt;）。
+     *
+     * <p>SP 持久化：key {@code yuj326_last_sync_version_per_space}（带 uid 前缀），value
+     * JSON Object 序列化，map 到 {@code {"spaceA": 123, "spaceB": 456}}。
+     * <ul>
+     *   <li>读入口：{@link #getLastSyncVersionForSpace(String)} — performSpaceSwitch 前
+     *       拿旧 cursor 发请求；空 Map / 首次访问返回 0（对应全量 sync）。</li>
+     *   <li>写入口：{@link #snapshotLastSyncVersion(String)} — 切 Space 前拍快照把旧
+     *       Space 的 {@code max(version) WHERE space_id=?} 落 SP；
+     *       {@link #updateLastSyncVersion(String, long)} — sync 成功后单点写入。</li>
+     * </ul>
+     *
+     * <p>与 server 关系：server 的 version 是全局单用户最大值（不按 Space 分桶），但
+     * 客户端带着 per-Space cursor 发请求，server WHERE version &gt; ? + SpaceMiddleware
+     * filter → 返回只剩本 Space 的增量。代价是 B 期间活跃会让 A 的 cursor 跨过
+     * B 的 version，下次 A sync 带宽略浪费（正确性不受影响，见 YUJ-325 comment
+     * ea086f34）。
+     *
+     * <p>Thread-safety：{@code ConcurrentHashMap} 本身线程安全；JSON 序列化整体
+     * 用 synchronized(this) 保护以避免与 SP write 交叉产生脏值。
+     */
+    private static final String SP_KEY_LAST_SYNC_VERSION_PER_SPACE = "yuj326_last_sync_version_per_space";
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> lastSyncVersionForSpace
+            = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile boolean lastSyncVersionLoaded = false;
+
+    private void loadLastSyncVersionMapIfNeeded() {
+        if (lastSyncVersionLoaded) return;
+        synchronized (this) {
+            if (lastSyncVersionLoaded) return;
+            String raw = WKSharedPreferencesUtil.getInstance()
+                    .getSPWithUID(SP_KEY_LAST_SYNC_VERSION_PER_SPACE);
+            if (!TextUtils.isEmpty(raw)) {
+                try {
+                    JSONObject obj = JSON.parseObject(raw);
+                    if (obj != null) {
+                        for (String key : obj.keySet()) {
+                            Long v = obj.getLong(key);
+                            if (v != null && v >= 0) {
+                                lastSyncVersionForSpace.put(key, v);
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {
+                    // 脏数据（老版本写入 / 手动改过）不让它 block 登录流程；丢弃即可。
+                }
+            }
+            lastSyncVersionLoaded = true;
+        }
+    }
+
+    private void persistLastSyncVersionMap() {
+        // 小 map（典型 &lt; 10 个 Space），直接整体序列化；比 diff 写成本低。
+        synchronized (this) {
+            JSONObject obj = new JSONObject();
+            for (java.util.Map.Entry<String, Long> e : lastSyncVersionForSpace.entrySet()) {
+                obj.put(e.getKey(), e.getValue());
+            }
+            WKSharedPreferencesUtil.getInstance()
+                    .putSPWithUID(SP_KEY_LAST_SYNC_VERSION_PER_SPACE, obj.toJSONString());
+        }
+    }
+
+    /** YUJ-326 · 读某 Space 的 last_sync_version cursor。空 / 首次访问返回 0（触发全量）。 */
+    public long getLastSyncVersionForSpace(@Nullable String spaceId) {
+        if (spaceId == null) return 0L;
+        loadLastSyncVersionMapIfNeeded();
+        Long v = lastSyncVersionForSpace.get(spaceId);
+        return v == null ? 0L : v;
+    }
+
+    /**
+     * YUJ-326 · 切 Space 前拍快照：从 DB {@code max(version) WHERE space_id=?} 读出
+     * 旧 Space 的最新 cursor 写入 SP。这样切回时 {@link #getLastSyncVersionForSpace}
+     * 返回 &gt;0 → 真增量；相比每次 clear 后 version=0 全量下载省一次 server roundtrip。
+     *
+     * <p>调用点：{@link com.chat.uikit.fragment.ChatFragment#performSpaceSwitch}（flag on）
+     * 切 Space 前的旧 Space 快照 + sync 成功回调里的新 Space 快照。
+     */
+    public void snapshotLastSyncVersion(@Nullable String spaceId) {
+        if (spaceId == null) return;
+        loadLastSyncVersionMapIfNeeded();
+        long v = com.xinbida.wukongim.db.ConversationDbManager.getInstance()
+                .queryMaxVersionForSpace(spaceId);
+        if (v > 0) {
+            lastSyncVersionForSpace.put(spaceId, v);
+            persistLastSyncVersionMap();
+        }
+    }
+
+    /** YUJ-326 · sync 成功后直接写入 cursor（省一次 DB query）。 */
+    public void updateLastSyncVersion(@Nullable String spaceId, long version) {
+        if (spaceId == null) return;
+        if (version <= 0) return;
+        loadLastSyncVersionMapIfNeeded();
+        Long old = lastSyncVersionForSpace.get(spaceId);
+        if (old != null && old >= version) return; // 单调递增，避免老回调覆盖新值
+        lastSyncVersionForSpace.put(spaceId, version);
+        persistLastSyncVersionMap();
+    }
+
+    /** @VisibleForTesting · 单测入口，绕过 SP 预加载直接塞值。 */
+    public void seedLastSyncVersionForTest(String spaceId, long version) {
+        loadLastSyncVersionMapIfNeeded();
+        lastSyncVersionForSpace.put(spaceId, version);
+    }
+
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("last_msg_seqs", last_msg_seqs);

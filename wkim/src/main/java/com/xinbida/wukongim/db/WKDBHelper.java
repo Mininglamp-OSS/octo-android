@@ -52,7 +52,14 @@ public class WKDBHelper {
 
     private volatile static WKDBHelper openHelper = null;
     // 数据库版本
-    private final static int version = 1;
+    // YUJ-326 · v1 → v2 · conversation / message / channel 三表新增 space_id 列 + per-Space
+    // 索引。migration SQL 在 wk_sql/202605040001.sql 只做 schema 变更（ALTER + INDEX），
+    // 不带任何破坏性语句；存量行的 space_id 回填由 Java 侧的 WKDBSpaceIdBackfill 以
+    // inline UPDATE + 事务 + 大表分批 + 磁盘检查 + 重试降级 的方式完成（见 YUJ-326
+    // 2026-05-04 Yu review 04:41Z 风险评审结论）。本常量仅作文档标识，没有运行时
+    // 消费方；底层 migration 路由仍由 WKDBUpgrade.onUpgrade 按 SQL 文件名 timestamp
+    // 顺序驱动。
+    private final static int version = 2;
     private static String myDBName;
     private static String uid;
     

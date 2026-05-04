@@ -194,5 +194,10 @@ public interface WKDBColumns {
         public static final String parent_channel_id = "parent_channel_id";
         // 父channelType
         public static final String parent_channel_type = "parent_channel_type";
+        // YUJ-326 · per-Space 本地缓存列。随 2026-05-04 migration 加入。server 在
+        // conversation/sync 响应 per-item 返回（已 ship，见 YUJ-325 comment），历史行
+        // migration 后为空字符串，首次冷启动强制 clearAll 洗干净，避免被当作"未知 Space"
+        // 永久滞留当前 Space 列表。
+        public static final String space_id = "space_id";
     }
 }

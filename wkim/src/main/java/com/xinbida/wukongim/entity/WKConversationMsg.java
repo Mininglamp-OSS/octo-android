@@ -36,6 +36,14 @@ public class WKConversationMsg {
     public WKConversationMsgExtra msgExtra;
     public String parentChannelID;
     public byte parentChannelType;
+    /**
+     * YUJ-326 · 本行归属 Space（32-hex space_id，个人/空 Space 时为 ""）。syncChat
+     * 写入时从 server 响应 {@code WKSyncConvMsg.space_id} 取；历史行 migration 后为空
+     * 字符串，首次 upgrade 会强制 clearAll 洗掉（见 {@link
+     * com.xinbida.wukongim.manager.ConversationManager#onFirstUpgradeAfterV2WashIfNeeded}）
+     * 避免永久滞留。per-Space clearForSpace / queryMaxVersionForSpace 按此列过滤。
+     */
+    public String spaceID = "";
 
     public WKConversationMsg() {
         this.lastMsgTimestamp = DateUtils.getInstance().getCurrentSeconds();

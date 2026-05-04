@@ -66,6 +66,18 @@ public class ConversationManager extends BaseManager {
     private volatile long syncInFlightSince = 0L;
     private static final long SYNC_STUCK_RESET_MS = 15_000L;
 
+    /**
+     * YUJ-326 · 本轮 sync 的 Space 归属兜底值。由 {@link
+     * #setSyncConversationListener(String, ISyncConversationChatBack)} 设置，
+     * 在 {@code saveSyncChatImpl} 里用于回填 server 响应未带 {@code space_id} 字段
+     * 的 conversation 行（老 server / 兼容路径）。
+     *
+     * <p>读写都在 sync permit 保护下（syncInFlight CAS + dispatchQueuePool 串行），
+     * 但 dispatchQueuePool 可能与 setSyncConversationListener 主线程 runOnMainThread
+     * 回调交叉，用 volatile 保证跨线程可见性。saveSyncChatImpl 完成后清理为 null。
+     */
+    private volatile String pendingWriteSpaceId = null;
+
     private ConversationManager() {
     }
 
@@ -148,6 +160,19 @@ public class ConversationManager extends BaseManager {
      */
     public boolean clearAll() {
         return ConversationDbManager.getInstance().clearEmpty();
+    }
+
+    /**
+     * YUJ-326 · 只清单个 Space 的 conversation 行。flag 开启后 {@code performSpaceSwitch}
+     * 调用此方法代替 {@link #clearAll()}，切回已访问 Space 时本地行保留 → 首帧秒开。
+     *
+     * <p>{@code spaceId == null} 等价 no-op（防御式，避免未设置 currentSpaceId 时清错）；
+     * {@code spaceId == ""} 清"空 Space"行（无 Space 模式 / migration 残留）。
+     *
+     * @see ConversationDbManager#clearForSpace(String)
+     */
+    public boolean clearAllForSpace(String spaceId) {
+        return ConversationDbManager.getInstance().clearForSpace(spaceId);
     }
 
     public void addOnRefreshMsgListListener(String key, IRefreshConversationMsgList listener) {
@@ -318,6 +343,40 @@ public class ConversationManager extends BaseManager {
     }
 
     public void setSyncConversationListener(ISyncConversationChatBack iSyncConversationChatBack) {
+        // 兼容入口：不传 spaceId → version/lastMsgSeq 用全局值（老路径）。
+        setSyncConversationListener(null, -1L, null, iSyncConversationChatBack);
+    }
+
+    /**
+     * YUJ-326 · per-Space sync listener（auto cursor）。{@code spaceId} 非 null 时
+     * version/lastMsgSeq 从本 Space 算出（{@link ConversationDbManager#queryMaxVersionForSpace(String)}
+     * + {@link ConversationDbManager#queryLastMsgSeqsForSpace(String)}）。
+     *
+     * <p>注意：调用方若刚做过 {@link #clearAllForSpace(String)}，DB 里本 Space 行已清，
+     * 此入口自动查到的 version 会是 0 → 全量 resync。如需保留旧 cursor 做真增量
+     * （e.g. MsgModel 维护的 SP 快照），改用
+     * {@link #setSyncConversationListener(String, long, String, ISyncConversationChatBack)}。
+     */
+    public void setSyncConversationListener(String spaceId, ISyncConversationChatBack iSyncConversationChatBack) {
+        setSyncConversationListener(spaceId, -1L, null, iSyncConversationChatBack);
+    }
+
+    /**
+     * YUJ-326 · per-Space sync listener（显式 cursor override）。
+     *
+     * @param spaceId              目标 Space（null → 走全局老路径）
+     * @param explicitVersion      {@code &gt;= 0} 时用此值作为 sync cursor，{@code &lt; 0} 回落
+     *                             DB 查询。调用方场景：clearForSpace 前 snapshot 了
+     *                             {@code max(version) WHERE space_id=?} 并写入 MsgModel SP，
+     *                             传进来避免 clear 后 DB=0 退化成全量 resync。
+     * @param explicitLastMsgSeqs  非 null 时用此值；null 回落 DB 查询。clear 后 DB 查出 ""，
+     *                             server 会按 {@code version &gt; ?} 做 conversation-level delta，
+     *                             语义正确但 recent msgs 可能多拉一轮。调用方可选透传 pre-clear 值。
+     */
+    public void setSyncConversationListener(String spaceId,
+                                            long explicitVersion,
+                                            String explicitLastMsgSeqs,
+                                            ISyncConversationChatBack iSyncConversationChatBack) {
         if (iSyncConversationChat == null) {
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
             return;
@@ -350,10 +409,29 @@ public class ConversationManager extends BaseManager {
             }
         }
         syncInFlightSince = now;
-        final long version = ConversationDbManager.getInstance().queryMaxVersion();
-        final String lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
+        // YUJ-326 · 设置本轮 sync 的兜底 Space 归属（server 响应缺 space_id 字段时使用）。
+        // 只在 per-Space 路径（spaceId != null）下写入，老全局路径维持 null 不触发回填逻辑。
+        pendingWriteSpaceId = spaceId;
+        final long version;
+        if (explicitVersion >= 0) {
+            version = explicitVersion;
+        } else if (spaceId == null) {
+            version = ConversationDbManager.getInstance().queryMaxVersion();
+        } else {
+            version = ConversationDbManager.getInstance().queryMaxVersionForSpace(spaceId);
+        }
+        final String lastMsgSeqStr;
+        if (explicitLastMsgSeqs != null) {
+            lastMsgSeqStr = explicitLastMsgSeqs;
+        } else if (spaceId == null) {
+            lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
+        } else {
+            lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqsForSpace(spaceId);
+        }
         WKLoggerUtils.getInstance().e(TAG,
-                "setSyncConversationListener begin (version=" + version
+                "setSyncConversationListener begin (spaceId=" + spaceId
+                        + ", version=" + version
+                        + (explicitVersion >= 0 ? " [explicit]" : "")
                         + ", lastMsgSeq=" + lastMsgSeqStr + ")");
         runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
             dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
@@ -364,6 +442,7 @@ public class ConversationManager extends BaseManager {
                 } finally {
                     // 无论上层回调是否抛，都必须 release permit。
                     syncInFlightSince = 0L;
+                    pendingWriteSpaceId = null;
                     syncInFlight.set(false);
                 }
             }));
@@ -425,6 +504,16 @@ public class ConversationManager extends BaseManager {
                 conversationMsg.lastMsgTimestamp = syncChat.conversations.get(i).timestamp;
                 conversationMsg.unreadCount = syncChat.conversations.get(i).unread;
                 conversationMsg.version = syncChat.conversations.get(i).version;
+                // YUJ-326 · 写入 per-Space 归属。Server dmworkim @759dd507 已 ship
+                // SyncUserConversationResp.SpaceID（api_conversation.go:1223 + :1315 自动反解），
+                // 直接用 server 响应的 space_id 即可。若 server 没下发（老版本 / 兼容路径），
+                // 回落 {@link #pendingWriteSpaceId} — 由本次 setSyncConversationListener
+                // 的 spaceId 入参设置（"本次 sync 结果必定属于本次请求 Space"，见 Phase 3a §5）。
+                String respSpaceId = syncChat.conversations.get(i).space_id;
+                if (respSpaceId == null || respSpaceId.isEmpty()) {
+                    respSpaceId = pendingWriteSpaceId != null ? pendingWriteSpaceId : "";
+                }
+                conversationMsg.spaceID = respSpaceId;
                 //聊天消息对象
                 if (syncChat.conversations.get(i).recents != null && WKCommonUtils.isNotEmpty(syncChat.conversations)) {
                     for (WKSyncRecent wkSyncRecent : syncChat.conversations.get(i).recents) {

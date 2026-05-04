@@ -532,21 +532,48 @@ public class MsgModel extends WKBaseModel {
         }
     }
 
-    /** YUJ-326 · sync 成功后直接写入 cursor（省一次 DB query）。 */
+    /**
+     * YUJ-326 · sync 成功后直接写入 cursor（省一次 DB query）。
+     *
+     * <p>YUJ-330 · Jerry review 2026-05-04 06:49Z Warning #2：原实现 {@code get → compare → put}
+     * 是三步 check-then-put，两个 sync 回调并发到达时可能都读到同一个旧值，都进入 put 分支，
+     * 后入者用较小 version 覆盖较大 version；外层 {@code ConcurrentHashMap} 本身线程安全但
+     * 不能消除 TOCTOU。改用 {@link java.util.concurrent.ConcurrentHashMap#compute} 在 bucket
+     * 锁内部做"取 max"，原子替换；仅当数值真的升高才触发 {@link #persistLastSyncVersionMap}，
+     * 避免无谓 SP 写入放大。
+     */
     public void updateLastSyncVersion(@Nullable String spaceId, long version) {
         if (spaceId == null) return;
         if (version <= 0) return;
         loadLastSyncVersionMapIfNeeded();
-        Long old = lastSyncVersionForSpace.get(spaceId);
-        if (old != null && old >= version) return; // 单调递增，避免老回调覆盖新值
-        lastSyncVersionForSpace.put(spaceId, version);
-        persistLastSyncVersionMap();
+        final boolean[] changed = {false};
+        lastSyncVersionForSpace.compute(spaceId, (k, old) -> {
+            if (old == null || version > old) {
+                changed[0] = true;
+                return version;
+            }
+            return old;
+        });
+        if (changed[0]) {
+            persistLastSyncVersionMap();
+        }
     }
 
     /** @VisibleForTesting · 单测入口，绕过 SP 预加载直接塞值。 */
     public void seedLastSyncVersionForTest(String spaceId, long version) {
         loadLastSyncVersionMapIfNeeded();
         lastSyncVersionForSpace.put(spaceId, version);
+    }
+
+    /**
+     * @VisibleForTesting · 把 per-Space map 切回"空 + 已加载"状态，供并发/回归
+     * 单测使用；host-side JVM 下 {@link #loadLastSyncVersionMapIfNeeded} 会因
+     * {@code WKSharedPreferencesUtil} 需要真实 Context 而 NPE，这个 hook 让测试
+     * 绕开 SP 预加载，仅锁算法行为（YUJ-330 Jerry review Warning #2 并发回归）。
+     */
+    public void resetLastSyncVersionForTest() {
+        lastSyncVersionForSpace.clear();
+        lastSyncVersionLoaded = true;
     }
 
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {

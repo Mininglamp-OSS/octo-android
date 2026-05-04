@@ -61,6 +61,7 @@ import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
 import com.chat.uikit.chat.manager.WKIMUtils;
+import com.chat.uikit.chat.SpaceSyncCoordinator;
 import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.category.CategoryEntity;
@@ -957,13 +958,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
                 if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty() && dbQueryCompleted) {
                     spaceConversationKeys.clear();
-                    Schedulers.io().scheduleDirect(() -> {
-                        WKIM.getInstance().getConversationManager().clearAll();
-                        // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
-                        // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                        WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                    // YUJ-318 · 连接成功补偿路径也走 coordinator。同路径 debounce 避免
+                    // 连接抖动反复触发；全局守卫避免与 performSpaceSwitch / resync 并发。
+                    if (SpaceSyncCoordinator.getInstance().tryBegin("connectSuccessCompensate")) {
+                        Schedulers.io().scheduleDirect(() -> {
+                            WKIM.getInstance().getConversationManager().clearAll();
+                            // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
+                            // 放主线程会和 sync 写入争抢数据库锁导致 ANR
+                            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                                SpaceSyncCoordinator.getInstance().complete();
+                            });
                         });
-                    });
+                    }
                 }
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
@@ -1114,11 +1120,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             WKSharedPreferencesUtil.getInstance()
                     .putSPWithUID("last_loaded_space_id", currentSpaceId);
             spaceConversationKeys.clear();
-            Schedulers.io().scheduleDirect(() -> {
-                WKIM.getInstance().getConversationManager().clearAll();
-                WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+            // YUJ-318 · 初次加载路径亦接入 coordinator；如果 performSpaceSwitch 刚触发过
+            // sync，这里会被 debounce 掉避免双重 clearAll（iOS `_isSyncing` 等价语义）。
+            if (SpaceSyncCoordinator.getInstance().tryBegin("initialSpaceLoad")) {
+                Schedulers.io().scheduleDirect(() -> {
+                    WKIM.getInstance().getConversationManager().clearAll();
+                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                        SpaceSyncCoordinator.getInstance().complete();
+                    });
                 });
-            });
+            }
             return;
         }
         // 无 Space 模式：直接加载本地所有会话
@@ -1729,11 +1740,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // YUJ-229 · 同步清 allConversations + conversationIndex
         clearAllConversations();
         chatConversationAdapter.setList(new ArrayList<>());
+        // YUJ-318 · resync 也接入 coordinator 去重
+        if (!SpaceSyncCoordinator.getInstance().tryBegin("spaceResync")) {
+            return;
+        }
         Schedulers.io().scheduleDirect(() -> {
             WKIM.getInstance().getConversationManager().clearAll();
             // setSyncConversationListener 内部有 DB 查询，必须在 IO 线程执行，
             // 放主线程会和 sync 写入争抢数据库锁导致 ANR
             WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                SpaceSyncCoordinator.getInstance().complete();
             });
         });
     };
@@ -1742,6 +1758,122 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (pendingSpaceResync) return;
         pendingSpaceResync = true;
         pingHandler.postDelayed(spaceResyncRunnable, 500);
+    }
+
+    // ============================================================================
+    // YUJ-318 · Space 切换 Loading Overlay
+    // ============================================================================
+
+    /**
+     * YUJ-318 · {@link #showSpaceSwitchOverlay()} 的 5s fallback 文案触发 runnable。
+     * sync / 首帧 sortMsg 在 5s 内回来会在 {@link #hideSpaceSwitchOverlay()} 取消这个。
+     */
+    private final Runnable spaceSwitchOverlayFallbackRunnable = () -> {
+        if (wkVBinding == null) return;
+        if (wkVBinding.spaceSwitchOverlay.getVisibility() == View.VISIBLE) {
+            wkVBinding.spaceSwitchOverlayFallbackTv.setVisibility(View.VISIBLE);
+        }
+    };
+
+    /**
+     * YUJ-321（fixing YUJ-318 ReviewBot P0-#1）· Overlay 10s 硬超时。网络失败 / 后端
+     * 不返回 / sync listener 未注册等情况下，原本 {@link #hideSpaceSwitchOverlay()} 永不
+     * 触发→ overlay 永久显示 + {@code clickable=true} 阻断所有点击，比不修还糟。
+     *
+     * <p>这里做兜底：10s 后无论如何强制隐藏，并 toast 提示用户「同步较慢，请稍候」，
+     * 同时释放 {@link SpaceSyncCoordinator} 的 permit，避免协调器也一起卡住导致后续切换
+     * 无法触发（协调器自己也有 STUCK_RESET_MS=10_000L，时序对齐）。
+     */
+    private final Runnable spaceSwitchOverlayHardTimeoutRunnable = () -> {
+        if (wkVBinding == null) return;
+        if (wkVBinding.spaceSwitchOverlay.getVisibility() != View.VISIBLE) return;
+        hideSpaceSwitchOverlay();
+        // 兜底释放 coordinator permit——正常路径 sync 回调会 complete，但走到 10s
+        // 说明 callback 没回来，这里主动放行，避免下次 performSpaceSwitch 也被挡。
+        SpaceSyncCoordinator.getInstance().complete();
+        try {
+            WKToastUtils.getInstance().showToastNormal(
+                    getString(R.string.yuj_321_space_switch_timeout_toast));
+        } catch (Throwable ignored) {
+            // Fragment 已 detach / Context 丢失时 getString 可能抛；静默吞掉
+        }
+    };
+
+    /**
+     * YUJ-318 · 显示 Space 切换 Loading Overlay。
+     *
+     * <p>只由 {@link #performSpaceSwitch(SpaceEntity)} 调用。其他 sync 路径（连接成功
+     * 补偿 / spaceResync / initialSpaceLoad）不显示 overlay，避免后台路径扰动用户视觉。
+     *
+     * <p>5s 仍未 {@link #hideSpaceSwitchOverlay()} 时显示 fallback 文案，提示用户不是
+     * App 卡死，而是网络 / 后端同步慢。
+     */
+    private void showSpaceSwitchOverlay() {
+        if (wkVBinding == null) return;
+        wkVBinding.spaceSwitchOverlay.setVisibility(View.VISIBLE);
+        wkVBinding.spaceSwitchOverlayFallbackTv.setVisibility(View.GONE);
+        if (pingHandler != null) {
+            pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
+            pingHandler.postDelayed(spaceSwitchOverlayFallbackRunnable, 5_000L);
+            // YUJ-321 P0-#1 · 10s 硬超时兜底：无论 sync listener 是否触发，10s 后强制
+            // hide + toast，避免 overlay 永久卡住 + clickable=true 阻断交互。
+            pingHandler.removeCallbacks(spaceSwitchOverlayHardTimeoutRunnable);
+            pingHandler.postDelayed(spaceSwitchOverlayHardTimeoutRunnable, 10_000L);
+        }
+    }
+
+    /**
+     * YUJ-318 · 隐藏 Loading Overlay。幂等：重复调用安全。
+     *
+     * <p>调用点：
+     * <ul>
+     *   <li>sync 回调（{@code setSyncConversationListener} 完成）</li>
+     *   <li>{@link #sortMsg(List)} 首帧 runOnUIThread 内（data 真的回来了）</li>
+     *   <li>performSpaceSwitch 因 coordinator debounce 放弃 sync 时的早退路径</li>
+     *   <li>YUJ-321 · {@link #spaceSwitchOverlayHardTimeoutRunnable} 10s 硬超时兜底</li>
+     * </ul>
+     */
+    private void hideSpaceSwitchOverlay() {
+        if (wkVBinding == null) return;
+        wkVBinding.spaceSwitchOverlay.setVisibility(View.GONE);
+        wkVBinding.spaceSwitchOverlayFallbackTv.setVisibility(View.GONE);
+        if (pingHandler != null) {
+            pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
+            // YUJ-321 · 同时取消 10s 硬超时，避免正常完成后仍弹 toast
+            pingHandler.removeCallbacks(spaceSwitchOverlayHardTimeoutRunnable);
+        }
+    }
+
+    /**
+     * YUJ-318 · ChannelInfoCache 批量预热（对照 iOS sync 完成后 `cacheDict` 已填满）。
+     *
+     * <p>从 sortMsg 即将 display 的 list 中抽出 (channelID, channelType) 组合，一次性
+     * 通过 SDK 的 {@code getChannel} 触发 DB → 回填 cache。原 adapter.convert 每行
+     * getWkChannel 被改为首次 miss 进 DB 打脸 36 次 × N 行；这里预热后 bind 路径都是
+     * O(1) ConcurrentHashMap.get 命中，主线程不再等 IO。
+     *
+     * <p>线程：调用方保证在 IO 线程（sortMsg 主线程 UI callback 之外，或本方法内部
+     * Schedulers.io 包装）。
+     */
+    private void prewarmChannelInfoCache(@NonNull List<ChatConversationMsg> list) {
+        if (list.isEmpty()) return;
+        Schedulers.io().scheduleDirect(() -> {
+            try {
+                for (int i = 0, size = list.size(); i < size; i++) {
+                    ChatConversationMsg m = list.get(i);
+                    if (m == null || m.isSectionHeader || m.uiConversationMsg == null) continue;
+                    String id = m.uiConversationMsg.channelID;
+                    if (TextUtils.isEmpty(id)) continue;
+                    // 首次调用：SDK 慢路径 DB 查 + 回填 cache。
+                    // 后续 adapter bind 调 getWkChannel 都会命中 ConcurrentHashMap fast path。
+                    WKIM.getInstance().getChannelManager()
+                            .getChannel(id, m.uiConversationMsg.channelType);
+                }
+            } catch (Throwable t) {
+                // 预热失败不影响列表显示，adapter 仍会走原 getWkChannel 路径。
+                android.util.Log.w("YUJ318-prewarm", "prewarmChannelInfoCache failed", t);
+            }
+        });
     }
 
     /**
@@ -1892,14 +2024,34 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         CategoryModel.getInstance().invalidateCache();
         loadCategories();
 
+        // YUJ-321（fixing YUJ-318 ReviewBot P1-#2）· 顺序修复：coordinator.tryBegin()
+        // 必须在 clearAllConversations() 之前。历史 bug：原实现先清 UI 再 check，快速
+        // A→B→A 时 B→A 被 debounce 但 UI 已清空，数据再也填不回来。
+        // 放行规则：
+        //   - tryBegin 通过 → 下面按原顺序清 UI / 清 DB / resync
+        //   - tryBegin 被 debounce → 直接 return，保留已有 UI 列表（Space
+        //     name/avatar 等 UI 反馈已在上面更新，用户知道点击生效；数据不清就不会
+        //     出现「切过去空白 5 秒」）
+        if (!SpaceSyncCoordinator.getInstance().tryBegin("performSpaceSwitch")) {
+            return;
+        }
+
         spaceConversationKeys.clear();
         // YUJ-229 · 同步清 allConversations + conversationIndex
         clearAllConversations();
         chatConversationAdapter.setList(new ArrayList<>());
 
+        // YUJ-318 · 切 Space 立刻显示 loading overlay，避免用户看到空列表 + 「收取中」一直转
+        // 搞不清是否点击生效。sync 完成 / 首帧 sortMsg 会调 hideSpaceSwitchOverlay 隐藏；
+        // 10s 硬超时兜底见 spaceSwitchOverlayHardTimeoutRunnable（YUJ-321 P0-#1）。
+        showSpaceSwitchOverlay();
+
         Schedulers.io().scheduleDirect(() -> {
             WKIM.getInstance().getConversationManager().clearAll();
             WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                // YUJ-318 · sync 完成回调：释放 coordinator permit + 隐藏 overlay
+                SpaceSyncCoordinator.getInstance().complete();
+                AndroidUtilities.runOnUIThread(this::hideSpaceSwitchOverlay);
             });
             new Handler(Looper.getMainLooper()).post(() ->
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
@@ -2027,6 +2179,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         List<ChatConversationMsg> tempList = new ArrayList<>();
         tempList.addAll(normalList);
         tempList.addAll(0, topList);
+        // YUJ-318 · 列表组装好就异步批量预热 ChannelInfoCache，避免后面 adapter.convert
+        // 每行首次 bind 时到主线程 DB 查询（H3 根因）。
+        prewarmChannelInfoCache(tempList);
         AndroidUtilities.runOnUIThread(() -> {
             // YUJ-229 · 先清 allConversations + conversationIndex，再 addAll 写入，
             // 最后重建索引 —— 批量替换路径统一口径，保证索引不漏新 entry 也不留陈旧残留。
@@ -2051,6 +2206,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 hasInitialReminderSynced = true;
                 MsgModel.getInstance().syncReminder();
             }
+            // YUJ-318 · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
+            // 稍后到，或用户侧首次 DB 命中先于 sync），立刻隐藏给用户即时反馈。
+            hideSpaceSwitchOverlay();
         });
     }
 

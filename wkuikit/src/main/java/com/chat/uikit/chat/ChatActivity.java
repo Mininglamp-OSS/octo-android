@@ -76,6 +76,8 @@ import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.space.SpaceChangedBroadcaster;
+import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.NumberTextView;
 import com.chat.base.ui.components.SystemMsgBackgroundColorSpan;
@@ -247,6 +249,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private final int pinnedViewHeight = AndroidUtilities.dp(50f);
     private boolean hasJoinedThread = false;
 
+    // YUJ-324 · Space 上下文快照：每次 initParam 时记录当前 Space，用于两处防御：
+    // (1) SpaceChangedBroadcaster 监听回调里比较"实例快照 != 新 Space"→ finish；
+    // (2) onNewIntent 复用路径顶部二次校验"实例快照 != SP 里现值"→ finish 后让
+    //     下一次 ChatReuseNavigator.launchChat 走冷启路径（defense in depth：
+    //     万一广播因进程切换 / race 没有到达）。
+    private String lastKnownSpaceId = "";
+
+    // YUJ-324 · Space 变化监听器；onCreate 注册、onDestroy 反注册。放成实例字段
+    // 是为了保留"一个 Activity 实例对应一个 listener"的语义，反注册时能精确定位。
+    private SpaceChangedBroadcaster.Listener spaceChangedListener;
     private int getTopPinViewHeight() {
         int totalHeight = 0;
         if (isShowCallingView) {
@@ -277,6 +289,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         channelId = getIntent().getStringExtra("channelId");
         //频道类型
         channelType = getIntent().getByteExtra("channelType", WKChannelType.PERSONAL);
+        // YUJ-324 · 每次 initParam 时刷新 Space 快照。冷启动 onCreate → initParam 拿到
+        // 真实当前 Space；onNewIntent 复用路径 setIntent + initParam 之后也会走到这里，
+        // 保证 lastKnownSpaceId 永远跟当前 Activity 实际渲染的 Space 对齐。
+        lastKnownSpaceId = SpaceFilter.getCurrentSpaceId();
         maxMsgOrderSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
         maxMsgSeq = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(channelId, channelType);
         resetHideChannelAllPinnedMessage();
@@ -353,6 +369,34 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         initListener();
         //initData();
         ActManagerUtils.getInstance().addActivity(this);
+        // YUJ-324 · 注册 Space 变化监听。ChatReuseNavigator.goBackToList 用
+        // REORDER_TO_FRONT 让 ChatActivity 常驻任务栈；一旦用户从 TabActivity
+        // 切了 Space，本实例必须主动销毁 —— 否则下次 launchChat 走 onNewIntent
+        // 复用，Space 上下文（WKIM channel session / WKChannel.remoteExtraMap
+        // 缓存 / 未经 Space 校验的消息 DB 读取）不会被重置，会出现"上个 Space
+        // 的内容串到新 Space 频道"的数据隔离破坏（P0）。
+        //
+        // 单实例封闭：lambda 只捕获 this 弱意义上的引用（随 Activity 生命周期
+        // 在 onDestroy 反注册），不会产生 process-scope 泄漏。
+        spaceChangedListener = (oldSpaceId, newSpaceId) -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (!TextUtils.equals(lastKnownSpaceId, newSpaceId)) {
+                if (WKBinder.isDebug) {
+                    Log.w("YUJ324-space-switch",
+                            "ChatActivity self-finish on Space switch: channel=" + channelId
+                                    + " old=" + oldSpaceId + " new=" + newSpaceId
+                                    + " snapshot=" + lastKnownSpaceId);
+                }
+                // 清掉全局 chattingChannelID：如果分屏态用这个字段恢复选中，这里
+                // 主动置空避免新 Space 的 ChatFragment.onResume 读到旧值去 re-select
+                // 一个不在新 Space 列表里的 channel。
+                if (TextUtils.equals(WKUIKitApplication.getInstance().chattingChannelID, channelId)) {
+                    WKUIKitApplication.getInstance().chattingChannelID = "";
+                }
+                finish();
+            }
+        };
+        SpaceChangedBroadcaster.addListener(spaceChangedListener);
         // YUJ-305 P1-A · 预测性返回（Predictive Back，API 33+）不走 onKeyDown → onBackPressed
         // 分发链，而是走 OnBackInvokedDispatcher / OnBackPressedDispatcher。若不注册回调，
         // 系统手势返回会直接 finish()，绕过 setBackListener() → goBackToList 的 soft-back
@@ -971,6 +1015,44 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // + FLAG_ACTIVITY_SINGLE_TOP 命中这里，彻底规避 recreate。
         long tNewIntent = SystemClock.uptimeMillis();
         String newChannelId = intent.getStringExtra("channelId");
+        // YUJ-324 · 跨 Space 复用防御（defense in depth）。
+        //
+        // 正常路径：performSpaceSwitch → MsgModel.setCurrentSpaceId → 广播 →
+        //   onCreate 注册的 spaceChangedListener 已经 finish 了自己，这里根本
+        //   不会再收到 onNewIntent。但万一广播因进程切换 / race / Activity 在
+        //   广播之前就被 REORDER 到栈顶（同 task 内事件顺序罕见但不绝对安全）
+        //   没有被及时消费，本实例可能带着 Space A 的快照收到 Space B 的
+        //   newChannelId。如果直接走常规切频道分支，SDK 内的 channel session /
+        //   WKChannel.remoteExtraMap / DB 读取会在新 Space 上下文缺失的情况下
+        //   渲染旧 Space 的残留 → 数据隔离破坏（P0）。
+        //
+        // 这里用"本实例 Space 快照 vs. SP 里现值"做最后一道闸：不一致就 finish，
+        // 并用原始 Intent 重新 startActivity 走冷启路径，让 onCreate → initParam
+        // 按 Space B 上下文重新加载所有 Space-aware 状态。对齐 Plan B（onNewIntent
+        // 自修复），把 Plan C（SpaceChanged 广播）没覆盖到的边界兜住。
+        String currentSpaceId = SpaceFilter.getCurrentSpaceId();
+        if (!TextUtils.equals(lastKnownSpaceId, currentSpaceId)) {
+            if (WKBinder.isDebug) {
+                Log.w("YUJ324-space-switch",
+                        "onNewIntent detected stale Space snapshot: channel=" + channelId
+                                + " newChannel=" + newChannelId
+                                + " snapshot=" + lastKnownSpaceId
+                                + " current=" + currentSpaceId
+                                + " → finish + cold relaunch");
+            }
+            if (TextUtils.equals(WKUIKitApplication.getInstance().chattingChannelID, channelId)) {
+                WKUIKitApplication.getInstance().chattingChannelID = "";
+            }
+            finish();
+            // 用新 Intent 重新打开 —— 剥掉 REORDER_TO_FRONT / SINGLE_TOP 防止
+            // 再次命中自己（虽然此刻本实例已 finish，但 AMS 可能尚未回收）。
+            Intent relaunch = new Intent(intent);
+            relaunch.setFlags(intent.getFlags()
+                    & ~Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    & ~Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(relaunch);
+            return;
+        }
         if (WKBinder.isDebug) {
             Log.d("YUJ276-trace", "[T_ON_NEW_INTENT] previousChannel=" + channelId
                     + " newChannel=" + newChannelId);
@@ -3305,6 +3387,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，
         // 避免两条路径清理矩阵漂移。
         detachChannelListeners(channelId);
+        // YUJ-324 · 反注册 Space 变化监听，避免 process-scope 列表长期持有本实例
+        // 引用（lambda 捕获 this.lastKnownSpaceId / this.channelId 字段访问通过
+        // 合成类持有 outer ChatActivity 引用）。
+        if (spaceChangedListener != null) {
+            SpaceChangedBroadcaster.removeListener(spaceChangedListener);
+            spaceChangedListener = null;
+        }
         WKVoiceViewManager.getInstance().release();
         EndpointManager.getInstance().remove("hide_pinned_view");
         EndpointManager.getInstance().remove("show_pinned_view");

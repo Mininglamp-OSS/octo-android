@@ -21,6 +21,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
+import com.chat.base.space.SpaceChangedBroadcaster;
 import com.chat.base.external.ExternalMsgExtras;
 import com.xinbida.wukongim.db.ReminderDBManager;
 import com.chat.base.net.ud.WKDownloader;
@@ -402,10 +403,16 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void setCurrentSpaceId(String spaceId, String spaceName) {
+        // YUJ-324 · 保存旧值，待 SP 落地后广播给 ChatActivity 等保活页面，
+        // 让它们在 Space 变化时主动 finish 自己，避免跨 Space 串内容（P0 数据隔离）。
+        // 广播必须在 SP 写入之后发出 —— 监听方常调 SpaceFilter.getCurrentSpaceId()
+        // 作为"当前 Space"判定依据，顺序反了会读到旧值。
+        String oldSpaceId = this.currentSpaceId;
         this.currentSpaceId = spaceId != null ? spaceId : "";
         this.currentSpaceName = spaceName != null ? spaceName : "";
         WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_id", this.currentSpaceId);
         WKSharedPreferencesUtil.getInstance().putSPWithUID("current_space_name", this.currentSpaceName);
+        SpaceChangedBroadcaster.notifyChanged(oldSpaceId, this.currentSpaceId);
     }
 
     public void loadCurrentSpaceId() {

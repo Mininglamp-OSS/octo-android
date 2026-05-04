@@ -2,6 +2,7 @@ package com.chat.uikit.message;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
@@ -22,6 +23,7 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.space.SpaceChangedBroadcaster;
+import com.chat.uikit.BuildConfig;
 import com.chat.base.external.ExternalMsgExtras;
 import com.xinbida.wukongim.db.ReminderDBManager;
 import com.chat.base.net.ud.WKDownloader;
@@ -437,9 +439,34 @@ public class MsgModel extends WKBaseModel {
         jsonObject.put("version", version);
         jsonObject.put("device_uuid", WKConstants.getDeviceUUID());
         String spaceId = currentSpaceId.isEmpty() ? null : currentSpaceId;
+        // YUJ-312 Phase 2 · T6 埋点：sync request-out / response-in。
+        //
+        // Jerry review（2026-05-04）指出：原版用 Trace.beginSection 在 IO 线程 begin，
+        // onSuccess/onFail 在主线程 end，但 Android `android.os.Trace` API 是
+        // per-thread stack——跨线程 begin/end 无法配对：
+        //   1) IO 线程 begin 永远不 end → perfetto 图里段悬挂
+        //   2) 主线程 endSection 可能错误关闭主线程上当时最外层的其他段（例如
+        //      YUJ312-onRefreshList-rebuild）。
+        //
+        // 修复方案（Jerry 推荐 · Yu 拍板）：syncChat 是唯一跨线程段，直接去掉
+        // beginSection/endSection 调用，只保留 Log.d 时间戳。Debug only 性能分析
+        // 场景下，Perfetto 的 logcat view 可对齐 "YUJ312" 标签 + elapsedRealtime
+        // 戳；其余 7 段（都在主线程 OR 同一后台线程内闭合）配对不受影响。
+        final long yuj312SyncStartMs = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("YUJ312", "sync-request-out space_id=" + spaceId
+                    + " version=" + version + " msg_count=" + msg_count
+                    + " ts=" + yuj312SyncStartMs);
+        }
         request(createService(MsgService.class).syncChat(jsonObject, spaceId), new IRequestResultListener<>() {
             @Override
             public void onSuccess(WKSyncChat result) {
+                if (BuildConfig.DEBUG) {
+                    int convCount = (result == null || result.conversations == null)
+                            ? 0 : result.conversations.size();
+                    android.util.Log.d("YUJ312", "sync-response-in convCount=" + convCount
+                            + " rtt=" + (SystemClock.elapsedRealtime() - yuj312SyncStartMs) + "ms");
+                }
                 if (result != null && !TextUtils.isEmpty(result.uid) && result.uid.equals(WKConfig.getInstance().getUid())) {
                     if (WKReader.isNotEmpty(result.conversations)) {
                         WKUIKitApplication.getInstance().isRefreshChatActivityMessage = true;
@@ -458,6 +485,10 @@ public class MsgModel extends WKBaseModel {
 
             @Override
             public void onFail(int code, String msg) {
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("YUJ312", "sync-response-fail code=" + code + " msg=" + msg
+                            + " rtt=" + (SystemClock.elapsedRealtime() - yuj312SyncStartMs) + "ms");
+                }
                 iSyncConversationChatBack.onBack(null);
             }
         });

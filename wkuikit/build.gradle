@@ -31,6 +31,8 @@ android {
     buildFeatures {
         viewBinding true
         dataBinding true
+        // YUJ-312 Phase 2 · 打开 BuildConfig 生成，用于 Trace/Log 埋点的 DEBUG 守卫
+        buildConfig true
     }
     namespace 'com.chat.uikit'
 

@@ -8,7 +8,10 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.os.Trace;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -21,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
@@ -56,6 +60,7 @@ import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
+import com.chat.uikit.BuildConfig;
 import com.chat.uikit.R;
 import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
@@ -776,6 +781,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             if (allConversations.isEmpty()) {
                 // allConversations 为空，说明是首次加载或 Space 切换后的首次同步结果
+                // YUJ-312 Phase 2 · T8 埋点：主线程重建列表（逐条 SpaceFilter + per-channel DB 读）。
+                // 这个分支 sync 完成后会走一次，成本 ≈ O(N × getMsgExtraWithChannel)。
+                long yuj312T8Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+                int yuj312T8InputSize = BuildConfig.DEBUG ? list.size() : 0;
+                if (BuildConfig.DEBUG) {
+                    Trace.beginSection("YUJ312-onRefreshList-rebuild");
+                }
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
                 for (WKUIConversationMsg uiConversationMsg : list) {
@@ -815,6 +827,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 ensureSystemBotsVisible(uiList);
                 sortMsg(uiList);
                 setAllCount();
+                if (BuildConfig.DEBUG) {
+                    Trace.endSection();
+                    Log.d("YUJ312", "onRefreshList-rebuild done inputSize=" + yuj312T8InputSize
+                            + " outputSize=" + uiList.size()
+                            + " +" + (SystemClock.elapsedRealtime() - yuj312T8Start) + "ms");
+                }
                 return;
             }
             List<ChatConversationMsg> uiList = new ArrayList<>();
@@ -1807,11 +1825,25 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      *
      * <p>5s 仍未 {@link #hideSpaceSwitchOverlay()} 时显示 fallback 文案，提示用户不是
      * App 卡死，而是网络 / 后端同步慢。
+     *
+     * <p>YUJ-312 Phase 2 · overlay 主文案显示「正在同步「{spaceName}」…」，让用户立刻
+     * 知道切换已触发并在同步该 Space；空 spaceName 时降级为不显示主文案，仅 spinner。
+     *
+     * @param spaceName 目标 Space 名，主文案占位；传 null/空不渲染主文案
      */
-    private void showSpaceSwitchOverlay() {
+    private void showSpaceSwitchOverlay(@Nullable String spaceName) {
         if (wkVBinding == null) return;
         wkVBinding.spaceSwitchOverlay.setVisibility(View.VISIBLE);
         wkVBinding.spaceSwitchOverlayFallbackTv.setVisibility(View.GONE);
+        if (wkVBinding.spaceSwitchOverlayPrimaryTv != null) {
+            if (TextUtils.isEmpty(spaceName)) {
+                wkVBinding.spaceSwitchOverlayPrimaryTv.setVisibility(View.GONE);
+            } else {
+                wkVBinding.spaceSwitchOverlayPrimaryTv.setText(
+                        getString(R.string.yuj_312_space_switch_syncing_fmt, spaceName));
+                wkVBinding.spaceSwitchOverlayPrimaryTv.setVisibility(View.VISIBLE);
+            }
+        }
         if (pingHandler != null) {
             pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
             pingHandler.postDelayed(spaceSwitchOverlayFallbackRunnable, 5_000L);
@@ -1837,6 +1869,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (wkVBinding == null) return;
         wkVBinding.spaceSwitchOverlay.setVisibility(View.GONE);
         wkVBinding.spaceSwitchOverlayFallbackTv.setVisibility(View.GONE);
+        if (wkVBinding.spaceSwitchOverlayPrimaryTv != null) {
+            wkVBinding.spaceSwitchOverlayPrimaryTv.setVisibility(View.GONE);
+        }
         if (pingHandler != null) {
             pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
             // YUJ-321 · 同时取消 10s 硬超时，避免正常完成后仍弹 toast
@@ -2009,6 +2044,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      */
     private void performSpaceSwitch(@NotNull SpaceEntity space) {
         if (space == null || space.space_id == null) return;
+        // YUJ-312 Phase 2 · 埋点：从方法入口开始；所有 beginSection 对应 endSection 在方法末尾。
+        // 守 BuildConfig.DEBUG 确保 release 零开销。Trace 对应 Android Studio / Perfetto / systrace
+        // 工具中 "YUJ312-" 前缀高亮段，便于真机抓图对齐 Issue 中 T1–T10 调用链表格。
+        final long yuj312StartMs = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+        if (BuildConfig.DEBUG) {
+            Trace.beginSection("YUJ312-performSpaceSwitch");
+            Log.d("YUJ312", "performSpaceSwitch START space_id=" + space.space_id
+                    + " name=" + space.name);
+        }
         // YUJ-267 · 切 Space 清掉选中态（Space 维度不同，旧选中 channel 可能已不在新列表）。
         // 必须在调用链最顶层做，避免 adapter.setList(empty) 之后再清（先后顺序不重要但一次调用即可）。
         if (chatConversationAdapter != null) {
@@ -2033,23 +2077,71 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //     name/avatar 等 UI 反馈已在上面更新，用户知道点击生效；数据不清就不会
         //     出现「切过去空白 5 秒」）
         if (!SpaceSyncCoordinator.getInstance().tryBegin("performSpaceSwitch")) {
+            if (BuildConfig.DEBUG) {
+                Log.d("YUJ312", "performSpaceSwitch END debounced +"
+                        + (SystemClock.elapsedRealtime() - yuj312StartMs) + "ms");
+                Trace.endSection();
+            }
             return;
         }
 
+        // YUJ-312 Phase 2 · T3 埋点：主线程清 UI（clear memory + setList(empty)）。
+        // Jerry review 2026-05-04 · 统一 DEBUG 守卫样式：每个 section 的 begin + end
+        // 都各自用 `if (BuildConfig.DEBUG) { ... }` 包裹，避免原先 T3→T3b 的链式
+        // «前段 endSection + 下段 beginSection 塞在同一个 DEBUG 块» 结构。
+        long yuj312T3Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+        if (BuildConfig.DEBUG) {
+            Trace.beginSection("YUJ312-clearAllConversations");
+        }
         spaceConversationKeys.clear();
         // YUJ-229 · 同步清 allConversations + conversationIndex
         clearAllConversations();
+        if (BuildConfig.DEBUG) {
+            Trace.endSection();
+            Log.d("YUJ312", "clearAllConversations done +"
+                    + (SystemClock.elapsedRealtime() - yuj312T3Start) + "ms");
+        }
+
+        long yuj312T3bStart = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+        if (BuildConfig.DEBUG) {
+            Trace.beginSection("YUJ312-adapter-setList-empty");
+        }
         chatConversationAdapter.setList(new ArrayList<>());
+        if (BuildConfig.DEBUG) {
+            Trace.endSection();
+            Log.d("YUJ312", "adapter.setList(empty) done +"
+                    + (SystemClock.elapsedRealtime() - yuj312T3bStart) + "ms");
+        }
 
         // YUJ-318 · 切 Space 立刻显示 loading overlay，避免用户看到空列表 + 「收取中」一直转
         // 搞不清是否点击生效。sync 完成 / 首帧 sortMsg 会调 hideSpaceSwitchOverlay 隐藏；
         // 10s 硬超时兜底见 spaceSwitchOverlayHardTimeoutRunnable（YUJ-321 P0-#1）。
-        showSpaceSwitchOverlay();
+        // YUJ-312 Phase 2 · 传入 space.name 渲染主文案「正在同步「xxx」…」（Yu 授权文案）。
+        showSpaceSwitchOverlay(space.name);
 
         Schedulers.io().scheduleDirect(() -> {
+            // YUJ-312 Phase 2 · T4 埋点：IO 线程 WKIM.clearAll（DB DELETE FROM conversation）。
+            // section 名称包含 "WKIM-clearAll"，与 SDK 侧 saveSyncChat 区分。
+            // 注意：beginSection + endSection 都在同一个 IO 线程内闭合（非跨线程），
+            // per-thread stack 配对正常——不存在 syncChat 的跨线程失效问题。
+            long yuj312T4Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+            if (BuildConfig.DEBUG) {
+                Trace.beginSection("YUJ312-WKIM-clearAll");
+            }
             WKIM.getInstance().getConversationManager().clearAll();
+            if (BuildConfig.DEBUG) {
+                Trace.endSection();
+                Log.d("YUJ312", "WKIM.clearAll done +"
+                        + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
+            }
             WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
                 // YUJ-318 · sync 完成回调：释放 coordinator permit + 隐藏 overlay
+                if (BuildConfig.DEBUG) {
+                    int convCount = (result == null || result.conversations == null)
+                            ? 0 : result.conversations.size();
+                    Log.d("YUJ312", "sync-listener onBack conversations=" + convCount
+                            + " totalElapsed=" + (SystemClock.elapsedRealtime() - yuj312StartMs) + "ms");
+                }
                 SpaceSyncCoordinator.getInstance().complete();
                 AndroidUtilities.runOnUIThread(this::hideSpaceSwitchOverlay);
             });
@@ -2057,6 +2149,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null)
             );
         });
+        if (BuildConfig.DEBUG) {
+            // 注意：T4/T6/T7 发生在异步线程，这里 endSection 只对应「主线程入口段」的同步部分。
+            // 真机 trace 中 YUJ312-performSpaceSwitch 段时长 = 同步 UI 清理耗时（T1-T3）。
+            Log.d("YUJ312", "performSpaceSwitch RETURN sync-portion +"
+                    + (SystemClock.elapsedRealtime() - yuj312StartMs) + "ms");
+            Trace.endSection();
+        }
     }
 
     /**
@@ -2183,6 +2282,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 每行首次 bind 时到主线程 DB 查询（H3 根因）。
         prewarmChannelInfoCache(tempList);
         AndroidUtilities.runOnUIThread(() -> {
+            // YUJ-312 Phase 2 · T10 埋点：首帧最终 adapter rebuild（含 filterAndDisplay / setAllCount）。
+            // 这是用户感知 Space 切换「完成」的关键节点；真机 trace 中 YUJ312-adapter-setList-final
+            // 段 end 到 hideSpaceSwitchOverlay 之间的距离 ≈ 首帧 render 延迟。
+            long yuj312T10Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+            int yuj312T10Size = BuildConfig.DEBUG ? tempList.size() : 0;
+            if (BuildConfig.DEBUG) {
+                Trace.beginSection("YUJ312-adapter-setList-final");
+            }
             // YUJ-229 · 先清 allConversations + conversationIndex，再 addAll 写入，
             // 最后重建索引 —— 批量替换路径统一口径，保证索引不漏新 entry 也不留陈旧残留。
             clearAllConversations();
@@ -2209,6 +2316,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // YUJ-318 · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
             // 稍后到，或用户侧首次 DB 命中先于 sync），立刻隐藏给用户即时反馈。
             hideSpaceSwitchOverlay();
+            if (BuildConfig.DEBUG) {
+                Trace.endSection();
+                Log.d("YUJ312", "adapter-setList-final done size=" + yuj312T10Size
+                        + " +" + (SystemClock.elapsedRealtime() - yuj312T10Start) + "ms");
+            }
         });
     }
 

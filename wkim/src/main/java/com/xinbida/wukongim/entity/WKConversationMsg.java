@@ -38,10 +38,10 @@ public class WKConversationMsg {
     public byte parentChannelType;
     /**
      * YUJ-326 · 本行归属 Space（32-hex space_id，个人/空 Space 时为 ""）。syncChat
-     * 写入时从 server 响应 {@code WKSyncConvMsg.space_id} 取；历史行 migration 后为空
-     * 字符串，首次 upgrade 会强制 clearAll 洗掉（见 {@link
-     * com.xinbida.wukongim.manager.ConversationManager#onFirstUpgradeAfterV2WashIfNeeded}）
-     * 避免永久滞留。per-Space clearForSpace / queryMaxVersionForSpace 按此列过滤。
+     * 写入时从 server 响应 {@code WKSyncConvMsg.space_id} 取；历史行在 v1 → v2 升级时
+     * 由 {@link com.xinbida.wukongim.db.WKDBSpaceIdBackfill} 做 inline UPDATE 批量回填
+     * （见 wk_sql/202605040001.sql + Yu review 2026-05-04 04:41Z 风险评审结论）。
+     * per-Space clearForSpace / queryMaxVersionForSpace 按此列过滤。
      */
     public String spaceID = "";
 

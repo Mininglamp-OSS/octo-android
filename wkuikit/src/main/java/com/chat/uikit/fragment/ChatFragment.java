@@ -2179,6 +2179,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 // 下次切回时 SpaceFilter + 内存 Set 重建即可首帧从 DB 出数据。
                 // targetSpaceId 可能为空（无 Space 模式 / 默认域），clearForSpace("")
                 // 清"空 Space"行，等价 iOS 空域逻辑。
+                //
+                // YUJ-330 Jerry review 2026-05-04 06:49Z Suggestion #5 · debug build
+                // 双保险：进到这里必须满足 SpaceCacheFlag.isEnabled()==true，否则
+                // 说明 perSpaceEnabled 与 flag 判定出现漂移（例如未来谁把 flag 读取
+                // 下沉了但忘更新这里），会把 backfill 未完成时的预回填行误清。
+                // Release build 不开，不影响线上行为；DEBUG build 一旦命中立刻崩。
+                if (BuildConfig.DEBUG && !com.chat.uikit.space.SpaceCacheFlag.isEnabled()) {
+                    throw new IllegalStateException(
+                            "clearForSpace called while SpaceCacheFlag.isEnabled()==false;"
+                                    + " backfill gate invariant violated (YUJ-330 Suggestion #5)");
+                }
                 WKIM.getInstance().getConversationManager()
                         .clearAllForSpace(targetSpaceId == null ? "" : targetSpaceId);
             } else {

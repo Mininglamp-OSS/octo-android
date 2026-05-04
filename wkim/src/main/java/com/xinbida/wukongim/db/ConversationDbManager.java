@@ -443,6 +443,16 @@ public class ConversationDbManager {
      * space_id 列保留供后续 Phase 3c 评估 per-Space 消息缓存时使用，本 Phase 不动；
      * 切 Space 后消息列表/频道信息靠 SpaceFilter 内存 Set + UI filter 层做隔离，DB 层
      * 老路径不变，避免扩大改动面引入回归。
+     *
+     * <p><b>Caller contract</b> · 调用前必须确认 {@code
+     * com.chat.uikit.space.SpaceCacheFlag#isEnabled() == true}（内部已串联
+     * {@code SpaceCacheBackfillGate.isBackfillDone()}）。如果在 backfill 未完成或硬失败的
+     * 窗口内调用 {@code clearForSpace("")}，会把"尚未识别 space_id 的存量 conversation 行"
+     * 全部删掉（它们此刻 {@code space_id=''} 正好匹配），造成首屏消息/会话丢失 + 下次切回
+     * 必须走全量 resync。YUJ-330 Jerry review 2026-05-04 06:49Z Suggestion #5 要求把此
+     * 不变量从 javadoc 上抬到代码里能看到的位置。主要调用点
+     * ({@code ChatFragment.performSpaceSwitch}) 已用 {@code SpaceCacheFlag.isEnabled()}
+     * 分支短路，同时那里的 debug build 会再加一层 {@code BuildConfig.DEBUG} 断言双保险。
      */
     public synchronized boolean clearForSpace(String spaceId) {
         if (spaceId == null) return false;

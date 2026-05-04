@@ -54,8 +54,10 @@ public final class WKDBSpaceIdBackfill {
 
     private static final String TAG = "YUJ326-backfill";
 
-    // SP keys（uid-scoped，与 WKIMApplication.setDBUpgradeIndex 同一 SharedPreferences 文件）
-    private static final String SP_FILE_SUFFIX = "_db_setting";
+    // SP keys（uid-scoped · 落 "wk_account_config" 文件，与 WKIMApplication.setDBUpgradeIndex
+    // / getDBUpgradeIndex 是同一个 SharedPreferences，不要把回填状态拆到别的文件避免状态
+    // 发散 —— 见 {@link #sharedPrefs} 说明。YUJ-330 Jerry review 2026-05-04 06:49Z Warning #4
+    // 删除未使用的 SP_FILE_SUFFIX 常量，并把"同一文件"的约束在注释里点名到字面量。
     private static final String SP_STATE = "yuj326_backfill_state";
     private static final String SP_RETRIES = "yuj326_backfill_retries";
     private static final String SP_LAST_DURATION_MS = "yuj326_backfill_last_duration_ms";
@@ -270,8 +272,9 @@ public final class WKDBSpaceIdBackfill {
     }
 
     private static SharedPreferences sharedPrefs(Context context, String uid) {
-        // 与 WKIMApplication.getDBUpgradeIndex 同一个文件，避免跨文件状态发散。
-        // 文件名与 WKIMApplication 中的 sharedName 约定一致 — 见 WKIMApplication 源码。
+        // 与 WKIMApplication.getDBUpgradeIndex / setDBUpgradeIndex 同一个文件（"wk_account_config"，
+        // 由 WKIMApplication.sharedName 常量定义，通过 getSharedName() 暴露）。同一文件避免
+        // 升级索引与 backfill 状态落到不同 SP 造成状态发散。
         return context.getSharedPreferences(
                 WKIMApplication.getInstance().getSharedName(), Context.MODE_PRIVATE);
     }

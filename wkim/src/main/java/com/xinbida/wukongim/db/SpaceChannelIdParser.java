@@ -15,8 +15,7 @@ package com.xinbida.wukongim.db;
  *
  * <p>与 migration SQL {@code substr(channel_id, 2, 32)} 的行为差异：SQL 版本不做 hex
  * 校验（SQLite 没有 regex extension），极端情况下非 hex 字节会被写入 space_id 列。
- * 这个 Java 版本作为"严格参照实现"供单测锁定契约，也供 runtime 可选用它逐行校验
- * （{@link WKDBSpaceIdBackfill#BACKFILL_MODE} 选择 SQL 快速批 vs Java 严格批）。
+ * 这个 Java 版本作为"严格参照实现"供单测锁定契约，也供 runtime 可选用它逐行校验。
  */
 public final class SpaceChannelIdParser {
 

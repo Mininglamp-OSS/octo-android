@@ -488,13 +488,20 @@ public class MsgModel extends WKBaseModel {
 
     private void persistLastSyncVersionMap() {
         // 小 map（典型 &lt; 10 个 Space），直接整体序列化；比 diff 写成本低。
+        // YUJ-329 · Codex followup: 包一层 try/catch 兜底 SP / JSON 序列化异常，
+        // 失败时 log + 保持内存 map 不变（上一次成功状态），避免切 Space 场景崩溃。
         synchronized (this) {
-            JSONObject obj = new JSONObject();
-            for (java.util.Map.Entry<String, Long> e : lastSyncVersionForSpace.entrySet()) {
-                obj.put(e.getKey(), e.getValue());
+            try {
+                JSONObject obj = new JSONObject();
+                for (java.util.Map.Entry<String, Long> e : lastSyncVersionForSpace.entrySet()) {
+                    obj.put(e.getKey(), e.getValue());
+                }
+                WKSharedPreferencesUtil.getInstance()
+                        .putSPWithUID(SP_KEY_LAST_SYNC_VERSION_PER_SPACE, obj.toJSONString());
+            } catch (Throwable t) {
+                // 降级：不抛，仅记录；内存 map 保持不变（下次 updateLastSyncVersion / snapshot 仍会重试）。
+                WKLogUtils.e("MsgModel", "persistLastSyncVersionMap failed: " + t.getMessage());
             }
-            WKSharedPreferencesUtil.getInstance()
-                    .putSPWithUID(SP_KEY_LAST_SYNC_VERSION_PER_SPACE, obj.toJSONString());
         }
     }
 

@@ -526,6 +526,12 @@ public class ConversationDbManager {
                 .rawQuery(sql, new Object[]{spaceId})) {
             if (cursor != null && cursor.moveToFirst()) {
                 lastMsgSeqs = WKCursor.readString(cursor, "synckey");
+                // YUJ-330 Jerry review 2026-05-04 06:49Z Suggestion #6 · GROUP_CONCAT
+                // 当本 Space 在 conversation 表一条都没有时（冷启动首次切入 / 全部 is_deleted=1
+                // 被过滤），SQLite 返回单行 {synckey: NULL}，WKCursor.readString 直接回 null。
+                // 下游 syncChat 把 null 放 JSON 请求体会触发空指针或 server 参数校验失败；
+                // 此处把 null 归一成 "" 保证 "no cursor = 空字符串" 的契约对齐空表分支。
+                if (lastMsgSeqs == null) lastMsgSeqs = "";
             }
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG, "queryLastMsgSeqsForSpace error: " + e.getMessage());

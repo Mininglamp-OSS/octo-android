@@ -3,7 +3,6 @@ package com.chat.base.utils;
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -21,6 +20,7 @@ import androidx.core.content.FileProvider;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.R;
+import com.tencent.bugly.crashreport.CrashReport;
 
 import java.io.File;
 
@@ -58,6 +58,7 @@ public class DownloadApkUtils {
     private String downloadUrl;
     private File localFiles;
     private boolean isdownload = false;
+    private Context registeredContext;
 
     private DownloadApkUtils() {
 
@@ -174,6 +175,12 @@ public class DownloadApkUtils {
                 return;
             }
             isdownload = true;
+            // 清理上一次的下载任务，防止 DownloadManager 内部残留导致重试失败
+            if (downloadId != 0 && downloadManager != null) {
+                downloadManager.remove(downloadId);
+                downloadId = 0;
+            }
+            unregisterReceiverSafely();
             // 删除旧文件（app 私有目录，delete 一定成功）
             if (localFiles.exists()) {
                 localFiles.delete();
@@ -181,38 +188,43 @@ public class DownloadApkUtils {
             // 清理其他旧版本 APK
             cleanOldApks(context, versionName);
             // 创建下载任务
-            DownloadManager.Request request;
             try {
-                request = new DownloadManager.Request(Uri.parse(url));
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                request.setAllowedOverRoaming(false);
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
+                request.setTitle(context.getString(R.string.app_name) + "新版本下载");
+                request.setDescription("下载中...");
+                request.setVisibleInDownloadsUi(true);
+                // 使用 setDestinationUri 指定 app 私有目录
+                request.setDestinationUri(Uri.fromFile(localFiles));
+                WKLogUtils.e("新版本下载网络url地址=", url);
+                WKLogUtils.e("新版本下载本地文件地址=", localFiles.getAbsolutePath());
+                // 获取DownloadManager
+                if (null == downloadManager) {
+                    downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
+                }
+                if (downloadManager == null) {
+                    isdownload = false;
+                    if (callback != null) callback.onError("下载服务不可用");
+                    return;
+                }
+                // 将下载请求加入下载队列
+                downloadId = downloadManager.enqueue(request);
+                // 注册广播接收者，监听下载状态
+                registeredContext = context;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(receiver,
+                            new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
+                } else {
+                    context.registerReceiver(receiver,
+                            new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+                }
+                if (callback != null) callback.onDownloadStarted();
             } catch (Exception e) {
+                CrashReport.postCatchedException(e);
                 isdownload = false;
-                if (callback != null) callback.onError("下载地址无效");
-                return;
+                if (callback != null) callback.onError("下载失败，请重试");
             }
-            request.setAllowedOverRoaming(false);
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
-            request.setTitle(context.getString(R.string.app_name) + "新版本下载");
-            request.setDescription("下载中...");
-            request.setVisibleInDownloadsUi(true);
-            // 使用 setDestinationUri 指定 app 私有目录
-            request.setDestinationUri(Uri.fromFile(localFiles));
-            WKLogUtils.e("新版本下载网络url地址=", url);
-            WKLogUtils.e("新版本下载本地文件地址=", localFiles.getAbsolutePath());
-            // 获取DownloadManager
-            if (null == downloadManager) {
-                downloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-            }
-            // 将下载请求加入下载队列
-            downloadId = downloadManager.enqueue(request);
-            // 注册广播接收者，监听下载状态
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver,
-                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED);
-            } else {
-                context.registerReceiver(receiver,
-                        new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-            }
-            if (callback != null) callback.onDownloadStarted();
         }
     }
 
@@ -242,6 +254,7 @@ public class DownloadApkUtils {
                     case DownloadManager.STATUS_PAUSED:
                         WKLogUtils.e("新版本下载状态", "下载暂停");
                         isdownload = false;
+                        unregisterReceiverSafely();
                         break;
                     //下载延迟
                     case DownloadManager.STATUS_PENDING:
@@ -255,12 +268,16 @@ public class DownloadApkUtils {
                     case DownloadManager.STATUS_SUCCESSFUL:
                         //下载完成安装APK
                         isdownload = false;
+                        unregisterReceiverSafely();
                         installAPK(localFiles);
                         break;
                     //下载失败
                     case DownloadManager.STATUS_FAILED:
                         isdownload = false;
-                        WKLogUtils.e("新版本下载状态", "下载失败");
+                        unregisterReceiverSafely();
+                        @SuppressLint("Range") int reason = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_REASON));
+                        CrashReport.postCatchedException(new RuntimeException(
+                                "OTA download failed: reason=" + reason + ", url=" + downloadUrl));
                         break;
                 }
             }
@@ -368,15 +385,20 @@ public class DownloadApkUtils {
                 //获取不到文件信息，跳转到浏览器下载
                 openBrowser(context);
             }
-            try {
-                WKBaseApplication.getInstance().getContext().unregisterReceiver(receiver);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
         } catch (Exception e) {
             e.printStackTrace();
             WKToastUtils.getInstance().showToastNormal("安装失败");
         }
+    }
+
+    private void unregisterReceiverSafely() {
+        try {
+            if (registeredContext != null) {
+                registeredContext.unregisterReceiver(receiver);
+            }
+        } catch (Exception ignored) {
+        }
+        registeredContext = null;
     }
 
     /**

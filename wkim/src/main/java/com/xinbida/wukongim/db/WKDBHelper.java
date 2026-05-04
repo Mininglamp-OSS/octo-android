@@ -46,6 +46,36 @@ public class WKDBHelper {
     // 主线程 Handler，用于回调
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    /**
+     * YUJ-330 · Jerry review 2026-05-04 06:49Z Warning #3 · Backfill 执行线程。
+     *
+     * <p>Audit 结论：{@code WKIMApplication.getDbHelper()} 首次调用实际存在两条路径：
+     * <ol>
+     *   <li>冷启动链路：{@code WKUIKitApplication.initIM()} 包在 {@code AppStartup.postPhaseB}
+     *       里 → {@code AppExecutors.io()} 后台线程，安全。</li>
+     *   <li>登录成功回调链路：{@code EndpointCategory.loginMenus} 的 {@code LoginMenu} lambda
+     *       在主线程直接调 {@code WKUIKitApplication.initIM()}（{@code
+     *       wkuikit/src/main/java/com/chat/uikit/WKUIKitApplication.java:565}），
+     *       {@code WKIM.init → getDbHelper → new WKDBHelper} 全部发生在主线程。</li>
+     * </ol>
+     *
+     * <p>路径 2 如果把 {@code WKDBSpaceIdBackfill.runIfNeeded()} 放在构造函数里直接跑，
+     * 1M 行 message 的 inline UPDATE 会阻塞主线程 10-60 秒 → 100% ANR。所以构造时
+     * 只做 DB schema 初始化，backfill 通过此独立单线程 executor submit 后台执行。
+     *
+     * <p>为什么不复用 {@link #dbExecutor}：dbExecutor 还服务于 {@code rawQueryAsync} /
+     * {@code selectAsync}，若把 30-60s 的 backfill 塞进去，所有 UI 异步查询都要排队
+     * 等它完成 —— 相当于把问题从 "主线程 ANR" 换成 "UI 列表失响应"。独立 executor
+     * 让 backfill 和异步查询并发（SQLCipher WAL 模式下 read/writer 并发安全）。
+     */
+    private static final ExecutorService backfillExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "yuj326-backfill");
+        t.setDaemon(true);
+        // 稍低于 NORM 优先级：backfill 不阻塞用户操作。
+        t.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 1));
+        return t;
+    });
+
     public SQLiteDatabase getDb() {
         return mDb;
     }
@@ -100,7 +130,26 @@ public class WKDBHelper {
             // (3) 支持失败重试 + 硬失败降级（MAX_RETRIES 后强制关 SpaceCacheFlag）
             // 替换 Phase 3b 初版"DELETE FROM conversation 吞全量代价"方案（见 YUJ-326
             // 2026-05-04 Yu review 04:41Z 风险评审结论）。
-            com.xinbida.wukongim.db.WKDBSpaceIdBackfill.runIfNeeded(ctx, mDb, uid);
+            //
+            // YUJ-330 Jerry review 2026-05-04 06:49Z Warning #3 · 登录成功回调路径
+            // （WKUIKitApplication LoginMenu → initIM）会在主线程构造 WKDBHelper；
+            // 直接在构造里跑 runIfNeeded 会把 10-60s 的 inline UPDATE 压在主线程 →
+            // ANR。改为 submit 到 backfillExecutor 异步执行：构造只负责把 DB open +
+            // schema 升级完成，backfill 在后台线程 push SpaceCacheBackfillGate 状态，
+            // SpaceCacheFlag.isEnabled 未完成时自动回落 clearAll() 老路径，不会触碰
+            // 未回填的 space_id=''（见 SpaceCacheFlag.isEnabled 的 final gate）。
+            final Context appCtx = ctx.getApplicationContext() != null
+                    ? ctx.getApplicationContext() : ctx;
+            final SQLiteDatabase dbRef = mDb;
+            final String uidRef = uid;
+            backfillExecutor.execute(() -> {
+                try {
+                    com.xinbida.wukongim.db.WKDBSpaceIdBackfill.runIfNeeded(appCtx, dbRef, uidRef);
+                } catch (Throwable t) {
+                    WKLoggerUtils.getInstance().e(TAG,
+                            "backfillExecutor runIfNeeded error: " + t.getMessage());
+                }
+            });
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " init WKDBHelper error: " + e.getMessage());
             e.printStackTrace();

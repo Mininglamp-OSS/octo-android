@@ -1945,6 +1945,77 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
+     * YUJ-332 · 切回已访问 Space 时，从本地 DB 缓存把会话填回 UI，秒级首帧。
+     *
+     * <p>调用时机：{@link #performSpaceSwitch} flag-on 路径（per-Space cache），在 IO 线程
+     * 读完 {@code ConversationManager.getAll()} 后 post 到 main thread 执行。
+     *
+     * <p>过滤逻辑与 {@code addOnRefreshMsgListListener("chat_fragment")} 的
+     * {@code allConversations.isEmpty()} 分支（L782-835 onRefreshList-rebuild）同源，
+     * 保证「从 DB 恢复」与「sync 回调 rebuild」两条入口对同一 Space 产出相同的白名单
+     * (spaceConversationKeys) 与 list 内容。
+     *
+     * <p>race 语义：本方法在 main thread 同步填完 {@link #allConversations} 后返回 →
+     *   - 后续 sync 回调（{@code saveSyncChat → setOnRefreshMsg → onRefresh listener}）
+     *     走 L838 的「非空」分支做增量合并，而非 L782 的 rebuild 分支。
+     *   - 如果 sync 提前回来（竞速），listener 若先看到 allConversations 空，会走 rebuild
+     *     分支用 sync delta 重建 UI（此时 DB 数据暂时缺失但下一帧 populate 补回）——
+     *     安全降级，不会白屏 > 1 帧。
+     *
+     * @param cached         DB 缓存 snapshot（{@code getAll()} 返回）；{@code null}/空 → 只
+     *                       重建空态（让 sync 回调补）
+     * @param targetSpaceId  切入的目标 Space，用于过滤跨 Space 行
+     */
+    private void populateConversationsFromCache(@Nullable List<WKUIConversationMsg> cached,
+                                                @Nullable String targetSpaceId) {
+        if (chatConversationAdapter == null) return;
+        long start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
+        if (BuildConfig.DEBUG) {
+            Trace.beginSection("YUJ332-populateFromCache");
+        }
+        spaceConversationKeys.clear();
+        clearAllConversations();
+        List<ChatConversationMsg> uiList = new ArrayList<>();
+        if (WKReader.isNotEmpty(cached)) {
+            for (WKUIConversationMsg uc : cached) {
+                if (uc == null || TextUtils.isEmpty(uc.channelID)) continue;
+                if (uc.channelType == WKChannelType.COMMUNITY_TOPIC) continue;
+                adjustPersonalForSpace(uc);
+                String key = channelKey(uc.channelID, uc.channelType);
+                boolean reject;
+                if (uc.channelType == WKChannelType.GROUP) {
+                    reject = !isChannelInCurrentSpace(uc.channelID, uc.channelType);
+                } else {
+                    // 私聊：payload space_id 判定；SystemBot 跨 Space 共享放行。
+                    reject = isMessageFromOtherSpace(uc.getWkMsg())
+                            && !com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID);
+                }
+                if (reject) continue;
+                WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                        .getMsgExtraWithChannel(uc.channelID, uc.channelType);
+                if (extra != null) {
+                    uc.setRemoteMsgExtra(extra);
+                }
+                uiList.add(new ChatConversationMsg(uc));
+                spaceConversationKeys.add(key);
+            }
+        }
+        // SYSTEM_BOTS 兜底：如果本 Space 下 DB 没有 botfather/fileHelper，插占位让它们可见
+        ensureSystemBotsVisible(uiList);
+        syncSpaceKeysToGlobal();
+        sortMsg(uiList);
+        setAllCount();
+        dbQueryCompleted = true;
+        if (BuildConfig.DEBUG) {
+            Trace.endSection();
+            Log.d("YUJ312", "YUJ332 populateFromCache space=" + targetSpaceId
+                    + " input=" + (cached == null ? -1 : cached.size())
+                    + " output=" + uiList.size()
+                    + " +" + (SystemClock.elapsedRealtime() - start) + "ms");
+        }
+    }
+
+    /**
      * YUJ-217 Fix D · 全量兜底清扫：从 {@link #allConversations} 和 {@link #spaceConversationKeys}
      * 中剔除所有不属于当前 Space 的 GROUP 会话。
      *
@@ -2175,29 +2246,58 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             if (perSpaceEnabled) {
-                // YUJ-326 · 只清目标 Space。其它已访问 Space 的 conversation 行保留在本地 DB，
-                // 下次切回时 SpaceFilter + 内存 Set 重建即可首帧从 DB 出数据。
-                // targetSpaceId 可能为空（无 Space 模式 / 默认域），clearForSpace("")
-                // 清"空 Space"行，等价 iOS 空域逻辑。
+                // YUJ-332 · 跳过 clearForSpace，per-Space cache 的核心就是保留本地缓存。
                 //
-                // YUJ-330 Jerry review 2026-05-04 06:49Z Suggestion #5 · debug build
-                // 双保险：进到这里必须满足 SpaceCacheFlag.isEnabled()==true，否则
-                // 说明 perSpaceEnabled 与 flag 判定出现漂移（例如未来谁把 flag 读取
-                // 下沉了但忘更新这里），会把 backfill 未完成时的预回填行误清。
-                // Release build 不开，不影响线上行为；DEBUG build 一旦命中立刻崩。
+                // 历史 bug（Yu 2026-05-04 08:48Z 真机复现 · commit 8cbb911d）：
+                //   切到其它 Space → 切回"Demo Space"大 Space → UI 只剩 1 个群；杀 app
+                //   冷启动 → 群列表又全部回来 → 说明 DB 行未被删（否则冷启动也空）。
+                //
+                // 根因（Root cause A + refresh gap）：
+                //   1) pre-clear snapshot 取 preDbMax = queryMaxVersionForSpace(target)。
+                //      大 Space 已存在历史行，preDbMax 一般 > 0。
+                //   2) clearForSpace(target) DELETE 掉 space_id == target 的行（但
+                //      channel_id 不符合 's<32hex>_peer' 格式的 GROUP 行 space_id='' 幸存
+                //      —— 所以杀 app 后仍看到大部分群）。
+                //   3) sync 用 explicitVersion = preDbMax（cursor 已到本 Space 最高）
+                //      → server 只返 version > cursor 的行（几乎为空）。
+                //   4) saveSyncChatImpl 检查 conversations.isEmpty() 直接短路 ——
+                //      不触发 setOnRefreshMsg → UI 的 RefreshMsgList listener 不跑 ——
+                //      adapter 保留 setList(empty) 状态，白屏（或仅 SYSTEM_BOTS 占位）。
+                //
+                // 正确行为：per-Space cache 路径的意义是「切回秒开」——
+                //   - 本地 DB 行保留（不 clear）
+                //   - 从 DB 读出本 Space 会话，直接填 UI（秒级首帧）
+                //   - 并行触发 incremental sync：cursor = preDbMax，server 只返 delta，
+                //     saveSyncChat 通过 UPSERT 合并；非空 delta 会走 setOnRefreshMsg →
+                //     RefreshMsgList listener 的非空分支（allConversations.isEmpty()==false）
+                //     合并新增/变更，不再 rebuild 全表。
+                //
+                // SpaceFilter Round-3 五层零改动：populate 调用 adjustPersonalForSpace
+                // + isChannelInCurrentSpace + isMessageFromOtherSpace 与 sync 回调
+                // 的 onRefreshList-rebuild 分支（L782-835）同源过滤逻辑。
+                //
+                // YUJ-330 Jerry Suggestion #5 debug assertion 保留（现在仍需守护
+                // backfill gate 不变量 —— populate 时读的 DB 行信任 space_id 列）。
                 if (BuildConfig.DEBUG && !com.chat.uikit.space.SpaceCacheFlag.isEnabled()) {
                     throw new IllegalStateException(
-                            "clearForSpace called while SpaceCacheFlag.isEnabled()==false;"
+                            "per-Space cache path entered while SpaceCacheFlag.isEnabled()==false;"
                                     + " backfill gate invariant violated (YUJ-330 Suggestion #5)");
                 }
-                WKIM.getInstance().getConversationManager()
-                        .clearAllForSpace(targetSpaceId == null ? "" : targetSpaceId);
+                final List<WKUIConversationMsg> cached =
+                        WKIM.getInstance().getConversationManager().getAll();
+                if (BuildConfig.DEBUG) {
+                    Log.d("YUJ312", "YUJ332 cache load done space=" + targetSpaceId
+                            + " rows=" + (cached == null ? -1 : cached.size())
+                            + " +" + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
+                }
+                AndroidUtilities.runOnUIThread(() ->
+                        populateConversationsFromCache(cached, targetSpaceId));
             } else {
                 WKIM.getInstance().getConversationManager().clearAll();
             }
             if (BuildConfig.DEBUG) {
                 Trace.endSection();
-                Log.d("YUJ312", (perSpaceEnabled ? "WKIM.clearForSpace" : "WKIM.clearAll")
+                Log.d("YUJ312", (perSpaceEnabled ? "YUJ332-loadCacheFromDb" : "WKIM.clearAll")
                         + " done +" + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
             }
 

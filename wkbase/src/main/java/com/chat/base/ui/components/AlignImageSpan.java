@@ -144,6 +144,13 @@ public abstract class AlignImageSpan extends ImageSpan {
 
         // 这里如果不移动画布，drawable 就会在 Textview 的左上角出现
         canvas.translate(x, transY);
+        if (drawable instanceof android.graphics.drawable.BitmapDrawable) {
+            android.graphics.Bitmap bmp = ((android.graphics.drawable.BitmapDrawable) drawable).getBitmap();
+            if (bmp != null && bmp.isRecycled()) {
+                canvas.restore();
+                return;
+            }
+        }
         drawable.draw(canvas);
         canvas.restore();
     }

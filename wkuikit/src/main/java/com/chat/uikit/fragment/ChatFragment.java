@@ -353,11 +353,37 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 });
         wkVBinding.recyclerView.addOnItemTouchListener(
                 new RecyclerView.SimpleOnItemTouchListener() {
+                    private float downX, downY;
+                    private boolean swiping;
+                    private static final int TOUCH_SLOP = 24;
+
                     @Override
                     public boolean onInterceptTouchEvent(@NonNull RecyclerView rv,
                                                         @NonNull MotionEvent e) {
                         tabSwipeDetector.onTouchEvent(e);
-                        return false;
+                        switch (e.getActionMasked()) {
+                            case MotionEvent.ACTION_DOWN:
+                                downX = e.getX();
+                                downY = e.getY();
+                                swiping = false;
+                                break;
+                            case MotionEvent.ACTION_MOVE:
+                                if (!swiping) {
+                                    float dx = Math.abs(e.getX() - downX);
+                                    float dy = Math.abs(e.getY() - downY);
+                                    if (dx > TOUCH_SLOP && dx > dy) {
+                                        swiping = true;
+                                    }
+                                }
+                                break;
+                        }
+                        return swiping;
+                    }
+
+                    @Override
+                    public void onTouchEvent(@NonNull RecyclerView rv,
+                                             @NonNull MotionEvent e) {
+                        tabSwipeDetector.onTouchEvent(e);
                     }
                 });
 

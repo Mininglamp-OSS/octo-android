@@ -122,10 +122,15 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
     @Override
     public void onResume() {
         super.onResume();
-        wkVBinding.nameTv.setText(WKConfig.getInstance().getUserInfo().name);
+        // YUJ-361 (#227)：displayName 合并 —— 实名态下用 realname，否则用 nickname
+        com.chat.base.entity.UserInfoEntity me = WKConfig.getInstance().getUserInfo();
+        wkVBinding.nameTv.setText(me.getDisplayName());
+        int verifiedVis = me.realname_verified ? android.view.View.VISIBLE : android.view.View.GONE;
+        wkVBinding.realnameVerifiedIv.setVisibility(verifiedVis);
+        wkVBinding.realnameVerifiedTag.setVisibility(verifiedVis);
         wkVBinding.avatarView.showAvatar(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
 
-        String shortNo = WKConfig.getInstance().getUserInfo().short_no;
+        String shortNo = me.short_no;
         if (!TextUtils.isEmpty(shortNo)) {
             wkVBinding.shortNoTv.setVisibility(android.view.View.VISIBLE);
             wkVBinding.shortNoTv.setText(getString(R.string.app_name) + " 号：" + shortNo);

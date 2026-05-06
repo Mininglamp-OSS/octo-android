@@ -355,5 +355,13 @@
     <string name="bot_edit_description_title">Edit description</string>
     <string name="bot_edit_description_hint">Enter bot description</string>
     <string name="bot_description_update_success">Description updated</string>
+    <!-- YUJ-361 (#227) · OCTO real-name verification UI -->
+    <string name="realname_verified_tag">Verified</string>
+    <string name="realname_verification">Real-name verification</string>
+    <string name="realname_goto_verify">Verify now</string>
+    <string name="realname_verified_at_fmt">Verified · %1$s</string>
+    <string name="realname_verify_token_fail">Could not start verification, please try again</string>
+    <string name="realname_verify_no_browser">No browser available</string>
+    <string name="realname_verify_refresh_success">Verification complete</string>
 </resources>
 

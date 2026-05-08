@@ -5,6 +5,8 @@ import android.os.Build
 import android.view.WindowInsetsController
 import com.chat.base.base.WKBaseActivity
 import com.chat.base.net.ICommonListener
+import com.chat.base.space.PendingGroupInvite
+import com.chat.scan.ScanJoinGroupActivity
 import com.chat.uikit.TabActivity
 import com.chat.uikit.message.MsgModel
 import com.chat.uikit.space.SpaceCreateDialog
@@ -99,6 +101,37 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
     }
 
     private fun goToTab() {
+        // YUJ-372 Phase 2 · 若有暂存的 pending_group_invite（扫码 / App Link 入口
+        // 命中 need_space 时落盘），加 Space 成功后优先回到 ScanJoinGroupActivity
+        // 重新发起入群请求；无则走常规 Tab 跳转。
+        //
+        // 注意：这里不限定 extras 里的 `pending_group_invite=true`，因为
+        //   1) 用户也可能走登录后冷启动的 SpaceGate 路径加 Space；
+        //   2) consume() 是一次性的，没有 pending 时 no-op。
+        val pending = try {
+            PendingGroupInvite.consume()
+        } catch (t: Throwable) {
+            null
+        }
+        if (pending != null) {
+            val retry = Intent(this@SpaceGuideActivity, ScanJoinGroupActivity::class.java).apply {
+                putExtra("group_no", pending.groupNo)
+                putExtra("auth_code", pending.authCode)
+                putExtra("group_name", pending.groupName)
+                putExtra("avatar", pending.avatar)
+                putExtra("member_count", pending.memberCount)
+                putExtra("is_member", pending.isMember)
+                putExtra("space_id", pending.spaceId)
+                putExtra("space_name", pending.spaceName)
+                // 确保先跳 Tab、再从 Tab 上拉起 ScanJoin，避免背景栈只剩扫码页。
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            // 先进 Tab 兜底（若 ScanJoin 失败仍有主界面可回），再叠加 ScanJoin。
+            startActivity(Intent(this@SpaceGuideActivity, TabActivity::class.java))
+            startActivity(retry)
+            finish()
+            return
+        }
         startActivity(Intent(this@SpaceGuideActivity, TabActivity::class.java))
         finish()
     }

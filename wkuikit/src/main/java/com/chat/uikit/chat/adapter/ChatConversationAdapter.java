@@ -1655,9 +1655,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         return sb.toString();
     }
 
-    /**
-     * 直接更新可见 ViewHolder 的子区预览，不触发 notifyItemChanged，避免闪烁。
-     */
     private void updateThreadPreviewDirectly(String groupNo) {
         if (getRecyclerView() == null) return;
         for (int i = 0; i < getData().size(); i++) {

@@ -158,6 +158,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     // DB 异步查询是否已完成，防止连接成功回调误判 allConversations 为空
     private boolean dbQueryCompleted = false;
 
+    // 对齐 iOS 2 秒节流：onResume 返回时如果距上次刷新不到 2 秒，跳过重载
+    private long lastFullRefreshTime = 0;
+    private static final long RESUME_THROTTLE_MS = 2000L;
+    // Fragment 不可见时标记需要刷新，onResume 时再执行
+    private boolean pendingFilterAndDisplay = false;
+
     // YUJ-261 · filterAndDisplay 的 50ms 合并刷新：消息到达 / reminder / typing / calling
     // 等会在短时间内触发多次，DiffUtil 仍然是全量遍历，合并后仅执行一次。
     private final Handler filterDebounceHandler = new Handler(Looper.getMainLooper());
@@ -294,9 +300,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 不再使用 setList（内部 notifyDataSetChanged）导致的全 ViewHolder rebind。
         chatConversationAdapter.setDiffCallback(DIFF_CALLBACK);
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
-        // YUJ-240 review fix (Jerry-Xin blocking): 会话列表 RV 容器是 match_parent/match_parent（见 frag_chat_conversation_layout.xml），
-        // 尺寸固定，在此处显式开启 setHasFixedSize(true)（已从 WKBaseFragment.initAdapter 移除）。
-        wkVBinding.recyclerView.setHasFixedSize(true);
         // YUJ-240 review fix (Jerry-Xin W#5): setSupportsChangeAnimations 必须在 setAdapter 之后调用才稳定生效，移到 initAdapter 之后。
         RecyclerView.ItemAnimator itemAnimator = wkVBinding.recyclerView.getItemAnimator();
         if (itemAnimator instanceof DefaultItemAnimator) {
@@ -2488,17 +2491,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      */
     private void filterAndDisplay() {
         filterDebounceHandler.removeCallbacks(filterRunnable);
-        filterDebounceHandler.postDelayed(filterRunnable, FILTER_DEBOUNCE_MS);
+        filterAndDisplayInternal();
     }
 
     /**
-     * Tab 切换专用：跳过 debounce，用 setList 立即替换数据（无动画），并恢复滚动位置。
+     * Tab 切换专用：跳过 debounce，立即替换数据并恢复滚动位置。
      */
     private void filterAndDisplayForTabSwitch() {
         filterDebounceHandler.removeCallbacks(filterRunnable);
         if (chatConversationAdapter == null || getActivity() == null) return;
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        wkVBinding.recyclerView.setItemAnimator(null);
         chatConversationAdapter.setList(displayList);
         // 恢复目标 tab 的滚动位置
         RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
@@ -2508,27 +2510,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 lm.onRestoreInstanceState(state);
             }
         }
-        // 延迟恢复 item animator
-        wkVBinding.recyclerView.post(() -> {
-            RecyclerView.ItemAnimator animator = new DefaultItemAnimator();
-            ((DefaultItemAnimator) animator).setSupportsChangeAnimations(false);
-            wkVBinding.recyclerView.setItemAnimator(animator);
-        });
     }
 
     private void filterAndDisplayInternal() {
-        // 诊断日志（Fix 6）：每 10s 汇总调用次数，便于观察 debounce 合并效果。
-        long nowMs = System.currentTimeMillis();
-        filterCallCount++;
-        if (nowMs - lastFilterLogMs > 10_000) {
-            android.util.Log.d(TAG_FILTER, "filterAndDisplay runs in last 10s: " + filterCallCount);
-            filterCallCount = 0;
-            lastFilterLogMs = nowMs;
-        }
-
         if (chatConversationAdapter == null || getActivity() == null) return;
+        if (!isResumed()) {
+            pendingFilterAndDisplay = true;
+            return;
+        }
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        chatConversationAdapter.setDiffNewData(displayList);
+        chatConversationAdapter.setList(displayList);
+        lastFullRefreshTime = System.currentTimeMillis();
+        pendingFilterAndDisplay = false;
     }
 
     private List<ChatConversationMsg> buildDisplayListForCurrentTab() {
@@ -3475,6 +3468,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // YUJ-267 · Fix A：根据当前 pane 宽度判定 splitMode，恢复 selection。
         // 折叠态 ↔ 展开态切换 / 旋转时也会重新 resume，所以 splitMode 在这里同步。
         syncSplitModeAndSelection();
+        // Fragment 不可见期间有数据变化，返回时一次性刷新
+        if (pendingFilterAndDisplay) {
+            pendingFilterAndDisplay = false;
+            filterAndDisplayInternal();
+        }
+        // 对齐 iOS：2 秒内已刷新过则跳过重载，避免从聊天返回时列表跳动
+        long now = System.currentTimeMillis();
+        if (now - lastFullRefreshTime < RESUME_THROTTLE_MS) {
+            // 仅刷新子区未读（轻量，不触发全量 setList）
+            chatConversationAdapter.clearAndReloadThreadData();
+            refreshExtrasIfNeeded();
+            consumeJoinSuccessNoticeIfAny();
+            int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
+            wkVBinding.deviceLayout.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
+            return;
+        }
         // 子区数据缓存清除并重新加载，返回时实时更新
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上

@@ -52,7 +52,9 @@ import kotlin.Pair;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +63,63 @@ import java.util.regex.Pattern;
  * 消息列表item
  */
 public class WKUIChatMsgItemEntity {
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([^@\\s]+)");
+
+    private static volatile MentionLookupCache sMentionCache;
+
+    static class MentionLookupCache {
+        final String channelId;
+        final byte channelType;
+        final Map<String, String> nameToUid;
+
+        MentionLookupCache(String channelId, byte channelType, Map<String, String> nameToUid) {
+            this.channelId = channelId;
+            this.channelType = channelType;
+            this.nameToUid = nameToUid;
+        }
+    }
+
+    public static void prepareMentionCache(String channelId, byte channelType) {
+        String lookupChannelId = channelId;
+        byte lookupChannelType = channelType;
+        if (channelType == WKChannelType.COMMUNITY_TOPIC && channelId != null && channelId.contains("____")) {
+            lookupChannelId = channelId.substring(0, channelId.indexOf("____"));
+            lookupChannelType = WKChannelType.GROUP;
+        }
+
+        List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
+                .getMembers(lookupChannelId, lookupChannelType);
+
+        Map<String, String> nameToUid = new HashMap<>();
+        if (members != null) {
+            for (WKChannelMember member : members) {
+                if (!TextUtils.isEmpty(member.memberName)) {
+                    nameToUid.put(member.memberName, member.memberUID);
+                }
+                if (!TextUtils.isEmpty(member.memberRemark)) {
+                    nameToUid.put(member.memberRemark, member.memberUID);
+                }
+                if (!TextUtils.isEmpty(member.memberUID)) {
+                    nameToUid.put(member.memberUID, member.memberUID);
+                }
+                WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(member.memberUID, WKChannelType.PERSONAL);
+                if (ch != null) {
+                    if (!TextUtils.isEmpty(ch.channelName)) {
+                        nameToUid.put(ch.channelName, member.memberUID);
+                    }
+                    if (!TextUtils.isEmpty(ch.channelRemark)) {
+                        nameToUid.put(ch.channelRemark, member.memberUID);
+                    }
+                }
+            }
+        }
+        sMentionCache = new MentionLookupCache(channelId, channelType, nameToUid);
+    }
+
+    public static void clearMentionCache() {
+        sMentionCache = null;
+    }
+
     public WKMsg wkMsg; // 本条消息对象
     public boolean showNickName = true; // 是否显示消息昵称
     public boolean isPlaying; // 语音是否在播放
@@ -431,10 +490,23 @@ public class WKUIChatMsgItemEntity {
      */
     private void detectAndApplyMentions(IConversationContext conversationContext, WKMsg wkMsg, int mentionColor) {
         String text = displaySpans.toString();
-        Pattern pattern = Pattern.compile("@([^@\\s]+)");
-        Matcher m = pattern.matcher(text);
-        List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
-                .getMembers(getMemberLookupChannelID(wkMsg), getMemberLookupChannelType(wkMsg));
+        Matcher m = MENTION_PATTERN.matcher(text);
+
+        // 优先使用缓存（buildUiMsgList 批量路径）
+        MentionLookupCache cache = sMentionCache;
+        boolean useCache = cache != null && TextUtils.equals(cache.channelId, wkMsg.channelID)
+                && cache.channelType == wkMsg.channelType;
+
+        // 子区消息的 channelType 是 COMMUNITY_TOPIC，缓存中存的也是原始 channelId
+        if (!useCache && cache != null && wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            useCache = TextUtils.equals(cache.channelId, wkMsg.channelID);
+        }
+
+        List<WKChannelMember> members = null;
+        if (!useCache) {
+            members = WKIM.getInstance().getChannelMembersManager()
+                    .getMembers(getMemberLookupChannelID(wkMsg), getMemberLookupChannelType(wkMsg));
+        }
 
         // 收集已有 mention span 的范围，避免重复
         NormalClickableSpan[] existingSpans = displaySpans.getSpans(0, displaySpans.length(), NormalClickableSpan.class);
@@ -458,14 +530,14 @@ public class WKUIChatMsgItemEntity {
             String mentionName = m.group(1);
             String matchedUID = null;
 
-            // 在群成员中匹配
-            if (WKReader.isNotEmpty(members)) {
+            if (useCache) {
+                matchedUID = cache.nameToUid.get(mentionName);
+            } else if (WKReader.isNotEmpty(members)) {
                 for (WKChannelMember member : members) {
                     if (mentionName.equals(member.memberName) || mentionName.equals(member.memberRemark) || mentionName.equals(member.memberUID)) {
                         matchedUID = member.memberUID;
                         break;
                     }
-                    // 尝试匹配联系人备注
                     WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(member.memberUID, WKChannelType.PERSONAL);
                     if (ch != null && (mentionName.equals(ch.channelName) || mentionName.equals(ch.channelRemark))) {
                         matchedUID = member.memberUID;

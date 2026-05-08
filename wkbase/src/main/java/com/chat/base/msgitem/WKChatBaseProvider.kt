@@ -627,7 +627,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             uiChatMsgItemEntity.wkMsg,
             uiChatMsgItemEntity.nextMsg
         )
-        if (uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP) {
+        if (uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP
+            || uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
             var showName: String? = ""
             receivedNameTv.tag = uiChatMsgItemEntity.wkMsg.fromUID
             if (uiChatMsgItemEntity.wkMsg.from != null && !TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.from.channelRemark)) {

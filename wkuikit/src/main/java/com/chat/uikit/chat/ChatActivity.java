@@ -2148,6 +2148,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         List<WKUIChatMsgItemEntity> list = new ArrayList<>();
         if (WKReader.isNotEmpty(msgList)) {
             long pre_msg_time = lastTimeMsg;
+            WKUIChatMsgItemEntity.prepareMentionCache(channelId, channelType);
             for (int i = 0, size = msgList.size(); i < size; i++) {
                 // 后台线程保护：Activity 已销毁时立即返回已构建的部分
                 if (isFinishing() || isDestroyed()) return list;
@@ -2236,10 +2237,25 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 // 不使用 addData(0, list) + notifyItemRangeInserted，因为在位置 0 批量插入
                 // 会破坏 RecyclerView 的内部滑动状态导致 fling 失效。
                 int insertCount = list.size();
-                // 构建完整列表：新消息 + 旧消息（去掉 loading indicator）
+                // 构建完整列表：新消息 + 旧消息（去掉重复项和合成消息）
+                java.util.Set<String> newMsgIds = new java.util.HashSet<>();
+                for (WKUIChatMsgItemEntity item : list) {
+                    if (item.wkMsg != null) {
+                        if (!TextUtils.isEmpty(item.wkMsg.clientMsgNO)) newMsgIds.add(item.wkMsg.clientMsgNO);
+                        if (!TextUtils.isEmpty(item.wkMsg.messageID)) newMsgIds.add("mid_" + item.wkMsg.messageID);
+                    }
+                }
                 List<WKUIChatMsgItemEntity> merged = new ArrayList<>(list);
                 for (WKUIChatMsgItemEntity item : chatAdapter.getData()) {
-                    if (item.wkMsg != null && item.wkMsg.type == WKContentType.loading) continue;
+                    if (item.wkMsg == null) continue;
+                    // 跳过合成消息（时间分隔符、空白占位等），它们已在新 list 中重建
+                    if (item.wkMsg.type == WKContentType.loading
+                            || item.wkMsg.type == WKContentType.msgPromptTime
+                            || item.wkMsg.type == WKContentType.emptyView
+                            || item.wkMsg.type == WKContentType.spanEmptyView) continue;
+                    // 跳过与新 list 重复的真实消息
+                    if (!TextUtils.isEmpty(item.wkMsg.clientMsgNO) && newMsgIds.contains(item.wkMsg.clientMsgNO)) continue;
+                    if (!TextUtils.isEmpty(item.wkMsg.messageID) && newMsgIds.contains("mid_" + item.wkMsg.messageID)) continue;
                     merged.add(item);
                 }
                 // 在 setNewInstance 之前裁剪，避免 notifyDataSetChanged 后再

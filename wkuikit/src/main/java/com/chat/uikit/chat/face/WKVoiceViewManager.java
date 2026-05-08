@@ -10,6 +10,7 @@ import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.voice.WKVoiceInputService;
+import com.chat.base.ui.components.ContactEditText;
 import com.chat.uikit.view.voice.SpeechToTextView;
 import com.chat.uikit.view.voice.TalkBackView;
 import com.chat.uikit.view.voice.VoiceInputView;
@@ -104,11 +105,7 @@ public class WKVoiceViewManager {
             voiceInput.setListener(new VoiceInputView.VoiceInputListener() {
                 @Override
                 public void onTranscribed(@NotNull String text, boolean shouldReplace) {
-                    if (shouldReplace) {
-                        setEditTextContent(iConversationContext, text);
-                    } else {
-                        insertTextToEditText(iConversationContext, text);
-                    }
+                    insertTranscribedTextWithMentions(iConversationContext, text, shouldReplace);
                 }
 
                 @Override
@@ -285,6 +282,197 @@ public class WKVoiceViewManager {
         int start = editText.getSelectionStart();
         if (start > 0) {
             editText.getText().delete(start - 1, start);
+        }
+    }
+
+    /**
+     * 将转写文本中的 @mention 解析出来，以 span 形式插入 EditText
+     */
+    private void insertTranscribedTextWithMentions(IConversationContext context, String text, boolean shouldReplace) {
+        WKChannel channel = context.getChatChannelInfo();
+        if (channel == null || (channel.channelType != WKChannelType.GROUP
+                && channel.channelType != WKChannelType.COMMUNITY_TOPIC)) {
+            if (shouldReplace) {
+                setEditTextContent(context, text);
+            } else {
+                insertTextToEditText(context, text);
+            }
+            return;
+        }
+
+        // 获取群成员列表
+        String channelId = channel.channelID;
+        byte channelType = channel.channelType;
+        if (channelType == WKChannelType.COMMUNITY_TOPIC && channel.remoteExtraMap != null) {
+            Object parentGroupNo = channel.remoteExtraMap.get("parentGroupNo");
+            if (parentGroupNo instanceof String && !((String) parentGroupNo).isEmpty()) {
+                channelId = (String) parentGroupNo;
+                channelType = WKChannelType.GROUP;
+            }
+        }
+
+        List<WKChannelMember> members = WKIM.getInstance().getChannelMembersManager()
+                .getMembers(channelId, channelType);
+        if (members == null || members.isEmpty()) {
+            if (shouldReplace) {
+                setEditTextContent(context, text);
+            } else {
+                insertTextToEditText(context, text);
+            }
+            return;
+        }
+
+        // 解析 mention
+        List<MentionMatch> mentions = new ArrayList<>();
+        String parsedText = parseMentionMarkers(text, members, mentions);
+
+        if (mentions.isEmpty()) {
+            if (shouldReplace) {
+                setEditTextContent(context, parsedText);
+            } else {
+                insertTextToEditText(context, parsedText);
+            }
+            return;
+        }
+
+        // 有 mention：逐段插入文本和 span
+        EditText editText = getEditText(context);
+        if (!(editText instanceof ContactEditText)) {
+            if (shouldReplace) {
+                setEditTextContent(context, parsedText);
+            } else {
+                insertTextToEditText(context, parsedText);
+            }
+            return;
+        }
+
+        ContactEditText contactEditText = (ContactEditText) editText;
+        if (shouldReplace) {
+            contactEditText.setText("");
+        }
+
+        // 按 mention 位置拆分文本，依次插入
+        int cursor = 0;
+        for (MentionMatch match : mentions) {
+            // 插入 mention 之前的普通文本
+            if (match.offset > cursor) {
+                String before = parsedText.substring(cursor, match.offset);
+                int pos = contactEditText.getSelectionStart();
+                if (pos < 0) pos = contactEditText.getText().length();
+                contactEditText.getText().insert(pos, before);
+            }
+            // 插入 mention span
+            contactEditText.addSpan("@" + match.name + " ", match.uid);
+            cursor = match.offset + match.length;
+        }
+        // 插入剩余文本
+        if (cursor < parsedText.length()) {
+            String remaining = parsedText.substring(cursor);
+            int pos = contactEditText.getSelectionStart();
+            if (pos < 0) pos = contactEditText.getText().length();
+            contactEditText.getText().insert(pos, remaining);
+        }
+    }
+
+    /**
+     * 从转写文本中解析 @mention（最长前缀匹配，对齐 iOS parseMentionMarkers）
+     * 返回清理后的文本（去掉 @ 后面多余的空格），mentions 列表记录各 mention 在返回文本中的位置
+     */
+    private String parseMentionMarkers(String text, List<WKChannelMember> members, List<MentionMatch> mentions) {
+        if (text == null || text.isEmpty()) return text;
+
+        String loginUID = WKConfig.getInstance().getUid();
+
+        // 构建成员名字列表：(name, uid)，按名字长度降序排列
+        List<String[]> nameEntries = new ArrayList<>();
+        for (WKChannelMember member : members) {
+            if (member.memberUID != null && member.memberUID.equals(loginUID)) continue;
+            if (member.isDeleted == 1) continue;
+
+            String displayName = !TextUtils.isEmpty(member.memberRemark) ? member.memberRemark : member.memberName;
+            if (!TextUtils.isEmpty(displayName)) {
+                nameEntries.add(new String[]{displayName, member.memberUID});
+            }
+            // 也加上 memberName（如果和 remark 不同）
+            if (!TextUtils.isEmpty(member.memberRemark) && !TextUtils.isEmpty(member.memberName)
+                    && !member.memberRemark.equals(member.memberName)) {
+                nameEntries.add(new String[]{member.memberName, member.memberUID});
+            }
+        }
+        // 按名字长度降序排序（最长前缀匹配）
+        nameEntries.sort((a, b) -> b[0].length() - a[0].length());
+
+        String allName = "所有人";
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        int len = text.length();
+
+        while (i < len) {
+            char ch = text.charAt(i);
+            if (ch != '@') {
+                result.append(ch);
+                i++;
+                continue;
+            }
+
+            String rest = text.substring(i + 1);
+
+            // 匹配 @所有人
+            if (rest.startsWith(allName)) {
+                int mentionOffset = result.length();
+                result.append("@").append(allName);
+                mentions.add(new MentionMatch("-1", allName, mentionOffset, allName.length() + 1));
+                i += 1 + allName.length();
+                if (i < len && text.charAt(i) == ' ') i++;
+                continue;
+            }
+            // 匹配 @all
+            if (rest.length() >= 3 && rest.substring(0, 3).equalsIgnoreCase("all")
+                    && (rest.length() == 3 || !Character.isLetterOrDigit(rest.charAt(3)))) {
+                int mentionOffset = result.length();
+                result.append("@").append(allName);
+                mentions.add(new MentionMatch("-1", allName, mentionOffset, allName.length() + 1));
+                i += 1 + 3;
+                if (i < len && text.charAt(i) == ' ') i++;
+                continue;
+            }
+
+            // 最长前缀匹配群成员名
+            boolean matched = false;
+            for (String[] entry : nameEntries) {
+                String name = entry[0];
+                if (rest.length() >= name.length()
+                        && rest.substring(0, name.length()).equalsIgnoreCase(name)) {
+                    int mentionOffset = result.length();
+                    result.append("@").append(name);
+                    mentions.add(new MentionMatch(entry[1], name, mentionOffset, name.length() + 1));
+                    i += 1 + name.length();
+                    if (i < len && text.charAt(i) == ' ') i++;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                result.append('@');
+                i++;
+            }
+        }
+
+        return result.toString();
+    }
+
+    private static class MentionMatch {
+        final String uid;
+        final String name;
+        final int offset; // 在 parsedText 中的起始位置
+        final int length; // @name 的总长度（含 @）
+
+        MentionMatch(String uid, String name, int offset, int length) {
+            this.uid = uid;
+            this.name = name;
+            this.offset = offset;
+            this.length = length;
         }
     }
 

@@ -136,6 +136,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
     private final List<ChatConversationMsg> allConversations = new ArrayList<>();
+    // 保存每个 tab 的滚动位置
+    private android.os.Parcelable tabScrollState0;
+    private android.os.Parcelable tabScrollState1;
     // YUJ-229 · key-based 去重索引：和 {@link #allConversations} 一一对应，
     // key = channelKey(channelID, channelType)。所有对 allConversations 的
     // 新增 / 删除 / 清空 / 批量替换都必须走 {@link #upsertConversation(ChatConversationMsg)} /
@@ -318,12 +321,21 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         FrameLayout.LayoutParams.WRAP_CONTENT));
         segmentTabView.setOnTabSelectedListener(index -> {
+            // 保存当前 tab 的滚动位置
+            RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
+            if (lm != null) {
+                if (currentTab == 0) {
+                    tabScrollState0 = lm.onSaveInstanceState();
+                } else {
+                    tabScrollState1 = lm.onSaveInstanceState();
+                }
+            }
             currentTab = index;
             // YUJ-267 · 切 tab 时清选中态（新 tab 的列表上下文不同）。
             if (chatConversationAdapter != null) {
                 chatConversationAdapter.clearSelected();
             }
-            filterAndDisplay();
+            filterAndDisplayForTabSwitch();
         });
 
         // 左右滑动切换群聊/私聊
@@ -2479,6 +2491,31 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         filterDebounceHandler.postDelayed(filterRunnable, FILTER_DEBOUNCE_MS);
     }
 
+    /**
+     * Tab 切换专用：跳过 debounce，用 setList 立即替换数据（无动画），并恢复滚动位置。
+     */
+    private void filterAndDisplayForTabSwitch() {
+        filterDebounceHandler.removeCallbacks(filterRunnable);
+        if (chatConversationAdapter == null || getActivity() == null) return;
+        List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
+        wkVBinding.recyclerView.setItemAnimator(null);
+        chatConversationAdapter.setList(displayList);
+        // 恢复目标 tab 的滚动位置
+        RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
+        if (lm != null) {
+            android.os.Parcelable state = (currentTab == 0) ? tabScrollState0 : tabScrollState1;
+            if (state != null) {
+                lm.onRestoreInstanceState(state);
+            }
+        }
+        // 延迟恢复 item animator
+        wkVBinding.recyclerView.post(() -> {
+            RecyclerView.ItemAnimator animator = new DefaultItemAnimator();
+            ((DefaultItemAnimator) animator).setSupportsChangeAnimations(false);
+            wkVBinding.recyclerView.setItemAnimator(animator);
+        });
+    }
+
     private void filterAndDisplayInternal() {
         // 诊断日志（Fix 6）：每 10s 汇总调用次数，便于观察 debounce 合并效果。
         long nowMs = System.currentTimeMillis();
@@ -2490,6 +2527,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
 
         if (chatConversationAdapter == null || getActivity() == null) return;
+        List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
+        chatConversationAdapter.setDiffNewData(displayList);
+    }
+
+    private List<ChatConversationMsg> buildDisplayListForCurrentTab() {
         if (currentTab == 0) {
             // 群聊 tab：按 category 分组显示
             // 1. 建立 channelId → ChatConversationMsg 映射
@@ -2597,7 +2639,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             }
 
-            chatConversationAdapter.setDiffNewData(displayList);
+            return displayList;
         } else {
             // 私聊 tab：无分组
             List<ChatConversationMsg> filtered = new ArrayList<>();
@@ -2606,7 +2648,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     filtered.add(msg);
                 }
             }
-            chatConversationAdapter.setDiffNewData(filtered);
+            return filtered;
         }
     }
 

@@ -66,6 +66,12 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
     @Override
     protected void onResume() {
         super.onResume();
+        // YUJ-361 (#227)：名字行应用 displayName + ✓ 勾 + 已实名 tag
+        UserInfoEntity me = WKConfig.getInstance().getUserInfo();
+        wkVBinding.nameTv.setText(me.getDisplayName());
+        int verifiedVis = me.realname_verified ? View.VISIBLE : View.GONE;
+        wkVBinding.realnameVerifiedIv.setVisibility(verifiedVis);
+        wkVBinding.realnameVerifiedTag.setVisibility(verifiedVis);
         WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
         if (channel != null && !TextUtils.isEmpty(channel.channelID)) {
             wkVBinding.avatarView.showAvatar(channel);
@@ -86,7 +92,8 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
                 if (shortNoObject != null) {
                     String shortNo = (String) shortNoObject;
                     wkVBinding.identityTv.setText(shortNo);
-                    wkVBinding.nameTv.setText(entity.name);
+                    // YUJ-361：channel 回包里的 name 是 nickname，实名态下仍以 displayName 为准
+                    wkVBinding.nameTv.setText(WKConfig.getInstance().getUserInfo().getDisplayName());
                 }
             }
         });
@@ -125,8 +132,13 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
             String resultStr = result.getData().getStringExtra("result");
             int updateType = result.getData().getIntExtra("updateType", 1);
             if (updateType == 1) {
-                wkVBinding.nameTv.setText(resultStr);
+                // YUJ-361 (#227)：用户改的是 nickname（name），displayName 在实名态下
+                // 仍应显示 realname。先把 name 落盘，再按 displayName 重绘。
+                UserInfoEntity local = WKConfig.getInstance().getUserInfo();
+                local.name = resultStr;
+                WKConfig.getInstance().saveUserInfo(local);
                 WKConfig.getInstance().setUserName(resultStr);
+                wkVBinding.nameTv.setText(local.getDisplayName());
             } else if (updateType == 2) {
                 wkVBinding.identityTv.setText(resultStr);
                 wkVBinding.identityIv.setVisibility(View.GONE);

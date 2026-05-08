@@ -58,4 +58,21 @@ public class UserInfo {
     public String home_space_name;
     public int is_external;
     public String source_space_name;
+
+    // YUJ-361 (#227) · OCTO 实名认证：`users/{uid}` 回包里的实名三件套。
+    // 这是 viewer 看其它用户详情时使用；登录者自己的副本在 UserInfoEntity 上。
+    public boolean realname_verified;
+    public String realname;
+    public String realname_verified_at;
+
+    /**
+     * YUJ-361：displayName 合并 —— 实名态下展示真名，未认证态回落昵称。
+     * 聊天气泡/群成员列表<strong>不</strong>调用此方法，保留 {@link #name} 原语义。
+     */
+    public String getDisplayName() {
+        if (realname_verified && realname != null && !realname.isEmpty()) {
+            return realname;
+        }
+        return name;
+    }
 }

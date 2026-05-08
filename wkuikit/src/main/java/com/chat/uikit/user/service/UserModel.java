@@ -14,6 +14,8 @@ import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
+import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.entity.UserInfoSetting;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
@@ -28,6 +30,7 @@ import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
 import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
+import com.chat.uikit.enity.VerifyTokenResponse;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -560,6 +563,75 @@ public class UserModel extends WKBaseModel {
             @Override
             public void onFail(int code, String msg) {
                 listener.onResult(code, msg);
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------------
+    // YUJ-361 (#227) · OCTO 实名认证（verify-side-channel 方案 J v3）
+    // ---------------------------------------------------------------------
+
+    public interface IVerifyTokenListener {
+        void onResult(int code, String msg, VerifyTokenResponse response);
+    }
+
+    /**
+     * 发起实名认证握手：向 dmworkim 后端要一次性 verify-token，后端返回
+     * 已拼好 return_to=dmwork://verified 的 verify_url；调用方应把该 URL
+     * 喂给 {@code CustomTabsIntent} 打开。
+     */
+    public void createVerifyToken(IVerifyTokenListener listener) {
+        request(createService(UserService.class).createVerifyToken(), new IRequestResultListener<VerifyTokenResponse>() {
+            @Override
+            public void onSuccess(VerifyTokenResponse result) {
+                if (listener != null) listener.onResult(HttpResponseCode.success, "", result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (listener != null) listener.onResult(code, msg, null);
+            }
+        });
+    }
+
+    public interface IRefreshProfileListener {
+        void onResult(int code, String msg, UserInfoEntity userInfo);
+    }
+
+    /**
+     * Custom Tabs 回跳后调用：拉一次 {@code GET /v1/user/current} 把
+     * {@code realname_verified/realname/realname_verified_at} 刷进本地缓存。
+     *
+     * <p>注意：后端响应不保证 token 字段回传，因此合并策略是 <b>只覆盖实名
+     * 相关字段 + 通用 profile 字段（name/avatar/short_no 等）</b>，保留本地
+     * 已有 token/im_token/chat_pwd 等敏感凭证。这样即使服务端没回 token
+     * 也不会把用户登出。
+     */
+    public void refreshCurrentUser(IRefreshProfileListener listener) {
+        request(createService(UserService.class).getCurrentUser(), new IRequestResultListener<UserInfoEntity>() {
+            @Override
+            public void onSuccess(UserInfoEntity result) {
+                UserInfoEntity local = WKConfig.getInstance().getUserInfo();
+                if (result != null) {
+                    local.realname_verified = result.realname_verified;
+                    local.realname = result.realname;
+                    local.realname_verified_at = result.realname_verified_at;
+                    if (!android.text.TextUtils.isEmpty(result.name)) local.name = result.name;
+                    if (!android.text.TextUtils.isEmpty(result.avatar)) local.avatar = result.avatar;
+                    if (!android.text.TextUtils.isEmpty(result.short_no)) local.short_no = result.short_no;
+                    if (result.short_status != 0) local.short_status = result.short_status;
+                    if (!android.text.TextUtils.isEmpty(result.username)) local.username = result.username;
+                    if (result.setting != null) local.setting = result.setting;
+                    WKConfig.getInstance().saveUserInfo(local);
+                    if (!android.text.TextUtils.isEmpty(local.name))
+                        WKConfig.getInstance().setUserName(local.name);
+                }
+                if (listener != null) listener.onResult(HttpResponseCode.success, "", local);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (listener != null) listener.onResult(code, msg, null);
             }
         });
     }

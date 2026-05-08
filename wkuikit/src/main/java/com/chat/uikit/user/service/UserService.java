@@ -3,6 +3,7 @@ package com.chat.uikit.user.service;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.uikit.enity.Device;
 import com.chat.uikit.enity.MailListEntity;
@@ -10,6 +11,7 @@ import com.chat.uikit.enity.OnlineUser;
 import com.chat.uikit.enity.OnlineUserAndDevice;
 import com.chat.uikit.enity.UserInfo;
 import com.chat.uikit.enity.UserQr;
+import com.chat.uikit.enity.VerifyTokenResponse;
 
 import java.util.List;
 
@@ -85,4 +87,22 @@ public interface UserService {
     // 后端 PUT /robot/:uid/description 内置 creator_uid 校验，非 owner 返回 403。
     @PUT("robot/{uid}/description")
     Observable<CommonResponse> updateBotDescription(@Path("uid") String uid, @Body JSONObject body);
+
+    // ---------------------------------------------------------------------
+    // YUJ-361 (#227) · OCTO 实名认证接入（dmworkim PR#1301 后端已 merge）
+    // ---------------------------------------------------------------------
+
+    /**
+     * 获取当前登录用户的权威 profile，带 {@code realname_verified/realname/
+     * realname_verified_at} 字段。Custom Tabs 回跳后调用以刷新本地缓存。
+     */
+    @GET("user/current")
+    Observable<UserInfoEntity> getCurrentUser();
+
+    /**
+     * 客户端发起实名流程前的握手：后端签发一次性 verify-token，返回
+     * CAS/Aegis 的 {@code verify_url}（已含 return_to=dmwork://verified）。
+     */
+    @POST("internal/verify-token")
+    Observable<VerifyTokenResponse> createVerifyToken();
 }

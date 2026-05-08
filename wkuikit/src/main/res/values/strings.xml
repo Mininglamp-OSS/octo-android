@@ -472,5 +472,14 @@
     <string name="yuj_321_space_switch_timeout_toast">同步较慢，请稍候</string>
     <!-- YUJ-312 Phase 2：Space 切换 Overlay 主文案，%1$s 为目标 Space 名 -->
     <string name="yuj_312_space_switch_syncing_fmt">正在同步「%1$s」…</string>
+    <!-- YUJ-361 (#227) · OCTO 实名认证 UI -->
+    <string name="realname_verified_tag">已实名</string>
+    <string name="realname_verification">实名认证</string>
+    <string name="realname_goto_verify">去认证</string>
+    <!-- %1$s = 年-月，如「2026-05」 -->
+    <string name="realname_verified_at_fmt">已认证 · %1$s</string>
+    <string name="realname_verify_token_fail">发起实名认证失败，请稍后重试</string>
+    <string name="realname_verify_no_browser">未检测到可用浏览器</string>
+    <string name="realname_verify_refresh_success">实名认证已完成</string>
 </resources>
 

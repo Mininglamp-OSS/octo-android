@@ -173,18 +173,11 @@
         android:paddingBottom="2dp"
         android:background="@color/homeColor" />
 
-    <com.scwang.smart.refresh.layout.SmartRefreshLayout
-        android:id="@+id/refreshLayout"
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/conversationPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/homeColor">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            tools:listitem="@layout/item_chat_conv_layout" />
-    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+        android:background="@color/homeColor" />
 
     </LinearLayout>
 

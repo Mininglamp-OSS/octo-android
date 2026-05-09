@@ -11,6 +11,7 @@ import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -474,10 +475,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 .edit().putString(key, value).apply();
     }
 
-    public void restoreExpandedState() {
+    public void restoreExpandedState(Context context) {
         String uid = WKConfig.getInstance().getUid();
         String key = uid + "_expanded_thread_groups";
-        String value = getContext().getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
+        String value = context.getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
                 .getString(key, "");
         expandedThreadGroups.clear();
         if (!TextUtils.isEmpty(value)) {
@@ -689,9 +690,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         } else {
             forbiddenIv.setVisibility(View.GONE);
         }
-    }
 
-    public interface IListener {
+        // 重建长按菜单（mute/top 状态变化后菜单文案需更新）
+        addEvent(helper, item);
+    }    public interface IListener {
         void onClick(ItemMenu menu, WKUIConversationMsg item);
     }
 
@@ -1992,7 +1994,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (item.getWkChannel() != null) {
             list.add(new PopupMenuItem(getContext().getString(mute ? R.string.open_channel_notice : R.string.close_channel_notice), mute ? R.mipmap.msg_unmute : R.mipmap.msg_mute, () -> iListener.onClick(ItemMenu.mute, item)));
         }
-        //list.add(new ChatLongClickEntity(2, item.unreadCount > 0 ? getContext().getString(R.string.sign_read_msg) : getContext().getString(R.string.sign_unread_msg)));
         list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
         if (item.channelType == WKChannelType.GROUP) {
             list.add(new PopupMenuItem(getContext().getString(R.string.move_to_category), R.mipmap.msg_forward, () -> iListener.onClick(ItemMenu.moveToCategory, item)));

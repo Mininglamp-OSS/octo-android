@@ -332,6 +332,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     tabScrollState1 = lm.onSaveInstanceState();
                 }
             }
+            wkVBinding.recyclerView.stopScroll();
             currentTab = index;
             // YUJ-267 · 切 tab 时清选中态（新 tab 的列表上下文不同）。
             if (chatConversationAdapter != null) {
@@ -367,37 +368,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 });
         wkVBinding.recyclerView.addOnItemTouchListener(
                 new RecyclerView.SimpleOnItemTouchListener() {
-                    private float downX, downY;
-                    private boolean swiping;
-                    private static final int TOUCH_SLOP = 24;
-
                     @Override
                     public boolean onInterceptTouchEvent(@NonNull RecyclerView rv,
                                                         @NonNull MotionEvent e) {
                         tabSwipeDetector.onTouchEvent(e);
-                        switch (e.getActionMasked()) {
-                            case MotionEvent.ACTION_DOWN:
-                                downX = e.getX();
-                                downY = e.getY();
-                                swiping = false;
-                                break;
-                            case MotionEvent.ACTION_MOVE:
-                                if (!swiping) {
-                                    float dx = Math.abs(e.getX() - downX);
-                                    float dy = Math.abs(e.getY() - downY);
-                                    if (dx > TOUCH_SLOP && dx > dy) {
-                                        swiping = true;
-                                    }
-                                }
-                                break;
-                        }
-                        return swiping;
-                    }
-
-                    @Override
-                    public void onTouchEvent(@NonNull RecyclerView rv,
-                                             @NonNull MotionEvent e) {
-                        tabSwipeDetector.onTouchEvent(e);
+                        return false;
                     }
                 });
 

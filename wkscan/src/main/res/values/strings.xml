@@ -13,4 +13,6 @@
     <string name="scan_enter_group">进入群聊</string>
     <string name="scan_join_group_member_count">%d位成员</string>
     <string name="scan_join_group_info">群聊信息</string>
+    <!-- YUJ-372 Phase 2 · 零 Space 用户扫码入群 need_space 提示 -->
+    <string name="scan_join_group_need_space">请先加入一个 Space 后再加入群聊</string>
 </resources>

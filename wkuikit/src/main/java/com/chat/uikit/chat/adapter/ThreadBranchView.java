@@ -6,30 +6,34 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
 
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 
 /**
  * Discord 风格的子区连接线：左侧竖线 + 每行圆角分支
- * 非最后一行: ├ 形（竖线继续 + 圆角分支向右）
- * 最后一行:   └ 形（竖线结束 + 圆角分支向右）
+ * 自动从父容器的兄弟 View（contentWrapper → cardContainer）中计算行位置，
+ * 不需要外部手动 setRowCenterYs，首帧即可正确绘制。
  */
 public class ThreadBranchView extends View {
 
     private final Paint paint;
     private final Path path;
-    private int rowCount;
-    private float[] rowCenterYs;
+    private final int expectedRowCount;
 
     private final float lineX;
     private final float endX;
     private final float radius;
 
+    private float[] cachedCenterYs;
+    private int cachedParentHeight;
+    private int cachedParentWidth;
+
     public ThreadBranchView(Context context, int rowCount) {
         super(context);
-        this.rowCount = rowCount;
-        this.rowCenterYs = new float[rowCount];
+        this.expectedRowCount = rowCount;
 
         paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setStyle(Paint.Style.STROKE);
@@ -46,44 +50,83 @@ public class ThreadBranchView extends View {
         radius = AndroidUtilities.dp(8);
     }
 
-    public void setRowCenterYs(float[] centerYs) {
-        this.rowCenterYs = centerYs;
-        this.rowCount = centerYs.length;
-        invalidate();
-    }
-
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (rowCount == 0 || rowCenterYs == null) return;
+        if (expectedRowCount == 0) return;
+
+        float[] centerYs = getCenterYs();
+        if (centerYs == null || centerYs.length == 0) return;
 
         path.reset();
 
-        for (int i = 0; i < rowCount; i++) {
-            float targetY = rowCenterYs[i];
-            boolean isLast = (i == rowCount - 1);
+        for (int i = 0; i < centerYs.length; i++) {
+            float targetY = centerYs[i];
 
-            // 竖线起点
-            float lineTop = (i == 0) ? 0 : rowCenterYs[i - 1];
+            float lineTop = (i == 0) ? 0 : centerYs[i - 1];
 
-            // 竖线：从起点画到弯角上方
             path.moveTo(lineX, lineTop);
             path.lineTo(lineX, targetY - radius);
 
-            // 圆角弧形：└ 弯曲向右
             RectF arcRect = new RectF(lineX, targetY - radius * 2, lineX + radius * 2, targetY);
             path.arcTo(arcRect, 180, -90, false);
 
-            // 水平线到卡片左边缘
             path.lineTo(endX, targetY);
 
-            // 非最后一行：竖线继续穿过弯角区域（├ 效果）
-            if (!isLast) {
+            if (i < centerYs.length - 1) {
                 path.moveTo(lineX, targetY - radius);
                 path.lineTo(lineX, targetY);
             }
         }
 
         canvas.drawPath(path, paint);
+    }
+
+    private float[] getCenterYs() {
+        ViewGroup parent = (ViewGroup) getParent();
+        if (parent == null) return cachedCenterYs;
+        int ph = parent.getHeight();
+        int pw = parent.getWidth();
+        if (ph == cachedParentHeight && pw == cachedParentWidth && cachedCenterYs != null) {
+            return cachedCenterYs;
+        }
+        cachedCenterYs = computeRowCenterYs(parent);
+        cachedParentHeight = ph;
+        cachedParentWidth = pw;
+        return cachedCenterYs;
+    }
+
+    private float[] computeRowCenterYs(ViewGroup parent) {
+        if (parent.getChildCount() < 2) return null;
+
+        // 容器结构: parent(FrameLayout) → child0=BranchView, child1=contentWrapper
+        View contentWrapperView = parent.getChildAt(1);
+        if (!(contentWrapperView instanceof LinearLayout)) return null;
+        LinearLayout contentWrapper = (LinearLayout) contentWrapperView;
+        if (contentWrapper.getChildCount() == 0) return null;
+
+        // contentWrapper → child0=cardContainer
+        View cardContainerView = contentWrapper.getChildAt(0);
+        if (!(cardContainerView instanceof LinearLayout)) return null;
+        LinearLayout cardContainer = (LinearLayout) cardContainerView;
+
+        // 找出 cardContainer 中的 row views（跳过 separator）
+        java.util.List<View> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < cardContainer.getChildCount(); i++) {
+            View child = cardContainer.getChildAt(i);
+            if (child.getHeight() > AndroidUtilities.dp(5)) {
+                rows.add(child);
+            }
+        }
+
+        if (rows.isEmpty()) return null;
+
+        float[] centerYs = new float[rows.size()];
+        for (int i = 0; i < rows.size(); i++) {
+            View row = rows.get(i);
+            centerYs[i] = row.getTop() + cardContainer.getTop()
+                    + contentWrapper.getTop() + row.getHeight() / 2f;
+        }
+        return centerYs;
     }
 }

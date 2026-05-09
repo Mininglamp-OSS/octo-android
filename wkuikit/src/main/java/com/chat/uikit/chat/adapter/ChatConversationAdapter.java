@@ -108,6 +108,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Set<String> collapsedSections = new HashSet<>();
     // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
+    // 缓存：groupNo → 上次渲染的结构签名，用于跳过不必要的容器重建
+    private final Map<String, String> renderedThreadSigs = new ConcurrentHashMap<>();
 
     public String findThreadName(String threadChannelId) {
         for (List<ThreadEntity> threads : threadDataCache.values()) {
@@ -408,8 +410,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 container.removeAllViews();
                 container.setVisibility(View.GONE);
-                // YUJ-261 · 折叠时清空签名 tag，下次展开走全量重建。
-                container.setTag(R.id.threadPreviewContainer, null);
+                renderedThreadSigs.remove(item.channelID);
             }
         } else {
             threadToggleIv.setVisibility(View.GONE);
@@ -479,13 +480,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                             isTop ? R.drawable.home_bg : R.drawable.layout_bg);
                     applySelectedBackground(baseViewHolder, ui);
                     if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
-                        // 紧凑行：清 threadPreviewContainer signature tag 让子区签名
-                        // 在下轮展开时包含 isThreadRowSelected 状态（子区选中态靠
-                        // rowView bg 驱动，必须重建）。
                         FrameLayout threadContainer = baseViewHolder.getView(R.id.threadPreviewContainer);
                         if (threadContainer != null) {
-                            threadContainer.setTag(R.id.threadPreviewContainer, null);
-                            // 直接触发重建（若展开）
+                            renderedThreadSigs.remove(ui.channelID);
                             if (isThreadExpanded(ui.channelID)) {
                                 showThreadPreviews(baseViewHolder, ui);
                             }
@@ -1193,7 +1190,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 || WKConfig.getInstance().getAppConfig().thread_on != 1) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
 
@@ -1202,7 +1198,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (cachedList == null) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
             loadThreadPreviews(groupNo);
             return;
         }
@@ -1217,7 +1212,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (activeList.isEmpty()) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
+            renderedThreadSigs.remove(groupNo);
             return;
         }
         // updated_at 是 ISO 格式字符串，可直接用字符串比较排序
@@ -1249,9 +1244,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 则跳过所有 removeAllViews() + inflate，避免 onClickListener 持有的 rowView
         // 被替换导致 ACTION_DOWN → CANCEL。
         String newSig = buildThreadPreviewSignature(groupNo, activeList, inactiveList, showCount);
-        Object existingSig = container.getTag(R.id.threadPreviewContainer);
-        if (newSig.equals(existingSig) && container.getChildCount() > 0) {
+        String existingSig = renderedThreadSigs.get(groupNo);
+        Object renderedGroupNo = container.getTag(R.id.threadPreviewContainer);
+        if (groupNo.equals(renderedGroupNo) && newSig.equals(existingSig) && container.getChildCount() > 0) {
             container.setVisibility(View.VISIBLE);
+            updateThreadBadgesInPlace(container, groupNo, activeList, showCount);
             return;
         }
 
@@ -1478,23 +1475,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 FrameLayout.LayoutParams.MATCH_PARENT);
         container.addView(branchView, 0, branchLp);
 
-        // 等布局完成后计算每行中心 Y 并更新分支线
-        container.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                container.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                float[] centerYs = new float[rowViews.size()];
-                for (int i = 0; i < rowViews.size(); i++) {
-                    View row = rowViews.get(i);
-                    centerYs[i] = row.getTop() + cardContainer.getTop()
-                            + contentWrapper.getTop() + row.getHeight() / 2f;
-                }
-                branchView.setRowCenterYs(centerYs);
-            }
-        });
-
-        // YUJ-261 · 记录本次签名，下次同 ViewHolder 同签名直接跳过重建。
-        container.setTag(R.id.threadPreviewContainer, newSig);
+        // 记录本次签名到 adapter 级缓存 + ViewHolder tag 标识当前群
+        renderedThreadSigs.put(groupNo, newSig);
+        container.setTag(R.id.threadPreviewContainer, groupNo);
     }
 
     /**
@@ -1509,37 +1492,85 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         sb.append(groupNo).append('#').append(showCount).append('|');
         for (int i = 0; i < showCount && i < activeList.size(); i++) {
             ThreadEntity t = activeList.get(i);
-            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
-            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
-            int unread = conv != null ? conv.unreadCount : t.unread_count;
-            WKChannel ch = WKIM.getInstance().getChannelManager()
-                    .getChannel(tcId, WKChannelType.COMMUNITY_TOPIC);
-            boolean mute = ch != null && ch.mute == 1;
-            boolean mention = hasThreadMentionForChannel(tcId);
-            boolean selected = isThreadRowSelected(tcId);
             sb.append(t.short_id).append(':')
               .append(t.name != null ? t.name : "").append(':')
-              .append(unread).append(':')
-              .append(mute ? 1 : 0).append(':')
-              .append(mention ? 1 : 0).append(':')
-              .append(selected ? 1 : 0).append(':')
-              .append(t.last_message_content != null ? t.last_message_content.hashCode() : 0).append(':')
               .append(t.is_joined).append('|');
         }
-        // "+N 个子区" 行的聚合未读 + mention
-        int moreUnread = 0;
-        boolean moreMention = false;
-        for (ThreadEntity t : inactiveList) {
-            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
-            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
-            moreUnread += conv != null ? conv.unreadCount : t.unread_count;
-            if (hasThreadMentionForChannel(tcId)) moreMention = true;
-        }
-        sb.append("+").append(inactiveList.size()).append(':')
-          .append(moreUnread).append(':').append(moreMention ? 1 : 0);
+        sb.append("+").append(inactiveList.size());
         return sb.toString();
+    }
+
+    private void updateThreadBadgesInPlace(FrameLayout container, String groupNo,
+                                           List<ThreadEntity> activeList, int showCount) {
+        if (container.getChildCount() < 2) return;
+        View contentWrapperView = container.getChildAt(1);
+        if (!(contentWrapperView instanceof LinearLayout)) return;
+        LinearLayout contentWrapper = (LinearLayout) contentWrapperView;
+        if (contentWrapper.getChildCount() == 0) return;
+        View cardContainerView = contentWrapper.getChildAt(0);
+        if (!(cardContainerView instanceof LinearLayout)) return;
+        LinearLayout cardContainer = (LinearLayout) cardContainerView;
+
+        int rowIndex = 0;
+        for (int i = 0; i < cardContainer.getChildCount() && rowIndex < showCount; i++) {
+            View child = cardContainer.getChildAt(i);
+            if (child.findViewById(R.id.threadUnreadBadge) == null) continue;
+
+            if (rowIndex >= activeList.size()) break;
+            ThreadEntity entity = activeList.get(rowIndex);
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            int unread = threadConv != null ? threadConv.unreadCount : entity.unread_count;
+
+            WKChannel threadChannel = WKIM.getInstance().getChannelManager()
+                    .getChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            boolean threadMute = threadChannel != null && threadChannel.mute == 1;
+
+            TextView unreadBadge = child.findViewById(R.id.threadUnreadBadge);
+            if (unread > 0) {
+                unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                GradientDrawable badgeBg = new GradientDrawable();
+                badgeBg.setCornerRadius(AndroidUtilities.dp(9f));
+                badgeBg.setColor(ContextCompat.getColor(getContext(),
+                        threadMute ? R.color.color999 : R.color.reminderColor));
+                unreadBadge.setBackground(badgeBg);
+                unreadBadge.setVisibility(View.VISIBLE);
+            } else {
+                unreadBadge.setVisibility(View.GONE);
+            }
+
+            ImageView muteIv = child.findViewById(R.id.threadMuteIv);
+            if (muteIv != null) {
+                if (threadMute) {
+                    muteIv.setVisibility(View.VISIBLE);
+                    Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+                } else {
+                    muteIv.setVisibility(View.GONE);
+                }
+            }
+
+            TextView mentionTv = child.findViewById(R.id.threadMentionTv);
+            if (mentionTv != null) {
+                boolean threadHasMention = hasThreadMentionForChannel(threadChannelId);
+                if (threadHasMention) {
+                    String mentionTag = getContext().getString(R.string.last_msg_remind);
+                    String lastMsg = "";
+                    if (!TextUtils.isEmpty(entity.last_message_content)) {
+                        lastMsg = entity.last_message_content;
+                        if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
+                            lastMsg = entity.last_message_sender_name + ": " + lastMsg;
+                        }
+                    }
+                    mentionTv.setText(mentionTag + (TextUtils.isEmpty(lastMsg) ? "" : " " + lastMsg));
+                    mentionTv.setVisibility(View.VISIBLE);
+                } else {
+                    mentionTv.setVisibility(View.GONE);
+                }
+            }
+
+            rowIndex++;
+        }
     }
 
     /**
@@ -1762,6 +1793,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (msg.channelType == WKChannelType.GROUP
                     && WKConfig.getInstance().getAppConfig().thread_on == 1) {
                 reloadThreadPreviews(msg.channelID);
+            }
+        }
+    }
+
+    public void preloadAllThreadData() {
+        if (WKConfig.getInstance().getAppConfig().thread_on != 1) return;
+        for (int i = 0; i < getData().size(); i++) {
+            if (getData().get(i).isSectionHeader) continue;
+            WKUIConversationMsg msg = getData().get(i).uiConversationMsg;
+            if (msg.channelType == WKChannelType.GROUP
+                    && !threadDataCache.containsKey(msg.channelID)) {
+                loadThreadPreviews(msg.channelID);
             }
         }
     }

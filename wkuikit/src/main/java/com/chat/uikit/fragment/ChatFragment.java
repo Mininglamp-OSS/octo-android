@@ -296,10 +296,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         });
         loadCurrentSpaceName();
         chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
-        // YUJ-261 · 注册 DiffUtil callback，后续 filterAndDisplay 走 setDiffNewData 增量更新，
-        // 不再使用 setList（内部 notifyDataSetChanged）导致的全 ViewHolder rebind。
         chatConversationAdapter.setDiffCallback(DIFF_CALLBACK);
         initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
+        wkVBinding.recyclerView.setItemAnimator(null);
         // YUJ-240 review fix (Jerry-Xin W#5): setSupportsChangeAnimations 必须在 setAdapter 之后调用才稳定生效，移到 initAdapter 之后。
         RecyclerView.ItemAnimator itemAnimator = wkVBinding.recyclerView.getItemAnimator();
         if (itemAnimator instanceof DefaultItemAnimator) {
@@ -1363,6 +1362,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                                 && msg.uiConversationMsg.channelType == WKChannelType.GROUP) {
                             if (uiConversationMsg.lastMsgTimestamp > msg.uiConversationMsg.lastMsgTimestamp) {
                                 msg.uiConversationMsg.lastMsgTimestamp = uiConversationMsg.lastMsgTimestamp;
+                                final String groupNo = parsed[0];
+                                final long ts = uiConversationMsg.lastMsgTimestamp;
+                                io.reactivex.rxjava3.schedulers.Schedulers.io().scheduleDirect(() ->
+                                        WKIM.getInstance().getConversationManager().updateLastMsgTimestamp(
+                                                groupNo, WKChannelType.GROUP, ts));
                             }
                             break;
                         }
@@ -2347,8 +2351,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // 同时收敛可能的历史 duplicate entry（rebuildIndex 会倒序去重、保留最先出现的）。
             rebuildConversationIndex();
             filterAndDisplay();
+            chatConversationAdapter.preloadAllThreadData();
             setAllCount();
-            scrollToPositionIfNearTop(0);
             syncSpaceKeysToGlobal();
             // 对齐 iOS：仅首次会话同步完成后调用一次 syncReminder
             if (!hasInitialReminderSynced) {
@@ -2514,7 +2518,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void filterAndDisplayInternal() {
-        if (chatConversationAdapter == null || getActivity() == null) return;
+        if (chatConversationAdapter == null || getActivity() == null || !isAdded()) return;
         if (!isResumed()) {
             pendingFilterAndDisplay = true;
             return;
@@ -3474,9 +3478,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             pendingFilterAndDisplay = false;
             filterAndDisplayInternal();
         }
-        // 对齐 iOS：2 秒内已刷新过则跳过重载，避免从聊天返回时列表跳动
         long now = System.currentTimeMillis();
-        if (now - lastFullRefreshTime < RESUME_THROTTLE_MS) {
+        long elapsed = now - lastFullRefreshTime;
+        if (elapsed < RESUME_THROTTLE_MS) {
             // 仅刷新子区未读（轻量，不触发全量 setList）
             chatConversationAdapter.clearAndReloadThreadData();
             refreshExtrasIfNeeded();
@@ -3489,8 +3493,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         chatConversationAdapter.clearAndReloadThreadData();
         // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
         refreshExtrasIfNeeded();
-        // 刷新分组数据，确保新建群聊等操作后分组列表及时更新
-        CategoryModel.getInstance().invalidateCache();
+        // 静默刷新分组（不 invalidateCache，只有服务端返回新数据才触发 filterAndDisplay）
         loadCategories();
         // YUJ-140 · 跨 Space 加群 Toast：消费上个界面（扫码 / 邀请加群）留下的 notice
         consumeJoinSuccessNoticeIfAny();

@@ -21,7 +21,8 @@ public class ThreadBranchView extends View {
 
     private final Paint paint;
     private final Path path;
-    private final int expectedRowCount;
+    private final RectF arcRect;
+    private int expectedRowCount;
 
     private final float lineX;
     private final float endX;
@@ -30,6 +31,7 @@ public class ThreadBranchView extends View {
     private float[] cachedCenterYs;
     private int cachedParentHeight;
     private int cachedParentWidth;
+    private boolean pathDirty = true;
 
     public ThreadBranchView(Context context, int rowCount) {
         super(context);
@@ -44,10 +46,30 @@ public class ThreadBranchView extends View {
         paint.setColor((color & 0x00FFFFFF) | 0x4D000000);
 
         path = new Path();
+        arcRect = new RectF();
 
         lineX = AndroidUtilities.dp(40);
         endX = AndroidUtilities.dp(58);
         radius = AndroidUtilities.dp(8);
+    }
+
+    public void setRowCount(int rowCount) {
+        if (this.expectedRowCount != rowCount) {
+            this.expectedRowCount = rowCount;
+            pathDirty = true;
+            invalidateCenterYsCache();
+            invalidate();
+        }
+    }
+
+    public int getRowCount() {
+        return expectedRowCount;
+    }
+
+    private void invalidateCenterYsCache() {
+        cachedCenterYs = null;
+        cachedParentHeight = 0;
+        cachedParentWidth = 0;
     }
 
     @Override
@@ -58,17 +80,25 @@ public class ThreadBranchView extends View {
         float[] centerYs = getCenterYs();
         if (centerYs == null || centerYs.length == 0) return;
 
+        if (pathDirty) {
+            rebuildPath(centerYs);
+            pathDirty = false;
+        }
+
+        canvas.drawPath(path, paint);
+    }
+
+    private void rebuildPath(float[] centerYs) {
         path.reset();
 
         for (int i = 0; i < centerYs.length; i++) {
             float targetY = centerYs[i];
-
             float lineTop = (i == 0) ? 0 : centerYs[i - 1];
 
             path.moveTo(lineX, lineTop);
             path.lineTo(lineX, targetY - radius);
 
-            RectF arcRect = new RectF(lineX, targetY - radius * 2, lineX + radius * 2, targetY);
+            arcRect.set(lineX, targetY - radius * 2, lineX + radius * 2, targetY);
             path.arcTo(arcRect, 180, -90, false);
 
             path.lineTo(endX, targetY);
@@ -78,8 +108,6 @@ public class ThreadBranchView extends View {
                 path.lineTo(lineX, targetY);
             }
         }
-
-        canvas.drawPath(path, paint);
     }
 
     private float[] getCenterYs() {
@@ -90,27 +118,30 @@ public class ThreadBranchView extends View {
         if (ph == cachedParentHeight && pw == cachedParentWidth && cachedCenterYs != null) {
             return cachedCenterYs;
         }
-        cachedCenterYs = computeRowCenterYs(parent);
-        cachedParentHeight = ph;
-        cachedParentWidth = pw;
+        float[] newYs = computeRowCenterYs(parent);
+        if (newYs != null) {
+            if (!java.util.Arrays.equals(newYs, cachedCenterYs)) {
+                pathDirty = true;
+            }
+            cachedCenterYs = newYs;
+            cachedParentHeight = ph;
+            cachedParentWidth = pw;
+        }
         return cachedCenterYs;
     }
 
     private float[] computeRowCenterYs(ViewGroup parent) {
         if (parent.getChildCount() < 2) return null;
 
-        // 容器结构: parent(FrameLayout) → child0=BranchView, child1=contentWrapper
         View contentWrapperView = parent.getChildAt(1);
         if (!(contentWrapperView instanceof LinearLayout)) return null;
         LinearLayout contentWrapper = (LinearLayout) contentWrapperView;
         if (contentWrapper.getChildCount() == 0) return null;
 
-        // contentWrapper → child0=cardContainer
         View cardContainerView = contentWrapper.getChildAt(0);
         if (!(cardContainerView instanceof LinearLayout)) return null;
         LinearLayout cardContainer = (LinearLayout) cardContainerView;
 
-        // 找出 cardContainer 中的 row views（跳过 separator）
         java.util.List<View> rows = new java.util.ArrayList<>();
         for (int i = 0; i < cardContainer.getChildCount(); i++) {
             View child = cardContainer.getChildAt(i);

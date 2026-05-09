@@ -175,6 +175,32 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int filterCallCount = 0;
     private static final String TAG_FILTER = "ChatFragment.filter";
 
+    // Phase 5: Safe Update Scheduler — 2s watchdog 防止 setList 卡死
+    private static final long SAFE_UPDATE_WATCHDOG_MS = 2000L;
+    private int consecutiveWatchdogFires = 0;
+    private final Runnable watchdogRunnable = () -> {
+        consecutiveWatchdogFires++;
+        android.util.Log.w("SafeUpdate", "Watchdog fired! setList may be stuck. count=" + consecutiveWatchdogFires);
+        if (chatConversationAdapter != null) {
+            if (consecutiveWatchdogFires >= 3) {
+                android.util.Log.e("SafeUpdate", "3 consecutive watchdog fires, full adapter rebuild");
+                List<ChatConversationMsg> data = chatConversationAdapter.getData();
+                chatConversationAdapter.setList(null);
+                chatConversationAdapter.setList(data);
+                consecutiveWatchdogFires = 0;
+            } else {
+                chatConversationAdapter.notifyDataSetChanged();
+            }
+        }
+    };
+
+    private void safeSetList(List<ChatConversationMsg> displayList) {
+        filterDebounceHandler.postDelayed(watchdogRunnable, SAFE_UPDATE_WATCHDOG_MS);
+        chatConversationAdapter.setList(displayList);
+        filterDebounceHandler.removeCallbacks(watchdogRunnable);
+        consecutiveWatchdogFires = 0;
+    }
+
     /**
      * YUJ-261 · DiffUtil callback。
      * - areItemsTheSame: section 用 sectionId，普通行用 channelID+channelType 作稳定 id
@@ -205,8 +231,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 @Override
                 public Object getChangePayload(@androidx.annotation.NonNull ChatConversationMsg oldItem,
                                                @androidx.annotation.NonNull ChatConversationMsg newItem) {
-                    // 本期返回 null，让 BRVAH 对变化行走 full rebind。未变化行不被 invalidate，
-                    // 根治 touch event 在 filterAndDisplay 期间被 cancel 的问题。
+                    // Section headers: only badges/counts change between rebuilds,
+                    // skip full rebind when title and collapse state are the same
+                    if (oldItem.isSectionHeader && newItem.isSectionHeader) {
+                        if (TextUtils.equals(oldItem.sectionTitle, newItem.sectionTitle)
+                                && oldItem.sectionGroupCount == newItem.sectionGroupCount) {
+                            // title/count same → only badge changed
+                            return ChatConversationAdapter.PAYLOAD_SECTION_BADGE;
+                        }
+                    }
+                    // Normal rows: side-channel (notifyRecycler + isResetXxx flags) handles
+                    // partial updates. DiffUtil path returns null → full rebind as fallback.
                     return null;
                 }
             };
@@ -2481,7 +2516,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         filterDebounceHandler.removeCallbacks(filterRunnable);
         if (chatConversationAdapter == null || getActivity() == null) return;
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        chatConversationAdapter.setList(displayList);
+        safeSetList(displayList);
         // 恢复目标 tab 的滚动位置
         RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
         if (lm != null) {
@@ -2499,7 +2534,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return;
         }
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        chatConversationAdapter.setList(displayList);
+        safeSetList(displayList);
         lastFullRefreshTime = System.currentTimeMillis();
         pendingFilterAndDisplay = false;
     }

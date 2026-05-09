@@ -100,6 +100,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 避免 DiffUtil contentHash 恒等设计引发的卡片替换链路打断。
      */
     public static final int PAYLOAD_SELECTED = 1;
+    /** DiffUtil payload: section header badges/counts changed, skip full rebind */
+    public static final int PAYLOAD_SECTION_BADGE = 2;
+    /** Side-channel payload: refresh channel info (name/mute/forbidden/top) without rebuilding thread previews */
+    public static final int PAYLOAD_CHANNEL_INFO_ONLY = 3;
 
     private IListener iListener;
     private IThreadPreviewClickListener threadPreviewClickListener;
@@ -110,6 +114,28 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
     // 缓存：groupNo → 上次渲染的结构签名，用于跳过不必要的容器重建
     private final Map<String, String> renderedThreadSigs = new ConcurrentHashMap<>();
+
+    // Phase 2: 缓存 GradientDrawable 避免热路径分配
+    private static GradientDrawable sBadgeBgNormal;
+    private static GradientDrawable sBadgeBgMuted;
+
+    private static GradientDrawable getBadgeDrawable(Context context, boolean muted) {
+        if (muted) {
+            if (sBadgeBgMuted == null) {
+                sBadgeBgMuted = new GradientDrawable();
+                sBadgeBgMuted.setCornerRadius(AndroidUtilities.dp(9f));
+            }
+            sBadgeBgMuted.setColor(ContextCompat.getColor(context, R.color.color999));
+            return sBadgeBgMuted;
+        } else {
+            if (sBadgeBgNormal == null) {
+                sBadgeBgNormal = new GradientDrawable();
+                sBadgeBgNormal.setCornerRadius(AndroidUtilities.dp(9f));
+            }
+            sBadgeBgNormal.setColor(ContextCompat.getColor(context, R.color.reminderColor));
+            return sBadgeBgNormal;
+        }
+    }
 
     public String findThreadName(String threadChannelId) {
         for (List<ThreadEntity> threads : threadDataCache.values()) {
@@ -463,7 +489,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     @Override
     protected void convert(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg uiConversationMsg, @NotNull List<?> payloads) {
+        // Section header payload: 只刷新 badge/count，不重建整个 header
         if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
+            for (Object p : payloads) {
+                if (p instanceof Integer && ((Integer) p) == PAYLOAD_SECTION_BADGE) {
+                    refreshSectionBadges(baseViewHolder, uiConversationMsg);
+                    return;
+                }
+            }
             return;
         }
         // YUJ-267 · 选中态 payload：只刷背景，不整 rebind（DiffUtil contentHash
@@ -472,9 +505,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (p instanceof Integer && ((Integer) p) == PAYLOAD_SELECTED) {
                 WKUIConversationMsg ui = uiConversationMsg != null ? uiConversationMsg.uiConversationMsg : null;
                 if (ui != null) {
-                    // 先恢复非选中状态下的默认 bg（top=home_bg vs normal=layout_bg），
-                    // 若当前行是新选中则 applySelectedBackground 再覆盖为 selected_bg。
-                    // 不做这一步的话取消选中后背景不会恢复。
                     boolean isTop = ui.getWkChannel() != null && ui.getWkChannel().top == 1;
                     baseViewHolder.setBackgroundResource(R.id.contentLayout,
                             isTop ? R.drawable.home_bg : R.drawable.layout_bg);
@@ -499,6 +529,38 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 convertNormalPayloads(baseViewHolder, chatConversationMsg);
             }
+        }
+    }
+
+    /**
+     * Section header 增量刷新：只更新未读角标、@提醒、分组计数，不重建整个 header。
+     */
+    private void refreshSectionBadges(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
+        if (msg == null) return;
+        boolean collapsed = collapsedSections.contains(msg.sectionId);
+
+        TextView countTv = helper.getView(R.id.sectionCount);
+        if (msg.sectionGroupCount > 0 && collapsed) {
+            countTv.setText("(" + msg.sectionGroupCount + ")");
+            countTv.setVisibility(View.VISIBLE);
+        } else {
+            countTv.setVisibility(View.GONE);
+        }
+
+        TextView mentionTv = helper.getView(R.id.sectionMentionTv);
+        if (collapsed && msg.sectionHasMention) {
+            mentionTv.setText(getContext().getString(R.string.last_msg_remind));
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
+        }
+
+        TextView unreadBadge = helper.getView(R.id.sectionUnreadBadge);
+        if (collapsed && msg.sectionUnreadCount > 0) {
+            unreadBadge.setText(msg.sectionUnreadCount > 99 ? "99+" : String.valueOf(msg.sectionUnreadCount));
+            unreadBadge.setVisibility(View.VISIBLE);
+        } else {
+            unreadBadge.setVisibility(View.GONE);
         }
     }
 
@@ -551,7 +613,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             chatConversationMsg.isResetCounter = false;
         }
         if (chatConversationMsg.isRefreshChannelInfo) {
-            convertCompact(baseViewHolder, chatConversationMsg);
+            refreshCompactChannelInfo(baseViewHolder, chatConversationMsg);
             chatConversationMsg.isRefreshChannelInfo = false;
         }
         // 内容或提醒变化时刷新紧凑行的 @mention 预览
@@ -564,6 +626,69 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         chatConversationMsg.isResetTime = false;
         chatConversationMsg.isResetTyping = false;
         chatConversationMsg.isRefreshStatus = false;
+    }
+
+    /**
+     * 仅刷新 compact 行的频道基本信息（名称、免打扰、禁言、置顶背景、头像），
+     * 不重建子区预览容器。避免 channel info 更新时触发昂贵的 showThreadPreviews。
+     */
+    private void refreshCompactChannelInfo(@NotNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        WKUIConversationMsg item = conversationMsg.uiConversationMsg;
+        if (item == null) return;
+
+        // 头像
+        AvatarView compactAvatar = helper.getView(R.id.compactAvatarView);
+        compactAvatar.setSize(52);
+        if (item.getWkChannel() != null) {
+            compactAvatar.showAvatar(item.getWkChannel());
+        } else {
+            compactAvatar.showAvatar(item.channelID, item.channelType);
+        }
+
+        // 频道名
+        String showName = "";
+        if (item.getWkChannel() != null) {
+            showName = TextUtils.isEmpty(item.getWkChannel().channelRemark)
+                    ? item.getWkChannel().channelName
+                    : item.getWkChannel().channelRemark;
+            if (TextUtils.isEmpty(showName)) {
+                showName = getContext().getString(R.string.chat);
+            }
+        } else {
+            showName = getContext().getString(R.string.chat);
+        }
+        helper.setText(R.id.nameTv, showName);
+        applyExternalGroupTag(helper, item);
+
+        // 置顶背景
+        boolean isTop = item.getWkChannel() != null && item.getWkChannel().top == 1;
+        helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+        applySelectedBackground(helper, item);
+
+        // 免打扰图标
+        ImageView muteIv = helper.getView(R.id.muteIv);
+        if (item.getWkChannel() != null && item.getWkChannel().mute == 1) {
+            muteIv.setVisibility(View.VISIBLE);
+            Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+        } else {
+            muteIv.setVisibility(View.GONE);
+        }
+
+        // 禁言图标
+        ImageView forbiddenIv = helper.getView(R.id.forbiddenIv);
+        if (item.getWkChannel() != null && item.getWkChannel().forbidden == 1) {
+            WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager()
+                    .getMember(item.channelID, item.channelType, WKConfig.getInstance().getUid());
+            if (mChannelMember != null && mChannelMember.role == 0) {
+                forbiddenIv.setVisibility(View.VISIBLE);
+                forbiddenIv.setColorFilter(new PorterDuffColorFilter(
+                        ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
+            } else {
+                forbiddenIv.setVisibility(View.GONE);
+            }
+        } else {
+            forbiddenIv.setVisibility(View.GONE);
+        }
     }
 
     public interface IListener {
@@ -989,9 +1114,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (WKReader.isNotEmpty(item.getReminders())) {
             for (int i = 0, size = item.getReminders().size(); i < size; i++) {
                 if (!mention && item.getReminders().get(i).type == WKMentionType.WKReminderTypeMentionMe && item.getReminders().get(i).done == 0) {
-                    //存在@
                     mention = true;
-                    // break;
                 }
                 if (item.getReminders().get(i).type == WKMentionType.WKApplyJoinGroupApprove && item.getReminders().get(i).done == 0) {
                     approveContent = getContext().getString(R.string.apply_join_group);
@@ -1002,39 +1125,37 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             draft = item.uiConversationMsg.getRemoteMsgExtra().draft;
         }
         boolean isSetChatPwd = isSetChatPwd(item.uiConversationMsg.getWkChannel());
-        // 聊天密码
         if (isSetChatPwd) {
             if (!TextUtils.isEmpty(draft))
                 draft = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         }
-        LinearLayout remindLayout = helper.getView(R.id.remindLayout);
-        remindLayout.removeAllViews();
+
+        // 复用 XML 中预定义的 TextView，避免每次 bind 分配新 View
+        TextView mentionTv = helper.getView(R.id.mentionTv);
+        TextView draftTv = helper.getView(R.id.draftTv);
+        TextView approveTv = helper.getView(R.id.approveTv);
+
         if (mention) {
-            TextView textView = new TextView(getContext());
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setText(R.string.last_msg_remind);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            mentionTv.setText(R.string.last_msg_remind);
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
         }
+
         if (!TextUtils.isEmpty(draft)) {
-            TextView textView = new TextView(getContext());
-            textView.setText(R.string.last_msg_draft);
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            draftTv.setText(R.string.last_msg_draft);
+            draftTv.setVisibility(View.VISIBLE);
             MoonUtil.identifyFaceExpression(getContext(), contentTv, draft, MoonUtil.SMALL_SCALE);
         } else {
+            draftTv.setVisibility(View.GONE);
             showContent(helper, item.uiConversationMsg);
         }
+
         if (!TextUtils.isEmpty(approveContent)) {
-            TextView textView = new TextView(getContext());
-            textView.setText(approveContent);
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            approveTv.setText(approveContent);
+            approveTv.setVisibility(View.VISIBLE);
+        } else {
+            approveTv.setVisibility(View.GONE);
         }
     }
 
@@ -1252,8 +1373,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             return;
         }
 
-        // 数据变化或首次渲染 → 重建。
-        container.removeAllViews();
+        // 数据变化或首次渲染 → 重建内容（保留 ThreadBranchView 复用）。
+        removeContentViews(container);
         container.setVisibility(View.VISIBLE);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
@@ -1322,11 +1443,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
             if (unread > 0) {
                 unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
-                GradientDrawable badgeBg = new GradientDrawable();
-                badgeBg.setCornerRadius(AndroidUtilities.dp(9f));
-                badgeBg.setColor(ContextCompat.getColor(getContext(),
-                        threadMute ? R.color.color999 : R.color.reminderColor));
-                unreadBadge.setBackground(badgeBg);
+                unreadBadge.setBackground(getBadgeDrawable(getContext(), threadMute).getConstantState().newDrawable().mutate());
                 unreadBadge.setVisibility(View.VISIBLE);
             } else {
                 unreadBadge.setVisibility(View.GONE);
@@ -1468,16 +1585,40 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
         container.addView(contentWrapper);
 
-        // 2. 分支线视图（从头像区域弯曲到每一行，放在最底层）
-        ThreadBranchView branchView = new ThreadBranchView(getContext(), showCount);
-        FrameLayout.LayoutParams branchLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
-        container.addView(branchView, 0, branchLp);
+        // 2. 分支线视图：复用已有实例或新建（从头像区域弯曲到每一行，放在最底层）
+        ThreadBranchView branchView = findBranchView(container);
+        if (branchView != null) {
+            branchView.setRowCount(showCount);
+        } else {
+            branchView = new ThreadBranchView(getContext(), showCount);
+            FrameLayout.LayoutParams branchLp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT);
+            container.addView(branchView, 0, branchLp);
+        }
 
         // 记录本次签名到 adapter 级缓存 + ViewHolder tag 标识当前群
         renderedThreadSigs.put(groupNo, newSig);
         container.setTag(R.id.threadPreviewContainer, groupNo);
+    }
+
+    /** 从 container 中查找已有的 ThreadBranchView（复用避免重建）。 */
+    private ThreadBranchView findBranchView(ViewGroup container) {
+        for (int i = 0; i < container.getChildCount(); i++) {
+            if (container.getChildAt(i) instanceof ThreadBranchView) {
+                return (ThreadBranchView) container.getChildAt(i);
+            }
+        }
+        return null;
+    }
+
+    /** 移除 container 中除 ThreadBranchView 以外的所有子 View（保留分支线复用）。 */
+    private void removeContentViews(FrameLayout container) {
+        for (int i = container.getChildCount() - 1; i >= 0; i--) {
+            if (!(container.getChildAt(i) instanceof ThreadBranchView)) {
+                container.removeViewAt(i);
+            }
+        }
     }
 
     /**
@@ -1530,11 +1671,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             TextView unreadBadge = child.findViewById(R.id.threadUnreadBadge);
             if (unread > 0) {
                 unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
-                GradientDrawable badgeBg = new GradientDrawable();
-                badgeBg.setCornerRadius(AndroidUtilities.dp(9f));
-                badgeBg.setColor(ContextCompat.getColor(getContext(),
-                        threadMute ? R.color.color999 : R.color.reminderColor));
-                unreadBadge.setBackground(badgeBg);
+                unreadBadge.setBackground(getBadgeDrawable(getContext(), threadMute).getConstantState().newDrawable().mutate());
                 unreadBadge.setVisibility(View.VISIBLE);
             } else {
                 unreadBadge.setVisibility(View.GONE);

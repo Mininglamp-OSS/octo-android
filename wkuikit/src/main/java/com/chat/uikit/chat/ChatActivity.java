@@ -361,7 +361,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // so we do not need to consume; just keep the chain alive.
         ViewCompat.setOnApplyWindowInsetsListener(wkVBinding.rootView, (v, insets) -> {
             Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
-            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), imeInsets.bottom);
+            // 仅 Activity Embedding 分屏态需要手动补偿 IME bottom padding（副栏收不到
+            // adjustResize）。窄屏/普通手机由系统 adjustResize + PanelSwitchHelper 协同
+            // 处理，额外 padding 会导致消息列表显示不到底部。
+            boolean narrow = NarrowTransition.isNarrow(this);
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(),
+                    narrow ? 0 : imeInsets.bottom);
             return insets;
         });
         initParam();
@@ -2798,25 +2803,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 CommonAnim.getInstance().showOrHide(numberTextView, false, true);
             } else {
                 if (chatPanelManager.isCanBack()) {
-                    // YUJ-298 · Fix A：窄屏下不 finish —— 通过 ChatReuseNavigator.goBackToList
-                    // 把 TabActivity reorder 到栈顶，保留 ChatActivity 实例，下一次点击
-                    // 会话命中 onNewIntent 热路径（~50-100ms），不用重建。
-                    //
-                    // 之前的 postDelayed 150ms finish 是为了等 IME / 面板收起动画，
-                    // 但实测主线程已经在 isCanBack 时完成 panel 切换；真正的延迟来自
-                    // Activity transition 本身（被 NarrowTransition applyFastClose 压到
-                    // 120ms）+ recreate（现在被复用消除）。这里直接立即处理，去掉 150ms
-                    // 感知延迟。
-                    //
-                    // YUJ-305 P0-2 · soft-back 不走 finish → onDestroy 不触发 →
-                    // saveEditContent 不执行。必须在进入 soft-back 前主动 flush 一次，
-                    // 否则草稿 / 浏览位置 / 阅后即焚 / readMsg 上报全丢。
                     persistCurrentChannelEditState();
-                    if (com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
+                    // 子区（COMMUNITY_TOPIC）不走 goBackToList 保活路径：子区是一次性
+                    // 浏览，保活会导致折叠屏上反复进出子区时实例堆积，back 时逐个回退
+                    // 像死循环。只有群聊/私聊等主会话才适合 reuse 优化。
+                    if (channelType != WKChannelType.COMMUNITY_TOPIC
+                            && com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
                         return false;
                     }
-                    // 非窄屏 / 复用路径失败 → 回退到原来的 finish 路径。保留 150ms
-                    // postDelayed 兼容原有分屏 / 折叠屏的 panel 收起动画时序。
                     new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(this::finish, 150);
                 }
             }

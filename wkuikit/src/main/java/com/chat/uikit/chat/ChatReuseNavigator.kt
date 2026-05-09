@@ -66,31 +66,19 @@ object ChatReuseNavigator {
     fun launchChat(context: Context, intent: Intent, activity: Activity? = asActivity(context)) {
         val narrow = activity?.let { NarrowTransition.isNarrow(it) } ?: false
         if (narrow) {
-            // YUJ-305 P1-B 防御：上游入口（通知构造 / Bot 跳转 / 外部 deeplink）若带了
-            // FLAG_ACTIVITY_CLEAR_TOP，Android 会忽略同一 Intent 上的
-            // FLAG_ACTIVITY_REORDER_TO_FRONT（见 Intent javadoc：
-            // "This flag is ignored if FLAG_ACTIVITY_CLEAR_TOP is also specified."），
-            // 导致 Fix A 复用路径失效，又掉回 recreate。同理 NEW_TASK 会开新 task，
-            // ChatActivity 跨 task 无法复用。这里统一剥掉，保证 REORDER_TO_FRONT 生效；
-            // 调用方若确实需要清栈 / 开 task 的语义，应走非窄屏路径或独立入口。
             val toClear = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             if ((intent.flags and toClear) != 0) {
                 intent.flags = intent.flags and toClear.inv()
-                if (WKBinder.isDebug) {
-                    Log.d(TAG, "launchChat narrow stripped CLEAR_TOP|NEW_TASK to keep REORDER_TO_FRONT semantics")
-                }
             }
-            // REORDER_TO_FRONT + SINGLE_TOP：任务栈里有实例就 reorder 并走
-            // onNewIntent；没有就正常新建。两种情况都是单一 startActivity 调用，
-            // 系统负责选路。
             intent.addFlags(
                 Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                         or Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
-            if (WKBinder.isDebug) {
-                Log.d(TAG, "launchChat narrow flags=REORDER|SINGLE_TOP channel=" +
-                        intent.getStringExtra("channelId"))
-            }
+        } else {
+            // 非窄屏（折叠屏展开态 / Activity Embedding）：加 SINGLE_TOP 让右栏
+            // ChatActivity 通过 onNewIntent 复用，避免连续点击子区时实例堆栈。
+            // WKThreadCreatedProvider 不走本方法，不受影响。
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         if (WKBinder.isDebug) {
             Log.d(

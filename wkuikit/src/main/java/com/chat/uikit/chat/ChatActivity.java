@@ -1319,55 +1319,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void scrollToMessageForReuse(long targetOrderSeq) {
         if (chatAdapter == null || linearLayoutManager == null) return;
-        int index = chatAdapter.findPositionByOrderSeq(targetOrderSeq);
-        if (index >= 0) {
-            // 快路径：目标在当前窗口内，直接滚动并高亮。对齐 tipsMsg() 的 UX。
-            final int targetIndex = index;
-            // YUJ-311 防御 · findPositionByOrderSeq 返回的 index 是「当前可见
-            // snapshot」，但在同一主线程调用里 adapter 已经不能被其它线程改动；
-            // 这里先做 size guard 只是为了对齐 postDelayed 里的守卫口径，
-            // 防 adapter 内部在 bind 过程中触发异步 remove 造成 off-by-one。
-            if (targetIndex >= chatAdapter.getItemCount()) return;
-            WKUIChatMsgItemEntity targetItem = chatAdapter.getItem(targetIndex);
-            if (targetItem == null) return;
-            targetItem.isShowTips = true;
-            if (mHelper != null) {
-                mHelper.hookSystemBackByPanelSwitcher();
-            }
-            wkVBinding.recyclerView.postDelayed(() -> {
-                // YUJ-311 防御 · 120ms 窗口期间可能发生：
-                //   1) Activity finishing / destroyed（swipe-back / Embedding 关副栏）
-                //   2) 同频道再来一次短路 applyIntentExtrasForReuse（adapter 数据
-                //      稳定但 targetIndex 已过期）
-                //   3) 跨频道 onNewIntent → chatAdapter.setList([]) 后 targetIndex
-                //      指向空 adapter 的越界位置
-                // 命中任一就静默退出，滚动/高亮让正常 onNewIntent 流程覆盖。
-                if (isFinishing() || isDestroyed()) return;
-                if (chatAdapter == null || linearLayoutManager == null) return;
-                if (targetIndex < 0 || targetIndex >= chatAdapter.getItemCount()) return;
-                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
-                int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
-                if (targetIndex < firstItemPosition || targetIndex > lastItemPosition) {
-                    linearLayoutManager.scrollToPositionWithOffset(targetIndex, AndroidUtilities.dp(50));
-                }
-                chatAdapter.notifyItemChanged(targetIndex);
-            }, 120);
-        } else {
-            // 慢路径：目标不在当前窗口，按 aroundMsgSeq 重新拉取。对齐 tipsMsg() 的
-            // fallback 分支与 initData() 的 getData(aroundMsgSeq) 入参语义。
-            unreadStartMsgOrderSeq = 0;
-            tipsOrderSeq = targetOrderSeq;
-            unreadStartSnapshotOrderSeq = 0;
-            tipsSnapshotOrderSeq = targetOrderSeq;
-            hasRenderedPreview = false;
-            userHasScrolled = false;
-            hasShownTips = false;
-            if (mHelper != null) {
-                mHelper.hookSystemBackByPanelSwitcher();
-            }
-            getData(0, true, targetOrderSeq, true);
-            isCanLoadMore = true;
+        unreadStartMsgOrderSeq = 0;
+        tipsOrderSeq = targetOrderSeq;
+        unreadStartSnapshotOrderSeq = 0;
+        tipsSnapshotOrderSeq = targetOrderSeq;
+        hasRenderedPreview = false;
+        userHasScrolled = false;
+        hasShownTips = false;
+        if (mHelper != null) {
+            mHelper.hookSystemBackByPanelSwitcher();
         }
+        getData(0, true, targetOrderSeq, false);
+        isCanLoadMore = true;
     }
 
     /**
@@ -2288,21 +2251,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         final long tipsAnchor = tipsSnapshotOrderSeq;
         if (tipsAnchor != 0 || lastPreviewMsgOrderSeq != 0) {
             wkVBinding.recyclerView.setVisibility(View.VISIBLE);
-            // Only auto-scroll to the tips anchor on the first render, or if
-            // the user has not yet taken over the viewport (YUJ-256 P1-3).
-            if (tipsAnchor != 0 && !userHasScrolled) {
+            if (tipsAnchor != 0) {
                 int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsAnchor);
                 if (tipsIndex >= 0) {
                     linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
-                    // YUJ-258 P2-NEW-1: only trigger the tips highlight once.
-                    // The snapshot still drives the second (post-sync) scroll
-                    // so the target stays in view, but the flash animation
-                    // must not replay.
-                    if (!hasShownTips) {
-                        chatAdapter.getItem(tipsIndex).isShowTips = true;
-                        chatAdapter.notifyItemChanged(tipsIndex);
-                        hasShownTips = true;
-                    }
+                    chatAdapter.getItem(tipsIndex).isShowTips = true;
+                    chatAdapter.notifyItemChanged(tipsIndex);
                     tipsOrderSeq = 0;
                 }
             }

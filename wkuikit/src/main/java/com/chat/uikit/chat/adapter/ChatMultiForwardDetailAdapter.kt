@@ -619,21 +619,7 @@ class ChatMultiForwardDetailAdapter(
     }
 
     private fun openForwardFile(file: File) {
-        try {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                context,
-                context.packageName + ".fileProvider",
-                file
-            )
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
-            intent.setDataAndType(uri, WKFileProvider.getMimeType(file.name))
-            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            WKToastUtils.getInstance()
-                .showToastNormal(context.getString(R.string.str_file_not_exist))
-        }
+        WKFileProvider.openFileWithOptions(context, file)
     }
 
     private fun applyUrlHighlighting(spanned: android.text.Spanned): android.text.SpannableStringBuilder {

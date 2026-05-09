@@ -50,16 +50,8 @@ class MainActivity : AppCompatActivity() {
             if (TextUtils.isEmpty(WKConfig.getInstance().userInfo.name)) {
                 startActivity(Intent(this, PerfectUserInfoActivity::class.java))
             } else {
-                val publicRSAKey: String =
-                    WKConfig.getInstance().userInfo.rsa_public_key ?: ""
-                if (TextUtils.isEmpty(publicRSAKey)) {
-                    val intent = Intent(this, WKLoginActivity::class.java)
-                    intent.putExtra("from", getIntent().getIntExtra("from", 0))
-                    startActivity(intent)
-                } else {
-                    loadSpaceAndGo()
-                    return
-                }
+                loadSpaceAndGo()
+                return
             }
         } else {
             val intent = Intent(this, WKLoginActivity::class.java)

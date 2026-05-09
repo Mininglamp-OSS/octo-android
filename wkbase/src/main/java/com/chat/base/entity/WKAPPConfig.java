@@ -28,4 +28,12 @@ public class WKAPPConfig {
      * 参见 GH dmwork-android#162。
      */
     public List<String> system_bot_uids;
+
+    public List<OidcProvider> oidc_providers;
+
+    public static class OidcProvider {
+        public String id;
+        public String name;
+        public String authorize_path;
+    }
 }

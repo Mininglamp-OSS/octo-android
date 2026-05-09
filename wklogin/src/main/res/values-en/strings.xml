@@ -70,4 +70,8 @@
     <string name="invite_code_not_null">The invitation code cannot be empty</string>
     <string name="reset_base_url">Reset</string>
     <string name="update_api_content">The method of filling in server address, domain name, or IP+port must start with HTTP.\nExample：https://api.botgate.cn\nExample：https://172.0.0.1:8090</string>
+    <string name="sso_login_button">Login or register with %s</string>
+    <string name="sso_auth_title">Authorization</string>
+    <string name="please_wait">Please wait…</string>
+    <string name="str_network_error">Network request failed</string>
 </resources>

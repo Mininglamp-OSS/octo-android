@@ -504,4 +504,53 @@ public class LoginModel extends WKBaseModel {
             CrashReport.putUserData(WKBaseApplication.getInstance().getContext(), "name", userInfo.name);
         }
     }
+
+    public interface IOidcAuthCodeCallback {
+        void onResult(int code, String authcode);
+    }
+
+    public interface IOidcAuthStatusCallback {
+        void onResult(int status, UserInfoEntity userInfo);
+        void onError(int code, String msg);
+    }
+
+    public void getOidcAuthCode(IOidcAuthCodeCallback callback) {
+        request(createService(LoginService.class).getAuthCode(), new IRequestResultListener<ThirdAuthCode>() {
+            @Override
+            public void onSuccess(ThirdAuthCode result) {
+                if (callback != null) {
+                    callback.onResult(HttpResponseCode.success, result.getAuthcode());
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (callback != null) {
+                    callback.onResult(code, null);
+                }
+            }
+        });
+    }
+
+    public void pollOidcAuthStatus(String authcode, IOidcAuthStatusCallback callback) {
+        request(createService(LoginService.class).getAuthStatus(authcode), new IRequestResultListener<ThirdLoginResult>() {
+            @Override
+            public void onSuccess(ThirdLoginResult result) {
+                if (callback == null) return;
+                if (result.getStatus() == 1 && result.getResult() != null) {
+                    saveLoginInfo(result.getResult());
+                    callback.onResult(1, result.getResult());
+                } else {
+                    callback.onResult(0, null);
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (callback != null) {
+                    callback.onError(code, msg);
+                }
+            }
+        });
+    }
 }

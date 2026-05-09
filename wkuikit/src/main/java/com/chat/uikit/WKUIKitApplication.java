@@ -729,6 +729,9 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().invoke("wk_logout", null);
         WKConfig.getInstance().clearInfo();
         WKIM.getInstance().getConnectionManager().disconnect(true);
+        // 清除 WebView Cookie 和 Storage，防止 OIDC SSO 会话残留导致下次自动登录
+        android.webkit.CookieManager.getInstance().removeAllCookies(null);
+        android.webkit.WebStorage.getInstance().deleteAllData();
         ActManagerUtils.getInstance().clearAllActivity();
         EndpointManager.getInstance().invoke("main_show_home_view", from);
         //关闭UI层数据库

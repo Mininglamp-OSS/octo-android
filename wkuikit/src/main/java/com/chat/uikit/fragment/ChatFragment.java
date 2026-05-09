@@ -1560,6 +1560,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
             spaceConversationKeys.add(key);
             syncSpaceKeysToGlobal();
+            isSort = true;
             ChatConversationMsg newMsg = new ChatConversationMsg(uiConversationMsg);
             // YUJ-229 · key-based 去重：若已有同 (channelID, channelType) 的
             // allConversations entry（比如前面 L687 批量路径 / L1218 本方法前置循环

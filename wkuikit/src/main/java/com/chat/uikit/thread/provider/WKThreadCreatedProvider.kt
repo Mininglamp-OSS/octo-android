@@ -72,41 +72,33 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
             val channelId = content.channel_id ?: return@setOnClickListener
             val parsed = ThreadModel.getInstance().parseChannelId(channelId)
             if (parsed == null) {
-                // 无法解析，直接打开
                 val intent = Intent(context, ChatActivity::class.java)
                 intent.putExtra("channelId", channelId)
                 intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                // YUJ-298 · Fix A：走 ChatReuseNavigator，窄屏复用 ChatActivity。
-                com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
+                context.startActivity(intent)
                 return@setOnClickListener
             }
             val groupNo = parsed[0]
             val shortId = parsed[1]
-            // 先查询子区状态，防止打开已关闭的子区
             ThreadModel.getInstance().getThreadDetail(groupNo, shortId) { code, msg, entity ->
                 if (code == HttpResponseCode.success.toInt() && entity != null) {
                     if (entity.status == 3) {
-                        // 子区已被关闭
                         WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
                     } else {
                         val intent = Intent(context, ChatActivity::class.java)
                         intent.putExtra("channelId", channelId)
                         intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                        // YUJ-298 · Fix A：走 ChatReuseNavigator。
-                        com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
+                        context.startActivity(intent)
                     }
                 } else {
-                    // API 错误，检查是否包含删除相关信息
                     val errMsg = msg ?: ""
                     if (errMsg.contains("deleted") || errMsg.contains("已关闭") || errMsg.contains("已删除")) {
                         WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
                     } else {
-                        // 其他网络错误降级直接打开
                         val intent = Intent(context, ChatActivity::class.java)
                         intent.putExtra("channelId", channelId)
                         intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                        // YUJ-298 · Fix A：走 ChatReuseNavigator。
-                        com.chat.uikit.chat.ChatReuseNavigator.launchChat(context, intent)
+                        context.startActivity(intent)
                     }
                 }
             }

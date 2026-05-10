@@ -2557,20 +2557,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * Tab 切换专用：跳过 debounce，立即替换数据并恢复滚动位置。
      */
     private void filterAndDisplayForTabSwitch() {
-        filterDebounceHandler.removeCallbacks(filterRunnable);
-        if (chatConversationAdapter == null || getActivity() == null) return;
-        List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        chatConversationAdapter.setList(displayList);
+        // ViewPager2 切换时数据已预填充，无需重新构建列表
     }
 
     private void filterAndDisplayInternal() {
-        if (chatConversationAdapter == null || getActivity() == null || !isAdded()) return;
+        if (groupAdapter == null || getActivity() == null || !isAdded()) return;
         if (!isResumed()) {
             pendingFilterAndDisplay = true;
             return;
         }
-        List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        chatConversationAdapter.setList(displayList);
+        // 同时更新两个 adapter，确保 tab 切换时数据已就绪
+        int savedTab = currentTab;
+        currentTab = 0;
+        List<ChatConversationMsg> groupList = buildDisplayListForCurrentTab();
+        currentTab = 1;
+        List<ChatConversationMsg> personalList = buildDisplayListForCurrentTab();
+        currentTab = savedTab;
+        groupAdapter.setList(groupList);
+        personalAdapter.setList(personalList);
         lastFullRefreshTime = System.currentTimeMillis();
         pendingFilterAndDisplay = false;
     }
@@ -2616,7 +2620,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 sectionHeader.sectionUnreadCount = getUnreadCountInCategory(category, channelMap);
                 sectionHeader.sectionHasMention = hasMentionInCategory(category, channelMap);
                 displayList.add(sectionHeader);
-                if (!chatConversationAdapter.isSectionCollapsed(category.category_id)) {
+                if (!groupAdapter.isSectionCollapsed(category.category_id)) {
                     List<ChatConversationMsg> sectionItems = new ArrayList<>();
                     for (CategoryEntity.CategoryGroup cg : category.groups) {
                         ChatConversationMsg msg = channelMap.get(cg.group_no);
@@ -2672,7 +2676,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 ungroupedHeader.sectionUnreadCount = computeUnreadCountForItems(ungroupedItems);
                 ungroupedHeader.sectionHasMention = computeHasMentionForItems(ungroupedItems);
                 displayList.add(ungroupedHeader);
-                if (!chatConversationAdapter.isSectionCollapsed(sectionId)) {
+                if (!groupAdapter.isSectionCollapsed(sectionId)) {
                     ungroupedItems.sort((a, b) -> {
                         int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
                         int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;

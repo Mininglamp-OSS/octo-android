@@ -17,7 +17,6 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.entity.UserInfoEntity;
-import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.AppExecutors;
@@ -30,7 +29,6 @@ import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.databinding.ActSettingLayoutBinding;
 import com.chat.uikit.message.BackupRestoreMessageActivity;
-import com.chat.uikit.user.service.UserModel;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -39,6 +37,20 @@ import com.xinbida.wukongim.entity.WKChannelType;
  * 设置页面
  */
 public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
+
+    /**
+     * YUJ-392 · Aegis OIDC v3 Phase 2b：去认证按钮直跳 Aegis 账户页。
+     * 不再走 dmworkim `POST /v1/internal/verify-token` 翻译接口，客户端直接
+     * 打开 Aegis 的 verification anchor；Aegis 完成身份验证后会 302 回
+     * {@code dmwork://verified} deeplink，由 {@code VerifyLandingActivity}
+     * 刷新本地 {@code user_verification} 状态后 finish。
+     *
+     * <p>老版本 App（未升级到 Phase 2b）仍然依赖 dmworkim 端的 verify-token
+     * 翻译层已处理，后端会直接返回 Aegis URL。
+     */
+    private static final String AEGIS_VERIFICATION_URL =
+            "https://accounts.example.com/profile/info?anchor=verification";
+
     private String str;
 
     @Override
@@ -70,12 +82,14 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         super.onResume();
         // YUJ-361 (#227)：从 Custom Tabs 回来后 VerifyLandingActivity 会刷新 profile，
         // 这里 onResume 把最新状态重新渲染到行上。
+        // YUJ-392 · Aegis Phase 2b：切到 Aegis 直跳后路径不变 —— deeplink 回跳
+        // 依然触发 VerifyLandingActivity → refreshCurrentUser → 栈回到这里 onResume。
         renderRealnameStatus();
     }
 
     /**
      * YUJ-361 (#227)：实名认证行的状态渲染。
-     * - 未认证：显示「去认证」，点击发起 verify-token + Custom Tabs。
+     * - 未认证：显示「去认证」，点击直跳 Aegis 账户页（YUJ-392 · Phase 2b）。
      * - 已认证：显示「已认证 · YYYY-MM」，隐藏箭头，不可点。
      */
     private void renderRealnameStatus() {
@@ -103,33 +117,26 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     }
 
     private void startVerifyFlow() {
-        UserModel.getInstance().createVerifyToken((code, msg, resp) -> {
-            // Activity 生命周期守卫：回调返回时 Activity 可能已 destroyed。
-            if (isFinishing() || isDestroyed()) return;
-            if (code != HttpResponseCode.success || resp == null
-                    || TextUtils.isEmpty(resp.verify_url)) {
-                showToast(getString(R.string.realname_verify_token_fail));
-                return;
-            }
-            // 安全：verify_url 来自服务端响应，防止后端被篡改后返回恶意 scheme
-            // （intent:// / file:// / javascript: 等）在 launchUrl 内部被 startActivity() 触发劫持。
-            Uri verifyUri = Uri.parse(resp.verify_url);
-            String scheme = verifyUri.getScheme();
-            if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
-                showToast(getString(R.string.realname_verify_token_fail));
-                return;
-            }
-            try {
-                CustomTabsIntent intent = new CustomTabsIntent.Builder()
-                        .setToolbarColor(ContextCompat.getColor(this, R.color.colorAccent))
-                        .setShowTitle(true)
-                        .build();
-                intent.launchUrl(this, verifyUri);
-            } catch (Exception e) {
-                // 没装任何可以处理 http(s) intent 的包（极少见，CI 模拟器可能遇到）。
-                showToast(getString(R.string.realname_verify_no_browser));
-            }
-        });
+        // YUJ-392 · Aegis OIDC v3 Phase 2b：去认证入口改为直跳 Aegis 账户页。
+        //
+        // 与 Phase 2a（走 dmworkim `verify-token` 翻译接口）对比：
+        // 1. 不再经过 OCTO 后端多一跳；URL 是硬编码的 Aegis profile page，
+        //    不存在后端被篡改后返回恶意 scheme 的风险，因此省掉 scheme 校验。
+        // 2. 不再需要异步回调 / Activity 生命周期守卫 —— launchUrl 是同步操作。
+        // 3. `dmwork://verified` deeplink 回跳兜底保留：Aegis 验证完成后 302
+        //    回该 scheme，由 VerifyLandingActivity 刷 /v1/user/current 同步本地
+        //    realname_verified 状态，栈回到本页 onResume 重绘徽章。
+        // 4. 老版本 App 继续依赖 dmworkim 的 verify-token 翻译层（已处理）。
+        try {
+            CustomTabsIntent intent = new CustomTabsIntent.Builder()
+                    .setToolbarColor(ContextCompat.getColor(this, R.color.colorAccent))
+                    .setShowTitle(true)
+                    .build();
+            intent.launchUrl(this, Uri.parse(AEGIS_VERIFICATION_URL));
+        } catch (Exception e) {
+            // 没装任何可以处理 http(s) intent 的包（极少见，CI 模拟器可能遇到）。
+            showToast(getString(R.string.realname_verify_no_browser));
+        }
     }
 
     @Override

@@ -12,8 +12,9 @@ import com.chat.uikit.user.service.UserModel
 /**
  * YUJ-361 (#227) · OCTO 实名认证 `dmwork://verified` 回落处理。
  *
- * CAS 验证完成后 verify-service 会 302 到 `dmwork://verified?...`；系统会按 manifest
- * 注册的 intent-filter 把 intent 投递到这个透明 Activity。我们职责极简：
+ * 实名完成后 Aegis（YUJ-392 · Phase 2b，取代原 verify-service / CAS）会 302
+ * 到 `dmwork://verified?...`；系统会按 manifest 注册的 intent-filter 把 intent
+ * 投递到这个透明 Activity。我们职责极简：
  *
  * 1. 拉一次 `GET /v1/user/current`，把 `realname_verified / realname /
  *    realname_verified_at` 同步到 [WKConfig] 本地缓存；
@@ -50,7 +51,7 @@ class VerifyLandingActivity : AppCompatActivity() {
                 ).show()
             }
             // 不论成功失败都 finish；失败场景下用户仍能在 SettingActivity 里
-            // 看到「去认证」按钮，下次点击时会再拉一次 verify-token 重试。
+            // 看到「去认证」按钮，下次点击时会再打开一次 Aegis 账户页重试。
             finish()
         }
     }

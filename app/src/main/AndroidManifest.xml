@@ -154,7 +154,8 @@
 
         <!--
           YUJ-361 (#227) · OCTO 实名认证 deep link 回落。
-          CAS 完成后 verify-service 会 302 到 `dmwork://verified?...`，系统把
+          YUJ-392 · Aegis Phase 2b：实名完成后 Aegis 直接 302 到
+          `dmwork://verified?...`（取代原 verify-service / CAS 路径）；系统把
           intent 投给该 Activity；内部拉一次 /v1/user/current 刷新 profile 后 finish。
           singleTask + noHistory：同源被打开时不堆栈、也不留在回退栈中。
           Translucent：完全透明，不闪白屏。

@@ -1088,12 +1088,25 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         });
         // 如果 IM 在 Fragment 创建前已连接成功，listener 会错过回调，主动补齐状态
-        if (connectedAtMs == 0) {
-            connectedAtMs = System.currentTimeMillis();
+        // 但必须确认网络可用，否则断网冷启动会错误显示在线状态
+        android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                requireContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        android.net.NetworkInfo netInfo = cm != null ? cm.getActiveNetworkInfo() : null;
+        boolean networkAvailable = netInfo != null && netInfo.isConnected();
+        if (networkAvailable) {
+            if (connectedAtMs == 0) {
+                connectedAtMs = System.currentTimeMillis();
+            }
+            setSpaceSwitcherText(getDisplayTitle());
+            wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
+            startPingTimer();
+        } else {
+            // 断网冷启动：立即显示网络异常状态，并注册网络恢复监听
+            wkVBinding.textSwitcher.setText(getString(R.string.network_error_tips));
+            wkVBinding.spaceChevronIv.setVisibility(View.GONE);
+            wkVBinding.signalLayout.setVisibility(View.GONE);
+            registerNetworkRecoveryCallback();
         }
-        setSpaceSwitcherText(getDisplayTitle());
-        wkVBinding.spaceChevronIv.setVisibility(View.VISIBLE);
-        startPingTimer();
         EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
@@ -3459,6 +3472,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onDestroy() {
         super.onDestroy();
+        unregisterNetworkRecoveryCallback();
         if (disposable != null) {
             disposable.dispose();
             disposable = null;
@@ -3583,6 +3597,42 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             connectTimer.cancel();
             connectTimer = null;
         }
+    }
+
+    private android.net.ConnectivityManager.NetworkCallback networkRecoveryCallback;
+
+    /** 断网冷启动时注册：网络恢复后触发 SDK 重连，仅触发一次后自动注销 */
+    private void registerNetworkRecoveryCallback() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N) return;
+        android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                requireContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return;
+        networkRecoveryCallback = new android.net.ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(@NonNull android.net.Network network) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    WKIM.getInstance().getConnectionManager().connection();
+                    unregisterNetworkRecoveryCallback();
+                });
+            }
+        };
+        android.net.NetworkRequest request = new android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build();
+        cm.registerNetworkCallback(request, networkRecoveryCallback);
+    }
+
+    private void unregisterNetworkRecoveryCallback() {
+        if (networkRecoveryCallback == null) return;
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    requireContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                cm.unregisterNetworkCallback(networkRecoveryCallback);
+            }
+        } catch (Exception ignored) {
+        }
+        networkRecoveryCallback = null;
     }
 
     private void startPingTimer() {
@@ -3831,8 +3881,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             String cachedName = MsgModel.getInstance().getCurrentSpaceName();
             if (!TextUtils.isEmpty(cachedName)) {
                 currentSpaceName = cachedName;
-                setSpaceSwitcherText(cachedName);
+                // 冷启动直接赋值，不走 TextSwitcher 动画，避免布局跳动
+                setSpaceSwitcherTextImmediate(cachedName);
                 updateSpaceAvatar(cachedName);
+            } else {
+                setSpaceSwitcherTextImmediate(getString(R.string.app_name));
+                updateSpaceAvatar(getString(R.string.app_name));
             }
             // 再异步校验最新名称
             SpaceModel.getInstance().getMySpaces(new SpaceModel.ISpaceListListener() {
@@ -3866,7 +3920,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             });
         } else {
-            setSpaceSwitcherText(getString(R.string.app_name));
+            setSpaceSwitcherTextImmediate(getString(R.string.app_name));
             updateSpaceAvatar(getString(R.string.app_name));
         }
     }
@@ -3880,6 +3934,21 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             child.clearAnimation();
         }
         wkVBinding.textSwitcher.requestLayout();
+    }
+
+    /** 冷启动时直接设置文字，跳过动画和 requestLayout，避免布局跳动 */
+    private void setSpaceSwitcherTextImmediate(String text) {
+        // TextSwitcher factory 可能尚未创建子 View，手动触发
+        if (wkVBinding.textSwitcher.getChildCount() == 0) {
+            wkVBinding.textSwitcher.setCurrentText(text);
+        } else {
+            for (int i = 0; i < wkVBinding.textSwitcher.getChildCount(); i++) {
+                View child = wkVBinding.textSwitcher.getChildAt(i);
+                if (child instanceof TextView) {
+                    ((TextView) child).setText(text);
+                }
+            }
+        }
     }
 
     private void updateSpaceAvatar(String name) {

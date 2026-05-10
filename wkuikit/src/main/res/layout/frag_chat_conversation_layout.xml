@@ -51,8 +51,7 @@
                 android:measureAllChildren="false"
                 android:inAnimation="@anim/ts_in_anim"
                 android:outAnimation="@anim/ts_out_anim"
-                android:tag="-1"
-                android:text="@string/not_connected" />
+                android:tag="-1" />
 
             <ImageView
                 android:id="@+id/spaceChevronIv"

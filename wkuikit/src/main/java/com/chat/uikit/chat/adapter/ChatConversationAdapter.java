@@ -149,6 +149,20 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         return null;
     }
+    private boolean attachedToRecyclerView = false;
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        attachedToRecyclerView = true;
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        attachedToRecyclerView = false;
+    }
+
     // 标记正在加载的 groupNo，避免重复请求
     private final Set<String> threadLoadingSet = Collections.synchronizedSet(new HashSet<>());
     // 子区展开状态（默认折叠，在此集合中的表示已展开，对齐 iOS expandedThreadGroups）
@@ -1902,7 +1916,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void updateThreadPreviewDirectly(String groupNo) {
-        if (getRecyclerView() == null) return;
+        if (!attachedToRecyclerView) return;
         for (int i = 0; i < getData().size(); i++) {
             if (getData().get(i).isSectionHeader) continue;
             WKUIConversationMsg convMsg = getData().get(i).uiConversationMsg;

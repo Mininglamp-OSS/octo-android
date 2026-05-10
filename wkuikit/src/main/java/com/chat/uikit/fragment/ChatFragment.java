@@ -177,31 +177,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int filterCallCount = 0;
     private static final String TAG_FILTER = "ChatFragment.filter";
 
-    // Phase 5: Safe Update Scheduler — 2s watchdog 防止 setList 卡死
-    private static final long SAFE_UPDATE_WATCHDOG_MS = 2000L;
-    private int consecutiveWatchdogFires = 0;
-    private final Runnable watchdogRunnable = () -> {
-        consecutiveWatchdogFires++;
-        android.util.Log.w("SafeUpdate", "Watchdog fired! setList may be stuck. count=" + consecutiveWatchdogFires);
-        if (chatConversationAdapter != null) {
-            if (consecutiveWatchdogFires >= 3) {
-                android.util.Log.e("SafeUpdate", "3 consecutive watchdog fires, full adapter rebuild");
-                List<ChatConversationMsg> data = chatConversationAdapter.getData();
-                chatConversationAdapter.setList(null);
-                chatConversationAdapter.setList(data);
-                consecutiveWatchdogFires = 0;
-            } else {
-                chatConversationAdapter.notifyDataSetChanged();
-            }
-        }
-    };
-
-    private void safeSetList(List<ChatConversationMsg> displayList) {
-        filterDebounceHandler.postDelayed(watchdogRunnable, SAFE_UPDATE_WATCHDOG_MS);
-        chatConversationAdapter.setList(displayList);
-        filterDebounceHandler.removeCallbacks(watchdogRunnable);
-        consecutiveWatchdogFires = 0;
-    }
 
     /**
      * YUJ-261 · DiffUtil callback。
@@ -2572,7 +2547,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         filterDebounceHandler.removeCallbacks(filterRunnable);
         if (chatConversationAdapter == null || getActivity() == null) return;
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        safeSetList(displayList);
+        chatConversationAdapter.setList(displayList);
     }
 
     private void filterAndDisplayInternal() {
@@ -2582,7 +2557,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return;
         }
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
-        safeSetList(displayList);
+        chatConversationAdapter.setList(displayList);
         lastFullRefreshTime = System.currentTimeMillis();
         pendingFilterAndDisplay = false;
     }

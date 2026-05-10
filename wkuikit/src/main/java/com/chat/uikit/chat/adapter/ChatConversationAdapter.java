@@ -71,6 +71,7 @@ import org.jetbrains.annotations.NotNull;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.chat.uikit.thread.service.ThreadModel;
@@ -461,6 +462,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void toggleThreadExpanded(String channelId) {
         if (expandedThreadGroups.contains(channelId)) {
             expandedThreadGroups.remove(channelId);
+            removeThreadCacheFromLocal(channelId);
         } else {
             expandedThreadGroups.add(channelId);
         }
@@ -485,6 +487,77 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             for (String id : value.split(",")) {
                 if (!TextUtils.isEmpty(id)) expandedThreadGroups.add(id);
             }
+        }
+        // 冷启动：从本地缓存恢复子区数据，首次 bind 时直接渲染
+        for (String groupNo : expandedThreadGroups) {
+            List<ThreadEntity> cached = restoreThreadCacheFromLocal(context, groupNo);
+            if (cached != null && !cached.isEmpty()) {
+                threadDataCache.put(groupNo, cached);
+            }
+        }
+        // 同时发起 API 请求，后台静默刷新
+        for (String groupNo : expandedThreadGroups) {
+            loadThreadPreviewsSilent(groupNo);
+        }
+    }
+
+    /** 从本地 SharedPreferences 恢复子区数据快照 */
+    private List<ThreadEntity> restoreThreadCacheFromLocal(Context context, String groupNo) {
+        try {
+            String uid = WKConfig.getInstance().getUid();
+            String json = context.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .getString(uid + "_" + groupNo, "");
+            if (TextUtils.isEmpty(json)) return null;
+            JSONArray arr = new JSONArray(json);
+            List<ThreadEntity> list = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                ThreadEntity e = new ThreadEntity();
+                e.short_id = obj.optString("short_id");
+                e.group_no = groupNo;
+                e.name = obj.optString("name");
+                e.status = obj.optInt("status");
+                e.unread_count = obj.optInt("unread_count");
+                e.updated_at = obj.optString("updated_at");
+                list.add(e);
+            }
+            return list;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 将子区数据快照持久化到本地 */
+    private void saveThreadCacheToLocal(String groupNo, List<ThreadEntity> list) {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            String uid = WKConfig.getInstance().getUid();
+            JSONArray arr = new JSONArray();
+            for (ThreadEntity e : list) {
+                JSONObject obj = new JSONObject();
+                obj.put("short_id", e.short_id);
+                obj.put("name", e.name);
+                obj.put("status", e.status);
+                obj.put("unread_count", e.unread_count);
+                obj.put("updated_at", e.updated_at);
+                arr.put(obj);
+            }
+            ctx.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .edit().putString(uid + "_" + groupNo, arr.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 折叠时移除本地缓存条目 */
+    private void removeThreadCacheFromLocal(String groupNo) {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            String uid = WKConfig.getInstance().getUid();
+            ctx.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .edit().remove(uid + "_" + groupNo).apply();
+        } catch (Exception ignored) {
         }
     }
 
@@ -1321,7 +1394,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (cachedList == null) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            loadThreadPreviews(groupNo);
+            loadThreadPreviewsSilent(groupNo);
             return;
         }
 
@@ -1724,6 +1797,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             threadLoadingSet.remove(groupNo);
             List<ThreadEntity> result = (list != null) ? list : new ArrayList<>();
             threadDataCache.put(groupNo, result);
+            // 持久化到本地，下次冷启动可直接恢复
+            saveThreadCacheToLocal(groupNo, result);
             // 对齐 iOS：子区加载后检查 @所有人消息，补创建本地 reminder
             // saveOrUpdateReminders 会自动触发 addOnNewReminderListener → filterAndDisplay
             checkThreadMentionAll(groupNo, result);
@@ -1787,6 +1862,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             List<ThreadEntity> newData = (list != null) ? list : new ArrayList<>();
             List<ThreadEntity> oldData = threadDataCache.get(groupNo);
             threadDataCache.put(groupNo, newData);
+            saveThreadCacheToLocal(groupNo, newData);
             // 只有数据变化时才刷新 UI，避免不必要的重绘
             if (!isThreadDataEqual(oldData, newData)) {
                 AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));

@@ -1319,18 +1319,34 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void scrollToMessageForReuse(long targetOrderSeq) {
         if (chatAdapter == null || linearLayoutManager == null) return;
-        unreadStartMsgOrderSeq = 0;
-        tipsOrderSeq = targetOrderSeq;
-        unreadStartSnapshotOrderSeq = 0;
-        tipsSnapshotOrderSeq = targetOrderSeq;
-        hasRenderedPreview = false;
-        userHasScrolled = false;
-        hasShownTips = false;
         if (mHelper != null) {
             mHelper.hookSystemBackByPanelSwitcher();
         }
-        getData(0, true, targetOrderSeq, false);
-        isCanLoadMore = true;
+        // 直接用 adapter 级别高亮（不受 item 替换影响）+ 滚动到目标
+        chatAdapter.setPendingHighlightOrderSeq(targetOrderSeq);
+        int index = chatAdapter.findPositionByOrderSeq(targetOrderSeq);
+        if (index >= 0) {
+            // 消息在 adapter 中：滚动到可见位置，触发 rebind 让高亮生效
+            if (index >= chatAdapter.getItemCount() - 3) {
+                wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
+            } else {
+                linearLayoutManager.scrollToPositionWithOffset(index, wkVBinding.recyclerView.getHeight() / 3);
+            }
+            chatAdapter.notifyItemChanged(index);
+        } else {
+            // 消息不在 adapter 中：重新加载
+            chatAdapter.setList(new ArrayList<>());
+            unreadStartMsgOrderSeq = 0;
+            tipsOrderSeq = targetOrderSeq;
+            unreadStartSnapshotOrderSeq = 0;
+            tipsSnapshotOrderSeq = targetOrderSeq;
+            lastPreviewMsgOrderSeq = 0;
+            hasRenderedPreview = false;
+            userHasScrolled = false;
+            hasShownTips = false;
+            getData(0, true, targetOrderSeq, false);
+            isCanLoadMore = true;
+        }
     }
 
     /**
@@ -1867,7 +1883,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (aroundMsgSeq == 0 && getIntent().hasExtra("aroundMsgSeq")) {
             aroundMsgSeq = getIntent().getLongExtra("aroundMsgSeq", 0);
         }
-        getData(lastPreviewMsgOrderSeq == 0 ? 0 : 1, unreadStartMsgOrderSeq > 0, aroundMsgSeq, isScrollToEnd);
+        // tipsOrderSeq 场景用 isSetNewData=true，避免 merge 分支的 scrollToPositionWithOffset 干扰 tips 定位
+        boolean isSetNewData = unreadStartMsgOrderSeq > 0 || tipsOrderSeq > 0;
+        getData(lastPreviewMsgOrderSeq == 0 ? 0 : 1, isSetNewData, aroundMsgSeq, isScrollToEnd);
 
         //查询高光内容
         WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager().getMsgExtraWithChannel(channelId, channelType);
@@ -2254,10 +2272,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (tipsAnchor != 0) {
                 int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsAnchor);
                 if (tipsIndex >= 0) {
-                    linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
-                    chatAdapter.getItem(tipsIndex).isShowTips = true;
-                    chatAdapter.notifyItemChanged(tipsIndex);
+                    // 最后几条消息：滚到底部（聊天窗口自然视角）
+                    // 中间消息：居中显示（对齐 iOS UITableViewScrollPositionMiddle）
+                    if (tipsIndex >= chatAdapter.getItemCount() - 3) {
+                        wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
+                    } else {
+                        linearLayoutManager.scrollToPositionWithOffset(tipsIndex, wkVBinding.recyclerView.getHeight() / 3);
+                    }
+                    chatAdapter.setPendingHighlightOrderSeq(tipsAnchor);
                     tipsOrderSeq = 0;
+                    tipsSnapshotOrderSeq = 0;
                 }
             }
             if (lastPreviewMsgOrderSeq != 0 && !userHasScrolled) {

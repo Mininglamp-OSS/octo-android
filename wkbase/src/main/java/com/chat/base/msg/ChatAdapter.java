@@ -46,6 +46,21 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     private final HashMap<String, Integer> messageIdIndex = new HashMap<>(512);
     private final HashMap<Long, Integer> orderSeqIndex = new HashMap<>(512);
 
+    // 持久化高亮目标：不受 setNewInstance 替换 item 影响，bind 时按 orderSeq 匹配
+    private volatile long pendingHighlightOrderSeq = 0;
+
+    public void setPendingHighlightOrderSeq(long orderSeq) {
+        this.pendingHighlightOrderSeq = orderSeq;
+    }
+
+    public long consumeHighlightIfMatch(long itemOrderSeq) {
+        if (pendingHighlightOrderSeq != 0 && pendingHighlightOrderSeq == itemOrderSeq) {
+            pendingHighlightOrderSeq = 0;
+            return itemOrderSeq;
+        }
+        return 0;
+    }
+
     public enum AdapterType {
         normalMessage, pinnedMessage
     }

@@ -28,4 +28,16 @@ public class WKAPPConfig {
      * 参见 GH dmwork-android#162。
      */
     public List<String> system_bot_uids;
+
+    /**
+     * OIDC provider 列表（YUJ-396 / GH dmwork-web#1174）。
+     *
+     * <p>后端 {@code modules/common/api.go::oidcAccountURL()} 按环境下发的
+     * Aegis 账户中心域名通过此数组的 {@link OidcProviderConfig#account_url} 字段暴露:
+     * im-test → {@code accounts-test.imocto.cn}, im-prod → {@code accounts.example.com}。
+     * 客户端从这里读 accountUrl, 不再硬编码 prod URL。
+     *
+     * <p>字段缺失 / Gson 反序列化 null → 调用侧视为「无可用 provider」, toast 兜底。
+     */
+    public List<OidcProviderConfig> oidc_providers;
 }

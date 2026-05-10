@@ -17,6 +17,7 @@ import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.realname.AegisVerifyUrlResolver;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.AppExecutors;
@@ -40,17 +41,20 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     /**
      * YUJ-392 · Aegis OIDC v3 Phase 2b：去认证按钮直跳 Aegis 账户页。
-     * 不再走 dmworkim `POST /v1/internal/verify-token` 翻译接口，客户端直接
-     * 打开 Aegis 的 verification anchor；Aegis 完成身份验证后会 302 回
-     * {@code dmwork://verified} deeplink，由 {@code VerifyLandingActivity}
+     * YUJ-396 / GH dmwork-web#1174：Aegis 域名改为按环境从后端 appconfig 下发的
+     *   {@code oidc_providers[].account_url} 字段读, 不再硬编码 prod URL。
+     *
+     * <p>客户端打开 Aegis 的 verification anchor; Aegis 完成身份验证后会 302 回
+     * {@code dmwork://verified} deeplink, 由 {@code VerifyLandingActivity}
      * 刷新本地 {@code user_verification} 状态后 finish。
      *
+     * <p>URL 由 {@link AegisVerifyUrlResolver#resolve(com.chat.base.entity.WKAPPConfig)}
+     * 从 appconfig 解析; 未下发可用 {@code account_url} 时弹 toast 不跳转,
+     * 绝不回退任何硬编码 prod 域。合约见该类 Javadoc。
+     *
      * <p>老版本 App（未升级到 Phase 2b）仍然依赖 dmworkim 端的 verify-token
-     * 翻译层已处理，后端会直接返回 Aegis URL。
+     * 翻译层已处理, 后端会返回按环境下发的 Aegis URL。
      */
-    private static final String AEGIS_VERIFICATION_URL =
-            "https://accounts.example.com/profile/info?anchor=verification";
-
     private String str;
 
     @Override
@@ -118,21 +122,44 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     private void startVerifyFlow() {
         // YUJ-392 · Aegis OIDC v3 Phase 2b：去认证入口改为直跳 Aegis 账户页。
+        // YUJ-396 · Aegis 域名改为按环境从后端 appconfig 下发的
+        //   oidc_providers[].account_url 字段读, 不再硬编码 prod URL。
         //
         // 与 Phase 2a（走 dmworkim `verify-token` 翻译接口）对比：
-        // 1. 不再经过 OCTO 后端多一跳；URL 是硬编码的 Aegis profile page，
-        //    不存在后端被篡改后返回恶意 scheme 的风险，因此省掉 scheme 校验。
+        // 1. 不再经过 OCTO 后端多一跳。
         // 2. 不再需要异步回调 / Activity 生命周期守卫 —— launchUrl 是同步操作。
         // 3. `dmwork://verified` deeplink 回跳兜底保留：Aegis 验证完成后 302
         //    回该 scheme，由 VerifyLandingActivity 刷 /v1/user/current 同步本地
         //    realname_verified 状态，栈回到本页 onResume 重绘徽章。
         // 4. 老版本 App 继续依赖 dmworkim 的 verify-token 翻译层（已处理）。
+        //
+        // URL 解析合约 + 安全守卫（scheme=https + host 非空 + 末尾斜杠剥离）
+        // 由 AegisVerifyUrlResolver 兜底, 见 AegisVerifyUrlResolverTest。
+        AegisVerifyUrlResolver.Result resolved =
+                AegisVerifyUrlResolver.resolve(WKConfig.getInstance().getAppConfig());
+        if (!resolved.isOk()) {
+            // appconfig 未下发可用 account_url（冷启动未到 / 后端没配 / 配的 URL 非法）。
+            // 绝不回退到任何硬编码 prod 域 —— 弹原有 toast 提示用户稍后重试。
+            showToast(getString(R.string.realname_verify_token_fail));
+            return;
+        }
+        Uri verifyUri = Uri.parse(resolved.url);
+        // 双保险: Custom Tabs launchUrl 前再校验一次 scheme + host 一致性。
+        // host 必须来自 accountUrl 本身, 严禁与 resolver 给的不符（防未来有人在
+        // resolver 出来以后又拼一次外部输入）。
+        if (verifyUri == null
+                || !"https".equalsIgnoreCase(verifyUri.getScheme())
+                || verifyUri.getHost() == null
+                || !verifyUri.getHost().equalsIgnoreCase(resolved.host)) {
+            showToast(getString(R.string.realname_verify_token_fail));
+            return;
+        }
         try {
             CustomTabsIntent intent = new CustomTabsIntent.Builder()
                     .setToolbarColor(ContextCompat.getColor(this, R.color.colorAccent))
                     .setShowTitle(true)
                     .build();
-            intent.launchUrl(this, Uri.parse(AEGIS_VERIFICATION_URL));
+            intent.launchUrl(this, verifyUri);
         } catch (Exception e) {
             // 没装任何可以处理 http(s) intent 的包（极少见，CI 模拟器可能遇到）。
             showToast(getString(R.string.realname_verify_no_browser));

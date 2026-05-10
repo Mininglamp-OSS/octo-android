@@ -65,6 +65,8 @@ import com.chat.uikit.R;
 import com.chat.uikit.TabActivity;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.adapter.ChatConversationAdapter;
+import com.chat.uikit.chat.adapter.ConversationPagerAdapter;
+import androidx.viewpager2.widget.ViewPager2;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.SpaceSyncCoordinator;
 import com.chat.uikit.contacts.ChooseContactsActivity;
@@ -126,6 +128,9 @@ import com.chat.uikit.view.PixelParticleHintView;
 public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBinding> {
 
     private ChatConversationAdapter chatConversationAdapter;
+    private ChatConversationAdapter groupAdapter;
+    private ChatConversationAdapter personalAdapter;
+    private ConversationPagerAdapter pagerAdapter;
     private Disposable disposable;
     private final List<Integer> refreshIds = new ArrayList<>();
     private Timer connectTimer;
@@ -136,9 +141,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
     private final List<ChatConversationMsg> allConversations = new ArrayList<>();
-    // 保存每个 tab 的滚动位置
-    private android.os.Parcelable tabScrollState0;
-    private android.os.Parcelable tabScrollState1;
     // YUJ-229 · key-based 去重索引：和 {@link #allConversations} 一一对应，
     // key = channelKey(channelID, channelType)。所有对 allConversations 的
     // 新增 / 删除 / 清空 / 批量替换都必须走 {@link #upsertConversation(ChatConversationMsg)} /
@@ -175,6 +177,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int filterCallCount = 0;
     private static final String TAG_FILTER = "ChatFragment.filter";
 
+
     /**
      * YUJ-261 · DiffUtil callback。
      * - areItemsTheSame: section 用 sectionId，普通行用 channelID+channelType 作稳定 id
@@ -205,8 +208,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 @Override
                 public Object getChangePayload(@androidx.annotation.NonNull ChatConversationMsg oldItem,
                                                @androidx.annotation.NonNull ChatConversationMsg newItem) {
-                    // 本期返回 null，让 BRVAH 对变化行走 full rebind。未变化行不被 invalidate，
-                    // 根治 touch event 在 filterAndDisplay 期间被 cancel 的问题。
+                    // Section headers: only badges/counts change between rebuilds,
+                    // skip full rebind when title and collapse state are the same
+                    if (oldItem.isSectionHeader && newItem.isSectionHeader) {
+                        if (TextUtils.equals(oldItem.sectionTitle, newItem.sectionTitle)
+                                && oldItem.sectionGroupCount == newItem.sectionGroupCount) {
+                            // title/count same → only badge changed
+                            return ChatConversationAdapter.PAYLOAD_SECTION_BADGE;
+                        }
+                    }
+                    // Normal rows: side-channel (notifyRecycler + isResetXxx flags) handles
+                    // partial updates. DiffUtil path returns null → full rebind as fallback.
                     return null;
                 }
             };
@@ -295,27 +307,53 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return textView;
         });
         loadCurrentSpaceName();
-        chatConversationAdapter = new ChatConversationAdapter(new ArrayList<>());
-        chatConversationAdapter.setDiffCallback(DIFF_CALLBACK);
-        initAdapter(wkVBinding.recyclerView, chatConversationAdapter);
-        wkVBinding.recyclerView.setItemAnimator(null);
-        // YUJ-240 review fix (Jerry-Xin W#5): setSupportsChangeAnimations 必须在 setAdapter 之后调用才稳定生效，移到 initAdapter 之后。
-        RecyclerView.ItemAnimator itemAnimator = wkVBinding.recyclerView.getItemAnimator();
-        if (itemAnimator instanceof DefaultItemAnimator) {
-            ((DefaultItemAnimator) itemAnimator).setSupportsChangeAnimations(false);
-        }
-        // YUJ-236 phase2 perf (A2): 会话列表 off-screen 缓存 2 → 15，减少快速滑动时 ViewHolder 重建。
-        wkVBinding.recyclerView.setItemViewCacheSize(15);
-        chatConversationAdapter.restoreExpandedState();
-        chatConversationAdapter.setAnimationEnable(false);
-        wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
-        wkVBinding.refreshLayout.setEnableLoadMore(false);
-        wkVBinding.refreshLayout.setEnableRefresh(false);
+        groupAdapter = new ChatConversationAdapter(new ArrayList<>());
+        groupAdapter.setDiffCallback(DIFF_CALLBACK);
+        groupAdapter.setAnimationEnable(false);
+        groupAdapter.restoreExpandedState(requireContext());
+        personalAdapter = new ChatConversationAdapter(new ArrayList<>());
+        personalAdapter.setDiffCallback(DIFF_CALLBACK);
+        personalAdapter.setAnimationEnable(false);
+        chatConversationAdapter = groupAdapter;
+
+        pagerAdapter = new ConversationPagerAdapter();
+        wkVBinding.conversationPager.setAdapter(pagerAdapter);
+        wkVBinding.conversationPager.setOffscreenPageLimit(1);
+        wkVBinding.conversationPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageScrollStateChanged(int state) {
+                pageSwiping = (state != ViewPager2.SCROLL_STATE_IDLE);
+            }
+
+            @Override
+            public void onPageSelected(int position) {
+                currentTab = position;
+                chatConversationAdapter = (position == 0) ? groupAdapter : personalAdapter;
+                segmentTabView.selectTabWithoutCallback(position);
+                if (chatConversationAdapter != null) {
+                    chatConversationAdapter.clearSelected();
+                }
+                filterAndDisplayForTabSwitch();
+            }
+        });
+        wkVBinding.conversationPager.post(() -> {
+            RecyclerView groupRv = pagerAdapter.getPageRecyclerView(0);
+            RecyclerView personalRv = pagerAdapter.getPageRecyclerView(1);
+            if (groupRv != null) {
+                groupRv.setAdapter(groupAdapter);
+                addGlideScrollListener(groupRv);
+                addSwipeGuard(groupRv);
+            }
+            if (personalRv != null) {
+                personalRv.setAdapter(personalAdapter);
+                addGlideScrollListener(personalRv);
+                addSwipeGuard(personalRv);
+            }
+        });
 
         Theme.setPressedBackground(wkVBinding.deviceLayout);
         Theme.setPressedBackground(wkVBinding.rightIv);
 
-        // 分段 Tab 切换控件
         segmentTabView = new SegmentTabView(requireContext(),
                 new String[]{getString(R.string.str_group_chat), getString(R.string.str_private_chat)});
         wkVBinding.segmentTabContainer.addView(segmentTabView,
@@ -323,64 +361,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         FrameLayout.LayoutParams.WRAP_CONTENT));
         segmentTabView.setOnTabSelectedListener(index -> {
-            // 保存当前 tab 的滚动位置
-            RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
-            if (lm != null) {
-                if (currentTab == 0) {
-                    tabScrollState0 = lm.onSaveInstanceState();
-                } else {
-                    tabScrollState1 = lm.onSaveInstanceState();
-                }
-            }
-            wkVBinding.recyclerView.stopScroll();
-            currentTab = index;
-            // YUJ-267 · 切 tab 时清选中态（新 tab 的列表上下文不同）。
-            if (chatConversationAdapter != null) {
-                chatConversationAdapter.clearSelected();
-            }
-            filterAndDisplayForTabSwitch();
+            wkVBinding.conversationPager.setCurrentItem(index, true);
         });
+    }
 
-        // 左右滑动切换群聊/私聊
-        GestureDetector tabSwipeDetector = new GestureDetector(requireContext(),
-                new GestureDetector.SimpleOnGestureListener() {
-                    private static final int SWIPE_THRESHOLD = 80;
-                    private static final int SWIPE_VELOCITY_THRESHOLD = 200;
-
-                    @Override
-                    public boolean onFling(MotionEvent e1, MotionEvent e2,
-                                           float velocityX, float velocityY) {
-                        if (e1 == null || e2 == null) return false;
-                        float diffX = e2.getX() - e1.getX();
-                        float diffY = e2.getY() - e1.getY();
-                        if (Math.abs(diffX) > Math.abs(diffY)
-                                && Math.abs(diffX) > SWIPE_THRESHOLD
-                                && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                            if (diffX < 0 && currentTab == 0) {
-                                segmentTabView.selectTab(1);
-                            } else if (diffX > 0 && currentTab == 1) {
-                                segmentTabView.selectTab(0);
-                            }
-                            return true;
-                        }
-                        return false;
-                    }
-                });
-        wkVBinding.recyclerView.addOnItemTouchListener(
-                new RecyclerView.SimpleOnItemTouchListener() {
-                    @Override
-                    public boolean onInterceptTouchEvent(@NonNull RecyclerView rv,
-                                                        @NonNull MotionEvent e) {
-                        tabSwipeDetector.onTouchEvent(e);
-                        return false;
-                    }
-                });
-
-        // YUJ-236 phase2 perf (A3) + YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1):
-        // 仅 SETTLING (fling) 时 pause，DRAGGING 不动（慢滑手指在屏不应看到占位符），IDLE 恢复。
-        wkVBinding.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+    private void addGlideScrollListener(RecyclerView rv) {
+        if (rv == null) return;
+        rv.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
-            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 if (!isAdded() || isDetached()) return;
                 try {
                     RequestManager glideMgr = Glide.with(ChatFragment.this);
@@ -389,12 +378,27 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                         glideMgr.resumeRequests();
                     }
-                    // DRAGGING: 保持加载
-                } catch (IllegalArgumentException ignored) {
-                    // Fragment 已 detach 的竞态保护
-                }
+                } catch (IllegalArgumentException ignored) {}
             }
         });
+    }
+
+    private boolean pageSwiping = false;
+
+    /** ViewPager2 滑动时拦截页面 RecyclerView 的触摸，防止误触长按。 */
+    private void addSwipeGuard(RecyclerView rv) {
+        if (rv == null) return;
+        rv.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView, @NonNull android.view.MotionEvent e) {
+                return pageSwiping;
+            }
+        });
+    }
+
+    private RecyclerView getActiveRecyclerView() {
+        if (pagerAdapter == null) return null;
+        return pagerAdapter.getPageRecyclerView(currentTab);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -432,6 +436,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                                 uiConversationMsg.uiConversationMsg.channelType);
                         WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(getActivity(), uiConversationMsg.uiConversationMsg.channelID, uiConversationMsg.uiConversationMsg.channelType, 0, false));
                     }
+                }
+            }
+        }));
+        // personalAdapter 同样设置点击事件
+        personalAdapter.addChildClickViewIds(R.id.contentLayout);
+        personalAdapter.setOnItemChildClickListener((adapter, view, position) -> SingleClickUtil.determineTriggerSingleClick(view, v -> {
+            ChatConversationMsg uiConversationMsg = (ChatConversationMsg) adapter.getItem(position);
+            if (uiConversationMsg != null && uiConversationMsg.uiConversationMsg != null) {
+                if (view.getId() == R.id.contentLayout) {
+                    personalAdapter.setSelected(
+                            uiConversationMsg.uiConversationMsg.channelID,
+                            uiConversationMsg.uiConversationMsg.channelType);
+                    WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(getActivity(), uiConversationMsg.uiConversationMsg.channelID, uiConversationMsg.uiConversationMsg.channelType, 0, false));
                 }
             }
         }));
@@ -493,6 +510,47 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
             } else if (menu == ChatConversationAdapter.ItemMenu.moveToCategory) {
                 showMoveToCategoryDialog(item.channelID);
+            }
+        });
+        // personalAdapter 同样需要 listener（私聊长按菜单）
+        personalAdapter.addListener((menu, item) -> {
+            if (menu == ChatConversationAdapter.ItemMenu.delete) {
+                WKDialogUtils.getInstance().showDialog(getActivity(), getString(R.string.delete_chat), getString(R.string.delete_conver_msg_tips), true, "", getString(R.string.base_delete), 0, ContextCompat.getColor(requireActivity(), R.color.red), index -> {
+                    if (index == 1) {
+                        List<WKReminder> list = WKIM.getInstance().getReminderManager().getReminders(item.channelID, item.channelType);
+                        if (WKReader.isNotEmpty(list)) {
+                            List<Long> reminderIds = new ArrayList<>();
+                            for (WKReminder reminder : list) {
+                                if (reminder.done == 0) {
+                                    reminder.done = 1;
+                                    reminderIds.add(reminder.reminderID);
+                                }
+                            }
+                            if (WKReader.isNotEmpty(reminderIds))
+                                MsgModel.getInstance().doneReminder(reminderIds);
+                        }
+                        MsgModel.getInstance().offsetMsg(item.channelID, item.channelType, null);
+                        WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list);
+                        boolean result = WKIM.getInstance().getConversationManager().deleteWitchChannel(item.channelID, item.channelType);
+                        if (result) {
+                            if (item.getWkChannel() != null && item.getWkChannel().top == 1) {
+                                updateTop(item.channelID, item.channelType, 0);
+                            }
+                            WKIM.getInstance().getMsgManager().clearWithChannel(item.channelID, item.channelType);
+                        }
+                        MsgModel.getInstance().clearUnread(item.channelID, item.channelType, 0, null);
+                    }
+                });
+            } else if (menu == ChatConversationAdapter.ItemMenu.top) {
+                boolean top = item.getWkChannel() != null && item.getWkChannel().top == 1;
+                updateTop(item.channelID, item.channelType, top ? 0 : 1);
+            } else if (menu == ChatConversationAdapter.ItemMenu.mute) {
+                boolean mute = item.getWkChannel() != null && item.getWkChannel().mute == 1;
+                FriendModel.getInstance().updateUserSetting(item.channelID, "mute", mute ? 0 : 1, (code, msg) -> {
+                    if (code != HttpResponseCode.success) {
+                        WKToastUtils.getInstance().showToastNormal(msg);
+                    }
+                });
             }
         });
         // 子区预览点击监听
@@ -1778,7 +1836,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         spaceConversationKeys.clear();
         // YUJ-229 · 同步清 allConversations + conversationIndex
         clearAllConversations();
-        chatConversationAdapter.setList(new ArrayList<>());
+        groupAdapter.setList(new ArrayList<>());
+        personalAdapter.setList(new ArrayList<>());
         // YUJ-318 · resync 也接入 coordinator 去重
         if (!SpaceSyncCoordinator.getInstance().tryBegin("spaceResync")) {
             return;
@@ -2127,7 +2186,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (BuildConfig.DEBUG) {
             Trace.beginSection("YUJ312-adapter-setList-empty");
         }
-        chatConversationAdapter.setList(new ArrayList<>());
+        groupAdapter.setList(new ArrayList<>());
+        personalAdapter.setList(new ArrayList<>());
         if (BuildConfig.DEBUG) {
             Trace.endSection();
             Log.d("YUJ312", "adapter.setList(empty) done +"
@@ -2194,21 +2254,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void syncSplitModeAndSelection() {
         if (chatConversationAdapter == null || getContext() == null) return;
         boolean split = isSplitModeNow();
-        chatConversationAdapter.setSplitMode(split);
+        groupAdapter.setSplitMode(split);
+        personalAdapter.setSplitMode(split);
         if (!split) return;
-        // 分屏态下：根据全局 chattingChannelID 恢复选中态（onResume / 切 Space 后）。
         String chattingId = WKUIKitApplication.getInstance().chattingChannelID;
         if (TextUtils.isEmpty(chattingId)) {
-            chatConversationAdapter.clearSelected();
+            groupAdapter.clearSelected();
+            personalAdapter.clearSelected();
             return;
         }
-        // 子区 channelId 约定：{groupNo}____{shortId}
+        // 子区选中 → 只可能在群聊 adapter
         if (chattingId.contains("____")) {
-            chatConversationAdapter.setSelectedThread(chattingId);
+            groupAdapter.setSelectedThread(chattingId);
+            personalAdapter.clearSelected();
         } else {
-            // 先尝试 GROUP 再 PERSONAL，由 Adapter 内的行匹配自己过滤；若都不在列表
-            // 则 refreshSelectionRow 直接 no-op，无副作用。
-            // 这里没有 channelType 的精确来源，取 WKIM 缓存的 channel。
             byte type = WKChannelType.PERSONAL;
             WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(chattingId, WKChannelType.GROUP);
             if (ch != null) {
@@ -2217,7 +2276,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 WKChannel ch2 = WKIM.getInstance().getChannelManager().getChannel(chattingId, WKChannelType.COMMUNITY);
                 if (ch2 != null) type = WKChannelType.COMMUNITY;
             }
-            chatConversationAdapter.setSelected(chattingId, type);
+            // 根据频道类型路由到正确的 adapter
+            if (type == WKChannelType.GROUP || type == WKChannelType.COMMUNITY) {
+                groupAdapter.setSelected(chattingId, type);
+                personalAdapter.clearSelected();
+            } else {
+                personalAdapter.setSelected(chattingId, type);
+                groupAdapter.clearSelected();
+            }
         }
     }
 
@@ -2482,14 +2548,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (chatConversationAdapter == null || getActivity() == null) return;
         List<ChatConversationMsg> displayList = buildDisplayListForCurrentTab();
         chatConversationAdapter.setList(displayList);
-        // 恢复目标 tab 的滚动位置
-        RecyclerView.LayoutManager lm = wkVBinding.recyclerView.getLayoutManager();
-        if (lm != null) {
-            android.os.Parcelable state = (currentTab == 0) ? tabScrollState0 : tabScrollState1;
-            if (state != null) {
-                lm.onRestoreInstanceState(state);
-            }
-        }
     }
 
     private void filterAndDisplayInternal() {
@@ -3635,17 +3693,19 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 仅当用户当前已处于列表顶部附近时才滚动，避免打断用户浏览。
      */
     private void scrollToPositionIfNearTop(int insertIndex) {
-        LinearLayoutManager lm = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+        RecyclerView rv = getActiveRecyclerView();
+        if (rv == null) return;
+        LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
         if (lm == null) return;
         int firstVisible = lm.findFirstVisibleItemPosition();
-        // 用户在列表顶部附近（前 3 项之内），滚动到插入位置
         if (firstVisible <= insertIndex + 3) {
-            wkVBinding.recyclerView.post(() -> lm.scrollToPositionWithOffset(insertIndex, 0));
+            rv.post(() -> lm.scrollToPositionWithOffset(insertIndex, 0));
         }
     }
 
     private void notifyRecycler(int index, ChatConversationMsg msg) {
-        if (wkVBinding.recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE || (!wkVBinding.recyclerView.isComputingLayout())) {
+        RecyclerView rv = getActiveRecyclerView();
+        if (rv == null || rv.getScrollState() == RecyclerView.SCROLL_STATE_IDLE || !rv.isComputingLayout()) {
             chatConversationAdapter.notifyItemChanged(index, msg);
         }
     }
@@ -3834,7 +3894,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         long firstTime = 0L;
         int firstIndex = 0;
         boolean isScrollToFirstIndex = true;
-        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) wkVBinding.recyclerView.getLayoutManager();
+        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) (getActiveRecyclerView() != null ? getActiveRecyclerView().getLayoutManager() : null);
         for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
             if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
             if (chatConversationAdapter.getData().get(i).getUnReadCount() > 0 && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel() != null && chatConversationAdapter.getData().get(i).uiConversationMsg.getWkChannel().mute == 0) {

@@ -62,6 +62,7 @@ import com.chat.base.endpoint.entity.WithdrawMsgMenu
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.external.ExternalSourceResolver
 import com.chat.base.msg.ChatAdapter
+import com.chat.base.realname.RealnameBadgeResolver
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.ActionBarMenuSubItem
 import com.chat.base.ui.components.ActionBarPopupWindow
@@ -622,6 +623,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         from: WKChatIteMsgFromType, receivedNameTv: TextView
     ) {
+        // YUJ-380 · 实名徽章 Phase A：作者名行容器 + 迷你蓝勾。
+        // row 容器在 chat_item_base_layout.xml 中包裹 receivedNameTv + realnameBadgeIv，
+        // 仅当 parent.id == R.id.receivedNameRow 时才把整个 row 作为 visibility target，
+        // 旧布局 / 非 row 容器（e.g. WKTypingProvider 的 chat_typing_layout.xml:24，
+        // receivedTextNameTv.parent 是 BubbleLayout contentLayout，把它 GONE
+        // 会让整个 typing 指示器消失）直接退化到切 TextView 本身 —— YUJ-395 P0-1。
+        val parentView = receivedNameTv.parent as? View
+        val nameRow = parentView?.takeIf { it.id == R.id.receivedNameRow }
+        val realnameBadgeIv = nameRow?.findViewById<View>(R.id.realnameBadgeIv)
+        val nameVisibilityTarget: View = nameRow ?: receivedNameTv
         val bgType: WKMsgBgType = getMsgBgType(
             uiChatMsgItemEntity.previousMsg,
             uiChatMsgItemEntity.wkMsg,
@@ -697,12 +708,31 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             if (from == WKChatIteMsgFromType.RECEIVED) {
                 val showNickName = uiChatMsgItemEntity.showNickName
                 if (showNickName && (bgType == WKMsgBgType.single || bgType == WKMsgBgType.top)) {
-                    receivedNameTv.visibility = VISIBLE
-                } else receivedNameTv.visibility = GONE
+                    nameVisibilityTarget.visibility = VISIBLE
+                } else nameVisibilityTarget.visibility = GONE
             } else {
-                receivedNameTv.visibility = GONE
+                nameVisibilityTarget.visibility = GONE
             }
-        } else receivedNameTv.visibility = GONE
+            // YUJ-380 · 实名徽章可见性：只在群聊 RECEIVED 且名字行可见时再决定。
+            // tri-state 优先级（YUJ-395 P0-2）：
+            //   1. memberOfFrom.extraMap 有显式 true/false → 直接用，不 fallback
+            //      （修 memberOfFrom=false 被 from=stale-true 覆盖导致「已取消实名」
+            //       用户错打勾的 bug）；
+            //   2. memberOfFrom 缺失 key → fallback 到 from.remoteExtraMap（用户
+            //      profile 级兜底，仅当 member 侧没有显式答案时才用）；
+            //   3. 两侧都没有 → false（不渲染负向标识）。
+            // 名字行 GONE 时 badge 强制 GONE（避免名字行隐藏 ImageView 残留布局高度）。
+            if (realnameBadgeIv != null) {
+                val verified = RealnameBadgeResolver.isVerifiedTriState(uiChatMsgItemEntity.wkMsg.memberOfFrom)
+                    ?: RealnameBadgeResolver.isVerifiedTriState(uiChatMsgItemEntity.wkMsg.from)
+                    ?: false
+                realnameBadgeIv.visibility =
+                    if (nameVisibilityTarget.visibility == VISIBLE && verified) VISIBLE else GONE
+            }
+        } else {
+            nameVisibilityTarget.visibility = GONE
+            realnameBadgeIv?.visibility = GONE
+        }
 
     }
 

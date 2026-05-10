@@ -17,6 +17,7 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.external.ExternalViewerResolver;
 import com.chat.base.msgitem.WKChannelMemberRole;
+import com.chat.base.realname.RealnameBadgeResolver;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.RoundTextView;
@@ -67,6 +68,12 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
 
         CharSequence nameCs = buildNameWithSuffix(showName, suffix);
         baseViewHolder.setText(R.id.nameTv, nameCs);
+
+        // YUJ-380 · 实名徽章 Phase A：成员名旁的 12dp 迷你蓝勾。
+        // 可见性仅由后端 extraMap.realname_verified 决定，缺失/false 隐藏 ——
+        // 未实名用户不渲染任何负向标识（对齐 iOS/Web 的硬 UI 规范）。
+        baseViewHolder.setGone(R.id.realnameBadgeIv,
+                !RealnameBadgeResolver.isVerified(channelMember));
 
         AvatarView avatarView = baseViewHolder.getView(R.id.avatarView);
         avatarView.setSize(45);

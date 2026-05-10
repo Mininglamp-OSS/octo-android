@@ -167,4 +167,6 @@
     <string name="group_join_cross_space_notice">Joined group \"%2$s\" in [%1$s]</string>
     <!-- %1$s = target Space name, for action button -->
     <string name="group_join_cross_space_action">View in %1$s</string>
+    <!-- YUJ-380 · Chat bubble author ✓ badge contentDescription -->
+    <string name="realname_verified_badge_cd">Verified</string>
 </resources>

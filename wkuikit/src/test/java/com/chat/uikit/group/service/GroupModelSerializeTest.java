@@ -104,4 +104,54 @@ public class GroupModelSerializeTest {
         assertNotNull(cls.getField("home_space_id"));
         assertNotNull(cls.getField("home_space_name"));
     }
+
+    /**
+     * YUJ-380 · 实名徽章 Phase A 回归锁：serialize 必须把 realname_verified
+     * 透传进 extraMap，群成员列表 adapter 才能渲染迷你蓝勾。
+     */
+    @Test
+    public void serialize_propagatesRealnameVerifiedTrue_intoExtraMap() {
+        GroupMember m = newExternalMember();
+        m.realname_verified = Boolean.TRUE;
+
+        List<WKChannelMember> out = GroupModel.serialize(Arrays.asList(m));
+        WKChannelMember member = out.get(0);
+
+        assertNotNull(member.extraMap);
+        assertEquals(Boolean.TRUE, member.extraMap.get(WKChannelMemberExtras.realnameVerified));
+    }
+
+    /**
+     * YUJ-395 P0-2：字段改为装箱 Boolean 后，显式 false 必须写进 extraMap，
+     * 才能覆盖 WKChannel.remoteExtraMap 里可能残留的 stale true（tri-state 语义
+     * 下 resolver 读到显式 false 就不再 fallback 到 channel）。
+     */
+    @Test
+    public void serialize_propagatesRealnameVerifiedExplicitFalse_overwritesStaleTrue() {
+        GroupMember m = newExternalMember();
+        m.realname_verified = Boolean.FALSE;
+
+        List<WKChannelMember> out = GroupModel.serialize(Arrays.asList(m));
+        WKChannelMember member = out.get(0);
+
+        assertNotNull(member.extraMap);
+        assertTrue(member.extraMap.containsKey(WKChannelMemberExtras.realnameVerified));
+        assertEquals(Boolean.FALSE, member.extraMap.get(WKChannelMemberExtras.realnameVerified));
+    }
+
+    /**
+     * YUJ-395 P0-2：后端未下发 realname_verified 时（字段为 null），不写进
+     * extraMap —— 让 resolver tri-state 读到 null，回落到 channel 侧的 profile。
+     */
+    @Test
+    public void serialize_omitsRealnameVerified_whenBackendDidNotSendKey() {
+        GroupMember m = newExternalMember();
+        m.realname_verified = null;
+
+        List<WKChannelMember> out = GroupModel.serialize(Arrays.asList(m));
+        WKChannelMember member = out.get(0);
+
+        assertNotNull(member.extraMap);
+        assertFalse(member.extraMap.containsKey(WKChannelMemberExtras.realnameVerified));
+    }
 }

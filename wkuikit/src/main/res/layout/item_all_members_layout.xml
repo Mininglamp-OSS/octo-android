@@ -43,13 +43,33 @@
 
             <TextView
                 android:id="@+id/nameTv"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:layout_marginStart="10dp"
                 android:ellipsize="end"
                 android:lines="1"
                 android:textColor="@color/colorDark"
                 android:textSize="@dimen/font_size_16" />
+
+            <!--
+              YUJ-380 (对齐 web YUJ-379 · dmwork-web#1169 Phase A / iOS YUJ-381)
+              群成员列表每行实名蓝勾：12dp × 12dp，layout_marginStart=2dp，不挤占
+              行高；可见性由 AllMembersAdapter 根据 extraMap.realname_verified 决定。
+
+              YUJ-395 P1：nameTv 用 width=0dp + weight=1 占剩余宽度，长昵称场景下
+              让 nameTv 的 ellipsize 先裁掉尾部，badge 保持在屏幕内可见，而不是
+              TextView 按完整宽度测量把 badge 挤出去。
+            -->
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/realnameBadgeIv"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="2dp"
+                android:contentDescription="@string/realname_verified_badge_cd"
+                android:src="@drawable/ic_realname_verified_mini"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView

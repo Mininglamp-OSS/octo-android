@@ -362,6 +362,18 @@ public class GroupModel extends WKBaseModel {
             if (homeSpaceName != null && !homeSpaceName.isEmpty()) {
                 hashMap.put(WKChannelMemberExtras.homeSpaceName, homeSpaceName);
             }
+            // YUJ-380 · 实名徽章 Phase A：后端透传 realname_verified，
+            // 列表/气泡侧只需 bool 可见性；未认证不写任何负向字段。
+            //
+            // YUJ-395 P0-2：字段改为装箱 Boolean，tri-state 语义：
+            //   - Boolean.TRUE / Boolean.FALSE → put 进 extraMap（覆盖 stale），
+            //     resolver 读到显式答案后不 fallback 到 channel；
+            //   - null（后端未下发）            → 不 put，let resolver fallback
+            //     到 WKChannel.remoteExtraMap。
+            Boolean realnameVerified = list.get(i).realname_verified;
+            if (realnameVerified != null) {
+                hashMap.put(WKChannelMemberExtras.realnameVerified, realnameVerified);
+            }
             member.extraMap = hashMap;
             members.add(member);
         }

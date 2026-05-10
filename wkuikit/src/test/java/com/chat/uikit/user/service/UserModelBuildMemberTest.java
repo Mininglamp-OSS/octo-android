@@ -136,4 +136,50 @@ public class UserModelBuildMemberTest {
         assertNotNull(member.extraMap);
         assertFalse(member.extraMap.containsKey(WKChannelMemberExtras.WKCode));
     }
+
+    /**
+     * YUJ-380 · 实名徽章 Phase A：透传 realname_verified → extraMap，
+     * 让 UserDetailActivity 调 /users/{uid}?group_no= 也能刷新群成员列表的蓝勾。
+     */
+    @Test
+    public void realnameVerifiedTrue_propagatesIntoExtraMap() {
+        GroupMember gm = externalMember();
+        gm.realname_verified = Boolean.TRUE;
+
+        WKChannelMember member = UserModel.buildMemberFromUserInfo(gm);
+
+        assertNotNull(member.extraMap);
+        assertEquals(Boolean.TRUE, member.extraMap.get(WKChannelMemberExtras.realnameVerified));
+    }
+
+    /**
+     * YUJ-395 P0-2：显式 false 必须写进 extraMap，tri-state resolver 才能
+     * 让「已取消实名」的显式状态覆盖 channel 侧的 stale true。
+     */
+    @Test
+    public void realnameVerifiedExplicitFalse_isWrittenToExtraMap() {
+        GroupMember gm = externalMember();
+        gm.realname_verified = Boolean.FALSE;
+
+        WKChannelMember member = UserModel.buildMemberFromUserInfo(gm);
+
+        assertNotNull(member.extraMap);
+        assertTrue(member.extraMap.containsKey(WKChannelMemberExtras.realnameVerified));
+        assertEquals(Boolean.FALSE, member.extraMap.get(WKChannelMemberExtras.realnameVerified));
+    }
+
+    /**
+     * YUJ-395 P0-2：后端未下发 realname_verified 时字段为 null，不写进 extraMap，
+     * 让 resolver tri-state 读到 null，回落到 channel 侧的 profile。
+     */
+    @Test
+    public void realnameVerifiedNull_isOmittedFromExtraMap() {
+        GroupMember gm = externalMember();
+        gm.realname_verified = null;
+
+        WKChannelMember member = UserModel.buildMemberFromUserInfo(gm);
+
+        assertNotNull(member.extraMap);
+        assertFalse(member.extraMap.containsKey(WKChannelMemberExtras.realnameVerified));
+    }
 }

@@ -466,6 +466,16 @@ public class UserModel extends WKBaseModel {
         if (!isNullOrEmpty(gm.home_space_name)) {
             extras.put(WKChannelMemberExtras.homeSpaceName, gm.home_space_name);
         }
+        // YUJ-380 · 实名徽章 Phase A：透传 realname_verified 到 extraMap，
+        // 让群成员列表 + 聊天气泡作者名旁的迷你蓝勾能直接消费。
+        //
+        // YUJ-395 P0-2：字段改为装箱 Boolean，tri-state 语义：
+        //   - Boolean.TRUE / Boolean.FALSE → put 进 extraMap（覆盖 stale），
+        //     resolver 读到显式答案后不 fallback 到 channel；
+        //   - null（后端未下发）            → 不 put，let resolver fallback。
+        if (gm.realname_verified != null) {
+            extras.put(WKChannelMemberExtras.realnameVerified, gm.realname_verified);
+        }
         member.extraMap = extras;
         return member;
     }

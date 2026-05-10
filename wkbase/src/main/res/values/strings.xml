@@ -182,4 +182,6 @@
     <string name="group_join_cross_space_notice">已加入【%1$s】的群组「%2$s」</string>
     <!-- 参数 1: 目标 Space 名，用于按钮文案「切换到Demo查看」 -->
     <string name="group_join_cross_space_action">切换到%1$s查看</string>
+    <!-- YUJ-380 · 聊天气泡作者名右侧 ✓ 徽章 contentDescription -->
+    <string name="realname_verified_badge_cd">已实名</string>
 </resources>

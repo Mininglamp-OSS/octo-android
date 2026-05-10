@@ -36,18 +36,44 @@
             android:maxWidth="@dimen/chat_bubble_max_width"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/receivedNameTv"
+            <!--
+              YUJ-380 (对齐 web YUJ-379 · dmwork-web#1169 Phase A / iOS YUJ-381)
+              群聊气泡作者名行：原来只是一个 TextView；本次加一个 12dp × 12dp 的
+              蓝勾 ImageView，由 WKChatBaseProvider#setFromName 根据发送者
+              realname_verified 切换 GONE/VISIBLE。用水平 LinearLayout 包裹，把
+              marginStart/marginBottom 从 TextView 抬升到行容器上，保持与旧布局
+              像素级一致（不加一行高、不挤占原文本行高）。原 receivedNameTv id /
+              样式完全保留，provider 那边兼容无感。
+            -->
+            <LinearLayout
+                android:id="@+id/receivedNameRow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="5dp"
                 android:layout_marginBottom="3dp"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center"
-                android:singleLine="true"
-                android:textColor="@color/colorDark"
-                android:textSize="12sp"
-                android:visibility="gone" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/receivedNameTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:textColor="@color/colorDark"
+                    android:textSize="12sp" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/realnameBadgeIv"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="2dp"
+                    android:contentDescription="@string/realname_verified_badge_cd"
+                    android:src="@drawable/ic_realname_verified_mini"
+                    android:visibility="gone" />
+            </LinearLayout>
 
 
             <LinearLayout

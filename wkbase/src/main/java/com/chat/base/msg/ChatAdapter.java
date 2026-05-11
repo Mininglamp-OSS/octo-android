@@ -72,10 +72,26 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         FullSpanUtil.onAttachedToRecyclerView(recyclerView, this, WKContentType.msgPromptTime);
     }
 
+    public interface OnMessageDisplayedListener {
+        void onMessageDisplayed(WKUIChatMsgItemEntity item, View itemView);
+    }
+
+    private OnMessageDisplayedListener messageDisplayedListener;
+
+    public void setOnMessageDisplayedListener(OnMessageDisplayedListener listener) {
+        this.messageDisplayedListener = listener;
+    }
+
     @Override
     public void onViewAttachedToWindow(@NotNull BaseViewHolder holder) {
         super.onViewAttachedToWindow(holder);
         FullSpanUtil.onViewAttachedToWindow(holder, this, WKContentType.msgPromptTime);
+        if (messageDisplayedListener != null) {
+            int pos = holder.getBindingAdapterPosition();
+            if (pos >= 0 && pos < getData().size()) {
+                messageDisplayedListener.onMessageDisplayed(getData().get(pos), holder.itemView);
+            }
+        }
     }
 
     private final AdapterType adapterType;

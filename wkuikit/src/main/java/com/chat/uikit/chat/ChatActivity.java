@@ -169,6 +169,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private String channelId = "";
     private byte channelType = WKChannelType.PERSONAL;
     private ChatAdapter chatAdapter;
+    private com.chat.base.msgeffect.MessageEffectManager messageEffectManager;
+    private com.chat.base.msgeffect.MessageEffectOverlayView messageEffectOverlay;
     //是否在查看历史消息
     private boolean isShowHistory;
     private boolean isSyncLastMsg = false;
@@ -681,6 +683,20 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
         msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
+
+        // Message effect overlay — 添加到 content 根 FrameLayout 顶层，覆盖整个内容区域
+        messageEffectOverlay = new com.chat.base.msgeffect.MessageEffectOverlayView(this);
+        FrameLayout.LayoutParams effectLP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        messageEffectOverlay.setVisibility(View.INVISIBLE);
+        FrameLayout contentRoot = findViewById(android.R.id.content);
+        contentRoot.addView(messageEffectOverlay, effectLP);
+        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay);
+        chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
+            if (messageEffectManager != null) {
+                messageEffectManager.onMessageVisible(item.wkMsg, itemView);
+            }
+        });
     }
 
     private void initListener() {
@@ -1611,6 +1627,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (!TextUtils.isEmpty(channelID) && ChatActivity.this.channelId.equals(channelID) && ChatActivity.this.channelType == channelType) {
                 if (TextUtils.isEmpty(fromUID)) {
                     chatAdapter = new ChatAdapter(ChatActivity.this, ChatAdapter.AdapterType.normalMessage);
+                    chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
+                        if (messageEffectManager != null) {
+                            messageEffectManager.onMessageVisible(item.wkMsg, itemView);
+                        }
+                    });
                     wkVBinding.recyclerView.setAdapter(chatAdapter);
                 } else {
                     for (int i = 0; i < chatAdapter.getData().size(); i++) {
@@ -3366,6 +3387,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (messageEffectManager != null) {
+            messageEffectManager.destroy();
+            messageEffectManager = null;
+        }
+        if (messageEffectOverlay != null) {
+            FrameLayout contentRoot = findViewById(android.R.id.content);
+            if (contentRoot != null) {
+                contentRoot.removeView(messageEffectOverlay);
+            }
+            messageEffectOverlay = null;
+        }
         chatPanelManager.onDestroy();
         // YUJ-267 · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
         // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，

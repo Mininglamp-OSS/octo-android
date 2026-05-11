@@ -153,9 +153,13 @@ class WKVoiceInputService private constructor() {
             override fun onResponse(call: Call, response: Response) {
                 val bodyStr = try { response.body?.string() ?: "{}" } catch (_: Exception) { "{}" }
                 mainHandler.post {
-                    // YUJ-420 R6 fix: 校验异步响应对应的还是当前 Space.
-                    // 如果用户在请求期间 switch 了 Space, 旧 Space 的响应不应覆盖新 Space 的缓存。
-                    if (voiceContextSpaceId != spaceId) return@post
+                    // YUJ-420 R7 fix (Jerry R4 加强): 双重校验异步回包对应的仍是:
+                    // (1) 当前 inflight 的 spaceId 仍是 requesting-time 的 spaceId
+                    // (2) currentSpaceId (SpaceFilter 现值) 也仍是 requesting-time 的 spaceId
+                    // 两个条件同时成立才写缓存, 避免三态切换 (Space-1→Space-2→Space-3) 竞态中
+                    // invalidateCache 暂时为 null 的 gap 被 late response 塑充的问题。
+                    val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+                    if (voiceContextSpaceId != spaceId || currentSpaceId != spaceId) return@post
                     try {
                         val json = JSONObject(bodyStr)
                         val hasContext = json.optBoolean("has_context", false)

@@ -482,10 +482,10 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
-        // YUJ-420 R2 fix (Jerry R1 Critical 3): 禁止将 auth token 写入 logcat（release/debug 都不可出现凭证）。
-        // BuildConfig.DEBUG gate + redact: 只打长度 + 非空性，不打 token 原文。
-        // 用 wklogin module 自己的 BuildConfig (com.chat.login.BuildConfig)。
-        if (com.chat.login.BuildConfig.DEBUG) {
+        // YUJ-420 R2 fix (Jerry R1 Critical 3): 禁止将 auth token 写入 logcat。
+        // R5 fix: wklogin module 未启 buildConfig=true (AGP 8+ 默认关), 改用
+        // wkbase 的 WKBinder.isDebug (全仓统一 debug 标志) 避免跨 module BuildConfig 依赖。
+        if (com.chat.base.config.WKBinder.isDebug) {
             android.util.Log.d("TokenDebug",
                 "login response: token.len=" + (userInfo.token == null ? -1 : userInfo.token.length())
                 + ", im_token.len=" + (userInfo.im_token == null ? -1 : userInfo.im_token.length())
@@ -495,12 +495,12 @@ public class LoginModel extends WKBaseModel {
         WKConfig.getInstance().setToken(userInfo.token);
         if (!TextUtils.isEmpty(userInfo.im_token)) {
             WKConfig.getInstance().setImToken(userInfo.im_token);
-            if (com.chat.login.BuildConfig.DEBUG) {
+            if (com.chat.base.config.WKBinder.isDebug) {
                 android.util.Log.d("TokenDebug", "using im_token for IM connection");
             }
         } else {
             WKConfig.getInstance().setImToken(userInfo.token);
-            if (com.chat.login.BuildConfig.DEBUG) {
+            if (com.chat.base.config.WKBinder.isDebug) {
                 android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
             }
         }

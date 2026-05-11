@@ -263,11 +263,11 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         }
         OidcProviderConfig provider = config.oidc_providers.get(0);
         // YUJ-420 R2 fix (Jerry R1 Warning / YUJ-212 教训): 区分 null vs "".
-        // 后端显式空串 vs 缺字段 的语义不同时 TextUtils.isEmpty 会混两者。
-        // 此处 authorize_path / name 空串 / null 均视为「无可用 provider」，
-        // 与韧点 完全一致。如后续区分 需改为显式 null-check。
+        // R5 fix (Jerry R2 Critical 1): 同时校验 authorize_path 是 https:// 或相对路径,
+        // 拒绝 http:// 添加到按钮可点状态. 避免点击后 buildAuthorizeUrl 抛异常 crash.
         boolean unusable = provider.name == null || provider.name.isEmpty()
-                || provider.authorize_path == null || provider.authorize_path.isEmpty();
+                || provider.authorize_path == null || provider.authorize_path.isEmpty()
+                || provider.authorize_path.startsWith("http://");  // 生产 SSO 必须 HTTPS
         if (unusable) {
             wkVBinding.ssoBtn.setVisibility(View.GONE);
             return;
@@ -286,7 +286,16 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
                 showToast(getString(R.string.str_network_error));
                 return;
             }
-            String url = OidcAuthActivity.buildAuthorizeUrl(provider.authorize_path, authcode);
+            // YUJ-420 R5 fix (Jerry R2 Critical 1): buildAuthorizeUrl 遇非 HTTPS 会抛 IllegalArgumentException,
+            // 此处 try/catch 并 graceful degrade, 不要 crash 用户 UI。
+            // 配合 refreshOidcProvider 的 http:// 预检 (按钮隐藏), 双重防御。
+            String url;
+            try {
+                url = OidcAuthActivity.buildAuthorizeUrl(provider.authorize_path, authcode);
+            } catch (IllegalArgumentException e) {
+                showToast(getString(R.string.str_network_error));
+                return;
+            }
             Intent intent = new Intent(this, OidcAuthActivity.class);
             intent.putExtra("authcode", authcode);
             intent.putExtra("authorize_url", url);

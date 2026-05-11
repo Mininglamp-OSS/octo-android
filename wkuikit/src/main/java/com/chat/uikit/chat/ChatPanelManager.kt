@@ -1963,8 +1963,9 @@ class ChatPanelManager(
     }
 
     fun hideRemindView() {
-        if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && remindRecycleView!!.visibility != View.GONE) {
-            CommonAnim.getInstance().hideTop2Bottom(remindRecycleView!!)
+        val rv = remindRecycleView ?: return
+        if ((iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP || iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) && rv.visibility != View.GONE) {
+            CommonAnim.getInstance().hideTop2Bottom(rv)
         }
     }
 

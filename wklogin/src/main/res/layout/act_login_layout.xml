@@ -220,6 +220,21 @@
                 android:textSize="@dimen/font_size_13" />
         </LinearLayout>
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/ssoBtn"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginStart="30dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginEnd="30dp"
+            android:textColor="@color/colorDark"
+            android:textSize="@dimen/font_size_14"
+            android:visibility="gone"
+            app:cornerRadius="@dimen/button_radian"
+            app:strokeColor="@color/colorAccent"
+            app:strokeWidth="1dp" />
+
 
     </LinearLayout>
 

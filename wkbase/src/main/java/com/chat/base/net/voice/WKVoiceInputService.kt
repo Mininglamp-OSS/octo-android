@@ -36,12 +36,24 @@ class WKVoiceInputService private constructor() {
         val instance: WKVoiceInputService by lazy { WKVoiceInputService() }
 
         private const val CONFIG_CACHE_TTL = 300_000L // 5 minutes
+        private const val VOICE_CONTEXT_CACHE_TTL = 300_000L // 5 minutes
+        private const val VOICE_CONTEXT_TIMEOUT = 5_000L // 5 seconds
         private const val TRANSCRIBE_TIMEOUT = 30_000L // 30 seconds
         private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5MB
     }
 
     private var cachedConfig: WKVoiceInputConfig? = null
     private var cachedAt: Long = 0
+
+    private var cachedVoiceContext: String? = null
+    private var voiceContextCachedAt: Long = 0
+    private var voiceContextSpaceId: String? = null
+    private var voiceContextInflight: Boolean = false
+    // YUJ-420 R8 fix (Jerry R6 Warning 4): request token 防同 Space 内旧 timeout
+    // 清掉 late 请求的 inflight 。每次 prefetch 给新请求 +1, onResponse/onFailure/
+    // timeout 呼调时必须校验 token 是自己的.
+    private var voiceContextRequestToken: Long = 0
+    private val voiceContextPendingCallbacks = mutableListOf<(String?) -> Unit>()
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val client: OkHttpClient
@@ -89,10 +101,153 @@ class WKVoiceInputService private constructor() {
         cachedAt = 0
     }
 
+    fun prefetchVoiceContext() {
+        // YUJ-420 R3 fix (lml2468 R1 Blocker): 原代码读 android.preference.PreferenceManager 的
+        // "currentSpaceId" 键, 但全库其它 Space 隔离代码走 WKSharedPreferencesUtil + SPWithUID
+        // 的 "current_space_id" 键 (见 SpaceFilter.getCurrentSpaceId())。
+        // 键名不匹配导致此处永远读不到 spaceId 早返回,
+        // personal_context 预取路径活不起来。统一改为 SpaceFilter.getCurrentSpaceId()。
+        val spaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+
+        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9): Space 为空 / 切换 Space / logout
+        // 时必须清旧缓存, 避免 getVoiceContext() 旧 Space 的 personal_context 泄漏给新 Space 的请求。
+        if (spaceId.isNullOrEmpty()) {
+            invalidateVoiceContextCache()
+            return
+        }
+        if (voiceContextSpaceId != null && voiceContextSpaceId != spaceId) {
+            invalidateVoiceContextCache()
+        }
+
+        if (cachedVoiceContext != null &&
+            voiceContextSpaceId == spaceId &&
+            (System.currentTimeMillis() - voiceContextCachedAt) < VOICE_CONTEXT_CACHE_TTL) {
+            return
+        }
+
+        if (voiceContextInflight && voiceContextSpaceId == spaceId) return
+
+        voiceContextInflight = true
+        voiceContextSpaceId = spaceId
+        // YUJ-420 R8: 给本请求分配 token, 后续 timeout/onResponse/onFailure 通过校验 token 身份
+        val myToken = ++voiceContextRequestToken
+
+        mainHandler.postDelayed({
+            // R8: 双重校验 — token 不匹配 说明有新请求代替, 不要误伤新请求的 inflight
+            if (voiceContextRequestToken == myToken &&
+                voiceContextInflight && voiceContextSpaceId == spaceId) {
+                voiceContextInflight = false
+                flushVoiceContextCallbacks(null)
+            }
+        }, VOICE_CONTEXT_TIMEOUT)
+
+        val url = WKApiConfig.baseUrl + "voice/context?space_id=" +
+                android.net.Uri.encode(spaceId)
+        val request = Request.Builder().url(url).get().build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post {
+                    // R8: token 校验 + spaceId 校验 双重防护。
+                    // token 不匹 说明旧请求 late, 不应清新 inflight。
+                    if (voiceContextRequestToken == myToken && voiceContextSpaceId == spaceId) {
+                        voiceContextInflight = false
+                        cachedVoiceContext = null
+                        flushVoiceContextCallbacks(null)
+                    }
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val bodyStr = try { response.body?.string() ?: "{}" } catch (_: Exception) { "{}" }
+                mainHandler.post {
+                    // R7/R8: 三重校验 异步回包
+                    // (1) 当前 inflight 的 spaceId 仍是 requesting-time 的 spaceId
+                    // (2) currentSpaceId (SpaceFilter 现值) 也仍是 requesting-time 的 spaceId
+                    // (3) R8: token 校验 - 旧同 space 请求的 late response 不能覆盖新请求
+                    val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+                    if (voiceContextRequestToken != myToken ||
+                        voiceContextSpaceId != spaceId ||
+                        currentSpaceId != spaceId) return@post
+                    try {
+                        val json = JSONObject(bodyStr)
+                        val hasContext = json.optBoolean("has_context", false)
+                        val context = json.optString("context", "")
+                        cachedVoiceContext = if (hasContext && context.isNotEmpty()) context else null
+                        voiceContextCachedAt = System.currentTimeMillis()
+                    } catch (_: Exception) {
+                        cachedVoiceContext = null
+                    }
+                    voiceContextInflight = false
+                    flushVoiceContextCallbacks(cachedVoiceContext)
+                }
+            }
+        })
+    }
+
+    /**
+     * YUJ-420 R6: Space 切换 / logout 时清 voice context 缓存,
+     * 避免旧 Space personal_context 被新 Space 的转写请求误作为 personal_context 上传。
+     *
+     * R8 fix (Jerry R6 Warning): 原实现直接 clear() pending callbacks, 调用方会永远卡在
+     * THINKING / TRANSCRIBING 状态。R8 改为先 flush null 通知调用方失败, 再清球 state。
+     *
+     * 可被 SpaceChangedBroadcaster 订阅方或 LoginModel.logout() 调用。
+     */
+    fun invalidateVoiceContextCache() {
+        cachedVoiceContext = null
+        voiceContextCachedAt = 0
+        voiceContextSpaceId = null
+        voiceContextInflight = false
+        // R8: 递增 token 让正在 inflight 的请求的回包/timeout 都被无视
+        voiceContextRequestToken++
+        // YUJ-420 R8 fix: flush null 给 pending callbacks, 否则 UI 可能卡在 THINKING。
+        flushVoiceContextCallbacks(null)
+    }
+
+    fun getVoiceContext(completion: (String?) -> Unit) {
+        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9):
+        // 校验 (1) 缓存的 spaceId 必须等于当前 Space (2) 未过 TTL.
+        // 任一不满足 → return null (避免跨 Space 数据泄漏), 并顺手 invalidate 隔离胏脈。
+        val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+        val cachedForSameSpace = voiceContextSpaceId != null &&
+                voiceContextSpaceId == currentSpaceId &&
+                !currentSpaceId.isNullOrEmpty()
+        val withinTtl = (System.currentTimeMillis() - voiceContextCachedAt) < VOICE_CONTEXT_CACHE_TTL
+
+        if (!voiceContextInflight) {
+            if (cachedForSameSpace && withinTtl) {
+                completion(cachedVoiceContext)
+            } else {
+                if (!cachedForSameSpace) {
+                    // Space 已切换 (或 spaceId 空) → 主动清旧 Space 缓存
+                    invalidateVoiceContextCache()
+                }
+                completion(null)
+            }
+            return
+        }
+        // inflight 中: 确认 inflight 的也是当前 Space, 否则丟回 null 并 invalidate
+        if (!cachedForSameSpace) {
+            invalidateVoiceContextCache()
+            completion(null)
+            return
+        }
+        voiceContextPendingCallbacks.add(completion)
+    }
+
+    private fun flushVoiceContextCallbacks(context: String?) {
+        val callbacks = voiceContextPendingCallbacks.toList()
+        voiceContextPendingCallbacks.clear()
+        callbacks.forEach { it(context) }
+    }
+
     fun transcribeAudio(
         audioFile: File,
         contextText: String?,
         chatContext: String? = null,
+        personalContext: String? = null,
+        memberContext: String? = null,
         completion: TranscribeCallback
     ) {
         if (audioFile.length() > MAX_FILE_SIZE) {
@@ -117,6 +272,12 @@ class WKVoiceInputService private constructor() {
         }
         if (!chatContext.isNullOrEmpty()) {
             bodyBuilder.addFormDataPart("chat_context", chatContext)
+        }
+        if (!personalContext.isNullOrEmpty()) {
+            bodyBuilder.addFormDataPart("personal_context", personalContext)
+        }
+        if (!memberContext.isNullOrEmpty()) {
+            bodyBuilder.addFormDataPart("member_context", memberContext)
         }
 
         val request = Request.Builder()

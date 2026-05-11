@@ -44,7 +44,9 @@ public class ChatConversationMsg {
             isTop = uiConversationMsg.getWkChannel().top;
         }
         loginUID = WKConfig.getInstance().getUid();
-        WKIMUtils.getInstance().resetMsgProhibitWord(msg.getWkMsg());
+        if (!TextUtils.isEmpty(msg.clientMsgNo)) {
+            WKIMUtils.getInstance().resetMsgProhibitWord(msg.getWkMsg());
+        }
     }
 
     /** Section header 专用构造 */

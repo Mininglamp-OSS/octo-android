@@ -14,7 +14,6 @@
         android:id="@+id/contentTvLayout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:maxWidth="@dimen/chat_bubble_max_width"
         android:animateLayoutChanges="true"
         android:clickable="true"
         android:focusable="true"

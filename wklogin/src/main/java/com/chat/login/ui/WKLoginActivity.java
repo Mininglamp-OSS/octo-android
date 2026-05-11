@@ -28,6 +28,7 @@ import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.entity.LoginMenu;
 import com.chat.base.endpoint.entity.OtherLoginResultMenu;
 import com.chat.base.entity.UserInfoEntity;
+import com.chat.base.entity.OidcProviderConfig;
 import com.chat.base.entity.WKAPPConfig;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
@@ -40,6 +41,7 @@ import com.chat.login.R;
 import com.chat.login.databinding.ActLoginLayoutBinding;
 import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
+import com.chat.login.service.LoginModel;
 import com.chat.login.service.LoginPresenter;
 
 import java.util.List;
@@ -243,11 +245,61 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     @Override
     protected void initData() {
         super.initData();
+        // 先从本地缓存显示 SSO 按钮（避免等网络导致 UI 跳动）
+        refreshOidcProvider(WKConfig.getInstance().getAppConfig());
         WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
             this.wkappConfig = wkappConfig;
             if (wkappConfig != null && wkappConfig.can_modify_api_url == 1) {
                 wkVBinding.settingLayout.setVisibility(View.VISIBLE);
             }
+            refreshOidcProvider(wkappConfig);
+        });
+    }
+
+    private void refreshOidcProvider(WKAPPConfig config) {
+        if (config == null || config.oidc_providers == null || config.oidc_providers.isEmpty()) {
+            wkVBinding.ssoBtn.setVisibility(View.GONE);
+            return;
+        }
+        OidcProviderConfig provider = config.oidc_providers.get(0);
+        // YUJ-420 R2 fix (Jerry R1 Warning / YUJ-212 教训): 区分 null vs "".
+        // R5 fix (Jerry R2 Critical 1): 同时校验 authorize_path 是 https:// 或相对路径,
+        // 拒绝 http:// 添加到按钮可点状态. 避免点击后 buildAuthorizeUrl 抛异常 crash.
+        boolean unusable = provider.name == null || provider.name.isEmpty()
+                || provider.authorize_path == null || provider.authorize_path.isEmpty()
+                || provider.authorize_path.startsWith("http://");  // 生产 SSO 必须 HTTPS
+        if (unusable) {
+            wkVBinding.ssoBtn.setVisibility(View.GONE);
+            return;
+        }
+        wkVBinding.ssoBtn.setVisibility(View.VISIBLE);
+        wkVBinding.ssoBtn.setText(String.format(getString(R.string.sso_login_button), provider.name));
+        wkVBinding.ssoBtn.setOnClickListener(v -> startOidcLogin(provider));
+    }
+
+    private void startOidcLogin(OidcProviderConfig provider) {
+        loadingPopup.show();
+        loadingPopup.setTitle(getString(R.string.please_wait));
+        LoginModel.getInstance().getOidcAuthCode((code, authcode) -> {
+            loadingPopup.dismiss();
+            if (TextUtils.isEmpty(authcode)) {
+                showToast(getString(R.string.str_network_error));
+                return;
+            }
+            // YUJ-420 R5 fix (Jerry R2 Critical 1): buildAuthorizeUrl 遇非 HTTPS 会抛 IllegalArgumentException,
+            // 此处 try/catch 并 graceful degrade, 不要 crash 用户 UI。
+            // 配合 refreshOidcProvider 的 http:// 预检 (按钮隐藏), 双重防御。
+            String url;
+            try {
+                url = OidcAuthActivity.buildAuthorizeUrl(provider.authorize_path, authcode);
+            } catch (IllegalArgumentException e) {
+                showToast(getString(R.string.str_network_error));
+                return;
+            }
+            Intent intent = new Intent(this, OidcAuthActivity.class);
+            intent.putExtra("authcode", authcode);
+            intent.putExtra("authorize_url", url);
+            startActivity(intent);
         });
     }
 

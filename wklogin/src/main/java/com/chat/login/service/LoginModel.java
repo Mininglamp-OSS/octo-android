@@ -482,15 +482,27 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
-        android.util.Log.d("TokenDebug", "login response: token=" + userInfo.token + ", im_token=" + userInfo.im_token + ", uid=" + userInfo.uid);
+        // YUJ-420 R2 fix (Jerry R1 Critical 3): 禁止将 auth token 写入 logcat。
+        // R5 fix: wklogin module 未启 buildConfig=true (AGP 8+ 默认关), 改用
+        // wkbase 的 WKBinder.isDebug (全仓统一 debug 标志) 避免跨 module BuildConfig 依赖。
+        if (com.chat.base.config.WKBinder.isDebug) {
+            android.util.Log.d("TokenDebug",
+                "login response: token.len=" + (userInfo.token == null ? -1 : userInfo.token.length())
+                + ", im_token.len=" + (userInfo.im_token == null ? -1 : userInfo.im_token.length())
+                + ", uid=" + userInfo.uid);
+        }
         WKConfig.getInstance().saveUserInfo(userInfo);
         WKConfig.getInstance().setToken(userInfo.token);
         if (!TextUtils.isEmpty(userInfo.im_token)) {
             WKConfig.getInstance().setImToken(userInfo.im_token);
-            android.util.Log.d("TokenDebug", "using im_token for IM connection");
+            if (com.chat.base.config.WKBinder.isDebug) {
+                android.util.Log.d("TokenDebug", "using im_token for IM connection");
+            }
         } else {
             WKConfig.getInstance().setImToken(userInfo.token);
-            android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
+            if (com.chat.base.config.WKBinder.isDebug) {
+                android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
+            }
         }
         WKConfig.getInstance().setUid(userInfo.uid);
         WKConfig.getInstance().setUserName(userInfo.name);
@@ -503,5 +515,54 @@ public class LoginModel extends WKBaseModel {
         if (!TextUtils.isEmpty(userInfo.name)) {
             CrashReport.putUserData(WKBaseApplication.getInstance().getContext(), "name", userInfo.name);
         }
+    }
+
+    public interface IOidcAuthCodeCallback {
+        void onResult(int code, String authcode);
+    }
+
+    public interface IOidcAuthStatusCallback {
+        void onResult(int status, UserInfoEntity userInfo);
+        void onError(int code, String msg);
+    }
+
+    public void getOidcAuthCode(IOidcAuthCodeCallback callback) {
+        request(createService(LoginService.class).getAuthCode(), new IRequestResultListener<ThirdAuthCode>() {
+            @Override
+            public void onSuccess(ThirdAuthCode result) {
+                if (callback != null) {
+                    callback.onResult(HttpResponseCode.success, result.getAuthcode());
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (callback != null) {
+                    callback.onResult(code, null);
+                }
+            }
+        });
+    }
+
+    public void pollOidcAuthStatus(String authcode, IOidcAuthStatusCallback callback) {
+        request(createService(LoginService.class).getAuthStatus(authcode), new IRequestResultListener<ThirdLoginResult>() {
+            @Override
+            public void onSuccess(ThirdLoginResult result) {
+                if (callback == null) return;
+                if (result.getStatus() == 1 && result.getResult() != null) {
+                    saveLoginInfo(result.getResult());
+                    callback.onResult(1, result.getResult());
+                } else {
+                    callback.onResult(0, null);
+                }
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (callback != null) {
+                    callback.onError(code, msg);
+                }
+            }
+        });
     }
 }

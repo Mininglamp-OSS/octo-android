@@ -21,7 +21,7 @@ import com.chat.login.ui.WKLoginActivity
 import com.chat.uikit.TabActivity
 import com.chat.uikit.message.MsgModel
 import com.chat.uikit.space.SpaceModel
-import com.xinbida.wukongim.WKIM
+
 
 /**
  * 轻量级路由 Activity：不继承 WKBaseActivity，不膨胀布局（除非首次显示协议弹窗）。
@@ -50,16 +50,8 @@ class MainActivity : AppCompatActivity() {
             if (TextUtils.isEmpty(WKConfig.getInstance().userInfo.name)) {
                 startActivity(Intent(this, PerfectUserInfoActivity::class.java))
             } else {
-                val publicRSAKey: String =
-                    WKIM.getInstance().cmdManager.rsaPublicKey
-                if (TextUtils.isEmpty(publicRSAKey)) {
-                    val intent = Intent(this, WKLoginActivity::class.java)
-                    intent.putExtra("from", getIntent().getIntExtra("from", 0))
-                    startActivity(intent)
-                } else {
-                    loadSpaceAndGo()
-                    return
-                }
+                loadSpaceAndGo()
+                return
             }
         } else {
             val intent = Intent(this, WKLoginActivity::class.java)

@@ -812,11 +812,12 @@ public class MsgDbManager {
     }
 
     public WKMsg queryWithClientMsgNo(String clientMsgNo) {
+        if (TextUtils.isEmpty(clientMsgNo)) return null;
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return null;
         WKMsg wkMsg = null;
         String sql = "select " + messageCols + "," + extraCols + " from " + message + " LEFT JOIN " + messageExtra + " ON " + message + ".message_id=" + messageExtra + ".message_id WHERE " + message + ".client_msg_no=?";
-        try (Cursor cursor = WKIMApplication
-                .getInstance()
-                .getDbHelper().rawQuery(sql, new Object[]{clientMsgNo})) {
+        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{clientMsgNo})) {
             if (cursor == null) {
                 return null;
             }

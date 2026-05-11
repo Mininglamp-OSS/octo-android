@@ -33,7 +33,6 @@
             android:id="@+id/fullContentLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="@dimen/chat_bubble_max_width"
             android:orientation="vertical">
 
             <!--
@@ -80,6 +79,7 @@
                 android:id="@+id/wkBaseContentLayout"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:animateLayoutChanges="true"
                 android:orientation="horizontal" />
 
             <FrameLayout

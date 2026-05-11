@@ -169,6 +169,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private String channelId = "";
     private byte channelType = WKChannelType.PERSONAL;
     private ChatAdapter chatAdapter;
+    private com.chat.base.msgeffect.MessageEffectManager messageEffectManager;
+    private com.chat.base.msgeffect.MessageEffectOverlayView messageEffectOverlay;
     //是否在查看历史消息
     private boolean isShowHistory;
     private boolean isSyncLastMsg = false;
@@ -361,7 +363,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // so we do not need to consume; just keep the chain alive.
         ViewCompat.setOnApplyWindowInsetsListener(wkVBinding.rootView, (v, insets) -> {
             Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
-            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), imeInsets.bottom);
+            // 仅 Activity Embedding 分屏态需要手动补偿 IME bottom padding（副栏收不到
+            // adjustResize）。窄屏/普通手机由系统 adjustResize + PanelSwitchHelper 协同
+            // 处理，额外 padding 会导致消息列表显示不到底部。
+            boolean narrow = NarrowTransition.isNarrow(this);
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(),
+                    narrow ? 0 : imeInsets.bottom);
             return insets;
         });
         initParam();
@@ -663,13 +670,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
-        // YUJ-236 perf: RV 容器 match_parent，setHasFixedSize(true) 跳过 Adapter 变化触发的 requestLayout。
-        wkVBinding.recyclerView.setHasFixedSize(true);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
         // YUJ-236 perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
-        MyItemAnimator itemAnimator = new MyItemAnimator();
-        itemAnimator.setSupportsChangeAnimations(false);
-        wkVBinding.recyclerView.setItemAnimator(itemAnimator);
+        wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
@@ -680,6 +683,20 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
         msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
+
+        // Message effect overlay — 添加到 content 根 FrameLayout 顶层，覆盖整个内容区域
+        messageEffectOverlay = new com.chat.base.msgeffect.MessageEffectOverlayView(this);
+        FrameLayout.LayoutParams effectLP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        messageEffectOverlay.setVisibility(View.INVISIBLE);
+        FrameLayout contentRoot = findViewById(android.R.id.content);
+        contentRoot.addView(messageEffectOverlay, effectLP);
+        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay);
+        chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
+            if (messageEffectManager != null) {
+                messageEffectManager.onMessageVisible(item.wkMsg, itemView);
+            }
+        });
     }
 
     private void initListener() {
@@ -1318,53 +1335,32 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void scrollToMessageForReuse(long targetOrderSeq) {
         if (chatAdapter == null || linearLayoutManager == null) return;
+        if (mHelper != null) {
+            mHelper.hookSystemBackByPanelSwitcher();
+        }
+        // 直接用 adapter 级别高亮（不受 item 替换影响）+ 滚动到目标
+        chatAdapter.setPendingHighlightOrderSeq(targetOrderSeq);
         int index = chatAdapter.findPositionByOrderSeq(targetOrderSeq);
         if (index >= 0) {
-            // 快路径：目标在当前窗口内，直接滚动并高亮。对齐 tipsMsg() 的 UX。
-            final int targetIndex = index;
-            // YUJ-311 防御 · findPositionByOrderSeq 返回的 index 是「当前可见
-            // snapshot」，但在同一主线程调用里 adapter 已经不能被其它线程改动；
-            // 这里先做 size guard 只是为了对齐 postDelayed 里的守卫口径，
-            // 防 adapter 内部在 bind 过程中触发异步 remove 造成 off-by-one。
-            if (targetIndex >= chatAdapter.getItemCount()) return;
-            WKUIChatMsgItemEntity targetItem = chatAdapter.getItem(targetIndex);
-            if (targetItem == null) return;
-            targetItem.isShowTips = true;
-            if (mHelper != null) {
-                mHelper.hookSystemBackByPanelSwitcher();
+            // 消息在 adapter 中：滚动到可见位置，触发 rebind 让高亮生效
+            if (index >= chatAdapter.getItemCount() - 3) {
+                wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
+            } else {
+                linearLayoutManager.scrollToPositionWithOffset(index, wkVBinding.recyclerView.getHeight() / 3);
             }
-            wkVBinding.recyclerView.postDelayed(() -> {
-                // YUJ-311 防御 · 120ms 窗口期间可能发生：
-                //   1) Activity finishing / destroyed（swipe-back / Embedding 关副栏）
-                //   2) 同频道再来一次短路 applyIntentExtrasForReuse（adapter 数据
-                //      稳定但 targetIndex 已过期）
-                //   3) 跨频道 onNewIntent → chatAdapter.setList([]) 后 targetIndex
-                //      指向空 adapter 的越界位置
-                // 命中任一就静默退出，滚动/高亮让正常 onNewIntent 流程覆盖。
-                if (isFinishing() || isDestroyed()) return;
-                if (chatAdapter == null || linearLayoutManager == null) return;
-                if (targetIndex < 0 || targetIndex >= chatAdapter.getItemCount()) return;
-                int firstItemPosition = linearLayoutManager.findFirstVisibleItemPosition();
-                int lastItemPosition = linearLayoutManager.findLastVisibleItemPosition();
-                if (targetIndex < firstItemPosition || targetIndex > lastItemPosition) {
-                    linearLayoutManager.scrollToPositionWithOffset(targetIndex, AndroidUtilities.dp(50));
-                }
-                chatAdapter.notifyItemChanged(targetIndex);
-            }, 120);
+            chatAdapter.notifyItemChanged(index);
         } else {
-            // 慢路径：目标不在当前窗口，按 aroundMsgSeq 重新拉取。对齐 tipsMsg() 的
-            // fallback 分支与 initData() 的 getData(aroundMsgSeq) 入参语义。
+            // 消息不在 adapter 中：重新加载
+            chatAdapter.setList(new ArrayList<>());
             unreadStartMsgOrderSeq = 0;
             tipsOrderSeq = targetOrderSeq;
             unreadStartSnapshotOrderSeq = 0;
             tipsSnapshotOrderSeq = targetOrderSeq;
+            lastPreviewMsgOrderSeq = 0;
             hasRenderedPreview = false;
             userHasScrolled = false;
             hasShownTips = false;
-            if (mHelper != null) {
-                mHelper.hookSystemBackByPanelSwitcher();
-            }
-            getData(0, true, targetOrderSeq, true);
+            getData(0, true, targetOrderSeq, false);
             isCanLoadMore = true;
         }
     }
@@ -1631,6 +1627,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (!TextUtils.isEmpty(channelID) && ChatActivity.this.channelId.equals(channelID) && ChatActivity.this.channelType == channelType) {
                 if (TextUtils.isEmpty(fromUID)) {
                     chatAdapter = new ChatAdapter(ChatActivity.this, ChatAdapter.AdapterType.normalMessage);
+                    chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
+                        if (messageEffectManager != null) {
+                            messageEffectManager.onMessageVisible(item.wkMsg, itemView);
+                        }
+                    });
                     wkVBinding.recyclerView.setAdapter(chatAdapter);
                 } else {
                     for (int i = 0; i < chatAdapter.getData().size(); i++) {
@@ -1903,7 +1904,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (aroundMsgSeq == 0 && getIntent().hasExtra("aroundMsgSeq")) {
             aroundMsgSeq = getIntent().getLongExtra("aroundMsgSeq", 0);
         }
-        getData(lastPreviewMsgOrderSeq == 0 ? 0 : 1, unreadStartMsgOrderSeq > 0, aroundMsgSeq, isScrollToEnd);
+        // tipsOrderSeq 场景用 isSetNewData=true，避免 merge 分支的 scrollToPositionWithOffset 干扰 tips 定位
+        boolean isSetNewData = unreadStartMsgOrderSeq > 0 || tipsOrderSeq > 0;
+        getData(lastPreviewMsgOrderSeq == 0 ? 0 : 1, isSetNewData, aroundMsgSeq, isScrollToEnd);
 
         //查询高光内容
         WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager().getMsgExtraWithChannel(channelId, channelType);
@@ -2152,6 +2155,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         List<WKUIChatMsgItemEntity> list = new ArrayList<>();
         if (WKReader.isNotEmpty(msgList)) {
             long pre_msg_time = lastTimeMsg;
+            WKUIChatMsgItemEntity.prepareMentionCache(channelId, channelType);
             for (int i = 0, size = msgList.size(); i < size; i++) {
                 // 后台线程保护：Activity 已销毁时立即返回已构建的部分
                 if (isFinishing() || isDestroyed()) return list;
@@ -2240,10 +2244,25 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 // 不使用 addData(0, list) + notifyItemRangeInserted，因为在位置 0 批量插入
                 // 会破坏 RecyclerView 的内部滑动状态导致 fling 失效。
                 int insertCount = list.size();
-                // 构建完整列表：新消息 + 旧消息（去掉 loading indicator）
+                // 构建完整列表：新消息 + 旧消息（去掉重复项和合成消息）
+                java.util.Set<String> newMsgIds = new java.util.HashSet<>();
+                for (WKUIChatMsgItemEntity item : list) {
+                    if (item.wkMsg != null) {
+                        if (!TextUtils.isEmpty(item.wkMsg.clientMsgNO)) newMsgIds.add(item.wkMsg.clientMsgNO);
+                        if (!TextUtils.isEmpty(item.wkMsg.messageID)) newMsgIds.add("mid_" + item.wkMsg.messageID);
+                    }
+                }
                 List<WKUIChatMsgItemEntity> merged = new ArrayList<>(list);
                 for (WKUIChatMsgItemEntity item : chatAdapter.getData()) {
-                    if (item.wkMsg != null && item.wkMsg.type == WKContentType.loading) continue;
+                    if (item.wkMsg == null) continue;
+                    // 跳过合成消息（时间分隔符、空白占位等），它们已在新 list 中重建
+                    if (item.wkMsg.type == WKContentType.loading
+                            || item.wkMsg.type == WKContentType.msgPromptTime
+                            || item.wkMsg.type == WKContentType.emptyView
+                            || item.wkMsg.type == WKContentType.spanEmptyView) continue;
+                    // 跳过与新 list 重复的真实消息
+                    if (!TextUtils.isEmpty(item.wkMsg.clientMsgNO) && newMsgIds.contains(item.wkMsg.clientMsgNO)) continue;
+                    if (!TextUtils.isEmpty(item.wkMsg.messageID) && newMsgIds.contains("mid_" + item.wkMsg.messageID)) continue;
                     merged.add(item);
                 }
                 // 在 setNewInstance 之前裁剪，避免 notifyDataSetChanged 后再
@@ -2271,22 +2290,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         final long tipsAnchor = tipsSnapshotOrderSeq;
         if (tipsAnchor != 0 || lastPreviewMsgOrderSeq != 0) {
             wkVBinding.recyclerView.setVisibility(View.VISIBLE);
-            // Only auto-scroll to the tips anchor on the first render, or if
-            // the user has not yet taken over the viewport (YUJ-256 P1-3).
-            if (tipsAnchor != 0 && !userHasScrolled) {
+            if (tipsAnchor != 0) {
                 int tipsIndex = chatAdapter.findPositionByOrderSeq(tipsAnchor);
                 if (tipsIndex >= 0) {
-                    linearLayoutManager.scrollToPositionWithOffset(tipsIndex, AndroidUtilities.dp(50));
-                    // YUJ-258 P2-NEW-1: only trigger the tips highlight once.
-                    // The snapshot still drives the second (post-sync) scroll
-                    // so the target stays in view, but the flash animation
-                    // must not replay.
-                    if (!hasShownTips) {
-                        chatAdapter.getItem(tipsIndex).isShowTips = true;
-                        chatAdapter.notifyItemChanged(tipsIndex);
-                        hasShownTips = true;
+                    // 最后几条消息：滚到底部（聊天窗口自然视角）
+                    // 中间消息：居中显示（对齐 iOS UITableViewScrollPositionMiddle）
+                    if (tipsIndex >= chatAdapter.getItemCount() - 3) {
+                        wkVBinding.recyclerView.scrollToPosition(chatAdapter.getItemCount() - 1);
+                    } else {
+                        linearLayoutManager.scrollToPositionWithOffset(tipsIndex, wkVBinding.recyclerView.getHeight() / 3);
                     }
+                    chatAdapter.setPendingHighlightOrderSeq(tipsAnchor);
                     tipsOrderSeq = 0;
+                    tipsSnapshotOrderSeq = 0;
                 }
             }
             if (lastPreviewMsgOrderSeq != 0 && !userHasScrolled) {
@@ -2786,25 +2802,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 CommonAnim.getInstance().showOrHide(numberTextView, false, true);
             } else {
                 if (chatPanelManager.isCanBack()) {
-                    // YUJ-298 · Fix A：窄屏下不 finish —— 通过 ChatReuseNavigator.goBackToList
-                    // 把 TabActivity reorder 到栈顶，保留 ChatActivity 实例，下一次点击
-                    // 会话命中 onNewIntent 热路径（~50-100ms），不用重建。
-                    //
-                    // 之前的 postDelayed 150ms finish 是为了等 IME / 面板收起动画，
-                    // 但实测主线程已经在 isCanBack 时完成 panel 切换；真正的延迟来自
-                    // Activity transition 本身（被 NarrowTransition applyFastClose 压到
-                    // 120ms）+ recreate（现在被复用消除）。这里直接立即处理，去掉 150ms
-                    // 感知延迟。
-                    //
-                    // YUJ-305 P0-2 · soft-back 不走 finish → onDestroy 不触发 →
-                    // saveEditContent 不执行。必须在进入 soft-back 前主动 flush 一次，
-                    // 否则草稿 / 浏览位置 / 阅后即焚 / readMsg 上报全丢。
                     persistCurrentChannelEditState();
-                    if (com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
+                    // 子区（COMMUNITY_TOPIC）不走 goBackToList 保活路径：子区是一次性
+                    // 浏览，保活会导致折叠屏上反复进出子区时实例堆积，back 时逐个回退
+                    // 像死循环。只有群聊/私聊等主会话才适合 reuse 优化。
+                    if (channelType != WKChannelType.COMMUNITY_TOPIC
+                            && com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
                         return false;
                     }
-                    // 非窄屏 / 复用路径失败 → 回退到原来的 finish 路径。保留 150ms
-                    // postDelayed 兼容原有分屏 / 折叠屏的 panel 收起动画时序。
                     new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(this::finish, 150);
                 }
             }
@@ -3382,6 +3387,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (messageEffectManager != null) {
+            messageEffectManager.destroy();
+            messageEffectManager = null;
+        }
+        if (messageEffectOverlay != null) {
+            FrameLayout contentRoot = findViewById(android.R.id.content);
+            if (contentRoot != null) {
+                contentRoot.removeView(messageEffectOverlay);
+            }
+            messageEffectOverlay = null;
+        }
         chatPanelManager.onDestroy();
         // YUJ-267 · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
         // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，

@@ -11,6 +11,7 @@ import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -70,6 +71,7 @@ import org.jetbrains.annotations.NotNull;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.chat.uikit.thread.service.ThreadModel;
@@ -100,6 +102,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 避免 DiffUtil contentHash 恒等设计引发的卡片替换链路打断。
      */
     public static final int PAYLOAD_SELECTED = 1;
+    /** DiffUtil payload: section header badges/counts changed, skip full rebind */
+    public static final int PAYLOAD_SECTION_BADGE = 2;
+    /** Side-channel payload: refresh channel info (name/mute/forbidden/top) without rebuilding thread previews */
+    public static final int PAYLOAD_CHANNEL_INFO_ONLY = 3;
 
     private IListener iListener;
     private IThreadPreviewClickListener threadPreviewClickListener;
@@ -108,6 +114,30 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Set<String> collapsedSections = new HashSet<>();
     // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
+    // 缓存：groupNo → 上次渲染的结构签名，用于跳过不必要的容器重建
+    private final Map<String, String> renderedThreadSigs = new ConcurrentHashMap<>();
+
+    // Phase 2: 缓存 GradientDrawable 避免热路径分配
+    private static GradientDrawable sBadgeBgNormal;
+    private static GradientDrawable sBadgeBgMuted;
+
+    private static GradientDrawable getBadgeDrawable(Context context, boolean muted) {
+        if (muted) {
+            if (sBadgeBgMuted == null) {
+                sBadgeBgMuted = new GradientDrawable();
+                sBadgeBgMuted.setCornerRadius(AndroidUtilities.dp(9f));
+            }
+            sBadgeBgMuted.setColor(ContextCompat.getColor(context, R.color.color999));
+            return sBadgeBgMuted;
+        } else {
+            if (sBadgeBgNormal == null) {
+                sBadgeBgNormal = new GradientDrawable();
+                sBadgeBgNormal.setCornerRadius(AndroidUtilities.dp(9f));
+            }
+            sBadgeBgNormal.setColor(ContextCompat.getColor(context, R.color.reminderColor));
+            return sBadgeBgNormal;
+        }
+    }
 
     public String findThreadName(String threadChannelId) {
         for (List<ThreadEntity> threads : threadDataCache.values()) {
@@ -119,6 +149,20 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         return null;
     }
+    private boolean attachedToRecyclerView = false;
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        attachedToRecyclerView = true;
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        attachedToRecyclerView = false;
+    }
+
     // 标记正在加载的 groupNo，避免重复请求
     private final Set<String> threadLoadingSet = Collections.synchronizedSet(new HashSet<>());
     // 子区展开状态（默认折叠，在此集合中的表示已展开，对齐 iOS expandedThreadGroups）
@@ -408,8 +452,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 container.removeAllViews();
                 container.setVisibility(View.GONE);
-                // YUJ-261 · 折叠时清空签名 tag，下次展开走全量重建。
-                container.setTag(R.id.threadPreviewContainer, null);
+                renderedThreadSigs.remove(item.channelID);
             }
         } else {
             threadToggleIv.setVisibility(View.GONE);
@@ -433,6 +476,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private void toggleThreadExpanded(String channelId) {
         if (expandedThreadGroups.contains(channelId)) {
             expandedThreadGroups.remove(channelId);
+            removeThreadCacheFromLocal(channelId);
         } else {
             expandedThreadGroups.add(channelId);
         }
@@ -447,10 +491,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 .edit().putString(key, value).apply();
     }
 
-    public void restoreExpandedState() {
+    public void restoreExpandedState(Context context) {
         String uid = WKConfig.getInstance().getUid();
         String key = uid + "_expanded_thread_groups";
-        String value = getContext().getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
+        String value = context.getSharedPreferences("thread_prefs", Context.MODE_PRIVATE)
                 .getString(key, "");
         expandedThreadGroups.clear();
         if (!TextUtils.isEmpty(value)) {
@@ -458,11 +502,89 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 if (!TextUtils.isEmpty(id)) expandedThreadGroups.add(id);
             }
         }
+        // 冷启动：从本地缓存恢复子区数据，首次 bind 时直接渲染
+        for (String groupNo : expandedThreadGroups) {
+            List<ThreadEntity> cached = restoreThreadCacheFromLocal(context, groupNo);
+            if (cached != null && !cached.isEmpty()) {
+                threadDataCache.put(groupNo, cached);
+            }
+        }
+        // 同时发起 API 请求，后台静默刷新
+        for (String groupNo : expandedThreadGroups) {
+            loadThreadPreviewsSilent(groupNo);
+        }
+    }
+
+    /** 从本地 SharedPreferences 恢复子区数据快照 */
+    private List<ThreadEntity> restoreThreadCacheFromLocal(Context context, String groupNo) {
+        try {
+            String uid = WKConfig.getInstance().getUid();
+            String json = context.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .getString(uid + "_" + groupNo, "");
+            if (TextUtils.isEmpty(json)) return null;
+            JSONArray arr = new JSONArray(json);
+            List<ThreadEntity> list = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                ThreadEntity e = new ThreadEntity();
+                e.short_id = obj.optString("short_id");
+                e.group_no = groupNo;
+                e.name = obj.optString("name");
+                e.status = obj.optInt("status");
+                e.unread_count = obj.optInt("unread_count");
+                e.updated_at = obj.optString("updated_at");
+                list.add(e);
+            }
+            return list;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 将子区数据快照持久化到本地 */
+    private void saveThreadCacheToLocal(String groupNo, List<ThreadEntity> list) {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            String uid = WKConfig.getInstance().getUid();
+            JSONArray arr = new JSONArray();
+            for (ThreadEntity e : list) {
+                JSONObject obj = new JSONObject();
+                obj.put("short_id", e.short_id);
+                obj.put("name", e.name);
+                obj.put("status", e.status);
+                obj.put("unread_count", e.unread_count);
+                obj.put("updated_at", e.updated_at);
+                arr.put(obj);
+            }
+            ctx.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .edit().putString(uid + "_" + groupNo, arr.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 折叠时移除本地缓存条目 */
+    private void removeThreadCacheFromLocal(String groupNo) {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            String uid = WKConfig.getInstance().getUid();
+            ctx.getSharedPreferences("thread_cache", Context.MODE_PRIVATE)
+                    .edit().remove(uid + "_" + groupNo).apply();
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
     protected void convert(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg uiConversationMsg, @NotNull List<?> payloads) {
+        // Section header payload: 只刷新 badge/count，不重建整个 header
         if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
+            for (Object p : payloads) {
+                if (p instanceof Integer && ((Integer) p) == PAYLOAD_SECTION_BADGE) {
+                    refreshSectionBadges(baseViewHolder, uiConversationMsg);
+                    return;
+                }
+            }
             return;
         }
         // YUJ-267 · 选中态 payload：只刷背景，不整 rebind（DiffUtil contentHash
@@ -471,21 +593,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (p instanceof Integer && ((Integer) p) == PAYLOAD_SELECTED) {
                 WKUIConversationMsg ui = uiConversationMsg != null ? uiConversationMsg.uiConversationMsg : null;
                 if (ui != null) {
-                    // 先恢复非选中状态下的默认 bg（top=home_bg vs normal=layout_bg），
-                    // 若当前行是新选中则 applySelectedBackground 再覆盖为 selected_bg。
-                    // 不做这一步的话取消选中后背景不会恢复。
                     boolean isTop = ui.getWkChannel() != null && ui.getWkChannel().top == 1;
                     baseViewHolder.setBackgroundResource(R.id.contentLayout,
                             isTop ? R.drawable.home_bg : R.drawable.layout_bg);
                     applySelectedBackground(baseViewHolder, ui);
                     if (baseViewHolder.getItemViewType() == TYPE_COMPACT) {
-                        // 紧凑行：清 threadPreviewContainer signature tag 让子区签名
-                        // 在下轮展开时包含 isThreadRowSelected 状态（子区选中态靠
-                        // rowView bg 驱动，必须重建）。
                         FrameLayout threadContainer = baseViewHolder.getView(R.id.threadPreviewContainer);
                         if (threadContainer != null) {
-                            threadContainer.setTag(R.id.threadPreviewContainer, null);
-                            // 直接触发重建（若展开）
+                            renderedThreadSigs.remove(ui.channelID);
                             if (isThreadExpanded(ui.channelID)) {
                                 showThreadPreviews(baseViewHolder, ui);
                             }
@@ -502,6 +617,38 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             } else {
                 convertNormalPayloads(baseViewHolder, chatConversationMsg);
             }
+        }
+    }
+
+    /**
+     * Section header 增量刷新：只更新未读角标、@提醒、分组计数，不重建整个 header。
+     */
+    private void refreshSectionBadges(@NonNull BaseViewHolder helper, ChatConversationMsg msg) {
+        if (msg == null) return;
+        boolean collapsed = collapsedSections.contains(msg.sectionId);
+
+        TextView countTv = helper.getView(R.id.sectionCount);
+        if (msg.sectionGroupCount > 0 && collapsed) {
+            countTv.setText("(" + msg.sectionGroupCount + ")");
+            countTv.setVisibility(View.VISIBLE);
+        } else {
+            countTv.setVisibility(View.GONE);
+        }
+
+        TextView mentionTv = helper.getView(R.id.sectionMentionTv);
+        if (collapsed && msg.sectionHasMention) {
+            mentionTv.setText(getContext().getString(R.string.last_msg_remind));
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
+        }
+
+        TextView unreadBadge = helper.getView(R.id.sectionUnreadBadge);
+        if (collapsed && msg.sectionUnreadCount > 0) {
+            unreadBadge.setText(msg.sectionUnreadCount > 99 ? "99+" : String.valueOf(msg.sectionUnreadCount));
+            unreadBadge.setVisibility(View.VISIBLE);
+        } else {
+            unreadBadge.setVisibility(View.GONE);
         }
     }
 
@@ -554,7 +701,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             chatConversationMsg.isResetCounter = false;
         }
         if (chatConversationMsg.isRefreshChannelInfo) {
-            convertCompact(baseViewHolder, chatConversationMsg);
+            refreshCompactChannelInfo(baseViewHolder, chatConversationMsg);
             chatConversationMsg.isRefreshChannelInfo = false;
         }
         // 内容或提醒变化时刷新紧凑行的 @mention 预览
@@ -569,7 +716,71 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         chatConversationMsg.isRefreshStatus = false;
     }
 
-    public interface IListener {
+    /**
+     * 仅刷新 compact 行的频道基本信息（名称、免打扰、禁言、置顶背景、头像），
+     * 不重建子区预览容器。避免 channel info 更新时触发昂贵的 showThreadPreviews。
+     */
+    private void refreshCompactChannelInfo(@NotNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        WKUIConversationMsg item = conversationMsg.uiConversationMsg;
+        if (item == null) return;
+
+        // 头像
+        AvatarView compactAvatar = helper.getView(R.id.compactAvatarView);
+        compactAvatar.setSize(52);
+        if (item.getWkChannel() != null) {
+            compactAvatar.showAvatar(item.getWkChannel());
+        } else {
+            compactAvatar.showAvatar(item.channelID, item.channelType);
+        }
+
+        // 频道名
+        String showName = "";
+        if (item.getWkChannel() != null) {
+            showName = TextUtils.isEmpty(item.getWkChannel().channelRemark)
+                    ? item.getWkChannel().channelName
+                    : item.getWkChannel().channelRemark;
+            if (TextUtils.isEmpty(showName)) {
+                showName = getContext().getString(R.string.chat);
+            }
+        } else {
+            showName = getContext().getString(R.string.chat);
+        }
+        helper.setText(R.id.nameTv, showName);
+        applyExternalGroupTag(helper, item);
+
+        // 置顶背景
+        boolean isTop = item.getWkChannel() != null && item.getWkChannel().top == 1;
+        helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+        applySelectedBackground(helper, item);
+
+        // 免打扰图标
+        ImageView muteIv = helper.getView(R.id.muteIv);
+        if (item.getWkChannel() != null && item.getWkChannel().mute == 1) {
+            muteIv.setVisibility(View.VISIBLE);
+            Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+        } else {
+            muteIv.setVisibility(View.GONE);
+        }
+
+        // 禁言图标
+        ImageView forbiddenIv = helper.getView(R.id.forbiddenIv);
+        if (item.getWkChannel() != null && item.getWkChannel().forbidden == 1) {
+            WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager()
+                    .getMember(item.channelID, item.channelType, WKConfig.getInstance().getUid());
+            if (mChannelMember != null && mChannelMember.role == 0) {
+                forbiddenIv.setVisibility(View.VISIBLE);
+                forbiddenIv.setColorFilter(new PorterDuffColorFilter(
+                        ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
+            } else {
+                forbiddenIv.setVisibility(View.GONE);
+            }
+        } else {
+            forbiddenIv.setVisibility(View.GONE);
+        }
+
+        // 重建长按菜单（mute/top 状态变化后菜单文案需更新）
+        addEvent(helper, item);
+    }    public interface IListener {
         void onClick(ItemMenu menu, WKUIConversationMsg item);
     }
 
@@ -992,9 +1203,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (WKReader.isNotEmpty(item.getReminders())) {
             for (int i = 0, size = item.getReminders().size(); i < size; i++) {
                 if (!mention && item.getReminders().get(i).type == WKMentionType.WKReminderTypeMentionMe && item.getReminders().get(i).done == 0) {
-                    //存在@
                     mention = true;
-                    // break;
                 }
                 if (item.getReminders().get(i).type == WKMentionType.WKApplyJoinGroupApprove && item.getReminders().get(i).done == 0) {
                     approveContent = getContext().getString(R.string.apply_join_group);
@@ -1005,39 +1214,37 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             draft = item.uiConversationMsg.getRemoteMsgExtra().draft;
         }
         boolean isSetChatPwd = isSetChatPwd(item.uiConversationMsg.getWkChannel());
-        // 聊天密码
         if (isSetChatPwd) {
             if (!TextUtils.isEmpty(draft))
                 draft = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         }
-        LinearLayout remindLayout = helper.getView(R.id.remindLayout);
-        remindLayout.removeAllViews();
+
+        // 复用 XML 中预定义的 TextView，避免每次 bind 分配新 View
+        TextView mentionTv = helper.getView(R.id.mentionTv);
+        TextView draftTv = helper.getView(R.id.draftTv);
+        TextView approveTv = helper.getView(R.id.approveTv);
+
         if (mention) {
-            TextView textView = new TextView(getContext());
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setText(R.string.last_msg_remind);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            mentionTv.setText(R.string.last_msg_remind);
+            mentionTv.setVisibility(View.VISIBLE);
+        } else {
+            mentionTv.setVisibility(View.GONE);
         }
+
         if (!TextUtils.isEmpty(draft)) {
-            TextView textView = new TextView(getContext());
-            textView.setText(R.string.last_msg_draft);
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            draftTv.setText(R.string.last_msg_draft);
+            draftTv.setVisibility(View.VISIBLE);
             MoonUtil.identifyFaceExpression(getContext(), contentTv, draft, MoonUtil.SMALL_SCALE);
         } else {
+            draftTv.setVisibility(View.GONE);
             showContent(helper, item.uiConversationMsg);
         }
+
         if (!TextUtils.isEmpty(approveContent)) {
-            TextView textView = new TextView(getContext());
-            textView.setText(approveContent);
-            textView.setTypeface(null, Typeface.BOLD);
-            textView.setTextColor(ContextCompat.getColor(getContext(), R.color.reminderColor));
-            textView.setTextSize(13f);
-            remindLayout.addView(textView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 0, 0, 5, 0));
+            approveTv.setText(approveContent);
+            approveTv.setVisibility(View.VISIBLE);
+        } else {
+            approveTv.setVisibility(View.GONE);
         }
     }
 
@@ -1193,7 +1400,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 || WKConfig.getInstance().getAppConfig().thread_on != 1) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
             return;
         }
 
@@ -1202,8 +1408,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (cachedList == null) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
-            loadThreadPreviews(groupNo);
+            loadThreadPreviewsSilent(groupNo);
             return;
         }
 
@@ -1217,7 +1422,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (activeList.isEmpty()) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
-            container.setTag(R.id.threadPreviewContainer, null);
+            renderedThreadSigs.remove(groupNo);
             return;
         }
         // updated_at 是 ISO 格式字符串，可直接用字符串比较排序
@@ -1249,14 +1454,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 则跳过所有 removeAllViews() + inflate，避免 onClickListener 持有的 rowView
         // 被替换导致 ACTION_DOWN → CANCEL。
         String newSig = buildThreadPreviewSignature(groupNo, activeList, inactiveList, showCount);
-        Object existingSig = container.getTag(R.id.threadPreviewContainer);
-        if (newSig.equals(existingSig) && container.getChildCount() > 0) {
+        String existingSig = renderedThreadSigs.get(groupNo);
+        Object renderedGroupNo = container.getTag(R.id.threadPreviewContainer);
+        if (groupNo.equals(renderedGroupNo) && newSig.equals(existingSig) && container.getChildCount() > 0) {
             container.setVisibility(View.VISIBLE);
+            updateThreadBadgesInPlace(container, groupNo, activeList, showCount);
             return;
         }
 
-        // 数据变化或首次渲染 → 重建。
-        container.removeAllViews();
+        // 数据变化或首次渲染 → 重建内容（保留 ThreadBranchView 复用）。
+        removeContentViews(container);
         container.setVisibility(View.VISIBLE);
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
@@ -1325,11 +1532,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
             if (unread > 0) {
                 unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
-                GradientDrawable badgeBg = new GradientDrawable();
-                badgeBg.setCornerRadius(AndroidUtilities.dp(9f));
-                badgeBg.setColor(ContextCompat.getColor(getContext(),
-                        threadMute ? R.color.color999 : R.color.reminderColor));
-                unreadBadge.setBackground(badgeBg);
+                unreadBadge.setBackground(getBadgeDrawable(getContext(), threadMute).getConstantState().newDrawable().mutate());
                 unreadBadge.setVisibility(View.VISIBLE);
             } else {
                 unreadBadge.setVisibility(View.GONE);
@@ -1471,30 +1674,40 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
         container.addView(contentWrapper);
 
-        // 2. 分支线视图（从头像区域弯曲到每一行，放在最底层）
-        ThreadBranchView branchView = new ThreadBranchView(getContext(), showCount);
-        FrameLayout.LayoutParams branchLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
-        container.addView(branchView, 0, branchLp);
+        // 2. 分支线视图：复用已有实例或新建（从头像区域弯曲到每一行，放在最底层）
+        ThreadBranchView branchView = findBranchView(container);
+        if (branchView != null) {
+            branchView.setRowCount(showCount);
+        } else {
+            branchView = new ThreadBranchView(getContext(), showCount);
+            FrameLayout.LayoutParams branchLp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT);
+            container.addView(branchView, 0, branchLp);
+        }
 
-        // 等布局完成后计算每行中心 Y 并更新分支线
-        container.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                container.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                float[] centerYs = new float[rowViews.size()];
-                for (int i = 0; i < rowViews.size(); i++) {
-                    View row = rowViews.get(i);
-                    centerYs[i] = row.getTop() + cardContainer.getTop()
-                            + contentWrapper.getTop() + row.getHeight() / 2f;
-                }
-                branchView.setRowCenterYs(centerYs);
+        // 记录本次签名到 adapter 级缓存 + ViewHolder tag 标识当前群
+        renderedThreadSigs.put(groupNo, newSig);
+        container.setTag(R.id.threadPreviewContainer, groupNo);
+    }
+
+    /** 从 container 中查找已有的 ThreadBranchView（复用避免重建）。 */
+    private ThreadBranchView findBranchView(ViewGroup container) {
+        for (int i = 0; i < container.getChildCount(); i++) {
+            if (container.getChildAt(i) instanceof ThreadBranchView) {
+                return (ThreadBranchView) container.getChildAt(i);
             }
-        });
+        }
+        return null;
+    }
 
-        // YUJ-261 · 记录本次签名，下次同 ViewHolder 同签名直接跳过重建。
-        container.setTag(R.id.threadPreviewContainer, newSig);
+    /** 移除 container 中除 ThreadBranchView 以外的所有子 View（保留分支线复用）。 */
+    private void removeContentViews(FrameLayout container) {
+        for (int i = container.getChildCount() - 1; i >= 0; i--) {
+            if (!(container.getChildAt(i) instanceof ThreadBranchView)) {
+                container.removeViewAt(i);
+            }
+        }
     }
 
     /**
@@ -1509,37 +1722,81 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         sb.append(groupNo).append('#').append(showCount).append('|');
         for (int i = 0; i < showCount && i < activeList.size(); i++) {
             ThreadEntity t = activeList.get(i);
-            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
-            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
-            int unread = conv != null ? conv.unreadCount : t.unread_count;
-            WKChannel ch = WKIM.getInstance().getChannelManager()
-                    .getChannel(tcId, WKChannelType.COMMUNITY_TOPIC);
-            boolean mute = ch != null && ch.mute == 1;
-            boolean mention = hasThreadMentionForChannel(tcId);
-            boolean selected = isThreadRowSelected(tcId);
             sb.append(t.short_id).append(':')
               .append(t.name != null ? t.name : "").append(':')
-              .append(unread).append(':')
-              .append(mute ? 1 : 0).append(':')
-              .append(mention ? 1 : 0).append(':')
-              .append(selected ? 1 : 0).append(':')
-              .append(t.last_message_content != null ? t.last_message_content.hashCode() : 0).append(':')
               .append(t.is_joined).append('|');
         }
-        // "+N 个子区" 行的聚合未读 + mention
-        int moreUnread = 0;
-        boolean moreMention = false;
-        for (ThreadEntity t : inactiveList) {
-            String tcId = ThreadModel.getInstance().buildChannelId(groupNo, t.short_id);
-            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
-            moreUnread += conv != null ? conv.unreadCount : t.unread_count;
-            if (hasThreadMentionForChannel(tcId)) moreMention = true;
-        }
-        sb.append("+").append(inactiveList.size()).append(':')
-          .append(moreUnread).append(':').append(moreMention ? 1 : 0);
+        sb.append("+").append(inactiveList.size());
         return sb.toString();
+    }
+
+    private void updateThreadBadgesInPlace(FrameLayout container, String groupNo,
+                                           List<ThreadEntity> activeList, int showCount) {
+        if (container.getChildCount() < 2) return;
+        View contentWrapperView = container.getChildAt(1);
+        if (!(contentWrapperView instanceof LinearLayout)) return;
+        LinearLayout contentWrapper = (LinearLayout) contentWrapperView;
+        if (contentWrapper.getChildCount() == 0) return;
+        View cardContainerView = contentWrapper.getChildAt(0);
+        if (!(cardContainerView instanceof LinearLayout)) return;
+        LinearLayout cardContainer = (LinearLayout) cardContainerView;
+
+        int rowIndex = 0;
+        for (int i = 0; i < cardContainer.getChildCount() && rowIndex < showCount; i++) {
+            View child = cardContainer.getChildAt(i);
+            if (child.findViewById(R.id.threadUnreadBadge) == null) continue;
+
+            if (rowIndex >= activeList.size()) break;
+            ThreadEntity entity = activeList.get(rowIndex);
+            String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
+                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            int unread = threadConv != null ? threadConv.unreadCount : entity.unread_count;
+
+            WKChannel threadChannel = WKIM.getInstance().getChannelManager()
+                    .getChannel(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            boolean threadMute = threadChannel != null && threadChannel.mute == 1;
+
+            TextView unreadBadge = child.findViewById(R.id.threadUnreadBadge);
+            if (unread > 0) {
+                unreadBadge.setText(unread > 99 ? "99+" : String.valueOf(unread));
+                unreadBadge.setBackground(getBadgeDrawable(getContext(), threadMute).getConstantState().newDrawable().mutate());
+                unreadBadge.setVisibility(View.VISIBLE);
+            } else {
+                unreadBadge.setVisibility(View.GONE);
+            }
+
+            ImageView muteIv = child.findViewById(R.id.threadMuteIv);
+            if (muteIv != null) {
+                if (threadMute) {
+                    muteIv.setVisibility(View.VISIBLE);
+                    Theme.setColorFilter(muteIv, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+                } else {
+                    muteIv.setVisibility(View.GONE);
+                }
+            }
+
+            TextView mentionTv = child.findViewById(R.id.threadMentionTv);
+            if (mentionTv != null) {
+                boolean threadHasMention = hasThreadMentionForChannel(threadChannelId);
+                if (threadHasMention) {
+                    String mentionTag = getContext().getString(R.string.last_msg_remind);
+                    String lastMsg = "";
+                    if (!TextUtils.isEmpty(entity.last_message_content)) {
+                        lastMsg = entity.last_message_content;
+                        if (!TextUtils.isEmpty(entity.last_message_sender_name)) {
+                            lastMsg = entity.last_message_sender_name + ": " + lastMsg;
+                        }
+                    }
+                    mentionTv.setText(mentionTag + (TextUtils.isEmpty(lastMsg) ? "" : " " + lastMsg));
+                    mentionTv.setVisibility(View.VISIBLE);
+                } else {
+                    mentionTv.setVisibility(View.GONE);
+                }
+            }
+
+            rowIndex++;
+        }
     }
 
     /**
@@ -1554,6 +1811,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             threadLoadingSet.remove(groupNo);
             List<ThreadEntity> result = (list != null) ? list : new ArrayList<>();
             threadDataCache.put(groupNo, result);
+            // 持久化到本地，下次冷启动可直接恢复
+            saveThreadCacheToLocal(groupNo, result);
             // 对齐 iOS：子区加载后检查 @所有人消息，补创建本地 reminder
             // saveOrUpdateReminders 会自动触发 addOnNewReminderListener → filterAndDisplay
             checkThreadMentionAll(groupNo, result);
@@ -1617,6 +1876,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             List<ThreadEntity> newData = (list != null) ? list : new ArrayList<>();
             List<ThreadEntity> oldData = threadDataCache.get(groupNo);
             threadDataCache.put(groupNo, newData);
+            saveThreadCacheToLocal(groupNo, newData);
             // 只有数据变化时才刷新 UI，避免不必要的重绘
             if (!isThreadDataEqual(oldData, newData)) {
                 AndroidUtilities.runOnUIThread(() -> updateThreadPreviewDirectly(groupNo));
@@ -1655,11 +1915,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         return sb.toString();
     }
 
-    /**
-     * 直接更新可见 ViewHolder 的子区预览，不触发 notifyItemChanged，避免闪烁。
-     */
     private void updateThreadPreviewDirectly(String groupNo) {
-        if (getRecyclerView() == null) return;
+        if (!attachedToRecyclerView) return;
         for (int i = 0; i < getData().size(); i++) {
             if (getData().get(i).isSectionHeader) continue;
             WKUIConversationMsg convMsg = getData().get(i).uiConversationMsg;
@@ -1769,6 +2026,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
     }
 
+    public void preloadAllThreadData() {
+        if (WKConfig.getInstance().getAppConfig().thread_on != 1) return;
+        for (int i = 0; i < getData().size(); i++) {
+            if (getData().get(i).isSectionHeader) continue;
+            WKUIConversationMsg msg = getData().get(i).uiConversationMsg;
+            if (msg.channelType == WKChannelType.GROUP
+                    && !threadDataCache.containsKey(msg.channelID)) {
+                loadThreadPreviews(msg.channelID);
+            }
+        }
+    }
+
     private boolean isSetChatPwd(WKChannel channel) {
         if (channel == null || channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey(WKChannelExtras.chatPwdOn))
             return false;
@@ -1815,7 +2084,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (item.getWkChannel() != null) {
             list.add(new PopupMenuItem(getContext().getString(mute ? R.string.open_channel_notice : R.string.close_channel_notice), mute ? R.mipmap.msg_unmute : R.mipmap.msg_mute, () -> iListener.onClick(ItemMenu.mute, item)));
         }
-        //list.add(new ChatLongClickEntity(2, item.unreadCount > 0 ? getContext().getString(R.string.sign_read_msg) : getContext().getString(R.string.sign_unread_msg)));
         list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
         if (item.channelType == WKChannelType.GROUP) {
             list.add(new PopupMenuItem(getContext().getString(R.string.move_to_category), R.mipmap.msg_forward, () -> iListener.onClick(ItemMenu.moveToCategory, item)));

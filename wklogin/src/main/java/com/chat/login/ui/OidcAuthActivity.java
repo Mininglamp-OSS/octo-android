@@ -131,9 +131,16 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
     }
 
     public static String buildAuthorizeUrl(String authorizePath, String authcode) {
+        // YUJ-420 R2 fix (Jerry R1 Critical 4): 用 Uri.Builder + appendQueryParameter 统一编码
+        // 避免 authcode / device_id / flag 等 query 参数手拼时的注入 / 日志泄露风险。
+        // 同时限制生产 SSO 只接受 HTTPS。
         String baseUrl;
-        if (authorizePath.startsWith("http://") || authorizePath.startsWith("https://")) {
+        if (authorizePath.startsWith("https://")) {
             baseUrl = authorizePath;
+        } else if (authorizePath.startsWith("http://")) {
+            // 生产 SSO 必须 HTTPS, 拒绝 http:// authorize_path
+            throw new IllegalArgumentException(
+                "OIDC authorize_path must be https:// in production, got http://");
         } else if (authorizePath.startsWith("/")) {
             String apiUrl = WKApiConfig.baseUrl;
             try {
@@ -148,13 +155,15 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
             baseUrl = WKApiConfig.baseUrl + authorizePath;
         }
 
-        String separator = baseUrl.contains("?") ? "&" : "?";
-        return baseUrl + separator
-                + "authcode=" + authcode
-                + "&flag=0"
-                + "&device_id=" + WKConstants.getDeviceID()
-                + "&device_name=" + android.net.Uri.encode(WKDeviceUtils.getInstance().getDeviceName())
-                + "&device_model=" + android.net.Uri.encode(WKDeviceUtils.getInstance().getSystemModel());
+        // Uri.Builder 会处理所有 query 参数的 URL 编码 + 纯字器层叠加,
+        // 避免手拼 "?k1=v1&k2=v2" 时的 injection / encoding bug。
+        android.net.Uri.Builder builder = android.net.Uri.parse(baseUrl).buildUpon();
+        builder.appendQueryParameter("authcode", authcode == null ? "" : authcode);
+        builder.appendQueryParameter("flag", "0");
+        builder.appendQueryParameter("device_id", WKConstants.getDeviceID());
+        builder.appendQueryParameter("device_name", WKDeviceUtils.getInstance().getDeviceName());
+        builder.appendQueryParameter("device_model", WKDeviceUtils.getInstance().getSystemModel());
+        return builder.build().toString();
     }
 
     @Override

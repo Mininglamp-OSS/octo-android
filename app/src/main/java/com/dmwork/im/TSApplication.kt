@@ -102,7 +102,11 @@ class TSApplication : MultiDexApplication() {
         WKPushApplication.getInstance().init(getAppPackageName(), this)
         addAppFrontBack()
         addListener()
-        DebugTools.init(this)
+        // YUJ-420 R2 fix (Jerry R1 Critical 2): DebugTools class 不存在于任何 source,
+        // kian-dev 侧 zhangqian 引用的是未提交的本地 debug 工具类。
+        // backport 时要么折版 (debug only) 要么删掉; 选删掉以简化,
+        // 如果 zhangqian 需要 debug 工具可以后续独立 PR 添加。
+        // DebugTools.init(this)
     }
 
     private fun initApi() {

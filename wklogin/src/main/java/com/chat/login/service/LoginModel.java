@@ -482,15 +482,27 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
-        android.util.Log.d("TokenDebug", "login response: token=" + userInfo.token + ", im_token=" + userInfo.im_token + ", uid=" + userInfo.uid);
+        // YUJ-420 R2 fix (Jerry R1 Critical 3): 禁止将 auth token 写入 logcat（release/debug 都不可出现凭证）。
+        // BuildConfig.DEBUG gate + redact: 只打长度 + 非空性，不打 token 原文。
+        // 用 wklogin module 自己的 BuildConfig (com.chat.login.BuildConfig)。
+        if (com.chat.login.BuildConfig.DEBUG) {
+            android.util.Log.d("TokenDebug",
+                "login response: token.len=" + (userInfo.token == null ? -1 : userInfo.token.length())
+                + ", im_token.len=" + (userInfo.im_token == null ? -1 : userInfo.im_token.length())
+                + ", uid=" + userInfo.uid);
+        }
         WKConfig.getInstance().saveUserInfo(userInfo);
         WKConfig.getInstance().setToken(userInfo.token);
         if (!TextUtils.isEmpty(userInfo.im_token)) {
             WKConfig.getInstance().setImToken(userInfo.im_token);
-            android.util.Log.d("TokenDebug", "using im_token for IM connection");
+            if (com.chat.login.BuildConfig.DEBUG) {
+                android.util.Log.d("TokenDebug", "using im_token for IM connection");
+            }
         } else {
             WKConfig.getInstance().setImToken(userInfo.token);
-            android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
+            if (com.chat.login.BuildConfig.DEBUG) {
+                android.util.Log.d("TokenDebug", "im_token is empty, using token for IM connection");
+            }
         }
         WKConfig.getInstance().setUid(userInfo.uid);
         WKConfig.getInstance().setUserName(userInfo.name);

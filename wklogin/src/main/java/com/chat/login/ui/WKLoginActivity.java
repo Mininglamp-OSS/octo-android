@@ -262,7 +262,13 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             return;
         }
         OidcProviderConfig provider = config.oidc_providers.get(0);
-        if (TextUtils.isEmpty(provider.name) || TextUtils.isEmpty(provider.authorize_path)) {
+        // YUJ-420 R2 fix (Jerry R1 Warning / YUJ-212 教训): 区分 null vs "".
+        // 后端显式空串 vs 缺字段 的语义不同时 TextUtils.isEmpty 会混两者。
+        // 此处 authorize_path / name 空串 / null 均视为「无可用 provider」，
+        // 与韧点 完全一致。如后续区分 需改为显式 null-check。
+        boolean unusable = provider.name == null || provider.name.isEmpty()
+                || provider.authorize_path == null || provider.authorize_path.isEmpty();
+        if (unusable) {
             wkVBinding.ssoBtn.setVisibility(View.GONE);
             return;
         }

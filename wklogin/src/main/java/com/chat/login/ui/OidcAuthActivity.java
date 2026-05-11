@@ -117,11 +117,17 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
             }
 
             /**
-             * 白名单: 只允许跳到授权 host 本身 + WKApiConfig.baseUrl 的 host.
-             * 非白名单 URL 拒绝加载, 防 authcode 通过 Referer 泄露。
+             * YUJ-420 R8 fix (Jerry R6 Critical): 白名单同时要求 scheme=https。
+             * R3 版本只校验 host, SSO WebView 后续可能被导红到 http://同 host
+             * 导致 authcode / cookie / token 降级到明文链路。
+             * R8 强制 https-only, 仅放行 scheme=https 且 host 在白名单的 URL。
+             * 未来如需 file:// / about:blank / data:// 等特殊来源, 在此显式扩展。
              */
             private boolean rejectNonWhitelistedUrl(android.net.Uri target) {
                 if (target == null) return true;
+                // scheme 必须是 https（OIDC 授权页流程没有合法 http 场景）
+                String scheme = target.getScheme();
+                if (scheme == null || !scheme.equalsIgnoreCase("https")) return true;
                 String host = target.getHost();
                 if (host == null || host.isEmpty()) return true;
                 if (host.equals(authHost)) return false;

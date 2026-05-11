@@ -49,6 +49,10 @@ class WKVoiceInputService private constructor() {
     private var voiceContextCachedAt: Long = 0
     private var voiceContextSpaceId: String? = null
     private var voiceContextInflight: Boolean = false
+    // YUJ-420 R8 fix (Jerry R6 Warning 4): request token 防同 Space 内旧 timeout
+    // 清掉 late 请求的 inflight 。每次 prefetch 给新请求 +1, onResponse/onFailure/
+    // timeout 呼调时必须校验 token 是自己的.
+    private var voiceContextRequestToken: Long = 0
     private val voiceContextPendingCallbacks = mutableListOf<(String?) -> Unit>()
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -125,9 +129,13 @@ class WKVoiceInputService private constructor() {
 
         voiceContextInflight = true
         voiceContextSpaceId = spaceId
+        // YUJ-420 R8: 给本请求分配 token, 后续 timeout/onResponse/onFailure 通过校验 token 身份
+        val myToken = ++voiceContextRequestToken
 
         mainHandler.postDelayed({
-            if (voiceContextInflight && voiceContextSpaceId == spaceId) {
+            // R8: 双重校验 — token 不匹配 说明有新请求代替, 不要误伤新请求的 inflight
+            if (voiceContextRequestToken == myToken &&
+                voiceContextInflight && voiceContextSpaceId == spaceId) {
                 voiceContextInflight = false
                 flushVoiceContextCallbacks(null)
             }
@@ -140,9 +148,9 @@ class WKVoiceInputService private constructor() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post {
-                    // 仅在 inflight spaceId 仍是本请求的 spaceId 时才重置,
-                    // 避免并发 space switch 后的 late failure 清掉20新 Space 的 inflight.
-                    if (voiceContextSpaceId == spaceId) {
+                    // R8: token 校验 + spaceId 校验 双重防护。
+                    // token 不匹 说明旧请求 late, 不应清新 inflight。
+                    if (voiceContextRequestToken == myToken && voiceContextSpaceId == spaceId) {
                         voiceContextInflight = false
                         cachedVoiceContext = null
                         flushVoiceContextCallbacks(null)
@@ -153,13 +161,14 @@ class WKVoiceInputService private constructor() {
             override fun onResponse(call: Call, response: Response) {
                 val bodyStr = try { response.body?.string() ?: "{}" } catch (_: Exception) { "{}" }
                 mainHandler.post {
-                    // YUJ-420 R7 fix (Jerry R4 加强): 双重校验异步回包对应的仍是:
+                    // R7/R8: 三重校验 异步回包
                     // (1) 当前 inflight 的 spaceId 仍是 requesting-time 的 spaceId
                     // (2) currentSpaceId (SpaceFilter 现值) 也仍是 requesting-time 的 spaceId
-                    // 两个条件同时成立才写缓存, 避免三态切换 (Space-1→Space-2→Space-3) 竞态中
-                    // invalidateCache 暂时为 null 的 gap 被 late response 塑充的问题。
+                    // (3) R8: token 校验 - 旧同 space 请求的 late response 不能覆盖新请求
                     val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
-                    if (voiceContextSpaceId != spaceId || currentSpaceId != spaceId) return@post
+                    if (voiceContextRequestToken != myToken ||
+                        voiceContextSpaceId != spaceId ||
+                        currentSpaceId != spaceId) return@post
                     try {
                         val json = JSONObject(bodyStr)
                         val hasContext = json.optBoolean("has_context", false)
@@ -180,6 +189,9 @@ class WKVoiceInputService private constructor() {
      * YUJ-420 R6: Space 切换 / logout 时清 voice context 缓存,
      * 避免旧 Space personal_context 被新 Space 的转写请求误作为 personal_context 上传。
      *
+     * R8 fix (Jerry R6 Warning): 原实现直接 clear() pending callbacks, 调用方会永远卡在
+     * THINKING / TRANSCRIBING 状态。R8 改为先 flush null 通知调用方失败, 再清球 state。
+     *
      * 可被 SpaceChangedBroadcaster 订阅方或 LoginModel.logout() 调用。
      */
     fun invalidateVoiceContextCache() {
@@ -187,8 +199,10 @@ class WKVoiceInputService private constructor() {
         voiceContextCachedAt = 0
         voiceContextSpaceId = null
         voiceContextInflight = false
-        // pending callbacks 不 flush null 给他们, 让新 prefetch 开启新轮时再分发
-        voiceContextPendingCallbacks.clear()
+        // R8: 递增 token 让正在 inflight 的请求的回包/timeout 都被无视
+        voiceContextRequestToken++
+        // YUJ-420 R8 fix: flush null 给 pending callbacks, 否则 UI 可能卡在 THINKING。
+        flushVoiceContextCallbacks(null)
     }
 
     fun getVoiceContext(completion: (String?) -> Unit) {

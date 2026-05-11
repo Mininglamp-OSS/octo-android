@@ -98,10 +98,12 @@ class WKVoiceInputService private constructor() {
     }
 
     fun prefetchVoiceContext() {
-        val ctx = com.chat.base.WKBaseApplication.getInstance().context ?: return
-        val spaceId = android.preference.PreferenceManager
-            .getDefaultSharedPreferences(ctx)
-            .getString("currentSpaceId", null)
+        // YUJ-420 R3 fix (lml2468 R1 Blocker): 原代码读 android.preference.PreferenceManager 的
+        // "currentSpaceId" 键, 但全库其它 Space 隔离代码走 WKSharedPreferencesUtil + SPWithUID
+        // 的 "current_space_id" 键 (见 SpaceFilter.getCurrentSpaceId())。
+        // 键名不匹配导致此处永远读不到 spaceId 早返回,
+        // personal_context 预取路径活不起来。统一改为 SpaceFilter.getCurrentSpaceId()。
+        val spaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
         if (spaceId.isNullOrEmpty()) return
 
         if (cachedVoiceContext != null &&
@@ -122,7 +124,8 @@ class WKVoiceInputService private constructor() {
             }
         }, VOICE_CONTEXT_TIMEOUT)
 
-        val url = WKApiConfig.baseUrl + "voice/context?space_id=$spaceId"
+        val url = WKApiConfig.baseUrl + "voice/context?space_id=" +
+                android.net.Uri.encode(spaceId)
         val request = Request.Builder().url(url).get().build()
 
         client.newCall(request).enqueue(object : Callback {

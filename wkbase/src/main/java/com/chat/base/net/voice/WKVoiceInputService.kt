@@ -104,7 +104,16 @@ class WKVoiceInputService private constructor() {
         // 键名不匹配导致此处永远读不到 spaceId 早返回,
         // personal_context 预取路径活不起来。统一改为 SpaceFilter.getCurrentSpaceId()。
         val spaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
-        if (spaceId.isNullOrEmpty()) return
+
+        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9): Space 为空 / 切换 Space / logout
+        // 时必须清旧缓存, 避免 getVoiceContext() 旧 Space 的 personal_context 泄漏给新 Space 的请求。
+        if (spaceId.isNullOrEmpty()) {
+            invalidateVoiceContextCache()
+            return
+        }
+        if (voiceContextSpaceId != null && voiceContextSpaceId != spaceId) {
+            invalidateVoiceContextCache()
+        }
 
         if (cachedVoiceContext != null &&
             voiceContextSpaceId == spaceId &&
@@ -131,15 +140,22 @@ class WKVoiceInputService private constructor() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post {
-                    voiceContextInflight = false
-                    cachedVoiceContext = null
-                    flushVoiceContextCallbacks(null)
+                    // 仅在 inflight spaceId 仍是本请求的 spaceId 时才重置,
+                    // 避免并发 space switch 后的 late failure 清掉20新 Space 的 inflight.
+                    if (voiceContextSpaceId == spaceId) {
+                        voiceContextInflight = false
+                        cachedVoiceContext = null
+                        flushVoiceContextCallbacks(null)
+                    }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 val bodyStr = try { response.body?.string() ?: "{}" } catch (_: Exception) { "{}" }
                 mainHandler.post {
+                    // YUJ-420 R6 fix: 校验异步响应对应的还是当前 Space.
+                    // 如果用户在请求期间 switch 了 Space, 旧 Space 的响应不应覆盖新 Space 的缓存。
+                    if (voiceContextSpaceId != spaceId) return@post
                     try {
                         val json = JSONObject(bodyStr)
                         val hasContext = json.optBoolean("has_context", false)
@@ -156,9 +172,47 @@ class WKVoiceInputService private constructor() {
         })
     }
 
+    /**
+     * YUJ-420 R6: Space 切换 / logout 时清 voice context 缓存,
+     * 避免旧 Space personal_context 被新 Space 的转写请求误作为 personal_context 上传。
+     *
+     * 可被 SpaceChangedBroadcaster 订阅方或 LoginModel.logout() 调用。
+     */
+    fun invalidateVoiceContextCache() {
+        cachedVoiceContext = null
+        voiceContextCachedAt = 0
+        voiceContextSpaceId = null
+        voiceContextInflight = false
+        // pending callbacks 不 flush null 给他们, 让新 prefetch 开启新轮时再分发
+        voiceContextPendingCallbacks.clear()
+    }
+
     fun getVoiceContext(completion: (String?) -> Unit) {
+        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9):
+        // 校验 (1) 缓存的 spaceId 必须等于当前 Space (2) 未过 TTL.
+        // 任一不满足 → return null (避免跨 Space 数据泄漏), 并顺手 invalidate 隔离胏脈。
+        val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+        val cachedForSameSpace = voiceContextSpaceId != null &&
+                voiceContextSpaceId == currentSpaceId &&
+                !currentSpaceId.isNullOrEmpty()
+        val withinTtl = (System.currentTimeMillis() - voiceContextCachedAt) < VOICE_CONTEXT_CACHE_TTL
+
         if (!voiceContextInflight) {
-            completion(cachedVoiceContext)
+            if (cachedForSameSpace && withinTtl) {
+                completion(cachedVoiceContext)
+            } else {
+                if (!cachedForSameSpace) {
+                    // Space 已切换 (或 spaceId 空) → 主动清旧 Space 缓存
+                    invalidateVoiceContextCache()
+                }
+                completion(null)
+            }
+            return
+        }
+        // inflight 中: 确认 inflight 的也是当前 Space, 否则丟回 null 并 invalidate
+        if (!cachedForSameSpace) {
+            invalidateVoiceContextCache()
+            completion(null)
             return
         }
         voiceContextPendingCallbacks.add(completion)

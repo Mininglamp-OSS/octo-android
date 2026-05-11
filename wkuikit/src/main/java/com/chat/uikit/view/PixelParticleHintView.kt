@@ -357,7 +357,7 @@ class PixelParticleHintView(context: Context) : FrameLayout(context) {
         dismissRunnable = Runnable {
             if (!dismissed) animateSlideOut()
         }
-        handler.postDelayed(dismissRunnable!!, 2000)
+        handler.postDelayed(dismissRunnable!!, 3000)
     }
 
     private fun animateSlideOut() {

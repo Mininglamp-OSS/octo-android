@@ -273,8 +273,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     ) {
         if (baseViewHolder.getViewOrNull<View>(R.id.viewGroupLayout) != null) {
             val viewGroupLayout = baseViewHolder.getView<ChatItemView>(R.id.viewGroupLayout)
-            // 提示本条消息
-            if (msgItemEntity.isShowTips) {
+            // 提示本条消息：优先检查 adapter 级别的 pendingHighlight（不受 setNewInstance 影响）
+            val chatAdapter = getAdapter() as? ChatAdapter
+            val matchedHighlight = chatAdapter?.consumeHighlightIfMatch(
+                msgItemEntity.wkMsg?.orderSeq ?: 0
+            ) ?: 0
+            if (msgItemEntity.isShowTips || matchedHighlight != 0L) {
                 val colorAnimation = ValueAnimator.ofObject(
                     ArgbEvaluator(),
                     ContextCompat.getColor(context, R.color.tip_message_cell_bg),
@@ -638,7 +642,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             uiChatMsgItemEntity.wkMsg,
             uiChatMsgItemEntity.nextMsg
         )
-        if (uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP) {
+        if (uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.GROUP
+            || uiChatMsgItemEntity.wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
             var showName: String? = ""
             receivedNameTv.tag = uiChatMsgItemEntity.wkMsg.fromUID
             if (uiChatMsgItemEntity.wkMsg.from != null && !TextUtils.isEmpty(uiChatMsgItemEntity.wkMsg.from.channelRemark)) {

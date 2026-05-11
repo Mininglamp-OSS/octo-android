@@ -663,6 +663,8 @@ class VoiceInputView @JvmOverloads constructor(
         setState(State.RECORDING)
         listener?.onRecordingStarted()
 
+        WKVoiceInputService.instance.prefetchVoiceContext()
+
         recordTimer = Timer().apply {
             schedule(object : TimerTask() {
                 override fun run() {
@@ -755,18 +757,36 @@ class VoiceInputView @JvmOverloads constructor(
         }
 
         val contextText = listener?.getCurrentInputText()
-        val chatContext = listener?.getChatContext()
+        val fullContext = listener?.getChatContext()
         setState(State.TRANSCRIBING)
 
-        WKVoiceInputService.instance.transcribeAudio(audioFile, contextText, chatContext) { result, error ->
-            cleanupRecordFile()
-            if (error != null || result == null || result.text.isEmpty()) {
-                Toast.makeText(context, R.string.speech_recognize_failed, Toast.LENGTH_SHORT).show()
-                setState(State.IDLE); return@transcribeAudio
+        // 拆分 fullContext：聊天成员：xxx\n[发送者]: yyy → memberContext + chatContext
+        var memberContext: String? = null
+        var chatContext: String? = null
+        if (fullContext != null && fullContext.startsWith("聊天成员：")) {
+            val newlineIdx = fullContext.indexOf('\n')
+            if (newlineIdx > 0) {
+                memberContext = fullContext.substring(0, newlineIdx)
+                chatContext = fullContext.substring(newlineIdx + 1)
+            } else {
+                memberContext = fullContext
             }
-            pendingTranscribeText = result.text
-            pendingTranscribeShouldReplace = !contextText.isNullOrEmpty()
-            completeThinkingAnimation()
+        } else {
+            chatContext = fullContext
+        }
+
+        WKVoiceInputService.instance.getVoiceContext { personalContext ->
+            WKVoiceInputService.instance.transcribeAudio(audioFile, contextText, chatContext, personalContext, memberContext) { result, error ->
+                cleanupRecordFile()
+                if (state != State.TRANSCRIBING) return@transcribeAudio
+                if (error != null || result == null || result.text.isEmpty()) {
+                    Toast.makeText(context, R.string.speech_recognize_failed, Toast.LENGTH_SHORT).show()
+                    setState(State.IDLE); return@transcribeAudio
+                }
+                pendingTranscribeText = result.text
+                pendingTranscribeShouldReplace = !contextText.isNullOrEmpty()
+                completeThinkingAnimation()
+            }
         }
     }
 

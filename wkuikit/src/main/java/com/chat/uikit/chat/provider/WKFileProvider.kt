@@ -2,6 +2,7 @@ package com.chat.uikit.chat.provider
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.text.TextUtils
 import android.view.LayoutInflater
@@ -193,119 +194,92 @@ class WKFileProvider : WKChatBaseProvider() {
     }
 
     private fun openFile(file: File) {
-        showFileOptionsSheet(file)
-    }
-
-    private fun showFileOptionsSheet(file: File) {
-        val activity = context as? Activity ?: return
-        if (activity.isFinishing || activity.isDestroyed) return
-        val dialog = BottomSheetDialog(activity)
-        val sheetView = LayoutInflater.from(activity).inflate(R.layout.bottom_sheet_file_actions, null)
-
-        sheetView.findViewById<View>(R.id.actionOpen).setOnClickListener {
-            dialog.dismiss()
-            openFileDirectly(file)
-        }
-        sheetView.findViewById<View>(R.id.actionSave).setOnClickListener {
-            dialog.dismiss()
-            saveFileWithSAF(file)
-        }
-        sheetView.findViewById<View>(R.id.actionShare).setOnClickListener {
-            dialog.dismiss()
-            shareFile(file)
-        }
-        sheetView.findViewById<View>(R.id.actionCancel).setOnClickListener {
-            dialog.dismiss()
-        }
-
-        val fileNameTv = sheetView.findViewById<TextView>(R.id.sheetFileName)
-        fileNameTv?.text = file.name
-
-        dialog.setContentView(sheetView)
-        dialog.show()
-    }
-
-    private fun openFileDirectly(file: File) {
-        val ext = file.extension.lowercase(Locale.getDefault())
-        if (isTextFile(ext)) {
-            openTextPreview(file)
-            return
-        }
-        try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                context.packageName + ".fileProvider",
-                file
-            )
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(uri, getMimeType(file.name))
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            WKToastUtils.getInstance()
-                .showToastNormal(context.getString(R.string.str_file_no_app))
-        } catch (_: Exception) {
-            WKToastUtils.getInstance()
-                .showToastNormal(context.getString(R.string.str_file_not_exist))
-        }
-    }
-
-    private fun saveFileWithSAF(file: File) {
-        val intent = Intent(context, FileSaveActivity::class.java)
-        intent.putExtra("sourceFilePath", file.absolutePath)
-        intent.putExtra("fileName", file.name)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-    }
-
-    private fun shareFile(file: File) {
-        try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                context.packageName + ".fileProvider",
-                file
-            )
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = getMimeType(file.name)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val chooser = Intent.createChooser(shareIntent, file.name)
-            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooser)
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun isTextFile(ext: String): Boolean {
-        return ext in listOf(
-            "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
-            "conf", "cfg", "ini", "properties", "toml",
-            "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
-            "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
-            "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore"
-        )
-    }
-
-    private fun openTextPreview(file: File) {
-        try {
-            val content = file.readText(Charsets.UTF_8).let {
-                if (it.length > 50000) it.substring(0, 50000) + "\n\n... (文件过大，仅显示前50000字符)" else it
-            }
-            val intent = Intent(context, TextPreviewActivity::class.java)
-            intent.putExtra("title", file.name)
-            intent.putExtra("content", content)
-            intent.putExtra("filePath", file.absolutePath)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            WKToastUtils.getInstance()
-                .showToastNormal(context.getString(R.string.str_file_not_exist))
-        }
+        openFileWithOptions(context, file)
     }
 
     companion object {
+
+        @JvmStatic
+        fun openFileWithOptions(context: Context, file: File) {
+            val activity = context as? Activity ?: return
+            if (activity.isFinishing || activity.isDestroyed) return
+            val dialog = BottomSheetDialog(activity)
+            val sheetView = LayoutInflater.from(activity).inflate(R.layout.bottom_sheet_file_actions, null)
+
+            sheetView.findViewById<View>(R.id.actionOpen).setOnClickListener {
+                dialog.dismiss()
+                openFileDirectlyStatic(context, file)
+            }
+            sheetView.findViewById<View>(R.id.actionSave).setOnClickListener {
+                dialog.dismiss()
+                val intent = Intent(context, FileSaveActivity::class.java)
+                intent.putExtra("sourceFilePath", file.absolutePath)
+                intent.putExtra("fileName", file.name)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+            sheetView.findViewById<View>(R.id.actionShare).setOnClickListener {
+                dialog.dismiss()
+                try {
+                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file)
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = getMimeType(file.name)
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(shareIntent, file.name)
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooser)
+                } catch (_: Exception) {}
+            }
+            sheetView.findViewById<View>(R.id.actionCancel).setOnClickListener {
+                dialog.dismiss()
+            }
+
+            val fileNameTv = sheetView.findViewById<TextView>(R.id.sheetFileName)
+            fileNameTv?.text = file.name
+
+            dialog.setContentView(sheetView)
+            dialog.show()
+        }
+
+        private fun openFileDirectlyStatic(context: Context, file: File) {
+            val ext = file.extension.lowercase(Locale.getDefault())
+            if (ext in listOf(
+                    "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
+                    "conf", "cfg", "ini", "properties", "toml",
+                    "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
+                    "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
+                    "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore"
+                )) {
+                try {
+                    val content = file.readText(Charsets.UTF_8).let {
+                        if (it.length > 50000) it.substring(0, 50000) + "\n\n... (文件过大，仅显示前50000字符)" else it
+                    }
+                    val intent = Intent(context, TextPreviewActivity::class.java)
+                    intent.putExtra("title", file.name)
+                    intent.putExtra("content", content)
+                    intent.putExtra("filePath", file.absolutePath)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_not_exist))
+                }
+                return
+            }
+            try {
+                val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file)
+                val intent = Intent(Intent.ACTION_VIEW)
+                intent.setDataAndType(uri, getMimeType(file.name))
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_no_app))
+            } catch (_: Exception) {
+                WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_not_exist))
+            }
+        }
 
         @JvmStatic
         fun setFileIcon(imageView: ImageView, extension: String?, fileName: String?) {

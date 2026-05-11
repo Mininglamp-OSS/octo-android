@@ -133,6 +133,10 @@ public class ConversationManager extends BaseManager {
         ConversationDbManager.getInstance().updateMsg(mConversationMsg.channelID, mConversationMsg.channelType, mConversationMsg.lastClientMsgNO, mConversationMsg.lastMsgSeq, mConversationMsg.unreadCount);
     }
 
+    public void updateLastMsgTimestamp(String channelId, byte channelType, long timestamp) {
+        ConversationDbManager.getInstance().updateLastMsgTimestamp(channelId, channelType, timestamp);
+    }
+
     /**
      * 删除某个会话记录信息
      *

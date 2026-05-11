@@ -143,6 +143,13 @@ public class SegmentTabView extends LinearLayout {
         }
     }
 
+    public void selectTabWithoutCallback(int index) {
+        if (index == selectedIndex) return;
+        selectedIndex = index;
+        updateTabStyles();
+        animateIndicator();
+    }
+
     public int getSelectedIndex() {
         return selectedIndex;
     }

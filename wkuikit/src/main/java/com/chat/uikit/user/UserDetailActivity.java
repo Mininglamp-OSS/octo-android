@@ -296,7 +296,6 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         });
         SingleClickUtil.onSingleClick(wkVBinding.sendMsgBtn, v -> {
             WKIMUtils.getInstance().startChatActivity(new ChatViewMenu(this, uid, WKChannelType.PERSONAL, 0, true));
-            finish();
         });
         wkVBinding.deleteLayout.setOnClickListener(v -> {
             String content = String.format(getString(R.string.delete_friends_tips), wkVBinding.nameTv.getText().toString());

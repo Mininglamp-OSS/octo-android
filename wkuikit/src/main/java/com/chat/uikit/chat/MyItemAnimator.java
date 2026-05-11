@@ -305,8 +305,6 @@ public class MyItemAnimator extends SimpleItemAnimator {
     public boolean animateChange(RecyclerView.ViewHolder oldHolder,
                                  RecyclerView.ViewHolder newHolder, int fromLeft, int fromTop, int toLeft, int toTop) {
         if (oldHolder == newHolder) {
-            // Don't know how to run change animations when the same view holder is re-used.
-            // run a move animation to handle position changes.
             return animateMove(oldHolder, fromLeft, fromTop, toLeft, toTop);
         }
         final float prevTranslationX = oldHolder.itemView.getTranslationX();

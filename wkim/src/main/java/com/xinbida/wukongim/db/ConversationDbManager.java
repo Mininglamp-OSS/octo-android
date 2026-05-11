@@ -295,6 +295,16 @@ public class ConversationDbManager {
                 .update(conversation, cv, WKDBColumns.WKCoverMessageColumns.channel_id + "=? and " + WKDBColumns.WKCoverMessageColumns.channel_type + "=?", update);
     }
 
+    public synchronized void updateLastMsgTimestamp(String channelID, byte channelType, long timestamp) {
+        String[] update = new String[2];
+        update[0] = channelID;
+        update[1] = String.valueOf(channelType);
+        ContentValues cv = new ContentValues();
+        cv.put(WKDBColumns.WKCoverMessageColumns.last_msg_timestamp, timestamp);
+        WKIMApplication.getInstance().getDbHelper()
+                .update(conversation, cv, WKDBColumns.WKCoverMessageColumns.channel_id + "=? and " + WKDBColumns.WKCoverMessageColumns.channel_type + "=?", update);
+    }
+
     public WKConversationMsg queryWithChannel(String channelID, byte channelType) {
         String sql = "select " + conversation + ".*," + channelCols + "," + extraCols + " from " + conversation + " left join " + channel + " on " + conversation + ".channel_id=" + channel + ".channel_id and " + conversation + ".channel_type=" + channel + ".channel_type left join " + conversationExtra + " on " + conversation + ".channel_id=" + conversationExtra + ".channel_id and " + conversation + ".channel_type=" + conversationExtra + ".channel_type where " + conversation + ".channel_id=? and " + conversation + ".channel_type=? and " + conversation + ".is_deleted=0";
         Cursor cursor = WKIMApplication

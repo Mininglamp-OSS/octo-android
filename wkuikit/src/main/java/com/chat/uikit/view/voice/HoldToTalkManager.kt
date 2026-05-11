@@ -61,7 +61,7 @@ class HoldToTalkManager(private val activity: Activity) {
     private var meteringRecord: AudioRecord? = null
     private var meteringThread: Thread? = null
     @Volatile private var meteringRunning = false
-    private var meteringAmplitude = 0
+    @Volatile private var meteringAmplitude = 0
 
     private val waveformLevels = mutableListOf<Float>()
 
@@ -142,6 +142,8 @@ class HoldToTalkManager(private val activity: Activity) {
         showOverlay()
         startTimers()
         listener?.onRecordingStarted()
+
+        WKVoiceInputService.instance.prefetchVoiceContext()
     }
 
     private fun handleRelease() {
@@ -198,19 +200,37 @@ class HoldToTalkManager(private val activity: Activity) {
         }
 
         val contextText = listener?.getCurrentInputText()
-        val chatContext = listener?.getChatContext()
+        val fullContext = listener?.getChatContext()
 
-        WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext) { result, error ->
-            if (error != null || result == null || result.text.isEmpty()) {
-                WKToastUtils.getInstance().showToastNormal("语音识别失败，请重试")
-                dismissOverlay()
-                cleanupAudioFile()
-                state = State.IDLE
-                return@transcribeAudio
+        // 拆分 fullContext：聊天成员：xxx\n[发送者]: yyy → memberContext + chatContext
+        var memberContext: String? = null
+        var chatContext: String? = null
+        if (fullContext != null && fullContext.startsWith("聊天成员：")) {
+            val newlineIdx = fullContext.indexOf('\n')
+            if (newlineIdx > 0) {
+                memberContext = fullContext.substring(0, newlineIdx)
+                chatContext = fullContext.substring(newlineIdx + 1)
+            } else {
+                memberContext = fullContext
             }
+        } else {
+            chatContext = fullContext
+        }
 
-            dismissOverlay()
-            showResult(result.text)
+        WKVoiceInputService.instance.getVoiceContext { personalContext ->
+            WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext, personalContext, memberContext) { result, error ->
+                if (state != State.THINKING) return@transcribeAudio
+                if (error != null || result == null || result.text.isEmpty()) {
+                    WKToastUtils.getInstance().showToastNormal("语音识别失败，请重试")
+                    dismissOverlay()
+                    cleanupAudioFile()
+                    state = State.IDLE
+                    return@transcribeAudio
+                }
+
+                dismissOverlay()
+                showResult(result.text)
+            }
         }
     }
 
@@ -268,17 +288,33 @@ class HoldToTalkManager(private val activity: Activity) {
 
         val file = audioFile ?: return
         val contextText = listener?.getCurrentInputText()
-        val chatContext = listener?.getChatContext()
+        val fullContext = listener?.getChatContext()
 
-        WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext) { result, error ->
-            listener?.onAppendThinkingEnd()
-            if (error != null || result == null || result.text.isEmpty()) {
-                WKToastUtils.getInstance().showToastNormal("语音识别失败")
-                cleanupAudioFile()
-                return@transcribeAudio
+        var memberContext: String? = null
+        var chatContext: String? = null
+        if (fullContext != null && fullContext.startsWith("聊天成员：")) {
+            val newlineIdx = fullContext.indexOf('\n')
+            if (newlineIdx > 0) {
+                memberContext = fullContext.substring(0, newlineIdx)
+                chatContext = fullContext.substring(newlineIdx + 1)
+            } else {
+                memberContext = fullContext
             }
-            listener?.onAppendText(result.text)
-            cleanupAudioFile()
+        } else {
+            chatContext = fullContext
+        }
+
+        WKVoiceInputService.instance.getVoiceContext { personalContext ->
+            WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext, personalContext, memberContext) { result, error ->
+                listener?.onAppendThinkingEnd()
+                if (error != null || result == null || result.text.isEmpty()) {
+                    WKToastUtils.getInstance().showToastNormal("语音识别失败")
+                    cleanupAudioFile()
+                    return@transcribeAudio
+                }
+                listener?.onAppendText(result.text)
+                cleanupAudioFile()
+            }
         }
     }
 

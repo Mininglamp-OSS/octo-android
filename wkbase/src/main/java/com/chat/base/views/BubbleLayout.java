@@ -237,9 +237,11 @@ public class BubbleLayout extends LinearLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int cap = mRuntimeMaxWidth;
         if (cap <= 0 && mPaneAwareMaxWidthEnabled) {
-            // Derive from the hosting Activity's current window bounds. Returns the full
-            // display when Embedding is inactive, so phone-mode behavior is preserved.
-            cap = PaneMetrics.bubbleMaxWidthPx(getContext());
+            int paneWidth = PaneMetrics.widthPx(getContext());
+            int maxWidth = PaneMetrics.maxWidthPx(getContext());
+            if (paneWidth < maxWidth) {
+                cap = PaneMetrics.bubbleMaxWidthPx(getContext());
+            }
         }
         if (cap > 0) {
             int widthMode = MeasureSpec.getMode(widthMeasureSpec);

@@ -21,5 +21,6 @@
         <activity android:name=".ui.PCLoginViewActivity" />
         <activity android:name=".ui.WKWebLoginActivity" />
         <activity android:name="com.chat.login.ui.ThirdLoginActivity" />
+        <activity android:name=".ui.OidcAuthActivity" />
     </application>
 </manifest>

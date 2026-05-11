@@ -62,6 +62,7 @@ public class WKSetGroupRemarkActivity extends WKBaseActivity<ActUpdateGroupRemar
     @Override
     protected void initListener() {
         wkVBinding.enter.setOnClickListener(v -> {
+            if (channel == null || TextUtils.isEmpty(channel.channelName)) return;
             wkVBinding.remarkEt.setText(channel.channelName);
             wkVBinding.remarkEt.setSelection(channel.channelName.length());
         });
@@ -81,7 +82,9 @@ public class WKSetGroupRemarkActivity extends WKBaseActivity<ActUpdateGroupRemar
 
             @Override
             public void afterTextChanged(Editable s) {
-                if ((TextUtils.isEmpty(s.toString()) && TextUtils.isEmpty(channel.channelRemark)) || channel.channelRemark.equals(s.toString())) {
+                if (channel == null) return;
+                String remark = channel.channelRemark != null ? channel.channelRemark : "";
+                if ((TextUtils.isEmpty(s.toString()) && TextUtils.isEmpty(remark)) || remark.equals(s.toString())) {
                     wkVBinding.saveBtn.setAlpha(0.2f);
                     wkVBinding.saveBtn.setEnabled(false);
                 } else {

@@ -36,12 +36,20 @@ class WKVoiceInputService private constructor() {
         val instance: WKVoiceInputService by lazy { WKVoiceInputService() }
 
         private const val CONFIG_CACHE_TTL = 300_000L // 5 minutes
+        private const val VOICE_CONTEXT_CACHE_TTL = 300_000L // 5 minutes
+        private const val VOICE_CONTEXT_TIMEOUT = 5_000L // 5 seconds
         private const val TRANSCRIBE_TIMEOUT = 30_000L // 30 seconds
         private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5MB
     }
 
     private var cachedConfig: WKVoiceInputConfig? = null
     private var cachedAt: Long = 0
+
+    private var cachedVoiceContext: String? = null
+    private var voiceContextCachedAt: Long = 0
+    private var voiceContextSpaceId: String? = null
+    private var voiceContextInflight: Boolean = false
+    private val voiceContextPendingCallbacks = mutableListOf<(String?) -> Unit>()
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val client: OkHttpClient
@@ -89,10 +97,82 @@ class WKVoiceInputService private constructor() {
         cachedAt = 0
     }
 
+    fun prefetchVoiceContext() {
+        val ctx = com.chat.base.WKBaseApplication.getInstance().context ?: return
+        val spaceId = android.preference.PreferenceManager
+            .getDefaultSharedPreferences(ctx)
+            .getString("currentSpaceId", null)
+        if (spaceId.isNullOrEmpty()) return
+
+        if (cachedVoiceContext != null &&
+            voiceContextSpaceId == spaceId &&
+            (System.currentTimeMillis() - voiceContextCachedAt) < VOICE_CONTEXT_CACHE_TTL) {
+            return
+        }
+
+        if (voiceContextInflight && voiceContextSpaceId == spaceId) return
+
+        voiceContextInflight = true
+        voiceContextSpaceId = spaceId
+
+        mainHandler.postDelayed({
+            if (voiceContextInflight && voiceContextSpaceId == spaceId) {
+                voiceContextInflight = false
+                flushVoiceContextCallbacks(null)
+            }
+        }, VOICE_CONTEXT_TIMEOUT)
+
+        val url = WKApiConfig.baseUrl + "voice/context?space_id=$spaceId"
+        val request = Request.Builder().url(url).get().build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post {
+                    voiceContextInflight = false
+                    cachedVoiceContext = null
+                    flushVoiceContextCallbacks(null)
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val bodyStr = try { response.body?.string() ?: "{}" } catch (_: Exception) { "{}" }
+                mainHandler.post {
+                    try {
+                        val json = JSONObject(bodyStr)
+                        val hasContext = json.optBoolean("has_context", false)
+                        val context = json.optString("context", "")
+                        cachedVoiceContext = if (hasContext && context.isNotEmpty()) context else null
+                        voiceContextCachedAt = System.currentTimeMillis()
+                    } catch (_: Exception) {
+                        cachedVoiceContext = null
+                    }
+                    voiceContextInflight = false
+                    flushVoiceContextCallbacks(cachedVoiceContext)
+                }
+            }
+        })
+    }
+
+    fun getVoiceContext(completion: (String?) -> Unit) {
+        if (!voiceContextInflight) {
+            completion(cachedVoiceContext)
+            return
+        }
+        voiceContextPendingCallbacks.add(completion)
+    }
+
+    private fun flushVoiceContextCallbacks(context: String?) {
+        val callbacks = voiceContextPendingCallbacks.toList()
+        voiceContextPendingCallbacks.clear()
+        callbacks.forEach { it(context) }
+    }
+
     fun transcribeAudio(
         audioFile: File,
         contextText: String?,
         chatContext: String? = null,
+        personalContext: String? = null,
+        memberContext: String? = null,
         completion: TranscribeCallback
     ) {
         if (audioFile.length() > MAX_FILE_SIZE) {
@@ -117,6 +197,12 @@ class WKVoiceInputService private constructor() {
         }
         if (!chatContext.isNullOrEmpty()) {
             bodyBuilder.addFormDataPart("chat_context", chatContext)
+        }
+        if (!personalContext.isNullOrEmpty()) {
+            bodyBuilder.addFormDataPart("personal_context", personalContext)
+        }
+        if (!memberContext.isNullOrEmpty()) {
+            bodyBuilder.addFormDataPart("member_context", memberContext)
         }
 
         val request = Request.Builder()

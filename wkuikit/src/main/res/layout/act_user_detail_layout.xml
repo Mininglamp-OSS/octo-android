@@ -77,6 +77,16 @@
                                 android:textSize="16sp" />
 
                             <androidx.appcompat.widget.AppCompatImageView
+                                android:id="@+id/realnameVerifiedIv"
+                                android:layout_width="24dp"
+                                android:layout_height="17dp"
+                                android:layout_gravity="center_vertical"
+                                android:layout_marginStart="4dp"
+                                android:layout_marginTop="2dp"
+                                android:src="@mipmap/ic_realname_verified_card"
+                                android:visibility="gone" />
+
+                            <androidx.appcompat.widget.AppCompatImageView
                                 android:id="@+id/sexIv"
                                 android:layout_width="25dp"
                                 android:layout_height="25dp"

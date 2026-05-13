@@ -343,11 +343,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 groupRv.setAdapter(groupAdapter);
                 addGlideScrollListener(groupRv);
                 addSwipeGuard(groupRv);
+                addVerticalScrollPriority(groupRv);
+                groupRv.addOnScrollListener(scrollIdleWatcher);
             }
             if (personalRv != null) {
                 personalRv.setAdapter(personalAdapter);
                 addGlideScrollListener(personalRv);
                 addSwipeGuard(personalRv);
+                addVerticalScrollPriority(personalRv);
+                personalRv.addOnScrollListener(scrollIdleWatcher);
             }
         });
 
@@ -373,7 +377,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 if (!isAdded() || isDetached()) return;
                 try {
                     RequestManager glideMgr = Glide.with(ChatFragment.this);
-                    if (newState == RecyclerView.SCROLL_STATE_SETTLING) {
+                    if (newState == RecyclerView.SCROLL_STATE_DRAGGING || newState == RecyclerView.SCROLL_STATE_SETTLING) {
                         glideMgr.pauseRequests();
                     } else if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                         glideMgr.resumeRequests();
@@ -392,6 +396,43 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             @Override
             public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView, @NonNull android.view.MotionEvent e) {
                 return pageSwiping;
+            }
+        });
+    }
+
+    private void addVerticalScrollPriority(RecyclerView rv) {
+        rv.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            private float startX, startY;
+            private boolean decided;
+
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView, @NonNull android.view.MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        startX = e.getX();
+                        startY = e.getY();
+                        decided = false;
+                        recyclerView.getParent().requestDisallowInterceptTouchEvent(true);
+                        break;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        if (!decided) {
+                            float dx = Math.abs(e.getX() - startX);
+                            float dy = Math.abs(e.getY() - startY);
+                            int slop = android.view.ViewConfiguration.get(recyclerView.getContext()).getScaledTouchSlop();
+                            if (dx > slop || dy > slop) {
+                                decided = true;
+                                if (dx > dy * 1.5f) {
+                                    recyclerView.getParent().requestDisallowInterceptTouchEvent(false);
+                                }
+                            }
+                        }
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        recyclerView.getParent().requestDisallowInterceptTouchEvent(false);
+                        break;
+                }
+                return false;
             }
         });
     }
@@ -2431,11 +2472,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 对齐 iOS WKCategorySectionCell：计算分组下所有会话的未读消息总数（含子区）
      * 子区会话 (COMMUNITY_TOPIC) 不在 allConversations 中，需从 ConversationManager 单独查询
      */
-    private int getUnreadCountInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
+    private int getUnreadCountInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap, List<WKConversationMsg> topicConvs) {
         if (category.groups == null) return 0;
-        // 一次性获取所有子区会话，避免在循环内重复查询
-        List<WKConversationMsg> topicConvs = WKIM.getInstance().getConversationManager()
-                .getWithChannelType(WKChannelType.COMMUNITY_TOPIC);
         int total = 0;
         for (CategoryEntity.CategoryGroup cg : category.groups) {
             ChatConversationMsg msg = channelMap.get(cg.group_no);
@@ -2560,10 +2598,26 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // ViewPager2 切换时数据已预填充，无需重新构建列表
     }
 
+    private boolean pendingScrollIdleRefresh = false;
+    private final RecyclerView.OnScrollListener scrollIdleWatcher = new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            if (newState == RecyclerView.SCROLL_STATE_IDLE && pendingScrollIdleRefresh) {
+                pendingScrollIdleRefresh = false;
+                filterAndDisplayInternal();
+            }
+        }
+    };
+
     private void filterAndDisplayInternal() {
         if (groupAdapter == null || getActivity() == null || !isAdded()) return;
         if (!isResumed()) {
             pendingFilterAndDisplay = true;
+            return;
+        }
+        RecyclerView rv = getActiveRecyclerView();
+        if (rv != null && rv.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+            pendingScrollIdleRefresh = true;
             return;
         }
         // 同时更新两个 adapter，确保 tab 切换时数据已就绪
@@ -2577,6 +2631,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         personalAdapter.setList(personalList);
         lastFullRefreshTime = System.currentTimeMillis();
         pendingFilterAndDisplay = false;
+        pendingScrollIdleRefresh = false;
     }
 
     private List<ChatConversationMsg> buildDisplayListForCurrentTab() {
@@ -2607,6 +2662,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             // 3. 用户自建分组
+            // 一次性查询所有子区会话，避免循环内重复 DB 查询
+            List<WKConversationMsg> topicConvs = WKIM.getInstance().getConversationManager()
+                    .getWithChannelType(WKChannelType.COMMUNITY_TOPIC);
             for (CategoryEntity category : userCategories) {
                 // 先统计实际有会话的群聊数量
                 int actualCount = 0;
@@ -2617,7 +2675,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
                 ChatConversationMsg sectionHeader = new ChatConversationMsg(category.category_id, category.name);
                 sectionHeader.sectionGroupCount = actualCount;
-                sectionHeader.sectionUnreadCount = getUnreadCountInCategory(category, channelMap);
+                sectionHeader.sectionUnreadCount = getUnreadCountInCategory(category, channelMap, topicConvs);
                 sectionHeader.sectionHasMention = hasMentionInCategory(category, channelMap);
                 displayList.add(sectionHeader);
                 if (!groupAdapter.isSectionCollapsed(category.category_id)) {
@@ -3524,28 +3582,30 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // YUJ-267 · Fix A：根据当前 pane 宽度判定 splitMode，恢复 selection。
         // 折叠态 ↔ 展开态切换 / 旋转时也会重新 resume，所以 splitMode 在这里同步。
         syncSplitModeAndSelection();
-        // Fragment 不可见期间有数据变化，返回时一次性刷新
+        // Fragment 不可见期间有数据变化，返回时延迟到下一帧刷新，不阻塞返回动画
         if (pendingFilterAndDisplay) {
             pendingFilterAndDisplay = false;
-            filterAndDisplayInternal();
+            filterDebounceHandler.post(filterRunnable);
         }
         long now = System.currentTimeMillis();
         long elapsed = now - lastFullRefreshTime;
         if (elapsed < RESUME_THROTTLE_MS) {
-            // 仅刷新子区未读（轻量，不触发全量 setList）
-            chatConversationAdapter.clearAndReloadThreadData();
-            refreshExtrasIfNeeded();
+            // 仅刷新子区未读（轻量，不触发全量 setList），延迟到下一帧避免阻塞返回动画
+            filterDebounceHandler.post(() -> {
+                chatConversationAdapter.clearAndReloadThreadData();
+                refreshExtrasIfNeeded();
+            });
             consumeJoinSuccessNoticeIfAny();
             int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
             wkVBinding.deviceLayout.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
             return;
         }
-        // 子区数据缓存清除并重新加载，返回时实时更新
-        chatConversationAdapter.clearAndReloadThreadData();
-        // 补充草稿等 extras：syncCoverExtra 可能在 Fragment 创建前完成，onResume 时从 DB 补上
-        refreshExtrasIfNeeded();
-        // 静默刷新分组（不 invalidateCache，只有服务端返回新数据才触发 filterAndDisplay）
-        loadCategories();
+        // 子区数据缓存清除并重新加载，延迟到下一帧避免阻塞返回动画
+        filterDebounceHandler.post(() -> {
+            chatConversationAdapter.clearAndReloadThreadData();
+            refreshExtrasIfNeeded();
+            loadCategories();
+        });
         // YUJ-140 · 跨 Space 加群 Toast：消费上个界面（扫码 / 邀请加群）留下的 notice
         consumeJoinSuccessNoticeIfAny();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
@@ -3759,8 +3819,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     private void notifyRecycler(int index, ChatConversationMsg msg) {
         RecyclerView rv = getActiveRecyclerView();
-        if (rv == null || rv.getScrollState() == RecyclerView.SCROLL_STATE_IDLE || !rv.isComputingLayout()) {
+        if (rv == null || (rv.getScrollState() == RecyclerView.SCROLL_STATE_IDLE && !rv.isComputingLayout())) {
             chatConversationAdapter.notifyItemChanged(index, msg);
+        } else {
+            pendingScrollIdleRefresh = true;
         }
     }
 

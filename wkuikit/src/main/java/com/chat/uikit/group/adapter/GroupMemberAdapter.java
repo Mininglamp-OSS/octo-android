@@ -14,10 +14,13 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.external.ExternalViewerResolver;
 import com.chat.base.msgitem.WKChannelMemberRole;
+import com.chat.base.realname.RealnameBadgeResolver;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.uikit.R;
 import com.chat.uikit.message.MsgModel;
+import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelType;
 
@@ -60,6 +63,15 @@ public class GroupMemberAdapter extends BaseQuickAdapter<WKChannelMember, BaseVi
             avatarView.showAvatar(item.memberUID, WKChannelType.PERSONAL, item.memberAvatarCacheKey);
             helper.setGone(R.id.handlerIv, true);
             helper.setGone(R.id.userLayout, false);
+            Boolean memberVerified = RealnameBadgeResolver.isVerifiedTriState(item);
+            boolean verified;
+            if (memberVerified != null) {
+                verified = memberVerified;
+            } else {
+                WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(item.memberUID, WKChannelType.PERSONAL);
+                verified = RealnameBadgeResolver.isVerified(ch);
+            }
+            helper.setGone(R.id.realnameBadgeIv, !verified);
             if (item.role == WKChannelMemberRole.admin) {
                 avatarView.onlineTv.setVisibility(View.VISIBLE);
                 avatarView.spotView.setVisibility(View.GONE);

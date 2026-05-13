@@ -15,6 +15,7 @@ import com.chat.base.config.WKSystemAccount
 import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.entity.PopupMenuItem
 import com.chat.base.entity.UserOnlineStatus
+import com.chat.base.realname.RealnameBadgeResolver
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.AndroidUtilities
@@ -32,6 +33,7 @@ class FriendAdapter :
             R.id.nameTv,
             if (TextUtils.isEmpty(item.channel.channelRemark)) item.channel.channelName else item.channel.channelRemark
         )
+        holder.setGone(R.id.realnameBadgeIv, !RealnameBadgeResolver.isVerified(item.channel))
         val index: Int = holder.bindingAdapterPosition - headerLayoutCount
         val firstLetter = if (item.pying.isNotEmpty()) item.pying.substring(0, 1) else "#"
         val index1: Int = getPositionForSection(firstLetter)

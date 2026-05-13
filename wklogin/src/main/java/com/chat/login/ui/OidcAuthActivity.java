@@ -29,7 +29,9 @@ import com.chat.login.R;
 import com.chat.login.databinding.ActOidcAuthLayoutBinding;
 import com.chat.login.service.LoginModel;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
 
@@ -99,6 +101,15 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
         // 记录授权 host 用于下面的 URL 白名单校验
         final String authHost = authHostResolved;
 
+        // OIDC 白名单：authHost + apiHost + 首次重定向的 IdP host（仅允许一次动态追加）
+        final Set<String> allowedHosts = new HashSet<>();
+        final boolean[] idpDiscovered = {false};
+        if (authHost != null) allowedHosts.add(authHost);
+        try {
+            String apiHost = new java.net.URL(WKApiConfig.baseUrl).getHost();
+            if (apiHost != null) allowedHosts.add(apiHost);
+        } catch (Exception ignore) { }
+
         wkVBinding.webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -107,35 +118,40 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return rejectNonWhitelistedUrl(request.getUrl());
+                return rejectUrl(request.getUrl());
             }
 
             @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return rejectNonWhitelistedUrl(android.net.Uri.parse(url));
+                return rejectUrl(android.net.Uri.parse(url));
             }
 
             /**
-             * YUJ-420 R8 fix (Jerry R6 Critical): 白名单同时要求 scheme=https。
-             * R3 版本只校验 host, SSO WebView 后续可能被导红到 http://同 host
-             * 导致 authcode / cookie / token 降级到明文链路。
-             * R8 强制 https-only, 仅放行 scheme=https 且 host 在白名单的 URL。
-             * 未来如需 file:// / about:blank / data:// 等特殊来源, 在此显式扩展。
+             * OIDC 授权流程 URL 安全校验。
+             *
+             * 安全策略：
+             * 1. 强制 HTTPS — 拒绝所有非 HTTPS 请求
+             * 2. 静态白名单 — authHost + apiHost
+             * 3. 单次 IdP 发现 — 授权页首次重定向的目标即为 IdP host，
+             *    加入白名单后锁定，不再接受新 host（防止用户点击
+             *    外链或脚本导航到任意站点）
              */
-            private boolean rejectNonWhitelistedUrl(android.net.Uri target) {
+            private boolean rejectUrl(android.net.Uri target) {
                 if (target == null) return true;
-                // scheme 必须是 https（OIDC 授权页流程没有合法 http 场景）
                 String scheme = target.getScheme();
-                if (scheme == null || !scheme.equalsIgnoreCase("https")) return true;
+                if (scheme == null || !scheme.equalsIgnoreCase("https")) {
+                    return true;
+                }
                 String host = target.getHost();
                 if (host == null || host.isEmpty()) return true;
-                if (host.equals(authHost)) return false;
-                try {
-                    String apiHost = new java.net.URL(WKApiConfig.baseUrl).getHost();
-                    if (apiHost != null && host.equals(apiHost)) return false;
-                } catch (Exception ignore) { }
-                return true; // reject (return true 即 WebView 不加载)
+                if (allowedHosts.contains(host)) return false;
+                if (!idpDiscovered[0]) {
+                    idpDiscovered[0] = true;
+                    allowedHosts.add(host);
+                    return false;
+                }
+                return true;
             }
         });
         wkVBinding.webView.setWebChromeClient(new WebChromeClient());

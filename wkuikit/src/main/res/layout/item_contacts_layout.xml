@@ -45,15 +45,29 @@
 
         <TextView
             android:id="@+id/nameTv"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
             android:layout_marginStart="10dp"
-            android:layout_weight="1"
             android:ellipsize="end"
             android:lines="1"
+            android:maxWidth="200dp"
             android:textColor="@color/colorDark"
             android:textSize="14sp" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/realnameBadgeIv"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="3dp"
+            android:src="@drawable/ic_realname_verified_mini"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
     </LinearLayout>
 

@@ -388,6 +388,9 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                         if (!TextUtils.isEmpty(localChannel.channelName)) {
                             channel.channelName = localChannel.channelName;
                         }
+                        if (localChannel.remoteExtraMap != null) {
+                            channel.remoteExtraMap = localChannel.remoteExtraMap;
+                        }
                     }
                     tempList.add(channel);
                 }

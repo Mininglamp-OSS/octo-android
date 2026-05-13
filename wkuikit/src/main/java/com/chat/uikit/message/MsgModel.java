@@ -759,32 +759,34 @@ public class MsgModel extends WKBaseModel {
     public void doneReminder(List<Long> list) {
         if (WKReader.isEmpty(list)) return;
 
-        // 对齐 iOS WKReminderManager.done: 同步更新 DB + 会话对象，避免返回列表时闪烁
-        // Step 1: 标记前先查出受影响的 channelID
-        List<WKReminder> affected = ReminderDBManager.getInstance().queryWithIds(list);
-        List<String> channelIds = new ArrayList<>();
-        for (WKReminder r : affected) {
-            if (!TextUtils.isEmpty(r.channelID) && !channelIds.contains(r.channelID)) {
-                channelIds.add(r.channelID);
+        // DB 操作放 IO 线程，避免 onPause 主线程阻塞
+        List<Long> idsCopy = new ArrayList<>(list);
+        WKDbScheduler.get().scheduleDirect(() -> {
+            // Step 1: 查出受影响的 channelID
+            List<WKReminder> affected = ReminderDBManager.getInstance().queryWithIds(idsCopy);
+            List<String> channelIds = new ArrayList<>();
+            for (WKReminder r : affected) {
+                if (!TextUtils.isEmpty(r.channelID) && !channelIds.contains(r.channelID)) {
+                    channelIds.add(r.channelID);
+                }
             }
-        }
 
-        // Step 2: 更新 DB (done=1)
-        ReminderDBManager.getInstance().doneWithReminderIds(list);
+            // Step 2: 更新 DB (done=1)
+            ReminderDBManager.getInstance().doneWithReminderIds(idsCopy);
 
-        // Step 3: 清除 ReminderManager 内存缓存
-        WKIM.getInstance().getReminderManager().clearAllCache();
-
-        // Step 4: 对齐 iOS updateConversations — 同步刷新受影响会话的 reminderList
-        if (WKReader.isNotEmpty(channelIds)) {
-            List<WKUIConversationMsg> uiMsgList = WKIM.getInstance().getConversationManager()
-                    .getWithChannelIds(channelIds);
-            for (WKUIConversationMsg msg : uiMsgList) {
-                // 设为 null，下次 getReminderList() 会从 DB 读取最新(done=1 已排除)
-                msg.setReminderList(null);
-            }
-            WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsgList, "doneReminders");
-        }
+            // Step 3-4: 回主线程清缓存 + 刷新会话列表
+            AndroidUtilities.runOnUIThread(() -> {
+                WKIM.getInstance().getReminderManager().clearAllCache();
+                if (WKReader.isNotEmpty(channelIds)) {
+                    List<WKUIConversationMsg> uiMsgList = WKIM.getInstance().getConversationManager()
+                            .getWithChannelIds(channelIds);
+                    for (WKUIConversationMsg msg : uiMsgList) {
+                        msg.setReminderList(null);
+                    }
+                    WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsgList, "doneReminders");
+                }
+            });
+        });
 
         // Step 5: 异步通知服务端，失败重试一次
         request(createService(MsgService.class).doneReminder(list), new IRequestResultListener<>() {

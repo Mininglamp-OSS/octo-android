@@ -55,9 +55,19 @@
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
                     android:lines="1"
+                    android:maxWidth="200dp"
                     android:text="111"
                     android:textColor="@color/colorDark"
                     android:textSize="16sp" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/realnameBadgeIv"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginStart="3dp"
+                    android:src="@drawable/ic_realname_verified_mini"
+                    android:visibility="gone" />
 
                 <LinearLayout
                     android:id="@+id/categoryLayout"

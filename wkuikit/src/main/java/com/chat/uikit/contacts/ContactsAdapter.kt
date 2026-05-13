@@ -5,6 +5,7 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
+import com.chat.base.realname.RealnameBadgeResolver
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.ui.components.CheckBox
@@ -33,6 +34,7 @@ class ContactsAdapter :
             R.id.nameTv,
             if (TextUtils.isEmpty(item.channel.channelRemark)) item.channel.channelName else item.channel.channelRemark
         )
+        holder.setGone(R.id.realnameBadgeIv, !RealnameBadgeResolver.isVerified(item.channel))
         val index: Int = holder.bindingAdapterPosition
         val index1: Int = getPositionForSection(item.pying.substring(0, 1))
         if (index == index1) {

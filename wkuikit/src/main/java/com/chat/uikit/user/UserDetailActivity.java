@@ -396,6 +396,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     wkVBinding.nameTv.setText(buildNameWithExternalSuffix(baseName, sourceSpaceLabel));
                     wkVBinding.nickNameTv.setText(userInfo.name);
                     wkVBinding.nickNameLayout.setVisibility(TextUtils.isEmpty(userInfo.remark) ? View.GONE : View.VISIBLE);
+                    wkVBinding.realnameVerifiedIv.setVisibility(userInfo.realname_verified ? View.VISIBLE : View.GONE);
                     if (TextUtils.isEmpty(userInfo.short_no)) {
                         wkVBinding.identityLayout.setVisibility(View.GONE);
                     } else {

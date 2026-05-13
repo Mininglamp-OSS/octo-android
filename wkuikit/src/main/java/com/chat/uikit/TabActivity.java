@@ -121,6 +121,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         fragments.add(new ContactsFragment());
         fragments.add(new MyFragment());
 
+        wkVBinding.vp.setSaveEnabled(false);
         wkVBinding.vp.setAdapter(new WKFragmentStateAdapter(this, fragments));
         wkVBinding.vp.setUserInputEnabled(false);
         wkVBinding.bottomNavigation.getOrCreateBadge(R.id.i_chat).setVisible(false);

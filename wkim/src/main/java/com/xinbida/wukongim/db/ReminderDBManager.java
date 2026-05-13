@@ -155,6 +155,9 @@ public class ReminderDBManager {
     }
 
     public List<WKReminder> queryWithIds(List<Long> ids) {
+        List<WKReminder> list = new ArrayList<>();
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return list;
         StringBuilder stringBuffer = new StringBuilder();
         for (int i = 0, size = ids.size(); i < size; i++) {
             if (!TextUtils.isEmpty(stringBuffer)) {
@@ -163,11 +166,7 @@ public class ReminderDBManager {
             stringBuffer.append(ids.get(i));
         }
         String sql = "select * from " + reminders + " where reminder_id in (" + stringBuffer + ")";
-        List<WKReminder> list = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication
-                .getInstance()
-                .getDbHelper()
-                .rawQuery(sql)) {
+        try (Cursor cursor = helper.rawQuery(sql)) {
             if (cursor == null) {
                 return list;
             }

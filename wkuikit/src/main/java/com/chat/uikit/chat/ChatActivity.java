@@ -16,6 +16,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
+import android.text.style.ImageSpan;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.ViewConfiguration;
@@ -53,6 +55,7 @@ import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.base.config.WKBinder;
 import com.chat.base.foldable.NarrowTransition;
 import com.chat.base.config.WKConfig;
+import com.chat.base.realname.RealnameBadgeResolver;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.config.WKSystemAccount;
@@ -2503,7 +2506,20 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             wkVBinding.topLayout.titleCenterTv.setText(R.string.wk_file_helper);
         } else {
             String showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
-            wkVBinding.topLayout.titleCenterTv.setText(showName);
+            if (channelType == WKChannelType.PERSONAL && RealnameBadgeResolver.isVerified(channel)) {
+                SpannableStringBuilder ssb = new SpannableStringBuilder(showName);
+                ssb.append("  ");
+                android.graphics.drawable.Drawable badge = androidx.core.content.ContextCompat.getDrawable(this, com.chat.base.R.drawable.ic_realname_verified_mini);
+                if (badge != null) {
+                    int size = (int) (wkVBinding.topLayout.titleCenterTv.getTextSize() * 0.8f);
+                    badge.setBounds(0, 0, size, size);
+                    ImageSpan span = new ImageSpan(badge, ImageSpan.ALIGN_BASELINE);
+                    ssb.setSpan(span, ssb.length() - 1, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+                wkVBinding.topLayout.titleCenterTv.setText(ssb);
+            } else {
+                wkVBinding.topLayout.titleCenterTv.setText(showName);
+            }
         }
     }
 
@@ -2810,7 +2826,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             && com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
                         return false;
                     }
-                    new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(this::finish, 150);
+                    finish();
                 }
             }
         }

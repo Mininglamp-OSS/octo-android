@@ -328,6 +328,11 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                         WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
                         channel.channelName = member.name;
                         channel.robot = member.robot;
+                        WKChannel cached = WKIM.getInstance().getChannelManager().getChannel(member.uid, WKChannelType.PERSONAL);
+                        if (cached != null) {
+                            if (!TextUtils.isEmpty(cached.channelRemark)) channel.channelRemark = cached.channelRemark;
+                            if (cached.remoteExtraMap != null) channel.remoteExtraMap = cached.remoteExtraMap;
+                        }
                         list.add(new FriendUIEntity(channel));
                     }
                     processContacts(list);

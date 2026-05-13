@@ -26,6 +26,10 @@ public class DBHelper {
         return mDb;
     }
 
+    public boolean isClosed() {
+        return mDb == null || !mDb.isOpen();
+    }
+
     private DBHelper(Context ctx, String uid) {
         DBHelper.uid = uid;
         myDBName = uid + ".db";
@@ -45,7 +49,7 @@ public class DBHelper {
     }
 
     public static DBHelper getInstance(Context context, String _uid) {
-        if (TextUtils.isEmpty(uid) || !uid.equals(_uid) || openHelper == null) {
+        if (TextUtils.isEmpty(uid) || !uid.equals(_uid) || openHelper == null || openHelper.isClosed()) {
             synchronized (DBHelper.class) {
                 if (openHelper != null) {
                     openHelper.close();
@@ -143,5 +147,23 @@ public class DBHelper {
         if (mDb == null || !mDb.isOpen()) return false;
         int count = mDb.delete(tableName, where, whereValue);
         return count > 0;
+    }
+
+    // ==================== 事务安全方法 ====================
+
+    public void beginTransaction() {
+        if (mDb != null && mDb.isOpen()) mDb.beginTransaction();
+    }
+
+    public void setTransactionSuccessful() {
+        if (mDb != null && mDb.isOpen() && mDb.inTransaction()) mDb.setTransactionSuccessful();
+    }
+
+    public void endTransaction() {
+        if (mDb != null && mDb.isOpen() && mDb.inTransaction()) mDb.endTransaction();
+    }
+
+    public boolean inTransaction() {
+        return mDb != null && mDb.isOpen() && mDb.inTransaction();
     }
 }

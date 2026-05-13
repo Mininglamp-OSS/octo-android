@@ -7,6 +7,7 @@ import android.util.Log;
 
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
+import com.xinbida.wukongim.db.WKDBHelper;
 import com.xinbida.wukongim.db.ConversationDbManager;
 import com.xinbida.wukongim.db.MsgDbManager;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -458,12 +459,13 @@ public class ConversationManager extends BaseManager {
             MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
         }
         List<WKUIConversationMsg> uiMsgList = new ArrayList<>();
+        WKDBHelper txHelper = WKIMApplication.getInstance().getDbHelper();
         if (WKCommonUtils.isNotEmpty(conversationMsgList)) {
             if (WKCommonUtils.isNotEmpty(msgList)) {
                 MsgDbManager.getInstance().insertMsgs(msgList);
             }
             try {
-                if (WKCommonUtils.isNotEmpty(conversationMsgList)) {
+                if (WKCommonUtils.isNotEmpty(conversationMsgList) && txHelper != null && !txHelper.isClosed()) {
                     List<ContentValues> cvList = new ArrayList<>();
                     for (int i = 0, size = conversationMsgList.size(); i < size; i++) {
                         ContentValues cv = ConversationDbManager.getInstance().getInsertSyncCV(conversationMsgList.get(i));
@@ -473,20 +475,17 @@ public class ConversationManager extends BaseManager {
                             uiMsgList.add(uiMsg);
                         }
                     }
-                    WKIMApplication.getInstance().getDbHelper().getDb()
-                            .beginTransaction();
+                    txHelper.beginTransaction();
                     for (ContentValues cv : cvList) {
                         ConversationDbManager.getInstance().insertSyncMsg(cv);
                     }
-                    WKIMApplication.getInstance().getDbHelper().getDb()
-                            .setTransactionSuccessful();
+                    txHelper.setTransactionSuccessful();
                 }
             } catch (Exception ignored) {
                 WKLoggerUtils.getInstance().e(TAG, "Save synchronization session message exception");
             } finally {
-                if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                    WKIMApplication.getInstance().getDbHelper().getDb()
-                            .endTransaction();
+                if (txHelper != null) {
+                    txHelper.endTransaction();
                 }
             }
             if (WKCommonUtils.isNotEmpty(msgReactionList)) {

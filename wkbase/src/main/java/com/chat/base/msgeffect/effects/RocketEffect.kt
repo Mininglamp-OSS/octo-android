@@ -557,6 +557,16 @@ class RocketEffect(
             intArrayOf(0xFFFFFFFF.toInt(), 0xFF8A5CD6.toInt(), 0xFF4A148C.toInt()),
             floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         textPaint.alpha = a; canvas.drawText("Octo", 0f, ty, textPaint); textPaint.shader = null
+
+        // "2718" 数字标识 — 机身下半部分，字号稍大
+        val numY = ty + rocketW * 0.28f
+        textPaint.textSize = rocketW * 0.18f
+        textPaint.color = 0x80000000.toInt(); textPaint.alpha = (a * 0.4f).toInt()
+        canvas.drawText("2718", 0.5f, numY + 0.5f, textPaint)
+        textPaint.shader = LinearGradient(0f, numY - textPaint.textSize, 0f, numY,
+            intArrayOf(0xFFFFFFFF.toInt(), 0xFF8A5CD6.toInt(), 0xFF4A148C.toInt()),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+        textPaint.alpha = a; canvas.drawText("2718", 0f, numY, textPaint); textPaint.shader = null
     }
 
     private fun drawBodyDetails(canvas: Canvas, a: Int, bodyTop: Float, bodyBot: Float) {

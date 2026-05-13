@@ -67,7 +67,7 @@ public class WKPushApplication {
         // YUJ-295 (P-04) · Phase-B —— Firebase 网络握手 / 厂商 SDK I/O 立即异步。
         AppStartup.postPhaseB("push-token", this::initPush);
 
-        EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
+        EndpointManager.getInstance().setMethod("push_login_menu", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
     }
 
     private void initPush() {

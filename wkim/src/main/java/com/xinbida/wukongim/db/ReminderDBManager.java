@@ -36,6 +36,8 @@ public class ReminderDBManager {
     }
 
     public void doneWithReminderIds(List<Long> ids) {
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         ContentValues cv = new ContentValues();
         cv.put("done", 1);
         cv.put("done_at", System.currentTimeMillis() / 1000);
@@ -43,15 +45,15 @@ public class ReminderDBManager {
         for (int i = 0; i < ids.size(); i++) {
             strings[i] = ids.get(i) + "";
         }
-        WKIMApplication.getInstance().getDbHelper().update(reminders, cv, "reminder_id in (" + WKCursor.getPlaceholders(ids.size()) + ")", strings);
+        helper.update(reminders, cv, "reminder_id in (" + WKCursor.getPlaceholders(ids.size()) + ")", strings);
     }
 
     public long queryMaxVersion() {
         String sql = "select * from " + reminders + " order by version desc limit 1";
         long version = 0;
-        try (Cursor cursor = WKIMApplication
-                .getInstance()
-                .getDbHelper().rawQuery(sql)) {
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return 0;
+        try (Cursor cursor = dbHelper.rawQuery(sql)) {
             if (cursor == null) {
                 return 0;
             }
@@ -68,7 +70,9 @@ public class ReminderDBManager {
     public boolean hasUndoneReminderWithChannelPrefix(String groupNo, int reminderType) {
         String prefix = groupNo + "____%";
         String sql = "select 1 from " + reminders + " where channel_id LIKE ? and done=0 and type=? limit 1";
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{prefix, reminderType})) {
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return false;
+        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{prefix, reminderType})) {
             return cursor != null && cursor.moveToFirst();
         }
     }
@@ -82,7 +86,9 @@ public class ReminderDBManager {
     public List<WKReminder> queryWithChannelAndDone(String channelID, byte channelType, int done) {
         String sql = "select * from " + reminders + " where channel_id=? and channel_type=? and done=? order by message_seq desc";
         List<WKReminder> list = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{channelID, channelType, done})) {
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return list;
+        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{channelID, channelType, done})) {
             if (cursor == null) {
                 return list;
             }
@@ -99,7 +105,12 @@ public class ReminderDBManager {
      */
     public void queryWithChannelAndDoneAsync(String channelID, byte channelType, int done, IReminderResult callback) {
         String sql = "select * from " + reminders + " where channel_id=? and channel_type=? and done=? order by message_seq desc";
-        WKIMApplication.getInstance().getDbHelper().rawQueryAsync(sql, new Object[]{channelID, channelType, done},
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) {
+            if (callback != null) callback.onResult(new ArrayList<>());
+            return;
+        }
+        dbHelper.rawQueryAsync(sql, new Object[]{channelID, channelType, done},
                 new WKDBHelper.QueryCallback<List<WKReminder>>() {
                     @Override
                     public List<WKReminder> onQuery(Cursor cursor) {
@@ -129,7 +140,9 @@ public class ReminderDBManager {
     public List<WKReminder> queryWithChannelAndTypeAndDone(String channelID, byte channelType, int type, int done) {
         String sql = "select * from " + reminders + " where channel_id=? and channel_type=? and done=? and type =? order by message_seq desc";
         List<WKReminder> list = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{channelID, channelType, done, type})) {
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return list;
+        try (Cursor cursor = helper.rawQuery(sql, new Object[]{channelID, channelType, done, type})) {
             if (cursor == null) {
                 return list;
             }
@@ -216,30 +229,28 @@ public class ReminderDBManager {
                 insertCVs.add(WKSqlContentValues.getCVWithReminder(list.get(i)));
             }
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return new ArrayList<>();
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .beginTransaction();
+            helper.beginTransaction();
             if (!insertCVs.isEmpty()) {
                 for (ContentValues cv : insertCVs) {
-                    WKIMApplication.getInstance().getDbHelper().insert(reminders, cv);
+                    helper.insert(reminders, cv);
                 }
             }
             if (!updateCVs.isEmpty()) {
                 for (ContentValues cv : updateCVs) {
                     String[] update = new String[1];
                     update[0] = cv.getAsString("reminder_id");
-                    WKIMApplication.getInstance().getDbHelper()
-                            .update(reminders, cv, "reminder_id=?", update);
+                    helper.update(reminders, cv, "reminder_id=?", update);
                 }
             }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                WKIMApplication.getInstance().getDbHelper().getDb()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
 
         List<WKReminder> reminderList = queryWithChannelIds(channelIds);

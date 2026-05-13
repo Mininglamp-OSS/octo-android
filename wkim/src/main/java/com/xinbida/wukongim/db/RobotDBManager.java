@@ -123,15 +123,18 @@ public class RobotDBManager {
         for (WKRobot robot : list) {
             cvList.add(getCV(robot));
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb().beginTransaction();
+            helper.beginTransaction();
             for (ContentValues cv : cvList) {
-                WKIMApplication.getInstance().getDbHelper().insert(robot, cv);
+                helper.insert(robot, cv);
             }
-            WKIMApplication.getInstance().getDbHelper().getDb().setTransactionSuccessful();
-
+            helper.setTransactionSuccessful();
         } finally {
-            WKIMApplication.getInstance().getDbHelper().getDb().endTransaction();
+            helper.endTransaction();
         }
     }
 
@@ -213,15 +216,18 @@ public class RobotDBManager {
         for (WKRobotMenu robot : list) {
             cvList.add(getCV(robot));
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb().beginTransaction();
+            helper.beginTransaction();
             for (ContentValues cv : cvList) {
-                WKIMApplication.getInstance().getDbHelper().insert(robotMenu, cv);
+                helper.insert(robotMenu, cv);
             }
-            WKIMApplication.getInstance().getDbHelper().getDb().setTransactionSuccessful();
-
+            helper.setTransactionSuccessful();
         } finally {
-            WKIMApplication.getInstance().getDbHelper().getDb().endTransaction();
+            helper.endTransaction();
         }
     }
 

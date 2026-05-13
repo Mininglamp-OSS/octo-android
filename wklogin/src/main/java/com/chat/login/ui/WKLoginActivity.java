@@ -331,7 +331,6 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
                         if (menu.iMenuClick != null) menu.iMenuClick.onClick();
                     }
                 }
-                // 不主动 finish，由目标页 CLEAR_TASK 清理，避免异步跳转间的闪屏
             }, 200);
         }
     }

@@ -38,22 +38,21 @@ class MsgReactionDBManager {
         for (WKMsgReaction reaction : list) {
             insertCVs.add(WKSqlContentValues.getContentValuesWithMsgReaction(reaction));
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .beginTransaction();
+            helper.beginTransaction();
             if (!insertCVs.isEmpty()) {
                 for (ContentValues cv : insertCVs) {
-                    WKIMApplication.getInstance().getDbHelper().insert(messageReaction, cv);
+                    helper.insert(messageReaction, cv);
                 }
             }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                WKIMApplication.getInstance().getDbHelper().getDb()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
     }
 

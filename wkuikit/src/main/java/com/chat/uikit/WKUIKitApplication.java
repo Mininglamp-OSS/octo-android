@@ -174,7 +174,6 @@ public class WKUIKitApplication {
     }
 
     private WeakReference<Application> mContext;
-    private volatile boolean wkimInitialized = false;
 
     public void init(Application mContext) {
         this.mContext = new WeakReference<>(mContext);
@@ -199,19 +198,15 @@ public class WKUIKitApplication {
         //   Phase-C（idle 后执行）：sensitive_words / prohibit words 的 **网络同步**
         //       + 阅后即焚清理——纯远端拉新，首屏不依赖，延迟到首帧之后不影响体验。
 
-        // Phase-B — 本地 sensitiveWords 解析 + WKIM 初始化 + 监听绑定（首屏必须）
+        // Phase-B — 本地 sensitiveWords 解析 + WKIM 监听绑定
         //
-        // 顺序约束（必须在同一个 Runnable 内串行）：
-        //   1) parseLocalSensitiveWords() —— 纯内存 JSON 反序列化，毫秒级
-        //   2) initIM() —— 构建 WKIM singleton
-        //   3) initIMListener() —— 注册入站消息监听；此前 (1) 必须完成，
-        //      否则第一条消息到达时 WKUIKitApplication.sensitiveWords 可能还是 null，
-        //      造成敏感词过滤短暂失效（最坏 5s fallback 窗口）。
+        // initIM() 必须同步执行：ViewPager2 重构后 ChatFragment 布局阶段即触发 DB 查询，
+        // 若 initIM 仍在后台异步，重启时 UI 跑在 init 前面导致会话列表空白。
+        parseLocalSensitiveWords();
+        initIM();
+
         AppStartup.postPhaseB("wkim", () -> {
-            parseLocalSensitiveWords();
-            initIM();
             WKIMUtils.getInstance().initIMListener();
-            wkimInitialized = true;
         });
 
         // Phase-C — sensitive_words / prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
@@ -247,7 +242,7 @@ public class WKUIKitApplication {
     }
 
 
-    public void initIM() {
+    public boolean initIM() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
             //设置开发模式
 //            WKIM.getInstance().setDebug(WKBinder.isDebug);
@@ -256,18 +251,23 @@ public class WKUIKitApplication {
 
             String imToken = WKConfig.getInstance().getImToken();
             String uid = WKConfig.getInstance().getUid();
+            if (TextUtils.isEmpty(uid) || TextUtils.isEmpty(imToken)) {
+                Log.e("WKUIKitApplication", "initIM skipped: uid or imToken is empty");
+                return false;
+            }
             WKIM.getInstance().init(mContext.get(), uid, imToken);
-
+            return true;
         }
+        return false;
     }
 
     public boolean isWkimReady() {
-        return wkimInitialized;
+        return WKIM.getInstance().isInitialized();
     }
 
     public void startChat() {
         if (!TextUtils.isEmpty(WKConfig.getInstance().getToken())) {
-            if (!wkimInitialized) {
+            if (!WKIM.getInstance().isInitialized()) {
                 // WKIM 后台初始化尚未完成，延迟重试
                 new android.os.Handler(android.os.Looper.getMainLooper())
                         .postDelayed(this::startChat, 100);
@@ -557,7 +557,7 @@ public class WKUIKitApplication {
             return null;
         });
         //监听登录状态
-        EndpointManager.getInstance().setMethod("", EndpointCategory.loginMenus, object -> new LoginMenu(() -> {
+        EndpointManager.getInstance().setMethod("uikit_login_menu", EndpointCategory.loginMenus, object -> new LoginMenu(() -> {
             Log.e("接受登录", "-->3");
             WKSharedPreferencesUtil.getInstance().putInt("wk_lock_screen_pwd_count", 5);
             WKSharedPreferencesUtil.getInstance().putBoolean("sync_friend", true);

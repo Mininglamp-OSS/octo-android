@@ -482,9 +482,6 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
-        // YUJ-420 R2 fix (Jerry R1 Critical 3): 禁止将 auth token 写入 logcat。
-        // R5 fix: wklogin module 未启 buildConfig=true (AGP 8+ 默认关), 改用
-        // wkbase 的 WKBinder.isDebug (全仓统一 debug 标志) 避免跨 module BuildConfig 依赖。
         if (com.chat.base.config.WKBinder.isDebug) {
             android.util.Log.d("TokenDebug",
                 "login response: token.len=" + (userInfo.token == null ? -1 : userInfo.token.length())

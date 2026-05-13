@@ -73,20 +73,18 @@ public class WKBaseCMDManager {
                     cvList.add(getContentValues(list.get(i)));
                 }
             }
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .beginTransaction();
-            for (ContentValues cv : cvList) {
-                WKBaseApplication.getInstance().getDbHelper()
-                        .insert("cmd", cv);
+            DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+            if (helper == null || helper.isClosed()) return;
+            try {
+                helper.beginTransaction();
+                for (ContentValues cv : cvList) {
+                    helper.insert("cmd", cv);
+                }
+                helper.setTransactionSuccessful();
+            } finally {
+                helper.endTransaction();
             }
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .setTransactionSuccessful();
         } catch (Exception ignored) {
-        } finally {
-            if (WKBaseApplication.getInstance().getDbHelper().getDB().inTransaction()) {
-                WKBaseApplication.getInstance().getDbHelper().getDB()
-                        .endTransaction();
-            }
         }
     }
 
@@ -314,20 +312,17 @@ public class WKBaseCMDManager {
                 }
             }
         }
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         try {
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .beginTransaction();
+            helper.beginTransaction();
             for (int i = 0; i < cmdList.size(); i++) {
                 deleteCmd(cmdList.get(i).client_msg_no);
             }
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKBaseApplication.getInstance().getDbHelper() != null && WKBaseApplication.getInstance().getDbHelper().getDB().inTransaction()) {
-                WKBaseApplication.getInstance().getDbHelper().getDB()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
     }
 }

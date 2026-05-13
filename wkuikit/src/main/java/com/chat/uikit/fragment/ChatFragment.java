@@ -1107,7 +1107,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             wkVBinding.signalLayout.setVisibility(View.GONE);
             registerNetworkRecoveryCallback();
         }
-        EndpointManager.getInstance().setMethod("", EndpointCategory.wkExitChat, object -> {
+        EndpointManager.getInstance().setMethod("chat_fragment_exit_chat", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
                 // YUJ-229 · 从 allConversations + conversationIndex 同步移除
@@ -3492,7 +3492,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getReminderManager().removeNewReminderListener("chat_fragment");
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("chat_fragment_refresh_channel");
         EndpointManager.getInstance().remove("show_create_category_dialog");
-        EndpointManager.getInstance().remove("");
+        EndpointManager.getInstance().remove("chat_fragment_exit_chat");
         EndpointManager.getInstance().remove("chat_cover");
         EndpointManager.getInstance().remove("refresh_conversation_extras");
         EndpointManager.getInstance().remove("refresh_conversation_calling");

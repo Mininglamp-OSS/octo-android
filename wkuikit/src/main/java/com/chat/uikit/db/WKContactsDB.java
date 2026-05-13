@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 
 import com.chat.base.WKBaseApplication;
+import com.chat.base.db.DBHelper;
 import com.chat.base.db.WKCursor;
 import com.chat.base.utils.WKReader;
 import com.chat.uikit.enity.MailListEntity;
@@ -27,11 +28,10 @@ public class WKContactsDB {
 
     public List<MailListEntity> query() {
         List<MailListEntity> list = new ArrayList<>();
-        Cursor cursor = WKBaseApplication
-                .getInstance()
-                .getDbHelper()
-                .rawQuery(
-                        "select * from user_contact", null);
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return list;
+        Cursor cursor = helper.rawQuery(
+                "select * from user_contact", null);
         if (cursor == null) {
             return list;
         }
@@ -56,8 +56,10 @@ public class WKContactsDB {
 
     public void save(List<MailListEntity> list) {
         if (WKReader.isEmpty(list)) return;
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         try {
-            WKBaseApplication.getInstance().getDbHelper().getDB().beginTransaction();
+            helper.beginTransaction();
             for (int i = 0, size = list.size(); i < size; i++) {
                 boolean isAdd = true;
                 if (isExist(list.get(i))) {
@@ -66,28 +68,34 @@ public class WKContactsDB {
                 if (isAdd)
                     insert(list.get(i));
             }
-            WKBaseApplication.getInstance().getDbHelper().getDB().setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } finally {
-            WKBaseApplication.getInstance().getDbHelper().getDB().endTransaction();
+            helper.endTransaction();
         }
     }
 
     private boolean delete(MailListEntity entity) {
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return false;
         String[] strings = new String[2];
         strings[0] = entity.phone;
         strings[1] = entity.name;
-        return WKBaseApplication.getInstance().getDbHelper().delete("user_contact", "phone=? and name=?", strings);
+        return helper.delete("user_contact", "phone=? and name=?", strings);
     }
 
     public void updateFriendStatus(String uid, int isFriend) {
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         ContentValues contentValues = new ContentValues();
         contentValues.put("is_friend", isFriend);
         String[] strings = new String[1];
         strings[0] = uid;
-        WKBaseApplication.getInstance().getDbHelper().update("user_contact", contentValues, "uid=?", strings);
+        helper.update("user_contact", contentValues, "uid=?", strings);
     }
 
     private void insert(MailListEntity entity) {
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         ContentValues contentValues = new ContentValues();
         contentValues.put("phone", entity.phone);
         contentValues.put("uid", entity.uid);
@@ -95,13 +103,14 @@ public class WKContactsDB {
         contentValues.put("name", entity.name);
         contentValues.put("vercode", entity.vercode);
         contentValues.put("is_friend", entity.is_friend);
-        WKBaseApplication.getInstance().getDbHelper().insert("user_contact", contentValues);
+        helper.insert("user_contact", contentValues);
     }
 
     private boolean isExist(MailListEntity entity) {
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return false;
         boolean isExist = false;
-        String sql = "select 1 from user_contact where phone=? and name=? limit 1";
-        Cursor cursor = WKBaseApplication.getInstance().getDbHelper().rawQuery(sql, new String[]{entity.phone, entity.name});
+        Cursor cursor = helper.rawQuery("select 1 from user_contact where phone=? and name=? limit 1", new String[]{entity.phone, entity.name});
         if (cursor != null && cursor.moveToNext()) {
             isExist = true;
         }

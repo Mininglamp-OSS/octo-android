@@ -36,11 +36,10 @@ public class ApplyDB {
 
     public List<NewFriendEntity> queryAll() {
         List<NewFriendEntity> list = new ArrayList<>();
-        Cursor cursor = WKBaseApplication
-                .getInstance()
-                .getDbHelper()
-                .rawQuery(
-                        "select * from " + tableName + " order by created_at desc", null);
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return list;
+        Cursor cursor = helper.rawQuery(
+                "select * from " + tableName + " order by created_at desc", null);
         if (cursor == null) {
             return list;
         }
@@ -53,11 +52,10 @@ public class ApplyDB {
 
     public NewFriendEntity query(String applyUid) {
         NewFriendEntity newFriendEntity = null;
-        Cursor cursor = WKBaseApplication
-                .getInstance()
-                .getDbHelper()
-                .rawQuery(
-                        "select * from " + tableName + " where apply_uid=?", new String[]{applyUid});
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return null;
+        Cursor cursor = helper.rawQuery(
+                "select * from " + tableName + " where apply_uid=?", new String[]{applyUid});
         if (cursor != null) {
             if (cursor.moveToFirst()) {
                 newFriendEntity = serializeFriend(cursor);
@@ -76,9 +74,10 @@ public class ApplyDB {
             WKLogUtils.e("新增申请数据错误");
         }
         long result = -1;
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return result;
         try {
-            result = WKBaseApplication.getInstance().getDbHelper()
-                    .insert(tableName, cv);
+            result = helper.insert(tableName, cv);
         } catch (Exception e) {
             Log.e("插入数据库异常：", Objects.requireNonNull(e.getMessage()));
         }
@@ -92,20 +91,17 @@ public class ApplyDB {
      */
     public synchronized void insert(List<NewFriendEntity> list) {
         if (WKReader.isEmpty(list)) return;
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         try {
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .beginTransaction();
+            helper.beginTransaction();
             for (int i = 0; i < list.size(); i++) {
                 insert(list.get(i));
             }
-            WKBaseApplication.getInstance().getDbHelper().getDB()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKBaseApplication.getInstance().getDbHelper().getDB().inTransaction()) {
-                WKBaseApplication.getInstance().getDbHelper().getDB()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
     }
 
@@ -119,14 +115,17 @@ public class ApplyDB {
         } catch (Exception e) {
             WKLogUtils.e("修改申请加好友数据错误");
         }
-        return WKBaseApplication.getInstance().getDbHelper()
-                .update(tableName, cv, "apply_uid=?", update);
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return false;
+        return helper.update(tableName, cv, "apply_uid=?", update);
     }
 
     public void delete(String uid) {
+        DBHelper helper = WKBaseApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         String[] where = new String[1];
         where[0] = uid;
-        WKBaseApplication.getInstance().getDbHelper().delete(tableName, "apply_uid=?", where);
+        helper.delete(tableName, "apply_uid=?", where);
     }
 
     @SuppressLint("Range")

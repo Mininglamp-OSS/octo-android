@@ -130,22 +130,21 @@ public class WKIMApplication {
 
 
     public synchronized WKDBHelper getDbHelper() {
-        if (mDbHelper == null) {
-            String uid = getUid();
-            if (!TextUtils.isEmpty(uid)) {
+        String uid = getUid();
+        if (!TextUtils.isEmpty(uid)) {
+            if (mDbHelper == null || mDbHelper.isClosed()) {
                 mDbHelper = WKDBHelper.getInstance(mContext.get(), uid);
-            } else {
-                WKLoggerUtils.getInstance().e("get DbHelper uid is null");
             }
         }
         return mDbHelper;
     }
 
-    public void closeDbHelper() {
+    public synchronized void closeDbHelper() {
         if (mDbHelper != null) {
             mDbHelper.close();
             mDbHelper = null;
         }
+        WKIM.getInstance().resetInitialized();
     }
 
     public long getDBUpgradeIndex() {

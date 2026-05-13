@@ -74,7 +74,7 @@ public class ConversationDbManager {
 
     public synchronized List<WKUIConversationMsg> queryAll() {
         List<WKUIConversationMsg> list = new ArrayList<>();
-        if (WKIMApplication.getInstance().getDbHelper() == null || WKIMApplication.getInstance().getDbHelper().getDb() == null) {
+        if (WKIMApplication.getInstance().getDbHelper() == null || WKIMApplication.getInstance().getDbHelper().isClosed()) {
             return list;
         }
 
@@ -252,13 +252,17 @@ public class ConversationDbManager {
     }
 
     public synchronized void insertSyncMsg(ContentValues cv) {
-        WKIMApplication.getInstance().getDbHelper().insertSql(conversation, cv);
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
+        helper.insertSql(conversation, cv);
     }
 
     public synchronized String queryLastMsgSeqs() {
         String lastMsgSeqs = "";
         String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey from (select *,(select max(message_seq) from " + message + " where " + message + ".channel_id=" + conversation + ".channel_id and " + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq from " + conversation + ") cn where channel_id<>'' AND is_deleted=0";
-        Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql);
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return lastMsgSeqs;
+        Cursor cursor = helper.rawQuery(sql);
         if (cursor == null) {
             return lastMsgSeqs;
         }
@@ -271,7 +275,7 @@ public class ConversationDbManager {
     }
 
     public synchronized boolean updateRedDot(String channelID, byte channelType, int redDot) {
-        if (WKIMApplication.getInstance().getDbHelper() == null || WKIMApplication.getInstance().getDbHelper().getDb() == null) {
+        if (WKIMApplication.getInstance().getDbHelper() == null || WKIMApplication.getInstance().getDbHelper().isClosed()) {
             return false;
         }
         ContentValues cv = new ContentValues();
@@ -510,12 +514,15 @@ public class ConversationDbManager {
             }
         }
 
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb().beginTransaction();
+            helper.beginTransaction();
             if (WKCommonUtils.isNotEmpty(insertCVList)) {
                 for (ContentValues cv : insertCVList) {
-                    WKIMApplication.getInstance().getDbHelper()
-                            .insert(conversationExtra, cv);
+                    helper.insert(conversationExtra, cv);
                 }
             }
             if (WKCommonUtils.isNotEmpty(updateCVList)) {
@@ -523,13 +530,12 @@ public class ConversationDbManager {
                     String[] sv = new String[2];
                     sv[0] = cv.getAsString("channel_id");
                     sv[1] = cv.getAsString("channel_type");
-                    WKIMApplication.getInstance().getDbHelper()
-                            .update(conversationExtra, cv, "channel_id=? and channel_type=?", sv);
+                    helper.update(conversationExtra, cv, "channel_id=? and channel_type=?", sv);
                 }
             }
-            WKIMApplication.getInstance().getDbHelper().getDb().setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } finally {
-            WKIMApplication.getInstance().getDbHelper().getDb().endTransaction();
+            helper.endTransaction();
         }
         List<WKUIConversationMsg> uiMsgList = ConversationDbManager.getInstance().queryWithChannelIds(channelIds);
 //        for (int i = 0, size = uiMsgList.size(); i < size; i++) {

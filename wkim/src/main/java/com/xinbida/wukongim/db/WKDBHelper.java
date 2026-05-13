@@ -50,6 +50,11 @@ public class WKDBHelper {
         return mDb;
     }
 
+    public boolean isClosed() {
+        SQLiteDatabase db = mDb;
+        return db == null || !db.isOpen();
+    }
+
     private volatile static WKDBHelper openHelper = null;
     // 数据库版本
     private final static int version = 1;
@@ -134,7 +139,7 @@ public class WKDBHelper {
      * @return db
      */
     public synchronized static WKDBHelper getInstance(Context context, String _uid) {
-        if (TextUtils.isEmpty(uid) || !uid.equals(_uid) || openHelper == null) {
+        if (TextUtils.isEmpty(uid) || !uid.equals(_uid) || openHelper == null || openHelper.isClosed()) {
             synchronized (WKDBHelper.class) {
                 if (openHelper != null) {
                     openHelper.close();
@@ -184,33 +189,38 @@ public class WKDBHelper {
 
 
     void insertSql(String tab, ContentValues cv) {
-        if (mDb == null) {
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) {
+            WKLoggerUtils.getInstance().e(TAG, "insertSql skipped: db unavailable, table=" + tab);
             return;
         }
-        mDb.insertWithOnConflict(tab, "", cv, SQLiteDatabase.CONFLICT_REPLACE);
+        db.insertWithOnConflict(tab, "", cv, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public Cursor rawQuery(String sql) {
-        if (mDb == null) {
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) {
             return null;
         }
-        return mDb.rawQuery(sql, null);
+        return db.rawQuery(sql, null);
     }
 
     public Cursor rawQuery(String sql, Object[] selectionArgs) {
-        if (mDb == null) {
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) {
             return null;
         }
-        return mDb.rawQuery(sql, selectionArgs);
+        return db.rawQuery(sql, selectionArgs);
     }
 
     public Cursor select(String table, String selection,
                          String[] selectionArgs,
                          String orderBy) {
-        if (mDb == null) return null;
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) return null;
         Cursor cursor;
         try {
-            cursor = mDb.query(table, null, selection, selectionArgs,
+            cursor = db.query(table, null, selection, selectionArgs,
                     null, null, orderBy);
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " select WKDBHelper error");
@@ -220,11 +230,14 @@ public class WKDBHelper {
     }
 
     public long insert(String table, ContentValues cv) {
-        if (mDb == null) return 0;
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) {
+            WKLoggerUtils.getInstance().e(TAG, "insert skipped: db unavailable, table=" + table);
+            return 0;
+        }
         long count = 0;
         try {
-            count = mDb.insert(table, SQLiteDatabase.CONFLICT_REPLACE, cv);
-//            count = mDb.insert(table, null, cv);
+            count = db.insert(table, SQLiteDatabase.CONFLICT_REPLACE, cv);
         } catch (Exception e) {
             StringBuilder fields = new StringBuilder();
             for (Map.Entry<String, Object> item : cv.valueSet()) {
@@ -239,21 +252,23 @@ public class WKDBHelper {
     }
 
     public boolean delete(String tableName, String where, String[] whereValue) {
-        if (mDb == null) return false;
-        int count = mDb.delete(tableName, where, whereValue);
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) return false;
+        int count = db.delete(tableName, where, whereValue);
         return count > 0;
     }
 
     public int update(String table, String[] updateFields,
                       String[] updateValues, String where, String[] whereValue) {
-        if (mDb == null) return 0;
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) return 0;
         ContentValues cv = new ContentValues();
         for (int i = 0; i < updateFields.length; i++) {
             cv.put(updateFields[i], updateValues[i]);
         }
         int count = 0;
         try {
-            count = mDb.update(table, cv, where, whereValue);
+            count = db.update(table, cv, where, whereValue);
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG, "update WKDBHelper error");
         }
@@ -262,10 +277,11 @@ public class WKDBHelper {
 
     public boolean update(String tableName, ContentValues cv, String where,
                           String[] whereValue) {
-        if (mDb == null) return false;
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) return false;
         boolean flag = false;
         try {
-            flag = mDb.update(tableName, cv, where, whereValue) > 0;
+            flag = db.update(tableName, cv, where, whereValue) > 0;
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG, "update WKDBHelper error");
         }
@@ -274,14 +290,51 @@ public class WKDBHelper {
 
     public boolean update(String tableName, String whereClause,
                           ContentValues args) {
-        if (mDb == null) return false;
+        SQLiteDatabase db = mDb;
+        if (db == null || !db.isOpen()) return false;
         boolean flag = false;
         try {
-            flag = mDb.update(tableName, args, whereClause, null) > 0;
+            flag = db.update(tableName, args, whereClause, null) > 0;
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " update WKDBHelper error");
         }
         return flag;
+    }
+
+    // ==================== 事务安全方法 ====================
+
+    public void beginTransaction() {
+        SQLiteDatabase db = mDb;
+        if (db != null && db.isOpen()) {
+            db.beginTransaction();
+        } else {
+            WKLoggerUtils.getInstance().e(TAG, "beginTransaction skipped: db unavailable");
+        }
+    }
+
+    public void setTransactionSuccessful() {
+        SQLiteDatabase db = mDb;
+        if (db != null && db.isOpen() && db.inTransaction()) db.setTransactionSuccessful();
+    }
+
+    public void endTransaction() {
+        SQLiteDatabase db = mDb;
+        if (db != null && db.isOpen() && db.inTransaction()) db.endTransaction();
+    }
+
+    public boolean inTransaction() {
+        SQLiteDatabase db = mDb;
+        return db != null && db.isOpen() && db.inTransaction();
+    }
+
+    public void execSQL(String sql) {
+        SQLiteDatabase db = mDb;
+        if (db != null && db.isOpen()) db.execSQL(sql);
+    }
+
+    public void execSQL(String sql, Object[] bindArgs) {
+        SQLiteDatabase db = mDb;
+        if (db != null && db.isOpen()) db.execSQL(sql, bindArgs);
     }
 
     // ==================== 异步查询方法 ====================

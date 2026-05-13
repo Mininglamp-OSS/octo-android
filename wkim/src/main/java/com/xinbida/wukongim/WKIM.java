@@ -3,6 +3,7 @@ package com.xinbida.wukongim;
 import android.content.Context;
 import android.text.TextUtils;
 
+import com.xinbida.wukongim.db.WKDBHelper;
 import com.xinbida.wukongim.manager.CMDManager;
 import com.xinbida.wukongim.manager.ChannelManager;
 import com.xinbida.wukongim.manager.ChannelMembersManager;
@@ -35,6 +36,7 @@ public class WKIM {
     private boolean isDebug = false;
     private boolean isWriteLog = false;
     private String deviceId = "";
+    private volatile boolean initialized = false;
 
     public boolean isDebug() {
         return isDebug;
@@ -65,6 +67,15 @@ public class WKIM {
     public String getVersion() {
         return Version;
     }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public void resetInitialized() {
+        initialized = false;
+    }
+
     public void setDeviceId(String deviceID){
         this.deviceId = deviceID;
     }
@@ -80,6 +91,7 @@ public class WKIM {
             throw new NullPointerException("context,uid and token cannot be null");
         }
 
+        initialized = false;
         WKIMApplication.getInstance().closeDbHelper();
         WKIMApplication.getInstance().initContext(context);
         WKIMApplication.getInstance().setUid(uid);
@@ -92,6 +104,9 @@ public class WKIM {
         WKIMApplication.getInstance().getDbHelper();
         // 将上次发送消息中的队列标志为失败
         MessageHandler.getInstance().updateLastSendingMsgFail();
+
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        initialized = (helper != null && !helper.isClosed());
     }
 
     // 获取消息管理

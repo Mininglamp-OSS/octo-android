@@ -7,6 +7,7 @@ import androidx.annotation.NonNull;
 
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
+import com.xinbida.wukongim.db.WKDBHelper;
 import com.xinbida.wukongim.db.ConversationDbManager;
 import com.xinbida.wukongim.db.MsgDbManager;
 import com.xinbida.wukongim.db.WKDBColumns;
@@ -369,23 +370,20 @@ public class MsgManager extends BaseManager {
     public void deleteWithClientMsgNos(List<String> clientMsgNos) {
         if (WKCommonUtils.isEmpty(clientMsgNos)) return;
         List<WKMsg> list = new ArrayList<>();
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return;
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .beginTransaction();
+            helper.beginTransaction();
             for (int i = 0, size = clientMsgNos.size(); i < size; i++) {
                 WKMsg msg = MsgDbManager.getInstance().deleteWithClientMsgNo(clientMsgNos.get(i));
                 if (msg != null) {
                     list.add(msg);
                 }
             }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                WKIMApplication.getInstance().getDbHelper().getDb()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
         List<WKMsg> deleteMsgList = new ArrayList<>();
         for (int i = 0, size = list.size(); i < size; i++) {

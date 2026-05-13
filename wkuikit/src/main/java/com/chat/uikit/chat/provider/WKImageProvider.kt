@@ -61,7 +61,15 @@ class WKImageProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
-        val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
+        val model = uiChatMsgItemEntity.wkMsg.baseContentMsgModel
+        if (model !is WKImageContent) {
+            parentView.findViewById<FilterImageView>(R.id.imageView)?.setImageDrawable(null)
+            parentView.findViewById<ShapeBlurView>(R.id.blurView)?.visibility = View.GONE
+            parentView.findViewById<CircularProgressView>(R.id.progressView)?.visibility = View.GONE
+            parentView.findViewById<TextView>(R.id.progressTv)?.visibility = View.GONE
+            return
+        }
+        val imgMsgModel = model
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView)
         val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
         setCorners(from, uiChatMsgItemEntity, imageView, blurView)
@@ -314,7 +322,7 @@ class WKImageProvider : WKChatBaseProvider() {
 
     private fun collect(mMsg: WKMsg) {
         val jsonObject = JSONObject()
-        val mImageContent = mMsg.baseContentMsgModel as WKImageContent
+        val mImageContent = mMsg.baseContentMsgModel as? WKImageContent ?: return
         jsonObject["content"] = WKApiConfig.getShowUrl(mImageContent.url)
         jsonObject["width"] = mImageContent.width
         jsonObject["height"] = mImageContent.height
@@ -365,7 +373,7 @@ class WKImageProvider : WKChatBaseProvider() {
     }
 
     private fun getShowURL(uiChatMsgItemEntity: WKUIChatMsgItemEntity): String {
-        val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKImageContent
+        val imgMsgModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKImageContent ?: return ""
         if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
             val file = File(imgMsgModel.localPath)
             if (file.exists() && file.length() > 0L) {

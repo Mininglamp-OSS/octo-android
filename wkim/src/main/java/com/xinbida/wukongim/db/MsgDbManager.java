@@ -288,7 +288,9 @@ public class MsgDbManager {
     public List<WKMsg> queryWithFlame() {
         String sql = "select * from " + message + " where " + WKDBColumns.WKMessageColumns.flame + "=1 and " + WKDBColumns.WKMessageColumns.is_deleted + "=0";
         List<WKMsg> list = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql)) {
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return list;
+        try (Cursor cursor = dbHelper.rawQuery(sql)) {
             if (cursor == null) {
                 return list;
             }
@@ -703,21 +705,26 @@ public class MsgDbManager {
             ContentValues cv = WKSqlContentValues.getContentValuesWithMsg(wkMsg);
             cvList.add(cv);
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb().beginTransaction();
+            helper.beginTransaction();
             for (ContentValues cv : cvList) {
-                WKIMApplication.getInstance().getDbHelper()
-                        .insert(message, cv);
+                helper.insert(message, cv);
             }
-            WKIMApplication.getInstance().getDbHelper().getDb().setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } finally {
-            WKIMApplication.getInstance().getDbHelper().getDb().endTransaction();
+            helper.endTransaction();
         }
     }
 
     public List<WKMsg> queryWithClientMsgNos(List<String> clientMsgNos) {
         List<WKMsg> msgs = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().select(message, "client_msg_no in (" + WKCursor.getPlaceholders(clientMsgNos.size()) + ")", clientMsgNos.toArray(new String[0]), null)) {
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) return msgs;
+        try (Cursor cursor = helper.select(message, "client_msg_no in (" + WKCursor.getPlaceholders(clientMsgNos.size()) + ")", clientMsgNos.toArray(new String[0]), null)) {
             if (cursor == null) {
                 return msgs;
             }
@@ -976,23 +983,22 @@ public class MsgDbManager {
             }
             cvList.add(WKSqlContentValues.getCVWithMsgExtra(list.get(i)));
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return new ArrayList<>();
+        }
         try {
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .beginTransaction();
+            helper.beginTransaction();
             if (!cvList.isEmpty()) {
                 for (ContentValues cv : cvList) {
-                    WKIMApplication.getInstance().getDbHelper().insert(messageExtra, cv);
+                    helper.insert(messageExtra, cv);
                 }
             }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
             WKLoggerUtils.getInstance().e(TAG, "insertOrReplace error");
         } finally {
-            if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                WKIMApplication.getInstance().getDbHelper().getDb()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
         List<WKMsg> msgList = queryWithMsgIds(msgIds);
         return msgList;

@@ -147,24 +147,19 @@ public class ChannelDBManager {
             ContentValues cv = WKSqlContentValues.getContentValuesWithChannel(channel);
             newCVList.add(cv);
         }
+        WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
+        if (helper == null || helper.isClosed()) {
+            return;
+        }
         try {
-            if (WKIMApplication.getInstance().getDbHelper() == null) {
-                return;
-            }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .beginTransaction();
+            helper.beginTransaction();
             for (ContentValues cv : newCVList) {
-                WKIMApplication.getInstance().getDbHelper()
-                        .insert(channel, cv);
+                helper.insert(channel, cv);
             }
-            WKIMApplication.getInstance().getDbHelper().getDb()
-                    .setTransactionSuccessful();
+            helper.setTransactionSuccessful();
         } catch (Exception ignored) {
         } finally {
-            if (WKIMApplication.getInstance().getDbHelper().getDb().inTransaction()) {
-                WKIMApplication.getInstance().getDbHelper().getDb()
-                        .endTransaction();
-            }
+            helper.endTransaction();
         }
     }
 

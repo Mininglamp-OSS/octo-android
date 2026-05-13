@@ -192,16 +192,16 @@ public class WKBaseApplication {
      * @return dbHelper
      */
     public synchronized DBHelper getDbHelper() {
-        if (mDbHelper == null) {
-            String uid = WKConfig.getInstance().getUid();
-            if (!TextUtils.isEmpty(uid) && context != null && context.get() != null) {
+        String uid = WKConfig.getInstance().getUid();
+        if (!TextUtils.isEmpty(uid) && context != null && context.get() != null) {
+            if (mDbHelper == null || mDbHelper.isClosed()) {
                 mDbHelper = DBHelper.getInstance(context.get(), uid);
             }
         }
         return mDbHelper;
     }
 
-    public void closeDbHelper() {
+    public synchronized void closeDbHelper() {
         if (mDbHelper != null) {
             mDbHelper.close();
             mDbHelper = null;

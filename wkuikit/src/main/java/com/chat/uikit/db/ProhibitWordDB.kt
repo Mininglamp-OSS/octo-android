@@ -42,11 +42,13 @@ class ProhibitWordDB private constructor() {
             }
         }
 
+        val helper = WKBaseApplication.getInstance().dbHelper ?: return
+        if (helper.isClosed) return
         try {
-            WKBaseApplication.getInstance().dbHelper.db.beginTransaction()
+            helper.beginTransaction()
             if (insertCVList.isNotEmpty()) {
                 for (cv in insertCVList) {
-                    WKBaseApplication.getInstance().dbHelper.insert(table, cv)
+                    helper.insert(table, cv)
                 }
             }
             if (updateCVList.isNotEmpty()) {
@@ -54,15 +56,13 @@ class ProhibitWordDB private constructor() {
                     val whereValue = arrayOfNulls<String>(1)
                     val sid = cv.get("sid") as Int
                     whereValue[0] = sid.toString()
-                    WKBaseApplication.getInstance().dbHelper.update(table, cv, "sid=?", whereValue)
+                    helper.update(table, cv, "sid=?", whereValue)
                 }
             }
-            WKBaseApplication.getInstance().dbHelper.db.setTransactionSuccessful()
+            helper.setTransactionSuccessful()
         } catch (_: Exception) {
         } finally {
-            if (WKBaseApplication.getInstance().dbHelper.db.inTransaction()) {
-                WKBaseApplication.getInstance().dbHelper.db.endTransaction()
-            }
+            helper.endTransaction()
         }
     }
 

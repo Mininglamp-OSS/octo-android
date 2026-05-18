@@ -87,7 +87,7 @@ public class ChannelMembersManager extends BaseManager {
                 handelType = 1;// 新增
             }
         }
-        // YUJ-178 / dmwork-android#134 修复：原先无论 row 是否存在都走 insert()（CONFLICT_REPLACE），
+        //  /  修复：原先无论 row 是否存在都走 insert()（CONFLICT_REPLACE），
         // 如果调用方只填了核心字段、没有重建 extraMap，REPLACE 会把既有 row 的 extra 列清空。
         // 外部群 home_space_* / source_space_* 字段由此丢失，导致群成员列表第二次打开时
         // `@SpaceName` 后缀消失（成员列表从本地 DB 读）。改用 insertOrUpdate 后：

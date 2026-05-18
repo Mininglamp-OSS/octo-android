@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.utils;
 
 import android.app.ActivityManager;
@@ -38,7 +54,7 @@ import java.util.Locale;
 public class AndroidUtilities {
     public static DecelerateInterpolator decelerateInterpolator = new DecelerateInterpolator();
     private static final Hashtable<String, Typeface> typefaceCache = new Hashtable<>();
-    // YUJ-250 B3: volatile — setDensity() is invoked from MainThread via
+    //  B3: volatile — setDensity() is invoked from MainThread via
     // ComponentCallbacks2.onConfigurationChanged (see WKBaseApplication.init)
     // and these fields are read from render / background threads. volatile
     // guarantees safe publication of the new DisplayMetrics ref and density
@@ -51,7 +67,7 @@ public class AndroidUtilities {
     public static final RectF rectTmp = new RectF();
     public static Point displaySize = new Point();
     public static float screenRefreshRate = 60;
-    // YUJ-250 B1+B3: Paint is now allocated lazily once (not on every
+    //  B1+B3: Paint is now allocated lazily once (not on every
     // config-change callback) and published via volatile for safe read
     // from draw threads (see CounterView#onDraw consumers).
     public static volatile Paint chat_actionBackgroundGradientDarkenPaint;
@@ -65,7 +81,7 @@ public class AndroidUtilities {
         density = density1;
         Resources resources = WKBaseApplication.getInstance().getContext().getResources();
         displayMetrics = resources.getDisplayMetrics();
-        // YUJ-250 B1: avoid re-allocating the Paint on every config change
+        //  B1: avoid re-allocating the Paint on every config change
         // (onConfigurationChanged can fire repeatedly — rotate / fold / theme /
         // font-scale). Allocate once, then just refresh properties. This also
         // prevents any stale Paint ref from leaking through draw calls.

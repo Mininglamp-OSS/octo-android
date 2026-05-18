@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.config;
 
 import android.text.TextUtils;
@@ -68,7 +84,7 @@ public class WKConfig {
     public void saveAppConfig(WKAPPConfig WKAPPConfig) {
         String json = new Gson().toJson(WKAPPConfig);
         WKSharedPreferencesUtil.getInstance().putSP("app_config", json);
-        // YUJ-219 · A3：appconfig 更新后清掉系统 Bot 白名单缓存，下次读取走最新值
+        //  · A3：appconfig 更新后清掉系统 Bot 白名单缓存，下次读取走最新值
         com.chat.base.space.SystemBotsFallback.invalidateCache();
     }
 

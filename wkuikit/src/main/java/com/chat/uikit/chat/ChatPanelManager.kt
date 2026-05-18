@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat
 
 import android.Manifest
@@ -209,6 +225,7 @@ class ChatPanelManager(
     // slash command popup
     private var slashCommandPopup: PopupWindow? = null
     private var slashCommandAdapter: SlashCommandAdapter? = null
+    private var suppressSlashPopup = false
     private var lastHeight = 0
     private var lastTargetLines = 1 // 追踪上一次的目标行数
     private val maxLines: Int = 3
@@ -348,6 +365,7 @@ class ChatPanelManager(
     }
 
     fun setEditContent(text: String) {
+        suppressSlashPopup = true
         val curPosition: Int = editText.selectionStart
         val sb = StringBuilder(
             Objects.requireNonNull(editText.text).toString()
@@ -362,6 +380,7 @@ class ChatPanelManager(
             )
         )
         editText.setSelection(curPosition + text.length)
+        suppressSlashPopup = false
     }
 
     private fun showForbiddenView() {
@@ -803,6 +822,8 @@ class ChatPanelManager(
     }
 
     fun onDestroy() {
+        dismissSlashCommandPopup()
+        slashCommandPopup = null
         if (timer != null) {
             timer!!.cancel()
             timer = null
@@ -1134,16 +1155,22 @@ class ChatPanelManager(
 
     private fun refreshSlashCommandMenus() {
         if (slashCommandAdapter == null) return
-        val menus = WKRobotModel.getInstance().getRobotMenus(
+        var menus = WKRobotModel.getInstance().getRobotMenus(
             iConversationContext.chatChannelInfo.channelID,
             iConversationContext.chatChannelInfo.channelType
         )
+        if (menus.isEmpty() && "botfather" == iConversationContext.chatChannelInfo.channelID) {
+            menus = botFatherFallbackMenus()
+        }
         slashCommandAdapter!!.setAllItems(menus)
     }
 
     private fun initSlashCommandPopup() {
         if (iConversationContext.chatChannelInfo.channelType != WKChannelType.PERSONAL) return
-        if (iConversationContext.chatChannelInfo.robot != 1) return
+        val channelID = iConversationContext.chatChannelInfo.channelID
+        val isBotChannel = iConversationContext.chatChannelInfo.robot == 1
+                || com.chat.base.space.SystemBotsFallback.isSystemBot(channelID)
+        if (!isBotChannel) return
 
         slashCommandAdapter = SlashCommandAdapter()
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
@@ -1152,6 +1179,10 @@ class ChatPanelManager(
         recyclerView.setBackgroundColor(
             ContextCompat.getColor(iConversationContext.chatActivity, R.color.homeColor)
         )
+        val divider = androidx.recyclerview.widget.DividerItemDecoration(
+            iConversationContext.chatActivity, LinearLayoutManager.VERTICAL
+        )
+        recyclerView.addItemDecoration(divider)
 
         slashCommandPopup = PopupWindow(
             recyclerView,
@@ -1170,33 +1201,61 @@ class ChatPanelManager(
             dismissSlashCommandPopup()
         }
 
-        val menus = WKRobotModel.getInstance().getRobotMenus(
+        var menus = WKRobotModel.getInstance().getRobotMenus(
             iConversationContext.chatChannelInfo.channelID,
             iConversationContext.chatChannelInfo.channelType
         )
+        if (menus.isEmpty() && "botfather" == channelID) {
+            menus = botFatherFallbackMenus()
+        }
         slashCommandAdapter!!.setAllItems(menus)
     }
 
+    private fun botFatherFallbackMenus(): List<WKRobotMenuEntity> {
+        val cmds = arrayOf(
+            "quickstart" to "AI Agent 快速入门",
+            "newbot" to "创建新机器人",
+            "mybots" to "查看我的机器人",
+            "connect" to "获取连接 prompt",
+            "disconnect" to "断开 Agent 连接",
+            "setname" to "修改机器人名称",
+            "setdescription" to "修改机器人描述",
+            "deletebot" to "删除机器人",
+            "token" to "查看 Token",
+            "revoke" to "重置 Token",
+            "pending" to "查看待处理的好友申请",
+            "approve" to "通过好友申请",
+            "reject" to "拒绝好友申请",
+            "cancel" to "取消当前操作",
+            "help" to "显示帮助"
+        )
+        return cmds.map { (cmd, desc) ->
+            WKRobotMenuEntity().apply { this.cmd = cmd; this.remark = desc }
+        }
+    }
+
     private fun showSlashCommandPopup(query: String) {
-        if (slashCommandAdapter == null) return
+        if (slashCommandAdapter == null || suppressSlashPopup) return
+        if (!editText.isAttachedToWindow) return
         slashCommandAdapter!!.filter(query)
         if (slashCommandAdapter!!.data.isEmpty()) {
             dismissSlashCommandPopup()
             return
         }
         if (slashCommandPopup?.isShowing != true) {
-            val itemHeight = AndroidUtilities.dp(52f)
+            val itemHeight = AndroidUtilities.dp(44f)
             val maxItems = 4
             val popupHeight = itemHeight * minOf(slashCommandAdapter!!.data.size, maxItems)
             slashCommandPopup?.height = popupHeight
             slashCommandPopup?.showAsDropDown(editText, 0, -(editText.height + popupHeight), Gravity.START)
-        } else {
-            slashCommandPopup?.update()
         }
     }
 
     private fun dismissSlashCommandPopup() {
-        slashCommandPopup?.dismiss()
+        try {
+            slashCommandPopup?.dismiss()
+        } catch (_: Exception) {
+        }
     }
 
     private fun checkRobotMenu(iConversationContext: IConversationContext) {

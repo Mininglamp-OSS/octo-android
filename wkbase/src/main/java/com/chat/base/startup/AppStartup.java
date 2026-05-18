@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.startup;
 
 import android.os.Looper;
@@ -13,7 +29,7 @@ import com.chat.base.utils.AppExecutors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * App 启动 Initializer 分阶段调度器（YUJ-295 / P-04）。
+ * App 启动 Initializer 分阶段调度器（ / P-04）。
  *
  * <h2>三阶段</h2>
  * <ul>
@@ -36,7 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       perfetto 里定位出处：<code>app-startup:&lt;phase&gt;:&lt;label&gt;</code>。</li>
  *   <li>任务抛出的异常不会让启动链崩溃——捕获并打印到 {@link Log#e}，按「启动路径
  *       任务不应互相影响」对齐旧 {@code new Thread().start()} fire-and-forget 语义。</li>
- *   <li>所有线程走 {@link AppExecutors}，符合 YUJ-288（P-11）禁用裸
+ *   <li>所有线程走 {@link AppExecutors}，符合 （P-11）禁用裸
  *       {@code new Thread} 的约束；{@code scripts/check-no-new-thread.sh} 本身不会命中本文件。</li>
  *   <li>不依赖 {@code androidx.startup} 的 {@code InitializationProvider}——那套是
  *       在 {@code Application.onCreate} 之前同步跑的，与「推迟到首帧后」完全相反；

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.scan;
 
 import android.content.Intent;
@@ -41,7 +57,7 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
      * 跳转 SpaceGuideActivity 的组件名（app 模块下 Activity）。
      * wkscan 不依赖 app，这里用 className + packageName 跨模块启动。
      */
-    private static final String SPACE_GUIDE_CLASS_NAME = "com.dmwork.im.SpaceGuideActivity";
+    private static final String SPACE_GUIDE_CLASS_NAME = "com.octoim.app.SpaceGuideActivity";
 
     private String groupNo;
     private String authCode;
@@ -122,11 +138,11 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                     .subscribe(new BaseObserver<ResponseBody>() {
                         @Override
                         protected void onSuccess(ResponseBody result) {
-                            // YUJ-212 / YUJ-200 Path B：scanjoin 响应以 space_id/space_name/group_name
+                            //  /  Path B：scanjoin 响应以 space_id/space_name/group_name
                             // 作为权威字段（PR#1250 新增），二维码预扫 payload 仅用作 fallback。
                             // is_external=1 时此 Toast 分支跳过（外部群走既有 UX 路径）。
                             //
-                            // YUJ-372 Phase 2（dmworkim#1319 / PR#1320）：零 Space 用户命中
+                            //  Phase 2（ / PR#1320）：零 Space 用户命中
                             // {"status":"need_space","msg":"..."} 响应 → 不走 JoinSuccessHelper，
                             // 暂存上下文到 pending_group_invite 后拉起 SpaceGuideActivity。
                             String respSpaceId = null;
@@ -138,7 +154,7 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                             try {
                                 if (result != null) {
                                     String body = result.string();
-                                    // YUJ-372：need_space 识别走本地 helper，fail-open（解析失败视为正常响应）。
+                                    // ：need_space 识别走本地 helper，fail-open（解析失败视为正常响应）。
                                     if (PendingGroupInvite.isNeedSpaceResponse(body)) {
                                         handleNeedSpace(body);
                                         return;
@@ -161,14 +177,14 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
                                 // 响应体不可解析时 fail-open：回退到 intent 的 pre-scan 字段
                             }
 
-                            // YUJ-372 兜底：极少数情况下 body 已经被消费过（IOException），
+                            //  兜底：极少数情况下 body 已经被消费过（IOException），
                             // 此时 respStatus 仍可能命中（fastjson 分支）。保持 defensive。
                             if (PendingGroupInvite.STATUS_NEED_SPACE.equals(respStatus)) {
                                 handleNeedSpaceWithMsg(respMsg);
                                 return;
                             }
 
-                            // round-2（Jerry-Xin review）：区分 null（字段缺失，用 pre-scan fallback）
+                            // round-2（review）：区分 null（字段缺失，用 pre-scan fallback）
                             // 与 ""（后端显式返回，表示「这是公共群」），避免把公共群误判为跨 Space。
                             // 解析逻辑抽到 ScanJoinEffectiveResolver 以便 host-side 单测覆盖。
                             String effectiveSpaceId = ScanJoinEffectiveResolver.resolve(respSpaceId, targetSpaceId);
@@ -206,7 +222,7 @@ public class ScanJoinGroupActivity extends WKBaseActivity<ActScanJoinGroupLayout
     }
 
     // ------------------------------------------------------------------
-    // YUJ-372 Phase 2 · need_space 处理
+    //  Phase 2 · need_space 处理
     // ------------------------------------------------------------------
 
     /**

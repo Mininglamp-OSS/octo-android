@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import static org.junit.Assert.assertEquals;
@@ -10,7 +26,7 @@ import com.xinbida.wukongim.entity.WKChannelType;
 import org.junit.Test;
 
 /**
- * EP3 · YUJ-88 — host-side 单元测试覆盖 {@link SpaceFilter} 字段透传与分支判定。
+ * EP3 ·  — host-side 单元测试覆盖 {@link SpaceFilter} 字段透传与分支判定。
  *
  * <p>测试矩阵覆盖验收清单 + iOS EP3 跨端一致性 P2 修复：
  * {@code space_prefix / cached-match / cached-external-member / cached-mismatch /
@@ -206,7 +222,7 @@ public class SpaceFilterTest {
     }
 
     // ------------------------------------------------------------------
-    // YUJ-208 — 新消息到达路径：外部群 + 非当前 Space 必须被跳过
+    //  — 新消息到达路径：外部群 + 非当前 Space 必须被跳过
     //
     // 场景：用户停留在 Space A，来自 Space B 的外部群 G 收到新消息 → 在 A 的
     // 会话列表 onNewMessage / recent-update 路径必须经由 SpaceFilter 判定为 skip，

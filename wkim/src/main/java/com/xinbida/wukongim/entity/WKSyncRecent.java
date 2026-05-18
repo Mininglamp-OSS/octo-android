@@ -31,7 +31,7 @@ public class WKSyncRecent {
     public List<WKSyncMsgReaction> reactions;
     public WKSyncExtraMsg message_extra;
 
-    // 外部群来源字段（YUJ-183 诊断 + 修复 / 对齐 wkuikit SyncMsg + web PR #981/#982/#997）。
+    // 外部群来源字段（ 诊断 + 修复 / 对齐 wkuikit SyncMsg + web PR #981/#982/#997）。
     //
     // /conversation/sync 返回的 recents 数组每条 JSON 对象在外部群场景下会带下列字段，
     // 客户端用它们渲染 "@SpaceName" 后缀（ExternalSourceResolver）。之前 DTO 缺字段

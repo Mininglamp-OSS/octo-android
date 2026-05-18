@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.external;
 
 import static org.junit.Assert.assertEquals;
@@ -11,7 +27,7 @@ import org.junit.Test;
 import java.util.HashMap;
 
 /**
- * Unit tests for {@link ExternalSourceResolver}. YUJ-53 was a silent
+ * Unit tests for {@link ExternalSourceResolver}.  was a silent
  * passthrough failure — these tests lock the priority chain and the
  * viewer-relative degradation rules so regressions surface immediately
  * rather than as "DOM count == 0" at runtime.
@@ -108,7 +124,7 @@ public class ExternalSourceResolverTest {
      * without an id) and the resolver must keep falling through to Priority 2.
      * This locks the semantic so a future refactor that "helpfully" uses the
      * name alone cannot silently break the viewer-relative rule — and also
-     * pins the fallback path (Jerry-Xin round 2, B3).
+     * pins the fallback path (review round 2, B3).
      */
     @Test
     public void homeSpaceNameWithoutIdIsIgnoredAndFallsThroughToLegacy() {
@@ -177,7 +193,7 @@ public class ExternalSourceResolverTest {
         assertNull(ExternalSourceResolver.resolveMergeForwardUserSpaceName(user, "viewer_space"));
     }
 
-    // ===== YUJ-132 · Reply 预览 overload（primitive 参数） =====
+    // =====  · Reply 预览 overload（primitive 参数） =====
 
     @Test
     public void replyOverload_viewerRelativeHomeSpacePriority() {

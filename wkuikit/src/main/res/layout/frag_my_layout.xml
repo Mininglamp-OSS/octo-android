@@ -48,7 +48,7 @@
                         android:layout_weight="1"
                         android:orientation="vertical">
 
-                        <!-- YUJ-361 (#227)：昵称 + 已实名 ✓ 勾 + 标签的行容器 -->
+                        <!--  (#227)：昵称 + 已实名 ✓ 勾 + 标签的行容器 -->
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"

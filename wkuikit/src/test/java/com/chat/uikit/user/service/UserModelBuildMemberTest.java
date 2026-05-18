@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user.service;
 
 import com.chat.uikit.group.service.entity.GroupMember;
@@ -13,7 +29,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * YUJ-178 / dmwork-android#134 问题 2 —
+ *  /  问题 2 —
  * {@link UserModel#buildMemberFromUserInfo(GroupMember)} 外部群字段透传单元测试。
  *
  * <p>根因回放：UserDetailActivity 打开一个群成员时会调 /users/{uid}?group_no=，
@@ -138,7 +154,7 @@ public class UserModelBuildMemberTest {
     }
 
     /**
-     * YUJ-380 · 实名徽章 Phase A：透传 realname_verified → extraMap，
+     *  · 实名徽章 Phase A：透传 realname_verified → extraMap，
      * 让 UserDetailActivity 调 /users/{uid}?group_no= 也能刷新群成员列表的蓝勾。
      */
     @Test
@@ -153,7 +169,7 @@ public class UserModelBuildMemberTest {
     }
 
     /**
-     * YUJ-395 P0-2：显式 false 必须写进 extraMap，tri-state resolver 才能
+     *  P0-2：显式 false 必须写进 extraMap，tri-state resolver 才能
      * 让「已取消实名」的显式状态覆盖 channel 侧的 stale true。
      */
     @Test
@@ -169,7 +185,7 @@ public class UserModelBuildMemberTest {
     }
 
     /**
-     * YUJ-395 P0-2：后端未下发 realname_verified 时字段为 null，不写进 extraMap，
+     *  P0-2：后端未下发 realname_verified 时字段为 null，不写进 extraMap，
      * 让 resolver tri-state 读到 null，回落到 channel 侧的 profile。
      */
     @Test

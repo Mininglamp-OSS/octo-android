@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat.msgmodel;
 
 import android.os.Parcel;
@@ -69,9 +85,9 @@ public class WKMultiForwardContent extends WKMessageContent {
                 // reason about the forwarded msg. decodeMsg previously left
                 // channelType == 0, which silently disabled msg-level
                 // external-source resolution in the merge-forward detail view
-                // (caught by /codex review on YUJ-89).
+                // (caught by /codex review on ).
                 msg.channelType = channelType;
-                // YUJ-89 / web PR #981: per-message external source fields inside merge-forward.
+                //  / web PR #981: per-message external source fields inside merge-forward.
                 copyExternalFieldsToLocalExtra(msg, msgJson);
                 msgList.add(msg);
             }
@@ -88,7 +104,7 @@ public class WKMultiForwardContent extends WKMessageContent {
                     channel.channelName = userJson.optString("name");
                 if (userJson.has("avatar"))
                     channel.avatar = userJson.optString("avatar");
-                // 外部群 Phase 1 — 合并转发消息 users 透传外部字段（YUJ-86 EP1 / web #981）。
+                // 外部群 Phase 1 — 合并转发消息 users 透传外部字段（ EP1 / web #981）。
                 // 用户头/气泡在合并转发详情页渲染时需要知道发送者是否外部、来自哪个
                 // Space。WKChannel 没有直接字段，统一写进 remoteExtraMap，复用频道
                 // 级 extra 读取方式。
@@ -96,12 +112,12 @@ public class WKMultiForwardContent extends WKMessageContent {
                 // 注 1：空值判空故意用纯 Java（!= null && !isEmpty()）而不是 TextUtils，
                 // 为让 JVM 单测在 unitTests.returnDefaultValues=true 下也能跑通
                 // （TextUtils.isEmpty stub 始终返回 false，会把空值当非空）。
-                // 参见 YUJ-86 EP1 codex review P1。
+                // 参见  EP1 codex review P1。
                 //
                 // 注 2：每个 optString 之前都先 isNull() 守卫。AOSP 的 JSONObject.optString
                 // 对 JSON null 返回字符串 "null"（而 json.org 返回 ""），不守卫就会把
                 // 字面量 "null" 写进 remoteExtraMap，UI 侧会展示一个叫 "null" 的 Space。
-                // 参见 YUJ-86 EP1 claude review P1。
+                // 参见  EP1 claude review P1。
                 HashMap<String, Object> extras = null;
                 boolean hasSourceSpaceId = userJson.has("source_space_id") && !userJson.isNull("source_space_id");
                 boolean hasSourceSpaceName = userJson.has("source_space_name") && !userJson.isNull("source_space_name");
@@ -172,14 +188,14 @@ public class WKMultiForwardContent extends WKMessageContent {
                     json.put("uid", userList.get(i).channelID);
                     json.put("name", userList.get(i).channelName);
                     json.put("avatar", userList.get(i).avatar);
-                    // 外部群 Phase 1 — 转发编码侧也要把外部字段写回（YUJ-86 EP1 / web #981），
+                    // 外部群 Phase 1 — 转发编码侧也要把外部字段写回（ EP1 / web #981），
                     // 否则二次转发时下游会丢掉 is_external / source_space_id /
                     // source_space_name / home_space_*。
                     //
                     // 每个 String 字段都做非空守卫，对齐 decodeMsg 的 "has() + !isNull()
                     // + !isEmpty()" 三重门 —— 否则 WKCommonUtils.str2HashMap 路径写进来
                     // 的空串会在 encode 时序列化为 "source_space_name":""，污染下游（参见
-                    // YUJ-86 EP1 claude review round-2 P2）。
+                    //  EP1 claude review round-2 P2）。
                     HashMap<?, ?> extras = userList.get(i).remoteExtraMap;
                     if (extras != null) {
                         Object isExternal = extras.get(WKChannelMemberExtras.isExternal);
@@ -218,7 +234,7 @@ public class WKMultiForwardContent extends WKMessageContent {
     }
 
     /**
-     * YUJ-89 external-source passthrough: copy the five viewer-relative fields
+     *  external-source passthrough: copy the five viewer-relative fields
      * from a merge-forward JSON entry into {@code msg.localExtraMap} so the
      * downstream bubble renderer can resolve the "@SpaceName" suffix without
      * another round trip. Visible for testing.
@@ -278,7 +294,7 @@ public class WKMultiForwardContent extends WKMessageContent {
     /**
      * 把 remoteExtraMap 里可能为空 / null 的字符串字段写进 JSON，空串 / null 直接跳过。
      * 对齐 decodeMsg 的 "has() + !isNull() + !isEmpty()" 三重门，防止 round-trip
-     * 把 "" 写到线上（参见 YUJ-86 EP1 claude review round-2 P2）。
+     * 把 "" 写到线上（参见  EP1 claude review round-2 P2）。
      */
     private static void putNonEmptyString(JSONObject json, String key, Object value)
             throws JSONException {

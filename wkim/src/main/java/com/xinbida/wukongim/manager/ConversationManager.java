@@ -52,10 +52,10 @@ public class ConversationManager extends BaseManager {
     private final String TAG = "ConversationManager";
 
     /**
-     * YUJ-316 C · SDK 层 sync 去重守卫。Phase 1 诊断识别出 5 条 sync 触发路径
+     *  C · SDK 层 sync 去重守卫。Phase 1 诊断识别出 5 条 sync 触发路径
      * （{@code performSpaceSwitch} / {@code getChatMsg} / {@code connectSuccessCompensate}
      * / {@code spaceResyncRunnable} / {@code WKConnection.wkConnectionSync}）。
-     * 上层 {@code SpaceSyncCoordinator}（YUJ-318/321）已在 UI 层做了 debounce + 全局重入
+     * 上层 {@code SpaceSyncCoordinator}（/321）已在 UI 层做了 debounce + 全局重入
      * 守卫，但 SDK 仍需要自己的 in-flight 防线：其它 SDK 使用方或未来新加的触发点不一定会
      * 走上层 coordinator，SDK 层 AtomicBoolean 保证任何路径都只能有一条 sync 进行中。
      *
@@ -205,7 +205,7 @@ public class ConversationManager extends BaseManager {
 
     public void setOnRefreshMsg(List<WKUIConversationMsg> list, String from) {
         if (WKCommonUtils.isEmpty(list)) return;
-        // YUJ-316 H3 · 在当前（后台）线程预加载 wkMsg + wkChannel，避免主线程回调中懒加载
+        //  H3 · 在当前（后台）线程预加载 wkMsg + wkChannel，避免主线程回调中懒加载
         // 触发 DB 查询导致 ANR。adapter.convert 每 item 调 getWkChannel 36 次 / getWkMsg 15 次，
         // Space 切换冷启动时 ChannelManager 缓存为空 → 撞上 saveSyncChat 写事务 → 主线程
         // 卡死 30s → 系统杀进程（用户感知为闪退）。getWkChannel 单独预加载即可消除该窗口。
@@ -327,7 +327,7 @@ public class ConversationManager extends BaseManager {
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
             return;
         }
-        // YUJ-316 C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正
+        //  C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正
         // 发起 syncConversationChat，其余立即短路——但仍调用 onBack(null)，让上层
         // SpaceSyncCoordinator / SyncGate 的 complete() 有机会触发，避免协调器状态卡住。
         final long now = SystemClock.elapsedRealtime();
@@ -360,6 +360,9 @@ public class ConversationManager extends BaseManager {
         WKLoggerUtils.getInstance().e(TAG,
                 "setSyncConversationListener begin (version=" + version
                         + ", lastMsgSeq=" + lastMsgSeqStr + ")");
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.util.Log.d("ConvSync", "[ConvSync] sync request: version=" + version);
+        }
         runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
             dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
                 try {
@@ -367,7 +370,6 @@ public class ConversationManager extends BaseManager {
                         iSyncConversationChatBack.onBack(syncChat);
                     }
                 } finally {
-                    // 无论上层回调是否抛，都必须 release permit。
                     syncInFlightSince = 0L;
                     syncInFlight.set(false);
                 }
@@ -382,7 +384,7 @@ public class ConversationManager extends BaseManager {
 
 
     private void saveSyncChat(WKSyncChat syncChat, final ISaveSyncChatBack iSaveSyncChatBack) {
-        // YUJ-312 Phase 2 · T7 埋点：SDK 批量落盘段（conversations + recents + reactions + extras）。
+        //  Phase 2 · T7 埋点：SDK 批量落盘段（conversations + recents + reactions + extras）。
         // 发生在 dispatchQueuePool（非主线程）。守 BuildConfig.DEBUG 确保 release 无开销。
         final long yuj312T7Start = com.xinbida.wukongim.BuildConfig.DEBUG
                 ? android.os.SystemClock.elapsedRealtime() : 0L;
@@ -407,6 +409,15 @@ public class ConversationManager extends BaseManager {
         if (syncChat == null) {
             iSaveSyncChatBack.onBack();
             return;
+        }
+        if (com.xinbida.wukongim.BuildConfig.DEBUG && syncChat.conversations != null) {
+            StringBuilder sb = new StringBuilder("[ConvSync] saveSyncChat: ");
+            for (int di = 0; di < syncChat.conversations.size(); di++) {
+                if (di > 0) sb.append(", ");
+                sb.append(syncChat.conversations.get(di).channel_id)
+                  .append(":").append(syncChat.conversations.get(di).channel_type);
+            }
+            android.util.Log.d("ConvSync", sb.toString());
         }
         List<WKConversationMsg> conversationMsgList = new ArrayList<>();
         List<WKMsg> msgList = new ArrayList<>();

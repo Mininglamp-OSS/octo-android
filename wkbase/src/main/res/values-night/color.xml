@@ -9,7 +9,7 @@
     <color name="screen_bg">#1D2733</color>
     <color name="screen_bg_selected">#1B1C1D</color>
     <color name="homeColorSelected">#050505</color>
-    <!-- YUJ-267 · 夜间模式分屏选中背景（colorAccent 加亮饱和度，暗底下也能识别）。 -->
+    <!--  · 夜间模式分屏选中背景（colorAccent 加亮饱和度，暗底下也能识别）。 -->
     <color name="chat_conv_selected_bg">#407761F4</color>
     <color name="chat_conv_selected_bg_pressed">#667761F4</color>
     <color name="borderColor">#0B0000</color>

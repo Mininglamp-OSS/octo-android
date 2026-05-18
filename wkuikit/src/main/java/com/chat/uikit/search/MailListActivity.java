@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.search;
 
 import android.Manifest;
@@ -100,7 +116,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
                     Intent intent = new Intent();
                     intent.setAction(Intent.ACTION_SENDTO);
                     intent.setData(Uri.parse("smsto:" + entity.phone));
-                    intent.putExtra("sms_body", "我正在使用【悟空IM】app，体验还不错。你也赶快来下载玩玩吧！http://www.githubim.com");
+                    intent.putExtra("sms_body", "I am using OctoIM, come and try it!");
                     startActivity(intent);
                 }
 

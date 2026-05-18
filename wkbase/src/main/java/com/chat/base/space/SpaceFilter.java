@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import android.text.TextUtils;
@@ -21,9 +37,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 外部群 · Space 隔离过滤（EP3 · YUJ-88）
+ * 外部群 · Space 隔离过滤（EP3 · ）
  *
- * <p>与 dmwork-web 的 {@code shouldSkipChannelForSpace} 双路径判定对齐：
+ * <p>与 的 {@code shouldSkipChannelForSpace} 双路径判定对齐：
  * <ul>
  *     <li>客户端兜底：不完全信任后端 {@code SetEffectiveSpaceID}，本地做一层过滤。</li>
  *     <li>channel-level 用于会话列表；message-level 用于私聊消息 payload 过滤。</li>
@@ -260,7 +276,7 @@ public final class SpaceFilter {
     }
 
     /**
-     * 外部群漏显诊断日志（YUJ-178 / dmwork-android#134 问题 1）。
+     * 外部群漏显诊断日志（ /  问题 1）。
      *
      * <p>debug build 打印过滤决策全部关键变量：群 id / 归属 Space / 我自己的
      * source_space_id / 我的 row 是否已缓存 / 最终分支。用来定位「同账号

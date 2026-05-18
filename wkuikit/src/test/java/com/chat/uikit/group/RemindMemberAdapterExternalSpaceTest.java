@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group;
 
 import static org.junit.Assert.assertEquals;
@@ -11,7 +27,7 @@ import org.junit.Test;
 import java.util.HashMap;
 
 /**
- * YUJ-134 · Android @Mention 候选菜单外部成员 @SpaceName 标识单测。
+ *  · Android @Mention 候选菜单外部成员 @SpaceName 标识单测。
  *
  * <p>覆盖 {@link RemindMemberAdapter#resolveExternalSpaceName(WKChannelMember, String)}
  * 四个关键场景（对齐 Web `createMentionSuggestion` + resolveExternalForViewer 语义）：
@@ -25,7 +41,7 @@ import java.util.HashMap;
  *       → 回落到 legacy 字段，仍需显示后缀（旧后端兼容）。</li>
  * </ol>
  *
- * <p>同时守护 Web YUJ-53 式 key 漂移：所有测试用 {@link WKChannelMemberExtras}
+ * <p>同时守护 Web  式 key 漂移：所有测试用 {@link WKChannelMemberExtras}
  * 的常量往 extraMap 里放值，避免 model / resolver 之间字符串不一致导致 UI 静默失效。
  */
 public class RemindMemberAdapterExternalSpaceTest {

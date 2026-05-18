@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.external
 
 import com.chat.base.external.ExternalViewerResolver.MemberOrgData
@@ -8,8 +24,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 与 dmwork-web `apps/web/__tests__/externalViewer.test.ts` 等价的视角相对化回归。
- * 覆盖 YUJ-87 验收清单：
+ * 与 `apps/web/__tests__/externalViewer.test.ts` 等价的视角相对化回归。
+ * 覆盖  验收清单：
  *  - 新字段路径（home_space_id 存在）→ 与 viewer 对比
  *  - 降级回落（新字段缺失）→ 退回 is_external + source_space_name
  *  - 同 Space / 跨 Space / 空字符串 / 自己查自己 / 空 extras
@@ -173,7 +189,7 @@ class ExternalViewerResolverTest {
     }
 
     /**
-     * 防止 Web YUJ-53 事故重演：model 层 key 改名或 resolver 常量漂移会让 UI 静默失效。
+     * 防止 Web  事故重演：model 层 key 改名或 resolver 常量漂移会让 UI 静默失效。
      * 显式锁死 `resolveFromExtras` 使用的字符串 key 必须与 [WKChannelMemberExtras] 对齐。
      */
     @Test

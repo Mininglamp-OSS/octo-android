@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.search;
 
 import static org.junit.Assert.assertEquals;
@@ -8,11 +24,11 @@ import com.chat.uikit.enity.UserInfo;
 import org.junit.Test;
 
 /**
- * YUJ-155 · Android 搜索结果外部成员 @SpaceName 后缀单测。
+ *  · Android 搜索结果外部成员 @SpaceName 后缀单测。
  *
  * <p>覆盖 {@link SearchUserAdapter#resolveExternalSpaceName(UserInfo, String)}
- * 四个关键场景（对齐 YUJ-134 RemindMemberAdapterExternalSpaceTest 与 Web
- * YUJ-138 PR#1088 resolveExternalForViewer 语义）：
+ * 四个关键场景（对齐  RemindMemberAdapterExternalSpaceTest 与 Web
+ *  PR#1088 resolveExternalForViewer 语义）：
  * <ol>
  *   <li>跨 Space：home_space_id != viewerSpaceId → 返回 home_space_name，
  *       调用方会在搜索结果昵称后拼 " @SpaceName" 灰紫色后缀。</li>

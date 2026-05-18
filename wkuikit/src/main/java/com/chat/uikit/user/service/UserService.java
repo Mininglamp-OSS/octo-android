@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user.service;
 
 
@@ -83,13 +99,13 @@ public interface UserService {
     @POST("user/destroy/cancel")
     Observable<CommonResponse> cancelDestroy();
 
-    // YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者更新 bot 简介。
+    //  (对齐 web PR#1092 BotDetailModal)：bot 创建者更新 bot 简介。
     // 后端 PUT /robot/:uid/description 内置 creator_uid 校验，非 owner 返回 403。
     @PUT("robot/{uid}/description")
     Observable<CommonResponse> updateBotDescription(@Path("uid") String uid, @Body JSONObject body);
 
     // ---------------------------------------------------------------------
-    // YUJ-361 (#227) · OCTO 实名认证接入（dmworkim PR#1301 后端已 merge）
+    //  (#227) · OCTO 实名认证接入（PR#1301 后端已 merge）
     // ---------------------------------------------------------------------
 
     /**

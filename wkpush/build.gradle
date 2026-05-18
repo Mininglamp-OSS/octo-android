@@ -2,8 +2,14 @@ plugins {
     id 'com.android.library'
     id 'kotlin-parcelize'
     id 'kotlin-android'
-    id 'com.google.gms.google-services'
 }
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
@@ -12,6 +18,19 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
+
+        buildConfigField "String", "XIAOMI_APP_ID", "\"${localProperties.getProperty('XIAOMI_APP_ID', '')}\""
+        buildConfigField "String", "XIAOMI_APP_KEY", "\"${localProperties.getProperty('XIAOMI_APP_KEY', '')}\""
+        buildConfigField "String", "HUAWEI_APP_ID", "\"${localProperties.getProperty('HUAWEI_APP_ID', '')}\""
+        buildConfigField "String", "OPPO_APP_KEY", "\"${localProperties.getProperty('OPPO_APP_KEY', '')}\""
+        buildConfigField "String", "OPPO_APP_SECRET", "\"${localProperties.getProperty('OPPO_APP_SECRET', '')}\""
+        buildConfigField "String", "VIVO_API_KEY", "\"${localProperties.getProperty('VIVO_API_KEY', '')}\""
+
+        manifestPlaceholders = [
+            HUAWEI_APP_ID: localProperties.getProperty('HUAWEI_APP_ID', ''),
+            VIVO_API_KEY : localProperties.getProperty('VIVO_API_KEY', ''),
+            VIVO_APP_ID  : localProperties.getProperty('VIVO_APP_ID', ''),
+        ]
     }
 
     buildTypes {
@@ -28,7 +47,9 @@ android {
         jvmTarget = "17"
     }
     namespace 'com.chat.push'
-
+    buildFeatures {
+        buildConfig true
+    }
 }
 
 dependencies {
@@ -37,7 +58,7 @@ dependencies {
     implementation project(path: ':MyLibs:xiaomipush')
 
     //oppo
-    implementation 'com.heytap.msp:push:3.0.0'
+    implementation project(path: ':MyLibs:oppopush')
     //vivo
     implementation project(path: ':MyLibs:vivopush')
     // firebase

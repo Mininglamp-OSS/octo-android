@@ -27,7 +27,7 @@ public class WKReply implements Parcelable {
     // 编辑时间
     public long editAt;
 
-    // ===== 外部群 Reply 预览 @SpaceName 字段（YUJ-132，对齐 Web PR#1073 / iOS）=====
+    // ===== 外部群 Reply 预览 @SpaceName 字段（，对齐 Web PR#1073 / iOS）=====
     // 当被回复消息的发送者来自其他 Space 时，服务端在 reply 对象中附带这四个字段，
     // 客户端据此在引用气泡的发送者名称后追加 " @SourceSpaceName"。
     // 字段全部可选：缺失时保持默认值（0 / null），由 ExternalSourceResolver 走降级链。
@@ -109,7 +109,7 @@ public class WKReply implements Parcelable {
                 payloadJson.put("type", payload.type);
             }
             jsonObject.put("payload", payloadJson);
-            // 外部群来源字段 round-trip（YUJ-132）：仅在有信号时写入，避免污染老数据。
+            // 外部群来源字段 round-trip（）：仅在有信号时写入，避免污染老数据。
             if (from_is_external != 0
                     || from_source_space_name != null
                     || from_home_space_id != null
@@ -142,7 +142,7 @@ public class WKReply implements Parcelable {
             if (payloadJson != null)
                 payload = MsgManager.getInstance().getMsgContentModel(payloadJson);
         }
-        // 外部群来源字段解析（YUJ-132 · 对齐 Web PR#1073 / iOS）。全部 optional：
+        // 外部群来源字段解析（ · 对齐 Web PR#1073 / iOS）。全部 optional：
         // 缺失时保持默认值（int=0, String=null），由上层 ExternalSourceResolver 决定是否渲染后缀。
         this.from_is_external = jsonObject.optInt("from_is_external", 0);
         this.from_source_space_name = jsonObject.has("from_source_space_name")

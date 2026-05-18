@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.setting;
 
 import android.content.Intent;
@@ -40,8 +56,8 @@ import com.xinbida.wukongim.entity.WKChannelType;
 public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     /**
-     * YUJ-392 · Aegis OIDC v3 Phase 2b：去认证按钮直跳 Aegis 账户页。
-     * YUJ-396 / GH dmwork-web#1174：Aegis 域名改为按环境从后端 appconfig 下发的
+     *  · Aegis OIDC v3 Phase 2b：去认证按钮直跳 Aegis 账户页。
+     *  / GH ：Aegis 域名改为按环境从后端 appconfig 下发的
      *   {@code oidc_providers[].account_url} 字段读, 不再硬编码 prod URL。
      *
      * <p>客户端打开 Aegis 的 verification anchor; Aegis 完成身份验证后会 302 回
@@ -52,7 +68,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
      * 从 appconfig 解析; 未下发可用 {@code account_url} 时弹 toast 不跳转,
      * 绝不回退任何硬编码 prod 域。合约见该类 Javadoc。
      *
-     * <p>老版本 App（未升级到 Phase 2b）仍然依赖 dmworkim 端的 verify-token
+     * <p>老版本 App（未升级到 Phase 2b）仍然依赖 端的 verify-token
      * 翻译层已处理, 后端会返回按环境下发的 Aegis URL。
      */
     private String str;
@@ -84,16 +100,16 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     @Override
     protected void onResume() {
         super.onResume();
-        // YUJ-361 (#227)：从 Custom Tabs 回来后 VerifyLandingActivity 会刷新 profile，
+        //  (#227)：从 Custom Tabs 回来后 VerifyLandingActivity 会刷新 profile，
         // 这里 onResume 把最新状态重新渲染到行上。
-        // YUJ-392 · Aegis Phase 2b：切到 Aegis 直跳后路径不变 —— deeplink 回跳
+        //  · Aegis Phase 2b：切到 Aegis 直跳后路径不变 —— deeplink 回跳
         // 依然触发 VerifyLandingActivity → refreshCurrentUser → 栈回到这里 onResume。
         renderRealnameStatus();
     }
 
     /**
-     * YUJ-361 (#227)：实名认证行的状态渲染。
-     * - 未认证：显示「去认证」，点击直跳 Aegis 账户页（YUJ-392 · Phase 2b）。
+     *  (#227)：实名认证行的状态渲染。
+     * - 未认证：显示「去认证」，点击直跳 Aegis 账户页（ · Phase 2b）。
      * - 已认证：显示「已认证 · YYYY-MM」，隐藏箭头，不可点。
      */
     private void renderRealnameStatus() {
@@ -121,17 +137,17 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     }
 
     private void startVerifyFlow() {
-        // YUJ-392 · Aegis OIDC v3 Phase 2b：去认证入口改为直跳 Aegis 账户页。
-        // YUJ-396 · Aegis 域名改为按环境从后端 appconfig 下发的
+        //  · Aegis OIDC v3 Phase 2b：去认证入口改为直跳 Aegis 账户页。
+        //  · Aegis 域名改为按环境从后端 appconfig 下发的
         //   oidc_providers[].account_url 字段读, 不再硬编码 prod URL。
         //
-        // 与 Phase 2a（走 dmworkim `verify-token` 翻译接口）对比：
+        // 与 Phase 2a（走 `verify-token` 翻译接口）对比：
         // 1. 不再经过 OCTO 后端多一跳。
         // 2. 不再需要异步回调 / Activity 生命周期守卫 —— launchUrl 是同步操作。
         // 3. `dmwork://verified` deeplink 回跳兜底保留：Aegis 验证完成后 302
         //    回该 scheme，由 VerifyLandingActivity 刷 /v1/user/current 同步本地
         //    realname_verified 状态，栈回到本页 onResume 重绘徽章。
-        // 4. 老版本 App 继续依赖 dmworkim 的 verify-token 翻译层（已处理）。
+        // 4. 老版本 App 继续依赖 的 verify-token 翻译层（已处理）。
         //
         // URL 解析合约 + 安全守卫（scheme=https + host 非空 + 末尾斜杠剥离）
         // 由 AegisVerifyUrlResolver 兜底, 见 AegisVerifyUrlResolverTest。
@@ -230,7 +246,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     //获取缓存大小
     private void getCacheSize() {
-        // YUJ-283 P-11: AppExecutors.io() 替代 new Thread()（磁盘统计属 I/O）
+        //  P-11: AppExecutors.io() 替代 new Thread()（磁盘统计属 I/O）
         AppExecutors.io().execute(() -> {
             try {
                 str = DataCleanManager.getTotalCacheSize(SettingActivity.this);

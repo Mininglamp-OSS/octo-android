@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.adapter;
 
 import android.graphics.Color;
@@ -38,7 +54,7 @@ import org.jetbrains.annotations.NotNull;
  * 2020-12-11 15:23
  * 所有成员
  *
- * 外部成员标识 v2（YUJ-87 / 对齐 web #1013）：
+ * 外部成员标识 v2（ / 对齐 web #1013）：
  *   成员名后内联「@SpaceName」后缀（灰色、同一行），取代 v1 紫色「外部」角标 +
  *   「来自 XX」副标题。当 viewer 当前 Space == 成员 home Space 时不渲染后缀。
  *   判定委托 {@link ExternalViewerResolver}，保证与 web / iOS 语义一致。
@@ -134,7 +150,7 @@ public class AllMembersAdapter extends BaseQuickAdapter<AllGroupMemberEntity, Ba
                     Gravity.CENTER_VERTICAL, 5, 0, 0, 0));
         }
 
-        // v1 紫色「外部」角标 + 「来自 XX」副标题已被 v2 @SpaceName 后缀替代（YUJ-87）。
+        // v1 紫色「外部」角标 + 「来自 XX」副标题已被 v2 @SpaceName 后缀替代（）。
         // 清理历史可能残留的 v1 View，保证复用 ViewHolder 不出现幽灵角标/副标题。
         View oldExternalBadge = nameRow.findViewWithTag("external_badge");
         if (oldExternalBadge != null) nameRow.removeView(oldExternalBadge);

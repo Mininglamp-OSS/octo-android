@@ -9,7 +9,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * YUJ-132 · Reply 引用预览 @SpaceName 字段单元测试。
+ *  · Reply 引用预览 @SpaceName 字段单元测试。
  *
  * <p>验证 {@link WKReply} 在 wire 层 round-trip 新增的四个外部群字段
  * ({@code from_is_external / from_source_space_name / from_home_space_id /

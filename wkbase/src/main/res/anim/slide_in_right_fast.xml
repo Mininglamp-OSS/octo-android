@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-276 · 窄屏点群/子区 Activity 过渡动画（快）。默认 Activity 过渡 ~250-350ms，
+   · 窄屏点群/子区 Activity 过渡动画（快）。默认 Activity 过渡 ~250-350ms，
   窄屏下叠加 onCreate + PanelSwitchHelper + initData 首帧，感知延迟 >500ms。
   这里缩到 120ms，既保留方向感又让 ChatActivity 更贴近「立即进入」。
   配合 slide_out_left_fast.xml 使用。

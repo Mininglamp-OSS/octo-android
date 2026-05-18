@@ -40,7 +40,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content" />
 
-                        <!-- YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者可见的
+                        <!--  (对齐 web PR#1092 BotDetailModal)：bot 创建者可见的
                              头像编辑铅笔，默认 GONE；UserDetailActivity.showBotInfo()
                              在 isOwner=true 时切到 VISIBLE。 -->
                         <androidx.appcompat.widget.AppCompatImageView
@@ -217,7 +217,7 @@
                                 android:layout_weight="1"
                                 android:text="@string/bot_description_label" />
 
-                            <!-- YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者可见的
+                            <!--  (对齐 web PR#1092 BotDetailModal)：bot 创建者可见的
                                  「编辑简介」按钮；非 owner 场景保持 GONE。 -->
                             <androidx.appcompat.widget.AppCompatImageView
                                 android:id="@+id/botDescEditIv"
@@ -456,7 +456,7 @@
                     android:visibility="gone"
                     app:cornerRadius="@dimen/button_radian" />
 
-                <!-- YUJ-204：外部成员 viewer 下替代整个 bottomPanel 的提示文案，
+                <!-- ：外部成员 viewer 下替代整个 bottomPanel 的提示文案，
                      对齐 web `.wk-userinfo-footer-external-hint`。默认隐藏，
                      UserDetailActivity 在 isExternalUser=true 时显示。 -->
                 <TextView

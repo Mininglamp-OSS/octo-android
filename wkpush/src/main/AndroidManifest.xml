@@ -56,7 +56,7 @@
         <!--华为-->
         <meta-data
             android:name="com.huawei.hms.client.appid"
-            android:value="108677047" />
+            android:value="${HUAWEI_APP_ID}" />
 
         <!--vivo-->
         <meta-data
@@ -64,11 +64,11 @@
             android:value="484" />
         <meta-data
             android:name="com.vivo.push.api_key"
-            android:value="d14dac0803bc8470d9ace9e29657a160" />
+            android:value="${VIVO_API_KEY}" />
 
         <meta-data
             android:name="com.vivo.push.app_id"
-            android:value="105660344" />
+            android:value="${VIVO_APP_ID}" />
 
         <!--push应用定义消息receiver声明-->
         <receiver

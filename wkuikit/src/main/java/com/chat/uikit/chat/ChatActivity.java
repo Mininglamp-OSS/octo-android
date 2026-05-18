@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat;
 
 import static androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE;
@@ -46,7 +62,7 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+//  phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
 
@@ -183,23 +199,23 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private long lastPreviewMsgOrderSeq = 0; //上次浏览消息
     private long unreadStartMsgOrderSeq = 0; //新消息开始位置
     private long tipsOrderSeq = 0; //需要强提示的msg
-    // YUJ-256 P1-2: snapshot of the initial positioning intents. The existing
+    //  P1-2: snapshot of the initial positioning intents. The existing
     // fields above (`unreadStartMsgOrderSeq`, `tipsOrderSeq`) are "consumed" —
-    // zeroed out after they drive a scroll. YUJ-242's local-first behavior
+    // zeroed out after they drive a scroll. 's local-first behavior
     // now calls applyDataToAdapter twice (preview + sync), and without these
     // snapshots the second call silently skips the "new messages" divider and
     // unread scroll because the source fields were cleared on the first call.
     private long unreadStartSnapshotOrderSeq = 0;
     private long tipsSnapshotOrderSeq = 0;
-    // YUJ-256 P1-3: flag flipped to true after the first applyDataToAdapter
+    //  P1-3: flag flipped to true after the first applyDataToAdapter
     // preview render. Used to suppress scroll-to-end on the second (post-sync)
     // render so the user's manually-scrolled viewport is not yanked back to
     // the bottom when sync completes.
     private boolean hasRenderedPreview = false;
-    // YUJ-256 P1-3: flipped true when the user has actively scrolled the chat
+    //  P1-3: flipped true when the user has actively scrolled the chat
     // RecyclerView (DRAGGING). Also suppresses the second-render scroll-to-end.
     private boolean userHasScrolled = false;
-    // YUJ-258 P2-NEW-1: flipped true after the first successful tips highlight
+    //  P2-NEW-1: flipped true after the first successful tips highlight
     // so the second applyDataToAdapter (sync-merge) does not replay the
     // `isShowTips = true` animation. Reset alongside tipsSnapshotOrderSeq in
     // every fresh-reload path (initData / clickResult / tipsMsg /
@@ -254,14 +270,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private final int pinnedViewHeight = AndroidUtilities.dp(50f);
     private boolean hasJoinedThread = false;
 
-    // YUJ-324 · Space 上下文快照：每次 initParam 时记录当前 Space，用于两处防御：
+    //  · Space 上下文快照：每次 initParam 时记录当前 Space，用于两处防御：
     // (1) SpaceChangedBroadcaster 监听回调里比较"实例快照 != 新 Space"→ finish；
     // (2) onNewIntent 复用路径顶部二次校验"实例快照 != SP 里现值"→ finish 后让
     //     下一次 ChatReuseNavigator.launchChat 走冷启路径（defense in depth：
     //     万一广播因进程切换 / race 没有到达）。
     private String lastKnownSpaceId = "";
 
-    // YUJ-324 · Space 变化监听器；onCreate 注册、onDestroy 反注册。放成实例字段
+    //  · Space 变化监听器；onCreate 注册、onDestroy 反注册。放成实例字段
     // 是为了保留"一个 Activity 实例对应一个 listener"的语义，反注册时能精确定位。
     private SpaceChangedBroadcaster.Listener spaceChangedListener;
     private int getTopPinViewHeight() {
@@ -294,7 +310,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         channelId = getIntent().getStringExtra("channelId");
         //频道类型
         channelType = getIntent().getByteExtra("channelType", WKChannelType.PERSONAL);
-        // YUJ-324 · 每次 initParam 时刷新 Space 快照。冷启动 onCreate → initParam 拿到
+        //  · 每次 initParam 时刷新 Space 快照。冷启动 onCreate → initParam 拿到
         // 真实当前 Space；onNewIntent 复用路径 setIntent + initParam 之后也会走到这里，
         // 保证 lastKnownSpaceId 永远跟当前 Activity 实际渲染的 Space 对齐。
         lastKnownSpaceId = SpaceFilter.getCurrentSpaceId();
@@ -333,14 +349,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        // YUJ-276 · diagnostic trace：窄屏冷启 breakdown 最大的一段发生在 onCreate
+        //  · diagnostic trace：窄屏冷启 breakdown 最大的一段发生在 onCreate
         // （DataBindingUtil.setContentView 膨胀 act_chat_layout.xml ≈ 80-200ms）+
         // onStart 里的 PanelSwitchHelper.Builder(this).build() ≈ 50-100ms + initData
         // 同步 DB 读。grep "YUJ276-trace" 可以和 WKIMUtils 里的 T_CLICK /
         // T_START_ACTIVITY 串起整条链路。
         long t0 = SystemClock.uptimeMillis();
         super.onCreate(savedInstanceState);
-        // YUJ-278 P1-1（Fix D 自我覆盖版）：把窄屏 120ms 快过渡下沉到 ChatActivity
+        //  P1-1（Fix D 自我覆盖版）：把窄屏 120ms 快过渡下沉到 ChatActivity
         // 自己注册，不再依赖 WKIMUtils.startChat。这样 WKThreadCreatedProvider
         // （子区卡片点击）/ SearchAllActivity / CreateThreadActivity 这些直接
         // startActivity(ChatActivity) 的调用方也能吃到快动画，和会话列表点击一致。
@@ -351,14 +367,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding = DataBindingUtil.setContentView(this, R.layout.act_chat_layout);
         long tInflate = SystemClock.uptimeMillis();
 //        setContentView(R.layout.act_chat_layout1);
-        // YUJ-252 / GH #182 Bug 1 — In Activity Embedding expanded mode the
+        //  / GH #182 Bug 1 — In Activity Embedding expanded mode the
         // secondary pane does not reliably receive adjustResize behavior, so the
         // IME can overlap the message input area. Manually translate IME insets
         // into bottom padding on the root view. On phone (single-pane) the IME
         // insets are still dispatched correctly, so this behaves identically to
         // the adjustResize default.
         //
-        // YUJ-253 / GH #184 — MUST return `insets` (not WindowInsetsCompat.CONSUMED).
+        //  / GH #184 — MUST return `insets` (not WindowInsetsCompat.CONSUMED).
         // Returning CONSUMED interrupts insets propagation to child views and
         // regressed PR#181's pane-aware bubble auto-resize (BubbleLayout /
         // descendants stopped getting layout/insets callbacks when the divider
@@ -379,7 +395,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         initListener();
         //initData();
         ActManagerUtils.getInstance().addActivity(this);
-        // YUJ-324 · 注册 Space 变化监听。ChatReuseNavigator.goBackToList 用
+        //  · 注册 Space 变化监听。ChatReuseNavigator.goBackToList 用
         // REORDER_TO_FRONT 让 ChatActivity 常驻任务栈；一旦用户从 TabActivity
         // 切了 Space，本实例必须主动销毁 —— 否则下次 launchChat 走 onNewIntent
         // 复用，Space 上下文（WKIM channel session / WKChannel.remoteExtraMap
@@ -407,7 +423,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         };
         SpaceChangedBroadcaster.addListener(spaceChangedListener);
-        // YUJ-305 P1-A · 预测性返回（Predictive Back，API 33+）不走 onKeyDown → onBackPressed
+        //  P1-A · 预测性返回（Predictive Back，API 33+）不走 onKeyDown → onBackPressed
         // 分发链，而是走 OnBackInvokedDispatcher / OnBackPressedDispatcher。若不注册回调，
         // 系统手势返回会直接 finish()，绕过 setBackListener() → goBackToList 的 soft-back
         // 优化路径。这里注册一个 OnBackPressedCallback，把预测性返回统一路由回 setBackListener()。
@@ -421,7 +437,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 // 走到 soft-back 成功分支，ChatActivity 仍留在栈里，回调保持 enabled，下次
                 // back 仍会命中本分支。此处不需要再调 finish()。
                 //
-                // YUJ-311 防御 · OnBackPressedCallback 通过 LifecycleOwner(this) 绑定，
+                //  防御 · OnBackPressedCallback 通过 LifecycleOwner(this) 绑定，
                 // 正常情况下在 STARTED 以下会自动 disable；但 Activity Embedding 快速
                 // 切副栏 / finish 中的极端时序下 callback 可能在 isFinishing=true
                 // 时短暂被调度到。setBackListener 会访问 chatAdapter / chatPanelManager，
@@ -430,7 +446,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 setBackListener();
             }
         });
-        // YUJ-251 / GH #180 — L2 pane-aware: when the Embedding pane resizes (divider
+        //  / GH #180 — L2 pane-aware: when the Embedding pane resizes (divider
         // drag, unfold, rotation), re-bind only the currently-visible messages so the
         // bubble max-width cap (driven by PaneMetrics) refreshes without re-creating
         // unrelated ViewHolders. BubbleLayout auto-caps on every measure, so this is
@@ -479,12 +495,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     protected void onResume() {
-        // YUJ-276 · diagnostic trace：onResume 是「用户看到 Activity 首帧」的最后
+        //  · diagnostic trace：onResume 是「用户看到 Activity 首帧」的最后
         // 一个生命周期节点，和 T_CLICK 的 delta 就是感知延迟。真正的像素出现时间还
         // 要加一帧（~16ms）的 measure/layout/draw，但这条 log 足够定位 P90/P99。
         long tOnResume = SystemClock.uptimeMillis();
         super.onResume();
-        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
+        //  round3 fix (review B1): 若后台/来电时 RV 停在 DRAGGING/SETTLING，onScrollStateChanged(IDLE) 不会触发，
         // Glide 会永远停住。onResume 主动恢复，消除生命周期死锁。
         try {
             Glide.with(this).resumeRequests();
@@ -507,7 +523,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onStart() {
         super.onStart();
-        // YUJ-276 · diagnostic trace：onStart 负责首次建 PanelSwitchHelper +
+        //  · diagnostic trace：onStart 负责首次建 PanelSwitchHelper +
         // ChatPanelManager + 首轮 initData。这是 onCreate 之后第二大耗时段。
         long tOnStart = SystemClock.uptimeMillis();
         if (mHelper == null) {
@@ -669,19 +685,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         CommonAnim.getInstance().showOrHide(numberTextView, false, false);
 
-        // YUJ-240 review fix (Jerry-Xin W#2): 旧 DefaultItemAnimator 配置代码已死 — MyItemAnimator 在下面立即替换它，移除以清理死代码与 import。
+        //  review fix (review W#2): 旧 DefaultItemAnimator 配置代码已死 — MyItemAnimator 在下面立即替换它，移除以清理死代码与 import。
         chatAdapter = new ChatAdapter(this, ChatAdapter.AdapterType.normalMessage);
         linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
-        // YUJ-236 perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
+        //  perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
         wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
         // 增大 off-screen ViewHolder 缓存，减少快速滑动时的 ViewHolder 创建开销
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
-        // YUJ-236 phase2 perf (A4) + YUJ-240 round3 fix (Jerry-Xin W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
+        //  phase2 perf (A4) +  round3 fix (review W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
         // 原先还有 richText (14)，但 WKUIKitApplication 未注册该 provider，ChatAdapter.getItemType 不会返回 14，配置池是 no-op，删除。
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
@@ -800,7 +816,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(reminderList.get(0).messageSeq, channelId, channelType);
                     unreadStartMsgOrderSeq = 0;
                     tipsOrderSeq = orderSeq;
-                    // YUJ-256 P1-2: sync snapshots + reset render flags for
+                    //  P1-2: sync snapshots + reset render flags for
                     // the fresh data load so the second (post-sync) callback
                     // honours the new tips anchor.
                     unreadStartSnapshotOrderSeq = 0;
@@ -856,14 +872,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
-                // YUJ-256 P1-3: record that the user has actively driven the
+                //  P1-3: record that the user has actively driven the
                 // RecyclerView. applyDataToAdapter will use this to suppress
                 // its scroll-to-end on the post-sync re-render so we do not
                 // yank the user back to the bottom of an unread chat.
                 if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
                     userHasScrolled = true;
                 }
-                // YUJ-240 round3 fix (Jerry-Xin R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
+                //  round3 fix (review R2-Glide/S1): 仅 fling (SETTLING) 时 pause，
                 // DRAGGING 保持加载（慢滑手指在屏不应看到占位符）；IDLE 恢复。
                 try {
                     RequestManager glideMgr = Glide.with(ChatActivity.this);
@@ -917,10 +933,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 wkVBinding.chatUnreadLayout.msgDownIv.setVisibility(View.GONE);
                 unreadStartMsgOrderSeq = 0;
                 lastPreviewMsgOrderSeq = 0;
-                // YUJ-258 P1-NEW-1: reset snapshots + render flags so the
+                //  P1-NEW-1: reset snapshots + render flags so the
                 // fresh reload triggered by the "N new messages" bubble
                 // actually scrolls to end and does not reinsert a stale
-                // unread divider (YUJ-242 regression path).
+                // unread divider ( regression path).
                 unreadStartSnapshotOrderSeq = 0;
                 tipsSnapshotOrderSeq = 0;
                 hasRenderedPreview = false;
@@ -940,7 +956,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             isCanLoadMore = false;
         });
 
-        // YUJ-267 · Fix B：所有以 channelId 为 key 的 SDK 监听 / EndpointManager
+        //  · Fix B：所有以 channelId 为 key 的 SDK 监听 / EndpointManager
         // setMethod 都挪到 attachChannelListeners()，配合 onNewIntent 做 detach →
         // initParam → attach 复用流程。initListener 只负责装配一次性的 UI click /
         // 非 channel-keyed endpoint method。
@@ -1029,13 +1045,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
-        // YUJ-276 · diagnostic trace：singleTop 复用路径。只有当 ChatActivity 已经
-        // 在栈顶时才会走这里。YUJ-298 Fix A 之后，窄屏从 TabActivity 返回不再 finish，
+        //  · diagnostic trace：singleTop 复用路径。只有当 ChatActivity 已经
+        // 在栈顶时才会走这里。 Fix A 之后，窄屏从 TabActivity 返回不再 finish，
         // 实例保活在任务栈里 —— 下一次 startActivity 通过 FLAG_ACTIVITY_REORDER_TO_FRONT
         // + FLAG_ACTIVITY_SINGLE_TOP 命中这里，彻底规避 recreate。
         long tNewIntent = SystemClock.uptimeMillis();
         String newChannelId = intent.getStringExtra("channelId");
-        // YUJ-324 · 跨 Space 复用防御（defense in depth）。
+        //  · 跨 Space 复用防御（defense in depth）。
         //
         // 正常路径：performSpaceSwitch → MsgModel.setCurrentSpaceId → 广播 →
         //   onCreate 注册的 spaceChangedListener 已经 finish 了自己，这里根本
@@ -1077,18 +1093,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             Log.d("YUJ276-trace", "[T_ON_NEW_INTENT] previousChannel=" + channelId
                     + " newChannel=" + newChannelId);
         }
-        // YUJ-298 · Fix A 同频道短路：窄屏用户常常 back → 回到列表 → 再点同一个会话
+        //  · Fix A 同频道短路：窄屏用户常常 back → 回到列表 → 再点同一个会话
         // 进入；此时 oldChannelId == newChannelId，走完整 detach/reset/attach 会造成
         // chatAdapter.setList([]) 闪烁 + 重新读 DB。直接短路掉，保持原画面。
         //
-        // YUJ-305 P0-1 · 短路路径必须处理"跳消息 / 转发 / 搜索定位"类 extras，否则
+        //  P0-1 · 短路路径必须处理"跳消息 / 转发 / 搜索定位"类 extras，否则
         //   - 点同会话 @ mention 通知 → 不跳消息
         //   - 转发到当前会话 → 不弹确认框
         //   - 搜索结果定位同会话某条消息 → 不滚动高亮
         // 抽出 applyIntentExtrasForReuse()，同时被同频道短路分支和 onDestroy → onCreate
         // 冷路径之间的中间态（可能仍由其它系统事件驱动）复用。
         //
-        // YUJ-305 P0-2 · 短路路径必须主动持久化当前 channel 编辑态。Fix A 之前 soft-back
+        //  P0-2 · 短路路径必须主动持久化当前 channel 编辑态。Fix A 之前 soft-back
         // 不 finish → onDestroy 不触发 → saveEditContent 不执行 → 草稿 / 浏览位置 / 阅后
         // 即焚清理全部丢失。即使在短路路径（未 back，也未切群）也要 flush 一次，避免
         // 从其他入口（deeplink / 通知）携带新 extras 打断输入时草稿丢失。
@@ -1107,11 +1123,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             return;
         }
-        // YUJ-267 · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
+        //  · Fix B：分屏态 Activity 复用路径。同实例切不同群时走这里而不是
         // onDestroy → onCreate，省掉 XML 膨胀 / PanelSwitchHelper 首建 / Activity
         // transition，目标感知延迟 < 200ms（原 500-800ms）。
         //
-        // 流程（YUJ-270 P0-2 修正：persist 必须在 reset 之前！）：
+        // 流程（ P0-2 修正：persist 必须在 reset 之前！）：
         // 1. 快照 oldChannelId / oldChannelType —— 两者在 initParam 后都会变；
         // 2. 用旧 channelId 做 key 卸所有 channel-keyed 监听；
         // 3. **先 persist 旧 channel 的草稿 / 已读 / 未读**（此时实例字段仍是旧值，
@@ -1123,7 +1139,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 7. attachChannelListeners 用新 channelId 重装；
         // 8. initData 读新 channel 的 DB + 同步头像 / title / membership。
         //
-        // 历史坑（YUJ-269 ReviewBot P0-2）：R1 版本先 reset 再 persist，editText 被
+        // 历史坑（ ReviewBot P0-2）：R1 版本先 reset 再 persist，editText 被
         // setText("") 后 persist 读到空串 → 草稿被空覆写；readMsgIds.clear() 后 persist
         // 检查 isNotEmpty 失败 → 已读回执永不触发；redDot=0 导致 clearUnread 失效。
         String oldChannelId = channelId;
@@ -1151,15 +1167,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-267 · Fix B：持久化上一个 channel 的编辑态（草稿 / 阅后即焚 / 浏览位置），
+     *  · Fix B：持久化上一个 channel 的编辑态（草稿 / 阅后即焚 / 浏览位置），
      * 对齐 {@link #onDestroy()}.{@code saveEditContent()} 的行为，避免复用时旧群
      * 的输入内容丢失。与 saveEditContent 的差别：这里不 dispose Activity 级资源，
      * 不 release 语音，只做 per-channel 数据落盘。
      *
-     * <p>YUJ-270 P0-2：必须在 {@link #resetPerChannelState()} <b>之前</b>调用 —— 否则
+     * <p> P0-2：必须在 {@link #resetPerChannelState()} <b>之前</b>调用 —— 否则
      * editText / readMsgIds / redDot 都已被 reset 清零，persist 读到零值。
      *
-     * <p>YUJ-270 P1-1：必须从 {@link #onNewIntent} 顶部把 {@code oldChannelType} 作为
+     * <p> P1-1：必须从 {@link #onNewIntent} 顶部把 {@code oldChannelType} 作为
      * 入参传下来 —— 不能在方法内用 {@code WKChannelManager.getChannel()} 探测，否则
      * 子区（{@link WKChannelType#COMMUNITY_TOPIC}）在 PERSONAL/GROUP 都查不到，会兜底
      * 到 {@code this.channelType}（initParam 已改成新值）→ 对旧子区用错类型写
@@ -1206,7 +1222,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-298 / YUJ-305 P0-2：持久化<b>当前</b> channel 的编辑态。与
+     *  /  P0-2：持久化<b>当前</b> channel 的编辑态。与
      * {@link #persistOldChannelEditState(String, byte)} 的区别：这里读的是 Activity
      * 字段（channelId / channelType / readMsgIds / redDot / editText），不接入参 —
      * 调用时必须保证还没切 channel（soft-back / 同频道短路 / finish 前都是这种状态）。
@@ -1267,7 +1283,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-305 P0-1：把 Intent 上挂的"跳消息 / 转发 payload / 搜索定位"类 extras 分发到
+     *  P0-1：把 Intent 上挂的"跳消息 / 转发 payload / 搜索定位"类 extras 分发到
      * 当前 UI。仅在 {@link #onNewIntent(Intent)} 的同频道短路路径使用 —— 跨频道路径会
      * 走完整的 resetPerChannelState + initData，extras 被 {@link #initParam()} /
      * {@link #initData()} 自然读走，不需要本方法。
@@ -1287,11 +1303,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 1. 转发 payload —— 对齐 initParam() 里的 msgContentList 分支。
         if (intent.hasExtra("msgContentList")) {
             List<WKMessageContent> msgContentList = intent.getParcelableArrayListExtra("msgContentList");
-            // YUJ-311 防御 · 消费 extras 必须无条件，否则同频道短路再次触发时会 replay
+            //  防御 · 消费 extras 必须无条件，否则同频道短路再次触发时会 replay
             // 一个我们本应丢弃的 payload。改成先 consume 再决定是否分发。
             intent.removeExtra("msgContentList");
             if (WKReader.isNotEmpty(msgContentList)) {
-                // YUJ-311 防御 · getChannel 可能返回 null（SDK cache 未热 / channel 被
+                //  防御 · getChannel 可能返回 null（SDK cache 未热 / channel 被
                 // evict / 跨 Space 冷启 race）。baseline 直接把 null 塞 channelList
                 // 进 showChatConfirmDialog，对话框的 adapter 在 bind 头像 / 名字时
                 // 会触发 NPE。短路路径放弃弹框比闪退好——用户再点一次该 extras
@@ -1329,12 +1345,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-305 P0-1：同频道短路路径下"滚动到目标消息"。
+     *  P0-1：同频道短路路径下"滚动到目标消息"。
      *
      * <p>目标若已在 adapter 缓存内，直接 scrollToPositionWithOffset + 高亮，
      * 不触发 DB 重读。否则按冷路径对齐，更新 tipsOrderSeq snapshot + 清 render
      * flag，让 getData(... aroundMsgSeq ...) 接手拉取并由 applyDataToAdapter
-     * 完成滚动和高亮（复用 YUJ-256 snapshot 机制）。
+     * 完成滚动和高亮（复用  snapshot 机制）。
      */
     private void scrollToMessageForReuse(long targetOrderSeq) {
         if (chatAdapter == null || linearLayoutManager == null) return;
@@ -1369,7 +1385,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-267 · Fix B · reset matrix：per-channel 一次性状态必须在切换时清零。
+     *  · Fix B · reset matrix：per-channel 一次性状态必须在切换时清零。
      * 遗漏会导致跨群串红点 / 串未读分割线 / 串 reminder / 串键盘高度等。
      *
      * 参见 issue / onDestroy 的 saveEditContent 流程 — 所有初始化值来自 onCreate
@@ -1423,14 +1439,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // rendering frame state
         isShowChatActivity = true;
 
-        // YUJ-270 P2-1 · SwipeRefresh / LoadMore 忙位：旧 channel 刷新中途切群时必须清，
+        //  P2-1 · SwipeRefresh / LoadMore 忙位：旧 channel 刷新中途切群时必须清，
         // 否则新 channel 的 loadMsgs / loadMoreMsgs 首帧会被 `isRefreshLoading || !isCanRefresh`
         // 门禁挡掉，滚到顶 / 到底不再触发请求。
         isRefreshLoading = false;
         isMoreLoading = false;
         isCanRefresh = true;
 
-        // YUJ-270 P2-2 · RxJava subscription：旧 channel 的 media 下载 / 任务订阅如果不
+        //  P2-2 · RxJava subscription：旧 channel 的 media 下载 / 任务订阅如果不
         // dispose，切到新 channel 后订阅叠加 → 回调错绑（新 channel 收到旧 channel 的
         // onNext）+ 内存 leak。
         if (disposable != null && !disposable.isDisposed()) {
@@ -1438,7 +1454,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
         disposable = null;
 
-        // YUJ-270 P2-3 · 空态补白：unfilledHeight 是按当前 channel 的列表高度 - 消息总高
+        //  P2-3 · 空态补白：unfilledHeight 是按当前 channel 的列表高度 - 消息总高
         // 算出来的，跨 channel 直接残留会让空态滚动距离算错（上下错位几行高）。
         unfilledHeight = 0;
 
@@ -1456,7 +1472,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-267 · Fix B · 注册所有以 channelId 为 key 的 SDK 监听 + EndpointManager
+     *  · Fix B · 注册所有以 channelId 为 key 的 SDK 监听 + EndpointManager
      * setMethod。onCreate → initListener() 走一次；onNewIntent 复用路径 detach →
      * attach 走一次。
      */
@@ -1667,7 +1683,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     tempMaxOrderSeq = chatAdapter.getLastMsg().orderSeq;
                 }
                 if (maxOrderSeq > tempMaxOrderSeq && !hasPositionedUnread) {
-                    // YUJ-258 P1-NEW-2: reset snapshots + render flags before
+                    //  P1-NEW-2: reset snapshots + render flags before
                     // the reconnect refresh so the viewport actually scrolls
                     // to end after airplane/sync-complete, rather than being
                     // pinned to the previous preview position.
@@ -1696,7 +1712,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-267 · Fix B · 用旧 channelId 作 key 卸所有 channel-keyed 监听。与
+     *  · Fix B · 用旧 channelId 作 key 卸所有 channel-keyed 监听。与
      * {@link #onDestroy()} 里的 remove 块保持同步——onDestroy 调用的是当前 channelId；
      * onNewIntent 调用此方法时 channelId 尚未更新，传入的 oldChannelId 即当前值。
      */
@@ -1727,7 +1743,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
         getChannelState();
 
-        // YUJ-242: do NOT clear the adapter here. The previous setList(empty)
+        // : do NOT clear the adapter here. The previous setList(empty)
         // caused a visible white-screen flash while getData() is waiting on
         // sync. applyDataToAdapter(isSetNewData=true) replaces data anyway,
         // and on onNewIntent (same Activity reused for a different channel)
@@ -1869,7 +1885,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (getIntent().hasExtra("unreadStartMsgOrderSeq")) {
             unreadStartMsgOrderSeq = getIntent().getLongExtra("unreadStartMsgOrderSeq", 0);
         }
-        // YUJ-256 P1-2: take a snapshot of the positioning targets so the
+        //  P1-2: take a snapshot of the positioning targets so the
         // second applyDataToAdapter (after sync) still inserts the divider
         // and scrolls correctly even though the source fields were zeroed
         // out during the first (preview) render.
@@ -2191,13 +2207,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 将已构建好的 UI list 应用到 adapter（必须在主线程调用）。
      */
     private void applyDataToAdapter(List<WKUIChatMsgItemEntity> list, int pullMode, boolean isSetNewData, boolean isScrollToEnd) {
-        // YUJ-256 P1-3: once we have already rendered the local-first preview,
+        //  P1-3: once we have already rendered the local-first preview,
         // the second (post-sync) render must NOT yank the user's viewport.
         // Same if the user has manually scrolled during the sync window.
         final boolean effectiveScrollToEnd = isScrollToEnd && !hasRenderedPreview && !userHasScrolled;
         if (isSetNewData) {
             int unreadScrollIndex = -1;
-            // YUJ-256 P1-2: use the non-zeroed snapshot so the divider is
+            //  P1-2: use the non-zeroed snapshot so the divider is
             // inserted on every applyDataToAdapter call (preview + sync),
             // not only the first one.
             final long unreadAnchor = unreadStartSnapshotOrderSeq;
@@ -2225,7 +2241,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             chatAdapter.setNewInstance(list);
             chatAdapter.rebuildIndex();
             // Only scroll to the unread anchor when the user has not taken
-            // over the viewport (YUJ-256 P1-3).
+            // over the viewport ( P1-3).
             if (unreadScrollIndex >= 0 && !userHasScrolled) {
                 final int scrollTarget = unreadScrollIndex;
                 linearLayoutManager.scrollToPositionWithOffset(scrollTarget, AndroidUtilities.dp(50));
@@ -2286,7 +2302,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 clearEdgeEffects();
             }
         }
-        // YUJ-256 P1-2: use the tips snapshot so the second applyDataToAdapter
+        //  P1-2: use the tips snapshot so the second applyDataToAdapter
         // call (after sync completes) still scrolls to and highlights the
         // target message, even though `tipsOrderSeq` was zeroed in the first
         // call.
@@ -2326,7 +2342,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         }
 
-        // YUJ-256 P1-3: mark that the preview/first render has happened so
+        //  P1-3: mark that the preview/first render has happened so
         // any subsequent applyDataToAdapter call (e.g. sync-complete second
         // onResult) does not yank the user's viewport back to the end.
         if (isSetNewData) {
@@ -2900,7 +2916,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         float density = getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
         AndroidUtilities.isPORTRAIT = newConfig.orientation != Configuration.ORIENTATION_LANDSCAPE;
-        // YUJ-273 · 折叠屏回归：非折叠态启动→展开时右侧消息区自适应失效。
+        //  · 折叠屏回归：非折叠态启动→展开时右侧消息区自适应失效。
         // setupPaneResizeObserver 依赖 RecyclerView 的 onLayoutChange（width 变化）触发
         // 可见项重绑，但若 ChatActivity 在非折叠态启动时被 Embedding 判为「不分屏」而
         // 全屏化，随后 unfold：Embedding 会改 Activity 容器尺寸，但某些设备上
@@ -2965,8 +2981,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             } else {
                 wkReply.root_mid = wkReply.message_id;
             }
-            // YUJ-132: 透传被回复消息发送者的 home/source Space 字段，让接收端的 Reply 预览
-            // 能够渲染 "@SpaceName"。字段位于 localExtraMap（见 YUJ-89 MsgModel.copyExternalSourceExtras）。
+            // : 透传被回复消息发送者的 home/source Space 字段，让接收端的 Reply 预览
+            // 能够渲染 "@SpaceName"。字段位于 localExtraMap（见  MsgModel.copyExternalSourceExtras）。
             copyReplyExternalExtras(replyWKMsg, wkReply);
             messageContent.reply = wkReply;
         }
@@ -3161,7 +3177,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (msg != null && msg.isDeleted == 0) {
                 unreadStartMsgOrderSeq = 0;
                 tipsOrderSeq = msg.orderSeq;
-                // YUJ-256 P1-2: sync snapshots + reset render flags for the
+                //  P1-2: sync snapshots + reset render flags for the
                 // tipsMsg jump so the second (post-sync) callback still
                 // positions on the target message.
                 unreadStartSnapshotOrderSeq = 0;
@@ -3363,7 +3379,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     @Override
     public void finish() {
-        // YUJ-305 P1-A · swipe-back 兜底：系统 / 第三方 SwipeBackLayout 的侧滑返回不走
+        //  P1-A · swipe-back 兜底：系统 / 第三方 SwipeBackLayout 的侧滑返回不走
         // onBackPressed 分发链，会直接调 Activity.finish()，绕过 setBackListener() →
         // persistCurrentChannelEditState() 的主动落盘点。这里在 super.finish() 之前再
         // flush 一次编辑态（幂等），保证草稿 / 浏览位置 / 阅后即焚 / readMsg 上报不丢。
@@ -3375,7 +3391,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             EndpointManager.getInstance().invoke(WKConstants.refreshContacts, null);
         }
         super.finish();
-        // YUJ-278 P1-3：快进慢出对称。入场 120ms 后，非 swipe 返回（系统 back /
+        //  P1-3：快进慢出对称。入场 120ms 后，非 swipe 返回（系统 back /
         // 工具栏返回按钮 / finish() 直调）若不覆盖仍走系统默认 ~250-350ms。
         // 这里用反向 slide pair 把返回也压到 120ms。pre-34 走 overridePendingTransition
         // 必须在 super.finish() 之后调；API 34+ 已由 NarrowTransition.applyFastOpen()
@@ -3415,11 +3431,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             messageEffectOverlay = null;
         }
         chatPanelManager.onDestroy();
-        // YUJ-267 · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
+        //  · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
         // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，
         // 避免两条路径清理矩阵漂移。
         detachChannelListeners(channelId);
-        // YUJ-324 · 反注册 Space 变化监听，避免 process-scope 列表长期持有本实例
+        //  · 反注册 Space 变化监听，避免 process-scope 列表长期持有本实例
         // 引用（lambda 捕获 this.lastKnownSpaceId / this.channelId 字段访问通过
         // 合成类持有 outer ChatActivity 引用）。
         if (spaceChangedListener != null) {
@@ -4108,11 +4124,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * YUJ-132: copy the replied-to sender's home/source Space fields from the
+     * : copy the replied-to sender's home/source Space fields from the
      * source {@link WKMsg} onto the outgoing {@link WKReply} so the receivers'
      * reply-preview can render "@SpaceName" via {@link com.chat.base.external.ExternalSourceResolver}.
      *
-     * <p>Fields are stored on {@link WKMsg#localExtraMap} per YUJ-89 / EP1
+     * <p>Fields are stored on {@link WKMsg#localExtraMap} per  / EP1
      * ({@code MsgModel.copyExternalSourceExtras}). Keys match
      * {@link com.chat.base.external.ExternalMsgExtras}. All fields are optional:
      * missing values leave the reply defaults untouched.

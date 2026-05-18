@@ -1,8 +1,26 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base;
 
 import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
+
+import com.chat.base.BuildConfig;
 import android.os.Handler;
 import android.text.TextUtils;
 
@@ -33,7 +51,7 @@ import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
 
-import org.telegram.ui.Components.RLottieApplication;
+import com.octoim.rlottie.RLottieApplication;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -55,7 +73,7 @@ public class WKBaseApplication {
     public boolean disconnect = true;
 
     public String versionName;
-    public String appID = "wukongchat";
+    public String appID = BuildConfig.APP_IDENTIFIER;
 
     public static volatile Handler applicationHandler;
 
@@ -80,7 +98,7 @@ public class WKBaseApplication {
         this.application = context;
         this.context = new WeakReference<>(context);
 
-        // YUJ-284 (P-01) · 冷启预热 —— 必须在 this.application 赋值之后、主线程
+        //  (P-01) · 冷启预热 —— 必须在 this.application 赋值之后、主线程
         // 首次触达 WKSharedPreferencesUtil 之前调用（本方法尾部
         // getBoolean("show_agreement_dialog") 即首个主线程 SP 访问点）。
         // 在后台线程上预建 EncryptedSharedPreferences 单例，把 MasterKey
@@ -90,7 +108,7 @@ public class WKBaseApplication {
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
 
-        // YUJ-248 (#176) — L1 stale-cache fix:
+        //  (#176) — L1 stale-cache fix:
         // After the P0 patch (#175) unlocked landscape + configChanges for TabActivity /
         // ChatActivity, configuration changes no longer destroy those Activities, so the
         // one-shot AndroidUtilities.setDensity() above never re-ran and cached
@@ -120,15 +138,17 @@ public class WKBaseApplication {
 
         versionName = WKDeviceUtils.getInstance().getVersionName(context);
 
-        // YUJ-295 (P-04) · App Startup Initializer 分阶段化
+        //  (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步）：上面的 prewarm / density / registerComponentCallbacks / versionName 已完成。
         //   Phase-B（异步立即投递到 AppExecutors.io()，首屏不依赖）：Bugly + RLottie 并行启动。
         //   Phase-C（idle 后）：EmojiManager 懒加载——emoji.xml 解析 + LruCache 构造不阻塞冷启。
         // 拆分成多个独立任务，IO 池会并行消费；相比旧的串行 blob，冷启 CPU 争抢 **-30-50ms**（P-04 审计估值）。
 
         // Phase-B — Bugly (JNI + 网络握手)
+        String buglyAppId = BuildConfig.BUGLY_APP_ID;
         AppStartup.postPhaseB("bugly", () -> {
-            CrashReport.initCrashReport(context, "6129cd9cf2", BuildConfig.DEBUG);
+            if (buglyAppId == null || buglyAppId.isEmpty()) return;
+            CrashReport.initCrashReport(context, buglyAppId, BuildConfig.DEBUG);
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
                 if (userInfo != null && !TextUtils.isEmpty(userInfo.short_no)) {
@@ -143,8 +163,8 @@ public class WKBaseApplication {
             }
         });
 
-        // Phase-B — RLottie（加载 librlottie.so + 扫描 assets/rlottie/）
-        AppStartup.postPhaseB("rlottie", () -> RLottieApplication.getInstance().init(context));
+        // RLottie — 同步加载 native 库，确保 UI 构造 RLottieDrawable 前库已就绪
+        RLottieApplication.getInstance().init(context);
 
         // Phase-C — EmojiManager 懒加载。
         //   EmojiManager 现在是 idempotent 的：文本 hot path（WKTextProvider / MoonUtil /

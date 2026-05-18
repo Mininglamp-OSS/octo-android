@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user;
 
 import com.chat.base.external.ExternalViewerResolver;
@@ -12,7 +28,7 @@ import java.util.Map;
 /**
  * Pure-function helper that answers「对当前 viewer 而言，这个 UserInfo 是不是外部成员？」
  *
- * <p>YUJ-136 (DM 骚扰治理 Phase 1 / 对齐 web PR#1021)：UserInfo 面板进入路径可能来自外部群，
+ * <p> (DM 骚扰治理 Phase 1 / 对齐 web PR#1021)：UserInfo 面板进入路径可能来自外部群，
  * 客户端必须在渲染「发送消息」按钮前判定跨 Space 关系，隐藏跨 Space 的 DM 入口。
  *
  * <p>本类与 {@link UserDetailActivity#applyExternalSourceRow} 共用同一套数据源优先级
@@ -72,7 +88,7 @@ public final class UserDetailExternalHelper {
     }
 
     /**
-     * YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：决定 UserInfo 页「申请加好友」
+     *  (对齐 web PR#1013/1091 · iOS )：决定 UserInfo 页「申请加好友」
      * 按钮是否可见。跨 Space 外部成员必须强制隐藏，阻断 Space 边界越权入口；
      * 同 Space / 自看 / 非群路径回退到原有 {@code follow} + {@code vercode} 逻辑。
      *
@@ -90,7 +106,7 @@ public final class UserDetailExternalHelper {
     }
 
     /**
-     * YUJ-206（对齐 web {@code UserInfo/index.tsx:52-55} / 企微语义）：
+     * （对齐 web {@code UserInfo/index.tsx:52-55} / 企微语义）：
      * Space 模式下同 Space 非好友 → 直接「发送消息」，跳过「申请加好友」。
      *
      * <p>嘉伟 2026-05-01 Android 真机实测复现：外部群里点成员显示「申请加好友」。
@@ -123,7 +139,7 @@ public final class UserDetailExternalHelper {
     }
 
     /**
-     * YUJ-204（对齐 web PR#1021 `UserInfo/index.tsx:29-48` — isExternalToViewer=true
+     * （对齐 web PR#1021 `UserInfo/index.tsx:29-48` — isExternalToViewer=true
      * 时整个 bottomPanel 被 `.wk-userinfo-footer-external-hint` 替换）：
      * 外部成员视角下 UserInfo 页底部所有交互按钮（applyBtn / sendMsgBtn /
      * deleteLayout / pushBlackLayout）必须一起隐藏。单一判定入口方便单测覆盖。
@@ -133,7 +149,7 @@ public final class UserDetailExternalHelper {
     }
 
     /**
-     * YUJ-204：与 {@link #shouldHideBottomPanel(boolean)} 对偶 —
+     * ：与 {@link #shouldHideBottomPanel(boolean)} 对偶 —
      * 外部成员必须显示「仅可在群内交流」提示文案，语义上是 bottomPanel 的替代物。
      * 独立一个 helper 是为了让 activity 端不用重复写条件，也方便单测对齐 web 行为。
      */
@@ -142,7 +158,7 @@ public final class UserDetailExternalHelper {
     }
 
     /**
-     * YUJ-204（对齐 web Subscribers/list.tsx:320 `@<SourceSpaceName>`）：
+     * （对齐 web Subscribers/list.tsx:320 `@<SourceSpaceName>`）：
      * 决定 UserInfo 页「姓名旁 / 来源行」要渲染的 Space 名。
      *
      * <p>非外部成员一律返回 null（不渲染）。外部成员按优先级：
@@ -215,7 +231,7 @@ public final class UserDetailExternalHelper {
 
     /**
      * JVM-friendly alternative to {@code TextUtils.isEmpty}: used so the helper
-     * can be unit-tested without Robolectric. YUJ-86 EP1 pinned the same pattern
+     * can be unit-tested without Robolectric.  EP1 pinned the same pattern
      * for data-layer paths after the codex P1 review.
      */
     private static boolean isNullOrEmpty(String s) {

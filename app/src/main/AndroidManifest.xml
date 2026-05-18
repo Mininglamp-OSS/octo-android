@@ -115,13 +115,13 @@
         android:usesCleartextTraffic="true"
         tools:ignore="GoogleAppIndexingWarning">
 
-        <!-- YUJ-248 (#176): enable Activity Embedding splits (foldable/tablet L3-A). -->
+        <!--  (#176): enable Activity Embedding splits (foldable/tablet L3-A). -->
         <property
             android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED"
             android:value="true" />
 
         <!--
-          YUJ-248 (#176): App Startup provider wires SplitInitializer (wkbase) so
+           (#176): App Startup provider wires SplitInitializer (wkbase) so
           RuleController is populated before the first Activity is created.
           tools:node="merge" keeps this compatible with any library-provided
           InitializationProvider entry.
@@ -153,8 +153,8 @@
             android:screenOrientation="portrait" />
 
         <!--
-          YUJ-361 (#227) · OCTO 实名认证 deep link 回落。
-          YUJ-392 · Aegis Phase 2b：实名完成后 Aegis 直接 302 到
+           (#227) · OCTO 实名认证 deep link 回落。
+           · Aegis Phase 2b：实名完成后 Aegis 直接 302 到
           `dmwork://verified?...`（取代原 verify-service / CAS 路径）；系统把
           intent 投给该 Activity；内部拉一次 /v1/user/current 刷新 profile 后 finish。
           singleTask + noHistory：同源被打开时不堆栈、也不留在回退栈中。

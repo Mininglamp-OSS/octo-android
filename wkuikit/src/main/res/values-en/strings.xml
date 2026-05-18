@@ -346,16 +346,16 @@
     <string name="external_group_tag">External</string>
     <string name="external_member_badge">External</string>
     <string name="external_member_source_format">From %1$s</string>
-    <!-- v2 viewer-relative @SpaceName suffix (YUJ-66/YUJ-87) — matches web PR #1013 -->
+    <!-- v2 viewer-relative @SpaceName suffix (/) — matches web PR #1013 -->
     <string name="external_member_space_suffix">\@%1$s</string>
-    <!-- YUJ-204: UserInfo external-viewer bottom hint (aligns web .wk-userinfo-footer-external-hint) -->
+    <!-- : UserInfo external-viewer bottom hint (aligns web .wk-userinfo-footer-external-hint) -->
     <string name="external_member_only_in_group_hint">You can only communicate in this group</string>
 
-    <!-- YUJ-238: Bot owner edit-description dialog strings -->
+    <!-- : Bot owner edit-description dialog strings -->
     <string name="bot_edit_description_title">Edit description</string>
     <string name="bot_edit_description_hint">Enter bot description</string>
     <string name="bot_description_update_success">Description updated</string>
-    <!-- YUJ-361 (#227) · OCTO real-name verification UI -->
+    <!--  (#227) · OCTO real-name verification UI -->
     <string name="realname_verified_tag">Verified</string>
     <string name="realname_verification">Real-name verification</string>
     <string name="realname_goto_verify">Verify now</string>

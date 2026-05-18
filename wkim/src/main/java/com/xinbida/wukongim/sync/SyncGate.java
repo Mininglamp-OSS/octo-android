@@ -1,7 +1,7 @@
 package com.xinbida.wukongim.sync;
 
 /**
- * YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · SDK 侧 sync 触发点的轻量守卫 hook。
+ *  (fixing  ReviewBot P1-#3) · SDK 侧 sync 触发点的轻量守卫 hook。
  *
  * <p>上层模块（wkuikit {@code SpaceSyncCoordinator}）无法被 wkim 直接依赖——wkim 是
  * SDK 底层。为了让 {@code WKConnection} 里的 sync 触发点也能走统一的 Space 级 debounce /

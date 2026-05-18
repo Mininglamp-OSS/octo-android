@@ -1162,7 +1162,7 @@ public class MsgManager extends BaseManager {
         if (WKCommonUtils.isNotEmpty(wkSyncRecent.reactions)) {
             msg.reactionList = getMsgReaction(wkSyncRecent);
         }
-        // YUJ-183 · 外部群来源字段透传到 localExtraMap（对齐 wkuikit
+        //  · 外部群来源字段透传到 localExtraMap（对齐 wkuikit
         // MsgModel.copyExternalSourceExtras 的 SyncMsg cmd 同步路径）。
         // 之前 WKSyncRecent 缺字段声明 → retrofit/fastjson 静默丢掉服务端 wire
         // 里的 is_external/source_space_*/home_space_* → WKMsg.localExtraMap
@@ -1177,7 +1177,7 @@ public class MsgManager extends BaseManager {
      * 把 WKSyncRecent 携带的外部群来源字段拷到 WKMsg.localExtraMap。与
      * {@code com.chat.uikit.message.MsgModel.copyExternalSourceExtras} 保持
      * 同样的 wire key（无 from_ 前缀）和同样的 null/empty-string skip 口径，
-     * 避免空字段污染 localExtraMap（参考 YUJ-86 EP1 codex review P1）。
+     * 避免空字段污染 localExtraMap（参考  EP1 codex review P1）。
      */
     private static void copyExternalSourceExtrasIntoMsg(WKMsg msg, WKSyncRecent wkSyncRecent) {
         if (msg == null || wkSyncRecent == null) return;

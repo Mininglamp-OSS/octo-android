@@ -2,7 +2,11 @@ plugins {
     id 'com.android.application'
     id 'kotlin-parcelize'
     id 'kotlin-android'
-    id 'com.google.gms.google-services'
+    id 'com.google.gms.google-services' apply false
+}
+
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
 }
 
 // 读取 local.properties 中的 applicationId
@@ -14,32 +18,16 @@ if (localPropertiesFile.exists()) {
 
 def appId = localProperties.getProperty('applicationId', 'com.example-app.octo')
 
-// 自动更新 google-services.json 中的 package_name
-def googleServicesFile = file('google-services.json')
-if (googleServicesFile.exists()) {
-    def jsonContent = googleServicesFile.text
-    def updatedContent = jsonContent.replaceAll(
-        /"package_name":\s*"[^"]*"/,
-        "\"package_name\": \"${appId}\""
-    )
-    if (jsonContent != updatedContent) {
-        googleServicesFile.write(updatedContent)
-        println "✅ google-services.json 的 package_name 已更新为: ${appId}"
-    }
-}
-
 android {
     signingConfigs {
         release {
-            def localProps = new Properties()
-            localProps.load(new FileInputStream(rootProject.file("local.properties")))
-            storeFile file('my-app.jks')
-            storePassword localProps['RELEASE_STORE_PASSWORD']
-            keyAlias 'dmwork'
-            keyPassword localProps['RELEASE_KEY_PASSWORD']
+            storeFile file(localProperties.getProperty('RELEASE_STORE_FILE', 'release.jks'))
+            storePassword localProperties.getProperty('RELEASE_STORE_PASSWORD', '')
+            keyAlias localProperties.getProperty('RELEASE_KEY_ALIAS', 'release')
+            keyPassword localProperties.getProperty('RELEASE_KEY_PASSWORD', '')
         }
     }
-    namespace 'com.dmwork.im'
+    namespace 'com.octoim.app'
     compileSdk rootProject.ext.compileSdkVersion
     aaptOptions.cruncherEnabled = false
     aaptOptions.useNewCruncher = false
@@ -49,8 +37,8 @@ android {
         applicationId appId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 29
-        versionName "1.2.8"
+        versionCode 30
+        versionName "1.2.9"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -70,13 +58,13 @@ android {
     productFlavors {
         dev {
             dimension "env"
-            buildConfigField "String", "API_BASE_URL", '"https://api-test.example.com/api"'
-            buildConfigField "String", "WEB_BASE_URL", '"https://api-test.example.com/web/"'
+            buildConfigField "String", "API_BASE_URL", "\"${localProperties.getProperty('DEV_API_BASE_URL', 'https://api.example.com')}\""
+            buildConfigField "String", "WEB_BASE_URL", "\"${localProperties.getProperty('DEV_WEB_BASE_URL', 'https://web.example.com/')}\""
         }
         prod {
             dimension "env"
-            buildConfigField "String", "API_BASE_URL", '"https://api.example.com/api"'
-            buildConfigField "String", "WEB_BASE_URL", '"https://api.example.com/web/"'
+            buildConfigField "String", "API_BASE_URL", "\"${localProperties.getProperty('PROD_API_BASE_URL', 'https://api.example.com')}\""
+            buildConfigField "String", "WEB_BASE_URL", "\"${localProperties.getProperty('PROD_WEB_BASE_URL', 'https://web.example.com/')}\""
         }
     }
 
@@ -90,17 +78,16 @@ android {
             signingConfig signingConfigs.release
         }
         debug {
-            // 仅当 my-app.jks 实际存在时才使用 release 签名配置；
-            // 否则让 AGP 回退到默认 ~/.android/debug.keystore（CI 未配置
-            // MY_APP_JKS_BASE64 secret 时的 dev-debug 场景）。
-            if (file('my-app.jks').exists()) {
+            // 仅当签名文件存在时才使用 release 签名配置
+            def keystoreFile = localProperties.getProperty('RELEASE_STORE_FILE', 'release.jks')
+            if (file(keystoreFile).exists()) {
                 signingConfig signingConfigs.release
             }
         }
     }
     applicationVariants.all { variant ->
         variant.outputs.all {
-            outputFileName = "dmwork-${variant.flavorName}-${variant.buildType.name}-v${variant.versionName}.apk"
+            outputFileName = "octoim-${variant.flavorName}-${variant.buildType.name}-v${variant.versionName}.apk"
         }
     }
     compileOptions {

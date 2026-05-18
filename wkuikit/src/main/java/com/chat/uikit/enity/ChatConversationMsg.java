@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.enity;
 
 import android.text.TextUtils;
@@ -61,7 +77,7 @@ public class ChatConversationMsg {
     /**
      * Content signature for DiffUtil.areContentsTheSame.
      *
-     * NOTE (YUJ-264): For section headers, contentHash drives real diff
+     * NOTE (): For section headers, contentHash drives real diff
      * behaviour — headers are re-constructed per filterAndDisplay with new
      * identities but comparable content. For normal conversation rows,
      * oldList and newList share the same ChatConversationMsg instances
@@ -71,7 +87,7 @@ public class ChatConversationMsg {
      * etc.). Channel-field coverage below exists as defense-in-depth for
      * code paths that mutate channel state without firing the listener.
      *
-     * YUJ-261 original contract:
+     *  original contract:
      *   Section header: sectionId + sectionTitle + sectionGroupCount
      *                   + sectionUnreadCount + sectionHasMention
      *   Normal:         channelID + channelType + lastMsgTimestamp + unreadCount
@@ -79,11 +95,11 @@ public class ChatConversationMsg {
      *                   + typingUserName + typingStartTime + isTop + isCalling
      *                   + draft + draftUpdatedAt + reminderList.size()
      *
-     * YUJ-264 P1 hardening: added channelName / channelRemark / forbidden /
+     *  P1 hardening: added channelName / channelRemark / forbidden /
      * category / robot / avatarCacheKey so DiffUtil can detect these even
      * when the channel listener is not fired.
      *
-     * YUJ-264 P2-1: removed the 7 isRefreshXxx / isResetXxx signal bits —
+     *  P2-1: removed the 7 isRefreshXxx / isResetXxx signal bits —
      * they are signals, not data, and are harmless-but-useless while all
      * three lists share instance references, but would cause false-positive
      * dirty diffs if callers ever clone rows.
@@ -104,7 +120,7 @@ public class ChatConversationMsg {
         h = 31 * h + Long.hashCode(uiConversationMsg.lastMsgTimestamp);
         h = 31 * h + uiConversationMsg.unreadCount;
         h = 31 * h + (uiConversationMsg.clientMsgNo != null ? uiConversationMsg.clientMsgNo.hashCode() : 0);
-        // YUJ-264: P1 defensive — cover channel fields that UI reads directly.
+        // : P1 defensive — cover channel fields that UI reads directly.
         // Without these in contentHash, DiffUtil can only detect changes via the
         // channel-listener side-channel (isRefreshChannelInfo). If any new code
         // path mutates these fields without triggering the listener, the row

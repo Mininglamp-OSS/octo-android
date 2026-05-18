@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat.manager;
 
 import android.app.Service;
@@ -89,7 +105,7 @@ public class WKIMUtils {
 
     private static final String TAG = "WKIMUtils";
 
-    // YUJ-256 P1-4: short global debounce guarding the startChat entry only.
+    //  P1-4: short global debounce guarding the startChat entry only.
     // Per-view SingleClickUtil (300ms) protects the SAME row but cross-row
     // fast taps (A → B within 300ms) fall through because each row has its
     // own throttle window. Without a small global gate, Fix 3's async Intent
@@ -100,14 +116,14 @@ public class WKIMUtils {
     private static final long START_CHAT_DEBOUNCE_MS = 250L;
     private final AtomicLong lastStartChatMs = new AtomicLong(0L);
 
-    // YUJ-276: debug-only trace tag for narrow-screen chat-open breakdown.
+    // : debug-only trace tag for narrow-screen chat-open breakdown.
     // Grep logcat for "YUJ276-trace" to line up:
     //   [click]→[intent-build]→[startActivity]→[ChatActivity.onCreate]→[onStart]
     //   →[onResume]. Gated behind WKBinder.isDebug (= BuildConfig.DEBUG) so
     // release APKs never emit these entries.
     public static final String TRACE_TAG = "YUJ276-trace";
 
-    // YUJ-278 P1-1：Fix D 已下沉到 ChatActivity.onCreate + finish()（见
+    //  P1-1：Fix D 已下沉到 ChatActivity.onCreate + finish()（见
     // com.chat.base.foldable.NarrowTransition）。这里不再持有 NARROW_MODE_DP /
     // applyFastTransitionIfNarrow。保留 TRACE_TAG 供 trace log 串联。
 
@@ -411,7 +427,7 @@ public class WKIMUtils {
             }
         });
 
-        // YUJ-183 · Fix B Step 2：老用户外部群 extra 字段回填迁移。
+        //  · Fix B Step 2：老用户外部群 extra 字段回填迁移。
         // 安装了本修复 APK 的老用户首次启动时跑一次，把所有 GROUP 会话的 member
         // sync 重跑一遍（Step 1 判定内部会决定是走增量还是强制全量）。幂等 —— SharedPreferences
         // per-uid 标记完成后再次启动立即返回。新用户冷启动时 groupNos 为空，直接 mark done。
@@ -634,12 +650,12 @@ public class WKIMUtils {
     }
 
     private void startChat(ChatViewMenu chatViewMenu) {
-        // YUJ-242: removed WKTimeUtils.isFastDoubleClick() pre-check. The global
+        // : removed WKTimeUtils.isFastDoubleClick() pre-check. The global
         // static throttle on top of the per-view SingleClickUtil throttle caused
         // first-tap-eaten bugs when switching between chats in TabActivity. View
         // level throttle in SingleClickUtil is sufficient.
         //
-        // YUJ-242: moved all DB-heavy work (deleteFlameMsg, getWithChannel,
+        // : moved all DB-heavy work (deleteFlameMsg, getWithChannel,
         // getWithClientMsgNO, findLatestMsgForSpace, getMessageOrderSeq) off the
         // main thread. startChat now assembles the Intent on an IO worker and
         // switches back to the main thread only for startActivity. This keeps
@@ -649,7 +665,7 @@ public class WKIMUtils {
                 || TextUtils.isEmpty(chatViewMenu.channelID)) {
             return;
         }
-        // YUJ-256 P1-4: narrow global debounce at the startChat entry. Per-view
+        //  P1-4: narrow global debounce at the startChat entry. Per-view
         // SingleClickUtil (300ms) gates the same row but does not protect
         // cross-row taps (row A → row B in <300ms). Without this, the Fix 3
         // async Observables stage in parallel and both startActivity() run,
@@ -663,7 +679,7 @@ public class WKIMUtils {
         if (!lastStartChatMs.compareAndSet(prev, now)) {
             return;
         }
-        // YUJ-278 P2-4：T_CLICK 必须打在 debounce **之后**。打在 debounce 前的话，
+        //  P2-4：T_CLICK 必须打在 debounce **之后**。打在 debounce 前的话，
         // 跨行快点（A→B <250ms）场景会多出一条被 debounce 丢弃的 T_CLICK，没
         // 对应的 T_START_ACTIVITY，统计时分母偏大、P50/P90 被拉低，误导选型。
         // 这里 tClickMs 作为「真正进入 startChat 流程」的 t0，所有后续阶段
@@ -673,7 +689,7 @@ public class WKIMUtils {
             Log.d(TRACE_TAG, "[T_CLICK] startChat enter channel=" + chatViewMenu.channelID
                     + " type=" + chatViewMenu.channelType);
         }
-        // YUJ-267 · Fix C：点击瞬间（debounce 通过后）就把全局 chattingChannelID 切
+        //  · Fix C：点击瞬间（debounce 通过后）就把全局 chattingChannelID 切
         // 到目标 channel，不等 onResume。对齐 push 通知去重 / Space 上下文等依赖该
         // 字段的逻辑——即使 Fix B 的 Activity 复用/新建还在走 IO 组装 Intent，
         // 状态已经切过去。放在 debounce 之后避免「B 被 debounce 挡住 → chatting
@@ -711,14 +727,14 @@ public class WKIMUtils {
                         Log.d(TRACE_TAG, "[T_START_ACTIVITY] sinceClick="
                                 + (SystemClock.uptimeMillis() - tClickMs) + "ms");
                     }
-                    // YUJ-298 · Fix A：窄屏路径上走 ChatReuseNavigator，把
+                    //  · Fix A：窄屏路径上走 ChatReuseNavigator，把
                     // FLAG_ACTIVITY_REORDER_TO_FRONT | FLAG_ACTIVITY_SINGLE_TOP 合并进
                     // Intent。任务栈里若已有 ChatActivity 实例（被 goBackToList 留在
                     // 栈中），AMS 会 reorder 到栈顶并走 onNewIntent 热路径（~50-100ms
                     // 切频道），没有实例则正常新建（和 PR#195 冷启动一致）。
                     // 分屏态 isNarrow=false，此处不加 flag，由 Activity Embedding 的
-                    // onNewIntent（YUJ-267）负责。
-                    // YUJ-278 P1-1：Fix D 的 overridePendingTransition 调用已下沉到
+                    // onNewIntent（）负责。
+                    //  P1-1：Fix D 的 overridePendingTransition 调用已下沉到
                     // ChatActivity.onCreate（见 com.chat.base.foldable.NarrowTransition.
                     // applyFastOpen）。这样子区卡片、SearchAllActivity、CreateThreadActivity
                     // 等直接 startActivity(ChatActivity) 的路径也能吃到 120ms 快过渡，
@@ -726,7 +742,7 @@ public class WKIMUtils {
                     com.chat.uikit.chat.ChatReuseNavigator.launchChat(
                             menu.activity, intent, menu.activity);
                 }, err -> {
-                    // YUJ-256 P2-1: surface startChat errors instead of
+                    //  P2-1: surface startChat errors instead of
                     // silently swallowing them — a dropped Intent build used
                     // to look like a first-tap-eaten UX bug.
                     WKLogUtils.e(TAG, "startChat buildIntent failed: " + err);

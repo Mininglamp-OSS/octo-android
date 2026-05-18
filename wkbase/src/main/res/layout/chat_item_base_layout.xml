@@ -36,7 +36,7 @@
             android:orientation="vertical">
 
             <!--
-              YUJ-380 (对齐 web YUJ-379 · dmwork-web#1169 Phase A / iOS YUJ-381)
+               (对齐 web  ·  Phase A / iOS )
               群聊气泡作者名行：原来只是一个 TextView；本次加一个 12dp × 12dp 的
               蓝勾 ImageView，由 WKChatBaseProvider#setFromName 根据发送者
               realname_verified 切换 GONE/VISIBLE。用水平 LinearLayout 包裹，把

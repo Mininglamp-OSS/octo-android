@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-267 · 折叠屏分屏态：左侧会话列表「当前正在看的群/子区」背景。
+   · 折叠屏分屏态：左侧会话列表「当前正在看的群/子区」背景。
   仅在 splitMode=true 时生效，手机形态由 adapter 逻辑阻断应用该背景。
   色值用 colorAccent 的 ~14% alpha 叠加，与 home_bg (top) / layout_bg (normal)
   视觉上可区分，同时与长按菜单 / pressed 态不冲突。

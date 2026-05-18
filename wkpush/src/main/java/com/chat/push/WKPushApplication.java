@@ -1,8 +1,26 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.push;
 
 import android.app.Activity;
 import android.app.Application;
 import android.app.NotificationChannel;
+
+import com.chat.push.BuildConfig;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.os.Build;
@@ -64,16 +82,29 @@ public class WKPushApplication {
         addListener();
 
         // Push token 获取移到后台线程，不阻塞启动
-        // YUJ-295 (P-04) · Phase-B —— Firebase 网络握手 / 厂商 SDK I/O 立即异步。
+        //  (P-04) · Phase-B —— Firebase 网络握手 / 厂商 SDK I/O 立即异步。
         AppStartup.postPhaseB("push-token", this::initPush);
 
         EndpointManager.getInstance().setMethod("push_login_menu", EndpointCategory.loginMenus, object -> new LoginMenu(this::initPush));
     }
 
+    private boolean isFirebaseAvailable() {
+        try {
+            com.google.firebase.FirebaseApp.getInstance();
+            return true;
+        } catch (IllegalStateException e) {
+            return false;
+        }
+    }
+
     private void initPush() {
         if (mContext == null || mContext.get() == null) return;
 
-        FirebaseApp.initializeApp(mContext.get());
+        try {
+            FirebaseApp.initializeApp(mContext.get());
+        } catch (Exception e) {
+            Log.w("Push", "Firebase init skipped", e);
+        }
         notifyChannel(WKBaseApplication.getInstance().application);
         getPushToken();
 //        if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
@@ -113,7 +144,7 @@ public class WKPushApplication {
 
     private void initOPPO() {
         HeytapPushManager.init(mContext.get(), true);
-        // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()
+        //  P-11: AppExecutors.io() 取代 new Thread()
         AppExecutors.io().execute(() -> HeytapPushManager.register(mContext.get(), PushKeys.oppoAppKey, PushKeys.oppoAppSecret, new ICallBackResultService() {
             @Override
             public void onRegister(int i, String s) {
@@ -201,8 +232,9 @@ public class WKPushApplication {
     private void getPushToken() {
         int statusCode = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(mContext.get());
         Log.e("google play services", statusCode + "");
-        if (statusCode == ConnectionResult.SUCCESS) {
-            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task1 -> {
+        if (statusCode == ConnectionResult.SUCCESS && isFirebaseAvailable()) {
+            try {
+                FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task1 -> {
                 if (!task1.isSuccessful()) {
                     Log.e("获取FCM令牌错误", "-->");
                     Log.w("Firebase", "Fetching FCM registration token failed", task1.getException());
@@ -213,16 +245,18 @@ public class WKPushApplication {
                 Log.e("获取到FCM令牌", token);
                 PushModel.getInstance().registerDeviceToken(token, pushBundleID,"FIREBASE");
             });
+            } catch (Exception e) {
+                Log.w("Push", "Firebase token retrieval failed", e);
+            }
         }else {
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
-                if (OsUtils.isEmui()) {
-                    // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()
+                if (OsUtils.isEmui() && !TextUtils.isEmpty(PushKeys.huaweiAPPID)) {
                     AppExecutors.io().execute(() -> getHuaWeiToken(mContext.get()));
-                } else if (OsUtils.isMiui()) {
+                } else if (OsUtils.isMiui() && !TextUtils.isEmpty(PushKeys.xiaoMiAppID)) {
                     initXiaoMiPush(mContext.get());
-                } else if (OsUtils.isOppo()) {
+                } else if (OsUtils.isOppo() && !TextUtils.isEmpty(PushKeys.oppoAppKey)) {
                     initOPPO();
-                } else if (OsUtils.isVivo()) {
+                } else if (OsUtils.isVivo() && !TextUtils.isEmpty(BuildConfig.VIVO_API_KEY)) {
                     initVIVO();
                 }
             }

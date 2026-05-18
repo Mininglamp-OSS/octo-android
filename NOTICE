@@ -1,0 +1,52 @@
+OctoIM Android
+Copyright 2026-present OctoIM contributors
+
+Licensed under the Apache License, Version 2.0.
+
+This product includes software developed by:
+
+1. WuKongIM Android SDK (com.xinbida.wukongim)
+   Copyright WuKongIM contributors
+   Licensed under the Apache License, Version 2.0
+   https://github.com/WuKongIM/WuKongIMAndroidSDK
+
+2. xSocket (wkim/libs/xSocket-2.8.15.jar)
+   Copyright xSocket contributors
+   Licensed under the GNU Lesser General Public License v2.1
+
+3. SvgHelper (wkbase/.../utils/SvgHelper.java)
+   Copyright Larva Labs, LLC
+   Modified by Nikolai Kudashov
+   Licensed under the Apache License, Version 2.0
+
+4. ViewDragHelper (wkbase/.../views/swipeback/ViewDragHelper.java)
+   Copyright 2013 The Android Open Source Project
+   Licensed under the Apache License, Version 2.0
+
+5. Scroller (wkbase/.../ui/components/Scroller.java)
+   Copyright 2006 The Android Open Source Project
+   Licensed under the Apache License, Version 2.0
+
+6. NumberPicker (wkbase/.../ui/components/NumberPicker.java)
+   Copyright 2008 The Android Open Source Project
+   Licensed under the Apache License, Version 2.0
+
+7. OPPO Push SDK (MyLibs/oppopush/)
+   Copyright OPPO
+   Proprietary — see OPPO developer documentation
+
+8. Xiaomi Push SDK (MyLibs/xiaomipush/)
+   Copyright Xiaomi
+   Proprietary — see Xiaomi developer documentation
+
+9. Vivo Push SDK (MyLibs/vivopush/)
+   Copyright Vivo
+   Proprietary — see Vivo developer documentation
+
+10. RLottie Animation Library (MyLibs/rlottie/lottiev1.aar)
+    Native rlottie engine: Copyright Samsung, Licensed under the MIT License
+    https://github.com/Samsung/rlottie
+    Java/JNI wrapper classes (com.octoim.rlottie.*):
+      Copyright 2026-present OctoIM contributors
+      Licensed under the Apache License, Version 2.0
+    Clean-room implementation — no Telegram/GPL code remains.

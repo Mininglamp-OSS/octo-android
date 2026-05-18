@@ -160,13 +160,13 @@
     <string name="str_net_error">Network error, please try again later</string>
     <string name="str_table">Table</string>
     <string name="str_table_copied">Table content copied</string>
-    <!-- Cross-Space join group notice (aligned with dmwork-web PR#1068 · YUJ-100/YUJ-140) -->
+    <!-- Cross-Space join group notice (aligned with #1068 · /) -->
     <string name="join_success_same_space">Joined \"%1$s\"</string>
-    <!-- Scan-to-join cross-Space toast (YUJ-200 Path B / YUJ-212 · aligned with dmwork-web #1102) -->
+    <!-- Scan-to-join cross-Space toast ( Path B /  · aligned with ) -->
     <!-- %1$s = target Space name, %2$s = group name -->
     <string name="group_join_cross_space_notice">Joined group \"%2$s\" in [%1$s]</string>
     <!-- %1$s = target Space name, for action button -->
     <string name="group_join_cross_space_action">View in %1$s</string>
-    <!-- YUJ-380 · Chat bubble author ✓ badge contentDescription -->
+    <!--  · Chat bubble author ✓ badge contentDescription -->
     <string name="realname_verified_badge_cd">Verified</string>
 </resources>

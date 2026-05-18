@@ -41,7 +41,7 @@
         android:textSize="12sp"
         tools:ignore="SmallSp" />
 
-    <org.telegram.ui.Components.RLottieImageView
+    <com.octoim.rlottie.RLottieImageView
         android:id="@+id/statusIV"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

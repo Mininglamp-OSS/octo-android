@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.foldable
 
 import android.app.Activity
@@ -7,7 +23,7 @@ import com.chat.base.R
 import com.chat.base.config.WKBinder
 
 /**
- * YUJ-278 · 窄屏 Activity 过渡统一入口（Fix D 自我覆盖版）。
+ *  · 窄屏 Activity 过渡统一入口（Fix D 自我覆盖版）。
  *
  * ## 为什么下沉到 Activity 自己
  * 首版（PR#195）把 [Activity.overridePendingTransition] 调用塞在
@@ -15,19 +31,19 @@ import com.chat.base.config.WKBinder
  * 击的主路径；**子区卡片点击**（WKThreadCreatedProvider）、SearchAllActivity、
  * CreateThreadActivity 都直接 `startActivity(ChatActivity)` 绕过 helper，
  * 导致窄屏下最敏感的「子区跳转」依然是默认 250-350ms 的慢动画。
- * YUJ-278 把入场/出场动画下沉到 ChatActivity 自身（onCreate + finish），
+ *  把入场/出场动画下沉到 ChatActivity 自身（onCreate + finish），
  * 所有调用方不用关心。
  *
- * ## 快进慢出对称（YUJ-278 P1-3）
+ * ## 快进慢出对称（ P1-3）
  * 入场 120ms、非 swipe 返回 ~250-350ms 观感不对称。finish() 里补
  * [applyFastClose]，用反向 slide pair 让返回同样 120ms。
  *
- * ## API 34+ 适配（YUJ-278 P2-3）
+ * ## API 34+ 适配（ P2-3）
  * `overridePendingTransition` 在 Android 14 (API 34) 被 deprecated，改为
  * [Activity.overrideActivityTransition]。后者可在 onCreate 里一次注册
  * OPEN + CLOSE，不用在每次 finish() 时重复调。
  *
- * ## 窄屏判定修正（YUJ-278 P2-2）
+ * ## 窄屏判定修正（ P2-2）
  * 原先 `maxWidthPx < 600dp` 在手机横屏（如 640×360dp）下误判为「宽屏」，
  * 不上快动画。现在结合两个信号：
  *  - Embedding 没有在分割当前 Activity：`widthPx == maxWidthPx`
@@ -130,7 +146,7 @@ object NarrowTransition {
     }
 
     /**
-     * YUJ-317 · 「用 startActivity 代替 finish() 做返回」场景的出场动画。
+     *  · 「用 startActivity 代替 finish() 做返回」场景的出场动画。
      *
      * 典型路径：[com.chat.uikit.chat.ChatReuseNavigator.goBackToList]，为了复用
      * ChatActivity 实例，窄屏返回不走 finish()，而是把 TabActivity 用

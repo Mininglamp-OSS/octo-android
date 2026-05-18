@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit;
 
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
@@ -182,19 +198,19 @@ public class WKUIKitApplication {
         // 避免与 ChatActivity 产生竞态导致 NPE
         initKitModuleListener();
 
-        // YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · 绑定 SpaceSyncCoordinator 到
+        //  (fixing  ReviewBot P1-#3) · 绑定 SpaceSyncCoordinator 到
         // wkim 层的 SyncGate，让 WKConnection 连接成功后的 sync 也走 debounce 守卫。
         // 必须在 WKIM 的首次连接成功回调之前完成——放到同步 init 段开头最安全。
         com.chat.uikit.chat.SpaceSyncCoordinator.installSyncGate();
 
-        // YUJ-295 (P-04) · App Startup Initializer 分阶段化
+        //  (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步，上面已完成）：initKitModuleListener——纯内存映射，必须在
         //       Intent 到达 ChatActivity 之前就绪。
         //   Phase-B（首屏依赖，立即异步）：WKIM.init + IMListener 注册——会话列表/
         //       聊天页面都必须等这步完成才能读数据。
         //       本地 sensitiveWords 缓存解析（SP → SensitiveWords）也归此阶段，
         //       必须在 initIMListener 之前完成，保证 WKIM 入站消息过滤不出现冷启
-        //       窗口内敏感词失效的短暂窗口（YUJ-304 / ReviewBot P2-1）。
+        //       窗口内敏感词失效的短暂窗口（ / ReviewBot P2-1）。
         //   Phase-C（idle 后执行）：sensitive_words / prohibit words 的 **网络同步**
         //       + 阅后即焚清理——纯远端拉新，首屏不依赖，延迟到首帧之后不影响体验。
 
@@ -218,9 +234,9 @@ public class WKUIKitApplication {
     }
 
     /**
-     * 从 SP 读取并反序列化本地 sensitiveWords 缓存（YUJ-304）。
+     * 从 SP 读取并反序列化本地 sensitiveWords 缓存（）。
      *
-     * <p>纯内存操作（SP 已由 YUJ-284 P-01 预热），无网络；抛出异常只打日志、不影响
+     * <p>纯内存操作（SP 已由  P-01 预热），无网络；抛出异常只打日志、不影响
      * 后续启动链——与 AppStartup runWithTrace 的 fire-and-forget 语义一致。
      *
      * <p>调用方必须保证此方法在 {@code WKIMUtils.initIMListener()} 之前执行，

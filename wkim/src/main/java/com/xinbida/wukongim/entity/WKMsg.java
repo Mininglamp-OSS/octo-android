@@ -239,7 +239,7 @@ public class WKMsg implements Parcelable {
     }
 
     // ---------------------------------------------------------------
-    // 外部群 Phase 1 — msg-level 便捷 getter（YUJ-86 EP1）
+    // 外部群 Phase 1 — msg-level 便捷 getter（ EP1）
     //
     // 对齐 web PR #982 (from_is_external / from_source_space_name) 与
     // PR #997 (from_home_space_id / from_home_space_name) 的 MessageWrap
@@ -247,7 +247,7 @@ public class WKMsg implements Parcelable {
     // 在 GroupModel.serialize 阶段由 /group/members 响应写入。
     //
     // UI 层直接调这些 getter，避免在消息气泡里散落 extraMap 取值逻辑。
-    // web YUJ-53 的静默失败教训：model 层未透传字段会导致 UI 节点数归零，
+    // web  的静默失败教训：model 层未透传字段会导致 UI 节点数归零，
     // 所以这里只返回原始字段，不做 viewer-relative 业务判定；viewer 比较
     // 逻辑（判断当前 viewer 的 Space 与 from_home_space_id 是否一致）
     // 由后续 EP 在 UI/ViewModel 层完成。
@@ -285,8 +285,8 @@ public class WKMsg implements Parcelable {
      *
      * 说明：issue 原文 MessageWrap getter 清单是 4 个（不含 source_space_id），但
      * GroupModel.serialize 与 WKMultiForwardContent.decodeMsg 都把 source_space_id
-     * 写进了 extraMap。为避免 UI 层绕过 getter 直接访问裸 key（YUJ-53 静默失败
-     * 模式），这里补上对称的 getter。参见 YUJ-86 EP1 claude review round-2 P2。
+     * 写进了 extraMap。为避免 UI 层绕过 getter 直接访问裸 key（ 静默失败
+     * 模式），这里补上对称的 getter。参见  EP1 claude review round-2 P2。
      */
     public String getFromSourceSpaceID() {
         WKChannelMember m = getMemberOfFrom();
@@ -295,7 +295,7 @@ public class WKMsg implements Parcelable {
         return v == null ? null : String.valueOf(v);
     }
 
-    /** 发送者的 Home Space ID — viewer-relative 外部判定用（YUJ-63 / web #997）。 */
+    /** 发送者的 Home Space ID — viewer-relative 外部判定用（ / web #997）。 */
     public String getFromHomeSpaceID() {
         WKChannelMember m = getMemberOfFrom();
         if (m == null || m.extraMap == null) return null;
@@ -303,7 +303,7 @@ public class WKMsg implements Parcelable {
         return v == null ? null : String.valueOf(v);
     }
 
-    /** 发送者的 Home Space 显示名 — 用于 @SpaceName 后缀展示（YUJ-63 / web #997）。 */
+    /** 发送者的 Home Space 显示名 — 用于 @SpaceName 后缀展示（ / web #997）。 */
     public String getFromHomeSpaceName() {
         WKChannelMember m = getMemberOfFrom();
         if (m == null || m.extraMap == null) return null;

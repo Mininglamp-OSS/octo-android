@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.service;
 
 import android.text.TextUtils;
@@ -205,7 +221,7 @@ public class GroupModel extends WKBaseModel {
     /**
      * 同步群成员
      *
-     * <p>YUJ-183 · Fix B Step 1：对缺失外部群 extra 字段的本地 row 强制全量重拉。
+     * <p> · Fix B Step 1：对缺失外部群 extra 字段的本地 row 强制全量重拉。
      *
      * <p>根因（Coda 定位）：后端 membersync 是 {@code WHERE version > $clientVersion}
      * 的增量接口。老用户本地 DB 里该群 {@code maxVersion} 早已超过"外部群字段首次下发"
@@ -245,7 +261,7 @@ public class GroupModel extends WKBaseModel {
     /**
      * 计算当前请求应该用的 sync version。
      * <p>正常：读 SDK 本地 DB 的 max version（增量）。
-     * <p>YUJ-183 Fix B Step 1：如果本地我这一行的 extraMap 缺外部群字段
+     * <p> Fix B Step 1：如果本地我这一行的 extraMap 缺外部群字段
      * （{@code home_space_id} / {@code is_external} 都没有），返回 0 强制全量重拉。
      * <p>{@code groupMembersSync} 是 synchronized 的，且全量后 {@code save} 走
      * CONFLICT_REPLACE 立即补齐 extra，第二次调用这个判定就不会再命中 0 分支 →
@@ -291,7 +307,7 @@ public class GroupModel extends WKBaseModel {
      * 纯函数：判断给定的 extraMap 是否缺少外部群标记字段。
      *
      * <p>拆成 package-private + static 是为了在 JVM 单元测试里直接校验判定矩阵
-     * （同 {@code serialize} 的 YUJ-86 EP1 pattern）。
+     * （同 {@code serialize} 的  EP1 pattern）。
      *
      * @param extras member 行的 extraMap（可能为 null）
      * @return true = 缺字段，需要强制 full sync；false = 已有外部群标记，可走增量
@@ -305,7 +321,7 @@ public class GroupModel extends WKBaseModel {
     }
 
     // 注：package-private + static，便于单元测试直接调用。
-    // 历史上此方法是 `private`，YUJ-86 EP1 的"强制单元测试覆盖解析层字段非空透传"
+    // 历史上此方法是 `private`， EP1 的"强制单元测试覆盖解析层字段非空透传"
     // 需要在不实例化 GroupModel（会触发 HTTP 客户端初始化）的情况下验证外部群
     // 字段透传。逻辑本身是纯数据转换，没有 this 依赖，提升为 static 不改变行为。
     // @VisibleForTesting 显式声明"本意应是 private"，保留 IDE/Lint 提示。
@@ -340,7 +356,7 @@ public class GroupModel extends WKBaseModel {
             // 注：这里用纯 Java null+empty 判空，而不是 TextUtils.isEmpty。
             // 原因：serialize 是解析层核心，需在 JVM 单测里直接跑，而 host JVM
             // 的 android.jar stub 对 TextUtils.isEmpty 返回默认 false，会把
-            // null/"" 当成非空，反而把空字段塞进 extraMap。参见 YUJ-86 EP1
+            // null/"" 当成非空，反而把空字段塞进 extraMap。参见  EP1
             // codex review P1。
             hashMap.put(WKChannelMemberExtras.isExternal, list.get(i).is_external);
             String sourceSpaceId = list.get(i).source_space_id;
@@ -351,7 +367,7 @@ public class GroupModel extends WKBaseModel {
             if (sourceSpaceName != null && !sourceSpaceName.isEmpty()) {
                 hashMap.put(WKChannelMemberExtras.sourceSpaceName, sourceSpaceName);
             }
-            // Home Space（YUJ-63 / web #997）— viewer-relative 外部判定字段。
+            // Home Space（ / web #997）— viewer-relative 外部判定字段。
             // 与 source_space_* 不同：home_space_* 是成员归属的 Space，客户端用它
             // 跟当前 viewer 的 Space 比较来判断是否外部，不完全信任后端 is_external。
             String homeSpaceId = list.get(i).home_space_id;
@@ -362,10 +378,10 @@ public class GroupModel extends WKBaseModel {
             if (homeSpaceName != null && !homeSpaceName.isEmpty()) {
                 hashMap.put(WKChannelMemberExtras.homeSpaceName, homeSpaceName);
             }
-            // YUJ-380 · 实名徽章 Phase A：后端透传 realname_verified，
+            //  · 实名徽章 Phase A：后端透传 realname_verified，
             // 列表/气泡侧只需 bool 可见性；未认证不写任何负向字段。
             //
-            // YUJ-395 P0-2：字段改为装箱 Boolean，tri-state 语义：
+            //  P0-2：字段改为装箱 Boolean，tri-state 语义：
             //   - Boolean.TRUE / Boolean.FALSE → put 进 extraMap（覆盖 stale），
             //     resolver 读到显式答案后不 fallback 到 channel；
             //   - null（后端未下发）            → 不 put，let resolver fallback
@@ -623,7 +639,7 @@ public class GroupModel extends WKBaseModel {
     }
 
     // ------------------------------------------------------------------
-    // YUJ-183 · Fix B Step 2 · one-time 老用户外部群 extra 字段回填迁移
+    //  · Fix B Step 2 · one-time 老用户外部群 extra 字段回填迁移
     // ------------------------------------------------------------------
 
     /**
@@ -675,7 +691,7 @@ public class GroupModel extends WKBaseModel {
             return;
         }
         // 后台线程收集 group 列表：DB 查询不要阻塞主线程。
-        // YUJ-283 P-11: AppExecutors.io() 替代 new Thread()（统一命名：app-io-N）；
+        //  P-11: AppExecutors.io() 替代 new Thread()（统一命名：app-io-N）；
         // 命名诊断日志仍按旧 tag yuj183-migration-collect 打印，不依赖线程名。
         AppExecutors.io().execute(() -> {
             try {

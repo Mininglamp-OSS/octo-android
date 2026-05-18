@@ -1,28 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="44dp"
     android:background="?attr/selectableItemBackground"
-    android:orientation="vertical"
-    android:paddingHorizontal="14dp"
-    android:paddingVertical="10dp">
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp">
 
     <TextView
         android:id="@+id/cmdTv"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/colorDark"
+        android:textColor="@color/colorAccent"
         android:textSize="@dimen/font_size_16"
-        android:textStyle="bold" />
+        tools:text="/newbot" />
 
     <TextView
         android:id="@+id/remarkTv"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
         android:ellipsize="end"
         android:lines="1"
         android:textColor="@color/color999"
-        android:textSize="@dimen/font_size_14" />
+        android:textSize="@dimen/font_size_14"
+        tools:text="创建新机器人" />
 
 </LinearLayout>

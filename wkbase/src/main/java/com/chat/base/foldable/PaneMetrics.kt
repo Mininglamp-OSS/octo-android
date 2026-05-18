@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.foldable
 
 import android.app.Activity
@@ -6,17 +22,17 @@ import android.content.ContextWrapper
 import androidx.window.layout.WindowMetricsCalculator
 
 /**
- * Pane-aware window metrics for Activity Embedding (YUJ-251 / GH #180).
+ * Pane-aware window metrics for Activity Embedding ( / GH #180).
  *
  * Background
  * ----------
- * Once Activity Embedding (YUJ-248 / PR#177) is active, the ChatActivity runs in the
+ * Once Activity Embedding ( / PR#177) is active, the ChatActivity runs in the
  * secondary pane of a split container. Its visible bounds (the "pane") are narrower than
  * the full display, but everything that reads [android.util.DisplayMetrics.widthPixels]
  * or [com.chat.base.utils.AndroidUtilities.getScreenWidth] still returns the whole-device
  * width. Likewise, resource qualifiers like `values-sw600dp/` gate on smallestScreenWidth
  * of the device, not the current window — so on a sw600dp+ device the chat bubble stayed
- * capped at 420dp even after the user dragged the divider to widen the pane (YUJ-250).
+ * capped at 420dp even after the user dragged the divider to widen the pane ().
  *
  * Fix
  * ---
@@ -86,7 +102,7 @@ object PaneMetrics {
      * Why not [widthPx]? In split mode the primary (chat-list) pane only sees its own
      * bounds (~336-480dp for the foldables / tablets we target), so comparing that to
      * 600dp is **always false** and the selected-row background never renders. See
-     * YUJ-270 P0-1 for the full failure matrix.
+     *  P0-1 for the full failure matrix.
      *
      * Falls back to `resources.displayMetrics.widthPixels` if no hosting Activity is
      * reachable or the Window metrics call throws.

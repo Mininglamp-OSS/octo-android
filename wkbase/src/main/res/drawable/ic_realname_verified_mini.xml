@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-380 (对齐 web YUJ-379 · dmwork-web#1169 Phase A / iOS YUJ-381) ·
+   (对齐 web  ·  Phase A / iOS ) ·
   聊天气泡作者名 + 群成员列表每行使用的迷你蓝勾。
   12dp × 12dp，蓝色实心圆 + 白色 ✓；与 iOS/Web 保持视觉一致。
-  YUJ-361 (#227) 的 ic_realname_verified.xml 是 14dp，给个人资料/Me 卡用，
+   (#227) 的 ic_realname_verified.xml 是 14dp，给个人资料/Me 卡用，
   列表/气泡场景需要更紧凑的 12dp 版本。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

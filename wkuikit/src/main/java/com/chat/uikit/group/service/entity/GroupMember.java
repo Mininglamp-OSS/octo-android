@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.service.entity;
 
 /**
@@ -24,7 +40,7 @@ public class GroupMember {
     public int is_external;
     public String source_space_id;
     public String source_space_name;
-    // 成员 Home Space（YUJ-63 / YUJ-87，web #997 / dmworkim #1208）— viewer-relative 外部判定用。
+    // 成员 Home Space（ / ，web #997 / ）— viewer-relative 外部判定用。
     // 与 source_space_* 的语义区分：
     // - source_space_*: 成员通过哪个 Space 加入了当前群（可能为空，表示同 Space）。
     // - home_space_*:   成员真正归属的 Space（始终有值）。外部成员 home = source_space_id；
@@ -32,11 +48,11 @@ public class GroupMember {
     // 前端用 home_space_id 与当前 viewer 的 Space 比较，决定是否渲染「@SpaceName」后缀。
     public String home_space_id;
     public String home_space_name;
-    // YUJ-380 · 实名徽章 Phase A（方案 J v3 消费）：后端 group_members / users/{uid}
+    //  · 实名徽章 Phase A（方案 J v3 消费）：后端 group_members / users/{uid}
     // 的 group_member 节点返回的 realname_verified。true 时 UI 侧在昵称右侧渲染
     // 12dp 迷你蓝勾；不做未认证用户的负向标识。
     //
-    // YUJ-395 P0-2：字段改为装箱 Boolean（非 primitive），区分三态：
+    //  P0-2：字段改为装箱 Boolean（非 primitive），区分三态：
     //   - Boolean.TRUE  → 后端显式 true（已实名）
     //   - Boolean.FALSE → 后端显式 false（已取消实名；必须写进 extraMap 覆盖
     //                     WKChannel.remoteExtraMap 里可能残留的 stale true，

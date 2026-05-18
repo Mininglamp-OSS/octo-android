@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.fragment;
 
 import static org.junit.Assert.assertEquals;
@@ -15,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * YUJ-183 · {@link CategoryDisplayHelper} host-side 单元测试。
+ *  · {@link CategoryDisplayHelper} host-side 单元测试。
  *
  * <p>复现 bug：外部群 G（{@code group.space_id == minglue_default}）通过 SpaceFilter
  * 进入 {@code allConversations}，但服务端 {@code /spaces/{spaceId}/categories}

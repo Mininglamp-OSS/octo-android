@@ -58,4 +58,7 @@ Thumbs.db
 *.swp
 
 # Google services (may contain API keys)
-# google-services.json
+google-services.json
+
+# Internal scripts (not part of open source)
+scripts/

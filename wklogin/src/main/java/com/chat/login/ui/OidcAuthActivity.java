@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.login.ui;
 
 import android.content.Intent;
@@ -83,7 +99,7 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
         settings.setDefaultTextEncodingName("UTF-8");
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
-        // YUJ-420 R3 fix (Titan R1 P0-2): WebView 安全硬化对齐 WKWebViewActivity 基线。
+        //  R3 fix (review): WebView 安全硬化对齐 WKWebViewActivity 基线。
         // SSO 访问授权 token, 对安全要求比普通 WebView 更高。
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             // 拒绝 HTTP 子资源在 HTTPS 授权页中加载, 避免 MITM 风险
@@ -199,7 +215,7 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
     }
 
     public static String buildAuthorizeUrl(String authorizePath, String authcode) {
-        // YUJ-420 R2 fix (Jerry R1 Critical 4): 用 Uri.Builder + appendQueryParameter 统一编码
+        //  R2 fix (review): 用 Uri.Builder + appendQueryParameter 统一编码
         // 避免 authcode / device_id / flag 等 query 参数手拼时的注入 / 日志泄露风险。
         // 同时限制生产 SSO 只接受 HTTPS。
         String baseUrl;

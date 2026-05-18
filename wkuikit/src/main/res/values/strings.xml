@@ -378,7 +378,7 @@
     <string name="bot_commands_label">命令</string>
     <string name="bot_id_label">Bot ID</string>
 
-    <!-- YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot owner 编辑简介/头像提示文案。 -->
+    <!--  (对齐 web PR#1092 BotDetailModal)：bot owner 编辑简介/头像提示文案。 -->
     <string name="bot_edit_description_title">编辑简介</string>
     <string name="bot_edit_description_hint">请输入 Bot 简介</string>
     <string name="bot_description_update_success">简介已更新</string>
@@ -462,17 +462,17 @@
     <string name="external_group_tag">外部群</string>
     <string name="external_member_badge">外部</string>
     <string name="external_member_source_format">来自 %1$s</string>
-    <!-- v2 视角相对「@SpaceName」后缀（YUJ-66/YUJ-87）。web PR #1013 等价渲染 -->
+    <!-- v2 视角相对「@SpaceName」后缀（/）。web PR #1013 等价渲染 -->
     <string name="external_member_space_suffix">\@%1$s</string>
-    <!-- YUJ-204：UserInfo 底部外部成员提示（对齐 web .wk-userinfo-footer-external-hint） -->
+    <!-- ：UserInfo 底部外部成员提示（对齐 web .wk-userinfo-footer-external-hint） -->
     <string name="external_member_only_in_group_hint">仅可在群内交流</string>
-    <!-- YUJ-318：Space 切换 Loading Overlay 超过 5s 仍未完成的兜底文案 -->
+    <!-- ：Space 切换 Loading Overlay 超过 5s 仍未完成的兜底文案 -->
     <string name="yuj_318_space_switch_slow_hint">正在同步会话，网络较慢…请稍候</string>
-    <!-- YUJ-321（fixing YUJ-318 ReviewBot P0-#1）：Overlay 10s 硬超时的 toast 文案 -->
+    <!-- （fixing  ReviewBot P0-#1）：Overlay 10s 硬超时的 toast 文案 -->
     <string name="yuj_321_space_switch_timeout_toast">同步较慢，请稍候</string>
-    <!-- YUJ-312 Phase 2：Space 切换 Overlay 主文案，%1$s 为目标 Space 名 -->
+    <!--  Phase 2：Space 切换 Overlay 主文案，%1$s 为目标 Space 名 -->
     <string name="yuj_312_space_switch_syncing_fmt">正在同步「%1$s」…</string>
-    <!-- YUJ-361 (#227) · OCTO 实名认证 UI -->
+    <!--  (#227) · OCTO 实名认证 UI -->
     <string name="realname_verified_tag">已实名</string>
     <string name="realname_verification">实名认证</string>
     <string name="realname_goto_verify">去认证</string>

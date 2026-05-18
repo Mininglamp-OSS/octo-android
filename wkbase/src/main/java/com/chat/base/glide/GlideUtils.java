@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.glide;
 
 import android.app.Activity;
@@ -121,7 +137,7 @@ public class GlideUtils {
             Context context = weakReference.get();
             if (context instanceof Activity activity) {
                 if (!activity.isDestroyed()) {
-                    // YUJ-236 phase2 perf (A8): +thumbnail(0.1f) 先绘制缩略图降低解码峰值。
+                    //  phase2 perf (A8): +thumbnail(0.1f) 先绘制缩略图降低解码峰值。
                     Glide.with(context).load(url)
                             .thumbnail(0.1f)
                             .apply(GlideRequestOptions.getInstance().normalRequestOption(width, height))
@@ -168,12 +184,12 @@ public class GlideUtils {
             Context context = weakReference.get();
             if (context instanceof Activity activity) {
                 if (!activity.isDestroyed()) {
-                    // YUJ-283-P-03: 始终使用 MyGlideUrlWithId，cache key 仅依赖服务端 avatarCacheKey，
+                    // -P-03: 始终使用 MyGlideUrlWithId，cache key 仅依赖服务端 avatarCacheKey，
                     // 头像变更时由后端翻版本号触发失效，长期命中磁盘缓存。
                     // key 为空时用 url 本身作为唯一标识，避免所有无 cacheKey 的头像共享同一缓存。
                     String cacheKey = TextUtils.isEmpty(key) ? url : key;
-                    // YUJ-236 phase2 perf (A8): 读 ImageView.layoutParams 做 override + thumbnail(0.1f)。
-                    // YUJ-240 round3 fix (Jerry-Xin W2/R2-avatar-fallback): WRAP_CONTENT(-2) / MATCH_PARENT(-1) / 0
+                    //  phase2 perf (A8): 读 ImageView.layoutParams 做 override + thumbnail(0.1f)。
+                    //  round3 fix (review W2/R2-avatar-fallback): WRAP_CONTENT(-2) / MATCH_PARENT(-1) / 0
                     // → 兜底 96dp 方形，避免退化到 Target.SIZE_ORIGINAL 解码原图。
                     int targetW = imageView.getLayoutParams() != null
                             ? imageView.getLayoutParams().width : 0;

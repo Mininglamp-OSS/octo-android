@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-361 (#227) · 「已实名」pill-shaped 标签背景（淡蓝填充 + 细描边）。
+   (#227) · 「已实名」pill-shaped 标签背景（淡蓝填充 + 细描边）。
 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat
 
 import android.annotation.SuppressLint
@@ -178,7 +194,7 @@ class MessageSwipeController(
                 isVibrate = true
             }
         }
-        // YUJ-251: anchor swipe-reply icon to the right edge of the *pane*, not the device.
+        // : anchor swipe-reply icon to the right edge of the *pane*, not the device.
         // Falls back to device width when the host context isn't an Activity.
         val maxWidth = PaneMetrics.widthPx(mView.context)
         val x: Int = if (abs(mView.translationX) > AndroidUtilities.dp(130f)) {

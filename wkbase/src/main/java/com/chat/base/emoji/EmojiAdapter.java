@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.emoji;
 
 import android.widget.LinearLayout;
@@ -18,7 +34,7 @@ import java.util.List;
  * emoji表情适配器
  */
 public class EmojiAdapter extends BaseQuickAdapter<EmojiEntry, BaseViewHolder> {
-    // YUJ-279: mutable so EmojiFragment can refresh on unfold while panel is visible.
+    // : mutable so EmojiFragment can refresh on unfold while panel is visible.
     // Was `final int width`; made writable through setWidth() + convert() reads live value.
     private int width;
 
@@ -28,7 +44,7 @@ public class EmojiAdapter extends BaseQuickAdapter<EmojiEntry, BaseViewHolder> {
     }
 
     /**
-     * YUJ-279 · refresh the per-item margin to match the new pane width on unfold/fold.
+     *  · refresh the per-item margin to match the new pane width on unfold/fold.
      * Caller must invoke {@link #notifyDataSetChanged()} afterwards to rebind visible cells.
      */
     public void setWidth(int width) {

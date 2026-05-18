@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat.msgmodel;
 
 import com.xinbida.wukongim.entity.WKChannel;
@@ -18,7 +34,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 外部群 Phase 1 — YUJ-86 EP1 合并转发 users 透传测试（对齐 web #981）。
+ * 外部群 Phase 1 —  EP1 合并转发 users 透传测试（对齐 web #981）。
  *
  * 合并转发消息里的 users 列表在二次转发时容易丢字段（web 侧历史就是这样踩过坑）。
  * 该测试锁死 decode / encode 两侧对 is_external / source_space_name /

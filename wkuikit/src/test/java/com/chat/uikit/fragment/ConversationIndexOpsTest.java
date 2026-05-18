@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.fragment;
 
 import static org.junit.Assert.assertEquals;
@@ -21,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * YUJ-229 · {@link ConversationIndexOps} host-side 单元测试。
+ *  · {@link ConversationIndexOps} host-side 单元测试。
  *
  * <p>覆盖 ChatFragment 把 {@code allConversations} 从裸 ArrayList 升级到
  * 「List + Map 索引」后的一致性合约：
@@ -67,7 +83,7 @@ public class ConversationIndexOpsTest {
 
     @Test
     public void upsert_sameKey_noDuplicateListEntry_returnsExisting() {
-        // YUJ-229 核心契约：同一 (channelID, channelType) 再次 upsert 时，
+        //  核心契约：同一 (channelID, channelType) 再次 upsert 时，
         // 列表绝不多出一条；返回的是之前已经插入的 entry。
         ChatConversationMsg first = conv(BOT_SYSTEM, WKChannelType.PERSONAL);
         ConversationIndexOps.upsert(list, index, first);
@@ -167,7 +183,7 @@ public class ConversationIndexOpsTest {
 
     @Test
     public void removeByKey_removesHistoricDuplicateResidueFromList() {
-        // 历史污染场景：列表里有多条同 key 的残留（pre-YUJ-229 bug 状态）。
+        // 历史污染场景：列表里有多条同 key 的残留（pre- bug 状态）。
         // removeByKey 必须清掉所有同 key 残留，不留漏网之鱼。
         ChatConversationMsg a = conv(BOT_SYSTEM, WKChannelType.PERSONAL);
         ChatConversationMsg b = conv(BOT_SYSTEM, WKChannelType.PERSONAL);

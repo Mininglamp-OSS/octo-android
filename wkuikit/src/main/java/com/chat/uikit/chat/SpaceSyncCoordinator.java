@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat;
 
 import android.os.SystemClock;
@@ -12,10 +28,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * YUJ-318 · Space 切换 / Conversation resync 的去重协调器。
+ *  · Space 切换 / Conversation resync 的去重协调器。
  *
  * <p>对照 iOS {@code WKSyncService._isSyncing}（全局 boolean 守卫）+ 补齐 Android 侧
- * 「每条 sync 路径独立 debounce 500ms」，解决 YUJ-316 H2「5 条 sync 触发路径无去重」。
+ * 「每条 sync 路径独立 debounce 500ms」，解决  H2「5 条 sync 触发路径无去重」。
  *
  * <p>Android 侧 {@code performSpaceSwitch} / 注册成功补偿 / 实时消息跨 Space 触发的
  * resync / 启动时 Space 切换首帧 等 5 条路径，在 2 秒内可能连续 fire。本类提供两层
@@ -58,7 +74,7 @@ public final class SpaceSyncCoordinator {
     }
 
     /**
-     * YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · 显式绑定本协调器到 wkim 层 SyncGate，
+     *  (fixing  ReviewBot P1-#3) · 显式绑定本协调器到 wkim 层 SyncGate，
      * 让 {@code WKConnection} 第 5 条 sync 路径也走统一 debounce / 重入守卫。
      *
      * <p>必须由上层在 Application 初始化时调一次（幂等）。不放在 static 块里是因为

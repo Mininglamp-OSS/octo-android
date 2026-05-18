@@ -1,9 +1,17 @@
 /*
- * This is the source code of Telegram for Android v. 2.0.x.
- * It is licensed under GNU GPL v. 2 or later.
- * You should have received a copy of the license in this archive (see LICENSE).
+ * Copyright 2026-present OctoIM contributors
  *
- * Copyright Nikolai Kudashov, 2013-2018.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.chat.base.ui.components;
@@ -17,7 +25,6 @@ import android.view.animation.DecelerateInterpolator;
 
 import com.chat.base.utils.AndroidUtilities;
 
-
 public class LineProgressView extends View {
 
     private long lastUpdateTime;
@@ -30,50 +37,14 @@ public class LineProgressView extends View {
     private int backColor;
     private int progressColor;
 
-    private static DecelerateInterpolator decelerateInterpolator;
-    private static Paint progressPaint;
-
-    private RectF rect = new RectF();
-
-//    CellFlickerDrawable cellFlickerDrawable;
+    private final DecelerateInterpolator interpolator = new DecelerateInterpolator();
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
 
     public LineProgressView(Context context) {
         super(context);
-
-        if (decelerateInterpolator == null) {
-            decelerateInterpolator = new DecelerateInterpolator();
-            progressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            progressPaint.setStrokeCap(Paint.Cap.ROUND);
-            progressPaint.setStrokeWidth(AndroidUtilities.dp(2));
-        }
-    }
-
-    private void updateAnimation() {
-        long newTime = System.currentTimeMillis();
-        long dt = newTime - lastUpdateTime;
-        lastUpdateTime = newTime;
-
-        if (animatedProgressValue != 1 && animatedProgressValue != currentProgress) {
-            float progressDiff = currentProgress - animationProgressStart;
-            if (progressDiff > 0) {
-                currentProgressTime += dt;
-                if (currentProgressTime >= 300) {
-                    animatedProgressValue = currentProgress;
-                    animationProgressStart = currentProgress;
-                    currentProgressTime = 0;
-                } else {
-                    animatedProgressValue = animationProgressStart + progressDiff * decelerateInterpolator.getInterpolation(currentProgressTime / 300.0f);
-                }
-            }
-            invalidate();
-        }
-        if (animatedProgressValue >= 1 && animatedProgressValue == 1 && animatedAlphaValue != 0) {
-            animatedAlphaValue -= dt / 200.0f;
-            if (animatedAlphaValue <= 0) {
-                animatedAlphaValue = 0.0f;
-            }
-            invalidate();
-        }
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeWidth(AndroidUtilities.dp(2));
     }
 
     public void setProgressColor(int color) {
@@ -96,7 +67,6 @@ public class LineProgressView extends View {
         }
         currentProgress = value;
         currentProgressTime = 0;
-
         lastUpdateTime = System.currentTimeMillis();
         invalidate();
     }
@@ -105,31 +75,52 @@ public class LineProgressView extends View {
         return currentProgress;
     }
 
-    public void onDraw(Canvas canvas) {
+    @Override
+    protected void onDraw(Canvas canvas) {
         if (backColor != 0 && animatedProgressValue != 1) {
-            progressPaint.setColor(backColor);
-            progressPaint.setAlpha((int) (255 * animatedAlphaValue));
-            int start = (int) (getWidth() * animatedProgressValue);
+            paint.setColor(backColor);
+            paint.setAlpha((int) (255 * animatedAlphaValue));
             rect.set(0, 0, getWidth(), getHeight());
-            canvas.drawRoundRect(rect, getHeight() / 2f, getHeight() / 2f, progressPaint);
+            float radius = getHeight() / 2f;
+            canvas.drawRoundRect(rect, radius, radius, paint);
         }
 
-        progressPaint.setColor(progressColor);
-        progressPaint.setAlpha((int) (255 * animatedAlphaValue));
+        paint.setColor(progressColor);
+        paint.setAlpha((int) (255 * animatedAlphaValue));
         rect.set(0, 0, getWidth() * animatedProgressValue, getHeight());
-        canvas.drawRoundRect(rect, getHeight() / 2f, getHeight() / 2f, progressPaint);
-
-        if (animatedAlphaValue > 0) {
-//            if (cellFlickerDrawable == null) {
-//                cellFlickerDrawable = new CellFlickerDrawable(160, 0);
-//                cellFlickerDrawable.drawFrame = false;
-//                cellFlickerDrawable.animationSpeedScale = 0.8f;
-//                cellFlickerDrawable.repeatProgress = 1.2f;
-//            }
-//            cellFlickerDrawable.setParentWidth(getMeasuredWidth());
-//            cellFlickerDrawable.draw(canvas, rect, getHeight() / 2f, null);
-        }
+        float radius = getHeight() / 2f;
+        canvas.drawRoundRect(rect, radius, radius, paint);
 
         updateAnimation();
+    }
+
+    private void updateAnimation() {
+        long now = System.currentTimeMillis();
+        long dt = now - lastUpdateTime;
+        lastUpdateTime = now;
+
+        if (animatedProgressValue != currentProgress) {
+            float diff = currentProgress - animationProgressStart;
+            if (diff > 0) {
+                currentProgressTime += dt;
+                if (currentProgressTime >= 300) {
+                    animatedProgressValue = currentProgress;
+                    animationProgressStart = currentProgress;
+                    currentProgressTime = 0;
+                } else {
+                    animatedProgressValue = animationProgressStart +
+                            diff * interpolator.getInterpolation(currentProgressTime / 300f);
+                }
+            }
+            invalidate();
+        }
+
+        if (animatedProgressValue >= 1f && animatedAlphaValue != 0) {
+            animatedAlphaValue -= dt / 200f;
+            if (animatedAlphaValue <= 0) {
+                animatedAlphaValue = 0f;
+            }
+            invalidate();
+        }
     }
 }

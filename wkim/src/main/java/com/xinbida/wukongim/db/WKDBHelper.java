@@ -28,9 +28,9 @@ public class WKDBHelper {
     private static final String TAG = "WKDBHelper";
 
     /**
-     * YUJ-316 D · 启用 SQLCipher WAL（Write-Ahead Logging）模式，允许多 reader 与单 writer
+     *  D · 启用 SQLCipher WAL（Write-Ahead Logging）模式，允许多 reader 与单 writer
      * 并发。默认 rollback journal 模式下写事务期间任何读都要排队，Space 切换 saveSyncChat
-     * 多个写事务叠加 × 主线程 adapter.convert 大量 DB 读 → ANR 30s 闪退（参见 YUJ-316 根因
+     * 多个写事务叠加 × 主线程 adapter.convert 大量 DB 读 → ANR 30s 闪退（参见  根因
      * 分析）。WAL 模式让 reader 不再阻塞 writer、writer 也不阻塞 reader，消除该路径的锁竞争。
      *
      * <p>回滚策略：若某机型出现 WAL 异常（磁盘空间 / 权限 / 特殊 FS），把此常量改为 {@code
@@ -87,7 +87,7 @@ public class WKDBHelper {
             File databaseFile = ctx.getDatabasePath(myDBName);
             databaseFile.getParentFile().mkdirs();
             mDb = SQLiteDatabase.openOrCreateDatabase(databaseFile, uid, null, null, null);
-            // YUJ-316 D · 启用 WAL，让 reader 与 writer 并发。必须在任何 schema 升级 /
+            //  D · 启用 WAL，让 reader 与 writer 并发。必须在任何 schema 升级 /
             // 业务读写前执行（PRAGMA journal_mode 在有 active txn 时会失效）。
             enableWalIfNeeded();
             WKDBUpgrade.getInstance().onUpgrade(mDb);
@@ -98,7 +98,7 @@ public class WKDBHelper {
     }
 
     /**
-     * YUJ-316 D · 切 WAL 并校验实际生效。PRAGMA 在某些特殊 FS（例如 /data/user_de 某些
+     *  D · 切 WAL 并校验实际生效。PRAGMA 在某些特殊 FS（例如 /data/user_de 某些
      * 厂商 ROM）可能被拒绝，这里捕获异常并记日志，但不阻断数据库初始化——失败回退到
      * rollback journal 语义，与打此 flag 前行为一致。
      */
@@ -112,7 +112,7 @@ public class WKDBHelper {
             if (mode != null && "wal".equalsIgnoreCase(mode)) {
                 // 开启后建议放宽 synchronous，WAL 下 NORMAL 即可，事务提交更快。
                 mDb.execSQL("PRAGMA synchronous=NORMAL");
-                // YUJ-316 D+ · checkpoint 调优。SQLCipher 默认 wal_autocheckpoint=1000 页
+                //  D+ · checkpoint 调优。SQLCipher 默认 wal_autocheckpoint=1000 页
                 // （~4MB 才触发），IM saveSyncChat 写量大时 -wal 文件可涨到 20-50MB，首次
                 // auto-checkpoint 需要把整个 WAL 回写到主 db 文件，会阻塞 reader 100-500ms
                 // —— 实测相当于退化回 ANR 窗口。把 autocheckpoint 调小到 100 页（~400KB）

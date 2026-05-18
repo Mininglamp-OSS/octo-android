@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.realname;
 
 import androidx.annotation.NonNull;
@@ -11,11 +27,11 @@ import java.net.URISyntaxException;
 import java.util.List;
 
 /**
- * YUJ-396 / GH dmwork-web#1174 — Aegis「去认证」入口 URL 解析器。
+ *  / GH  — Aegis「去认证」入口 URL 解析器。
  *
  * <p>把 Aegis verification URL 的拼接逻辑从 {@code SettingActivity} 里抽出来做成
  * 纯函数, 便于 JVM 单测锁合约。与 Web 端
- * {@code packages/dmworkbase/src/Components/MeInfo/realnameVerifyUrl.ts} /
+ * {@code web frontend realnameVerifyUrl.ts} /
  * iOS 端 {@code WKRealnameVerifyManager#buildVerifyURLFromAccountUrl:} 口径对齐。
  *
  * <p><b>行为合约（{@link #resolve(WKAPPConfig)}）</b>

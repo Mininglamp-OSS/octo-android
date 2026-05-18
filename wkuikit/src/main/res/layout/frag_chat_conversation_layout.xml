@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-318 · 根节点从 LinearLayout 升级为 FrameLayout，支持在会话列表之上叠加
+   · 根节点从 LinearLayout 升级为 FrameLayout，支持在会话列表之上叠加
   Space 切换 Loading Overlay（对照 iOS `pendingSpaceSwitchLoad` + spinner 行为）。
   原 LinearLayout 结构整体作为 FrameLayout 第一个子节点保留，内部 id 一律不变，
   ViewBinding 生成的字段访问保持向后兼容。
@@ -181,11 +181,11 @@
     </LinearLayout>
 
     <!--
-      YUJ-318 · Space 切换 Loading Overlay。仅在 performSpaceSwitch 期间显示，
+       · Space 切换 Loading Overlay。仅在 performSpaceSwitch 期间显示，
       半透明遮挡列表旧内容（避免空列表 + 闪烁）。sync 完成 / 首帧 sortMsg 回来立即
       隐藏；5s 仍未回来则显示 fallback 文案，提示用户不是 App 卡死。
 
-      YUJ-312 Phase 2 调整：
+       Phase 2 调整：
         - 按 Yu 授权在 overlay 主位置显示「正在同步 [Space Name]…」主文案（spaceSwitchOverlayPrimaryTv）
           代替原先 5s 前纯 spinner 的视觉，让用户立刻知道切换已触发且在同步。
         - 非阻塞（clickable=false / focusable=false）：Yu 明确要求 UX 不锁输入；
@@ -215,7 +215,7 @@
                 android:indeterminate="true"
                 android:indeterminateTint="@color/white" />
 
-            <!-- YUJ-312 Phase 2 · 主文案：始终显示「正在同步「<space name>」…」 -->
+            <!--  Phase 2 · 主文案：始终显示「正在同步「<space name>」…」 -->
             <TextView
                 android:id="@+id/spaceSwitchOverlayPrimaryTv"
                 android:layout_width="wrap_content"
@@ -227,7 +227,7 @@
                 android:textSize="14sp"
                 tools:text="正在同步「测试空间」…" />
 
-            <!-- YUJ-318 · 5s 兜底补充文案：仅当 5s 未完成时才出现，提示网络慢 -->
+            <!--  · 5s 兜底补充文案：仅当 5s 未完成时才出现，提示网络慢 -->
             <TextView
                 android:id="@+id/spaceSwitchOverlayFallbackTv"
                 android:layout_width="wrap_content"

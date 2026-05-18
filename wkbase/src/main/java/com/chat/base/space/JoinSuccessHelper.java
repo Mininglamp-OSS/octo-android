@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import androidx.annotation.NonNull;
@@ -10,7 +26,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * 跨 Space 加群提示 — 对齐 dmwork-web PR #1068（YUJ-100 / YUJ-106）。
+ * 跨 Space 加群提示 — 对齐  #1068（ / ）。
  *
  * <p>场景：用户当前在 Space A，通过邀请链接 / 扫码 / 直接接受邀请加入属于 Space B 的群。
  * 后端加群成功，但前端默认仍停留在 Space A → 新群在当前 Space 会话列表里被 {@link SpaceFilter}

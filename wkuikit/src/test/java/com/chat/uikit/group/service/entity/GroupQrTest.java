@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.service.entity;
 
 import static org.junit.Assert.assertEquals;
@@ -9,9 +25,9 @@ import com.google.gson.Gson;
 import org.junit.Test;
 
 /**
- * YUJ-91 · 外部群 EP8：群二维码「复制邀请链接」按钮
+ *  · 外部群 EP8：群二维码「复制邀请链接」按钮
  * <p>
- * 风险防范（对齐 YUJ-53）：model 层必须透传新字段 invite_url，
+ * 风险防范（对齐 ）：model 层必须透传新字段 invite_url，
  * 否则 UI 会静默失败（按钮永远不显示）。本测试确保 Gson 能把
  * 后端 ChannelQrcodeResp.invite_url 字段正确反序列化到 GroupQr.invite_url。
  */

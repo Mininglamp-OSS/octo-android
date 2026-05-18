@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user;
 
 import android.Manifest;
@@ -91,15 +107,15 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     private String botDescription;
     private String botCreatorName;
     /**
-     * YUJ-238 (对齐 web PR#1092 BotDetailModal)：从 /users/{uid} 拿到的 bot 创建者 uid，
+     *  (对齐 web PR#1092 BotDetailModal)：从 /users/{uid} 拿到的 bot 创建者 uid，
      * 用于判定当前登录者是否为该 bot 的 owner（可编辑头像 / 简介）。
      */
     private String botCreatorUid;
-    /** YUJ-238：当前页面的 bot 是否归属当前登录者。showBotInfo() 内计算并缓存。 */
+    /** ：当前页面的 bot 是否归属当前登录者。showBotInfo() 内计算并缓存。 */
     private boolean isBotOwner;
 
     /**
-     * YUJ-204：外部成员 " @SpaceName" 后缀的灰紫色（对齐 GroupMemberAdapter /
+     * ：外部成员 " @SpaceName" 后缀的灰紫色（对齐 GroupMemberAdapter /
      * SearchUserAdapter / RemindMemberAdapter 的 0xFF8B5CF6，避免各处渲染色号漂移）。
      */
     private static final int EXTERNAL_SPACE_SUFFIX_COLOR = 0xFF8B5CF6;
@@ -372,9 +388,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     if (!TextUtils.isEmpty(userInfo.vercode)) {
                         vercode = userInfo.vercode;
                     }
-                    // YUJ-136 (对齐 web PR#1021)：先算 viewer-relative 外部判定，
-                    // 同时驱动「来源」行 (YUJ-87) 与「发送消息」按钮是否隐藏，
-                    // 以及 YUJ-204 的 bottomPanel 全隐 + 来源 Space 后缀。
+                    //  (对齐 web PR#1021)：先算 viewer-relative 外部判定，
+                    // 同时驱动「来源」行 () 与「发送消息」按钮是否隐藏，
+                    // 以及  的 bottomPanel 全隐 + 来源 Space 后缀。
                     ExternalViewerResolver.Resolution externalRes =
                             UserDetailExternalHelper.resolve(
                                     userInfo,
@@ -383,12 +399,12 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                                     WKConfig.getInstance().getUid(),
                                     MsgModel.getInstance().getCurrentSpaceId(),
                                     groupID);
-                    // YUJ-177 (对齐 web PR#1013/1091 · iOS YUJ-136)：跨 Space 外部成员不允许申请加好友。
-                    // YUJ-146-2 (对齐 web PR YUJ-144)：同 Space 成员隐藏「解除好友 / 拉黑」，
-                    // 跨 Space 成员由 YUJ-204 统一走 bottomPanel 全隐。
+                    //  (对齐 web PR#1013/1091 · iOS )：跨 Space 外部成员不允许申请加好友。
+                    // -2 (对齐 web PR )：同 Space 成员隐藏「解除好友 / 拉黑」，
+                    // 跨 Space 成员由  统一走 bottomPanel 全隐。
                     boolean isExternalUser = isExternalUser(userInfo, externalRes);
 
-                    // YUJ-204：name 旁拼 " @SpaceName" 灰紫色后缀（对齐 web Subscribers/list.tsx:320）。
+                    // ：name 旁拼 " @SpaceName" 灰紫色后缀（对齐 web Subscribers/list.tsx:320）。
                     // 必须先于下方的 setText 分支，否则 nameTv 会被 userInfo.name / remark 覆盖。
                     String baseName = TextUtils.isEmpty(userInfo.remark) ? userInfo.name : userInfo.remark;
                     String sourceSpaceLabel = UserDetailExternalHelper.resolveSourceSpaceLabel(
@@ -419,7 +435,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.blacklistTv.setText(R.string.push_black_list);
                     }
 
-                    // YUJ-204（对齐 web PR#1021 UserInfo/index.tsx:29-48）：
+                    // （对齐 web PR#1021 UserInfo/index.tsx:29-48）：
                     // 外部成员 viewer 下整个 bottomPanel（applyBtn / sendMsgBtn /
                     // deleteLayout / pushBlackLayout / blacklistDesc）一起隐藏，
                     // 用 externalHintTv「仅可在群内交流」替代。
@@ -427,7 +443,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     boolean showExternalHint = UserDetailExternalHelper.shouldShowExternalHint(isExternalUser);
                     wkVBinding.externalHintTv.setVisibility(showExternalHint ? View.VISIBLE : View.GONE);
 
-                    // YUJ-206（对齐 web UserInfo/index.tsx:52-55 / 企微）：Space 模式
+                    // （对齐 web UserInfo/index.tsx:52-55 / 企微）：Space 模式
                     // 下同 Space 非好友（人类）直接「发送消息」，跳过「申请加好友」。
                     // 嘉伟 2026-05-01 Android 真机实测：外部群点成员误显 applyBtn 的
                     // 根因之二。Bot 走独立的 bot_add_friend 审批流，所以此分支不接管 bot。
@@ -447,15 +463,15 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     } else {
                         boolean hideSendMsgForExternal =
                                 UserDetailExternalHelper.shouldHideSendMessageButton(externalRes);
-                        // YUJ-206：follow=1 || Space 模式 + 非好友 + 非 bot → 显示 sendMsg。
+                        // ：follow=1 || Space 模式 + 非好友 + 非 bot → 显示 sendMsg。
                         wkVBinding.sendMsgBtn.setVisibility(
                                 ((userInfo.follow == 1 && !hideSendMsgForExternal) || spaceModeSendMsg)
                                         ? View.VISIBLE : View.GONE);
-                        // YUJ-146-2：同 Space 成员隐藏「解除好友 / 拉黑」。
+                        // -2：同 Space 成员隐藏「解除好友 / 拉黑」。
                         wkVBinding.deleteLayout.setVisibility(View.GONE);
                         wkVBinding.pushBlackLayout.setVisibility(View.GONE);
                         wkVBinding.blacklistDescTv.setVisibility(userInfo.status == 2 ? View.VISIBLE : View.GONE);
-                        // YUJ-206：Space 模式下 applyBtn 让位给 sendMsgBtn，
+                        // ：Space 模式下 applyBtn 让位给 sendMsgBtn，
                         // 仅在非 Space 模式 + 陌生人 + 持 vercode 时才展示（保持老语义）。
                         wkVBinding.applyBtn.setVisibility(
                                 (!spaceModeSendMsg
@@ -468,7 +484,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     isBot = userInfo.robot == 1;
                     botDescription = userInfo.bot_description;
                     botCreatorName = userInfo.bot_creator_name;
-                    // YUJ-238：缓存 bot_creator_uid 给 showBotInfo() / 编辑回调读取。
+                    // ：缓存 bot_creator_uid 给 showBotInfo() / 编辑回调读取。
                     botCreatorUid = userInfo.bot_creator_uid;
                     if (isBot) {
                         // Show AI badge
@@ -521,7 +537,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
 
 
     private void showBotInfo(com.chat.uikit.enity.UserInfo userInfo) {
-        // YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者 = 当前登录者时
+        //  (对齐 web PR#1092 BotDetailModal)：bot 创建者 = 当前登录者时
         // 切到「可编辑」UI 分支（头像右下铅笔 + 简介右侧铅笔）；非 owner 保持只读。
         String loginUid = WKConfig.getInstance().getUid();
         isBotOwner = !TextUtils.isEmpty(userInfo.bot_creator_uid)
@@ -540,7 +556,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     ? userInfo.bot_description
                     : getString(R.string.bot_no_description));
         }
-        // YUJ-238：简介右侧「编辑」铅笔。
+        // ：简介右侧「编辑」铅笔。
         wkVBinding.botDescEditIv.setVisibility(isBotOwner ? View.VISIBLE : View.GONE);
         if (isBotOwner) {
             wkVBinding.botDescEditIv.setOnClickListener(v -> showEditBotDescriptionDialog());
@@ -548,7 +564,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             wkVBinding.botDescEditIv.setOnClickListener(null);
         }
 
-        // YUJ-238：头像右下角「编辑」铅笔。
+        // ：头像右下角「编辑」铅笔。
         wkVBinding.botAvatarEditIv.setVisibility(isBotOwner ? View.VISIBLE : View.GONE);
         if (isBotOwner) {
             wkVBinding.botAvatarEditIv.setOnClickListener(v -> chooseBotAvatar());
@@ -596,7 +612,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             wkVBinding.botCommandsLayout.setVisibility(View.GONE);
         }
 
-        // YUJ-238：owner 永远展示 bot_info 卡片（至少有 desc 行 + 头像编辑入口）。
+        // ：owner 永远展示 bot_info 卡片（至少有 desc 行 + 头像编辑入口）。
         boolean hasAnyInfo = hasDesc || hasCreator || hasCommands || isBotOwner;
         wkVBinding.botInfoLayout.setVisibility(hasAnyInfo ? View.VISIBLE : View.GONE);
     }
@@ -706,7 +722,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         }
     });
 
-    // ==================== YUJ-238 Bot owner edit avatar/description ====================
+    // ====================  Bot owner edit avatar/description ====================
     //
     // 对齐 web PR#1092 BotDetailModal 的 handleAvatarUpload / handleSaveDescription：
     // 1. isBotOwner = (bot_creator_uid == currentLoginUid)，在 showBotInfo() 内计算。
@@ -762,7 +778,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                 if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
                 String path = result.getData().getStringExtra("path");
                 if (TextUtils.isEmpty(path)) return;
-                // YUJ-238 关键点：uid 必须是 targetBotUid（this.uid），而不是 loginUid。
+                //  关键点：uid 必须是 targetBotUid（this.uid），而不是 loginUid。
                 UserModel.getInstance().uploadAvatar(uid, path, code -> {
                     if (code == HttpResponseCode.success) {
                         refreshBotAvatarInPlace();
@@ -840,10 +856,10 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**
-     * 外部群视角下刷新「来源」行（YUJ-87 / YUJ-204 · 对齐 web #976 / #1021）：
+     * 外部群视角下刷新「来源」行（ /  · 对齐 web #976 / #1021）：
      *   - viewer-relative 判定为外部 → 整行显示成员 home/source Space 名，替代老的 source_desc。
      *   - 同 Space / 自看 / 未命中外部判定 → 整行隐藏，继续用上层 source_desc 逻辑。
-     *   - YUJ-204 修复：当 viewer-relative resolver 返回 null（group_member 缺字段且无
+     *   -  修复：当 viewer-relative resolver 返回 null（group_member 缺字段且无
      *     WKIM 成员缓存）但 UserInfo 顶层字段判定为外部时，也要渲染「来源」行 —— 否则
      *     外部 UserInfo 页底部显示了「仅可在群内交流」但用户看不到 Space 名，上下文丢失。
      * 返回 true 表示「来源」行已经由本方法处理，调用方不应再覆盖。
@@ -876,7 +892,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**
-     * YUJ-204（对齐 web Subscribers/list.tsx:320）：外部成员 UserInfo 姓名旁拼
+     * （对齐 web Subscribers/list.tsx:320）：外部成员 UserInfo 姓名旁拼
      * " @SpaceName" 灰紫色后缀，确保一眼看出对方归属的 Space。非外部 / 无 Space 名
      * 场景下返回原始昵称，保持老样式。
      */
@@ -894,7 +910,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**
-     * YUJ-146-2 (对齐 web PR YUJ-144) + YUJ-189 (对齐 web PR#1021 `isExternalToViewer`)：
+     * -2 (对齐 web PR ) +  (对齐 web PR#1021 `isExternalToViewer`)：
      * 判定 UserInfo 面板当前展示的成员对 viewer 是否为外部。
      *
      * <p>对齐 web 的「多源 OR」语义 — web 的 {@code UserInfoVM.isExternalToViewer} 会
@@ -910,7 +926,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
      * 任一路径判定为外部就按外部处理；两个路径都说「不是外部」才返回 false。
      *
      * <p>这样当后端只在 {@code group_member} 或只在顶层回填外部字段、或 WKIM 成员缓存
-     * 因增量 sync 缺字段时，应用层依然能命中隐藏规则（YUJ-183 根因下的兜底）。
+     * 因增量 sync 缺字段时，应用层依然能命中隐藏规则（ 根因下的兜底）。
      */
     private boolean isExternalUser(
             com.chat.uikit.enity.UserInfo userInfo,

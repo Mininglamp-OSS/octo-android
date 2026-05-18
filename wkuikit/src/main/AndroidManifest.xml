@@ -23,7 +23,7 @@
             android:name=".chat.ChooseChatActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity android:name=".search.SearchUserActivity" />
-        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity
             android:name=".chat.ChatPersonalActivity"
             android:resizeableActivity="true"
@@ -45,7 +45,7 @@
         <activity android:name=".setting.SettingActivity" />
         <activity android:name=".setting.DestroyAccountActivity" />
         <activity android:name=".group.GroupQrActivity" />
-        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity android:name=".search.SearchAllActivity"
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
@@ -53,7 +53,7 @@
         <activity android:name=".user.UserQrActivity" />
         <activity android:name=".user.MyHeadPortraitActivity" />
         <activity android:name=".setting.MsgNoticesSettingActivity" />
-        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity
             android:name=".user.UserDetailActivity"
             android:resizeableActivity="true"
@@ -97,7 +97,7 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="stateAlwaysHidden|adjustResize" />
-        <!-- YUJ-248 (#176): secondary pane in Activity Embedding split. -->
+        <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity android:name="com.chat.uikit.search.remote.GlobalActivity"
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />

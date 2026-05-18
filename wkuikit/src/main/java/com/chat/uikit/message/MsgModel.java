@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.message;
 
 import android.os.Handler;
@@ -336,7 +352,7 @@ public class MsgModel extends WKBaseModel {
             if (typeObject != null)
                 msg.type = (int) typeObject;
         }
-        // YUJ-89 / EP1: 透传消息级外部来源字段到 localExtraMap，供消息气泡
+        //  / EP1: 透传消息级外部来源字段到 localExtraMap，供消息气泡
         // 和合并转发渲染 "@SpaceName" 后缀（见 ExternalSourceResolver）。
         // 字段缺失时不写入 map，保持降级链语义。
         copyExternalSourceExtras(msg, syncMsg);
@@ -350,7 +366,7 @@ public class MsgModel extends WKBaseModel {
     /**
      * Copy the external-source fields from the sync DTO into the msg's
      * {@code localExtraMap}. Package-private for unit testing the passthrough
-     * — YUJ-53 was caused by a silent passthrough failure on web, so this hop
+     * —  was caused by a silent passthrough failure on web, so this hop
      * is explicitly covered by {@code MsgModelExternalPassthroughTest}.
      *
      * <p>Uses plain Java null/empty checks (not {@code TextUtils.isEmpty}) so
@@ -405,7 +421,7 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void setCurrentSpaceId(String spaceId, String spaceName) {
-        // YUJ-324 · 保存旧值，待 SP 落地后广播给 ChatActivity 等保活页面，
+        //  · 保存旧值，待 SP 落地后广播给 ChatActivity 等保活页面，
         // 让它们在 Space 变化时主动 finish 自己，避免跨 Space 串内容（P0 数据隔离）。
         // 广播必须在 SP 写入之后发出 —— 监听方常调 SpaceFilter.getCurrentSpaceId()
         // 作为"当前 Space"判定依据，顺序反了会读到旧值。
@@ -439,16 +455,16 @@ public class MsgModel extends WKBaseModel {
         jsonObject.put("version", version);
         jsonObject.put("device_uuid", WKConstants.getDeviceUUID());
         String spaceId = currentSpaceId.isEmpty() ? null : currentSpaceId;
-        // YUJ-312 Phase 2 · T6 埋点：sync request-out / response-in。
+        //  Phase 2 · T6 埋点：sync request-out / response-in。
         //
-        // Jerry review（2026-05-04）指出：原版用 Trace.beginSection 在 IO 线程 begin，
+        // review（2026-05-04）指出：原版用 Trace.beginSection 在 IO 线程 begin，
         // onSuccess/onFail 在主线程 end，但 Android `android.os.Trace` API 是
         // per-thread stack——跨线程 begin/end 无法配对：
         //   1) IO 线程 begin 永远不 end → perfetto 图里段悬挂
         //   2) 主线程 endSection 可能错误关闭主线程上当时最外层的其他段（例如
         //      YUJ312-onRefreshList-rebuild）。
         //
-        // 修复方案（Jerry 推荐 · Yu 拍板）：syncChat 是唯一跨线程段，直接去掉
+        // 修复方案（推荐 · 拍板）：syncChat 是唯一跨线程段，直接去掉
         // beginSection/endSection 调用，只保留 Log.d 时间戳。Debug only 性能分析
         // 场景下，Perfetto 的 logcat view 可对齐 "YUJ312" 标签 + elapsedRealtime
         // 戳；其余 7 段（都在主线程 OR 同一后台线程内闭合）配对不受影响。
@@ -466,6 +482,15 @@ public class MsgModel extends WKBaseModel {
                             ? 0 : result.conversations.size();
                     android.util.Log.d("YUJ312", "sync-response-in convCount=" + convCount
                             + " rtt=" + (SystemClock.elapsedRealtime() - yuj312SyncStartMs) + "ms");
+                    if (result != null && result.conversations != null) {
+                        StringBuilder sb = new StringBuilder("[ConvSync] server returned: ");
+                        for (int ci = 0; ci < result.conversations.size(); ci++) {
+                            if (ci > 0) sb.append(", ");
+                            sb.append(result.conversations.get(ci).channel_id)
+                              .append(":").append(result.conversations.get(ci).channel_type);
+                        }
+                        android.util.Log.d("ConvSync", sb.toString());
+                    }
                 }
                 if (result != null && !TextUtils.isEmpty(result.uid) && result.uid.equals(WKConfig.getInstance().getUid())) {
                     if (WKReader.isNotEmpty(result.conversations)) {

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group;
 
 import android.annotation.SuppressLint;
@@ -507,7 +523,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 wkVBinding.groupManageLayout.setVisibility(View.VISIBLE);
             }
             groupMemberAdapter.setList(temp);
-            // YUJ-189 #3：对齐企微 — 缩略图网格里外部成员 @SpaceName 按单行 ellipsize
+            //  #3：对齐企微 — 缩略图网格里外部成员 @SpaceName 按单行 ellipsize
             // 截断不折断，完整 @SpaceName 在「查看全部成员 (N)」一人一行的列表页展示。
             // 入口总是显示并拼上真实成员总数（从 WKIM 本地缓存读，比分页 list.size() 更准）。
             int totalMemberCount = WKIM.getInstance().getChannelMembersManager()

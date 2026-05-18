@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  YUJ-361 (#227) · OCTO 实名认证 ✓ 勾 icon。
+   (#227) · OCTO 实名认证 ✓ 勾 icon。
   蓝色实心圆 + 白色打勾，对齐 iOS/Web 的「已实名」视觉。
   用在 MyFragment 卡片与 MyInfoActivity 名字行（不在聊天气泡/群成员里）。
 -->

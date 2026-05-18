@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import androidx.annotation.NonNull;
@@ -8,13 +24,13 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * YUJ-324 · 当前 Space 切换广播（process-scope）。
+ *  · 当前 Space 切换广播（process-scope）。
  *
  * <p>配合 {@link SpaceFilter#getCurrentSpaceId()} 使用：当 {@code current_space_id}
  * 从一个非空值切到另一个非空值、或由空切到非空（反之亦然）时，由
  * {@code MsgModel#setCurrentSpaceId} 在 SP 持久化之后主动广播。
  *
- * <p><b>为什么需要这个广播：</b>YUJ-298（PR#205）把窄屏 ChatActivity 改成
+ * <p><b>为什么需要这个广播：</b>（PR#205）把窄屏 ChatActivity 改成
  * {@code FLAG_ACTIVITY_REORDER_TO_FRONT} 保活 + {@code onNewIntent} 热复用，
  * 切换频道只做 per-channel detach / persist / reset / attach / initData，
  * <b>不刷新 Space 上下文</b>。用户「Space A 进群 X → 返回 → 切 Space → 进群 Y」

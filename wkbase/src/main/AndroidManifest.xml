@@ -13,7 +13,7 @@
 
                 <data
                     android:host="url"
-                    android:scheme="com.dmwork.im" />
+                    android:scheme="com.octoim.app" />
             </intent-filter>
         </activity>
         <activity android:name=".act.WKCropImageActivity" />

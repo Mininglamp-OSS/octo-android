@@ -74,7 +74,7 @@
                             android:textColor="@color/color999"
                             android:textSize="16sp" />
 
-                        <!-- YUJ-361 (#227)：名字旁边 ✓ 蓝色勾 + 已实名 tag -->
+                        <!--  (#227)：名字旁边 ✓ 蓝色勾 + 已实名 tag -->
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/realnameVerifiedIv"
                             android:layout_width="16dp"

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.search;
 
 import android.text.SpannableStringBuilder;
@@ -29,7 +45,7 @@ import java.util.List;
  */
 public class SearchUserAdapter extends BaseMultiItemQuickAdapter<SearchUserEntity, BaseViewHolder> {
     /**
-     * 外部 Space 后缀灰紫色（YUJ-155 / 对齐 YUJ-134 RemindMemberAdapter &
+     * 外部 Space 后缀灰紫色（ / 对齐  RemindMemberAdapter &
      * WKChatBaseProvider.appendExternalSpaceSuffix 的气泡染色规范）。
      */
     private static final int EXTERNAL_SPACE_SUFFIX_COLOR = 0xFF8B5CF6;
@@ -49,8 +65,8 @@ public class SearchUserAdapter extends BaseMultiItemQuickAdapter<SearchUserEntit
                 AvatarView avatarView = helper.getView(R.id.avatarView);
                 avatarView.showAvatar(item.data.uid, WKChannelType.PERSONAL);
                 TextView nameTv = helper.getView(R.id.nameTv);
-                // YUJ-155: 在搜索结果昵称后拼外部成员 " @SpaceName"，与 Web
-                // YUJ-138 / Android YUJ-134 @Mention 候选菜单语义一致 —
+                // : 在搜索结果昵称后拼外部成员 " @SpaceName"，与 Web
+                //  / Android  @Mention 候选菜单语义一致 —
                 // 避免用户在加好友 / 通讯录搜索时看不出对方是跨 Space 外部成员，
                 // 减少跨 Space 数据泄漏的误触发。
                 String externalSpaceSuffix = resolveExternalSpaceName(item.data,

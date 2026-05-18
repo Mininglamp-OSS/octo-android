@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.emoji;
 
 import android.content.Context;
@@ -40,7 +56,7 @@ public class EmojiManager {
     private final int CACHE_MAX_SIZE = 1024;
 
     private Pattern pattern;
-    // YUJ-295 (P-04) — init() 幂等标记，供 ensureInitialized() 使用。
+    //  (P-04) — init() 幂等标记，供 ensureInitialized() 使用。
     private volatile boolean initialized = false;
 
     // default entries
@@ -65,7 +81,7 @@ public class EmojiManager {
     }
 
     /**
-     * YUJ-295 (P-04) · 空载 / 重复调用幂等化。
+     *  (P-04) · 空载 / 重复调用幂等化。
      *
      * 旧路径是 {@code WKBaseApplication.init} 里把本方法塞进同一个 {@code new Thread()}
      * 跟 Bugly / RLottie 抢 CPU。新 AppStartup 把它挪到 Phase-C（idle 后），

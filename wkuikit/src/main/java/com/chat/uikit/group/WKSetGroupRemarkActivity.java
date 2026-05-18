@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group;
 
 import android.text.Editable;
@@ -66,7 +82,7 @@ public class WKSetGroupRemarkActivity extends WKBaseActivity<ActUpdateGroupRemar
             wkVBinding.remarkEt.setText(channel.channelName);
             wkVBinding.remarkEt.setSelection(channel.channelName.length());
         });
-        // YUJ-251: pane-aware maxWidth so the group name TextView doesn't overrun the
+        // : pane-aware maxWidth so the group name TextView doesn't overrun the
         // action-bar right cluster on a narrow Embedding pane.
         wkVBinding.groupNameTv.setMaxWidth(PaneMetrics.widthPx(this) - AndroidUtilities.dp(135));
         wkVBinding.remarkEt.addTextChangedListener(new TextWatcher() {

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.realname;
 
 import com.xinbida.wukongim.entity.WKChannel;
@@ -7,7 +23,7 @@ import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import java.util.Map;
 
 /**
- * YUJ-380 (对齐 web YUJ-379 · dmwork-web#1169 Phase A / iOS YUJ-381) ·
+ *  (对齐 web  ·  Phase A / iOS ) ·
  * 实名徽章可见性解析。
  *
  * <p>方案 J v3 遗留：后端在 users/{uid}、group_members、订阅列表里透传
@@ -20,7 +36,7 @@ import java.util.Map;
  * （兼容 Boolean / Number / "true|1|false|0|空串" / null），避免聊天气泡 +
  * 群成员列表两处各自 cast 扩散。
  *
- * <h3>tri-state 语义（YUJ-395 修复）</h3>
+ * <h3>tri-state 语义（ 修复）</h3>
  * <p>聊天气泡侧存在 member 侧 → channel 侧的 fallback 链。如果 resolver 只返回
  * {@code boolean}，调用方无法区分「member 端显式 false（已取消实名）」与
  * 「member 端缺失 key（未知，应 fallback 到 channel）」—— stale 的
@@ -73,7 +89,7 @@ public final class RealnameBadgeResolver {
         return Boolean.TRUE.equals(isVerifiedTriStateFromMap(extra));
     }
 
-    // ---------------- tri-state API (YUJ-395, 有 fallback 需求时使用) ----------------
+    // ---------------- tri-state API (, 有 fallback 需求时使用) ----------------
 
     /**
      * tri-state 版：member 端是否有显式 realname_verified flag。

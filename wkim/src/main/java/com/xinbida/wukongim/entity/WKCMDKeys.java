@@ -43,5 +43,5 @@ public class WKCMDKeys {
     public final static String wk_sync_reminders = "syncReminders";
     // 同步最近会话扩展
     public final static String wk_sync_conversation_extra = "syncConversationExtra";
-    public final static String wk_conversation_delete = "conversationDelete";
+    public final static String wk_conversation_delete = "conversationDeleted";
 }

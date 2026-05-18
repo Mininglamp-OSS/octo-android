@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat.msgmodel;
 
 import static org.junit.Assert.assertEquals;
@@ -15,14 +31,14 @@ import org.junit.Test;
  * Locks the per-msg field-passthrough contract from merge-forward payload JSON
  * into {@code WKMsg.localExtraMap}.
  *
- * <p>YUJ-53 on web was caused by the model layer dropping these fields on the
+ * <p> on web was caused by the model layer dropping these fields on the
  * floor, causing the DOM to render with no external suffix even though the
  * server was sending the data. This test suite is the Android-side equivalent
  * guard — if any field is ever lost during decode, one of these tests fires.
  *
  * <p>Wire format aligned with web PR #981 — no {@code from_} prefix. Per-user
  * (users[]) passthrough is covered by {@link WKMultiForwardContentExternalFieldsTest}
- * (YUJ-86 EP1) which exercises the inline decode/encode paths.
+ * ( EP1) which exercises the inline decode/encode paths.
  */
 public class WKMultiForwardContentPassthroughTest {
 
@@ -86,7 +102,7 @@ public class WKMultiForwardContentPassthroughTest {
 
     @Test
     public void decodeInheritsChannelTypeOntoEachForwardedMsg() throws Exception {
-        // Regression for /codex review finding on YUJ-89: forwarded msgs used
+        // Regression for /codex review finding on : forwarded msgs used
         // to keep channelType == 0, which made ExternalSourceResolver's
         // "group only" guard drop all msg-level external-source extras.
         JSONObject payload = new JSONObject();

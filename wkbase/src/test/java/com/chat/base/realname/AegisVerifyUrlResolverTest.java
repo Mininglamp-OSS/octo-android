@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.realname;
 
 import static org.junit.Assert.assertEquals;
@@ -13,7 +29,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * YUJ-396 / GH dmwork-web#1174 — Android 端「去认证」URL 解析器单测。
+ *  / GH  — Android 端「去认证」URL 解析器单测。
  *
  * <p>锁以下行为合约（与 Web 端 resolveRealnameVerifyUrl 纯函数 /
  * iOS 端 WKRealnameVerifyURLBuilderTests 对齐）:
@@ -52,7 +68,7 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void prodAccountUrl_buildsProdVerifyURL() {
-        WKAPPConfig config = configWithProviders(provider("xming", "https://accounts.example.com"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "https://accounts.example.com"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
 
@@ -63,31 +79,31 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void testAccountUrl_buildsTestVerifyURL_imTestScenario() {
-        // 本测试就是 YUJ-396 修复的核心目标: im-test 环境不能再跳 prod Aegis。
+        // 本测试就是  修复的核心目标: im-test 环境不能再跳 prod Aegis。
         WKAPPConfig config = configWithProviders(
-                provider("xming", "https://accounts-test.imocto.cn"));
+                provider("testprovider", "https://accounts-test.example.com"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
 
         assertEquals(AegisVerifyUrlResolver.Result.Reason.OK, r.reason);
-        assertEquals("https://accounts-test.imocto.cn/profile/info?anchor=verification", r.url);
-        assertEquals("accounts-test.imocto.cn", r.host);
+        assertEquals("https://accounts-test.example.com/profile/info?anchor=verification", r.url);
+        assertEquals("accounts-test.example.com", r.host);
     }
 
     @Test
     public void trailingSlashOnAccountUrl_isStripped() {
         WKAPPConfig config = configWithProviders(
-                provider("xming", "https://accounts-test.imocto.cn/"));
+                provider("testprovider", "https://accounts-test.example.com/"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
 
         assertEquals(AegisVerifyUrlResolver.Result.Reason.OK, r.reason);
-        assertEquals("https://accounts-test.imocto.cn/profile/info?anchor=verification", r.url);
+        assertEquals("https://accounts-test.example.com/profile/info?anchor=verification", r.url);
     }
 
     @Test
     public void multipleTrailingSlashes_allStripped() {
-        WKAPPConfig config = configWithProviders(provider("xming", "https://accounts.example.com///"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "https://accounts.example.com///"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
 
@@ -99,12 +115,12 @@ public class AegisVerifyUrlResolverTest {
     public void firstProviderInvalid_fallsBackToSecondValidProvider() {
         WKAPPConfig config = configWithProviders(
                 provider("broken", "http://insecure.example"),     // http: 会被拒
-                provider("xming", "https://accounts-test.imocto.cn"));
+                provider("testprovider", "https://accounts-test.example.com"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
 
         assertEquals(AegisVerifyUrlResolver.Result.Reason.OK, r.reason);
-        assertEquals("https://accounts-test.imocto.cn/profile/info?anchor=verification", r.url);
+        assertEquals("https://accounts-test.example.com/profile/info?anchor=verification", r.url);
     }
 
     // ---- no_account_url 分支 ----
@@ -137,7 +153,7 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void providerWithNullAccountUrl_returnsNoAccountUrl() {
-        WKAPPConfig config = configWithProviders(provider("xming", null));
+        WKAPPConfig config = configWithProviders(provider("testprovider", null));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);
@@ -145,7 +161,7 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void providerWithEmptyAccountUrl_returnsNoAccountUrl() {
-        WKAPPConfig config = configWithProviders(provider("xming", ""));
+        WKAPPConfig config = configWithProviders(provider("testprovider", ""));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);
@@ -156,7 +172,7 @@ public class AegisVerifyUrlResolverTest {
     @Test
     public void httpAccountUrl_returnsNoAccountUrl_httpsOnly() {
         // Aegis 涉及密码 / OIDC token, 客户端必须 TLS。
-        WKAPPConfig config = configWithProviders(provider("xming", "http://accounts-test.imocto.cn"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "http://accounts-test.example.com"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);
@@ -164,7 +180,7 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void javascriptProtocolAccountUrl_returnsNoAccountUrl_noScriptInjection() {
-        WKAPPConfig config = configWithProviders(provider("xming", "javascript:alert(1)"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "javascript:alert(1)"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);
@@ -172,7 +188,7 @@ public class AegisVerifyUrlResolverTest {
 
     @Test
     public void httpsWithoutHost_returnsNoAccountUrl() {
-        WKAPPConfig config = configWithProviders(provider("xming", "https://"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "https://"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);
@@ -181,7 +197,7 @@ public class AegisVerifyUrlResolverTest {
     @Test
     public void onlySlashes_returnsNoAccountUrl() {
         // 全是斜杠的 accountUrl → 剥完以后是空串 → NO_ACCOUNT_URL
-        WKAPPConfig config = configWithProviders(provider("xming", "/////"));
+        WKAPPConfig config = configWithProviders(provider("testprovider", "/////"));
 
         AegisVerifyUrlResolver.Result r = AegisVerifyUrlResolver.resolve(config);
         assertEquals(AegisVerifyUrlResolver.Result.Reason.NO_ACCOUNT_URL, r.reason);

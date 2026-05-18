@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import android.app.Activity;
@@ -16,8 +32,8 @@ import com.google.android.material.snackbar.Snackbar;
 /**
  * 跨 Space 加群成功 — Snackbar 风格 Toast + 紫色「切换到 XX 查看」按钮。
  *
- * <p>YUJ-200 Path B / YUJ-212（对齐 dmwork-web PR#1102 · YUJ-170）：
- * 将原 YUJ-140 两行 Dialog 改为 Toast（Snackbar）+ 单 action 按钮，三端 UX 对齐。
+ * <p> Path B / （对齐 #1102 · ）：
+ * 将原  两行 Dialog 改为 Toast（Snackbar）+ 单 action 按钮，三端 UX 对齐。
  * 文案来自统一 i18n key {@code group_join_cross_space_notice}（正文）和
  * {@code group_join_cross_space_action}（按钮）。同 Space 场景仍走系统 Toast。
  */
@@ -104,7 +120,7 @@ public final class JoinSuccessDialog {
             }
             snackbar.dismiss();
         });
-        // 紫色按钮（对齐 web「切换过去 →」风格 / 原 YUJ-140 Dialog 紫色切换按钮）
+        // 紫色按钮（对齐 web「切换过去 →」风格 / 原  Dialog 紫色切换按钮）
         try {
             snackbar.setActionTextColor(
                     androidx.core.content.ContextCompat.getColor(context,

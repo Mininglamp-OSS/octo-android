@@ -37,7 +37,7 @@
     <color name="layoutColorSelected">#DAD9D9</color>
     <color name="homeColor">#f6f6f6</color>
     <color name="homeColorSelected">#E7E7E7</color>
-    <!-- YUJ-267 · 折叠屏分屏态选中背景（colorAccent 14% / 24% alpha）。 -->
+    <!--  · 折叠屏分屏态选中背景（colorAccent 14% / 24% alpha）。 -->
     <color name="chat_conv_selected_bg">#247761F4</color>
     <color name="chat_conv_selected_bg_pressed">#4D7761F4</color>
     <color name="colorDark">#313131</color>
@@ -53,7 +53,7 @@
     <color name="code_block_bg">#0D000000</color>
     <color name="code_text_color">#333333</color>
     <color name="blockquote_color">#CCCCCC</color>
-    <!-- 跨 Space 加群 Toast「切换过去」按钮紫色（对齐 EP5 三端 dmwork-web PR#1068） -->
+    <!-- 跨 Space 加群 Toast「切换过去」按钮紫色（对齐 EP5 三端 #1068） -->
     <color name="join_success_switch_purple">#722ED1</color>
     <array name="name_colors">
         <item>#8C8DFF</item>

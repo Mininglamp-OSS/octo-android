@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.utils;
 
 import static android.view.View.GONE;
@@ -224,7 +240,7 @@ public class WKDialogUtils {
         });
         qrCodeCell.setVisibility(GONE);
         if (!TextUtils.isEmpty(path)) {
-            // YUJ-283 P-11: AppExecutors.io() 取代 new Thread()，Glide 解码属 I/O
+            //  P-11: AppExecutors.io() 取代 new Thread()，Glide 解码属 I/O
             AppExecutors.io().execute(() -> Glide.with(context)
                     .asBitmap()
                     .load(path)
@@ -410,7 +426,7 @@ public class WKDialogUtils {
         }
         window.setAttributes(param);
 
-        // YUJ-279 · 折叠屏 phone→unfold 右侧自适应修复：
+        //  · 折叠屏 phone→unfold 右侧自适应修复：
         // 历史写法只在 show 时一次性读 PaneMetrics（show-at-use），已经在显的
         // 升级 Dialog 不会跟随 pane 变化。注册一个 ComponentCallbacks 让 dialog
         // 在 configuration change（unfold/fold/rotate）时重新按当前 pane 宽度
@@ -464,7 +480,7 @@ public class WKDialogUtils {
 
         alertDialog.setOnDismissListener(d -> {
             handler.removeCallbacks(progressPoller[0]);
-            // YUJ-279 · 解注册 ComponentCallbacks 防止 leak
+            //  · 解注册 ComponentCallbacks 防止 leak
             try {
                 context.unregisterComponentCallbacks(cfgListener);
             } catch (Throwable ignored) {
@@ -539,11 +555,11 @@ public class WKDialogUtils {
 
     @SuppressLint("ClickableViewAccessibility")
     public void setViewLongClickPopup(View view, List<PopupMenuItem> list) {
-        // YUJ-261 · 改用 GestureDetector 识别长按，OnTouchListener 返回 false 让 click 链路
+        //  · 改用 GestureDetector 识别长按，OnTouchListener 返回 false 让 click 链路
         // 继续传递。之前同一 view 同时挂 OnTouchListener + OnLongClickListener，view 在
         // RecyclerView 刷新时重建会出现竞争，导致「长按被识别为点击被吞掉」或「点击落到 CANCEL」。
         //
-        // YUJ-264 · Fix 5 加固：因为没有 setOnLongClickListener，框架的 long-click machinery
+        //  · Fix 5 加固：因为没有 setOnLongClickListener，框架的 long-click machinery
         // 不会 set mHasPerformedLongPress=true，ACTION_UP 仍会触发 performClick()。结果是
         // 长按 500ms 弹 popup + 用户松手同时跑 OnClickListener（同时进入会话 + 弹出菜单）。
         // 这里用 longPressFired 标记在长按触发后消费 ACTION_UP，阻止 performClick。
@@ -567,7 +583,7 @@ public class WKDialogUtils {
                 });
         view.setOnTouchListener((v, event) -> {
             detector.onTouchEvent(event);
-            // YUJ-264: consume ACTION_UP after a long-press so the framework
+            // : consume ACTION_UP after a long-press so the framework
             // does NOT also fire performClick() on release. Without this,
             // long-press → popup AND click → open chat both happen.
             int action = event.getActionMasked();

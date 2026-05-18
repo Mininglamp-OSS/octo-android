@@ -31,7 +31,7 @@ dependencies {
     implementation 'com.github.jenly1314:zxing-lite:3.2.0'
    // implementation 'com.github.jenly1314:zxing-lite:2.1.1'
 
-    // YUJ-372 Phase 2 · 本模块新增 host-side 单测（ScanJoinGroupNeedSpaceTest）
+    //  Phase 2 · 本模块新增 host-side 单测（ScanJoinGroupNeedSpaceTest）
     // 需要显式挂载 junit + org.json（wkbase 的 testImplementation 不会传递到
     // 依赖方 module，每个 module 要单独声明）。
     testImplementation 'junit:junit:4.13.2'

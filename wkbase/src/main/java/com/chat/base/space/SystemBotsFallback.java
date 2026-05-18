@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import android.text.TextUtils;
@@ -22,9 +38,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 系统 Bot（botfather / u_10000 / fileHelper 等）本地兜底（YUJ-217 · Fix C · 对齐 iOS YUJ-215 思路；
- * YUJ-219 · A3 扩展为读取 appconfig {@code system_bot_uids} 动态白名单；
- * YUJ-219 · B 作为 Android 侧 SystemBot 集合的唯一入口）。
+ * 系统 Bot（botfather / u_10000 / fileHelper 等）本地兜底（ · Fix C · 对齐 iOS  思路；
+ *  · A3 扩展为读取 appconfig {@code system_bot_uids} 动态白名单；
+ *  · B 作为 Android 侧 SystemBot 集合的唯一入口）。
  *
  * <p>背景：系统 Bot 是跨 Space 共享的 PERSONAL 频道，后端 sync 可能在某些 Space 下不返回其
  * conversation entry（时序 / 索引问题），导致在该 Space 下对应 Bot 完全不显示。同时消息级
@@ -45,7 +61,7 @@ import java.util.Set;
  *     <li>一旦后端下发真实 entry，{@link WKUIConversationMsg#channelID} 匹配即合并（调用方职责）</li>
  * </ul>
  *
- * <p><b>YUJ-219-B · 系统 Bot 集合三端对齐</b>：
+ * <p><b>-B · 系统 Bot 集合三端对齐</b>：
  * 本类是 Android 侧 SystemBot 集合的<b>唯一入口</b>（{@link #getSystemBotIds()} /
  * {@link #isSystemBot(String)}）。运行时从 {@link WKAPPConfig#system_bot_uids} 读取后端下发；
  * 冷启动 appconfig 未到时走 {@link #FALLBACK_SYSTEM_BOT_IDS} 兜底。
@@ -73,7 +89,7 @@ public final class SystemBotsFallback {
                     WKSystemAccount.system_file_helper)));
 
     /**
-     * 兼容别名：保留 YUJ-219-B 初版使用的 {@code DEFAULT_SYSTEM_BOT_IDS} 命名，等价于
+     * 兼容别名：保留 -B 初版使用的 {@code DEFAULT_SYSTEM_BOT_IDS} 命名，等价于
      * {@link #FALLBACK_SYSTEM_BOT_IDS}。新代码请使用 {@link #FALLBACK_SYSTEM_BOT_IDS}。
      */
     public static final Set<String> DEFAULT_SYSTEM_BOT_IDS = FALLBACK_SYSTEM_BOT_IDS;

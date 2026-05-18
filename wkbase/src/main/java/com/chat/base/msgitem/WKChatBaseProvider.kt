@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.msgitem
 
 import android.animation.Animator
@@ -89,8 +105,8 @@ import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.message.type.WKSendMsgResult
 import com.xinbida.wukongim.msgmodel.WKVoiceContent
-import org.telegram.ui.Components.RLottieDrawable
-import org.telegram.ui.Components.RLottieImageView
+import com.octoim.rlottie.RLottieDrawable
+import com.octoim.rlottie.RLottieImageView
 import java.util.Objects
 import kotlin.math.abs
 import kotlin.math.max
@@ -627,12 +643,12 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         from: WKChatIteMsgFromType, receivedNameTv: TextView
     ) {
-        // YUJ-380 · 实名徽章 Phase A：作者名行容器 + 迷你蓝勾。
+        //  · 实名徽章 Phase A：作者名行容器 + 迷你蓝勾。
         // row 容器在 chat_item_base_layout.xml 中包裹 receivedNameTv + realnameBadgeIv，
         // 仅当 parent.id == R.id.receivedNameRow 时才把整个 row 作为 visibility target，
         // 旧布局 / 非 row 容器（e.g. WKTypingProvider 的 chat_typing_layout.xml:24，
         // receivedTextNameTv.parent 是 BubbleLayout contentLayout，把它 GONE
-        // 会让整个 typing 指示器消失）直接退化到切 TextView 本身 —— YUJ-395 P0-1。
+        // 会让整个 typing 指示器消失）直接退化到切 TextView 本身 ——  P0-1。
         val parentView = receivedNameTv.parent as? View
         val nameRow = parentView?.takeIf { it.id == R.id.receivedNameRow }
         val realnameBadgeIv = nameRow?.findViewById<View>(R.id.realnameBadgeIv)
@@ -718,8 +734,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
             } else {
                 nameVisibilityTarget.visibility = GONE
             }
-            // YUJ-380 · 实名徽章可见性：只在群聊 RECEIVED 且名字行可见时再决定。
-            // tri-state 优先级（YUJ-395 P0-2）：
+            //  · 实名徽章可见性：只在群聊 RECEIVED 且名字行可见时再决定。
+            // tri-state 优先级（ P0-2）：
             //   1. memberOfFrom.extraMap 有显式 true/false → 直接用，不 fallback
             //      （修 memberOfFrom=false 被 from=stale-true 覆盖导致「已取消实名」
             //       用户错打勾的 bug）；
@@ -742,7 +758,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     /**
-     * YUJ-89 + YUJ-189: resolve the viewer-relative "@SpaceName" suffix for a
+     *  + : resolve the viewer-relative "@SpaceName" suffix for a
      * message bubble nickname. Returns null when the message is not external
      * for the current viewer, or when required fields are missing (bubble
      * renders nickname only).
@@ -752,10 +768,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
      *   <li>[ExternalSourceResolver] on the message itself
      *       (msg.localExtraMap home_space_id / is_external / source_space_name
      *       → channel.remoteExtraMap fallback).</li>
-     *   <li>YUJ-189 new fallback: the sender's cached [WKChannelMember] in
+     *   <li> new fallback: the sender's cached [WKChannelMember] in
      *       this group — {@code extraMap} carries home_space_id / is_external /
-     *       source_space_name after YUJ-87 / YUJ-178 data-layer pass-through.
-     *       This plugs the gap when messages synced before YUJ-89 have empty
+     *       source_space_name after  /  data-layer pass-through.
+     *       This plugs the gap when messages synced before  have empty
      *       msg-level external fields but the member cache has them (or vice
      *       versa after a stale incremental sync).</li>
      * </ol>
@@ -774,7 +790,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
     }
 
     /**
-     * YUJ-189 · fallback data source: look up the sender's cached
+     *  · fallback data source: look up the sender's cached
      * [WKChannelMember] in the same group and feed its extras through the
      * viewer-relative resolver. Scoped to group chats (matches
      * [ExternalSourceResolver]'s guard), null-safe and try/catch-wrapped
@@ -1782,7 +1798,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         fromType: WKChatIteMsgFromType,
         msgItemEntity: WKUIChatMsgItemEntity
     ): Int {
-        // YUJ-279 · phone→unfold 右侧消息宽度不自适应修复：
+        //  · phone→unfold 右侧消息宽度不自适应修复：
         // 旧实现读 AndroidUtilities.getScreenWidth()（device displayMetrics.widthPixels），
         // 在 Activity Embedding 下返回整机宽度（两栏总和）而非 ChatActivity 所在 pane 的
         // 可见宽度。phone 启动时 pane = 整机（窄）；unfold 后 pane 变成 secondary（约 480dp），

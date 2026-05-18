@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import static org.junit.Assert.assertEquals;
@@ -8,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
- * YUJ-200 Path B · Round-2 (Jerry-Xin review) · host-side 单元测试。
+ *  Path B · Round-2 (review) · host-side 单元测试。
  *
  * <p>锁定：后端显式返回 {@code space_id=""}（「这是公共群」语义）+ pre-scan QR
  * 带旧 {@code targetSpaceId} 非空的分支 → 必须被视为公共群、不触发跨 Space Toast。
@@ -89,7 +105,7 @@ public class ScanJoinEffectiveResolverTest {
     // ------------------------------------------------------------------
 
     /**
-     * 回归分支（Jerry-Xin review 指出的 blocker 场景）：
+     * 回归分支（review 指出的 blocker 场景）：
      * 群原本位于 space_B，QR 是在那个时点生成的（pre-scan 携带 targetSpaceId="space_B"）。
      * 随后群被移至公共 → 后端 scanjoin 响应 space_id="" 表示「这是公共群」。
      * viewer 当前站在 space_A。round-2 前：fallback 到 pre-scan 的 "space_B"

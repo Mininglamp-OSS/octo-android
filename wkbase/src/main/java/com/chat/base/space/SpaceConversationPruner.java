@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import androidx.annotation.NonNull;
@@ -13,7 +29,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 外部群 · Space 隔离过滤兜底清扫（YUJ-217 · 对齐 iOS YUJ-215 PR#95 Defense-in-Depth）。
+ * 外部群 · Space 隔离过滤兜底清扫（ · 对齐 iOS  PR#95 Defense-in-Depth）。
  *
  * <p>对齐 iOS {@code pruneNonCurrentSpaceGroups}：在 Space 切换 / 连接后 sync / DB 回放等
  * 状态变化点做一次全量扫描，把不属于当前 Space 的群会话从 in-memory list 和白名单里剔掉。
@@ -101,18 +117,17 @@ public final class SpaceConversationPruner {
                                      @NonNull SpaceFilter.ChannelInfoProvider provider) {
         if (whitelistKeys == null || whitelistKeys.isEmpty()) return 0;
         if (currentSpaceId == null || currentSpaceId.isEmpty()) return 0;
-        int removed = 0;
-        java.util.Iterator<String> it = whitelistKeys.iterator();
-        while (it.hasNext()) {
-            String key = it.next();
+        java.util.List<String> toRemove = new java.util.ArrayList<>();
+        java.util.List<String> snapshot = new java.util.ArrayList<>(whitelistKeys);
+        for (String key : snapshot) {
             ParsedKey p = parseKey(key);
             if (p == null) continue;
             if (shouldPrune(p.channelID, p.channelType, currentSpaceId, provider)) {
-                it.remove();
-                removed++;
+                toRemove.add(key);
             }
         }
-        return removed;
+        whitelistKeys.removeAll(toRemove);
+        return toRemove.size();
     }
 
     /** 解析 {@code channelID_channelType} 格式的白名单 key，格式不合法返回 null。 */

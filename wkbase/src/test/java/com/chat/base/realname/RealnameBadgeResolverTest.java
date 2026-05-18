@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.realname;
 
 import com.xinbida.wukongim.entity.WKChannel;
@@ -14,7 +30,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * YUJ-380 (dmwork-web#1169 Phase A / iOS YUJ-381) · 聊天气泡 + 群成员列表
+ *  ( Phase A / iOS ) · 聊天气泡 + 群成员列表
  * 实名徽章可见性逻辑单元测试。
  *
  * <p>锁死的验收矩阵（来自 issue 「UI 规范」+ 「单测」段）：
@@ -26,7 +42,7 @@ import static org.junit.Assert.assertTrue;
  * 同时覆盖后端可能下发的等价 true 表示 (Boolean true / int 1 / "true" /
  * "1")，保证 JSON 解析漂移不会让徽章悄悄消失。
  *
- * <p>YUJ-395 P0-2 追加：tri-state API 必须区分「显式 false」与「缺失 key」，
+ * <p> P0-2 追加：tri-state API 必须区分「显式 false」与「缺失 key」，
  * 让聊天气泡侧的 member → channel fallback 链只在 member 确实缺失 key 时才
  * 回落，修复 stale channel=true 覆盖 fresh member=false 的 bug。
  */
@@ -170,7 +186,7 @@ public class RealnameBadgeResolverTest {
         assertFalse(RealnameBadgeResolver.isVerified(c));
     }
 
-    // ---------- tri-state API (YUJ-395 P0-2) ----------
+    // ---------- tri-state API ( P0-2) ----------
 
     @Test
     public void triState_explicitTrue_returnsBoxedTrue() {

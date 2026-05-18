@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.login.ui;
 
 import android.app.Activity;
@@ -262,8 +278,8 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             return;
         }
         OidcProviderConfig provider = config.oidc_providers.get(0);
-        // YUJ-420 R2 fix (Jerry R1 Warning / YUJ-212 教训): 区分 null vs "".
-        // R5 fix (Jerry R2 Critical 1): 同时校验 authorize_path 是 https:// 或相对路径,
+        //  R2 fix (review/  教训): 区分 null vs "".
+        // R5 fix (review): 同时校验 authorize_path 是 https:// 或相对路径,
         // 拒绝 http:// 添加到按钮可点状态. 避免点击后 buildAuthorizeUrl 抛异常 crash.
         boolean unusable = provider.name == null || provider.name.isEmpty()
                 || provider.authorize_path == null || provider.authorize_path.isEmpty()
@@ -286,7 +302,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
                 showToast(getString(R.string.str_network_error));
                 return;
             }
-            // YUJ-420 R5 fix (Jerry R2 Critical 1): buildAuthorizeUrl 遇非 HTTPS 会抛 IllegalArgumentException,
+            //  R5 fix (review): buildAuthorizeUrl 遇非 HTTPS 会抛 IllegalArgumentException,
             // 此处 try/catch 并 graceful degrade, 不要 crash 用户 UI。
             // 配合 refreshOidcProvider 的 http:// 预检 (按钮隐藏), 双重防御。
             String url;

@@ -2,6 +2,12 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-parcelize'
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
@@ -10,6 +16,11 @@ android {
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
+
+        buildConfigField "String", "PRESET_SERVER_1", "\"${localProperties.getProperty('PROD_API_BASE_URL', 'https://api.example.com')}\""
+        buildConfigField "String", "PRESET_SERVER_2", "\"${localProperties.getProperty('DEV_API_BASE_URL', 'https://api.example.com')}\""
+        buildConfigField "String", "APP_IDENTIFIER", "\"${localProperties.getProperty('APP_IDENTIFIER', 'octoim')}\""
+        buildConfigField "String", "BUGLY_APP_ID", "\"${localProperties.getProperty('BUGLY_APP_ID', '')}\""
     }
     packagingOptions {
         resources {
@@ -41,7 +52,7 @@ android {
     namespace 'com.chat.base'
 
     testOptions {
-        // YUJ-89: stub unresolved Android framework calls (e.g. TextUtils) to
+        // : stub unresolved Android framework calls (e.g. TextUtils) to
         // default values so the external-source field-passthrough unit tests
         // can run under plain JVM without Robolectric.
         unitTests.returnDefaultValues = true
@@ -55,10 +66,10 @@ repositories {
 dependencies {
     api fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
     implementation 'androidx.appcompat:appcompat:1.7.0'
-    // YUJ-361 (#227): Chrome Custom Tabs — OCTO 实名认证流程在系统浏览器
+    //  (#227): Chrome Custom Tabs — OCTO 实名认证流程在系统浏览器
     // 容器中打开 verify_url（return_to=dmwork://verified 回落 App）。
     api 'androidx.browser:browser:1.8.0'
-    // YUJ-248 / GH #176: Activity Embedding (L3-A) — foldable/tablet dual-pane.
+    //  / GH #176: Activity Embedding (L3-A) — foldable/tablet dual-pane.
     // Declared at wkbase (widest visibility) so wkuikit + app can both see the
     // SplitInitializer registered via androidx.startup.
     api 'androidx.window:window:1.5.1'
@@ -132,10 +143,10 @@ dependencies {
     }
     annotationProcessor 'io.noties:prism4j-bundler:2.0.0'
 
-    // Unit tests (YUJ-86 EP1 channel extras key 契约锁 + YUJ-87 EP2 viewer-relative resolver
-    // + YUJ-88 EP3 SpaceFilter 单元测试 + YUJ-89 external-source field-passthrough coverage
-    // + YUJ-140 JoinSuccessHelper JSON round-trip tests)
+    // Unit tests ( EP1 channel extras key 契约锁 +  EP2 viewer-relative resolver
+    // +  EP3 SpaceFilter 单元测试 +  external-source field-passthrough coverage
+    // +  JoinSuccessHelper JSON round-trip tests)
     testImplementation 'junit:junit:4.13.2'
-    // YUJ-140: 提供真实 org.json 实现，避免 Android stub 对 host-side JSON 测试返回默认值
+    // : 提供真实 org.json 实现，避免 Android stub 对 host-side JSON 测试返回默认值
     testImplementation 'org.json:json:20231013'
 }

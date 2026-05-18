@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group;
 
 import android.text.SpannableStringBuilder;
@@ -29,7 +45,7 @@ import java.util.Map;
 
 public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, BaseViewHolder> {
     /**
-     * 外部 Space 后缀灰紫色 (YUJ-134 / 对齐 Web createMentionSuggestion 视觉规范 &
+     * 外部 Space 后缀灰紫色 ( / 对齐 Web createMentionSuggestion 视觉规范 &
      * WKChatBaseProvider.appendExternalSpaceSuffix 的气泡染色值)。
      */
     private static final int EXTERNAL_SPACE_SUFFIX_COLOR = 0xFF8B5CF6;
@@ -59,7 +75,7 @@ public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, Bas
             if (TextUtils.isEmpty(showName)) {
                 showName = TextUtils.isEmpty(groupMemberEntity.member.memberRemark) ? groupMemberEntity.member.memberName : groupMemberEntity.member.memberRemark;
             }
-            // YUJ-134: 计算外部成员 @SpaceName 后缀（跨 Space 才显示），
+            // : 计算外部成员 @SpaceName 后缀（跨 Space 才显示），
             // 与 Web `createMentionSuggestion` 的 resolveExternalForViewer 语义一致，
             // 避免用户在 @候选菜单里看不出对方是外部成员造成跨 Space 数据泄漏。
             String externalSpaceSuffix = resolveExternalSpaceName(groupMemberEntity.member,

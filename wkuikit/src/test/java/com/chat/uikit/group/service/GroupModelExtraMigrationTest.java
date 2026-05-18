@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.service;
 
 import static org.junit.Assert.assertFalse;
@@ -10,7 +26,7 @@ import org.junit.Test;
 import java.util.HashMap;
 
 /**
- * YUJ-183 · Fix B Step 1 · {@code GroupModel.isExtraMissingExternalFields} 判定矩阵。
+ *  · Fix B Step 1 · {@code GroupModel.isExtraMissingExternalFields} 判定矩阵。
  *
  * <p>根因：后端 membersync 是 version-based 增量接口，老用户本地 maxVersion 已经越过
  * 外部群字段首次下发的 version 点，之后如果没有 bump，客户端永远拉不到

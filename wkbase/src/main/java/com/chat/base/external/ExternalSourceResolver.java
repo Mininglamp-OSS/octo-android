@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.external;
 
 import com.chat.base.entity.WKChannelCustomerExtras;
@@ -12,10 +28,10 @@ import java.util.Map;
  * Resolves the viewer-relative "source Space" label to show after a sender nickname
  * in external-group message bubbles and in mergeforward user lists.
  *
- * <p>Priority chain (per YUJ-89 spec — aligned with web PR #981/#982/#997/#1013):
+ * <p>Priority chain (per  spec — aligned with web PR #981/#982/#997/#1013):
  * <ol>
  *   <li>msg-level {@code home_space_id} + {@code home_space_name}
- *       (YUJ-63 viewer-relative — only show when sender's home Space ≠ viewer's
+ *       ( viewer-relative — only show when sender's home Space ≠ viewer's
  *       current Space).</li>
  *   <li>msg-level {@code is_external} + {@code source_space_name}
  *       (absolute flag from backend).</li>
@@ -59,7 +75,7 @@ public final class ExternalSourceResolver {
             return null;
         }
 
-        // Priority 1: viewer-relative msg-level home_space_id/name (YUJ-63)
+        // Priority 1: viewer-relative msg-level home_space_id/name ()
         String homeSpaceId = getExtraString(msg.localExtraMap, ExternalMsgExtras.HOME_SPACE_ID);
         String homeSpaceName = getExtraString(msg.localExtraMap, ExternalMsgExtras.HOME_SPACE_NAME);
         if (!isNullOrEmpty(homeSpaceId)) {
@@ -138,7 +154,7 @@ public final class ExternalSourceResolver {
     }
 
     /**
-     * Reply-preview variant (YUJ-132 · aligned with web PR #1073 / iOS).
+     * Reply-preview variant ( · aligned with web PR #1073 / iOS).
      *
      * <p>The reply object (carried inside a message's payload) packs the replied-to
      * sender's home/source Space directly on the JSON object, not on a {@code WKMsg}.

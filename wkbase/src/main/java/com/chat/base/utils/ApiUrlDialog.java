@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.utils;
 
 import android.app.Activity;
@@ -21,6 +37,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
+import com.chat.base.BuildConfig;
 import com.chat.base.R;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKSharedPreferencesUtil;
@@ -38,10 +55,14 @@ public class ApiUrlDialog extends Dialog {
 
     private static final String DEFAULT_URL = "https://api.example.com";
 
+    private static String displayLabel(String url) {
+        if (url == null || url.isEmpty()) return "api.example.com";
+        return url.replaceFirst("^https?://", "").replaceFirst("/+$", "");
+    }
+
     private static final String[][] PRESET_SERVERS = {
-            {"国内正式版", "api.example.com"},
-            {"国内测试版", "api-test.example.com"},
-            {"国际版", "api-test.example.com"},
+            {"Server 1", BuildConfig.PRESET_SERVER_1, displayLabel(BuildConfig.PRESET_SERVER_1)},
+            {"Server 2", BuildConfig.PRESET_SERVER_2, displayLabel(BuildConfig.PRESET_SERVER_2)},
     };
 
     public interface OnConfirmListener {
@@ -108,8 +129,7 @@ public class ApiUrlDialog extends Dialog {
             // 检查是否匹配预设
             boolean matchedPreset = false;
             for (int i = 0; i < PRESET_SERVERS.length; i++) {
-                String presetFullUrl = "https://" + PRESET_SERVERS[i][1] + "/api";
-                if (savedUrl.equals(presetFullUrl)) {
+                if (savedUrl.equals(PRESET_SERVERS[i][1])) {
                     selectPreset(i);
                     matchedPreset = true;
                     break;
@@ -134,11 +154,9 @@ public class ApiUrlDialog extends Dialog {
             public void afterTextChanged(Editable s) {
                 errorTv.setVisibility(View.GONE);
                 if (s.length() > 0 && selectedPresetIndex != -1) {
-                    // 用户手动输入，检查是否仍匹配当前选中预设
                     String inputUrl = s.toString().trim();
-                    String presetDomain = PRESET_SERVERS[selectedPresetIndex][1];
-                    if (!inputUrl.equals(presetDomain) && !inputUrl.equals("https://" + presetDomain)
-                            && !inputUrl.equals("https://" + presetDomain + "/api")) {
+                    String presetUrl = PRESET_SERVERS[selectedPresetIndex][1];
+                    if (!inputUrl.equals(presetUrl)) {
                         clearPresetSelection();
                     }
                 }
@@ -159,7 +177,7 @@ public class ApiUrlDialog extends Dialog {
                 url = "https://" + url;
             }
             if (url.endsWith("/")) url = url.substring(0, url.length() - 1);
-            if (!url.endsWith("/api")) {
+            if (!url.contains("/api")) {
                 url = url + "/api";
             }
 
@@ -175,7 +193,7 @@ public class ApiUrlDialog extends Dialog {
                     confirmBtn.setEnabled(true);
                     confirmBtn.setText(R.string.api_url_dialog_confirm);
                     if (reachable) {
-                        // YUJ-310 · 必须用同步 commit 落盘：onConfirm 回调会立刻
+                        //  · 必须用同步 commit 落盘：onConfirm 回调会立刻
                         // 触发 restartApp() → Runtime.exit(0)，apply() 的异步
                         // QueuedWork 还没 flush 进程就被杀，冷启动读回旧值
                         // （用户切换到正式服后重启仍看到测试服）。
@@ -201,7 +219,7 @@ public class ApiUrlDialog extends Dialog {
 
         for (int i = 0; i < PRESET_SERVERS.length; i++) {
             String label = PRESET_SERVERS[i][0];
-            String domain = PRESET_SERVERS[i][1];
+            String displayUrl = PRESET_SERVERS[i][2];
 
             LinearLayout itemLayout = new LinearLayout(getContext());
             itemLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -227,7 +245,7 @@ public class ApiUrlDialog extends Dialog {
 
             // 域名
             TextView domainTv = new TextView(getContext());
-            domainTv.setText(domain);
+            domainTv.setText(displayUrl);
             domainTv.setTextSize(13);
             domainTv.setTextColor(0xFF6B7280);
             domainTv.setLayoutParams(new LinearLayout.LayoutParams(

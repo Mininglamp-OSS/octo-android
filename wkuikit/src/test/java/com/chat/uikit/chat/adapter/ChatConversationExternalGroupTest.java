@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat.adapter;
 
 import static org.junit.Assert.assertFalse;
@@ -11,9 +27,9 @@ import org.junit.Test;
 import java.util.HashMap;
 
 /**
- * YUJ-90 · EP5 会话列表外部群 Tag —— 字段透传兜底测试。
+ *  · EP5 会话列表外部群 Tag —— 字段透传兜底测试。
  *
- * 目的：防止 web YUJ-53 同类 P0（model 层未透传 is_external_group
+ * 目的：防止 web  同类 P0（model 层未透传 is_external_group
  * 导致 UI 静默失败 / count=0）在 Android 复现。
  *
  * 仅覆盖 {@link ChatConversationAdapter#isExternalGroup(WKChannel)} 纯判定逻辑。

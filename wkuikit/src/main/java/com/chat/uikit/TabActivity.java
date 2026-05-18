@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit;
 
 import android.Manifest;
@@ -16,6 +32,8 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+
+import android.os.Bundle;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
@@ -48,7 +66,7 @@ import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
 import com.chat.uikit.user.service.UserModel;
 
-import org.telegram.ui.Components.RLottieImageView;
+import com.octoim.rlottie.RLottieImageView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,9 +85,26 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     private TextView chatTV, contactsTV, meTV;
     private long lastClickChatTabTime = 0L;
     private final boolean isShowTabText = true;
-    // YUJ-287: 记录当前选中 tab，避免 playAnimation 重复 setImageResource / tint。
+    // : 记录当前选中 tab，避免 playAnimation 重复 setImageResource / tint。
     // 初始 -1 保证首帧 playAnimation(0) 必定执行一次着色。
     private int currentTabIndex = -1;
+    private static final String KEY_TAB_INDEX = "current_tab_index";
+    private int pendingRestoreTab = -1;
+
+    @Override
+    protected void initData(Bundle savedInstanceState) {
+        if (savedInstanceState != null) {
+            pendingRestoreTab = savedInstanceState.getInt(KEY_TAB_INDEX, -1);
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (wkVBinding != null && wkVBinding.vp != null) {
+            outState.putInt(KEY_TAB_INDEX, wkVBinding.vp.getCurrentItem());
+        }
+    }
 
     @Override
     protected ActTabMainBinding getViewBinding() {
@@ -93,7 +128,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         chatIV = new RLottieImageView(this);
         contactsIV = new RLottieImageView(this);
         meIV = new RLottieImageView(this);
-        // YUJ-287: drawable 只在 ViewHolder 初始化时 setImageResource 一次；
+        // : drawable 只在 ViewHolder 初始化时 setImageResource 一次；
         // 后续切 tab 只通过 tintTab 改 ColorFilter，避免 RLottieImageView
         // 每次 setImageResource 都重新解析 drawable + invalidate。
         chatIV.setImageResource(R.drawable.ic_tab_message);
@@ -173,7 +208,17 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         contactsCounterView.setVisibility(View.GONE);
 //        workplaceCounterView.setVisibility(View.GONE);
         msgCounterView.setVisibility(View.GONE);
-        playAnimation(0);
+        int restoreTab = pendingRestoreTab > 0 ? pendingRestoreTab : 0;
+        pendingRestoreTab = -1;
+        if (restoreTab != 0) {
+            wkVBinding.vp.setCurrentItem(restoreTab, false);
+            if (restoreTab == 1) {
+                wkVBinding.bottomNavigation.setSelectedItemId(R.id.i_contacts);
+            } else if (restoreTab == 2) {
+                wkVBinding.bottomNavigation.setSelectedItemId(R.id.i_my);
+            }
+        }
+        playAnimation(restoreTab);
 
         // 非关键工作延迟到第一帧渲染后执行，不阻塞启动
         wkVBinding.getRoot().post(() -> {
@@ -229,7 +274,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         });
         wkVBinding.bottomNavigation.setItemIconTintList(null);
         wkVBinding.bottomNavigation.setOnItemSelectedListener(item -> {
-            // YUJ-287: 只在真正需要切页时调 setCurrentItem；
+            // : 只在真正需要切页时调 setCurrentItem；
             // 切页后 ViewPager2 的 onPageSelected 会回调 playAnimation，
             // 这里不再重复调用，避免一次 tab 点击触发两次 playAnimation。
             if (item.getItemId() == R.id.i_chat) {
@@ -322,7 +367,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     }
 
     /**
-     * YUJ-283 P-05: fontScale 一次性在 attachBaseContext 里通过 createConfigurationContext
+     * P-05: fontScale 一次性在 attachBaseContext 里通过 createConfigurationContext
      * 生效，避免每次 getResources() 都走一遍已 deprecated 的 updateConfiguration() 热路径。
      * getResources() 在 View inflate、theme 查询、getString()、ContextCompat.getColor() 等
      * 场景下被高频访问，原实现每次都会读 SP + 改 Configuration + updateConfiguration，
@@ -380,13 +425,13 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     }
 
     private void playAnimation(int index) {
-        // YUJ-287: i_chat 顶部双击滚动逻辑依赖 lastClickChatTabTime 在首次进入聊天 tab 时置 0；
+        // : i_chat 顶部双击滚动逻辑依赖 lastClickChatTabTime 在首次进入聊天 tab 时置 0；
         // 即便 tab 未变也需要走这一行，因此放在 early-return 之前。
         if (index == 0) {
             lastClickChatTabTime = 0;
         }
 
-        // YUJ-287: tab 未变时跳过重复 tint / setImageResource / setTextColor。
+        // : tab 未变时跳过重复 tint / setImageResource / setTextColor。
         // ViewPager2 onPageSelected 与 BottomNavigationView OnItemSelectedListener
         // 有时会对同一次切换双重回调，这里保证每次真正的切换只着色一次。
         if (currentTabIndex == index) {

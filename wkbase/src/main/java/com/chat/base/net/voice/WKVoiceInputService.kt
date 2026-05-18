@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.net.voice
 
 import android.os.Handler
@@ -49,7 +65,7 @@ class WKVoiceInputService private constructor() {
     private var voiceContextCachedAt: Long = 0
     private var voiceContextSpaceId: String? = null
     private var voiceContextInflight: Boolean = false
-    // YUJ-420 R8 fix (Jerry R6 Warning 4): request token 防同 Space 内旧 timeout
+    //  R8 fix (review): request token 防同 Space 内旧 timeout
     // 清掉 late 请求的 inflight 。每次 prefetch 给新请求 +1, onResponse/onFailure/
     // timeout 呼调时必须校验 token 是自己的.
     private var voiceContextRequestToken: Long = 0
@@ -102,14 +118,14 @@ class WKVoiceInputService private constructor() {
     }
 
     fun prefetchVoiceContext() {
-        // YUJ-420 R3 fix (lml2468 R1 Blocker): 原代码读 android.preference.PreferenceManager 的
+        //  R3 fix (review): 原代码读 android.preference.PreferenceManager 的
         // "currentSpaceId" 键, 但全库其它 Space 隔离代码走 WKSharedPreferencesUtil + SPWithUID
         // 的 "current_space_id" 键 (见 SpaceFilter.getCurrentSpaceId())。
         // 键名不匹配导致此处永远读不到 spaceId 早返回,
         // personal_context 预取路径活不起来。统一改为 SpaceFilter.getCurrentSpaceId()。
         val spaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
 
-        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9): Space 为空 / 切换 Space / logout
+        //  R6 fix (review/ review): Space 为空 / 切换 Space / logout
         // 时必须清旧缓存, 避免 getVoiceContext() 旧 Space 的 personal_context 泄漏给新 Space 的请求。
         if (spaceId.isNullOrEmpty()) {
             invalidateVoiceContextCache()
@@ -129,7 +145,7 @@ class WKVoiceInputService private constructor() {
 
         voiceContextInflight = true
         voiceContextSpaceId = spaceId
-        // YUJ-420 R8: 给本请求分配 token, 后续 timeout/onResponse/onFailure 通过校验 token 身份
+        //  R8: 给本请求分配 token, 后续 timeout/onResponse/onFailure 通过校验 token 身份
         val myToken = ++voiceContextRequestToken
 
         mainHandler.postDelayed({
@@ -186,10 +202,10 @@ class WKVoiceInputService private constructor() {
     }
 
     /**
-     * YUJ-420 R6: Space 切换 / logout 时清 voice context 缓存,
+     *  R6: Space 切换 / logout 时清 voice context 缓存,
      * 避免旧 Space personal_context 被新 Space 的转写请求误作为 personal_context 上传。
      *
-     * R8 fix (Jerry R6 Warning): 原实现直接 clear() pending callbacks, 调用方会永远卡在
+     * R8 fix (review): 原实现直接 clear() pending callbacks, 调用方会永远卡在
      * THINKING / TRANSCRIBING 状态。R8 改为先 flush null 通知调用方失败, 再清球 state。
      *
      * 可被 SpaceChangedBroadcaster 订阅方或 LoginModel.logout() 调用。
@@ -201,12 +217,12 @@ class WKVoiceInputService private constructor() {
         voiceContextInflight = false
         // R8: 递增 token 让正在 inflight 的请求的回包/timeout 都被无视
         voiceContextRequestToken++
-        // YUJ-420 R8 fix: flush null 给 pending callbacks, 否则 UI 可能卡在 THINKING。
+        //  R8 fix: flush null 给 pending callbacks, 否则 UI 可能卡在 THINKING。
         flushVoiceContextCallbacks(null)
     }
 
     fun getVoiceContext(completion: (String?) -> Unit) {
-        // YUJ-420 R6 fix (Jerry R3 Critical / lml2468 R2 Blocker 9):
+        //  R6 fix (review/ review):
         // 校验 (1) 缓存的 spaceId 必须等于当前 Space (2) 未过 TTL.
         // 任一不满足 → return null (避免跨 Space 数据泄漏), 并顺手 invalidate 隔离胏脈。
         val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()

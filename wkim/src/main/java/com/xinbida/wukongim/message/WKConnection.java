@@ -626,7 +626,7 @@ public class WKConnection {
                         }
                     });
                 } else {
-                    // YUJ-321 (fixing YUJ-318 ReviewBot P1-#3) · 这里是 PR#217 原 body
+                    //  (fixing  ReviewBot P1-#3) · 这里是 PR#217 原 body
                     // 宣称「5 条 sync 路径」里漏掉的第 5 条：连接成功 + READ 模式会在此触发
                     // conversation sync。走统一的 SyncGate，让 SpaceSyncCoordinator 能
                     // debounce 与 performSpaceSwitch / spaceResync 并发的冗余 sync。

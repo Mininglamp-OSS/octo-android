@@ -1,0 +1,3 @@
+[submodule "MyLibs/rlottie/src/main/jni/rlottie"]
+	path = MyLibs/rlottie/src/main/jni/rlottie
+	url = git@github.com:Samsung/rlottie.git

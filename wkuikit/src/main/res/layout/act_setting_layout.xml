@@ -30,9 +30,9 @@
                     android:background="@color/white"
                     android:orientation="vertical">
 
-                    <!-- YUJ-361 (#227) · OCTO 实名认证入口。
+                    <!--  (#227) · OCTO 实名认证入口。
                          未认证：「去认证」→ Custom Tabs 直跳 Aegis 账户页
-                           (YUJ-392 · Aegis OIDC v3 Phase 2b，不再走 dmworkim verify-token)。
+                           ( · Aegis OIDC v3 Phase 2b，不再走 verify-token)。
                          已认证：「已认证 · YYYY-MM」灰色文字，不可点。 -->
                     <LinearLayout
                         android:id="@+id/realnameLayout"

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.config;
 
 import android.annotation.SuppressLint;
@@ -15,21 +31,21 @@ import com.chat.base.utils.AppExecutors;
  * 2019-11-13 10:30
  * 临时缓存数据
  *
- * <p>YUJ-284 (P-01) — 所有 {@code putXxx} 写入路径从 {@link SharedPreferences.Editor#commit()}
+ * <p> (P-01) — 所有 {@code putXxx} 写入路径从 {@link SharedPreferences.Editor#commit()}
  * 迁至 {@link SharedPreferences.Editor#apply()}：{@code commit()} 同步写盘，叠加
  * {@link EncryptedSharedPreferences} 的 AES-GCM + KeyStore 每次写入 50-150ms，
  * 冷启动 / 前后台切换 / 退出聊天等热路径主线程多次命中。全仓无调用点消费
  * {@code commit()} 的返回值，改 {@code apply()} 零语义差异。
  *
- * <p>YUJ-284 冷启预热：首次访问 {@link EncryptedSharedPreferences} 需要同步
+ * <p> 冷启预热：首次访问 {@link EncryptedSharedPreferences} 需要同步
  * 完成 Android KeyStore AES256-GCM MasterKey 握手，耗时 50-150ms 且阻塞
  * 首个调用线程。{@link #prewarm()} 在 {@code WKBaseApplication.init} 早期
  * 投递到 {@link com.chat.base.utils.AppExecutors#io() AppExecutors.io()}
  * 强制构造单例并预读主线程冷启路径上的高频 Key，
  * 将 KeyStore 初始化与首批磁盘读取都搬出主线程。
  *
- * <p>YUJ-294 merge-time hotfix：原实现 {@code new Thread(...).start()} 与
- * YUJ-283 P-11 的 {@code scripts/check-no-new-thread.sh} guard 冲突，现统一到
+ * <p> merge-time hotfix：原实现 {@code new Thread(...).start()} 与
+ *  P-11 的 {@code scripts/check-no-new-thread.sh} guard 冲突，现统一到
  * {@code AppExecutors.io()} 池（2×CPU、daemon、app-io-N 命名、priority NORM-1）。
  */
 public class WKSharedPreferencesUtil {
@@ -87,7 +103,7 @@ public class WKSharedPreferencesUtil {
     }
 
     /**
-     * YUJ-284 P-01 · 冷启预热。
+     *  P-01 · 冷启预热。
      *
      * <p>在后台线程上强制 {@link SingletonEnum} 初始化，触发
      * {@link EncryptedSharedPreferences#create} → MasterKey AES256-GCM →
@@ -105,8 +121,8 @@ public class WKSharedPreferencesUtil {
      * 赋值之后调用（{@link SingletonEnum} 构造需要它）。
      */
     public static void prewarm() {
-        // YUJ-294 · merge-time hotfix：PR#201 (YUJ-284 P-01) 的 `new Thread()` 与
-        // PR#202 (YUJ-283 P-11) 在 develop 上撞车。prewarm 语义 = EncryptedSP 单例
+        //  · merge-time hotfix：PR#201 ( P-01) 的 `new Thread()` 与
+        // PR#202 ( P-11) 在 develop 上撞车。prewarm 语义 = EncryptedSP 单例
         // 构造 + KeyStore 握手 + 首批磁盘预读，是典型 I/O，直接走 AppExecutors.io()
         // （2×CPU 池、app-io-N 命名、priority NORM-1），与其它 I/O 预热同调度。
         AppExecutors.io().execute(() -> {
@@ -145,18 +161,18 @@ public class WKSharedPreferencesUtil {
     }
 
     /**
-     * YUJ-310 · 同步落盘写入（仅用于写完立即 {@code Runtime.exit(0)} / 杀进程
+     *  · 同步落盘写入（仅用于写完立即 {@code Runtime.exit(0)} / 杀进程
      * 的极少数路径，例如登录页隐藏入口切换 API base URL 后的 App 重启）。
      *
-     * <p>{@link #putSP(String, String)} 走 {@code apply()} 异步落盘，是 YUJ-284
+     * <p>{@link #putSP(String, String)} 走 {@code apply()} 异步落盘，是 
      * (P-01, PR#201) 的性能优化；但对于「写 SP → 立即 {@code Runtime.exit(0)}」
      * 这条同步 call chain，{@code apply()} 的 QueuedWork 还没 flush 进程已被杀，
-     * 冷启动读回旧值，用户表现为切换到正式服后重启仍是测试服（YUJ-310 P0）。
+     * 冷启动读回旧值，用户表现为切换到正式服后重启仍是测试服（ P0）。
      *
      * <p>该变体用 {@code commit()} 同步写盘，阻塞调用线程（~50-150ms，叠加
      * {@link EncryptedSharedPreferences} AES-GCM 加密），但保证进程被杀前数据已落盘。
      *
-     * <p>⚠️ 仅用于重启前落盘场景，不要替换正常写入路径 —— 否则会把 YUJ-284 的
+     * <p>⚠️ 仅用于重启前落盘场景，不要替换正常写入路径 —— 否则会把  的
      * 主线程 stall 重新带回来。
      */
     public boolean putSPSync(String key, String value) {

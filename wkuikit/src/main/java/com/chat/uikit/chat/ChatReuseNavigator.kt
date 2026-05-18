@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.chat
 
 import android.app.Activity
@@ -10,13 +26,13 @@ import com.chat.base.foldable.NarrowTransition
 import com.chat.uikit.TabActivity
 
 /**
- * YUJ-298 · 窄屏会话 Activity 复用导航（Fix A · 真正不 recreate 版）。
+ *  · 窄屏会话 Activity 复用导航（Fix A · 真正不 recreate 版）。
  *
  * ## 背景
- * PR#195 (YUJ-276) 用 120ms 快过渡（Fix D）缓解了窄屏 ChatActivity 打开/返回
+ * PR#195 () 用 120ms 快过渡（Fix D）缓解了窄屏 ChatActivity 打开/返回
  * 的感知延迟，但根因没解：**窄屏每次点击都在 recreate ChatActivity** —
  * XML inflate ≈ 80-200ms + PanelSwitchHelper.Builder ≈ 50-100ms + DB read
- * ≈ 20-80ms 叠起来仍然 200-400ms。Fix A（onNewIntent 复用）是 YUJ-267 分屏
+ * ≈ 20-80ms 叠起来仍然 200-400ms。Fix A（onNewIntent 复用）是  分屏
  * 场景已用过的策略，这里补课把它同时应用到窄屏。
  *
  * ## 策略
@@ -25,7 +41,7 @@ import com.chat.uikit.TabActivity
  *
  * - 如果任务栈里已经有一个 [ChatActivity] 实例（被 [goBackToList] 留在那里），
  *   AMS 会先把它 reorder 到栈顶，然后按 singleTop 语义派发 `onNewIntent` —
- *   ChatActivity 里 YUJ-267 的 per-channel detach / persist / reset / attach
+ *   ChatActivity 里  的 per-channel detach / persist / reset / attach
  *   流程自然接管，切换成新频道只要 ~50-100ms。
  * - 如果任务栈里没有 ChatActivity（首次打开 / logout 后），AMS 会走常规路径
  *   新建实例，`singleTop` manifest + `onCreate` 里的 `NarrowTransition.applyFastOpen`
@@ -113,7 +129,7 @@ object ChatReuseNavigator {
             activity.startActivity(intent)
             // TabActivity 已经 reorder 到栈顶，当前 ChatActivity 被压到 onStop。
             //
-            // YUJ-317 · 这条路径在 AMS 眼里是 OPEN，不是 CLOSE —— [applyFastOpen]
+            //  · 这条路径在 AMS 眼里是 OPEN，不是 CLOSE —— [applyFastOpen]
             // 预注册的 OVERRIDE_TRANSITION_CLOSE 不会生效。以前这里调
             // [NarrowTransition.applyFastClose]，在 pre-34 靠 overridePendingTransition
             // 兜底、在 API 34+ 直接早返回 no-op，导致 Android 14+ 设备点左上角返回

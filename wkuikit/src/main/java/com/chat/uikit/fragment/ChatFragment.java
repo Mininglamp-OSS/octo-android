@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.fragment;
 
 import android.annotation.SuppressLint;
@@ -33,7 +49,7 @@ import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-// YUJ-236 phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
+//  phase2 perf: Glide pause/resume on RecyclerView scroll (A3)
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
 
@@ -141,7 +157,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
     private final List<ChatConversationMsg> allConversations = new ArrayList<>();
-    // YUJ-229 · key-based 去重索引：和 {@link #allConversations} 一一对应，
+    //  · key-based 去重索引：和 {@link #allConversations} 一一对应，
     // key = channelKey(channelID, channelType)。所有对 allConversations 的
     // 新增 / 删除 / 清空 / 批量替换都必须走 {@link #upsertConversation(ChatConversationMsg)} /
     // {@link #removeConversationByKey(String)} / {@link #clearAllConversations()} /
@@ -166,7 +182,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     // Fragment 不可见时标记需要刷新，onResume 时再执行
     private boolean pendingFilterAndDisplay = false;
 
-    // YUJ-261 · filterAndDisplay 的 50ms 合并刷新：消息到达 / reminder / typing / calling
+    //  · filterAndDisplay 的 50ms 合并刷新：消息到达 / reminder / typing / calling
     // 等会在短时间内触发多次，DiffUtil 仍然是全量遍历，合并后仅执行一次。
     private final Handler filterDebounceHandler = new Handler(Looper.getMainLooper());
     private final Runnable filterRunnable = this::filterAndDisplayInternal;
@@ -179,7 +195,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
 
     /**
-     * YUJ-261 · DiffUtil callback。
+     *  · DiffUtil callback。
      * - areItemsTheSame: section 用 sectionId，普通行用 channelID+channelType 作稳定 id
      * - areContentsTheSame: 走 {@link ChatConversationMsg#contentHash()}，覆盖所有 UI 字段
      * - getChangePayload: 本期返回 null（让 BRVAH rebind 变化行，而非整页 notifyDataSetChanged），
@@ -228,7 +244,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-229 · 以 key 插入会话（幂等）：如果 {@link #conversationIndex} 已有同 key
+     *  · 以 key 插入会话（幂等）：如果 {@link #conversationIndex} 已有同 key
      * entry，直接返回现有 entry，不插入重复；否则追加到 {@link #allConversations}
      * 末尾并写入索引。字段级 merge（unreadCount / lastMsgTimestamp / 刷新 flag 等）
      * 由调用方在调用前完成，本方法只保证 key 级别的唯一性。
@@ -240,20 +256,20 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-229 · 按 channel key 移除会话：同步清 {@link #allConversations} 和
+     *  · 按 channel key 移除会话：同步清 {@link #allConversations} 和
      * {@link #conversationIndex}。调用方仍需自行 notifyItemRemoved / setAllCount 等 UI 动作。
      */
     private boolean removeConversationByKey(String key) {
         return ConversationIndexOps.removeByKey(allConversations, conversationIndex, key);
     }
 
-    /** YUJ-229 · 清空列表 + 索引。供 Space 切换 / resync / cold-start 清空路径统一调用。 */
+    /**  · 清空列表 + 索引。供 Space 切换 / resync / cold-start 清空路径统一调用。 */
     private void clearAllConversations() {
         ConversationIndexOps.clearAll(allConversations, conversationIndex);
     }
 
     /**
-     * YUJ-229 · 列表批量替换后根据当前 {@link #allConversations} 重建索引。
+     *  · 列表批量替换后根据当前 {@link #allConversations} 重建索引。
      *
      * <p>适用于 {@code sortMsg} 的 {@code clear + addAll} 语义以及
      * {@code ensureSystemBotsVisible(allConversations)} 直接向列表追加的场景。
@@ -469,7 +485,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     if (uiConversationMsg.uiConversationMsg.channelType == WKChannelType.COMMUNITY) {
                         EndpointManager.getInstance().invoke("show_community", uiConversationMsg.uiConversationMsg.channelID);
                     } else {
-                        // YUJ-267 · Fix A：分屏态下先立即更新选中态让用户看到反馈，
+                        //  · Fix A：分屏态下先立即更新选中态让用户看到反馈，
                         // 再走 startChatActivity（后者走 IO 组装 Intent，存在几十到
                         // 几百 ms 的延迟，没有选中态 UI 会显得卡）。
                         chatConversationAdapter.setSelected(
@@ -598,7 +614,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         chatConversationAdapter.setThreadPreviewClickListener(new ChatConversationAdapter.IThreadPreviewClickListener() {
             @Override
             public void onThreadClick(String channelId, String groupNo, String shortId, int isJoined) {
-                // YUJ-267 · Fix A：子区点击瞬间更新选中态（分屏态下），再 joinThread / navigate。
+                //  · Fix A：子区点击瞬间更新选中态（分屏态下），再 joinThread / navigate。
                 chatConversationAdapter.setSelectedThread(channelId);
                 if (isJoined == 0) {
                     ThreadModel.getInstance().joinThread(groupNo, shortId, (code, msg) -> {
@@ -683,7 +699,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //监听移除最近会话
         WKIM.getInstance().getConversationManager().addOnDeleteMsgListener("chat_fragment", (s, b) -> {
             if (!TextUtils.isEmpty(s)) {
-                // YUJ-229 · 从 allConversations + conversationIndex 同步移除
+                //  · 从 allConversations + conversationIndex 同步移除
                 removeConversationByKey(channelKey(s, b));
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                     if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
@@ -864,6 +880,15 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (WKReader.isEmpty(list)) {
                 return;
             }
+            if (BuildConfig.DEBUG) {
+                StringBuilder sb = new StringBuilder("[ConvSync] UI callback: count=" + list.size()
+                        + " allConvEmpty=" + allConversations.isEmpty() + " items=");
+                for (int di = 0, ds = Math.min(list.size(), 20); di < ds; di++) {
+                    if (di > 0) sb.append(", ");
+                    sb.append(list.get(di).channelID).append(":").append(list.get(di).channelType);
+                }
+                android.util.Log.d("ConvSync", sb.toString());
+            }
             if (list.size() == 1) {
                 showPixelHintIfNeeded(list.get(0));
                 resetData(list.get(0), true);
@@ -895,7 +920,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             if (allConversations.isEmpty()) {
                 // allConversations 为空，说明是首次加载或 Space 切换后的首次同步结果
-                // YUJ-312 Phase 2 · T8 埋点：主线程重建列表（逐条 SpaceFilter + per-channel DB 读）。
+                //  Phase 2 · T8 埋点：主线程重建列表（逐条 SpaceFilter + per-channel DB 读）。
                 // 这个分支 sync 完成后会走一次，成本 ≈ O(N × getMsgExtraWithChannel)。
                 long yuj312T8Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
                 int yuj312T8InputSize = BuildConfig.DEBUG ? list.size() : 0;
@@ -907,7 +932,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 for (WKUIConversationMsg uiConversationMsg : list) {
                     // 私聊 Space 未读数适配：跨 Space 消息不计入未读（参考 iOS）
                     adjustPersonalForSpace(uiConversationMsg);
-                    // YUJ-217 Fix A（对齐 iOS PR#95 Defense-in-Depth）：
+                    //  Fix A（对齐 iOS PR#95 Defense-in-Depth）：
                     // 冷启动 sync 结果必须先过 SpaceFilter 再回填白名单。
                     // 否则服务端返回的跨 Space 会话（尤其是 botfather 之类的私聊系统 Bot 或
                     // 时序 race 下的外部群）会被无差别写入白名单，后续新消息路径即使走 Fix B
@@ -923,6 +948,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         // botfather 在某 Space 彻底消失。
                         reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg())
                                 && !com.chat.base.space.SystemBotsFallback.isSystemBot(uiConversationMsg.channelID);
+                    }
+                    if (BuildConfig.DEBUG) {
+                        android.util.Log.d("ConvSync", "[ConvSync] rebuild: "
+                                + uiConversationMsg.channelID + ":" + uiConversationMsg.channelType
+                                + " reject=" + reject);
                     }
                     if (reject) {
                         continue;
@@ -1034,7 +1064,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     adjustPersonalForSpace(uiConversationMsg);
                     // Space 过滤：只添加属于当前 Space 的会话
                     String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-                    // YUJ-217 Fix B（对齐 iOS PR#95 Defense-in-Depth）：
+                    //  Fix B（对齐 iOS PR#95 Defense-in-Depth）：
                     // 不再以 `spaceConversationKeys.contains(key)` 作为短路放行条件。
                     // 白名单可能被冷启动 race / Fix A 前历史污染留下残留 entry，信任其
                     // 短路会让来自其他 Space 的新消息错挂当前 Space。始终过一遍 filter，
@@ -1046,6 +1076,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         // 私聊：消息 payload space_id；系统 Bot 跨 Space 共享，不做 channel 级剔除
                         reject = isMessageFromOtherSpace(uiConversationMsg.getWkMsg())
                                 && !com.chat.base.space.SystemBotsFallback.isSystemBot(uiConversationMsg.channelID);
+                    }
+                    if (BuildConfig.DEBUG) {
+                        android.util.Log.d("ConvSync", "[ConvSync] incremental isAdd: "
+                                + uiConversationMsg.channelID + ":" + uiConversationMsg.channelType
+                                + " reject=" + reject);
                     }
                     if (reject) {
                         // 同步清理白名单残留（对齐 iOS Skip 清残留 pattern）
@@ -1090,7 +1125,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
                 if (!TextUtils.isEmpty(spaceId) && allConversations.isEmpty() && dbQueryCompleted) {
                     spaceConversationKeys.clear();
-                    // YUJ-318 · 连接成功补偿路径也走 coordinator。同路径 debounce 避免
+                    //  · 连接成功补偿路径也走 coordinator。同路径 debounce 避免
                     // 连接抖动反复触发；全局守卫避免与 performSpaceSwitch / resync 并发。
                     if (SpaceSyncCoordinator.getInstance().tryBegin("connectSuccessCompensate")) {
                         Schedulers.io().scheduleDirect(() -> {
@@ -1151,7 +1186,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         EndpointManager.getInstance().setMethod("chat_fragment_exit_chat", EndpointCategory.wkExitChat, object -> {
             if (object != null) {
                 WKChannel channel = (WKChannel) object;
-                // YUJ-229 · 从 allConversations + conversationIndex 同步移除
+                //  · 从 allConversations + conversationIndex 同步移除
                 removeConversationByKey(channelKey(channel.channelID, channel.channelType));
                 for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                     if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
@@ -1235,46 +1270,32 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private void getChatMsg() {
         String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (!TextUtils.isEmpty(currentSpaceId)) {
-            String lastLoaded = WKSharedPreferencesUtil.getInstance()
-                    .getSPWithUID("last_loaded_space_id");
-            boolean spaceChanged = !currentSpaceId.equals(lastLoaded);
-
-            if (!spaceChanged) {
-                // 同一 Space：从本地 DB 加载缓存，立即显示
-                WKIM.getInstance().getConversationManager().getAll(list -> {
-                    List<ChatConversationMsg> tempList = new ArrayList<>();
-                    spaceConversationKeys.clear();
-                    if (WKReader.isNotEmpty(list)) {
-                        for (WKUIConversationMsg conv : list) {
-                            if (conv.channelType == WKChannelType.COMMUNITY_TOPIC) continue;
-                            tempList.add(new ChatConversationMsg(conv));
-                            spaceConversationKeys.add(channelKey(conv.channelID, conv.channelType));
+            // 从本地 DB 加载全量会话 → Space 过滤在 sortMsg 内完成 → 立即显示。
+            // 后台增量 sync 由 WKConnection 连接成功后自动触发，
+            // 通过 onRefreshMsgListListener 回调增量更新列表。
+            WKIM.getInstance().getConversationManager().getAll(list -> {
+                List<ChatConversationMsg> tempList = new ArrayList<>();
+                Set<String> keys = new HashSet<>();
+                if (WKReader.isNotEmpty(list)) {
+                    for (WKUIConversationMsg conv : list) {
+                        if (conv.channelType == WKChannelType.COMMUNITY_TOPIC) continue;
+                        if (conv.channelType == WKChannelType.PERSONAL
+                                && isMessageFromOtherSpace(conv.getWkMsg())
+                                && !com.chat.base.space.SystemBotsFallback.isSystemBot(conv.channelID)) {
+                            continue;
                         }
+                        tempList.add(new ChatConversationMsg(conv));
+                        keys.add(channelKey(conv.channelID, conv.channelType));
                     }
-                    dbQueryCompleted = true;
-                    AndroidUtilities.runOnUIThread(() -> {
-                        syncSpaceKeysToGlobal();
-                        sortMsg(tempList);
-                    });
+                }
+                dbQueryCompleted = true;
+                AndroidUtilities.runOnUIThread(() -> {
+                    spaceConversationKeys.clear();
+                    spaceConversationKeys.addAll(keys);
+                    syncSpaceKeysToGlobal();
+                    sortMsg(tempList);
                 });
-                return;
-            }
-
-            // Space 变化或首次加载：清空后让 sync 返回新数据
-            dbQueryCompleted = true;
-            WKSharedPreferencesUtil.getInstance()
-                    .putSPWithUID("last_loaded_space_id", currentSpaceId);
-            spaceConversationKeys.clear();
-            // YUJ-318 · 初次加载路径亦接入 coordinator；如果 performSpaceSwitch 刚触发过
-            // sync，这里会被 debounce 掉避免双重 clearAll（iOS `_isSyncing` 等价语义）。
-            if (SpaceSyncCoordinator.getInstance().tryBegin("initialSpaceLoad")) {
-                Schedulers.io().scheduleDirect(() -> {
-                    WKIM.getInstance().getConversationManager().clearAll();
-                    WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                        SpaceSyncCoordinator.getInstance().complete();
-                    });
-                });
-            }
+            });
             return;
         }
         // 无 Space 模式：直接加载本地所有会话
@@ -1434,7 +1455,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (uiConversationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
             String[] parsed = ThreadModel.getInstance().parseChannelId(uiConversationMsg.channelID);
             if (parsed != null) {
-                // YUJ-219-B · 子区路径跨 Space 父群 bump 防护。
+                // -B · 子区路径跨 Space 父群 bump 防护。
                 // refreshThreadPreviews 只影响当前 adapter 中可见的父群 entry（跨
                 // Space 父群本就不在 adapter 里，刷新是 no-op），保留调用；
                 // 但父群的 lastMsgTimestamp 写入 allConversations 是跨 Space 污染 —
@@ -1483,7 +1504,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return;
         }
 
-        // YUJ-219-B · Layer 4½ gate（push 路径单条更新的跨 Space 兜底）。
+        // -B · Layer 4½ gate（push 路径单条更新的跨 Space 兜底）。
         //
         // 批量路径（L693）已有 isMessageFromOtherSpace 检查，但单条路径 L1193 第一个
         // 循环直接裸更新 allConversations（共享对象 → adapter 同步被污染 → 随后的
@@ -1628,10 +1649,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             adjustPersonalForSpace(uiConversationMsg);
             // Space 过滤：只添加属于当前 Space 的会话
             String key = channelKey(uiConversationMsg.channelID, uiConversationMsg.channelType);
-            // YUJ-217 Fix B（对齐 iOS PR#95 Defense-in-Depth）：
+            //  Fix B（对齐 iOS PR#95 Defense-in-Depth）：
             // 不再以 `spaceConversationKeys.contains(key)` 作为短路条件——新消息路径始终过 filter。
             // 白名单可能被冷启动 race / Fix A 前历史污染留下残留 entry；信任短路会让
-            // 来自其他 Space 的新消息错挂当前 Space（YUJ-208/209/215 同源 bug）。
+            // 来自其他 Space 的新消息错挂当前 Space（/209/215 同源 bug）。
             // SpaceFilter 自身带 fail-open 兜底，非 Space 模式 / race 窗口不会误杀。
             if (uiConversationMsg.channelType == WKChannelType.GROUP) {
                 if (!isChannelInCurrentSpace(uiConversationMsg.channelID, uiConversationMsg.channelType)) {
@@ -1653,7 +1674,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             syncSpaceKeysToGlobal();
             isSort = true;
             ChatConversationMsg newMsg = new ChatConversationMsg(uiConversationMsg);
-            // YUJ-229 · key-based 去重：若已有同 (channelID, channelType) 的
+            //  · key-based 去重：若已有同 (channelID, channelType) 的
             // allConversations entry（比如前面 L687 批量路径 / L1218 本方法前置循环
             // 都漏 match，但索引里还有），upsert 直接返回现有 entry 不再插入重复。
             // 对齐 iOS channelIndex 语义。
@@ -1723,7 +1744,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 判断消息是否来自其他 Space（非当前 Space）。
      * 用于过滤跨 Space 的实时消息更新，避免错误的未读计数。
      *
-     * <p>EP3 · YUJ-88：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipMessageForSpace(WKMsg)}
+     * <p>EP3 · ：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipMessageForSpace(WKMsg)}
      * 以便与 web shouldSkipMessageForSpace 判定对齐。
      */
     private boolean isMessageFromOtherSpace(WKMsg msg) {
@@ -1734,7 +1755,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 判断频道是否属于当前 Space。
      * 用于群聊过滤：群消息 payload 不含 space_id，无法用 isMessageFromOtherSpace 判断。
      *
-     * <p>EP3 · YUJ-88：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipChannelForSpace(String, byte)}
+     * <p>EP3 · ：委托给 {@link com.chat.base.space.SpaceFilter#shouldSkipChannelForSpace(String, byte)}
      * 实现 web 双路径判定（含外部群兜底：我以当前 Space 身份加入外部群时放行）。
      */
     private boolean isChannelInCurrentSpace(String channelID, byte channelType) {
@@ -1742,12 +1763,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     // 系统 Bot（如 BotFather / u_10000 / fileHelper）：跨 Space 共享，白名单由
-    // appconfig system_bot_uids 下发（YUJ-219-A3），客户端统一走
+    // appconfig system_bot_uids 下发（-A3），客户端统一走
     // {@link com.chat.base.space.SystemBotsFallback#getSystemBotIds()} /
     // {@link com.chat.base.space.SystemBotsFallback#isSystemBot(String)}，消除三端硬编码漂移。
 
     /**
-     * YUJ-219-B · Layer 4½ gate · 判断这条 push 是不是应该被拒绝的跨 Space 污染。
+     * -B · Layer 4½ gate · 判断这条 push 是不是应该被拒绝的跨 Space 污染。
      *
      * <p>与批量路径（L693）/ 新增路径（L1313）的 reject 语义对齐，集中在一处判定，
      * 避免「单条路径漏检 → 冒顶 + 切换后消失」的回归。
@@ -1801,7 +1822,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-219-B · 系统 Bot 跨 Space bump 保护。
+     * -B · 系统 Bot 跨 Space bump 保护。
      *
      * <p>SystemBot 的 conversation entry 跨 Space 共享是<b>设计</b>（否则 botfather
      * 在非默认 Space 下会彻底消失）；但「在 Space A 看到 Space B 的 botfather
@@ -1888,11 +1909,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private final Runnable spaceResyncRunnable = () -> {
         pendingSpaceResync = false;
         spaceConversationKeys.clear();
-        // YUJ-229 · 同步清 allConversations + conversationIndex
+        //  · 同步清 allConversations + conversationIndex
         clearAllConversations();
         groupAdapter.setList(new ArrayList<>());
         personalAdapter.setList(new ArrayList<>());
-        // YUJ-318 · resync 也接入 coordinator 去重
+        //  · resync 也接入 coordinator 去重
         if (!SpaceSyncCoordinator.getInstance().tryBegin("spaceResync")) {
             return;
         }
@@ -1913,11 +1934,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     // ============================================================================
-    // YUJ-318 · Space 切换 Loading Overlay
+    //  · Space 切换 Loading Overlay
     // ============================================================================
 
     /**
-     * YUJ-318 · {@link #showSpaceSwitchOverlay()} 的 5s fallback 文案触发 runnable。
+     *  · {@link #showSpaceSwitchOverlay()} 的 5s fallback 文案触发 runnable。
      * sync / 首帧 sortMsg 在 5s 内回来会在 {@link #hideSpaceSwitchOverlay()} 取消这个。
      */
     private final Runnable spaceSwitchOverlayFallbackRunnable = () -> {
@@ -1928,7 +1949,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     };
 
     /**
-     * YUJ-321（fixing YUJ-318 ReviewBot P0-#1）· Overlay 10s 硬超时。网络失败 / 后端
+     * （fixing  ReviewBot P0-#1）· Overlay 10s 硬超时。网络失败 / 后端
      * 不返回 / sync listener 未注册等情况下，原本 {@link #hideSpaceSwitchOverlay()} 永不
      * 触发→ overlay 永久显示 + {@code clickable=true} 阻断所有点击，比不修还糟。
      *
@@ -1952,7 +1973,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     };
 
     /**
-     * YUJ-318 · 显示 Space 切换 Loading Overlay。
+     *  · 显示 Space 切换 Loading Overlay。
      *
      * <p>只由 {@link #performSpaceSwitch(SpaceEntity)} 调用。其他 sync 路径（连接成功
      * 补偿 / spaceResync / initialSpaceLoad）不显示 overlay，避免后台路径扰动用户视觉。
@@ -1960,7 +1981,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * <p>5s 仍未 {@link #hideSpaceSwitchOverlay()} 时显示 fallback 文案，提示用户不是
      * App 卡死，而是网络 / 后端同步慢。
      *
-     * <p>YUJ-312 Phase 2 · overlay 主文案显示「正在同步「{spaceName}」…」，让用户立刻
+     * <p> Phase 2 · overlay 主文案显示「正在同步「{spaceName}」…」，让用户立刻
      * 知道切换已触发并在同步该 Space；空 spaceName 时降级为不显示主文案，仅 spinner。
      *
      * @param spaceName 目标 Space 名，主文案占位；传 null/空不渲染主文案
@@ -1981,7 +2002,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (pingHandler != null) {
             pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
             pingHandler.postDelayed(spaceSwitchOverlayFallbackRunnable, 5_000L);
-            // YUJ-321 P0-#1 · 10s 硬超时兜底：无论 sync listener 是否触发，10s 后强制
+            //  P0-#1 · 10s 硬超时兜底：无论 sync listener 是否触发，10s 后强制
             // hide + toast，避免 overlay 永久卡住 + clickable=true 阻断交互。
             pingHandler.removeCallbacks(spaceSwitchOverlayHardTimeoutRunnable);
             pingHandler.postDelayed(spaceSwitchOverlayHardTimeoutRunnable, 10_000L);
@@ -1989,14 +2010,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-318 · 隐藏 Loading Overlay。幂等：重复调用安全。
+     *  · 隐藏 Loading Overlay。幂等：重复调用安全。
      *
      * <p>调用点：
      * <ul>
      *   <li>sync 回调（{@code setSyncConversationListener} 完成）</li>
      *   <li>{@link #sortMsg(List)} 首帧 runOnUIThread 内（data 真的回来了）</li>
      *   <li>performSpaceSwitch 因 coordinator debounce 放弃 sync 时的早退路径</li>
-     *   <li>YUJ-321 · {@link #spaceSwitchOverlayHardTimeoutRunnable} 10s 硬超时兜底</li>
+     *   <li> · {@link #spaceSwitchOverlayHardTimeoutRunnable} 10s 硬超时兜底</li>
      * </ul>
      */
     private void hideSpaceSwitchOverlay() {
@@ -2008,13 +2029,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
         if (pingHandler != null) {
             pingHandler.removeCallbacks(spaceSwitchOverlayFallbackRunnable);
-            // YUJ-321 · 同时取消 10s 硬超时，避免正常完成后仍弹 toast
+            //  · 同时取消 10s 硬超时，避免正常完成后仍弹 toast
             pingHandler.removeCallbacks(spaceSwitchOverlayHardTimeoutRunnable);
         }
     }
 
     /**
-     * YUJ-318 · ChannelInfoCache 批量预热（对照 iOS sync 完成后 `cacheDict` 已填满）。
+     *  · ChannelInfoCache 批量预热（对照 iOS sync 完成后 `cacheDict` 已填满）。
      *
      * <p>从 sortMsg 即将 display 的 list 中抽出 (channelID, channelType) 组合，一次性
      * 通过 SDK 的 {@code getChannel} 触发 DB → 回填 cache。原 adapter.convert 每行
@@ -2046,7 +2067,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-217 Fix C · 本地兜底合成缺失的系统 Bot（botfather）占位会话。
+     *  Fix C · 本地兜底合成缺失的系统 Bot（botfather）占位会话。
      *
      * <p>背景：botfather 跨 Space 共享，但后端 sync 在某些 Space 下不返回其 conversation
      * entry（时序 / 索引问题），导致 botfather 在该 Space 彻底不显示。
@@ -2079,7 +2100,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-217 Fix D · 全量兜底清扫：从 {@link #allConversations} 和 {@link #spaceConversationKeys}
+     *  Fix D · 全量兜底清扫：从 {@link #allConversations} 和 {@link #spaceConversationKeys}
      * 中剔除所有不属于当前 Space 的 GROUP 会话。
      *
      * <p>对齐 iOS PR#95 {@code pruneNonCurrentSpaceGroups}：在 Space 切换 / 连接后 sync /
@@ -2114,7 +2135,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             String cid = msg.uiConversationMsg.channelID;
             byte ct = msg.uiConversationMsg.channelType;
             if (com.chat.base.space.SpaceConversationPruner.shouldPrune(cid, ct)) {
-                // YUJ-229 · 在向后逐个 remove 的循环里直接用 list.remove(i) + index.remove：
+                //  · 在向后逐个 remove 的循环里直接用 list.remove(i) + index.remove：
                 // 不用 removeConversationByKey 的批量清 key 残留语义——那里面自带的
                 // 倒序扫列表会和当前循环的 index 重叠，产生 off-by-one。
                 // 历史污染留下的多条同 key duplicate 交给 sortMsg() 结尾的
@@ -2173,12 +2194,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * <p>与 iOS 的 serial DB queue 对齐：先立即清空 UI 给用户即时反馈，再把 DB 清理 + sync
      * 放到 IO 线程，避免与主线程的 adapter 刷新争抢 SDK 数据库锁（历史 ANR 源）。
      *
-     * <p>对齐 dmwork-web PR#1068：跨 Space 加群「切换过去」按钮复用这条切换路径，
+     * <p>对齐 #1068：跨 Space 加群「切换过去」按钮复用这条切换路径，
      * 保证手动切换与加群后切换的 UI/数据行为完全一致。
      */
     private void performSpaceSwitch(@NotNull SpaceEntity space) {
         if (space == null || space.space_id == null) return;
-        // YUJ-312 Phase 2 · 埋点：从方法入口开始；所有 beginSection 对应 endSection 在方法末尾。
+        //  Phase 2 · 埋点：从方法入口开始；所有 beginSection 对应 endSection 在方法末尾。
         // 守 BuildConfig.DEBUG 确保 release 零开销。Trace 对应 Android Studio / Perfetto / systrace
         // 工具中 "YUJ312-" 前缀高亮段，便于真机抓图对齐 Issue 中 T1–T10 调用链表格。
         final long yuj312StartMs = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
@@ -2187,7 +2208,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             Log.d("YUJ312", "performSpaceSwitch START space_id=" + space.space_id
                     + " name=" + space.name);
         }
-        // YUJ-267 · 切 Space 清掉选中态（Space 维度不同，旧选中 channel 可能已不在新列表）。
+        //  · 切 Space 清掉选中态（Space 维度不同，旧选中 channel 可能已不在新列表）。
         // 必须在调用链最顶层做，避免 adapter.setList(empty) 之后再清（先后顺序不重要但一次调用即可）。
         if (chatConversationAdapter != null) {
             chatConversationAdapter.clearSelected();
@@ -2202,7 +2223,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         CategoryModel.getInstance().invalidateCache();
         loadCategories();
 
-        // YUJ-321（fixing YUJ-318 ReviewBot P1-#2）· 顺序修复：coordinator.tryBegin()
+        // （fixing  ReviewBot P1-#2）· 顺序修复：coordinator.tryBegin()
         // 必须在 clearAllConversations() 之前。历史 bug：原实现先清 UI 再 check，快速
         // A→B→A 时 B→A 被 debounce 但 UI 已清空，数据再也填不回来。
         // 放行规则：
@@ -2219,8 +2240,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             return;
         }
 
-        // YUJ-312 Phase 2 · T3 埋点：主线程清 UI（clear memory + setList(empty)）。
-        // Jerry review 2026-05-04 · 统一 DEBUG 守卫样式：每个 section 的 begin + end
+        //  Phase 2 · T3 埋点：主线程清 UI（clear memory + setList(empty)）。
+        // review 2026-05-04 · 统一 DEBUG 守卫样式：每个 section 的 begin + end
         // 都各自用 `if (BuildConfig.DEBUG) { ... }` 包裹，避免原先 T3→T3b 的链式
         // «前段 endSection + 下段 beginSection 塞在同一个 DEBUG 块» 结构。
         long yuj312T3Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
@@ -2228,7 +2249,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             Trace.beginSection("YUJ312-clearAllConversations");
         }
         spaceConversationKeys.clear();
-        // YUJ-229 · 同步清 allConversations + conversationIndex
+        //  · 同步清 allConversations + conversationIndex
         clearAllConversations();
         if (BuildConfig.DEBUG) {
             Trace.endSection();
@@ -2248,14 +2269,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     + (SystemClock.elapsedRealtime() - yuj312T3bStart) + "ms");
         }
 
-        // YUJ-318 · 切 Space 立刻显示 loading overlay，避免用户看到空列表 + 「收取中」一直转
+        //  · 切 Space 立刻显示 loading overlay，避免用户看到空列表 + 「收取中」一直转
         // 搞不清是否点击生效。sync 完成 / 首帧 sortMsg 会调 hideSpaceSwitchOverlay 隐藏；
-        // 10s 硬超时兜底见 spaceSwitchOverlayHardTimeoutRunnable（YUJ-321 P0-#1）。
-        // YUJ-312 Phase 2 · 传入 space.name 渲染主文案「正在同步「xxx」…」（Yu 授权文案）。
+        // 10s 硬超时兜底见 spaceSwitchOverlayHardTimeoutRunnable（ P0-#1）。
+        //  Phase 2 · 传入 space.name 渲染主文案「正在同步「xxx」…」（Yu 授权文案）。
         showSpaceSwitchOverlay(space.name);
 
         Schedulers.io().scheduleDirect(() -> {
-            // YUJ-312 Phase 2 · T4 埋点：IO 线程 WKIM.clearAll（DB DELETE FROM conversation）。
+            //  Phase 2 · T4 埋点：IO 线程 WKIM.clearAll（DB DELETE FROM conversation）。
             // section 名称包含 "WKIM-clearAll"，与 SDK 侧 saveSyncChat 区分。
             // 注意：beginSection + endSection 都在同一个 IO 线程内闭合（非跨线程），
             // per-thread stack 配对正常——不存在 syncChat 的跨线程失效问题。
@@ -2270,7 +2291,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         + (SystemClock.elapsedRealtime() - yuj312T4Start) + "ms");
             }
             WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
-                // YUJ-318 · sync 完成回调：释放 coordinator permit + 隐藏 overlay
+                //  · sync 完成回调：释放 coordinator permit + 隐藏 overlay
                 if (BuildConfig.DEBUG) {
                     int convCount = (result == null || result.conversations == null)
                             ? 0 : result.conversations.size();
@@ -2294,14 +2315,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-267 · Fix A：同步 splitMode 并从 {@link WKUIKitApplication#chattingChannelID}
+     *  · Fix A：同步 splitMode 并从 {@link WKUIKitApplication#chattingChannelID}
      * 恢复选中态。时机：onResume（正常生命周期）、Space/tab 切换完成后。
      *
      * <p>splitMode 判定：{@link PaneMetrics#maxWidthPx}（device 最大窗口，不受 Embedding
      * pane 拆分影响）≥ 600dp。与 main_split_config.xml 的 splitMinWidthDp=600 对齐，保证
      * 左右两栏同屏时才显示选中态，普通手机 portrait / 折叠关闭都不显示。
      *
-     * <p>历史坑（YUJ-270 P0-1）：初版用 {@code PaneMetrics.widthPx}（pane 宽度），在
+     * <p>历史坑（ P0-1）：初版用 {@code PaneMetrics.widthPx}（pane 宽度），在
      * Embedding 下 primary pane 约 336-480dp，恒 {@code < 600dp}，{@code splitMode} 永远
      * false，选中背景永不渲染。此版本改用 device 整机宽度。
      */
@@ -2344,7 +2365,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 判断当前是否处于分屏态（设备最大窗口宽度 ≥ 600dp）。
      *
-     * <p><b>为什么用 {@link PaneMetrics#maxWidthPx}？</b>（YUJ-270 P0-1）
+     * <p><b>为什么用 {@link PaneMetrics#maxWidthPx}？</b>（ P0-1）
      * Activity Embedding 激活后 {@link PaneMetrics#widthPx} 返回 <b>primary pane</b> 宽度（
      * 左栏），约 336-480dp（Fold5 884dp × splitRatio 0.4 ≈ 354dp；1200dp 平板 ≈ 480dp）。
      * 与 {@code dp(600)} 比永远 false → {@code splitMode=false} → 选中背景永不渲染。
@@ -2359,7 +2380,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         int maxWidthPx = PaneMetrics.maxWidthPx(ctx);
         int dp600 = AndroidUtilities.dp(600);
         boolean split = maxWidthPx >= dp600;
-        // YUJ-270 P0-1 · 真机 smoke 证据日志：PR description 需贴这条 logcat 输出，
+        //  P0-1 · 真机 smoke 证据日志：PR description 需贴这条 logcat 输出，
         // 证明分屏展开态下 maxWidthPx ≥ dp600（grep 关键词：YUJ270-splitMode）。
         android.util.Log.d("YUJ270-splitMode",
                 "isSplitModeNow maxWidthPx=" + maxWidthPx + " dp600=" + dp600 + " split=" + split);
@@ -2367,7 +2388,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * 消费「加群成功」通知（YUJ-140，对齐 dmwork-web PR#1068）。
+     * 消费「加群成功」通知（，对齐 #1068）。
      *
      * <p>在 {@link #onResume()} 调用：如果上个界面（扫码加群 / 邀请落地页）保存了 notice，
      * 根据 {@code crossSpace} 走普通 toast 或弹两行 Dialog；用户点「切换过去」才真正切 Space。
@@ -2419,11 +2440,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         List<ChatConversationMsg> tempList = new ArrayList<>();
         tempList.addAll(normalList);
         tempList.addAll(0, topList);
-        // YUJ-318 · 列表组装好就异步批量预热 ChannelInfoCache，避免后面 adapter.convert
+        //  · 列表组装好就异步批量预热 ChannelInfoCache，避免后面 adapter.convert
         // 每行首次 bind 时到主线程 DB 查询（H3 根因）。
         prewarmChannelInfoCache(tempList);
         AndroidUtilities.runOnUIThread(() -> {
-            // YUJ-312 Phase 2 · T10 埋点：首帧最终 adapter rebuild（含 filterAndDisplay / setAllCount）。
+            //  Phase 2 · T10 埋点：首帧最终 adapter rebuild（含 filterAndDisplay / setAllCount）。
             // 这是用户感知 Space 切换「完成」的关键节点；真机 trace 中 YUJ312-adapter-setList-final
             // 段 end 到 hideSpaceSwitchOverlay 之间的距离 ≈ 首帧 render 延迟。
             long yuj312T10Start = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
@@ -2431,18 +2452,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             if (BuildConfig.DEBUG) {
                 Trace.beginSection("YUJ312-adapter-setList-final");
             }
-            // YUJ-229 · 先清 allConversations + conversationIndex，再 addAll 写入，
+            //  · 先清 allConversations + conversationIndex，再 addAll 写入，
             // 最后重建索引 —— 批量替换路径统一口径，保证索引不漏新 entry 也不留陈旧残留。
             clearAllConversations();
             allConversations.addAll(tempList);
-            // YUJ-217 Fix D · 状态变化回扫：每次进 allConversations 前扫一遍，剔除
+            //  Fix D · 状态变化回扫：每次进 allConversations 前扫一遍，剔除
             // 不属于当前 Space 的 GROUP 会话。对齐 iOS PR#95 pruneNonCurrentSpaceGroups。
             // O(n) 开销，n 通常 < 100；但保证 Fix A/B 留下的 edge case（比如 resetData
             // 单 msg 路径在白名单被污染时仍可能写入 allConversations）有最终一致性兜底。
             pruneNonCurrentSpaceGroupsInMemoryOnly();
-            // YUJ-217 Fix C · SYSTEM_BOTS 本地兜底：确保 botfather 等跨 Space 共享 Bot 可见
+            //  Fix C · SYSTEM_BOTS 本地兜底：确保 botfather 等跨 Space 共享 Bot 可见
             ensureSystemBotsVisible(allConversations);
-            // YUJ-229 · 在所有对 allConversations 的 mutation 完成之后一次性重建索引，
+            //  · 在所有对 allConversations 的 mutation 完成之后一次性重建索引，
             // 同时收敛可能的历史 duplicate entry（rebuildIndex 会倒序去重、保留最先出现的）。
             rebuildConversationIndex();
             filterAndDisplay();
@@ -2454,7 +2475,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 hasInitialReminderSynced = true;
                 MsgModel.getInstance().syncReminder();
             }
-            // YUJ-318 · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
+            //  · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
             // 稍后到，或用户侧首次 DB 命中先于 sync），立刻隐藏给用户即时反馈。
             hideSpaceSwitchOverlay();
             if (BuildConfig.DEBUG) {
@@ -2525,7 +2546,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 为任意 ChatConversationMsg 列表计算未读总数。
      *
-     * <p>YUJ-183：未分组 section 包含服务端 defaultCategory 的群 + 客户端兜底的
+     * <p>：未分组 section 包含服务端 defaultCategory 的群 + 客户端兜底的
      * orphan 群（典型为外部群），无法复用 {@link #getUnreadCountInCategory} 的
      * CategoryEntity 入参版本。与父版本保持一致的口径（有 childList 走
      * {@link ChatConversationMsg#getUnReadCount()}，否则用自身 unreadCount），
@@ -2549,7 +2570,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 为任意 ChatConversationMsg 列表判定是否存在未处理的 @mention 提醒。
      *
-     * <p>YUJ-183：未分组 section orphan 合并路径的对应版本。保持与
+     * <p>：未分组 section orphan 合并路径的对应版本。保持与
      * {@link #hasMentionInCategory} 一致的判定口径（SDK DB 查提醒 + 子区前缀查）。
      */
     private boolean computeHasMentionForItems(List<ChatConversationMsg> items) {
@@ -2582,7 +2603,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 群聊 tab (0): channelType == GROUP，按 category 分组显示
      * 私聊 tab (1): channelType == PERSONAL，无分组
      *
-     * YUJ-261 · 外层封装为 50ms debounce：同一 UI 帧内的多次触发（消息到达 + reminder +
+     *  · 外层封装为 50ms debounce：同一 UI 帧内的多次触发（消息到达 + reminder +
      * channel 刷新 + typing/calling 变化）合并为一次 DiffUtil 遍历，避免 ACTION_DOWN
      * 和 ACTION_UP 之间发生多次 notifyDataSetChanged 导致 ViewHolder detach → touch cancel。
      */
@@ -2697,7 +2718,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
 
             // 4. 未分组：服务端 defaultCategory.groups + 客户端兜底 orphan 群
-            // YUJ-183 P1 修复：外部群（group.space_id != currentSpace 但我以外部成员
+            //  P1 修复：外部群（group.space_id != currentSpace 但我以外部成员
             // 身份加入，source_space_id == currentSpace）已通过 SpaceFilter 校验进入
             // allConversations，但不在服务端 /spaces/{spaceId}/categories 任一
             // category.groups 里（后端 categories 仅列 group.space_id == current
@@ -3556,7 +3577,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         EndpointManager.getInstance().remove("refresh_conversation_calling");
         EndpointManager.getInstance().remove("scroll_to_unread_channel");
         pingHandler.removeCallbacks(spaceResyncRunnable);
-        // YUJ-261 · 清理 filterAndDisplay debounce handler，防止 Fragment 销毁后 Runnable 回调。
+        //  · 清理 filterAndDisplay debounce handler，防止 Fragment 销毁后 Runnable 回调。
         filterDebounceHandler.removeCallbacks(filterRunnable);
         stopPingTimer();
     }
@@ -3564,7 +3585,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        // YUJ-264 · onDestroyView 也清 debounce：若 Fragment 在 onDestroyView 之后
+        //  · onDestroyView 也清 debounce：若 Fragment 在 onDestroyView 之后
         // onDestroy 之前有 50ms runnable 命中，filterAndDisplayInternal 的 guard 虽然
         // 能挡住，但 removeCallbacks 更严谨 —— 避免任何 view-dependent code path 被触达。
         filterDebounceHandler.removeCallbacks(filterRunnable);
@@ -3573,13 +3594,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     @Override
     public void onResume() {
         super.onResume();
-        // YUJ-240 round3 fix (Jerry-Xin B1): 若后台切换时 RV 停在 DRAGGING/SETTLING，IDLE 回调不会到，Glide 会永远停住。
+        //  round3 fix (review B1): 若后台切换时 RV 停在 DRAGGING/SETTLING，IDLE 回调不会到，Glide 会永远停住。
         try {
             Glide.with(this).resumeRequests();
         } catch (IllegalArgumentException ignored) {
             // Fragment 未 attach 竞态
         }
-        // YUJ-267 · Fix A：根据当前 pane 宽度判定 splitMode，恢复 selection。
+        //  · Fix A：根据当前 pane 宽度判定 splitMode，恢复 selection。
         // 折叠态 ↔ 展开态切换 / 旋转时也会重新 resume，所以 splitMode 在这里同步。
         syncSplitModeAndSelection();
         // Fragment 不可见期间有数据变化，返回时延迟到下一帧刷新，不阻塞返回动画
@@ -3606,7 +3627,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             refreshExtrasIfNeeded();
             loadCategories();
         });
-        // YUJ-140 · 跨 Space 加群 Toast：消费上个界面（扫码 / 邀请加群）留下的 notice
+        //  · 跨 Space 加群 Toast：消费上个界面（扫码 / 邀请加群）留下的 notice
         consumeJoinSuccessNoticeIfAny();
         int pcOnline = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_pc_online");
         wkVBinding.deviceLayout.setVisibility(pcOnline == 1 ? View.VISIBLE : View.GONE);
@@ -3622,7 +3643,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
-     * YUJ-273 · 折叠屏回归：非折叠态启动 → 展开时 splitMode 不刷新。
+     *  · 折叠屏回归：非折叠态启动 → 展开时 splitMode 不刷新。
      *
      * <p>TabActivity 声明 {@code configChanges=screenSize|screenLayout|smallestScreenSize}
      * 屏蔽了 unfold 引发的 recreate，所以 {@link #onResume()} 不会再被触发，

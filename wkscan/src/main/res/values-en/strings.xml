@@ -12,6 +12,6 @@
     <string name="scan_join_group_confirm_full">Join Group</string>
     <string name="scan_join_group_member_count">%d members</string>
     <string name="scan_join_group_info">Group Info</string>
-    <!-- YUJ-372 Phase 2 · need_space prompt for zero-Space users -->
+    <!--  Phase 2 · need_space prompt for zero-Space users -->
     <string name="scan_join_group_need_space">Please join a Space before joining the group</string>
 </resources>

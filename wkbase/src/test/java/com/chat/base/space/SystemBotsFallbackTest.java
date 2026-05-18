@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.space;
 
 import static org.junit.Assert.assertEquals;
@@ -20,9 +36,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * YUJ-217 / YUJ-219 · {@link SystemBotsFallback} host-side 单元测试。
+ *  /  · {@link SystemBotsFallback} host-side 单元测试。
  *
- * <p>覆盖行为合约（合并 YUJ-219-A3 appconfig 消费 + YUJ-219-B 三端 SystemBot 集合对齐）：
+ * <p>覆盖行为合约（合并 -A3 appconfig 消费 + -B 三端 SystemBot 集合对齐）：
  * <ul>
  *     <li>FALLBACK / DEFAULT 包含 botfather / u_10000 / fileHelper（与后端
  *         {@code pkg/space/query.go :: SystemBots} 对齐）</li>
@@ -55,7 +71,7 @@ public class SystemBotsFallbackTest {
     }
 
     // ------------------------------------------------------------------
-    // YUJ-219-A3 / B · FALLBACK 常量与默认行为
+    // -A3 / B · FALLBACK 常量与默认行为
     // ------------------------------------------------------------------
 
     @Test
@@ -141,7 +157,7 @@ public class SystemBotsFallbackTest {
 
     @Test
     public void findMissingBotIds_onlyBotfatherPresent_returnsOtherTwo() {
-        // YUJ-219-B 回归：旧实现硬编码只含 botfather，这里会返回 missing.isEmpty
+        // -B 回归：旧实现硬编码只含 botfather，这里会返回 missing.isEmpty
         // 新实现必须发现 u_10000 / fileHelper 缺失（对齐后端三端）
         Set<String> keys = new HashSet<>(Arrays.asList("botfather_" + PERSONAL));
         Set<String> missing = SystemBotsFallback.findMissingBotIds(keys);

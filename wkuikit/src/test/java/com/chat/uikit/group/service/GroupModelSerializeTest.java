@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.group.service;
 
 import com.chat.uikit.group.service.entity.GroupMember;
@@ -16,14 +32,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 外部群 Phase 1 — YUJ-86 EP1 解析层字段透传单元测试（强制）。
+ * 外部群 Phase 1 —  EP1 解析层字段透传单元测试（强制）。
  *
  * 验证 {@link GroupModel#serialize(List)} 将 /group/members 响应的外部字段
  * 完整写进 {@link WKChannelMember#extraMap}：
  *   is_external / source_space_id / source_space_name /
  *   home_space_id / home_space_name
  *
- * web YUJ-53 的静默失败教训：model 层漏了字段 → UI 节点数归零却没有编译报错。
+ * web  的静默失败教训：model 层漏了字段 → UI 节点数归零却没有编译报错。
  * 该测试就是 EP1 的止血点，只要 serialize 少写任何一个 key 就会红灯。
  */
 public class GroupModelSerializeTest {
@@ -94,7 +110,7 @@ public class GroupModelSerializeTest {
         assertTrue(GroupModel.serialize(null).isEmpty());
     }
 
-    /** 回归保护：GroupMember DTO 必须声明 5 个外部字段（YUJ-86 EP1 验收项）。 */
+    /** 回归保护：GroupMember DTO 必须声明 5 个外部字段（ EP1 验收项）。 */
     @Test
     public void groupMemberDto_declaresAllExternalFields() throws NoSuchFieldException {
         Class<GroupMember> cls = GroupMember.class;
@@ -106,7 +122,7 @@ public class GroupModelSerializeTest {
     }
 
     /**
-     * YUJ-380 · 实名徽章 Phase A 回归锁：serialize 必须把 realname_verified
+     *  · 实名徽章 Phase A 回归锁：serialize 必须把 realname_verified
      * 透传进 extraMap，群成员列表 adapter 才能渲染迷你蓝勾。
      */
     @Test
@@ -122,7 +138,7 @@ public class GroupModelSerializeTest {
     }
 
     /**
-     * YUJ-395 P0-2：字段改为装箱 Boolean 后，显式 false 必须写进 extraMap，
+     *  P0-2：字段改为装箱 Boolean 后，显式 false 必须写进 extraMap，
      * 才能覆盖 WKChannel.remoteExtraMap 里可能残留的 stale true（tri-state 语义
      * 下 resolver 读到显式 false 就不再 fallback 到 channel）。
      */
@@ -140,7 +156,7 @@ public class GroupModelSerializeTest {
     }
 
     /**
-     * YUJ-395 P0-2：后端未下发 realname_verified 时（字段为 null），不写进
+     *  P0-2：后端未下发 realname_verified 时（字段为 null），不写进
      * extraMap —— 让 resolver tri-state 读到 null，回落到 channel 侧的 profile。
      */
     @Test

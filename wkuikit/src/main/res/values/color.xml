@@ -9,7 +9,7 @@
     <color name="category_org_text">#1856e7</color>
     <color name="category_community_bg">#D0BCF3</color>
     <color name="category_community_text">#7E51CC</color>
-    <!-- 外部群标识：紫色背景 + 白色文字（对齐 dmwork-web PR #980 Semi purple） -->
+    <!-- 外部群标识：紫色背景 + 白色文字（对齐  #980 Semi purple） -->
     <color name="external_group_tag_bg">#722ED1</color>
     <color name="external_group_tag_text">#FFFFFF</color>
     <!-- 外部成员标识：紫色背景 + 白色文字（与 AI 紫色 #7761F4 区分） -->

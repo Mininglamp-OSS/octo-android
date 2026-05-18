@@ -44,14 +44,14 @@ public class ChannelManager extends BaseManager {
     private IGetChannelInfo iGetChannelInfo;
     private final CopyOnWriteArrayList<WKChannel> wkChannelList = new CopyOnWriteArrayList<>();
     /**
-     * YUJ-318 · ChannelInfoCache（对照 iOS `WKChannelManager.cacheDict`）。
+     *  · ChannelInfoCache（对照 iOS `WKChannelManager.cacheDict`）。
      *
      * <p>Key 形如 {@code channelId|channelType}，value 与 {@link #wkChannelList} 共享同一
      * {@link WKChannel} 实例（在 {@link #updateChannel(WKChannel)} / DB miss 分支里一并
      * put，保证 in-place 字段修改在 list 与 map 双视图下都可见）。
      *
      * <p>读路径（{@link #getChannel(String, byte)}）走 ConcurrentHashMap 无锁查找，
-     * 命中后立即返回，**不进入 synchronized 慢路径**。这是 YUJ-316 H3（adapter.convert
+     * 命中后立即返回，**不进入 synchronized 慢路径**。这是  H3（adapter.convert
      * 每行 getWkChannel × 36 主线程 SQLCipher 查询）的核心止血：sync 完成后首屏 bind，
      * 第 1 次 miss 查 DB 并回填 cache，之后同一 Space 内的后续 bind 全部 O(1) 内存命中。
      */
@@ -60,7 +60,7 @@ public class ChannelManager extends BaseManager {
     private ConcurrentHashMap<String, IRefreshChannel> refreshChannelMap;
 
     /**
-     * YUJ-318 · 生成 ChannelInfoCache 的 key。保持与 iOS `channelId|channelType` 对齐。
+     *  · 生成 ChannelInfoCache 的 key。保持与 iOS `channelId|channelType` 对齐。
      */
     private static String cacheKey(String channelID, byte channelType) {
         return channelID + "|" + (int) channelType;
@@ -68,7 +68,7 @@ public class ChannelManager extends BaseManager {
 
     public WKChannel getChannel(String channelID, byte channelType) {
         if (TextUtils.isEmpty(channelID)) return null;
-        // YUJ-318 · Fast path：ConcurrentHashMap 无锁命中直接返回，避免 synchronized
+        //  · Fast path：ConcurrentHashMap 无锁命中直接返回，避免 synchronized
         // 把 adapter.convert 的 N 行查询串行化（原 H3 主线程卡顿根因）。
         String key = cacheKey(channelID, channelType);
         WKChannel cached = channelInfoCache.get(key);
@@ -77,7 +77,7 @@ public class ChannelManager extends BaseManager {
     }
 
     /**
-     * YUJ-318 · 慢路径：cache miss 时走 synchronized + list 线性扫描 + DB fallback。
+     *  · 慢路径：cache miss 时走 synchronized + list 线性扫描 + DB fallback。
      *
      * <p>保留 {@link #wkChannelList} 的原有语义是因为别的路径（比如
      * {@link #updateChannel(String, byte, String, Object)} 的单字段 in-place 修改）依赖
@@ -108,7 +108,7 @@ public class ChannelManager extends BaseManager {
     }
 
     /**
-     * YUJ-318 · 批量预热 ChannelInfoCache（对照 iOS sync 完成后的 `cacheDict` 回填）。
+     *  · 批量预热 ChannelInfoCache（对照 iOS sync 完成后的 `cacheDict` 回填）。
      *
      * <p>典型调用点：Space 切换后 sync 完成，App 层一次性把相关 channel 列表喂进来，
      * 后续 RecyclerView bind 的 `getWkChannel` 直接走 fast path，不再触发 36×N 次
@@ -206,7 +206,7 @@ public class ChannelManager extends BaseManager {
         if (isAdd) {
             wkChannelList.add(channel);
         }
-        // YUJ-318 · 与 ChannelInfoCache 保持一致：
+        //  · 与 ChannelInfoCache 保持一致：
         // - isAdd 分支把新实例写入 map
         // - 命中分支（isAdd=false）则把 map 里的 key 指向 list 中当前被 in-place 修改的实例，
         //   避免「list 里的引用被改了，map 里还指向旧实例」的潜在漂移。
@@ -214,7 +214,7 @@ public class ChannelManager extends BaseManager {
     }
 
     /**
-     * YUJ-318 · 返回 {@link #wkChannelList} 中与入参 key 相同的实例；若不存在则返回入参本身。
+     *  · 返回 {@link #wkChannelList} 中与入参 key 相同的实例；若不存在则返回入参本身。
      * 配合 {@link #updateChannel(WKChannel)} 的 in-place 字段修改路径，保证 cache 指向
      * list 中真正被修改的那份对象。
      */
@@ -524,7 +524,7 @@ public class ChannelManager extends BaseManager {
 
     public synchronized void clearARMCache() {
         wkChannelList.clear();
-        // YUJ-318 · ChannelInfoCache 必须同步清理，否则切账号 / 退出登录后 map 里的
+        //  · ChannelInfoCache 必须同步清理，否则切账号 / 退出登录后 map 里的
         // stale 实例会让 fast path 返回旧 Space 的 channel（同 iOS `removeChannelAllCache`）。
         channelInfoCache.clear();
     }

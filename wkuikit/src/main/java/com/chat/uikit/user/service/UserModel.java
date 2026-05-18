@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user.service;
 
 import android.text.TextUtils;
@@ -157,7 +173,7 @@ public class UserModel extends WKBaseModel {
     }
 
     /**
-     * YUJ-238 (对齐 web PR#1092 BotDetailModal)：bot 创建者为自己管理的
+     *  (对齐 web PR#1092 BotDetailModal)：bot 创建者为自己管理的
      * bot 更新头像时需要显式指定 {@code targetUid}，而不是沿用老实现里
      * 写死的 {@code WKConfig.getUid()}。后端 {@code POST /users/:uid/avatar}
      * 内置 {@code creator_uid} 校验，非 owner 请求会 403 —— 这里只负责把
@@ -182,7 +198,7 @@ public class UserModel extends WKBaseModel {
     }
 
     /**
-     * YUJ-238 (对齐 web PR#1092 BotDetailModal handleSaveDescription)：
+     *  (对齐 web PR#1092 BotDetailModal handleSaveDescription)：
      * bot 创建者更新 bot 简介。后端 {@code PUT /robot/:uid/description}
      * 已内置 creator_uid 校验，非 owner 直接 403。
      */
@@ -410,12 +426,12 @@ public class UserModel extends WKBaseModel {
      * 可写入 WKIM 本地缓存的 {@link WKChannelMember}，<b>关键：把外部群相关字段
      * 完整透传到 {@code extraMap}</b>。
      *
-     * <p>bug（YUJ-178 / dmwork-android#134 问题 2）：历史实现漏掉 extraMap 赋值，
+     * <p>bug（ /  问题 2）：历史实现漏掉 extraMap 赋值，
      * 导致随后 {@code ChannelMembersManager.save(member)} 走 INSERT OR REPLACE 路径时，
      * 目标 row 的 {@code extra} 列被清空。再次打开成员列表读本地 DB 时就失去
      * {@code home_space_id / source_space_name} 等字段，{@code @SpaceName} 后缀丢失。
      *
-     * <p>透传字段清单与 {@code GroupModel.serialize}（YUJ-86 EP1）保持一致，集中在这里
+     * <p>透传字段清单与 {@code GroupModel.serialize}（ EP1）保持一致，集中在这里
      * 有两个好处：
      * <ol>
      *     <li>避免 {@code GroupModel.serialize} / {@code UserModel.getUserInfo} 双路径漂移；</li>
@@ -446,7 +462,7 @@ public class UserModel extends WKBaseModel {
         }
         member.updatedAt = gm.updated_at;
         member.createdAt = gm.created_at;
-        // 外部群字段写入 extraMap（YUJ-178 修复点，对齐 GroupModel.serialize 的清单）。
+        // 外部群字段写入 extraMap（ 修复点，对齐 GroupModel.serialize 的清单）。
         // 注：这里用纯 Java null+empty 判空而不是 TextUtils.isEmpty — 解析层需在 JVM
         // 单测里跑，而 host JVM 的 android.jar stub 对 TextUtils.isEmpty 返回默认 false。
         HashMap<String, Object> extras = new HashMap<>();
@@ -466,10 +482,10 @@ public class UserModel extends WKBaseModel {
         if (!isNullOrEmpty(gm.home_space_name)) {
             extras.put(WKChannelMemberExtras.homeSpaceName, gm.home_space_name);
         }
-        // YUJ-380 · 实名徽章 Phase A：透传 realname_verified 到 extraMap，
+        //  · 实名徽章 Phase A：透传 realname_verified 到 extraMap，
         // 让群成员列表 + 聊天气泡作者名旁的迷你蓝勾能直接消费。
         //
-        // YUJ-395 P0-2：字段改为装箱 Boolean，tri-state 语义：
+        //  P0-2：字段改为装箱 Boolean，tri-state 语义：
         //   - Boolean.TRUE / Boolean.FALSE → put 进 extraMap（覆盖 stale），
         //     resolver 读到显式答案后不 fallback 到 channel；
         //   - null（后端未下发）            → 不 put，let resolver fallback。
@@ -578,7 +594,7 @@ public class UserModel extends WKBaseModel {
     }
 
     // ---------------------------------------------------------------------
-    // YUJ-361 (#227) · OCTO 实名认证（verify-side-channel 方案 J v3）
+    //  (#227) · OCTO 实名认证（verify-side-channel 方案 J v3）
     // ---------------------------------------------------------------------
 
     public interface IVerifyTokenListener {
@@ -586,7 +602,7 @@ public class UserModel extends WKBaseModel {
     }
 
     /**
-     * 发起实名认证握手：向 dmworkim 后端要一次性 verify-token，后端返回
+     * 发起实名认证握手：向 后端要一次性 verify-token，后端返回
      * 已拼好 return_to=dmwork://verified 的 verify_url；调用方应把该 URL
      * 喂给 {@code CustomTabsIntent} 打开。
      */

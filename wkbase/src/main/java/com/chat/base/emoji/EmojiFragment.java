@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.base.emoji;
 
 import android.content.res.Configuration;
@@ -29,7 +45,7 @@ import java.util.List;
  */
 public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     EmojiAdapter emojiAdapter;
-    // YUJ-282 · twin of emojiAdapter: the "常用表情" header strip. Kept as a field
+    //  · twin of emojiAdapter: the "常用表情" header strip. Kept as a field
     // so onConfigurationChanged can push the new pane width into it as well —
     // same show-at-use one-shot-width bug as the main grid, same fix.
     private EmojiAdapter headerAdapter;
@@ -43,7 +59,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
 
     @Override
     protected void initView() {
-        // YUJ-251: use pane width (Activity-visible bounds) so the emoji grid tracks
+        // : use pane width (Activity-visible bounds) so the emoji grid tracks
         // the current Embedding pane instead of the full device width.
         width = PaneMetrics.widthPx(requireContext()) - (AndroidUtilities.dp(30) * 8);
         Theme.setColorFilter(getContext(), wkVBinding.deleteIv, R.color.popupTextColor);
@@ -96,7 +112,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     }
 
     /**
-     * YUJ-279 · 折叠屏 phone→unfold 右侧自适应修复：
+     *  · 折叠屏 phone→unfold 右侧自适应修复：
      * EmojiFragment 在正显示时（panel 已打开）unfold 到展开态，原先 {@link #initView()}
      * 里的 {@code width = PaneMetrics.widthPx(ctx) - dp(30)*8} 是 show-at-use 一次性计算，
      * pane 宽度变化后不会重算，导致 emoji 间距与新 pane 不匹配。
@@ -116,7 +132,7 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
         width = newWidth;
         emojiAdapter.setWidth(newWidth);
         emojiAdapter.notifyDataSetChanged();
-        // YUJ-282 · twin path: the common-emoji header strip shares the same
+        //  · twin path: the common-emoji header strip shares the same
         // one-shot width; refresh it alongside the main grid so margins match
         // the new pane after unfold/fold. null-guarded: header only exists
         // when the user has recently-used emoji.

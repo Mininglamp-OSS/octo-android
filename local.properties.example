@@ -1,0 +1,40 @@
+# OctoIM Android — local.properties example
+# Copy this file to local.properties and fill in your values.
+# This file is git-ignored and should NOT be committed.
+
+# Android SDK location
+sdk.dir=/path/to/android-sdk
+
+# Application ID (default: com.example-app.octo)
+applicationId=com.example-app.octo
+
+# App identifier sent to backend (default: octoim)
+APP_IDENTIFIER=octoim
+
+# Server URLs
+DEV_API_BASE_URL=https://your-dev-server.com/api
+DEV_WEB_BASE_URL=https://your-dev-server.com/web/
+PROD_API_BASE_URL=https://your-prod-server.com/api
+PROD_WEB_BASE_URL=https://your-prod-server.com/web/
+
+# Release signing (optional, debug builds use default keystore)
+# RELEASE_STORE_FILE=release.jks
+# RELEASE_STORE_PASSWORD=
+# RELEASE_KEY_ALIAS=release
+# RELEASE_KEY_PASSWORD=
+
+# Push vendor keys (optional, push is disabled when empty)
+# XIAOMI_APP_ID=
+# XIAOMI_APP_KEY=
+# HUAWEI_APP_ID=
+# OPPO_APP_KEY=
+# OPPO_APP_SECRET=
+# VIVO_API_KEY=
+# VIVO_APP_ID=
+
+# Bugly crash reporting (optional, disabled when empty)
+# BUGLY_APP_ID=
+
+# OPPO Maven repository credentials (optional, uses local AAR fallback)
+# OPPO_MAVEN_USER=
+# OPPO_MAVEN_PASSWORD=

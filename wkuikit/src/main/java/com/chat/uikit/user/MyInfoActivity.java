@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026-present OctoIM contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.chat.uikit.user;
 
 import android.content.Intent;
@@ -66,7 +82,7 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
     @Override
     protected void onResume() {
         super.onResume();
-        // YUJ-361 (#227)：名字行应用 displayName + ✓ 勾 + 已实名 tag
+        //  (#227)：名字行应用 displayName + ✓ 勾 + 已实名 tag
         UserInfoEntity me = WKConfig.getInstance().getUserInfo();
         wkVBinding.nameTv.setText(me.getDisplayName());
         int verifiedVis = me.realname_verified ? View.VISIBLE : View.GONE;
@@ -92,7 +108,7 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
                 if (shortNoObject != null) {
                     String shortNo = (String) shortNoObject;
                     wkVBinding.identityTv.setText(shortNo);
-                    // YUJ-361：channel 回包里的 name 是 nickname，实名态下仍以 displayName 为准
+                    // ：channel 回包里的 name 是 nickname，实名态下仍以 displayName 为准
                     wkVBinding.nameTv.setText(WKConfig.getInstance().getUserInfo().getDisplayName());
                 }
             }
@@ -132,7 +148,7 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
             String resultStr = result.getData().getStringExtra("result");
             int updateType = result.getData().getIntExtra("updateType", 1);
             if (updateType == 1) {
-                // YUJ-361 (#227)：用户改的是 nickname（name），displayName 在实名态下
+                //  (#227)：用户改的是 nickname（name），displayName 在实名态下
                 // 仍应显示 realname。先把 name 落盘，再按 displayName 重绘。
                 UserInfoEntity local = WKConfig.getInstance().getUserInfo();
                 local.name = resultStr;

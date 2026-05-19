@@ -63,7 +63,6 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
     protected boolean destroyWhenDone;
     private boolean decodeSingleFrame;
     private boolean singleFrameDecoded;
-    private boolean forceFrameRedraw;
     private boolean applyingLayerColors;
 
     protected int currentFrame;
@@ -352,49 +351,75 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
     }
 
     protected boolean scheduleNextGetFrame() {
-        if (loadFrameTask != null || nativePtr == 0 || isRecycled || width == 0 || height == 0) {
+        if (loadFrameTask != null || nextRenderingBitmap != null || nativePtr == 0
+                || destroyWhenDone || isRecycled || width == 0 || height == 0) {
             return false;
         }
 
         loadFrameTask = () -> {
-            if (isRecycled) return;
+            if (isRecycled || nativePtr == 0) {
+                uiHandler.post(() -> {
+                    loadFrameTask = null;
+                    if (destroyWhenDone) {
+                        checkRunningTasks();
+                    }
+                });
+                return;
+            }
+            long ptr = nativePtr;
 
             if (backgroundBitmap == null) {
                 try {
                     backgroundBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 } catch (Throwable e) {
+                    uiHandler.post(() -> {
+                        loadFrameTask = null;
+                        if (destroyWhenDone) {
+                            checkRunningTasks();
+                        }
+                    });
                     return;
                 }
             }
 
             if (pendingColorUpdates != null) {
                 for (HashMap.Entry<String, Integer> entry : pendingColorUpdates.entrySet()) {
-                    setLayerColor(nativePtr, entry.getKey(), entry.getValue());
+                    setLayerColor(ptr, entry.getKey(), entry.getValue());
                 }
                 pendingColorUpdates = null;
             }
 
             if (pendingReplaceColors != null) {
-                replaceColors(nativePtr, pendingReplaceColors);
+                replaceColors(ptr, pendingReplaceColors);
                 pendingReplaceColors = null;
             }
 
+            final int frameToDecode = currentFrame;
+
             try {
-                getFrame(nativePtr, currentFrame, backgroundBitmap, width, height,
+                getFrame(ptr, frameToDecode, backgroundBitmap, width, height,
                         backgroundBitmap.getRowBytes(), true);
             } catch (Exception e) {
                 // ignore
             }
 
             uiHandler.post(() -> {
-                nextRenderingBitmap = backgroundBitmap;
-                backgroundBitmap = null;
                 loadFrameTask = null;
 
                 if (destroyWhenDone) {
                     checkRunningTasks();
                     return;
                 }
+
+                if (!isRunning && frameToDecode != currentFrame) {
+                    backgroundBitmap = backgroundBitmap != null ? backgroundBitmap : nextRenderingBitmap;
+                    nextRenderingBitmap = null;
+                    scheduleNextGetFrame();
+                    return;
+                }
+
+                nextRenderingBitmap = backgroundBitmap;
+                backgroundBitmap = null;
 
                 if (isRunning) {
                     if (customEndFrame >= 0) {
@@ -476,13 +501,20 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
         if (frame < 0 || frame >= metaData[0]) return;
         currentFrame = frame;
         nextFrameIsLast = false;
+        singleFrameDecoded = false;
+
         if (force) {
-            singleFrameDecoded = false;
+            if (nextRenderingBitmap != null) {
+                backgroundBitmap = nextRenderingBitmap;
+                nextRenderingBitmap = null;
+            }
             scheduleNextGetFrame();
         }
+
         if (notify) {
             invalidateInternal();
         }
+        invalidateSelf();
     }
 
     public void setProgress(float progress) {
@@ -557,6 +589,7 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
                 if (nextRenderingBitmap != null) {
                     renderingBitmap = nextRenderingBitmap;
                     nextRenderingBitmap = null;
+                    scheduleNextGetFrame();
                 }
             }
             uiHandler.postDelayed(this::invalidateInternal,

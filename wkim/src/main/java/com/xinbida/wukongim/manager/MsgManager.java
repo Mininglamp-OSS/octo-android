@@ -3,6 +3,8 @@ package com.xinbida.wukongim.manager;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.xinbida.wukongim.BuildConfig;
+
 import androidx.annotation.NonNull;
 
 import com.xinbida.wukongim.WKIM;
@@ -928,9 +930,11 @@ public class MsgManager extends BaseManager {
 
 
     public void setSendMsgCallback(WKMsg msg) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[setSendMsgCallback] channelID=" + msg.channelID + " clientMsgNO=" + msg.clientMsgNO + " listenerCount=" + (sendMsgCallBackListenerHashMap != null ? sendMsgCallBackListenerHashMap.size() : 0));
         if (sendMsgCallBackListenerHashMap != null && !sendMsgCallBackListenerHashMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (Map.Entry<String, ISendMsgCallBackListener> entry : sendMsgCallBackListenerHashMap.entrySet()) {
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[setSendMsgCallback] notifying listener key=" + entry.getKey());
                     entry.getValue().onInsertMsg(msg);
                 }
             });
@@ -1011,6 +1015,7 @@ public class MsgManager extends BaseManager {
     }
 
     public void setSendMsgAck(WKMsg msg) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[setSendMsgAck] channelID=" + msg.channelID + " status=" + msg.status + " msgID=" + msg.messageID + " ackListenerCount=" + (sendAckListenerMap != null ? sendAckListenerMap.size() : 0));
         if (sendAckListenerMap != null && !sendAckListenerMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (Map.Entry<String, ISendACK> entry : sendAckListenerMap.entrySet()) {
@@ -1062,9 +1067,11 @@ public class MsgManager extends BaseManager {
     }
 
     public void setRefreshMsg(WKMsg msg, boolean left) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[setRefreshMsg] channelID=" + msg.channelID + " status=" + msg.status + " msgID=" + msg.messageID + " listenerCount=" + (refreshMsgListenerMap != null ? refreshMsgListenerMap.size() : 0));
         if (refreshMsgListenerMap != null && !refreshMsgListenerMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (Map.Entry<String, IRefreshMsg> entry : refreshMsgListenerMap.entrySet()) {
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[setRefreshMsg] notifying listener key=" + entry.getKey());
                     entry.getValue().onRefresh(msg, left);
                 }
             });
@@ -1301,9 +1308,16 @@ public class MsgManager extends BaseManager {
     }
 
     public void pushNewMsg(List<WKMsg> wkMsgList) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[pushNewMsg] msgCount=" + (wkMsgList != null ? wkMsgList.size() : 0) + " listenerCount=" + (newMsgListenerMap != null ? newMsgListenerMap.size() : 0));
+        if (wkMsgList != null) {
+            for (WKMsg m : wkMsgList) {
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[pushNewMsg] msg channelID=" + m.channelID + " channelType=" + m.channelType + " fromUID=" + m.fromUID + " type=" + m.type);
+            }
+        }
         if (newMsgListenerMap != null && !newMsgListenerMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (Map.Entry<String, INewMsgListener> entry : newMsgListenerMap.entrySet()) {
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[pushNewMsg] notifying listener key=" + entry.getKey());
                     entry.getValue().newMsg(wkMsgList);
                 }
             });

@@ -4,6 +4,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
 
+import android.util.Log;
+
+import com.xinbida.wukongim.BuildConfig;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
 import com.xinbida.wukongim.db.ConversationDbManager;
@@ -328,9 +331,11 @@ public class MessageHandler {
                 } else if (g_msg.packetType == WKMsgType.SENDACK) {
                     //发送ack
                     WKSendAckMsg sendAckMsg = (WKSendAckMsg) g_msg;
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SENDACK] clientSeq=" + sendAckMsg.clientSeq + " messageID=" + sendAckMsg.messageID + " reasonCode=" + sendAckMsg.reasonCode + " no_persist=" + no_persist);
                     WKMsg wkMsg = null;
                     if (no_persist == 0) {
                         wkMsg = MsgDbManager.getInstance().updateMsgSendStatus(sendAckMsg.clientSeq, sendAckMsg.messageSeq, sendAckMsg.messageID, sendAckMsg.reasonCode);
+                        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SENDACK] updateMsgSendStatus result wkMsg=" + (wkMsg != null ? "found(channelId=" + wkMsg.channelID + " status=" + wkMsg.status + ")" : "null"));
                     }
                     if (wkMsg == null) {
                         wkMsg = new WKMsg();
@@ -338,6 +343,7 @@ public class MessageHandler {
                         wkMsg.messageID = sendAckMsg.messageID;
                         wkMsg.status = sendAckMsg.reasonCode;
                         wkMsg.messageSeq = (int) sendAckMsg.messageSeq;
+                        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SENDACK] wkMsg was null, created placeholder");
                     }
                     WKIM.getInstance().getMsgManager().setSendMsgAck(wkMsg);
 
@@ -346,6 +352,7 @@ public class MessageHandler {
                 } else if (g_msg.packetType == WKMsgType.RECEIVED) {
                     //收到消息
                     WKMsg message = WKProto.getInstance().baseMsg2WKMsg(g_msg);
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[RECEIVED] msgID=" + message.messageID + " channelID=" + message.channelID + " channelType=" + message.channelType + " fromUID=" + message.fromUID + " type=" + message.type);
                     message.header.noPersist = no_persist == 1;
                     message.header.redDot = red_dot == 1;
                     message.header.syncOnce = sync_once == 1;
@@ -366,6 +373,7 @@ public class MessageHandler {
 
     private void handleReceiveMsg(WKMsg message) {
         message = parsingMsg(message);
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[handleReceiveMsg] channelID=" + message.channelID + " type=" + message.type + " msgID=" + message.messageID + " isInsideMsg=" + (message.type == WKMsgContentType.WK_INSIDE_MSG));
         if (message.type != WKMsgContentType.WK_INSIDE_MSG) {
             addReceivedMsg(message);
         } else {
@@ -406,6 +414,7 @@ public class MessageHandler {
                 receivedMsgList.clear();
             }
         }
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[saveReceiveMsg] tempList=" + (tempList != null ? tempList.size() + " msgs" : "null/empty"));
 
         if (tempList != null) {
             saveSyncMsg(tempList);

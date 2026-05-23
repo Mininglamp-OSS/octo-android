@@ -17,6 +17,7 @@
 package com.chat.uikit.thread;
 
 import android.content.Intent;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.TextView;
 
@@ -74,6 +75,14 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
 
     @Override
     protected void initListener() {
+        SingleClickUtil.onSingleClick(wkVBinding.threadNameLayout, v -> {
+            if (!isCreator && !isGroupAdmin) {
+                WKToastUtils.getInstance().showToastNormal(getString(R.string.str_rename_thread_no_permission));
+                return;
+            }
+            showRenameDialog();
+        });
+
         SingleClickUtil.onSingleClick(wkVBinding.threadMembersLayout, v -> {
             Intent intent = new Intent(this, ThreadMembersActivity.class);
             intent.putExtra("groupNo", groupNo);
@@ -160,7 +169,44 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
     @Override
     protected void initData() {
         super.initData();
+        WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("thread_detail_channel", (channel, isEnd) -> {
+            if (channel.channelType != WKChannelType.COMMUNITY_TOPIC) return;
+            if (!channel.channelID.equals(channelId)) return;
+            if (!TextUtils.isEmpty(channel.channelName)) {
+                wkVBinding.threadNameTv.setText(channel.channelName);
+            }
+        });
         loadDetail();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("thread_detail_channel");
+    }
+
+    private void showRenameDialog() {
+        String currentName = wkVBinding.threadNameTv.getText() != null
+                ? wkVBinding.threadNameTv.getText().toString() : "";
+        WKDialogUtils.getInstance().showInputDialog(this,
+                getString(R.string.str_rename_thread),
+                getString(R.string.str_rename_thread_hint),
+                currentName, "", 50, text -> {
+                    String trimmed = text.trim();
+                    if (TextUtils.isEmpty(trimmed)) {
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.str_thread_name_empty));
+                        return;
+                    }
+                    if (trimmed.equals(currentName)) return;
+                    ThreadModel.getInstance().updateThreadName(groupNo, shortId, trimmed, (code, msg) -> {
+                        if (code == HttpResponseCode.success) {
+                            wkVBinding.threadNameTv.setText(trimmed);
+                            WKIM.getInstance().getChannelManager().fetchChannelInfo(channelId, WKChannelType.COMMUNITY_TOPIC);
+                        } else {
+                            WKToastUtils.getInstance().showToastNormal(msg);
+                        }
+                    });
+                });
     }
 
     private void loadDetail() {
@@ -170,7 +216,6 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                 threadEntity = entity;
                 wkVBinding.threadNameTv.setText(entity.name);
                 wkVBinding.memberCountTv.setText(String.valueOf(entity.member_count));
-                wkVBinding.creatorNameTv.setText(entity.creator_name);
 
                 String currentUid = WKConfig.getInstance().getUid();
                 isCreator = currentUid.equals(entity.creator_uid);
@@ -190,6 +235,27 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                 isGroupAdmin = groupMember != null
                         && (groupMember.role == WKChannelMemberRole.admin
                         || groupMember.role == WKChannelMemberRole.manager);
+
+                // 创建者名字：API 未返回时从群成员缓存查
+                String displayCreatorName = entity.creator_name;
+                if (TextUtils.isEmpty(displayCreatorName) && !TextUtils.isEmpty(entity.creator_uid)) {
+                    WKChannelMember creatorMember = WKIM.getInstance().getChannelMembersManager()
+                            .getMember(groupNo, WKChannelType.GROUP, entity.creator_uid);
+                    if (creatorMember != null) {
+                        displayCreatorName = !TextUtils.isEmpty(creatorMember.memberRemark)
+                                ? creatorMember.memberRemark : creatorMember.memberName;
+                    }
+                }
+                if (!TextUtils.isEmpty(displayCreatorName)) {
+                    wkVBinding.creatorNameTv.setText(displayCreatorName);
+                }
+
+                // 同步 thread name 到 channelInfo
+                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, WKChannelType.COMMUNITY_TOPIC);
+                if (channel != null && !TextUtils.isEmpty(entity.name)) {
+                    channel.channelName = entity.name;
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
+                }
 
                 // 通过成员列表判断当前用户是否已加入子区
                 checkMembership(currentUid);

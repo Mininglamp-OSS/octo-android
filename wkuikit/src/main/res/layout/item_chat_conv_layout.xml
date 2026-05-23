@@ -38,6 +38,17 @@
             android:layout_marginStart="10dp"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/threadSourceTv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="2dp"
+                android:ellipsize="end"
+                android:lines="1"
+                android:textColor="#9498A8"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">

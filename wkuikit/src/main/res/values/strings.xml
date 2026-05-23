@@ -408,6 +408,10 @@
     <string name="str_enter_thread">进入子区</string>
     <string name="str_thread_name">子区名称</string>
     <string name="str_thread_name_hint">输入子区名称</string>
+    <string name="str_rename_thread">修改子区名称</string>
+    <string name="str_rename_thread_hint">请输入子区名称</string>
+    <string name="str_thread_name_empty">子区名称不能为空</string>
+    <string name="str_rename_thread_no_permission">仅子区创建者或群管理员可修改名称</string>
     <string name="str_join_thread">加入子区</string>
     <string name="str_leave_thread">离开子区</string>
     <string name="str_archive_thread">归档子区</string>
@@ -427,8 +431,15 @@
     <string name="str_thread_msg_count">%d条 ></string>
     <string name="str_expand_threads">%d 个子区</string>
     <string name="str_collapse_threads">收起 %d 个子区</string>
-    <string name="str_group_chat">群聊</string>
-    <string name="str_private_chat">私聊</string>
+    <string name="str_group_chat">关注</string>
+    <string name="str_private_chat">最近</string>
+
+    <string name="follow_empty_title">关注你最在意的会话</string>
+    <string name="follow_empty_desc">把重要的群聊、私聊、子区集中在这里，不再被消息淹没</string>
+    <string name="follow_empty_create_btn">＋ 新建分组</string>
+
+    <string name="follow_conversation">添加到关注</string>
+    <string name="unfollow_conversation">取消关注</string>
 
     <string name="section_pinned">置顶</string>
     <string name="section_channels">频道</string>
@@ -444,7 +455,9 @@
     <string name="remove_from_category">移出分组</string>
     <string name="move_to_front">移到最前</string>
     <string name="reorder_category">分组排序</string>
+    <string name="reorder_items">排列顺序</string>
     <string name="reorder_done">完成</string>
+    <string name="reorder_version_conflict">顺序已被其它设备更新</string>
     <string name="rename_category">重命名</string>
     <string name="rename_category_title">重命名分组</string>
     <string name="rename_category_hint">请输入分组名称</string>

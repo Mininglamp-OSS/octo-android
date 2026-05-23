@@ -141,6 +141,25 @@ public class ThreadModel extends WKBaseModel {
     }
 
     /**
+     * 修改子区名称
+     */
+    public void updateThreadName(String groupNo, String shortId, String name, ICommonListener listener) {
+        JSONObject body = new JSONObject();
+        body.put("name", name);
+        request(createService(ThreadService.class).updateThread(groupNo, shortId, body), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                listener.onResult(HttpResponseCode.success, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                listener.onResult(code, msg);
+            }
+        });
+    }
+
+    /**
      * 加入子区
      */
     public void joinThread(String groupNo, String shortId, ICommonListener listener) {

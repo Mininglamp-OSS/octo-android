@@ -17,6 +17,7 @@
 package com.chat.uikit.chat.adapter;
 
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -104,6 +105,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.chat.uikit.sidebar.FollowedKeysStore;
+import com.chat.uikit.sidebar.SidebarItemEntity;
+
 /**
  * 2019-11-15 13:46
  * 会话记录适配器
@@ -112,6 +116,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private static final int TYPE_NORMAL = 0;   // 私聊：传统 IM 风格
     private static final int TYPE_COMPACT = 1;  // 群聊：紧凑频道列表风格
     private static final int TYPE_SECTION_HEADER = 2; // 分组 header
+
+    private boolean recentTabContext = false;
+
+    public void setRecentTabContext(boolean recentTabContext) {
+        this.recentTabContext = recentTabContext;
+    }
+
+    public boolean isRecentTabContext() {
+        return recentTabContext;
+    }
 
     /**
      *  · 选中态 payload：点击群/子区后只刷 contentLayout 背景，不全 rebind，
@@ -130,6 +144,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private final Set<String> collapsedSections = new HashSet<>();
     // 缓存：groupNo → 子区列表，空列表 表示已加载但无数据
     private final Map<String, List<ThreadEntity>> threadDataCache = new ConcurrentHashMap<>();
+
+    public Map<String, List<ThreadEntity>> getThreadDataCache() {
+        return threadDataCache;
+    }
     // 缓存：groupNo → 上次渲染的结构签名，用于跳过不必要的容器重建
     private final Map<String, String> renderedThreadSigs = new ConcurrentHashMap<>();
 
@@ -325,6 +343,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     @Override
     protected int getDefItemViewType(int position) {
         ChatConversationMsg item = getItem(position);
+        if (recentTabContext) {
+            return TYPE_NORMAL;
+        }
         if (item != null && item.isSectionHeader) {
             return TYPE_SECTION_HEADER;
         }
@@ -367,15 +388,29 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         setUnreadCount(helper, conversationMsg, false);
         showTime(helper, item);
         showChannel(helper, item);
-        // showReminders 统一处理内容显示：有草稿显示草稿，否则显示最后一条消息
         showReminders(helper, conversationMsg);
         setStatus(helper, item, false);
         showTyping(helper, conversationMsg);
         showCalling(helper, conversationMsg);
         showThreadPreviews(helper, item);
-        //  · showChannel 已根据 top 覆盖过 contentLayout 背景；最后再走选中态
-        // 覆写，保证 selected > top > normal 的优先级。
+        showThreadSource(helper, item);
         applySelectedBackground(helper, item);
+
+        if (recentTabContext && item.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            if (conversationMsg.threadName != null && !conversationMsg.threadName.isEmpty()) {
+                helper.setText(R.id.nameTv, conversationMsg.threadName);
+            }
+            if (conversationMsg.threadParentGroupNo != null && !conversationMsg.threadParentGroupNo.isEmpty()) {
+                AvatarView avatarView = helper.getView(R.id.avatarView);
+                WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                        .getChannel(conversationMsg.threadParentGroupNo, WKChannelType.GROUP);
+                if (parentChannel != null) {
+                    avatarView.defaultAvatarTv.setVisibility(View.GONE);
+                    avatarView.imageView.setVisibility(View.VISIBLE);
+                    avatarView.showAvatar(parentChannel, true);
+                }
+            }
+        }
     }
 
     private void convertCompact(@NonNull BaseViewHolder helper, ChatConversationMsg conversationMsg) {
@@ -1278,7 +1313,45 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         boolean isTop;
         AvatarView avatarView = helper.getView(R.id.avatarView);
         avatarView.setSize(52);
-        if (item.getWkChannel() != null) {
+
+        if (recentTabContext && item.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            int sep = item.channelID.indexOf("____");
+            String parentGroupNo = sep > 0 ? item.channelID.substring(0, sep) : "";
+            if (!parentGroupNo.isEmpty()) {
+                WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                        .getChannel(parentGroupNo, WKChannelType.GROUP);
+                if (parentChannel != null) {
+                    avatarView.defaultAvatarTv.setVisibility(View.GONE);
+                    avatarView.imageView.setVisibility(View.VISIBLE);
+                    avatarView.showAvatar(parentChannel, true);
+                } else {
+                    avatarView.defaultAvatarTv.setVisibility(View.GONE);
+                    avatarView.imageView.setVisibility(View.VISIBLE);
+                    avatarView.imageView.setImageResource(R.drawable.default_view_bg);
+                    WKIM.getInstance().getChannelManager().fetchChannelInfo(parentGroupNo, WKChannelType.GROUP);
+                }
+            }
+            if (item.getWkChannel() != null) {
+                if (TextUtils.isEmpty(showName))
+                    showName = TextUtils.isEmpty(item.getWkChannel().channelRemark)
+                            ? item.getWkChannel().channelName : item.getWkChannel().channelRemark;
+            }
+            if (TextUtils.isEmpty(showName)) {
+                showName = getContext().getString(R.string.chat);
+                WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
+            }
+            isTop = (item.getWkChannel() != null && item.getWkChannel().top == 1);
+            helper.setBackgroundResource(R.id.contentLayout, isTop ? R.drawable.home_bg : R.drawable.layout_bg);
+            LinearLayout categoryLayout = helper.getView(R.id.categoryLayout);
+            categoryLayout.removeAllViews();
+            if (item.getWkChannel() != null && item.getWkChannel().mute == 1) {
+                ImageView muteIV = new ImageView(getContext());
+                muteIV.setImageResource(R.mipmap.list_mute);
+                Theme.setColorFilter(muteIV, ContextCompat.getColor(getContext(), R.color.popupTextColor));
+                categoryLayout.addView(muteIV, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 3, 1, 0, 0));
+            }
+            helper.setGone(R.id.forbiddenIv, true);
+        } else if (item.getWkChannel() != null) {
             if (item.channelType == WKChannelType.COMMUNITY) {
                 EndpointManager.getInstance().invoke("show_community_avatar", new ShowCommunityAvatarMenu(getContext(), avatarView, item.getWkChannel()));
             } else {
@@ -1355,6 +1428,17 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 //            if (!isScrolling)
             WKIM.getInstance().getChannelManager().fetchChannelInfo(item.channelID, item.channelType);
         }
+        TextView nameTv = helper.getView(R.id.nameTv);
+        if (recentTabContext && item.channelType == WKChannelType.COMMUNITY_TOPIC && nameTv != null) {
+            Drawable hashIcon = ContextCompat.getDrawable(getContext(), R.drawable.ic_thread);
+            if (hashIcon != null) {
+                hashIcon.setBounds(0, 0, AndroidUtilities.dp(14), AndroidUtilities.dp(14));
+                nameTv.setCompoundDrawables(hashIcon, null, null, null);
+                nameTv.setCompoundDrawablePadding(AndroidUtilities.dp(2));
+            }
+        } else if (nameTv != null) {
+            nameTv.setCompoundDrawables(null, null, null, null);
+        }
         helper.setText(R.id.nameTv, showName);
         applyExternalGroupTag(helper, item);
     }
@@ -1392,8 +1476,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             loadThreadPreviewsSilent(groupNo);
             return false;
         }
+        FollowedKeysStore store = !recentTabContext ? FollowedKeysStore.getInstance() : null;
         for (ThreadEntity e : cached) {
-            if (e.status == 1) return true;
+            if (e.status != 1) continue;
+            if (store != null) {
+                String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, e.short_id);
+                if (!store.isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, threadChannelId)) continue;
+            }
+            return true;
         }
         return false;
     }
@@ -1411,10 +1501,34 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 组合生成签名，若 container 已渲染过相同签名则直接跳过 removeAllViews() + inflate，
      * 避免 notifyItemChanged 时 rowView 被替换导致 touch 链路被 cancel。
      */
+    private void showThreadSource(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
+        TextView threadSourceTv = helper.getView(R.id.threadSourceTv);
+        if (threadSourceTv == null) return;
+        if (!recentTabContext || item.channelType != WKChannelType.COMMUNITY_TOPIC) {
+            threadSourceTv.setVisibility(View.GONE);
+            return;
+        }
+        String channelId = item.channelID;
+        int sep = channelId.indexOf("____");
+        if (sep <= 0) {
+            threadSourceTv.setVisibility(View.GONE);
+            return;
+        }
+        String parentGroupNo = channelId.substring(0, sep);
+        WKChannel parentChannel = WKIM.getInstance().getChannelManager()
+                .getChannel(parentGroupNo, WKChannelType.GROUP);
+        String parentName = (parentChannel != null && parentChannel.channelName != null
+                && !parentChannel.channelName.isEmpty())
+                ? parentChannel.channelName : parentGroupNo;
+        threadSourceTv.setText(parentName);
+        threadSourceTv.setVisibility(View.VISIBLE);
+    }
+
     private void showThreadPreviews(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
         FrameLayout container = helper.getView(R.id.threadPreviewContainer);
 
-        if (item.channelType != WKChannelType.GROUP
+        if (recentTabContext
+                || item.channelType != WKChannelType.GROUP
                 || WKConfig.getInstance().getAppConfig().thread_on != 1) {
             container.removeAllViews();
             container.setVisibility(View.GONE);
@@ -1430,12 +1544,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             return;
         }
 
-        // 过滤活跃子区（status == 1）并按 updated_at 降序（与 iOS 一致）
+        // 过滤活跃子区（status == 1）；关注 Tab 只显示被关注的子区
         List<ThreadEntity> activeList = new ArrayList<>();
+        FollowedKeysStore store = !recentTabContext ? FollowedKeysStore.getInstance() : null;
         for (ThreadEntity entity : cachedList) {
-            if (entity.status == 1) {
-                activeList.add(entity);
+            if (entity.status != 1) continue;
+            if (store != null) {
+                String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+                if (!store.isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, threadChannelId)) {
+                    continue;
+                }
             }
+            activeList.add(entity);
         }
         if (activeList.isEmpty()) {
             container.removeAllViews();
@@ -1584,9 +1704,22 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                             finalEntity.short_id, finalEntity.is_joined);
                 }
             });
-            // 长按弹出通知开关菜单
+            // 长按弹出菜单
             boolean finalThreadMute = threadMute;
             List<PopupMenuItem> menuItems = new ArrayList<>();
+            if (FollowedKeysStore.getInstance().isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, finalThreadChannelId)) {
+                menuItems.add(new PopupMenuItem(
+                        getContext().getString(R.string.unfollow_conversation),
+                        R.drawable.ic_unfollow_star,
+                        () -> {
+                            if (iListener != null) {
+                                WKUIConversationMsg fakeMsg = new WKUIConversationMsg();
+                                fakeMsg.channelID = finalThreadChannelId;
+                                fakeMsg.channelType = WKChannelType.COMMUNITY_TOPIC;
+                                iListener.onClick(ItemMenu.follow, fakeMsg);
+                            }
+                        }));
+            }
             menuItems.add(new PopupMenuItem(
                     getContext().getString(finalThreadMute ? R.string.open_channel_notice : R.string.close_channel_notice),
                     finalThreadMute ? R.mipmap.msg_unmute : R.mipmap.msg_mute,
@@ -2099,11 +2232,29 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             mute = false;
         }
         List<PopupMenuItem> list = new ArrayList<>();
+        {
+            int targetType;
+            if (item.channelType == WKChannelType.PERSONAL) {
+                targetType = SidebarItemEntity.TARGET_TYPE_DM;
+            } else if (item.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                targetType = SidebarItemEntity.TARGET_TYPE_THREAD;
+            } else {
+                targetType = SidebarItemEntity.TARGET_TYPE_CHANNEL;
+            }
+            boolean isFollowed = !recentTabContext
+                    || FollowedKeysStore.getInstance().isFollowed(targetType, item.channelID);
+            list.add(new PopupMenuItem(
+                    getContext().getString(isFollowed ? R.string.unfollow_conversation : R.string.follow_conversation),
+                    isFollowed ? R.drawable.ic_unfollow_star : R.drawable.ic_follow_star,
+                    () -> iListener.onClick(ItemMenu.follow, item)));
+        }
         if (item.getWkChannel() != null) {
             list.add(new PopupMenuItem(getContext().getString(mute ? R.string.open_channel_notice : R.string.close_channel_notice), mute ? R.mipmap.msg_unmute : R.mipmap.msg_mute, () -> iListener.onClick(ItemMenu.mute, item)));
         }
-        list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
-        if (item.channelType == WKChannelType.GROUP) {
+        if (recentTabContext && item.channelType != WKChannelType.COMMUNITY_TOPIC) {
+            list.add(new PopupMenuItem(top ? getContext().getString(R.string.cancel_top) : getContext().getString(R.string.msg_top), top ? R.mipmap.msg_unpin : R.mipmap.msg_pin, () -> iListener.onClick(ItemMenu.top, item)));
+        }
+        if (!recentTabContext && (item.channelType == WKChannelType.GROUP || item.channelType == WKChannelType.PERSONAL)) {
             list.add(new PopupMenuItem(getContext().getString(R.string.move_to_category), R.mipmap.msg_forward, () -> iListener.onClick(ItemMenu.moveToCategory, item)));
         }
         list.add(new PopupMenuItem(getContext().getString(R.string.delete_msg), R.mipmap.msg_delete, () -> iListener.onClick(ItemMenu.delete, item)));
@@ -2228,6 +2379,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     public enum ItemMenu {
-        delete, top, mute, moveToCategory
+        delete, top, mute, moveToCategory, follow
     }
 }

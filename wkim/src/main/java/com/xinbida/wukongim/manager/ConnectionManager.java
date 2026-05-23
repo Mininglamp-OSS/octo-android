@@ -1,6 +1,9 @@
 package com.xinbida.wukongim.manager;
 
 import android.text.TextUtils;
+import android.util.Log;
+
+import com.xinbida.wukongim.BuildConfig;
 
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
@@ -99,6 +102,7 @@ public class ConnectionManager extends BaseManager {
     }
 
     public void setConnectionStatus(int status, String reason) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ConnectionStatus] status=" + status + " reason=" + reason + " listenerCount=" + (connectionListenerMap != null ? connectionListenerMap.size() : 0));
         if (connectionListenerMap != null && !connectionListenerMap.isEmpty()) {
             runOnMainThread(() -> {
                 for (Map.Entry<String, IConnectionStatus> entry : connectionListenerMap.entrySet()) {

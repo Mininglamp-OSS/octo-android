@@ -75,6 +75,7 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
     protected volatile boolean isRunning;
     protected volatile boolean isRecycled;
     protected volatile long nativePtr;
+    protected final Object nativeLock = new Object();
 
     private boolean invalidateOnProgressSet;
     private boolean isInvalid;
@@ -259,10 +260,12 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
         if (loadFrameTask != null) {
             destroyWhenDone = true;
         } else {
-            recycleResources();
-            if (nativePtr != 0) {
-                destroy(nativePtr);
-                nativePtr = 0;
+            synchronized (nativeLock) {
+                recycleResources();
+                if (nativePtr != 0) {
+                    destroy(nativePtr);
+                    nativePtr = 0;
+                }
             }
         }
     }
@@ -366,12 +369,9 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
                 });
                 return;
             }
-            long ptr = nativePtr;
 
-            if (backgroundBitmap == null) {
-                try {
-                    backgroundBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                } catch (Throwable e) {
+            synchronized (nativeLock) {
+                if (isRecycled || nativePtr == 0) {
                     uiHandler.post(() -> {
                         loadFrameTask = null;
                         if (destroyWhenDone) {
@@ -380,28 +380,43 @@ public class RLottieDrawable extends BitmapDrawable implements Animatable {
                     });
                     return;
                 }
-            }
+                long ptr = nativePtr;
 
-            if (pendingColorUpdates != null) {
-                for (HashMap.Entry<String, Integer> entry : pendingColorUpdates.entrySet()) {
-                    setLayerColor(ptr, entry.getKey(), entry.getValue());
+                if (backgroundBitmap == null) {
+                    try {
+                        backgroundBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    } catch (Throwable e) {
+                        uiHandler.post(() -> {
+                            loadFrameTask = null;
+                            if (destroyWhenDone) {
+                                checkRunningTasks();
+                            }
+                        });
+                        return;
+                    }
                 }
-                pendingColorUpdates = null;
-            }
 
-            if (pendingReplaceColors != null) {
-                replaceColors(ptr, pendingReplaceColors);
-                pendingReplaceColors = null;
+                if (pendingColorUpdates != null) {
+                    for (HashMap.Entry<String, Integer> entry : pendingColorUpdates.entrySet()) {
+                        setLayerColor(ptr, entry.getKey(), entry.getValue());
+                    }
+                    pendingColorUpdates = null;
+                }
+
+                if (pendingReplaceColors != null) {
+                    replaceColors(ptr, pendingReplaceColors);
+                    pendingReplaceColors = null;
+                }
+
+                try {
+                    getFrame(ptr, currentFrame, backgroundBitmap, width, height,
+                            backgroundBitmap.getRowBytes(), true);
+                } catch (Exception e) {
+                    // ignore
+                }
             }
 
             final int frameToDecode = currentFrame;
-
-            try {
-                getFrame(ptr, frameToDecode, backgroundBitmap, width, height,
-                        backgroundBitmap.getRowBytes(), true);
-            } catch (Exception e) {
-                // ignore
-            }
 
             uiHandler.post(() -> {
                 loadFrameTask = null;

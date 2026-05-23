@@ -44,6 +44,9 @@ public interface ThreadService {
     @GET("groups/{groupNo}/threads/{shortId}")
     Observable<ThreadEntity> getThreadDetail(@Path("groupNo") String groupNo, @Path("shortId") String shortId);
 
+    @PUT("groups/{groupNo}/threads/{shortId}")
+    Observable<CommonResponse> updateThread(@Path("groupNo") String groupNo, @Path("shortId") String shortId, @Body JSONObject body);
+
     @POST("groups/{groupNo}/threads/{shortId}/archive")
     Observable<CommonResponse> archiveThread(@Path("groupNo") String groupNo, @Path("shortId") String shortId);
 

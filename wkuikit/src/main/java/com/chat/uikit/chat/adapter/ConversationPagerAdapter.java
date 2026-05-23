@@ -17,43 +17,53 @@
 package com.chat.uikit.chat.adapter;
 
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/**
- * ViewPager2 的 Adapter：持有两个 RecyclerView 页面（群聊 / 私聊）。
- * 每个页面独立管理滚动位置，ViewPager2 框架级处理水平/垂直手势冲突。
- */
 public class ConversationPagerAdapter extends RecyclerView.Adapter<ConversationPagerAdapter.PageViewHolder> {
 
     private static final int PAGE_COUNT = 2;
 
     private final RecyclerView[] pages = new RecyclerView[PAGE_COUNT];
+    private final FrameLayout[] containers = new FrameLayout[PAGE_COUNT];
 
     public RecyclerView getPageRecyclerView(int position) {
         return pages[position];
     }
 
+    public FrameLayout getPageContainer(int position) {
+        return containers[position];
+    }
+
     @NonNull
     @Override
     public PageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        RecyclerView recyclerView = new RecyclerView(parent.getContext());
-        recyclerView.setLayoutParams(new ViewGroup.LayoutParams(
+        FrameLayout container = new FrameLayout(parent.getContext());
+        container.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+
+        RecyclerView recyclerView = new RecyclerView(parent.getContext());
+        recyclerView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
         recyclerView.setLayoutManager(new LinearLayoutManager(
                 parent.getContext(), LinearLayoutManager.VERTICAL, false));
         recyclerView.setItemAnimator(null);
         recyclerView.setItemViewCacheSize(15);
         recyclerView.setOverScrollMode(RecyclerView.OVER_SCROLL_ALWAYS);
-        return new PageViewHolder(recyclerView);
+
+        container.addView(recyclerView);
+        return new PageViewHolder(container, recyclerView);
     }
 
     @Override
     public void onBindViewHolder(@NonNull PageViewHolder holder, int position) {
         pages[position] = holder.recyclerView;
+        containers[position] = holder.container;
     }
 
     @Override
@@ -62,11 +72,13 @@ public class ConversationPagerAdapter extends RecyclerView.Adapter<ConversationP
     }
 
     static class PageViewHolder extends RecyclerView.ViewHolder {
+        final FrameLayout container;
         final RecyclerView recyclerView;
 
-        PageViewHolder(@NonNull RecyclerView itemView) {
-            super(itemView);
-            this.recyclerView = itemView;
+        PageViewHolder(@NonNull FrameLayout container, @NonNull RecyclerView recyclerView) {
+            super(container);
+            this.container = container;
+            this.recyclerView = recyclerView;
         }
     }
 }

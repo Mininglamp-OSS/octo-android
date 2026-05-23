@@ -54,6 +54,10 @@ public class ChatConversationMsg {
     public int sectionUnreadCount = 0;
     public boolean sectionHasMention = false;
 
+    // 最近 Tab 子区独立行：从 ThreadEntity 取的名字和父群号
+    public String threadName;
+    public String threadParentGroupNo;
+
     public ChatConversationMsg(WKUIConversationMsg msg) {
         this.uiConversationMsg = msg;
         if (uiConversationMsg.getWkChannel() != null) {

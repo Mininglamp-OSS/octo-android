@@ -36,6 +36,7 @@ import android.text.SpannableStringBuilder;
 import android.text.style.ImageSpan;
 import android.text.TextUtils;
 import android.util.Log;
+import com.chat.uikit.BuildConfig;
 import android.view.ViewConfiguration;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -1477,6 +1478,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * attach 走一次。
      */
     private void attachChannelListeners() {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.attachChannelListeners] channelId=" + channelId + " channelType=" + channelType);
         //监听频道改变通知
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo(channelId, (channel, isEnd) -> {
             if (channel == null) return;
@@ -1717,6 +1719,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * onNewIntent 调用此方法时 channelId 尚未更新，传入的 oldChannelId 即当前值。
      */
     private void detachChannelListeners(String oldChannelId) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.detachChannelListeners] oldChannelId=" + oldChannelId);
         if (TextUtils.isEmpty(oldChannelId)) return;
         WKIM.getInstance().getConnectionManager().removeOnConnectionStatusListener(oldChannelId);
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(oldChannelId);
@@ -3635,6 +3638,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private synchronized void sendMsgInserted(WKMsg msg) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.sendMsgInserted] msgChannelID=" + msg.channelID + " myChannelId=" + channelId + " channelType=" + msg.channelType + "/" + channelType + " isDeleted=" + msg.isDeleted + " noPersist=" + msg.header.noPersist);
         if (msg.channelType == channelType && msg.channelID.equals(channelId) && msg.isDeleted == 0 && !msg.header.noPersist) {
             safeAdapterAction(() -> doSendMsgInserted(msg));
         }
@@ -3689,6 +3693,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return messages;
         }
         boolean isSystemBot = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId);
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[filterSystemBotMessages] channelId=" + channelId + " currentSpaceId=" + currentSpaceId + " isSystemBot=" + isSystemBot + " inputCount=" + messages.size());
         List<WKMsg> filtered = new ArrayList<>();
         for (WKMsg msg : messages) {
             String msgSpaceId = getSpaceIdFromMsg(msg);
@@ -3696,11 +3701,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 // 无 space_id：系统 Bot 在空间模式下隐藏，普通聊天向前兼容显示
                 if (!isSystemBot) {
                     filtered.add(msg);
+                } else {
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[filterSystemBotMessages] DROPPED msg (systemBot, no spaceId) msgID=" + msg.messageID);
                 }
             } else if (msgSpaceId.equals(currentSpaceId)) {
                 filtered.add(msg); // 匹配当前 Space
+            } else {
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[filterSystemBotMessages] DROPPED msg (spaceId mismatch) msgSpaceId=" + msgSpaceId + " currentSpaceId=" + currentSpaceId + " msgID=" + msg.messageID);
             }
         }
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[filterSystemBotMessages] outputCount=" + filtered.size());
         return filtered;
     }
 
@@ -3727,8 +3737,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private synchronized void receivedMessages(List<WKMsg> list) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.receivedMessages] incoming msgCount=" + (list != null ? list.size() : 0) + " myChannelId=" + channelId);
         list = filterSystemBotMessages(list);
-        if (!WKReader.isNotEmpty(list)) return;
+        if (!WKReader.isNotEmpty(list)) {
+            if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.receivedMessages] filtered list empty, returning");
+            return;
+        }
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.receivedMessages] after filter msgCount=" + list.size());
 
         // 收集需要批量添加的 items 和需要刷新背景的索引
         List<WKUIChatMsgItemEntity> pendingItems = new ArrayList<>();
@@ -3739,16 +3754,23 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         for (WKMsg msg : list) {
             // 命令消息和撤回消息不显示在聊天
-            if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist)
+            if (msg.type == WKContentType.WK_INSIDE_MSG || msg.type == WKContentType.withdrawSystemInfo || msg.isDeleted == 1 || msg.header.noPersist) {
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[receivedMessages] SKIP msg type/deleted/noPersist: type=" + msg.type + " isDeleted=" + msg.isDeleted + " noPersist=" + msg.header.noPersist + " msgID=" + msg.messageID);
                 continue;
+            }
 
             if (msg.remoteExtra.readedCount == 0) {
                 msg.remoteExtra.unreadCount = count - 1;
             }
-            if (!msg.channelID.equals(channelId) || msg.channelType != channelType)
+            if (!msg.channelID.equals(channelId) || msg.channelType != channelType) {
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[receivedMessages] SKIP channelMismatch: msg.channelID=" + msg.channelID + " myChannelId=" + channelId + " msg.channelType=" + msg.channelType + " myChannelType=" + channelType);
                 continue;
-            if (chatAdapter.isExist(msg.clientMsgNO, msg.messageID))
+            }
+            if (chatAdapter.isExist(msg.clientMsgNO, msg.messageID)) {
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[receivedMessages] SKIP duplicate: clientMsgNO=" + msg.clientMsgNO + " msgID=" + msg.messageID);
                 continue;
+            }
+            if (BuildConfig.DEBUG) Log.d("MsgDebug", "[receivedMessages] ACCEPTED msg: channelID=" + msg.channelID + " type=" + msg.type + " msgID=" + msg.messageID + " fromUID=" + msg.fromUID);
 
             if (!isCanLoadMore) {
                 // 移除正在输入（只移除一次）
@@ -3968,10 +3990,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private synchronized void refreshMsg(WKMsg wkMsg) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq);
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
         List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
         chatAdapter.refreshReplyMsg(wkMsg);
         int i = chatAdapter.findPositionByMsg(wkMsg);
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] findPositionByMsg=" + i + " listSize=" + list.size());
         if (i >= 0 && i < list.size()) {
             {
                 boolean isNotify = false;

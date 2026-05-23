@@ -4,7 +4,9 @@ import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
 
+import com.xinbida.wukongim.BuildConfig;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
 import com.xinbida.wukongim.db.MsgDbManager;
@@ -88,7 +90,16 @@ public class WKConnection {
     public boolean isReConnecting = false;
     // 连接状态
     private int connectStatus;
-    private long lastMsgTime = 0;
+
+    public int getConnectStatus() {
+        return connectStatus;
+    }
+
+    private volatile long lastMsgTime = 0;
+
+    public long getLastMsgTime() {
+        return lastMsgTime;
+    }
     private String ip;
     private int port;
     public volatile INonBlockingConnection connection;
@@ -277,6 +288,11 @@ public class WKConnection {
     }
 
     public synchronized void reconnection() {
+        if (BuildConfig.DEBUG) {
+            Log.d("MsgDebug", "[Reconnect] triggered, caller=" + Thread.currentThread().getStackTrace()[3].getMethodName()
+                    + " isClosing=" + isClosing.get() + " isReConnecting=" + isReConnecting
+                    + " connStatus=" + connectStatus);
+        }
         // 如果正在关闭连接，等待关闭完成
         if (isClosing.get()) {
             WKLoggerUtils.getInstance().e(TAG, "等待连接关闭完成后再重连");
@@ -449,6 +465,7 @@ public class WKConnection {
                     });
 
                     // 创建新连接
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[WKConnection] connecting to tcp://" + ip + ":" + port);
                     INonBlockingConnection newConnection = new NonBlockingConnection(ip, port, newClient);
                     newConnection.setAttachment(newSocketId);
 
@@ -504,6 +521,8 @@ public class WKConnection {
     }
 
     void receivedData(byte[] data) {
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[WKConnection.receivedData] dataLen=" + (data != null ? data.length : 0));
+        lastMsgTime = DateUtils.getInstance().getCurrentSeconds();
         MessageHandler.getInstance().cutBytes(data,
                 new IReceivedMsgListener() {
 
@@ -531,8 +550,8 @@ public class WKConnection {
 
                     @Override
                     public void pongMsg(WKPongMsg msgHeartbeat) {
-                        // 心跳消息
                         lastMsgTime = DateUtils.getInstance().getCurrentSeconds();
+                        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[Heartbeat] PONG received, lastMsgTime=" + lastMsgTime);
                     }
 
                     @Override
@@ -753,6 +772,10 @@ public class WKConnection {
             }
 
             int status = MessageHandler.getInstance().sendMessage(currentConnection, mBaseMsg);
+            if (BuildConfig.DEBUG && mBaseMsg.packetType == WKMsgType.PING) {
+                Log.d("MsgDebug", "[Heartbeat] PING sent, writeStatus=" + status
+                        + " connOpen=" + currentConnection.isOpen());
+            }
             if (status == 0) {
                 WKLoggerUtils.getInstance().e(TAG, "发消息失败 (status 0 from MessageHandler), attempting reconnection for: " + mBaseMsg.packetType);
                 reconnection();

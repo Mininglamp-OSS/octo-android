@@ -527,7 +527,12 @@ public class MessageHandler {
 
             lastMsg = parsingMsg(lastMsg);
             boolean isSave = false;
-            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1 && list.get(i).red_dot == 1) {
+            // 三态 mention：legacy mention.all=1 / 新 mention.humans=1 都触发未读累积；
+            // mention.ais=1 单独命中（无 humans / no all）不算 @ 到人类，按普通消息处理。
+            boolean broadcastsHumans = lastMsg.baseContentMsgModel != null
+                    && (lastMsg.baseContentMsgModel.mentionAll == 1
+                    || lastMsg.baseContentMsgModel.mentionHumans == 1);
+            if (broadcastsHumans && list.get(i).red_dot == 1) {
                 isSave = true;
             } else {
                 if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionInfo != null && WKCommonUtils.isNotEmpty(lastMsg.baseContentMsgModel.mentionInfo.uids) && count == 1) {
@@ -540,7 +545,8 @@ public class MessageHandler {
             }
             // 对齐 iOS WKChatManager：@所有人 时客户端本地创建 reminder（服务端不为 @所有人 生成 reminder）
             // GROUP 消息检查 red_dot（对齐 iOS showUnread）；COMMUNITY_TOPIC 子区不检查（服务端 red_dot 策略不同）
-            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+            // 三态 mention：mention.ais=1 单独命中不创建 reminder（bot 广播，人类不被打扰）
+            if (broadcastsHumans
                     && (lastMsg.channelType != WKChannelType.GROUP || list.get(i).red_dot == 1)
                     && !TextUtils.isEmpty(lastMsg.fromUID)
                     && !lastMsg.fromUID.equals(WKIMApplication.getInstance().getUid())) {

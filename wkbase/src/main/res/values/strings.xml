@@ -26,6 +26,9 @@
     <string name="str_success">成功</string>
     <string name="common_emoji">最近使用</string>
     <string name="all_emoji">所有表情</string>
+    <!-- 三态 mention：与 wkuikit 同义，wkbase 渲染层独立使用 -->
+    <string name="base_mention_all">所有人</string>
+    <string name="base_mention_all_ais">所有AI</string>
     <string name="str_send">发送</string>
     <string name="str_send_message_hint">给朋友留言</string>
     <string name="str_base_reply">评论</string>

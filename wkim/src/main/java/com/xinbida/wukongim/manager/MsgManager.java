@@ -190,13 +190,21 @@ public class MsgManager extends BaseManager {
         if (jsonObject.has("mention")) {
             JSONObject tempJson = jsonObject.optJSONObject("mention");
             if (tempJson != null) {
-                //是否@所有人
+                //是否@所有人 (legacy mention.all=1)
                 if (tempJson.has("all"))
                     baseContentMsgModel.mentionAll = tempJson.optInt("all");
+                // 三态 mention：mention.humans=1（@所有人 新字段）/ mention.ais=1（@所有AI）
+                if (tempJson.has("humans"))
+                    baseContentMsgModel.mentionHumans = tempJson.optInt("humans");
+                if (tempJson.has("ais"))
+                    baseContentMsgModel.mentionAis = tempJson.optInt("ais");
                 JSONArray uidList = tempJson.optJSONArray("uids");
 
+                // mention.uids 可能为空但 humans/ais 标志位仍需透传给 mentionInfo，否则
+                // sendTextMessage 重新 encode 时丢失三态标志位（PR#128 round 2 教训）。
+                WKMentionInfo mentionInfo = baseContentMsgModel.mentionInfo;
                 if (uidList != null && uidList.length() > 0) {
-                    WKMentionInfo mentionInfo = new WKMentionInfo();
+                    mentionInfo = new WKMentionInfo();
                     List<String> mentionInfoUIDs = new ArrayList<>();
                     for (int i = 0, size = uidList.length(); i < size; i++) {
                         String uid = uidList.optString(i);
@@ -206,9 +214,22 @@ public class MsgManager extends BaseManager {
                         mentionInfoUIDs.add(uid);
                     }
                     mentionInfo.uids = mentionInfoUIDs;
-                    if (baseContentMsgModel.mentionAll == 1) {
+                }
+                if (mentionInfo == null
+                        && (baseContentMsgModel.mentionAll == 1
+                        || baseContentMsgModel.mentionHumans == 1
+                        || baseContentMsgModel.mentionAis == 1)) {
+                    mentionInfo = new WKMentionInfo();
+                }
+                if (mentionInfo != null) {
+                    // legacy mention.all=1 / 新 mention.humans=1 → 人类被 @
+                    // mention.ais=1 单独命中 → 人类客户端不算被 @ 到
+                    if (baseContentMsgModel.mentionAll == 1
+                            || baseContentMsgModel.mentionHumans == 1) {
                         mentionInfo.isMentionMe = true;
                     }
+                    mentionInfo.humans = baseContentMsgModel.mentionHumans == 1;
+                    mentionInfo.ais = baseContentMsgModel.mentionAis == 1;
                     baseContentMsgModel.mentionInfo = mentionInfo;
                 }
             }

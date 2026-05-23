@@ -277,6 +277,27 @@ class WKProto {
         }
     }
 
+    /**
+     * 三态 mention：把 mention.humans=1 / mention.ais=1 写入 mention JSON。
+     * 标志位单一来源：WKMessageContent.mentionHumans / mentionAis (int)
+     * 兜底：WKMentionInfo.humans / ais (bool) —— 对齐 iOS PR#128 round 3 教训：
+     * 上层只设 enum/info BOOL 而忘了同步 int 字段时也能正确编码。
+     */
+    private static void writeThreeStateMentionFlags(JSONObject mentionJson,
+                                                    com.xinbida.wukongim.msgmodel.WKMessageContent content)
+            throws JSONException {
+        boolean humans = content.mentionHumans == 1
+                || (content.mentionInfo != null && content.mentionInfo.humans);
+        boolean ais = content.mentionAis == 1
+                || (content.mentionInfo != null && content.mentionInfo.ais);
+        if (humans) {
+            mentionJson.put("humans", 1);
+        }
+        if (ais) {
+            mentionJson.put("ais", 1);
+        }
+    }
+
     JSONObject getSendPayload(WKMsg msg) {
         JSONObject jsonObject = null;
         if (msg.baseContentMsgModel != null) {
@@ -298,15 +319,25 @@ class WKProto {
                 if (!jsonObject.has("mention")) {
                     JSONObject mentionJson = new JSONObject();
                     mentionJson.put("all", msg.baseContentMsgModel.mentionAll);
+                    // 三态 mention：humans=1 / ais=1 与 legacy all 字段并存
+                    writeThreeStateMentionFlags(mentionJson, msg.baseContentMsgModel);
                     mentionJson.put("uids", jsonArray);
                     jsonObject.put("mention", mentionJson);
                 }
 
             } else {
-                if (msg.baseContentMsgModel.mentionAll == 1) {
-                    JSONObject mentionJson = new JSONObject();
-                    mentionJson.put("all", msg.baseContentMsgModel.mentionAll);
-                    jsonObject.put("mention", mentionJson);
+                if (msg.baseContentMsgModel.mentionAll == 1
+                        || msg.baseContentMsgModel.mentionHumans == 1
+                        || msg.baseContentMsgModel.mentionAis == 1
+                        || (msg.baseContentMsgModel.mentionInfo != null
+                        && (msg.baseContentMsgModel.mentionInfo.humans
+                        || msg.baseContentMsgModel.mentionInfo.ais))) {
+                    if (!jsonObject.has("mention")) {
+                        JSONObject mentionJson = new JSONObject();
+                        mentionJson.put("all", msg.baseContentMsgModel.mentionAll);
+                        writeThreeStateMentionFlags(mentionJson, msg.baseContentMsgModel);
+                        jsonObject.put("mention", mentionJson);
+                    }
                 }
             }
             // 被回复消息

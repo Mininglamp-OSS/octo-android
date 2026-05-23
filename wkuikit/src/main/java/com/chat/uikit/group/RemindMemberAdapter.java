@@ -67,7 +67,12 @@ public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, Bas
         AvatarView avatarView = baseViewHolder.getView(R.id.avatarView);
         avatarView.setSize(30);
         if (groupMemberEntity.member == null) {
-            baseViewHolder.setText(R.id.nameTv, R.string.at_all);
+            // 三态 mention：@所有人 / @所有AI 都用 broadcast 条目（member==null）
+            if (groupMemberEntity.type == GroupMemberEntity.TYPE_AT_AIS) {
+                baseViewHolder.setText(R.id.nameTv, R.string.all_ais);
+            } else {
+                baseViewHolder.setText(R.id.nameTv, R.string.all);
+            }
             avatarView.imageView.setImageResource(R.mipmap.icon_mention_all);
         } else {
             TextView nameTv = baseViewHolder.getView(R.id.nameTv);
@@ -179,7 +184,12 @@ public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, Bas
         List<GroupMemberEntity> memberList = new ArrayList<>();
         // @所有人 对所有群成员可见，对齐 Web 端行为（移除管理员角色限制）
         if (page == 1 && isNormal) {
-            memberList.add(new GroupMemberEntity());
+            memberList.add(GroupMemberEntity.broadcast(GroupMemberEntity.TYPE_AT_ALL));
+            // 三态 mention：@所有AI 始终暴露入口，不依赖本地 robot 成员缓存（对齐 iOS PR#128 round 4）：
+            //   - 群成员未同步到本地时 hasRobot gate 会让入口"看似消失"，用户没法在新群里 @所有AI
+            //   - 后期机器人加群后 server 按 mention.ais=1 路由，无需 client 自检测
+            //   - mention.uids 为空 + mention.ais=1 也是合法广播
+            memberList.add(GroupMemberEntity.broadcast(GroupMemberEntity.TYPE_AT_AIS));
         }
         for (WKChannelMember member : list) {
             if (member != null && member.isDeleted == 0 && !member.memberUID.equals(loginUID)) {

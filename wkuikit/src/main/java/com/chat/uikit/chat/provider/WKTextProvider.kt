@@ -806,6 +806,11 @@ open class WKTextProvider : WKChatBaseProvider() {
                     } else {
                         uid = clickableContent.clickableContent.content
                     }
+                    // 三态 mention sentinel：@所有人("-1") / @所有AI("-2") 不是真实用户，
+                    // 点击仅作高亮 pill 不跳人卡片（对齐 iOS PR#128 round 4 tap guard）
+                    if (uid == "-1" || uid == "-2") {
+                        return
+                    }
                     val intent = Intent(context, UserDetailActivity::class.java)
                     intent.putExtra("uid", uid)
                     if (!TextUtils.isEmpty(groupNo)) intent.putExtra("groupID", groupNo)

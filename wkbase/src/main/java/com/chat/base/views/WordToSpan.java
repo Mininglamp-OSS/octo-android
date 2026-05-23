@@ -151,6 +151,16 @@ public class WordToSpan {
         while (matcherMENTION.find()) {
             int st = matcherMENTION.start();
             int en = st + matcherMENTION.group(0).length();
+            // 三态 mention：跳过广播 token（@所有人/@所有AI/@all/...）。
+            // 这些 token 由 WKUIChatMsgItemEntity / WKTextProvider 走单独的高亮路径，
+            // 不能被 legacy "mention" 类型重复包一层 ClickableSpan，否则点击会触发未定义跳转。
+            String matchedName = matcherMENTION.group(2);
+            if (matchedName != null) {
+                String lower = matchedName.toLowerCase();
+                if (lower.equals("all") || lower.equals("所有人") || lower.startsWith("所有ai")) {
+                    continue;
+                }
+            }
             this.ws.setSpan(new myClickableSpan(colorMENTION, underlineMENTION, "mention"), st, en, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
 

@@ -1992,7 +1992,12 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (lastMsg == null) continue;
             // 解析消息内容（DB 取出的消息可能未解析 baseContentMsgModel）
             lastMsg = MessageHandler.getInstance().parsingMsg(lastMsg);
-            if (lastMsg.baseContentMsgModel != null && lastMsg.baseContentMsgModel.mentionAll == 1
+            // 三态 mention：legacy mention.all=1 / 新 mention.humans=1 都触发 reminder；
+            // mention.ais=1 单独命中是 bot 广播，人类不被打扰
+            boolean broadcastsHumans = lastMsg.baseContentMsgModel != null
+                    && (lastMsg.baseContentMsgModel.mentionAll == 1
+                    || lastMsg.baseContentMsgModel.mentionHumans == 1);
+            if (broadcastsHumans
                     && !TextUtils.isEmpty(lastMsg.fromUID) && !lastMsg.fromUID.equals(loginUID)) {
                 WKReminder reminder = new WKReminder();
                 reminder.reminderID = lastMsg.messageSeq;

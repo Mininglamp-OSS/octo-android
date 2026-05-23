@@ -384,14 +384,16 @@ public class WKUIChatMsgItemEntity {
                     if (start < 0) continue;
                     int end = start + oldName.length();
 
-                    if (uid.equals("-1")) {
+                    if (uid.equals("-1") || uid.equals("-2")) {
+                        // 三态 mention sentinel：@所有人("-1") / @所有AI("-2") 不跳 UserDetail，
+                        // 仅作高亮 pill（对齐 iOS PR#128 round 4 tap guard）
                         showName = displaySpans.subSequence(start, end).toString();
                     }
                     WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
                     if (channel != null) {
                         showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
                     }
-                    boolean isUserDetail = !TextUtils.isEmpty(uid) && !uid.equals("-1");
+                    boolean isUserDetail = !TextUtils.isEmpty(uid) && !uid.equals("-1") && !uid.equals("-2");
                     if (!TextUtils.isEmpty(showName)) {
                         if (!showName.startsWith("@"))
                             showName = "@" + showName;
@@ -443,20 +445,49 @@ public class WKUIChatMsgItemEntity {
                 }
             }
         }
-        // @所有人 高亮
-        if (wkMsg.baseContentMsgModel.mentionAll == 1) {
-            String mentionAll = "@All";
-            String mentionAll1 = "@所有人";
-            String currentText = displaySpans.toString();
-            int index = currentText.indexOf(mentionAll);
-            if (index >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index, (index + mentionAll.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        // @所有人 / @所有AI 高亮（三态 mention）：
+        // locale-independent 字面量集合 —— 必须覆盖任意 sender locale 渲染出的 wire text
+        // （Chinese "@所有AI" / English "@All AIs" 都可能到达任意 receiver），
+        // 不能只用 receiver 的当前 locale（对齐 iOS PR#128 round 1/6 教训）。
+        boolean broadcastsAll = wkMsg.baseContentMsgModel.mentionAll == 1
+                || wkMsg.baseContentMsgModel.mentionHumans == 1;
+        boolean broadcastsAis = wkMsg.baseContentMsgModel.mentionAis == 1;
+        if (broadcastsAll || broadcastsAis) {
+            java.util.List<String> broadcastTokens = new ArrayList<>();
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            if (broadcastsAll) {
+                addBroadcastToken(broadcastTokens, seen, "@所有人");
+                addBroadcastToken(broadcastTokens, seen, "@All People");
+                addBroadcastToken(broadcastTokens, seen, "@All");
+                addBroadcastToken(broadcastTokens, seen, "@" + context.getString(R.string.base_mention_all));
             }
-            int index1 = currentText.indexOf(mentionAll1);
-            if (index1 >= 0) {
-                displaySpans.setSpan(new ForegroundColorSpan(mentionColor), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                displaySpans.setSpan(new StyleSpan(Typeface.BOLD), index1, (index1 + mentionAll1.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (broadcastsAis) {
+                addBroadcastToken(broadcastTokens, seen, "@所有AI");
+                addBroadcastToken(broadcastTokens, seen, "@All AIs");
+                addBroadcastToken(broadcastTokens, seen, "@" + context.getString(R.string.base_mention_all_ais));
+            }
+            // 长度降序：保证 "@All AIs" 优先于 "@All" 命中
+            broadcastTokens.sort((a, b) -> b.length() - a.length());
+
+            String currentText = displaySpans.toString();
+            for (String token : broadcastTokens) {
+                int fromIndex = 0;
+                while (fromIndex < currentText.length()) {
+                    int idx = currentText.indexOf(token, fromIndex);
+                    if (idx < 0) break;
+                    int end = idx + token.length();
+                    // 末位边界：避免 "@All" 命中 "@AllPeople" / "@All AIs" 等延伸串
+                    if (end < currentText.length()) {
+                        char nextCh = currentText.charAt(end);
+                        if (Character.isLetterOrDigit(nextCh) || nextCh == '_') {
+                            fromIndex = idx + 1;
+                            continue;
+                        }
+                    }
+                    displaySpans.setSpan(new ForegroundColorSpan(mentionColor), idx, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    displaySpans.setSpan(new StyleSpan(Typeface.BOLD), idx, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    fromIndex = end;
+                }
             }
         }
         // emoji
@@ -544,6 +575,9 @@ public class WKUIChatMsgItemEntity {
             if (overlaps) continue;
 
             String mentionName = m.group(1);
+            // 三态 mention：广播 token（@所有人/@所有AI/@all/@All AIs）走单独的高亮路径，
+            // 不能误匹配到群成员（对齐 iOS PR#128 round 5）
+            if (isBroadcastMentionName(mentionName)) continue;
             String matchedUID = null;
 
             if (useCache) {
@@ -578,5 +612,26 @@ public class WKUIChatMsgItemEntity {
         void onShowUserDetail(String uid, String groupNo);
 
         void onShowSearchUser(String phone);
+    }
+
+    private static void addBroadcastToken(java.util.List<String> tokens, java.util.Set<String> seen, String token) {
+        if (token == null || token.length() <= 1) return;
+        String key = token.toLowerCase();
+        if (seen.contains(key)) return;
+        seen.add(key);
+        tokens.add(token);
+    }
+
+    /**
+     * 三态 mention：判定 @\\S+ 抓到的 token 是否是广播标签（@所有人 / @所有AI / @all / @All AIs / ...）。
+     * 这些 token 走单独的高亮路径，不能被 detectAndApplyMentions 错误地匹配到群成员。
+     */
+    private static boolean isBroadcastMentionName(String name) {
+        if (name == null) return false;
+        String trimmed = name.trim();
+        if (trimmed.isEmpty()) return false;
+        String lower = trimmed.toLowerCase();
+        return lower.equals("所有人") || lower.equals("所有ai")
+                || lower.equals("all") || lower.equals("all people") || lower.equals("all ais");
     }
 }

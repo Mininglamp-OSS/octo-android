@@ -28,6 +28,8 @@
     <string name="cancel_top">Remove from Top</string>
     <string name="at_all">Choose All</string>
     <string name="all">All</string>
+    <string name="all_ais">All AIs</string>
+    <string name="at_all_ais">Choose All AIs</string>
     <string name="edit_group_notice">Only the owner and manager can edit</string>
     <string name="delete_group_members">Delete Members</string>
     <string name="add_group_members">Add Members</string>

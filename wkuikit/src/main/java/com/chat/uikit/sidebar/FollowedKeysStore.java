@@ -23,6 +23,7 @@ public class FollowedKeysStore {
 
     private volatile boolean loaded = false;
     private volatile int followVersion = 0;
+    private volatile int reloadGeneration = 0;
     private volatile Set<String> followedKeys = Collections.emptySet();
     private volatile Map<String, List<SidebarItemEntity>> itemsByCategory = Collections.emptyMap();
     private volatile Set<String> followedGroupNos = Collections.emptySet();
@@ -81,11 +82,13 @@ public class FollowedKeysStore {
 
     public void reload() {
         String deviceUUID = WKConstants.getDeviceUUID();
-        if (BuildConfig.DEBUG) Log.d("FollowedKeysStore", "reload() called, deviceUUID=" + deviceUUID);
+        final int gen = ++reloadGeneration;
+        if (BuildConfig.DEBUG) Log.d("FollowedKeysStore", "reload() called, gen=" + gen);
         SidebarModel.getInstance().sync("follow", 0, "", deviceUUID,
                 new SidebarModel.ISidebarSyncListener() {
                     @Override
                     public void onResult(SidebarSyncResponse response) {
+                        if (gen != reloadGeneration) return;
                         if (BuildConfig.DEBUG) Log.d("FollowedKeysStore", "reload SUCCESS: items=" + response.items.size()
                                 + " followVersion=" + response.follow_version);
                         applyItems(response.items, response.follow_version);
@@ -93,6 +96,7 @@ public class FollowedKeysStore {
 
                     @Override
                     public void onError(int code, String msg) {
+                        if (gen != reloadGeneration) return;
                         if (BuildConfig.DEBUG) Log.e("FollowedKeysStore", "reload FAILED: code=" + code + " msg=" + msg);
                         notifyListeners();
                     }
@@ -157,6 +161,7 @@ public class FollowedKeysStore {
     public void reset() {
         loaded = false;
         followVersion = 0;
+        reloadGeneration++;
         followedKeys = Collections.emptySet();
         itemsByCategory = Collections.emptyMap();
         followedGroupNos = Collections.emptySet();

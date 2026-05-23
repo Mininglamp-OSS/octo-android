@@ -343,6 +343,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         pagerAdapter = new ConversationPagerAdapter();
         wkVBinding.conversationPager.setAdapter(pagerAdapter);
         wkVBinding.conversationPager.setOffscreenPageLimit(1);
+        final int savedTab = Math.max(0, Math.min(1,
+                requireContext().getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+                        .getInt("last_tab", 0)));
+        if (savedTab != 0) {
+            wkVBinding.conversationPager.setCurrentItem(savedTab, false);
+            currentTab = savedTab;
+        }
+        final boolean[] pagerInitialized = {false};
         wkVBinding.conversationPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
             public void onPageScrollStateChanged(int state) {
@@ -352,8 +360,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             @Override
             public void onPageSelected(int position) {
                 currentTab = position;
+                if (pagerInitialized[0] && isAdded()) {
+                    requireContext().getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
+                            .edit().putInt("last_tab", position).apply();
+                }
                 chatConversationAdapter = (position == 0) ? followAdapter : recentAdapter;
-                segmentTabView.selectTabWithoutCallback(position);
+                if (segmentTabView != null) segmentTabView.selectTabWithoutCallback(position);
                 if (chatConversationAdapter != null) {
                     chatConversationAdapter.clearSelected();
                 }
@@ -379,6 +391,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 personalRv.addOnScrollListener(scrollIdleWatcher);
             }
             initFollowEmptyView();
+            pagerInitialized[0] = true;
+            chatConversationAdapter = (currentTab == 0) ? followAdapter : recentAdapter;
         });
 
         Theme.setPressedBackground(wkVBinding.deviceLayout);
@@ -393,6 +407,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         segmentTabView.setOnTabSelectedListener(index -> {
             wkVBinding.conversationPager.setCurrentItem(index, true);
         });
+        if (savedTab != 0) {
+            segmentTabView.selectTabWithoutCallback(savedTab);
+        }
     }
 
     private void addGlideScrollListener(RecyclerView rv) {
@@ -2288,6 +2305,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         SpaceModel.getInstance().invalidateMembersCache();
         CategoryModel.getInstance().invalidateCache();
+        categoryList = new ArrayList<>();
+        FollowedKeysStore.getInstance().reset();
         loadCategories();
         FollowedKeysStore.getInstance().reload();
 

@@ -168,6 +168,11 @@
 -keep class com.chat.uikit.chat.msgmodel.** { *; }
 -keep class com.chat.uikit.enity.** { *; }
 -keep class com.chat.uikit.thread.service.entity.** { *; }
+-keep class com.chat.uikit.sidebar.SidebarItemEntity { *; }
+-keep class com.chat.uikit.sidebar.SidebarSyncResponse { *; }
+-keep class com.chat.uikit.sidebar.FollowModel$FollowSortItem { *; }
+-keep class com.chat.uikit.category.CategoryEntity { *; }
+-keep class com.chat.uikit.category.CategoryEntity$CategoryGroup { *; }
 -keep class com.chat.uikit.group.service.entity.** { *; }
 -keep class com.chat.uikit.group.GroupEntity { *; }
 -keep class com.chat.uikit.group.GroupMemberEntity { *; }

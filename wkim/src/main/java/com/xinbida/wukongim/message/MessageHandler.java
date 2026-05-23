@@ -529,9 +529,12 @@ public class MessageHandler {
             boolean isSave = false;
             // 三态 mention：legacy mention.all=1 / 新 mention.humans=1 都触发未读累积；
             // mention.ais=1 单独命中（无 humans / no all）不算 @ 到人类，按普通消息处理。
+            // 兜底 mentionInfo.humans：上层若只填 BOOL 没同步 int 字段也要识别（对齐 iOS PR#129）。
             boolean broadcastsHumans = lastMsg.baseContentMsgModel != null
                     && (lastMsg.baseContentMsgModel.mentionAll == 1
-                    || lastMsg.baseContentMsgModel.mentionHumans == 1);
+                    || lastMsg.baseContentMsgModel.mentionHumans == 1
+                    || (lastMsg.baseContentMsgModel.mentionInfo != null
+                    && lastMsg.baseContentMsgModel.mentionInfo.humans));
             if (broadcastsHumans && list.get(i).red_dot == 1) {
                 isSave = true;
             } else {

@@ -450,7 +450,9 @@ public class WKUIChatMsgItemEntity {
         // （Chinese "@所有AI" / English "@All AIs" 都可能到达任意 receiver），
         // 不能只用 receiver 的当前 locale（对齐 iOS PR#128 round 1/6 教训）。
         boolean broadcastsAll = wkMsg.baseContentMsgModel.mentionAll == 1
-                || wkMsg.baseContentMsgModel.mentionHumans == 1;
+                || wkMsg.baseContentMsgModel.mentionHumans == 1
+                || (wkMsg.baseContentMsgModel.mentionInfo != null
+                && wkMsg.baseContentMsgModel.mentionInfo.humans);
         boolean broadcastsAis = wkMsg.baseContentMsgModel.mentionAis == 1;
         if (broadcastsAll || broadcastsAis) {
             java.util.List<String> broadcastTokens = new ArrayList<>();

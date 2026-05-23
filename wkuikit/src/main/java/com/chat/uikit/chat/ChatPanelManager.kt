@@ -1550,7 +1550,11 @@ class ChatPanelManager(
                     for (uid in list) {
                         when {
                             uid.equals("-1", ignoreCase = true) -> {
-                                textMsgModel.mentionAll = 1
+                                // 三态 mention：@所有人 走新协议 mention.humans=1，
+                                // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
+                                // 对齐 iOS dmwork-ios#129 / Web。
+                                textMsgModel.mentionHumans = 1
+                                mMentionInfo.humans = true
                             }
                             uid == "-2" -> {
                                 // 三态 mention：@所有AI 命中，标志位写入 mention.ais=1
@@ -1568,7 +1572,6 @@ class ChatPanelManager(
                         expandRobotMembersIntoUids(uidList)
                     }
                     mMentionInfo.uids = uidList
-                    mMentionInfo.humans = textMsgModel.mentionHumans == 1
                     textMsgModel.mentionInfo = mMentionInfo
                 }
                 textMsgModel.entities = allEntities
@@ -2293,7 +2296,11 @@ class ChatPanelManager(
                                 for (uid in list) {
                                     when {
                                         uid.equals("-1", ignoreCase = true) -> {
-                                            textMsgModel.mentionAll = 1
+                                            // 三态 mention：@所有人 走新协议 mention.humans=1，
+                                            // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
+                                            // 对齐 iOS dmwork-ios#129 / Web。
+                                            textMsgModel.mentionHumans = 1
+                                            mMentionInfo.humans = true
                                         }
                                         uid == "-2" -> {
                                             textMsgModel.mentionAis = 1

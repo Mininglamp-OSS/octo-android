@@ -318,7 +318,11 @@ class WKProto {
                 }
                 if (!jsonObject.has("mention")) {
                     JSONObject mentionJson = new JSONObject();
-                    mentionJson.put("all", msg.baseContentMsgModel.mentionAll);
+                    // 三态 mention：仅当 legacy mentionAll==1 时才写 all=1；
+                    // @所有人 走新协议 mention.humans=1，避免旧 adapter bot 因 all=1 被误唤醒。
+                    if (msg.baseContentMsgModel.mentionAll == 1) {
+                        mentionJson.put("all", 1);
+                    }
                     // 三态 mention：humans=1 / ais=1 与 legacy all 字段并存
                     writeThreeStateMentionFlags(mentionJson, msg.baseContentMsgModel);
                     mentionJson.put("uids", jsonArray);
@@ -334,7 +338,10 @@ class WKProto {
                         || msg.baseContentMsgModel.mentionInfo.ais))) {
                     if (!jsonObject.has("mention")) {
                         JSONObject mentionJson = new JSONObject();
-                        mentionJson.put("all", msg.baseContentMsgModel.mentionAll);
+                        // 仅当 mentionAll==1 时写 all=1（避免误唤醒旧 adapter bot）
+                        if (msg.baseContentMsgModel.mentionAll == 1) {
+                            mentionJson.put("all", 1);
+                        }
                         writeThreeStateMentionFlags(mentionJson, msg.baseContentMsgModel);
                         jsonObject.put("mention", mentionJson);
                     }

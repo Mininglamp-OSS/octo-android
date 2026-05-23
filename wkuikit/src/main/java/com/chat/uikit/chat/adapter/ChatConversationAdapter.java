@@ -1994,9 +1994,12 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             lastMsg = MessageHandler.getInstance().parsingMsg(lastMsg);
             // 三态 mention：legacy mention.all=1 / 新 mention.humans=1 都触发 reminder；
             // mention.ais=1 单独命中是 bot 广播，人类不被打扰
+            // 兜底 mentionInfo.humans：上层若只填 BOOL 没同步 int 字段也要识别（对齐 iOS PR#129）。
             boolean broadcastsHumans = lastMsg.baseContentMsgModel != null
                     && (lastMsg.baseContentMsgModel.mentionAll == 1
-                    || lastMsg.baseContentMsgModel.mentionHumans == 1);
+                    || lastMsg.baseContentMsgModel.mentionHumans == 1
+                    || (lastMsg.baseContentMsgModel.mentionInfo != null
+                    && lastMsg.baseContentMsgModel.mentionInfo.humans));
             if (broadcastsHumans
                     && !TextUtils.isEmpty(lastMsg.fromUID) && !lastMsg.fromUID.equals(loginUID)) {
                 WKReminder reminder = new WKReminder();

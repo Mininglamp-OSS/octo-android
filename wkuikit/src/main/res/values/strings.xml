@@ -29,6 +29,8 @@
 
     <string name="at_all">选择所有人</string>
     <string name="all">所有人</string>
+    <string name="all_ais">所有AI</string>
+    <string name="at_all_ais">选择所有AI</string>
     <string name="edit_group_notice">只有群主及管理员可以编辑</string>
     <string name="delete_group_members">删除群成员</string>
     <string name="add_group_members">添加群成员</string>

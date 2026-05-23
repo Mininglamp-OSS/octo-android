@@ -27,6 +27,8 @@
     <string name="str_success">Success</string>
     <string name="common_emoji">Recently</string>
     <string name="all_emoji">All Stickers</string>
+    <string name="base_mention_all">All</string>
+    <string name="base_mention_all_ais">All AIs</string>
     <string name="str_send">Send</string>
     <string name="str_base_reply">Comment</string>
     <string name="str_search">Search</string>

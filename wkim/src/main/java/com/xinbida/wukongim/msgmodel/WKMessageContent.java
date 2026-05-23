@@ -28,8 +28,12 @@ public class WKMessageContent implements Parcelable {
     public String fromName;
     //消息内容类型
     public int type;
-    //是否@所有人
+    //是否@所有人（legacy mention.all=1）
     public int mentionAll;
+    //三态 mention：是否@所有人（新协议 mention.humans=1，与 mentionAll 并存）
+    public int mentionHumans;
+    //三态 mention：是否@所有AI（mention.ais=1）
+    public int mentionAis;
     //@成员列表
     public WKMentionInfo mentionInfo;
     //回复对象
@@ -72,6 +76,8 @@ public class WKMessageContent implements Parcelable {
         type = in.readInt();
 
         mentionAll = in.readInt();
+        mentionHumans = in.readInt();
+        mentionAis = in.readInt();
         mentionInfo = in.readParcelable(WKMentionInfo.class.getClassLoader());
         searchableWord = in.readString();
         displayContent = in.readString();
@@ -91,6 +97,8 @@ public class WKMessageContent implements Parcelable {
         dest.writeString(fromName);
         dest.writeInt(type);
         dest.writeInt(mentionAll);
+        dest.writeInt(mentionHumans);
+        dest.writeInt(mentionAis);
         dest.writeParcelable(mentionInfo, flags);
         dest.writeString(searchableWord);
         dest.writeString(displayContent);

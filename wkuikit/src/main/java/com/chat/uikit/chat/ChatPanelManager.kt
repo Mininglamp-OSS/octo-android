@@ -1360,9 +1360,18 @@ class ChatPanelManager(
                 var memberEntity = entity.member
                 if (memberEntity == null) {
                     memberEntity = WKChannelMember()
-                    memberEntity.memberName =
-                        iConversationContext.chatActivity.getString(R.string.all)
-                    memberEntity.memberUID = "-1"
+                    // 三态 mention sentinel：
+                    //   uid = "-1" → @所有人（mention.all=1 / humans=1）
+                    //   uid = "-2" → @所有AI（mention.ais=1，bot UID 展开在发送时完成）
+                    if (entity.type == GroupMemberEntity.TYPE_AT_AIS) {
+                        memberEntity.memberName =
+                            iConversationContext.chatActivity.getString(R.string.all_ais)
+                        memberEntity.memberUID = "-2"
+                    } else {
+                        memberEntity.memberName =
+                            iConversationContext.chatActivity.getString(R.string.all)
+                        memberEntity.memberUID = "-1"
+                    }
                 }
                 var showName = memberEntity.memberName
                 val mChannel = WKIM.getInstance().channelManager.getChannel(
@@ -1523,6 +1532,13 @@ class ChatPanelManager(
                     scanPlainTextMentions(content, allEntities, list)
                 }
 
+                // 三态 mention：sentinel uid（"-1"/"-2"）只是 UI 路由标记，不能落到 mention.entities，
+                // 否则 server / 对端会把 "-1"/"-2" 当成真实用户 uid（对齐 iOS PR#128 round 2 教训）。
+                allEntities.removeAll { e ->
+                    e.type == ChatContentSpanType.mention &&
+                            (e.value == "-1" || e.value == "-2")
+                }
+
                 val hasMentions = list.isNotEmpty()
 
                 val textMsgModel = if (hasMentions)
@@ -1532,11 +1548,28 @@ class ChatPanelManager(
                     val mMentionInfo = WKMentionInfo()
                     val uidList: MutableList<String> = ArrayList()
                     for (uid in list) {
-                        if (uid.equals("-1", ignoreCase = true)) {
-                            textMsgModel.mentionAll = 1
-                        } else {
-                            uidList.add(uid)
+                        when {
+                            uid.equals("-1", ignoreCase = true) -> {
+                                // 三态 mention：@所有人 走新协议 mention.humans=1，
+                                // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
+                                // 对齐 iOS dmwork-ios#129 / Web。
+                                textMsgModel.mentionHumans = 1
+                                mMentionInfo.humans = true
+                            }
+                            uid == "-2" -> {
+                                // 三态 mention：@所有AI 命中，标志位写入 mention.ais=1
+                                textMsgModel.mentionAis = 1
+                                mMentionInfo.ais = true
+                            }
+                            else -> {
+                                uidList.add(uid)
+                            }
                         }
+                    }
+                    // 三态 mention：@所有AI 命中时把当前会话内 robot 成员展开到 mention.uids，
+                    // 兼容旧 adapter（新 adapter 直接读 mention.ais 路由）。对齐 iOS / Web PR#101。
+                    if (textMsgModel.mentionAis == 1) {
+                        expandRobotMembersIntoUids(uidList)
                     }
                     mMentionInfo.uids = uidList
                     textMsgModel.mentionInfo = mMentionInfo
@@ -1725,6 +1758,11 @@ class ChatPanelManager(
         entities: MutableList<WKMsgEntity>,
         uidList: MutableList<String>
     ) {
+        // 三态 mention：先识别广播 token（@所有人 / @所有AI / @all / @All AIs / ...）。
+        // 这些标签可能含空格（英文 "All AIs"），下面 @\\S+ 正则会被空格切碎，
+        // 必须在通用扫描前先按字面量匹配 → 转成 sentinel uid（-1 / -2）。
+        scanBroadcastMentions(content, entities, uidList)
+
         val pattern = java.util.regex.Pattern.compile("@([^@\\s]+)")
         val matcher = pattern.matcher(content)
         var channelId = iConversationContext.chatChannelInfo.channelID
@@ -1779,6 +1817,108 @@ class ChatPanelManager(
                 if (!uidList.contains(matchedMember.memberUID)) {
                     uidList.add(matchedMember.memberUID)
                 }
+            }
+        }
+    }
+
+    /**
+     * 三态 mention：locale-independent 的广播标签字面量匹配。
+     *
+     * 必须覆盖任意 sender locale 的 wire text（对齐 iOS PR#128 round 1/4 教训）：
+     * Chinese 端发出 "@所有AI" 到 English 端、English 端发出 "@All AIs" 到 Chinese 端，
+     * 两个方向都要能识别。因此把 canonical 中文 + 已知英文翻译 + 当前 locale 的资源全列上。
+     *
+     * 长度降序匹配：保证 "@All AIs" 优先于 "@all" 命中，避免短标签先抢。
+     */
+    private fun scanBroadcastMentions(
+        content: String,
+        entities: MutableList<WKMsgEntity>,
+        uidList: MutableList<String>
+    ) {
+        val ctx = iConversationContext.chatActivity
+        val labelToSentinel: List<Pair<String, String>> = mutableListOf<Pair<String, String>>().apply {
+            // @所有人 系
+            add("所有人" to "-1")
+            add("All People" to "-1")
+            add("all" to "-1")
+            add(ctx.getString(R.string.all) to "-1")
+            // @所有AI 系
+            add("所有AI" to "-2")
+            add("All AIs" to "-2")
+            add(ctx.getString(R.string.all_ais) to "-2")
+        }
+            // 去重（不同 locale 可能落到同一字面量）
+            .distinctBy { it.first.lowercase() + "|" + it.second }
+            // 长度降序：保证 "@All AIs" 优先于 "@all" 命中
+            .sortedByDescending { it.first.length }
+
+        for ((label, sentinel) in labelToSentinel) {
+            if (label.isEmpty()) continue
+            val token = "@$label"
+            var fromIndex = 0
+            while (fromIndex <= content.length - token.length) {
+                val idx = content.indexOf(token, fromIndex, ignoreCase = true)
+                if (idx < 0) break
+                val end = idx + token.length
+                // 末位边界：不能把 "@所有AIs" / "@All AIs2" 这种延伸串误命中
+                if (end < content.length) {
+                    val nextCh = content[end]
+                    if (nextCh.isLetterOrDigit() || nextCh == '_') {
+                        fromIndex = idx + 1
+                        continue
+                    }
+                }
+                val overlaps = entities.any { e ->
+                    e.type == ChatContentSpanType.mention &&
+                            idx < e.offset + e.length && e.offset < end
+                }
+                if (!overlaps) {
+                    val entity = WKMsgEntity()
+                    entity.type = ChatContentSpanType.mention
+                    entity.offset = idx
+                    entity.length = token.length
+                    entity.value = sentinel
+                    entities.add(entity)
+                    if (!uidList.contains(sentinel)) {
+                        uidList.add(sentinel)
+                    }
+                }
+                fromIndex = end
+            }
+        }
+    }
+
+    /**
+     * 三态 mention：把当前会话内 robot 成员展开到 mention.uids，兼容旧 adapter
+     *（新 adapter 直接根据 mention.ais=1 路由，但 server 当前还需要 UID 列表来定向投递）。
+     * 对齐 iOS PR#128 / Web PR#101。
+     *
+     * 子区会话（COMMUNITY_TOPIC）使用父群成员列表。
+     * 使用 LinkedHashSet 保留顺序去重，避免大群里 List.contains 退化成 O(n)。
+     */
+    private fun expandRobotMembersIntoUids(uidList: MutableList<String>) {
+        var channelId = iConversationContext.chatChannelInfo.channelID
+        var channelType = iConversationContext.chatChannelInfo.channelType
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            val channel = iConversationContext.chatChannelInfo
+            val parentGroupNo = channel.remoteExtraMap?.get("parentGroupNo") as? String
+            if (!parentGroupNo.isNullOrEmpty()) {
+                channelId = parentGroupNo
+                channelType = WKChannelType.GROUP
+            }
+        }
+        val members = WKIM.getInstance().channelMembersManager
+            .getMembers(channelId, channelType) ?: return
+        if (members.isEmpty()) return
+
+        val seen = HashSet<String>(uidList)
+        for (m in members) {
+            val uid = m.memberUID ?: continue
+            if (uid.isEmpty()) continue
+            if (m.robot != 1) continue
+            if (m.isDeleted == 1) continue
+            if (seen.add(uid)) {
+                uidList.add(uid)
             }
         }
     }
@@ -2141,6 +2281,12 @@ class ChatPanelManager(
                                 scanPlainTextMentions(text, allEntities, list)
                             }
 
+                            // 三态 mention：sentinel uid 不能写进 mention.entities
+                            allEntities.removeAll { e ->
+                                e.type == ChatContentSpanType.mention &&
+                                        (e.value == "-1" || e.value == "-2")
+                            }
+
                             val hasMentions = list.isNotEmpty()
                             val textMsgModel = if (hasMentions)
                                 WKMentionTextContent(text) else WKTextContent(text)
@@ -2148,11 +2294,25 @@ class ChatPanelManager(
                                 val mMentionInfo = WKMentionInfo()
                                 val uidList: MutableList<String> = ArrayList()
                                 for (uid in list) {
-                                    if (uid.equals("-1", ignoreCase = true)) {
-                                        textMsgModel.mentionAll = 1
-                                    } else {
-                                        uidList.add(uid)
+                                    when {
+                                        uid.equals("-1", ignoreCase = true) -> {
+                                            // 三态 mention：@所有人 走新协议 mention.humans=1，
+                                            // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
+                                            // 对齐 iOS dmwork-ios#129 / Web。
+                                            textMsgModel.mentionHumans = 1
+                                            mMentionInfo.humans = true
+                                        }
+                                        uid == "-2" -> {
+                                            textMsgModel.mentionAis = 1
+                                            mMentionInfo.ais = true
+                                        }
+                                        else -> {
+                                            uidList.add(uid)
+                                        }
                                     }
+                                }
+                                if (textMsgModel.mentionAis == 1) {
+                                    expandRobotMembersIntoUids(uidList)
                                 }
                                 mMentionInfo.uids = uidList
                                 textMsgModel.mentionInfo = mMentionInfo

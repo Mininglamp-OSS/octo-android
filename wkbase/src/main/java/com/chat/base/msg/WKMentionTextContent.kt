@@ -32,15 +32,26 @@ class WKMentionTextContent(content: String) : WKTextContent(content) {
     override fun encodeMsg(): JSONObject {
         val json = super.encodeMsg()
 
-        // 只有存在 mentionInfo 或 mentionAll 时才构建 mention 对象
+        // 三态 mention：mention.humans=1 / mention.ais=1 与 legacy mention.all=1、mention.uids 并存
         val hasUids = mentionInfo?.uids?.isNotEmpty() == true
         val hasMentionAll = mentionAll == 1
-        if (!hasUids && !hasMentionAll) return json
+        val hasHumans = mentionHumans == 1 || mentionInfo?.humans == true
+        val hasAis = mentionAis == 1 || mentionInfo?.ais == true
+        if (!hasUids && !hasMentionAll && !hasHumans && !hasAis) return json
 
         val mentionJson = JSONObject()
 
         if (hasMentionAll) {
             mentionJson.put("all", 1)
+        }
+        // 三态 mention：humans=1（@所有人 新协议）/ ais=1（@所有AI），可与 all / uids 并存。
+        // 单一来源原则：mentionInfo BOOL 与 WKMessageContent int 任一被置位即写出，
+        // 对齐 iOS PR#128 round 3 教训（避免上层只设 enum 而忘了 sync 标志位时丢失）。
+        if (hasHumans) {
+            mentionJson.put("humans", 1)
+        }
+        if (hasAis) {
+            mentionJson.put("ais", 1)
         }
 
         if (hasUids) {

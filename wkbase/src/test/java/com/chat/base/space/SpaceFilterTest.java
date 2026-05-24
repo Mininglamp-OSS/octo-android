@@ -46,9 +46,11 @@ public class SpaceFilterTest {
         final String groupSpaceId;
         final String mySourceSpaceId;
         boolean mineCached;
+        String convSyncMySourceSpaceId; // GH #251：conv sync 预填的 my_source_space_id
         int getChannelSpaceIdCalls;
         int getMyMembershipSourceSpaceIdCalls;
         int isMyMembershipCachedCalls;
+        int getConvSyncMySourceSpaceIdCalls;
 
         StubProvider(String groupSpaceId, String mySourceSpaceId, boolean mineCached) {
             this.groupSpaceId = groupSpaceId;
@@ -59,6 +61,11 @@ public class SpaceFilterTest {
         /** 兼容旧测试：默认 mineCached=true（保持既有测试语义）。 */
         StubProvider(String groupSpaceId, String mySourceSpaceId) {
             this(groupSpaceId, mySourceSpaceId, true);
+        }
+
+        StubProvider withConvSyncMySource(String value) {
+            this.convSyncMySourceSpaceId = value;
+            return this;
         }
 
         @Override
@@ -77,6 +84,12 @@ public class SpaceFilterTest {
         public boolean isMyMembershipCached(String channelID, byte channelType) {
             isMyMembershipCachedCalls++;
             return mineCached;
+        }
+
+        @Override
+        public String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
+            getConvSyncMySourceSpaceIdCalls++;
+            return convSyncMySourceSpaceId;
         }
     }
 
@@ -277,6 +290,96 @@ public class SpaceFilterTest {
                 /*mySourceSpaceId=*/null,
                 /*mineCached=*/false);
         assertFalse(SpaceFilter.shouldSkipChannelForSpace("group_any", GROUP, SPACE_A, p));
+    }
+
+    // ------------------------------------------------------------------
+    // GH dmwork-android#251 / octo-server PR #154 — conv sync my_source_space_id 短路
+    //
+    // 服务端在 conversation sync 响应里 resolved 的 my_source_space_id 由 SDK 写入
+    // channel.remoteExtraMap，SpaceFilter 优先用它做判定，从而消除两个 fail-open 窗口：
+    //   (a) my-row-not-cached-fail-open（subscriber row 还在路上）
+    //   (b) 末尾 fail-open（group space_id 也缺失）
+    // 老后端没回这个字段时（StubProvider.convSyncMySourceSpaceId==null）退化到原行为。
+    // ------------------------------------------------------------------
+
+    @Test
+    public void gh251_convSyncExternalMember_overridesMyRowFailOpen_doesNotSkip() {
+        // 群归属 Space B；my-row 没 sync（mineCached=false）；
+        // conv sync 已带 my_source_space_id=A → 直接判定为外部成员 → 不跳过，
+        // 不需要等 member sync。
+        StubProvider p = new StubProvider(SPACE_B, /*mySource=*/null, /*mineCached=*/false)
+                .withConvSyncMySource(SPACE_A);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        // 没必要再查 member sync 状态
+        assertEquals(0, p.isMyMembershipCachedCalls);
+        assertEquals(0, p.getMyMembershipSourceSpaceIdCalls);
+        assertEquals(1, p.getConvSyncMySourceSpaceIdCalls);
+    }
+
+    @Test
+    public void gh251_convSyncMismatch_overridesMyRowFailOpen_skips() {
+        // 群归属 Space B；my-row 没 sync；conv sync 带 my_source_space_id=C（既不是当前 Space
+        // 也不是群 Space）→ 直接判定 cached-mismatch → 跳过，不再 fail-open 泄漏跨 Space 群。
+        String otherSource = "cccccccccccccccccccccccccccccccc";
+        StubProvider p = new StubProvider(SPACE_B, /*mySource=*/null, /*mineCached=*/false)
+                .withConvSyncMySource(otherSource);
+        assertTrue(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        assertEquals(0, p.isMyMembershipCachedCalls);
+        assertEquals(0, p.getMyMembershipSourceSpaceIdCalls);
+    }
+
+    @Test
+    public void gh251_convSyncMissing_fallsBackToMyRowFailOpen() {
+        // conv sync 没回 my_source_space_id（老后端 / 该群没有外部成员关系）→ 原 fail-open
+        // 行为保持：my-row 没 sync 时不跳过，等下一次校准。
+        StubProvider p = new StubProvider(SPACE_B, /*mySource=*/null, /*mineCached=*/false);
+        // convSyncMySourceSpaceId 默认 null
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        assertEquals(1, p.isMyMembershipCachedCalls);
+    }
+
+    @Test
+    public void gh251_convSyncExternalMember_alsoOverridesEvenWhenMyRowCached() {
+        // 当 conv sync 已经给了权威值时直接用它，不走 member subscriber 查询路径，
+        // 避免出现 conv sync vs member sync 数据不一致时的不可预期行为。
+        StubProvider p = new StubProvider(SPACE_B, /*mySource=*/null, /*mineCached=*/true)
+                .withConvSyncMySource(SPACE_A);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        assertEquals(0, p.getMyMembershipSourceSpaceIdCalls);
+    }
+
+    @Test
+    public void gh251_finalFailOpen_convSyncMySourceOverridesNoGroupSpace_doesNotSkip() {
+        // 群 space_id 完全缺失（groupSpaceId=null，channel_id 无前缀） → 原本走最末尾 fail-open；
+        // 但 conv sync 已带 my_source_space_id=A → 即便不知道群归属，也能判断我是外部成员 → 不跳过。
+        StubProvider p = new StubProvider(/*groupSpaceId=*/null, /*mySource=*/null, /*mineCached=*/false)
+                .withConvSyncMySource(SPACE_A);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void gh251_finalFailOpen_convSyncMismatchOverridesNoGroupSpace_skips() {
+        // 群 space_id 完全缺失，但 conv sync 给的 my_source_space_id 也不是当前 Space →
+        // 改判 skip，堵住末尾 fail-open 的跨 Space 泄漏窗口。
+        String otherSource = "cccccccccccccccccccccccccccccccc";
+        StubProvider p = new StubProvider(/*groupSpaceId=*/null, /*mySource=*/null, /*mineCached=*/false)
+                .withConvSyncMySource(otherSource);
+        assertTrue(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void gh251_finalFailOpen_noConvSyncData_keepsLegacyFailOpen() {
+        // 完全没有任何 Space 信息（老后端 + 该群既没有 group space_id 也没有 my_source_space_id）
+        // → 维持原有 fail-open，等 channelInfo 异步回来二次校准。
+        StubProvider p = new StubProvider(/*groupSpaceId=*/null, /*mySource=*/null, /*mineCached=*/false);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void gh251_constant_matchesBackendContract() {
+        // 锁定 key 字面量与后端 sync payload 约定一致，防止跨端不一致回归
+        assertEquals("space_id", SpaceFilter.CHANNEL_EXTRA_SPACE_ID);
+        assertEquals("my_source_space_id", SpaceFilter.CHANNEL_EXTRA_MY_SOURCE_SPACE_ID);
     }
 
     // ------------------------------------------------------------------

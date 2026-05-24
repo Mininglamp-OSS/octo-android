@@ -2270,6 +2270,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 return false;
             }
         }
+
+        @Override
+        public String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
+            // GH dmwork-android#251 / octo-server PR #154：把 conv sync 预填的
+            // my_source_space_id 透传给 SpaceFilter，让 my-row sync 未就绪时也能给出权威判定。
+            return com.chat.base.space.SpaceFilter.getConvSyncMySourceSpaceId(channelID, channelType);
+        }
     }
 
     /**

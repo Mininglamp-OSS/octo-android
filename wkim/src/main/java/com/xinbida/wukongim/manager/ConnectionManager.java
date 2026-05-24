@@ -81,6 +81,8 @@ public class ConnectionManager extends BaseManager {
         WKConnection.getInstance().stopAll();
         WKIM.getInstance().getChannelManager().clearARMCache();
         WKIM.getInstance().getReminderManager().clearAllCache();
+        // GH dmwork-android#251 Round-3：清空 conv sync 预填的 space 缓存，避免跨用户泄漏。
+        WKIM.getInstance().getConversationManager().clearConvSyncSpaceCache();
         WKIMApplication.getInstance().closeDbHelper();
     }
 

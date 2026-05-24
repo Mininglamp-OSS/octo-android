@@ -67,6 +67,38 @@ public class ConversationManager extends BaseManager {
     private volatile long syncInFlightSince = 0L;
     private static final long SYNC_STUCK_RESET_MS = 15_000L;
 
+    /**
+     * GH dmwork-android#251 Round-2：conversation sync 响应里 resolved 的 group
+     * {@code space_id}（channelID → space_id）独立缓存。
+     *
+     * <p><b>为什么不写 {@link com.xinbida.wukongim.entity.WKChannel#remoteExtraMap}：</b>
+     * {@code ChannelManager.updateChannel(WKChannel)} 在 channelInfo 异步水合时会整体
+     * 替换 {@code wkChannelList[i].remoteExtraMap = channel.remoteExtraMap}（见
+     * {@code ChannelManager.java#updateChannel}），channelInfo 自带的 remoteExtraMap
+     * 通常只有 {@code space_id}（不含 {@code my_source_space_id}）→ conv sync 预填的
+     * 两个键会被一次性抹掉，竞态又回来了。改为独立内存缓存后，channelInfo 水合不会
+     * 触碰它，{@link com.chat.base.space.SpaceFilter} 在
+     * {@code channel.remoteExtraMap} 没有权威值时仍能读到 conv sync 给的兜底。
+     *
+     * <p><b>优先级语义</b>：{@code SpaceFilter.DEFAULT_PROVIDER.getChannelSpaceId} /
+     * {@code getMyMembershipSourceSpaceId} 先查权威源（{@code channel.remoteExtraMap}
+     * / member DB），再 fallback 到这两张 map——所以一旦 channelInfo / member sync
+     * 给出真实值，本缓存就自然被"压低优先级"，不会污染最终判定。
+     *
+     * <p>键不带 channelType（{@link #prefillSpaceExtrasFromConvSync} 只对
+     * {@link com.xinbida.wukongim.entity.WKChannelType#GROUP} 写入，读侧也只在 GROUP
+     * 路径上查；保持简洁）。
+     */
+    private final ConcurrentHashMap<String, String> convSyncSpaceMap = new ConcurrentHashMap<>();
+
+    /**
+     * GH dmwork-android#251 Round-2：conversation sync 响应里 resolved 的当前用户在该群
+     * 的 {@code my_source_space_id}（channelID → my_source_space_id）独立缓存。
+     * 与 {@link #convSyncSpaceMap} 同理：不写 {@link com.xinbida.wukongim.entity.WKChannel#remoteExtraMap}
+     * 是为了规避 {@code ChannelManager.updateChannel} 的整体替换语义。
+     */
+    private final ConcurrentHashMap<String, String> convSyncExternalMap = new ConcurrentHashMap<>();
+
     private ConversationManager() {
     }
 
@@ -434,6 +466,16 @@ public class ConversationManager extends BaseManager {
                     conversationMsg.parentChannelID = str[0];
                     conversationMsg.parentChannelType = WKChannelType.COMMUNITY;
                 }
+                // octo-server PR #154 / GH dmwork-android#251：conv sync 响应里 resolved 的
+                // space_id / my_source_space_id 在 GROUP 类型上预填到 channel.remoteExtraMap，
+                // 用来消除 SpaceFilter.shouldSkipChannelForSpace 的两个 fail-open 窗口
+                // （my-row-not-cached-fail-open 与末尾 fail-open）。老后端无此字段时跳过，
+                // 行为退化到原 fail-open 路径，保持向后兼容。
+                if (channelType == WKChannelType.GROUP) {
+                    prefillSpaceExtrasFromConvSync(channelID, channelType,
+                            syncChat.conversations.get(i).space_id,
+                            syncChat.conversations.get(i).my_source_space_id);
+                }
                 conversationMsg.channelID = syncChat.conversations.get(i).channel_id;
                 conversationMsg.channelType = syncChat.conversations.get(i).channel_type;
                 conversationMsg.lastMsgSeq = syncChat.conversations.get(i).last_msg_seq;
@@ -558,5 +600,115 @@ public class ConversationManager extends BaseManager {
         }
         WKIM.getInstance().getConnectionManager().setConnectionStatus(WKConnectStatus.syncCompleted, "");
         iSaveSyncChatBack.onBack();
+    }
+
+    /**
+     * GH dmwork-android#251 / octo-server PR #154 / Round-2 修法：把 conversation sync
+     * 响应里 resolved 的 Space 字段写进独立的内存缓存（{@link #convSyncSpaceMap} /
+     * {@link #convSyncExternalMap}），由 {@code SpaceFilter} 作为
+     * {@code channel.remoteExtraMap} / member DB 的兜底数据源读出。
+     *
+     * <p><b>Round-1 → Round-2 关键变更</b>：原版本写入
+     * {@link com.xinbida.wukongim.entity.WKChannel#remoteExtraMap}，但
+     * {@code ChannelManager.updateChannel(WKChannel)} 在 channelInfo 异步水合时会做
+     * <b>整体替换</b>（{@code wkChannelList[i].remoteExtraMap = channel.remoteExtraMap}），
+     * channelInfo 自带的 remoteExtraMap 通常只含 {@code space_id} 不含
+     * {@code my_source_space_id} → conv sync 预填的数据被覆盖 → 竞态又回来了。
+     * 改用独立 ConcurrentHashMap 后，channelInfo 水合路径不会触碰它，从根上消除覆盖窗口。
+     *
+     * <p>语义：value 非空 put / value 空 remove —— Round-3 修复 stale-cache 漏洞，
+     * 服务端显式清空 {@code space_id} / {@code my_source_space_id} 时同步清除本地条目。
+     * channelInfo / member DB 一旦给出权威值，{@code SpaceFilter} 优先读权威源，本缓存自动让位。
+     *
+     * <p>老后端未部署 PR #154 时 {@code spaceId} / {@code mySourceSpaceId} 均为 null，
+     * 此时 put 不会触发（hasXxx==false），remove 在空 map 上等价 no-op，
+     * 行为退化到原 fail-open 路径，保持向后兼容。
+     */
+    private void prefillSpaceExtrasFromConvSync(String channelID,
+                                                byte channelType,
+                                                String spaceId,
+                                                String mySourceSpaceId) {
+        // 注意：这里刻意不走 android.text.TextUtils#isEmpty —— 它在 host unit test
+        // （returnDefaultValues=true）下被 stub 成始终返回 false，会让 stale-cache 路径
+        // 失去测试覆盖。用纯 Java 判定保持语义在 stub 环境下也可断言。
+        if (channelID == null || channelID.isEmpty()) return;
+        boolean hasSpaceId = spaceId != null && !spaceId.isEmpty();
+        boolean hasMySource = mySourceSpaceId != null && !mySourceSpaceId.isEmpty();
+
+        try {
+            // Round-3：value 非空时 put 写入；服务端在后续 sync 中显式清空对应字段
+            // （例如群被移出 space / 当前用户退出 space 关系）时，必须主动 remove 旧条目，
+            // 否则 SpaceFilter 会拿到陈旧 fallback 误判频道归属。老后端从来不回这两个字段，
+            // 缓存一直为空，remove 等价于 no-op，老路径行为不变。
+            if (hasSpaceId) {
+                convSyncSpaceMap.put(channelID, spaceId);
+            } else {
+                convSyncSpaceMap.remove(channelID);
+            }
+            if (hasMySource) {
+                convSyncExternalMap.put(channelID, mySourceSpaceId);
+            } else {
+                convSyncExternalMap.remove(channelID);
+            }
+        } catch (Throwable t) {
+            // 单条 conv 的预填失败不应阻断批量落盘；下一次 sync 或 channelInfo 异步路径会补齐。
+            WKLoggerUtils.getInstance().e(TAG, "prefillSpaceExtrasFromConvSync failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * GH dmwork-android#251 Round-3：清空 conv sync 预填的 space 缓存。
+     *
+     * <p>这两张 map 是进程内单例缓存，跨用户必须显式清空，否则 logout 后再 init 另一个
+     * 账号时，SpaceFilter 会读到上个用户的 {@code my_source_space_id} 做错判（典型表现：
+     * 切号后某个群在新账号的 Space 视图里被错误地隐藏 / 显示）。
+     *
+     * <p>调用点：
+     * <ul>
+     *   <li>{@code ConnectionManager.logoutChat()} —— 与 {@code ChannelManager.clearARMCache()}
+     *       同级，确保退出登录时进程内所有用户态缓存全清。</li>
+     *   <li>{@code WKIM.init(context, uid, token)} —— 二次 init 通常意味着切号，
+     *       容错性地再清一次，避免 logout 路径被绕过时（如崩溃恢复）的残留。</li>
+     * </ul>
+     */
+    public void clearConvSyncSpaceCache() {
+        try {
+            convSyncSpaceMap.clear();
+            convSyncExternalMap.clear();
+        } catch (Throwable t) {
+            WKLoggerUtils.getInstance().e(TAG, "clearConvSyncSpaceCache failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * GH dmwork-android#251 Round-2：读 conv sync 写入的 group {@code space_id}。
+     *
+     * <p>{@code SpaceFilter.DEFAULT_PROVIDER.getChannelSpaceId} 在
+     * {@code channel.remoteExtraMap[space_id]} 没有值（channelInfo 还没水合 / 没回此字段）
+     * 时调用本方法做 fallback。channelInfo 水合后 remoteExtraMap 已含权威 space_id，
+     * 优先级自然回正。
+     *
+     * @return conv sync 缓存的 space_id，缺失时返回 {@code null}
+     */
+    @androidx.annotation.Nullable
+    public String getConvSyncSpaceId(String channelID) {
+        if (TextUtils.isEmpty(channelID)) return null;
+        return convSyncSpaceMap.get(channelID);
+    }
+
+    /**
+     * GH dmwork-android#251 Round-2：读 conv sync 写入的当前用户
+     * {@code my_source_space_id}。
+     *
+     * <p>{@code SpaceFilter.DEFAULT_PROVIDER.getMyMembershipSourceSpaceId} 在 member DB
+     * 还没 sync 到本地（{@code my-row-not-cached}）时调用本方法做 fallback；
+     * member DB 一旦补齐，优先读 member DB。
+     *
+     * @return conv sync 缓存的 my_source_space_id，缺失时返回 {@code null}
+     */
+    @androidx.annotation.Nullable
+    public String getConvSyncMySourceSpaceId(String channelID) {
+        if (TextUtils.isEmpty(channelID)) return null;
+        return convSyncExternalMap.get(channelID);
     }
 }

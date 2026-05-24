@@ -59,6 +59,21 @@ public final class SpaceFilter {
     /** remoteExtraMap 中群归属 Space 的 key（与后端 sync payload 约定）。 */
     public static final String CHANNEL_EXTRA_SPACE_ID = "space_id";
 
+    /**
+     * remoteExtraMap 中当前用户在该群的 source_space_id（外部成员通过哪个 Space 加入）的
+     * 字面 key——保留作为后端 sync payload 的接线契约（{@code gh251_constant_matchesBackendContract}
+     * 测试锁定）。
+     *
+     * <p><b>GH dmwork-android#251 Round-2</b>：实际存储位置已从
+     * {@code channel.remoteExtraMap} 搬到 {@code ConversationManager.convSyncExternalMap}
+     * 独立缓存——因为 {@code ChannelManager.updateChannel(WKChannel)} 在 channelInfo
+     * 异步水合时会整体替换 {@code remoteExtraMap}，conv sync 预填的
+     * {@code my_source_space_id}（channelInfo 通常不带此字段）会被一次性抹掉，竞态又回来。
+     * 这个常量保留是为了：(a) 跨端字面对齐（web/iOS 同名 key），(b) 单元测试合约锁定，
+     * (c) 万一未来某条路径仍需要从 remoteExtraMap 读，避免字符串散落。
+     */
+    public static final String CHANNEL_EXTRA_MY_SOURCE_SPACE_ID = "my_source_space_id";
+
     private SpaceFilter() {
     }
 
@@ -88,38 +103,88 @@ public final class SpaceFilter {
          * 我必是 subscriber） → fail-open 等二次校准。
          */
         boolean isMyMembershipCached(String channelID, byte channelType);
+
+        /**
+         * GH dmwork-android#251 / octo-server PR #154：读 conv sync 写入的
+         * {@code my_source_space_id}。
+         *
+         * <p>用途：当 my-row 还没 sync 下来（{@link #isMyMembershipCached} 返回 false）时，
+         * 优先用 conv sync 给的 my_source_space_id 做外部成员判定，避免 fail-open 让
+         * 跨 Space 群泄漏到当前视图。后端未部署 PR #154 时返回 null，走原有 fail-open 路径。
+         *
+         * <p><b>GH #251 Round-2</b>：默认实现现在读
+         * {@code ConversationManager.convSyncExternalMap} 而不是
+         * {@code channel.remoteExtraMap}——因为后者会被 channelInfo 异步水合整体替换覆盖。
+         * 单元测试通过 stub 注入。
+         */
+        @Nullable
+        default String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
+            return null;
+        }
     }
 
     private static final ChannelInfoProvider DEFAULT_PROVIDER = new ChannelInfoProvider() {
         @Override
         public String getChannelSpaceId(String channelID, byte channelType) {
+            // 优先源：channel.remoteExtraMap[space_id]（channelInfo 异步水合写入，权威）。
+            // Fallback：ConversationManager.convSyncSpaceMap（conv sync 预填，channelInfo
+            // 没回此字段或还没水合时兜底）。
+            //
+            // GH dmwork-android#251 Round-2：原 PR 把 conv sync 的 space_id 也写进
+            // remoteExtraMap，但 ChannelManager.updateChannel 在 channelInfo 水合时
+            // 会整体替换 remoteExtraMap → conv sync 写入的两个键会被一次性抹掉。
+            // 改为独立缓存 + 两段式 fallback 后，权威源缺失时 conv sync 仍能兜底，
+            // 权威源到位时优先级自然回正。
             try {
                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                 if (channel != null && channel.remoteExtraMap != null) {
                     Object v = channel.remoteExtraMap.get(CHANNEL_EXTRA_SPACE_ID);
                     if (v != null) {
                         String s = v.toString();
-                        return TextUtils.isEmpty(s) ? null : s;
+                        if (!TextUtils.isEmpty(s)) return s;
                     }
                 }
             } catch (Throwable ignored) {
-                // SDK 尚未初始化或线程异常时直接走 fail-open 分支
+                // SDK 尚未初始化或线程异常时落 conv sync fallback
             }
-            return null;
+            try {
+                String fallback = WKIM.getInstance().getConversationManager()
+                        .getConvSyncSpaceId(channelID);
+                return TextUtils.isEmpty(fallback) ? null : fallback;
+            } catch (Throwable ignored) {
+                return null;
+            }
         }
 
         @Override
         public String getMyMembershipSourceSpaceId(String channelID, byte channelType) {
+            // 优先源：member DB（subscriber 表里我自己的 row.source_space_id，member sync 写入）。
+            // Fallback：ConversationManager.convSyncExternalMap（conv sync 预填，member sync
+            // 还没把我自己的 row 推下来时兜底）。
+            //
+            // GH dmwork-android#251 Round-2：与 getChannelSpaceId 同理，把 conv sync 的
+            // my_source_space_id 从 remoteExtraMap 搬到独立缓存，避开 channelInfo 水合
+            // 整体替换的覆盖窗口。
             try {
                 String myUid = WKConfig.getInstance().getUid();
-                if (TextUtils.isEmpty(myUid)) return null;
-                WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
-                        .getMember(channelID, channelType, myUid);
-                if (me == null || me.extraMap == null) return null;
-                Object v = me.extraMap.get(WKChannelMemberExtras.sourceSpaceID);
-                if (v == null) return null;
-                String s = v.toString();
-                return TextUtils.isEmpty(s) ? null : s;
+                if (!TextUtils.isEmpty(myUid)) {
+                    WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
+                            .getMember(channelID, channelType, myUid);
+                    if (me != null && me.extraMap != null) {
+                        Object v = me.extraMap.get(WKChannelMemberExtras.sourceSpaceID);
+                        if (v != null) {
+                            String s = v.toString();
+                            if (!TextUtils.isEmpty(s)) return s;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+                // member DB 不可读时落 conv sync fallback
+            }
+            try {
+                String fallback = WKIM.getInstance().getConversationManager()
+                        .getConvSyncMySourceSpaceId(channelID);
+                return TextUtils.isEmpty(fallback) ? null : fallback;
             } catch (Throwable ignored) {
                 return null;
             }
@@ -135,6 +200,23 @@ public final class SpaceFilter {
                 return me != null;
             } catch (Throwable ignored) {
                 return false; // SDK 异常视为未缓存 → fail-open
+            }
+        }
+
+        /**
+         * GH dmwork-android#251 Round-2：读
+         * {@code ConversationManager.convSyncExternalMap}（不再读 channel.remoteExtraMap）。
+         * 改读独立缓存的原因见 {@link #getMyMembershipSourceSpaceId} javadoc。
+         */
+        @Override
+        public String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
+            try {
+                String v = WKIM.getInstance().getConversationManager()
+                        .getConvSyncMySourceSpaceId(channelID);
+                return TextUtils.isEmpty(v) ? null : v;
+            } catch (Throwable ignored) {
+                // SDK 未就绪或线程异常时返回 null，让上层走 fail-open / member sync 兜底
+                return null;
             }
         }
     };
@@ -180,18 +262,33 @@ public final class SpaceFilter {
     }
 
     /**
+     * 查 conv sync 写入的 my_source_space_id（未部署 PR #154 / 该群没有外部成员关系返回 null）。
+     * GH dmwork-android#251 / octo-server PR #154。
+     */
+    @Nullable
+    public static String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
+        return DEFAULT_PROVIDER.getConvSyncMySourceSpaceId(channelID, channelType);
+    }
+
+    /**
      * 是否跳过该频道（对齐 web {@code shouldSkipChannelForSpace} 双路径判定）。
      *
-     * <p>分支顺序（对齐 web + iOS EP3 跨端一致性修复 + codex 二次审查修正）：
+     * <p>分支顺序（对齐 web + iOS EP3 跨端一致性修复 + codex 二次审查修正 + GH #251 conv-sync 短路）：
      * <ol>
      *     <li><b>space-empty-pass</b>: currentSpaceId 为空 → false（非 Space 模式不过滤）</li>
      *     <li><b>space-prefix-keep</b>: channelID 有 {@code s{spaceId}_} 前缀且匹配 currentSpaceId → false（Keep 快速路径）</li>
      *     <li><b>person-pass</b>: 私聊 → 不在此函数过滤（用 {@link #shouldSkipMessageForSpace(WKMsg)}）</li>
      *     <li><b>cached-match</b>: 群归属 Space 命中 currentSpaceId → false</li>
-     *     <li><b>my-row-not-cached-fail-open</b>: 我自己的 subscriber 行尚未 sync 到本地 → false（竞态 fail-open）</li>
+     *     <li><b>convsync-external-member / convsync-mismatch</b>（GH #251）: conv sync 已带
+     *         {@code my_source_space_id} 时跳过 my-row sync 等待，直接判定。
+     *         {@code convsync-external-member}：我以当前 Space 身份加入 → false；
+     *         {@code convsync-mismatch}：source_space 与 currentSpace 不一致 → true。</li>
+     *     <li><b>my-row-not-cached-fail-open</b>: conv sync 没给 my_source_space_id 且 my-row 未 sync → false</li>
      *     <li><b>cached-external-member</b>: 我是以 currentSpaceId 身份加入的外部成员 → false</li>
      *     <li><b>cached-mismatch</b>: 我的 row 已 sync 但非外部成员 → true</li>
-     *     <li><b>fail-open</b>: 无任何 Space 信息 → false（等 channelInfo 回调后二次检查）</li>
+     *     <li><b>convsync-*-no-group-space</b>（GH #251）: 末尾 fail-open 之前再试一次 conv sync
+     *         的 my_source_space_id；命中即出 Keep/Skip，避免 group space_id 缺失也走 fail-open。</li>
+     *     <li><b>fail-open</b>: 完全无 Space 信息 → false（等 channelInfo 回调后二次检查）</li>
      * </ol>
      *
      * <p><b>P2 #1 修复（对齐 iOS EP3）</b>：space 前缀不匹配时 <b>fall-through</b> 到后续判定，
@@ -203,6 +300,18 @@ public final class SpaceFilter {
      * （检查 my own row 是否在本地 DB）作为竞态信号，而不是「members 列表非空」——
      * 因为发送者的 row 可能先 sync 下来，我的外部成员 row 还在路上，此时「非空」会误判
      * cached-mismatch 错杀外部群。my row 存在才可信；不存在 → 进入 race 窗口，fail-open。
+     *
+     * <p><b>GH #251 修复（octo-server PR #154 配套）</b>：octo-server 现在在 conversation
+     * sync 响应里 resolved 的 group {@code space_id} 和 viewer 的 {@code my_source_space_id}
+     * 直接回填到 conversation entry。SDK 把这两个字段写进
+     * {@code ConversationManager.convSyncSpaceMap} / {@code convSyncExternalMap}
+     * 两张独立内存缓存（<b>Round-2 关键</b>：不再写 {@code channel.remoteExtraMap}，
+     * 否则会被 {@code ChannelManager.updateChannel} 在 channelInfo 异步水合时整体替换抹掉）。
+     * {@link ChannelInfoProvider#getChannelSpaceId} / {@link ChannelInfoProvider#getMyMembershipSourceSpaceId}
+     * 现在以「权威源（channelInfo / member DB）→ conv sync 缓存」两段式读取；
+     * {@link ChannelInfoProvider#getConvSyncMySourceSpaceId} 仍单独暴露给 SpaceFilter 用于
+     * 在 my-row 未缓存阶段做权威短路。老后端无此字段时 conv sync 缓存为空，行为退化到
+     * 原 fail-open 路径，保持向后兼容。
      */
     public static boolean shouldSkipChannelForSpace(String channelID, byte channelType) {
         return shouldSkipChannelForSpace(channelID, channelType, getCurrentSpaceId(), DEFAULT_PROVIDER);
@@ -250,6 +359,21 @@ public final class SpaceFilter {
                 return false;
             }
 
+            // GH #251 / octo-server PR #154：在 my-row 还没 sync 之前先尝试用 conv sync
+            // 写入的 my_source_space_id 做权威判定。conv sync 已经携带这个字段时，无需
+            // 等 member sync —— 直接走 cached-external-member / cached-mismatch 判定。
+            String convSyncMySource = provider.getConvSyncMySourceSpaceId(channelID, channelType);
+            if (!isBlank(convSyncMySource)) {
+                if (currentSpaceId.equals(convSyncMySource)) {
+                    diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, convSyncMySource, null,
+                            "convsync-external-member", false);
+                    return false;
+                }
+                diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, convSyncMySource, null,
+                        "convsync-mismatch", true);
+                return true;
+            }
+
             // P2 #2: 我自己的 subscriber 行未缓存时 fail-open，避免竞态错杀
             boolean myCached = provider.isMyMembershipCached(channelID, channelType);
             if (!myCached) {
@@ -269,7 +393,21 @@ public final class SpaceFilter {
             return true; // cached-mismatch（我的 row 已 sync 且非外部成员）
         }
 
-        // 8. fail-open: 无任何 Space 信息
+        // 8. fail-open: 无任何 Space 信息——但在 fall-through 之前再尝试一次 conv sync
+        // my_source_space_id（即使后端没回 group space_id，只要 my_source_space_id 不为空，
+        // 就能判断我是不是当前 Space 的外部成员）。GH #251 / octo-server PR #154。
+        String convSyncMySource = provider.getConvSyncMySourceSpaceId(channelID, channelType);
+        if (!isBlank(convSyncMySource)) {
+            if (currentSpaceId.equals(convSyncMySource)) {
+                diagLog(channelID, channelType, currentSpaceId, null, prefix, convSyncMySource, null,
+                        "convsync-external-member-no-group-space", false);
+                return false;
+            }
+            diagLog(channelID, channelType, currentSpaceId, null, prefix, convSyncMySource, null,
+                    "convsync-mismatch-no-group-space", true);
+            return true;
+        }
+
         diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
                 "fail-open", false);
         return false;

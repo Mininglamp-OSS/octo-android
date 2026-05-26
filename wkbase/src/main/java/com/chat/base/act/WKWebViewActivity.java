@@ -184,6 +184,14 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             finish();
             return;
         }
+        // .pdf 文件通过独立 PdfViewActivity 渲染
+        if (urlPath != null && urlPath.toLowerCase().endsWith(".pdf")) {
+            Intent pdfIntent = new Intent(this, WKPdfViewActivity.class);
+            pdfIntent.putExtra("url", url);
+            startActivity(pdfIntent);
+            finish();
+            return;
+        }
 
         Log.e("加载的URL", url);
         wkVBinding.webView.loadUrl(url);

@@ -671,19 +671,25 @@ public class MsgModel extends WKBaseModel {
             request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncExtraMsg> result) {
+                if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[syncExtraMsg] onSuccess: channelID=" + channelID + " resultSize=" + (result == null ? "null" : result.size()) + " extraVersion=" + maxExtraVersion);
                 if (WKReader.isNotEmpty(result)) {
+                    for (WKSyncExtraMsg extra : result) {
+                        if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[syncExtraMsg] item: msgID=" + extra.message_id + " revoke=" + extra.revoke + " revoker=" + extra.revoker);
+                    }
                     // saveRemoteExtraMsg 内部有 DB 操作，必须在 IO 线程执行，
                     // 放主线程会和 sync 写入争抢数据库锁导致 ANR
                     WKDbScheduler.get().scheduleDirect(() -> {
                         WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
                         new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
                     });
+                } else if (maxExtraVersion > 10_000_000_000L) {
+                    if (BuildConfig.DEBUG) android.util.Log.w("RevokeDebug", "[syncExtraMsg] extraVersion abnormally high (" + maxExtraVersion + "), channelID=" + channelID + " — needs investigation");
                 }
             }
 
             @Override
             public void onFail(int code, String msg) {
-
+                if (BuildConfig.DEBUG) android.util.Log.e("RevokeDebug", "[syncExtraMsg] onFail: channelID=" + channelID + " code=" + code + " msg=" + msg);
             }
         });
         }); // end Schedulers.io

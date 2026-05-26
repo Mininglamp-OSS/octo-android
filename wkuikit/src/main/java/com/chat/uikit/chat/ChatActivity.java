@@ -3990,7 +3990,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private synchronized void refreshMsg(WKMsg wkMsg) {
-        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq);
+        if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq + " revoke=" + wkMsg.remoteExtra.revoke + " revoker=" + wkMsg.remoteExtra.revoker);
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
         List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
         chatAdapter.refreshReplyMsg(wkMsg);
@@ -4007,6 +4007,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 }
                 if (list.get(i).wkMsg.remoteExtra.revoke != wkMsg.remoteExtra.revoke) {
                     isNotify = true;
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] REVOKE CHANGED: msgID=" + wkMsg.messageID + " old=" + list.get(i).wkMsg.remoteExtra.revoke + " new=" + wkMsg.remoteExtra.revoke);
                 }
                 // 消息撤回
                 list.get(i).wkMsg.remoteExtra.revoke = wkMsg.remoteExtra.revoke;

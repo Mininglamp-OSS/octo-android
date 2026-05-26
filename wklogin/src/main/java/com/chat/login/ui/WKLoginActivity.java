@@ -261,29 +261,73 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     @Override
     protected void initData() {
         super.initData();
-        // 先从本地缓存显示 SSO 按钮（避免等网络导致 UI 跳动）
-        refreshOidcProvider(WKConfig.getInstance().getAppConfig());
+        refreshDynamicConfig(WKConfig.getInstance().getAppConfig());
         WKCommonModel.getInstance().getAppConfig((code, msg, wkappConfig) -> {
             this.wkappConfig = wkappConfig;
             if (wkappConfig != null && wkappConfig.can_modify_api_url == 1) {
                 wkVBinding.settingLayout.setVisibility(View.VISIBLE);
             }
-            refreshOidcProvider(wkappConfig);
+            refreshDynamicConfig(wkappConfig);
         });
     }
 
-    private void refreshOidcProvider(WKAPPConfig config) {
+    private static final String TERMS_URL = "https://cdn.example.com/legal-agreement/octo-terms.pdf";
+    private static final String PRIVACY_URL = "https://cdn.example.com/legal-agreement/octo-privacy.pdf";
+
+    private void refreshDynamicConfig(WKAPPConfig config) {
+        boolean ssoOnly = computeSsoOnly(config);
+        if (ssoOnly) {
+            OidcProviderConfig provider = config.oidc_providers.get(0);
+            applySsoOnlyMode(provider);
+        } else {
+            applyOctoMode(config);
+        }
+    }
+
+    private boolean computeSsoOnly(WKAPPConfig config) {
+        if (config == null) return false;
+        if (config.oidc_providers == null || config.oidc_providers.isEmpty()) return false;
+        OidcProviderConfig provider = config.oidc_providers.get(0);
+        return provider.name != null && !provider.name.isEmpty()
+                && provider.authorize_path != null && !provider.authorize_path.isEmpty()
+                && !provider.authorize_path.startsWith("http://");
+    }
+
+    private void applySsoOnlyMode(OidcProviderConfig provider) {
+        wkVBinding.loginTitleTv.setVisibility(View.GONE);
+        wkVBinding.formLayout.setVisibility(View.GONE);
+        wkVBinding.ssoOnlyLayout.setVisibility(View.VISIBLE);
+        wkVBinding.legalLayout.setVisibility(View.VISIBLE);
+
+        String displayName = !TextUtils.isEmpty(provider.name) ? provider.name : provider.id;
+        wkVBinding.ssoWelcomeTv.setText(String.format(getString(R.string.login_title), getString(R.string.app_name)));
+        wkVBinding.ssoPrimaryBtn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Theme.colorAccount));
+        wkVBinding.ssoPrimaryBtn.setText(String.format(getString(R.string.sso_login_button), displayName));
+        wkVBinding.ssoPrimaryBtn.setOnClickListener(v -> startOidcLogin(provider));
+        wkVBinding.ssoHintTv.setText(String.format(getString(R.string.sso_hint), displayName));
+
+        wkVBinding.termsTv.setTextColor(Theme.colorAccount);
+        wkVBinding.privacyTv.setTextColor(Theme.colorAccount);
+        wkVBinding.termsTv.setText(getString(R.string.user_agreement));
+        wkVBinding.privacyTv.setText(getString(R.string.privacy_policy));
+        wkVBinding.termsTv.setOnClickListener(v -> showWebView(TERMS_URL));
+        wkVBinding.privacyTv.setOnClickListener(v -> showWebView(PRIVACY_URL));
+    }
+
+    private void applyOctoMode(WKAPPConfig config) {
+        wkVBinding.loginTitleTv.setVisibility(View.VISIBLE);
+        wkVBinding.formLayout.setVisibility(View.VISIBLE);
+        wkVBinding.ssoOnlyLayout.setVisibility(View.GONE);
+        wkVBinding.legalLayout.setVisibility(View.GONE);
+
         if (config == null || config.oidc_providers == null || config.oidc_providers.isEmpty()) {
             wkVBinding.ssoBtn.setVisibility(View.GONE);
             return;
         }
         OidcProviderConfig provider = config.oidc_providers.get(0);
-        //  R2 fix (review/  教训): 区分 null vs "".
-        // R5 fix (review): 同时校验 authorize_path 是 https:// 或相对路径,
-        // 拒绝 http:// 添加到按钮可点状态. 避免点击后 buildAuthorizeUrl 抛异常 crash.
         boolean unusable = provider.name == null || provider.name.isEmpty()
                 || provider.authorize_path == null || provider.authorize_path.isEmpty()
-                || provider.authorize_path.startsWith("http://");  // 生产 SSO 必须 HTTPS
+                || provider.authorize_path.startsWith("http://");
         if (unusable) {
             wkVBinding.ssoBtn.setVisibility(View.GONE);
             return;

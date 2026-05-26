@@ -1054,6 +1054,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             // 紧凑布局（群聊）：圆形 TextView
             TextView badge = (TextView) view;
             if (unread > 0) {
+                boolean isMute = item.uiConversationMsg.getWkChannel() != null
+                        && item.uiConversationMsg.getWkChannel().mute == 1;
+                badge.setBackground(getBadgeDrawable(getContext(), isMute));
                 badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
                 badge.setVisibility(View.VISIBLE);
             } else {

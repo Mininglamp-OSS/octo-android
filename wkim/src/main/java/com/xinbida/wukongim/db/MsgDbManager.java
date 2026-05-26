@@ -1253,6 +1253,10 @@ public class MsgDbManager {
             }
             if (cursor.moveToLast()) {
                 version = WKCursor.readLong(cursor, "extra_version");
+                if (WKIM.getInstance().isDebug()) {
+                    String msgId = WKCursor.readString(cursor, "message_id");
+                    android.util.Log.d("RevokeDebug", "[queryMaxExtraVersion] channelID=" + channelID + " maxVersion=" + version + " messageID=" + msgId);
+                }
             }
         } finally {
             if (cursor != null)

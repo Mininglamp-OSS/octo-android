@@ -1602,8 +1602,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //
         // 严格按任务要求：gate 命中 → return，不写 allConversations、不 bump、不 sort。
         if (isCrossSpaceRealtimePush(uiConversationMsg)) {
+            if (BuildConfig.DEBUG) Log.d("SpaceDebug", "[resetData] BLOCKED crossSpace ch=" + uiConversationMsg.channelID
+                    + " type=" + uiConversationMsg.channelType);
             return;
         }
+        if (BuildConfig.DEBUG) Log.d("SpaceDebug", "[resetData] PASS ch=" + uiConversationMsg.channelID
+                + " type=" + uiConversationMsg.channelType
+                + " currentSpace=" + MsgModel.getInstance().getCurrentSpaceId());
 
         // 判断会话是否属于当前 tab 显示范围
         byte currentTabType = currentTab == 0 ? WKChannelType.GROUP : WKChannelType.PERSONAL;
@@ -1880,28 +1885,34 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         // SystemBot 跨 Space 共享 entry，但需要防止别 Space 消息 bump 当前 Space
         if (com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID)) {
-            return isSystemBotCrossSpaceBump(uc, currentSpaceId);
+            boolean reject = isSystemBotCrossSpaceBump(uc, currentSpaceId);
+            if (BuildConfig.DEBUG && reject) Log.d("SpaceDebug", "[CrossSpace] REJECT systemBot ch=" + uc.channelID);
+            return reject;
         }
 
         if (uc.channelType == WKChannelType.GROUP) {
-            return !isChannelInCurrentSpace(uc.channelID, uc.channelType);
+            boolean reject = !isChannelInCurrentSpace(uc.channelID, uc.channelType);
+            if (BuildConfig.DEBUG) Log.d("SpaceDebug", "[CrossSpace] GROUP ch=" + uc.channelID
+                    + " inCurrentSpace=" + !reject + " currentSpaceId=" + currentSpaceId);
+            return reject;
         }
 
         if (uc.channelType == WKChannelType.COMMUNITY_TOPIC) {
-            // 子区消息本身不进 conversation list（resetData 顶部 L1142 已拦截并
-            // return），但保留此分支让 gate 语义完整，方便其他调用方复用。
-            // 按父群 space 判定 —— 与后端 filterThreadConv 对齐。
             String[] parsed = ThreadModel.getInstance().parseChannelId(uc.channelID);
             if (parsed == null || parsed.length == 0 || TextUtils.isEmpty(parsed[0])) {
-                // 解析失败 fail-open：让旧有子区兜底 refreshThreadPreviews 处理
                 return false;
             }
-            return !isChannelInCurrentSpace(parsed[0], WKChannelType.GROUP);
+            boolean reject = !isChannelInCurrentSpace(parsed[0], WKChannelType.GROUP);
+            if (BuildConfig.DEBUG && reject) Log.d("SpaceDebug", "[CrossSpace] REJECT thread ch=" + uc.channelID
+                    + " parentGroup=" + parsed[0]);
+            return reject;
         }
 
         // PERSONAL（非 SystemBot）
-        return isMessageFromOtherSpace(uc.getWkMsg())
+        boolean reject = isMessageFromOtherSpace(uc.getWkMsg())
                 && !com.chat.base.space.SystemBotsFallback.isSystemBot(uc.channelID);
+        if (BuildConfig.DEBUG && reject) Log.d("SpaceDebug", "[CrossSpace] REJECT personal ch=" + uc.channelID);
+        return reject;
     }
 
     /**

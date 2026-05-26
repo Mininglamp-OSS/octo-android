@@ -249,6 +249,14 @@ public final class SpaceFilter {
         return m.matches() ? m.group(1) : null;
     }
 
+    /** 从子区 channelID（{parentGroupId}____{threadId}）中提取父群 ID。 */
+    @Nullable
+    public static String extractParentGroupId(@Nullable String channelID) {
+        if (channelID == null) return null;
+        int sep = channelID.indexOf("____");
+        return sep > 0 ? channelID.substring(0, sep) : null;
+    }
+
     /** 查当前用户在该频道的 source_space_id（非外部成员或 SDK 未就绪返回 null）。 */
     @Nullable
     public static String getMyMembershipSourceSpaceId(String channelID, byte channelType) {
@@ -345,6 +353,20 @@ public final class SpaceFilter {
             return false;
         }
 
+        // 3.5 thread-delegate: 子区（COMMUNITY_TOPIC）委托给父群判断。
+        // 子区 channelID 格式: {parentGroupId}____{threadId}，提取父群 ID 递归调用。
+        if (channelType == WKChannelType.COMMUNITY_TOPIC) {
+            String parentGroupId = extractParentGroupId(channelID);
+            if (!isBlank(parentGroupId)) {
+                boolean skip = shouldSkipChannelForSpace(parentGroupId, WKChannelType.GROUP,
+                        currentSpaceId, provider);
+                diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                        "thread-delegate(parent=" + parentGroupId + ")", skip);
+                return skip;
+            }
+            // 无法提取父群 ID，fall-through 到后续逻辑
+        }
+
         // 4-7: Group —— 先拿到群归属 Space；优先读 channelInfo.orgData.space_id，
         // 读不到时兜底用 channel_id 前缀（prefix 的 spaceId 就是群归属）。
         String groupSpaceId = provider.getChannelSpaceId(channelID, channelType);
@@ -436,10 +458,17 @@ public final class SpaceFilter {
                                  @NonNull String branch,
                                  boolean skip) {
         try {
+            String channelName = "";
+            if (channelType == WKChannelType.GROUP) {
+                WKChannel ch = com.xinbida.wukongim.WKIM.getInstance().getChannelManager()
+                        .getChannel(channelID, channelType);
+                if (ch != null && ch.channelName != null) channelName = ch.channelName;
+            }
             String line = "SpaceFilter#"
                     + " branch=" + branch
                     + " skip=" + skip
                     + " channelID=" + channelID
+                    + " name=" + channelName
                     + " channelType=" + channelType
                     + " currentSpaceId=" + currentSpaceId
                     + " groupSpaceId=" + groupSpaceId

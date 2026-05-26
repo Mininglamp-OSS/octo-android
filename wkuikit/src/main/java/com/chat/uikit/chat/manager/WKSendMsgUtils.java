@@ -92,77 +92,97 @@ public class WKSendMsgUtils {
      * @param listener 上传返回
      */
     void uploadChatAttachment(WKMsg msg, IUploadAttacResultListener listener) {
-        //存在附件待上传
         if (msg.type == WKContentType.WK_IMAGE || msg.type == WKContentType.WK_GIF || msg.type == WKContentType.WK_VOICE || msg.type == WKContentType.WK_LOCATION || msg.type == WKContentType.WK_FILE) {
             WKMediaMessageContent contentMsgModel = (WKMediaMessageContent) msg.baseContentMsgModel;
-            //已经有网络地址无需在上传
             if (!TextUtils.isEmpty(contentMsgModel.url)) {
                 listener.onUploadResult(true, contentMsgModel);
+                return;
+            }
+            if (TextUtils.isEmpty(contentMsgModel.localPath)) {
+                listener.onUploadResult(false, msg.baseContentMsgModel);
+                return;
+            }
+            WKUploader.getInstance().getUploadCredentials(msg.channelID, msg.channelType, contentMsgModel.localPath,
+                    (uploadUrl, downloadUrl, contentType, contentDisposition) -> {
+                        if (TextUtils.isEmpty(uploadUrl) || TextUtils.isEmpty(downloadUrl)) {
+                            listener.onUploadResult(false, contentMsgModel);
+                            return;
+                        }
+                        WKUploader.getInstance().putUpload(uploadUrl, contentMsgModel.localPath, contentType, contentDisposition, msg.clientSeq,
+                                new WKUploader.IUploadBack() {
+                                    @Override
+                                    public void onSuccess(String url) {
+                                        contentMsgModel.url = downloadUrl;
+                                        listener.onUploadResult(true, contentMsgModel);
+                                    }
+
+                                    @Override
+                                    public void onError() {
+                                        listener.onUploadResult(false, contentMsgModel);
+                                    }
+                                });
+                    });
+        } else if (msg.type == WKContentType.WK_VIDEO) {
+            WKVideoContent videoMsgModel = (WKVideoContent) msg.baseContentMsgModel;
+            if (!TextUtils.isEmpty(videoMsgModel.cover) && !TextUtils.isEmpty(videoMsgModel.url)) {
+                listener.onUploadResult(true, msg.baseContentMsgModel);
+                return;
+            }
+            if (TextUtils.isEmpty(videoMsgModel.cover)) {
+                uploadVideoCover(msg, videoMsgModel, listener);
             } else {
-                if (!TextUtils.isEmpty(contentMsgModel.localPath)) {
-                    WKUploader.getInstance().getUploadFileUrl(msg.channelID, msg.channelType, contentMsgModel.localPath, (url, filePath) -> {
-                        if (!TextUtils.isEmpty(url)) {
-                            WKUploader.getInstance().upload(url, contentMsgModel.localPath, msg.clientSeq, new WKUploader.IUploadBack() {
+                uploadVideoFile(msg, videoMsgModel, listener);
+            }
+        }
+    }
+
+    private void uploadVideoCover(WKMsg msg, WKVideoContent videoMsgModel, IUploadAttacResultListener listener) {
+        WKUploader.getInstance().getUploadCredentialsWithMime(msg.channelID, msg.channelType,
+                videoMsgModel.coverLocalPath, ".jpg", "image/jpeg",
+                (coverUploadUrl, coverDownloadUrl, coverContentType, coverContentDisposition) -> {
+                    if (TextUtils.isEmpty(coverUploadUrl) || TextUtils.isEmpty(coverDownloadUrl)) {
+                        listener.onUploadResult(false, msg.baseContentMsgModel);
+                        return;
+                    }
+                    WKUploader.getInstance().putUpload(coverUploadUrl, videoMsgModel.coverLocalPath,
+                            coverContentType, coverContentDisposition,
+                            UUID.randomUUID().toString().replaceAll("-", ""),
+                            new WKUploader.IUploadBack() {
                                 @Override
                                 public void onSuccess(String url) {
-                                    contentMsgModel.url = url;
-                                    listener.onUploadResult(true, contentMsgModel);
+                                    videoMsgModel.cover = coverDownloadUrl;
+                                    uploadVideoFile(msg, videoMsgModel, listener);
                                 }
 
                                 @Override
                                 public void onError() {
-                                    listener.onUploadResult(false, contentMsgModel);
+                                    listener.onUploadResult(false, msg.baseContentMsgModel);
                                 }
                             });
-                        } else {
-                            listener.onUploadResult(false, contentMsgModel);
-                        }
-                    });
-                } else {
-                    listener.onUploadResult(false, msg.baseContentMsgModel);
-                }
-            }
+                });
+    }
 
-        } else if (msg.type == WKContentType.WK_VIDEO) {
-            //视频
-            WKVideoContent videoMsgModel = (WKVideoContent) msg.baseContentMsgModel;
-            if (!TextUtils.isEmpty(videoMsgModel.cover) && !TextUtils.isEmpty(videoMsgModel.url)) {
-                listener.onUploadResult(true, msg.baseContentMsgModel);
-            } else {
-                if (TextUtils.isEmpty(videoMsgModel.cover)) {
-                    WKUploader.getInstance().getUploadFileUrl(msg.channelID, msg.channelType, videoMsgModel.coverLocalPath, (url, filePath) -> {
-                        if (!TextUtils.isEmpty(url)) {
-                            WKUploader.getInstance().upload(url, videoMsgModel.coverLocalPath, UUID.randomUUID().toString().replaceAll("-", ""),
-                                    new WKUploader.IUploadBack() {
-                                        @Override
-                                        public void onSuccess(String url) {
-                                            videoMsgModel.cover = url;
-                                            WKUploader.getInstance().getUploadFileUrl(msg.channelID, msg.channelType, videoMsgModel.localPath, (url1, fileUrl) -> WKUploader.getInstance().upload(url1, videoMsgModel.localPath, msg.clientSeq, new WKUploader.IUploadBack() {
-                                                @Override
-                                                public void onSuccess(String url1) {
-                                                    videoMsgModel.url = url1;
-                                                    listener.onUploadResult(true, videoMsgModel);
-                                                }
+    private void uploadVideoFile(WKMsg msg, WKVideoContent videoMsgModel, IUploadAttacResultListener listener) {
+        WKUploader.getInstance().getUploadCredentials(msg.channelID, msg.channelType, videoMsgModel.localPath,
+                (videoUploadUrl, videoDownloadUrl, videoContentType, videoContentDisposition) -> {
+                    if (TextUtils.isEmpty(videoUploadUrl) || TextUtils.isEmpty(videoDownloadUrl)) {
+                        listener.onUploadResult(false, videoMsgModel);
+                        return;
+                    }
+                    WKUploader.getInstance().putUpload(videoUploadUrl, videoMsgModel.localPath,
+                            videoContentType, videoContentDisposition, msg.clientSeq,
+                            new WKUploader.IUploadBack() {
+                                @Override
+                                public void onSuccess(String url) {
+                                    videoMsgModel.url = videoDownloadUrl;
+                                    listener.onUploadResult(true, videoMsgModel);
+                                }
 
-                                                @Override
-                                                public void onError() {
-                                                    listener.onUploadResult(false, videoMsgModel);
-                                                }
-                                            }));
-                                        }
-
-                                        @Override
-                                        public void onError() {
-                                            listener.onUploadResult(false, msg.baseContentMsgModel);
-                                        }
-                                    });
-                        } else {
-                            listener.onUploadResult(false, msg.baseContentMsgModel);
-                        }
-                    });
-                }
-            }
-        }
-
+                                @Override
+                                public void onError() {
+                                    listener.onUploadResult(false, videoMsgModel);
+                                }
+                            });
+                });
     }
 }

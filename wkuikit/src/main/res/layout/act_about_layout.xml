@@ -92,6 +92,22 @@
 
             <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
         </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="15dp"
+            android:background="@color/homeColor" />
+
+        <LinearLayout
+            android:id="@+id/exportDiagLogLayout"
+            style="@style/layoutBg">
+
+            <TextView
+                style="@style/leftTextView"
+                android:text="@string/export_diag_log" />
+
+            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+        </LinearLayout>
     </LinearLayout>
 
     <View

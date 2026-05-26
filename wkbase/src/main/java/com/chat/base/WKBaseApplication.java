@@ -148,7 +148,10 @@ public class WKBaseApplication {
         String buglyAppId = BuildConfig.BUGLY_APP_ID;
         AppStartup.postPhaseB("bugly", () -> {
             if (buglyAppId == null || buglyAppId.isEmpty()) return;
-            CrashReport.initCrashReport(context, buglyAppId, BuildConfig.DEBUG);
+            CrashReport.UserStrategy strategy = new CrashReport.UserStrategy(context);
+            strategy.setAppReportDelay(5000);
+            strategy.setEnableANRCrashMonitor(true);
+            CrashReport.initCrashReport(context, buglyAppId, BuildConfig.DEBUG, strategy);
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
                 UserInfoEntity userInfo = WKConfig.getInstance().getUserInfo();
                 if (userInfo != null && !TextUtils.isEmpty(userInfo.short_no)) {
@@ -162,6 +165,12 @@ public class WKBaseApplication {
                 }
             }
         });
+
+        // ANR 看门狗 — 先写本地文件再上报 Bugly，进程被杀也不丢日志
+        com.chat.base.utils.ANRWatchdog.init(context);
+
+        // Crash 本地日志兜底 — 在 Bugly 之后初始化，链式调用
+        CrashHandler.getInstance().init(context);
 
         // RLottie — 同步加载 native 库，确保 UI 构造 RLottieDrawable 前库已就绪
         RLottieApplication.getInstance().init(context);

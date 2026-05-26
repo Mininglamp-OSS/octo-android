@@ -57,6 +57,7 @@
     <string name="kit_user_agreement">用户协议</string>
     <string name="kit_privacy_policy">隐私政策</string>
     <string name="check_new_version">检查新版本</string>
+    <string name="export_diag_log">导出诊断日志</string>
     <string name="about">关于</string>
     <string name="time_am">上午</string>
     <string name="time_pm">下午</string>

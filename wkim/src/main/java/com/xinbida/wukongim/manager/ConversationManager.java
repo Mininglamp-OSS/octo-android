@@ -472,9 +472,13 @@ public class ConversationManager extends BaseManager {
                 // （my-row-not-cached-fail-open 与末尾 fail-open）。老后端无此字段时跳过，
                 // 行为退化到原 fail-open 路径，保持向后兼容。
                 if (channelType == WKChannelType.GROUP) {
-                    prefillSpaceExtrasFromConvSync(channelID, channelType,
-                            syncChat.conversations.get(i).space_id,
-                            syncChat.conversations.get(i).my_source_space_id);
+                    String _spaceId = syncChat.conversations.get(i).space_id;
+                    String _mySource = syncChat.conversations.get(i).my_source_space_id;
+                    if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                        WKLoggerUtils.getInstance().e(TAG, "convSync prefill: ch=" + channelID
+                                + " space_id=" + _spaceId + " my_source=" + _mySource);
+                    }
+                    prefillSpaceExtrasFromConvSync(channelID, channelType, _spaceId, _mySource);
                 }
                 conversationMsg.channelID = syncChat.conversations.get(i).channel_id;
                 conversationMsg.channelType = syncChat.conversations.get(i).channel_type;

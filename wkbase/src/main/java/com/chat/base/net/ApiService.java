@@ -29,4 +29,7 @@ public interface ApiService {
 
     @GET
     Observable<UploadFileUrl> getUploadFileUrl(@Url String url);
+
+    @GET
+    Observable<UploadFileUrl> getUploadCredentials(@Url String url);
 }

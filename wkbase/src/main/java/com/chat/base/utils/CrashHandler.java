@@ -1,217 +1,105 @@
-/*
- * Copyright 2026-present OctoIM contributors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.chat.base.utils;
 
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
-import com.chat.base.endpoint.EndpointManager;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.Writer;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-
 
 /**
- * 2019-12-12 14:21
- * 闪退bug收集
+ * Java 层未捕获异常处理：写本地文件 + 链式调用原 handler（Bugly）。
+ *
+ * 日志写到 DiagnosticLogFile 统一文件，和 ANRWatchdog 共用，
+ * 用户通过"关于 → 导出诊断日志"一并发送。
  */
 public class CrashHandler implements Thread.UncaughtExceptionHandler {
 
-    public static final String TAG = "CrashHandler";
+    private static final String TAG = "CrashHandler";
+    private static final CrashHandler INSTANCE = new CrashHandler();
 
-    // 系统默认的UncaughtException处理类
-    private Thread.UncaughtExceptionHandler mDefaultHandler;
-    // CrashHandler实例
-    private final static CrashHandler INSTANCE = new CrashHandler();
-    // 程序的Context对象
-    private WeakReference<Context> mContext;
-    // 用来存储设备信息和异常信息
-    private final Map<String, String> infos = new HashMap<>();
+    private Thread.UncaughtExceptionHandler previousHandler;
+    private WeakReference<Context> contextRef;
 
-    // 用于格式化日期,作为日志文件名的一部分
-    private final DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault());
-
-    /**
-     * 保证只有一个CrashHandler实例
-     */
     private CrashHandler() {
     }
 
-    /**
-     * 获取CrashHandler实例 ,单例模式
-     */
     public static CrashHandler getInstance() {
         return INSTANCE;
     }
 
     /**
-     * 初始化
-     *
-     * @param context
+     * 必须在 Bugly init 之后调用，这样 previousHandler 就是 Bugly 的 handler，
+     * 我们写完本地文件后再交给 Bugly 上报。
      */
     public void init(Context context) {
-        mContext = new WeakReference<>(context);
-        // 获取系统默认的UncaughtException处理器
-        mDefaultHandler = Thread.getDefaultUncaughtExceptionHandler();
-        // 设置该CrashHandler为程序的默认处理器
+        contextRef = new WeakReference<>(context.getApplicationContext());
+        previousHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(this);
     }
 
-    /**
-     * 当UncaughtException发生时会转入该函数来处理
-     */
     @Override
     public void uncaughtException(@NonNull Thread thread, @NonNull Throwable ex) {
-        if (!handleException(ex) && mDefaultHandler != null) {
-            // 如果用户没有处理则让系统默认的异常处理器来处理
-            mDefaultHandler.uncaughtException(thread, ex);
+        try {
+            String report = buildCrashReport(thread, ex);
+            Log.e(TAG, report);
+            DiagnosticLogFile.append(contextRef != null ? contextRef.get() : null, report);
+        } catch (Throwable ignored) {
+        }
+
+        // 链式调用：交给 Bugly（或系统默认 handler）处理
+        if (previousHandler != null) {
+            previousHandler.uncaughtException(thread, ex);
         } else {
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                Log.e(TAG, "error : ", e);
-            }
-            // 退出程序
             android.os.Process.killProcess(android.os.Process.myPid());
             System.exit(1);
         }
     }
 
-    /**
-     * 自定义错误处理,收集错误信息 发送错误报告等操作均在此完成.
-     *
-     * @param ex
-     * @return true:如果处理了该异常信息;否则返回false.
-     */
-    private boolean handleException(Throwable ex) {
-        if (ex == null) {
-            return false;
-        }
-        // 使用Toast来显示异常信息
-        //  P-11 白名单：Crash 路径需要独立 Looper 线程承载 Toast（主 Looper 即将退出），
-        // 不能走 AppExecutors。保留 new Thread() 写法并在 check-no-new-thread.sh 白名单内。
-        new Thread() {
-            @Override
-            public void run() {
-                Looper.prepare();
-                Toast.makeText(mContext.get(), "很抱歉,程序出现异常,即将退出.", Toast.LENGTH_LONG).show();
-                Looper.loop();
-            }
-        }.start();
-        // 收集设备参数信息
-        collectDeviceInfo(mContext.get());
-        // 保存日志文件
-        saveCrashInfo2File(ex);
-        EndpointManager.getInstance().invoke("saveCrashFile", ex);
-        return true;
-    }
+    private String buildCrashReport(Thread thread, Throwable ex) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US);
+        StringBuilder sb = new StringBuilder(4096);
 
-    /**
-     * 收集设备参数信息
-     *
-     * @param ctx
-     */
-    public void collectDeviceInfo(Context ctx) {
-        try {
-            PackageManager pm = ctx.getPackageManager();
-            PackageInfo pi = pm.getPackageInfo(ctx.getPackageName(), PackageManager.GET_ACTIVITIES);
-            if (pi != null) {
-                String versionName = pi.versionName == null ? "null" : pi.versionName;
-                String versionCode = pi.versionCode + "";
-                infos.put("versionName", versionName);
-                infos.put("versionCode", versionCode);
-            }
-        } catch (PackageManager.NameNotFoundException e) {
-            Log.e(TAG, "an error occured when collect package info", e);
-        }
-        Field[] fields = Build.class.getDeclaredFields();
-        for (Field field : fields) {
+        sb.append("====== CRASH DETECTED ======\n");
+        sb.append("Time: ").append(sdf.format(new Date())).append('\n');
+        sb.append("Thread: ").append(thread.getName()).append(" (id=").append(thread.getId()).append(")\n");
+        sb.append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+        sb.append("Android: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+
+        Context ctx = contextRef != null ? contextRef.get() : null;
+        if (ctx != null) {
             try {
-                field.setAccessible(true);
-                infos.put(field.getName(), Objects.requireNonNull(field.get(null)).toString());
-                Log.d(TAG, field.getName() + " : " + field.get(null));
-            } catch (Exception e) {
-                Log.e(TAG, "an error occured when collect crash info", e);
+                PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+                sb.append("App: ").append(pi.versionName).append(" (").append(pi.versionCode).append(")\n");
+            } catch (PackageManager.NameNotFoundException ignored) {
             }
         }
-    }
 
-    /**
-     * 保存错误信息到文件中
-     *
-     * @param ex
-     */
-    private void saveCrashInfo2File(Throwable ex) {
+        sb.append("\n--- Exception ---\n");
+        StringWriter sw = new StringWriter();
+        ex.printStackTrace(new PrintWriter(sw));
+        sb.append(sw.toString());
 
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : infos.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            sb.append(key).append("=").append(value).append("\n");
-        }
+        // 内存信息
+        Runtime rt = Runtime.getRuntime();
+        long usedMB = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+        long maxMB = rt.maxMemory() / (1024 * 1024);
+        sb.append("\n--- Memory ---\n");
+        sb.append("Used: ").append(usedMB).append("MB / Max: ").append(maxMB).append("MB\n");
 
-        Writer writer = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(writer);
-        ex.printStackTrace(printWriter);
-        Throwable cause = ex.getCause();
-        while (cause != null) {
-            cause.printStackTrace(printWriter);
-            cause = cause.getCause();
-        }
-        printWriter.close();
-        String result = writer.toString();
-        sb.append(result);
-        try {
-            long timestamp = System.currentTimeMillis();
-            String time = formatter.format(new Date());
-            String fileName = "crash-" + time + "-" + timestamp + ".log";
-            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-                String path = WKFileUtils.getInstance().getNormalFileSavePath("wkCrash");
-                File dir = new File(path);
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
-                FileOutputStream fos = new FileOutputStream(path + "/" + fileName);
-                fos.write(sb.toString().getBytes());
-                fos.close();
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "an error occured while writing file...", e);
-        }
-
+        sb.append("====== END CRASH ======\n\n");
+        return sb.toString();
     }
 }

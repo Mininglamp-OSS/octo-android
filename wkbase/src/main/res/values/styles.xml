@@ -177,5 +177,8 @@
         <item name="android:windowNoTitle">true</item>
     </style>
 
+    <style name="roundedCorner18" parent="">
+        <item name="cornerSize">18dp</item>
+    </style>
 
 </resources>

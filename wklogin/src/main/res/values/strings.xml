@@ -76,6 +76,7 @@
     <string name="reset_base_url">重置</string>
     <string name="update_api_content">填写服务器地址，域名或IP+端口的方式，都必须是http开头。\n例：https://your-server.com/api\n例：https://172.0.0.1:8090/api</string>
     <string name="sso_login_button">使用 %s 登录或注册</string>
+    <string name="sso_hint">新用户首次点击将自动创建 %s 账号</string>
     <string name="sso_auth_title">授权登录</string>
     <string name="please_wait">请稍候…</string>
     <string name="str_network_error">网络请求失败</string>

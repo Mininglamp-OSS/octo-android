@@ -56,4 +56,7 @@ public class WKAPPConfig {
      * <p>字段缺失 / Gson 反序列化 null → 调用侧视为「无可用 provider」, toast 兜底。
      */
     public List<OidcProviderConfig> oidc_providers;
+
+    public boolean login_enable = true;
+    public boolean register_enable = true;
 }

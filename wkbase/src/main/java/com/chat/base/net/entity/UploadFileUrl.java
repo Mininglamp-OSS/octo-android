@@ -24,4 +24,9 @@ public class UploadFileUrl {
     public String public_url;
     public String fid;
     public String url;
+    // COS pre-signed upload fields
+    public String uploadUrl;
+    public String downloadUrl;
+    public String contentType;
+    public String contentDisposition;
 }

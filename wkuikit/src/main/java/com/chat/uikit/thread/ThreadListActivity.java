@@ -23,13 +23,18 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import com.chat.base.base.WKBaseActivity;
+import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.databinding.ActThreadListLayoutBinding;
+import com.chat.uikit.sidebar.FollowModel;
+import com.chat.uikit.sidebar.FollowedKeysStore;
+import com.chat.uikit.sidebar.SidebarItemEntity;
 import com.chat.uikit.thread.adapter.ThreadListAdapter;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
@@ -100,10 +105,7 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         adapter.setOnItemLongClickListener((adapter1, view, position) -> {
             ThreadEntity entity = adapter.getItem(position);
             if (entity != null) {
-                String currentUid = com.chat.base.config.WKConfig.getInstance().getUid();
-                if (currentUid.equals(entity.creator_uid)) {
-                    showThreadOptions(entity);
-                }
+                showThreadPopup(view, entity);
             }
             return true;
         });
@@ -189,33 +191,49 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         loadData();
     }
 
-    private void showThreadOptions(ThreadEntity entity) {
-        String[] options;
-        if (entity.status == 1) {
-            options = new String[]{getString(R.string.str_archive_thread), getString(R.string.str_delete_thread)};
-        } else {
-            options = new String[]{getString(R.string.str_unarchive_thread), getString(R.string.str_delete_thread)};
-        }
-        new android.app.AlertDialog.Builder(this)
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        if (entity.status == 1) {
-                            ThreadModel.getInstance().archiveThread(groupNo, entity.short_id, (code, msg) -> {
-                                if (code == HttpResponseCode.success) refreshFromFirstPage();
-                                else WKToastUtils.getInstance().showToast(msg);
-                            });
-                        } else {
-                            ThreadModel.getInstance().unarchiveThread(groupNo, entity.short_id, (code, msg) -> {
-                                if (code == HttpResponseCode.success) refreshFromFirstPage();
-                                else WKToastUtils.getInstance().showToast(msg);
-                            });
-                        }
-                    } else if (which == 1) {
-                        ThreadModel.getInstance().deleteThread(groupNo, entity.short_id, (code, msg) -> {
-                            if (code == HttpResponseCode.success) refreshFromFirstPage();
-                            else WKToastUtils.getInstance().showToast(msg);
+    private void showThreadPopup(View anchorView, ThreadEntity entity) {
+        String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
+        boolean isFollowed = FollowedKeysStore.getInstance().isFollowed(
+                SidebarItemEntity.TARGET_TYPE_THREAD, threadChannelId);
+
+        List<PopupMenuItem> menuItems = new ArrayList<>();
+        menuItems.add(new PopupMenuItem(
+                getString(isFollowed ? R.string.unfollow_conversation : R.string.follow_conversation),
+                isFollowed ? R.drawable.ic_unfollow_star : R.drawable.ic_follow_star,
+                () -> {
+                    if (isFollowed) {
+                        FollowModel.getInstance().unfollowThread(threadChannelId, (code, msg) -> {
+                            if (code != HttpResponseCode.success) {
+                                WKToastUtils.getInstance().showToast(msg);
+                            }
+                        });
+                    } else {
+                        FollowModel.getInstance().followThread(threadChannelId, (code, msg) -> {
+                            if (code != HttpResponseCode.success) {
+                                WKToastUtils.getInstance().showToast(msg);
+                            }
                         });
                     }
-                }).show();
+                }));
+
+        String currentUid = com.chat.base.config.WKConfig.getInstance().getUid();
+        if (currentUid.equals(entity.creator_uid)) {
+            if (entity.status == 1) {
+                menuItems.add(new PopupMenuItem(
+                        getString(R.string.str_archive_thread), R.mipmap.msg_delete,
+                        () -> ThreadModel.getInstance().archiveThread(groupNo, entity.short_id, (code, msg) -> {
+                            if (code == HttpResponseCode.success) refreshFromFirstPage();
+                            else WKToastUtils.getInstance().showToast(msg);
+                        })));
+            }
+            menuItems.add(new PopupMenuItem(
+                    getString(R.string.str_delete_thread), R.mipmap.msg_delete,
+                    () -> ThreadModel.getInstance().deleteThread(groupNo, entity.short_id, (code, msg) -> {
+                        if (code == HttpResponseCode.success) refreshFromFirstPage();
+                        else WKToastUtils.getInstance().showToast(msg);
+                    })));
+        }
+
+        WKDialogUtils.getInstance().showScreenPopup(anchorView, menuItems);
     }
 }

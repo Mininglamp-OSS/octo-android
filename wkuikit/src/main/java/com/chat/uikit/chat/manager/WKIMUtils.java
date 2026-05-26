@@ -97,6 +97,8 @@ import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
+import com.chat.uikit.BuildConfig;
+
 /**
  * 2019-11-18 11:30
  * im监听相关处理
@@ -285,8 +287,7 @@ public class WKIMUtils {
                             sensitiveWordsMsg.setChannelInfo(channel);
                             sensitiveWordsMsg.content = jsonObject.toString();
                             sensitiveWordsMsg.type = WKContentType.sensitiveWordsTips;
-                            long tempOrderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(0, msgList.get(i).channelID, msgList.get(i).channelType);
-                            sensitiveWordsMsg.orderSeq = tempOrderSeq + 1;
+                            sensitiveWordsMsg.orderSeq = msgList.get(i).orderSeq + 1;
                             sensitiveWordsMsg.status = WKSendMsgResult.send_success;
 
                         }
@@ -588,6 +589,7 @@ public class WKIMUtils {
                 String messageId = jsonObject.optString("message_id");
                 String channelID = jsonObject.optString("channel_id");
                 byte channelType = (byte) jsonObject.optInt("channel_type");
+                if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[revokeMsg] CMD received: messageId=" + messageId + " channelID=" + channelID + " channelType=" + channelType);
                 // 撤回消息涉及多次 DB 读写操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
                 com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
                     WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
@@ -599,7 +601,9 @@ public class WKIMUtils {
                             revokeRemind = (int) object;
                         }
                     }
+                    if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[revokeMsg] revokeRemind=" + revokeRemind + " channelID=" + channelID);
                     if (revokeRemind == 1) {
+                        if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[revokeMsg] calling syncExtraMsg for channelID=" + channelID);
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
                     } else {
                         WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);

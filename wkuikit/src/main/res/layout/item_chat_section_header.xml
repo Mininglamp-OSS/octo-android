@@ -52,6 +52,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
+            android:maxWidth="80dp"
+            android:ellipsize="end"
+            android:singleLine="true"
             android:textColor="@color/reminderColor"
             android:textSize="12sp"
             android:visibility="gone" />

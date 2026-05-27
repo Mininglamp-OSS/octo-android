@@ -170,7 +170,7 @@
     <string name="show_all_members_with_count">All Members (%1$d)</string>
     <string name="group_members">Group Members(%s)</string>
     <string name="last_msg_draft">[Draft]</string>
-    <string name="last_msg_remind">[Mentioned me]</string>
+    <string name="last_msg_remind">[@me]</string>
     <string name="last_msg_card">[business card]</string>
     <string name="nickname">Nickname：</string>
     <string name="other_is_typing">typing</string>

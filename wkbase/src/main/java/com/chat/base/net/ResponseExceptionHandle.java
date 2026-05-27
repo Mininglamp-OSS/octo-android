@@ -19,6 +19,8 @@ package com.chat.base.net;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.chat.base.R;
+import com.chat.base.WKBaseApplication;
 import com.chat.base.utils.WKLogUtils;
 
 import org.json.JSONException;
@@ -77,10 +79,10 @@ public class ResponseExceptionHandle {
                     }
                     break;
                 case 401:
-                    responeThrowable.setMessage("认证失败");
+                    responeThrowable.setMessage(WKBaseApplication.getInstance().getContext().getString(R.string.error_auth_failed));
                     break;
                 case 404:
-                    responeThrowable.setMessage("请求地址不存在");
+                    responeThrowable.setMessage(WKBaseApplication.getInstance().getContext().getString(R.string.error_not_found));
                     break;
                 case 405:
                 case 403:
@@ -99,16 +101,16 @@ public class ResponseExceptionHandle {
                             }
                         }
                     } catch (Exception ignored) {}
-                    responeThrowable.setMessage("请求失败(" + httpException.code() + ")");
+                    responeThrowable.setMessage(String.format(WKBaseApplication.getInstance().getContext().getString(R.string.error_request_failed), httpException.code()));
                     break;
                 case 504:
-                    responeThrowable.setMessage("网络连接失败");
+                    responeThrowable.setMessage(WKBaseApplication.getInstance().getContext().getString(R.string.error_network_failed));
                     break;
             }
         } else {
             responeThrowable = new ResponseThrowable(e, -1);
             String msg = e.getMessage();
-            responeThrowable.setMessage(!TextUtils.isEmpty(msg) ? msg : "网络请求异常");
+            responeThrowable.setMessage(!TextUtils.isEmpty(msg) ? msg : WKBaseApplication.getInstance().getContext().getString(R.string.error_network_exception));
         }
         return responeThrowable;
     }

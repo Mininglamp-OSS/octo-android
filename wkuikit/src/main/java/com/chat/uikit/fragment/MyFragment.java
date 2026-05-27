@@ -149,7 +149,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         String shortNo = me.short_no;
         if (!TextUtils.isEmpty(shortNo)) {
             wkVBinding.shortNoTv.setVisibility(android.view.View.VISIBLE);
-            wkVBinding.shortNoTv.setText(getString(R.string.app_name) + " 号：" + shortNo);
+            wkVBinding.shortNoTv.setText(getString(R.string.short_no_format, getString(R.string.app_name), shortNo));
         }
 
         String versionName = WKDeviceUtils.getInstance().getVersionName(requireContext());

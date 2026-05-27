@@ -208,8 +208,8 @@ public class DownloadApkUtils {
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
                 request.setAllowedOverRoaming(false);
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
-                request.setTitle(context.getString(R.string.app_name) + "新版本下载");
-                request.setDescription("下载中...");
+                request.setTitle(String.format(context.getString(R.string.download_new_version), context.getString(R.string.app_name)));
+                request.setDescription(context.getString(R.string.download_in_progress));
                 request.setVisibleInDownloadsUi(true);
                 // 使用 setDestinationUri 指定 app 私有目录
                 request.setDestinationUri(Uri.fromFile(localFiles));
@@ -403,7 +403,7 @@ public class DownloadApkUtils {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            WKToastUtils.getInstance().showToastNormal("安装失败");
+            WKToastUtils.getInstance().showToastNormal(WKBaseApplication.getInstance().getContext().getString(R.string.install_failed));
         }
     }
 

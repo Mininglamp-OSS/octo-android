@@ -25,4 +25,9 @@
 
     <string name="please_login_first">请先登录</string>
     <string name="share_content_empty">分享内容为空</string>
+
+    <!-- i18n: Space join -->
+    <string name="space_joined">已加入 Space</string>
+    <string name="space_invite_invalid">邀请码无效或已过期</string>
+    <string name="space_join_failed">加入失败，请重试</string>
 </resources>

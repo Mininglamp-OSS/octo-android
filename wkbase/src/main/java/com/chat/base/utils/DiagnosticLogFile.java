@@ -6,6 +6,8 @@ import android.util.Log;
 
 import androidx.core.content.FileProvider;
 
+import com.chat.base.R;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -69,7 +71,7 @@ public final class DiagnosticLogFile {
     public static void share(Context context) {
         File file = getFile(context);
         if (!file.exists() || file.length() == 0) {
-            WKToastUtils.getInstance().showToastNormal("暂无诊断日志");
+            WKToastUtils.getInstance().showToastNormal(context.getString(R.string.diagnostic_no_logs));
             return;
         }
         try {
@@ -78,12 +80,12 @@ public final class DiagnosticLogFile {
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.putExtra(Intent.EXTRA_SUBJECT, "Octo 诊断日志");
+            intent.putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.export_diag_log));
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            context.startActivity(Intent.createChooser(intent, "发送诊断日志"));
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.diagnostic_share_title)));
         } catch (Throwable e) {
             Log.e(TAG, "share failed", e);
-            WKToastUtils.getInstance().showToastNormal("分享失败");
+            WKToastUtils.getInstance().showToastNormal(context.getString(R.string.diagnostic_share_failed));
         }
     }
 

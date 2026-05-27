@@ -171,4 +171,60 @@
     <string name="group_join_cross_space_action">View in %1$s</string>
     <!--  · Chat bubble author ✓ badge contentDescription -->
     <string name="realname_verified_badge_cd">Verified</string>
+
+    <!-- i18n: Network errors -->
+    <string name="error_auth_failed">Authentication failed</string>
+    <string name="error_not_found">Address not found</string>
+    <string name="error_request_failed">Request failed (%d)</string>
+    <string name="error_network_failed">Network connection failed</string>
+    <string name="error_network_exception">Network error</string>
+
+    <!-- i18n: PDF viewer -->
+    <string name="pdf_loading">Loading...</string>
+    <string name="pdf_load_failed">Load failed: %s</string>
+
+    <!-- i18n: Download/Install -->
+    <string name="download_new_version">%s New Version</string>
+    <string name="download_in_progress">Downloading...</string>
+    <string name="install_failed">Install failed</string>
+
+    <!-- i18n: Diagnostic -->
+    <string name="diagnostic_no_logs">No diagnostic logs</string>
+    <string name="diagnostic_share_failed">Share failed</string>
+    <string name="diagnostic_share_title">Send diagnostic log</string>
+
+    <!-- i18n: Auth dialog -->
+    <string name="auth_dialog_message">This page requires authorization</string>
+
+    <!-- i18n: Time relative -->
+    <string name="time_years_ago">%d yr ago</string>
+    <string name="time_months_ago">%d mo ago</string>
+    <string name="time_days_ago">%d d ago</string>
+    <string name="time_hours_ago">%d hr ago</string>
+    <string name="time_minutes_ago">%d min ago</string>
+    <string name="time_just_now">Just now</string>
+    <string name="time_format_month_day">MMM d</string>
+    <string name="time_format_year_month_day">MMM d, yyyy</string>
+    <string name="time_format_year_month_day_full">MMM dd, yyyy</string>
+
+    <!-- i18n: API URL dialog -->
+    <string name="api_url_dialog_checking">Verifying…</string>
+    <string name="api_url_dialog_confirm">Confirm and restart</string>
+    <string name="api_url_dialog_current">Current: %s</string>
+    <string name="api_url_dialog_custom_label">Manual input</string>
+    <string name="api_url_dialog_empty">Please enter an address</string>
+    <string name="api_url_dialog_hint">App will restart and re-login after changing. Make sure the address is correct.</string>
+    <string name="api_url_dialog_input_hint">Enter server address</string>
+    <string name="api_url_dialog_preset_label">Quick select</string>
+    <string name="api_url_dialog_title">Server Configuration</string>
+    <string name="api_url_dialog_unreachable">Server unreachable, please verify the address</string>
+
+    <!-- i18n: Misc -->
+    <string name="export_diag_log">Export diagnostic log</string>
+    <string name="screenshot_tip">%s took a screenshot</string>
+    <string name="str_confirm_send">Confirm Send</string>
+    <string name="str_default_text_file_name">Message</string>
+    <string name="str_send_message_hint">Leave a message</string>
+    <string name="str_someone">The other party</string>
+    <string name="str_text_exceed_limit_tip">Text exceeds the limit. Send as a document instead?</string>
 </resources>

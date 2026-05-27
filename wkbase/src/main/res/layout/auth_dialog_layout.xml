@@ -24,7 +24,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:text="当前网页需要授权 "
+            android:text="@string/auth_dialog_message"
             android:textColor="@color/colorDark"
             android:textSize="@dimen/font_size_12"
             android:textStyle="normal" />

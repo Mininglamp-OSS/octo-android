@@ -263,7 +263,7 @@
                                 android:layout_weight="1"
                                 android:background="@drawable/hold_to_talk_bg"
                                 android:gravity="center"
-                                android:text="按住 说话"
+                                android:text="@string/hold_to_talk"
                                 android:textColor="#666666"
                                 android:textSize="14sp"
                                 android:visibility="gone" />

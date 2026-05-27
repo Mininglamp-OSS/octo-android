@@ -496,5 +496,63 @@
     <string name="realname_verify_token_fail">发起实名认证失败，请稍后重试</string>
     <string name="realname_verify_no_browser">未检测到可用浏览器</string>
     <string name="realname_verify_refresh_success">实名认证已完成</string>
+
+    <!-- i18n: Follow/Unfollow toast -->
+    <string name="toast_unfollowed">%1$s 已取消关注</string>
+    <string name="toast_unfollow_failed">取消关注失败</string>
+    <string name="toast_followed_to_category">%1$s 已添加到 %2$s 分组</string>
+    <string name="toast_followed">%1$s 已添加到关注</string>
+    <string name="toast_follow_failed">添加到关注失败</string>
+    <string name="toast_select_space_first">请先选择 Space</string>
+
+    <!-- i18n: Voice recording -->
+    <string name="voice_record_failed">录音启动失败</string>
+    <string name="voice_too_short">说话时间太短</string>
+    <string name="voice_file_error">录音文件异常</string>
+    <string name="voice_recognize_failed_retry">语音识别失败，请重试</string>
+    <string name="voice_recognize_failed">语音识别失败</string>
+    <string name="voice_release_to_text">松手 转文字</string>
+    <string name="voice_recognizing">正在识别...</string>
+    <string name="voice_release_to_cancel">松手 取消</string>
+    <string name="voice_release_to_send">松手 发送原语音</string>
+    <string name="voice_hold_to_continue">按住继续</string>
+    <string name="voice_send">发送</string>
+    <string name="voice_pill_cancel">取消</string>
+    <string name="voice_pill_send_original">滑动到这里\n发送原语音</string>
+
+    <!-- i18n: Thread list -->
+    <string name="joined_threads_count">已加入子区 - %d</string>
+
+    <!-- i18n: My fragment -->
+    <string name="short_no_format">%1$s 号：%2$s</string>
+
+    <!-- i18n: Misc toast -->
+    <string name="toast_invalid_data">传入数据有误</string>
+    <string name="toast_no_contacts">手机无联系人</string>
+    <string name="toast_backup_save_error">保存备份数据错误</string>
+
+    <!-- i18n: Chat panel -->
+    <string name="mention_everyone">所有人</string>
+    <string name="mention_all_ai">所有AI</string>
+    <string name="engine_label">自研引擎 ▾</string>
+    <string name="hold_to_talk">按住 说话</string>
+    <string name="btn_cancel">取消</string>
+
+    <!-- i18n: Bot fallback menus -->
+    <string name="bot_cmd_quickstart">AI Agent 快速入门</string>
+    <string name="bot_cmd_newbot">创建新机器人</string>
+    <string name="bot_cmd_mybots">查看我的机器人</string>
+    <string name="bot_cmd_connect">获取连接 prompt</string>
+    <string name="bot_cmd_disconnect">断开 Agent 连接</string>
+    <string name="bot_cmd_setname">修改机器人名称</string>
+    <string name="bot_cmd_setdescription">修改机器人描述</string>
+    <string name="bot_cmd_deletebot">删除机器人</string>
+    <string name="bot_cmd_token">查看 Token</string>
+    <string name="bot_cmd_revoke">重置 Token</string>
+    <string name="bot_cmd_pending">查看待处理的好友申请</string>
+    <string name="bot_cmd_approve_request">通过好友申请</string>
+    <string name="bot_cmd_reject_request">拒绝好友申请</string>
+    <string name="bot_cmd_cancel">取消当前操作</string>
+    <string name="bot_cmd_help">显示帮助</string>
 </resources>
 

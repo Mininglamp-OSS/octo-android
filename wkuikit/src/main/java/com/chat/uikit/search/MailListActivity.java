@@ -225,7 +225,7 @@ public class MailListActivity extends WKBaseActivity<ActMailListLayoutBinding> {
                     }
                 } else {
                     loadingPopup.dismiss();
-                    showToast("手机无联系人");
+                    showToast(getString(R.string.toast_no_contacts));
                 }
 
             }

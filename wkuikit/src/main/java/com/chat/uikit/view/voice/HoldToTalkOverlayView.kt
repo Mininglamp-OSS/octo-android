@@ -31,6 +31,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import com.chat.base.ui.Theme
 import com.chat.base.utils.AndroidUtilities
+import com.chat.uikit.R
 import kotlin.math.max
 import kotlin.math.min
 
@@ -69,7 +70,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
 
         // Hint label
         hintLabel = TextView(context).apply {
-            text = "松手 转文字"
+            text = context.getString(R.string.voice_release_to_text)
             setTextColor(Color.WHITE)
             textSize = 16f
             gravity = Gravity.CENTER
@@ -87,7 +88,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
         addView(bubbleView, bubbleLp)
 
         // Cancel pill (left)
-        cancelPill = createPill("取消")
+        cancelPill = createPill(context.getString(R.string.voice_pill_cancel))
         val cancelLp = LayoutParams(
             (resources.displayMetrics.widthPixels * 0.42f).toInt(),
             AndroidUtilities.dp(55f)
@@ -98,7 +99,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
         addView(cancelPill, cancelLp)
 
         // Send voice pill (right)
-        sendVoicePill = createPill("滑动到这里\n发送原语音")
+        sendVoicePill = createPill(context.getString(R.string.voice_pill_send_original))
         val sendLp = LayoutParams(
             (resources.displayMetrics.widthPixels * 0.42f).toInt(),
             AndroidUtilities.dp(55f)
@@ -147,7 +148,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
         cancelPill.visibility = View.GONE
         sendVoicePill.visibility = View.GONE
 
-        hintLabel.text = "正在识别..."
+        hintLabel.text = context.getString(R.string.voice_recognizing)
 
         // Add thinking dots
         thinkingDots.forEach { removeView(it) }
@@ -195,7 +196,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
                 sendVoicePill.setTextColor(Color.WHITE)
                 sendVoicePill.scaleX = 1f
                 sendVoicePill.scaleY = 1f
-                hintLabel.text = "松手 转文字"
+                hintLabel.text = context.getString(R.string.voice_release_to_text)
             }
             DragState.CANCEL -> {
                 bubbleView.setBubbleColor(bubbleRedColor)
@@ -208,7 +209,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
                 sendVoicePill.setTextColor(Color.WHITE)
                 sendVoicePill.scaleX = 1f
                 sendVoicePill.scaleY = 1f
-                hintLabel.text = "松手 取消"
+                hintLabel.text = context.getString(R.string.voice_release_to_cancel)
             }
             DragState.SEND_VOICE -> {
                 bubbleView.setBubbleColor(bubbleGreenColor)
@@ -221,7 +222,7 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
                 cancelPill.setTextColor(Color.WHITE)
                 cancelPill.scaleX = 1f
                 cancelPill.scaleY = 1f
-                hintLabel.text = "松手 发送原语音"
+                hintLabel.text = context.getString(R.string.voice_release_to_send)
             }
         }
     }

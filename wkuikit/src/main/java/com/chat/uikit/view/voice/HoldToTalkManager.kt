@@ -30,6 +30,7 @@ import android.widget.FrameLayout
 import com.chat.base.net.voice.WKVoiceInputService
 import com.chat.base.utils.AndroidUtilities
 import com.chat.base.utils.WKToastUtils
+import com.chat.uikit.R
 import java.io.File
 import java.util.Timer
 import java.util.TimerTask
@@ -143,7 +144,7 @@ class HoldToTalkManager(private val activity: Activity) {
                 start()
             }
         } catch (e: Exception) {
-            WKToastUtils.getInstance().showToastNormal("录音启动失败")
+            WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_record_failed))
             cleanupAudioFile()
             return
         }
@@ -175,7 +176,7 @@ class HoldToTalkManager(private val activity: Activity) {
             HoldToTalkOverlayView.DragState.SEND_VOICE -> {
                 dismissOverlay()
                 if (recordDuration < 1) {
-                    WKToastUtils.getInstance().showToastNormal("说话时间太短")
+                    WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_too_short))
                     cleanupAudioFile()
                     state = State.IDLE
                 } else {
@@ -193,7 +194,7 @@ class HoldToTalkManager(private val activity: Activity) {
             HoldToTalkOverlayView.DragState.RECORDING -> {
                 if (recordDuration < 1) {
                     dismissOverlay()
-                    WKToastUtils.getInstance().showToastNormal("说话时间太短")
+                    WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_too_short))
                     cleanupAudioFile()
                     state = State.IDLE
                 } else {
@@ -209,7 +210,7 @@ class HoldToTalkManager(private val activity: Activity) {
         overlayView?.showThinking()
 
         val file = audioFile ?: run {
-            WKToastUtils.getInstance().showToastNormal("录音文件异常")
+            WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_file_error))
             dismissOverlay()
             state = State.IDLE
             return
@@ -237,7 +238,7 @@ class HoldToTalkManager(private val activity: Activity) {
             WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext, personalContext, memberContext) { result, error ->
                 if (state != State.THINKING) return@transcribeAudio
                 if (error != null || result == null || result.text.isEmpty()) {
-                    WKToastUtils.getInstance().showToastNormal("语音识别失败，请重试")
+                    WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_recognize_failed_retry))
                     dismissOverlay()
                     cleanupAudioFile()
                     state = State.IDLE
@@ -286,7 +287,7 @@ class HoldToTalkManager(private val activity: Activity) {
             startTimers()
             listener?.onRecordingStarted()
         } catch (e: Exception) {
-            WKToastUtils.getInstance().showToastNormal("录音启动失败")
+            WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_record_failed))
         }
     }
 
@@ -295,7 +296,7 @@ class HoldToTalkManager(private val activity: Activity) {
         listener?.onRecordingStopped()
 
         if (recordDuration < 1) {
-            WKToastUtils.getInstance().showToastNormal("说话时间太短")
+            WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_too_short))
             cleanupAudioFile()
             return
         }
@@ -324,7 +325,7 @@ class HoldToTalkManager(private val activity: Activity) {
             WKVoiceInputService.instance.transcribeAudio(file, contextText, chatContext, personalContext, memberContext) { result, error ->
                 listener?.onAppendThinkingEnd()
                 if (error != null || result == null || result.text.isEmpty()) {
-                    WKToastUtils.getInstance().showToastNormal("语音识别失败")
+                    WKToastUtils.getInstance().showToastNormal(activity.getString(R.string.voice_recognize_failed))
                     cleanupAudioFile()
                     return@transcribeAudio
                 }

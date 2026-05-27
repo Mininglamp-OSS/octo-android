@@ -137,8 +137,8 @@ public class WKTimeUtils {
         timeFormat = "M/d";
         yearTimeFormat = "yyyy/M/d";
         if (WKLanguageType.isCN()) {
-            timeFormat = "M月d日";
-            yearTimeFormat = "yyyy年M月d日";
+            timeFormat = WKBaseApplication.getInstance().getContext().getString(R.string.time_format_month_day);
+            yearTimeFormat = WKBaseApplication.getInstance().getContext().getString(R.string.time_format_year_month_day);
         }
         boolean yearTemp = todayCalendar.get(Calendar.YEAR) == otherCalendar.get(Calendar.YEAR);
         if (yearTemp) {
@@ -221,7 +221,7 @@ public class WKTimeUtils {
     }
 
     public String time2DataDay1(long timeStamp) {
-        SimpleDateFormat sdf = formatFor("yyyy年MM月dd日", Locale.getDefault());
+        SimpleDateFormat sdf = formatFor(WKBaseApplication.getInstance().getContext().getString(R.string.time_format_year_month_day_full), Locale.getDefault());
         return sdf.format(new Date(timeStamp));
     }
 
@@ -340,27 +340,28 @@ public class WKTimeUtils {
         }
         long diff = System.currentTimeMillis() - date.getTime();
         long r;
+        android.content.Context ctx = WKBaseApplication.getInstance().getContext();
         if (diff > year) {
             r = (diff / year);
-            return r + " 年前";
+            return ctx.getString(R.string.time_years_ago, (int) r);
         }
         if (diff > month) {
             r = (diff / month);
-            return r + " 月前";
+            return ctx.getString(R.string.time_months_ago, (int) r);
         }
         if (diff > day) {
             r = (diff / day);
-            return r + " 天前";
+            return ctx.getString(R.string.time_days_ago, (int) r);
         }
         if (diff > hour) {
             r = (diff / hour);
-            return r + " 小时前";
+            return ctx.getString(R.string.time_hours_ago, (int) r);
         }
         if (diff > minute) {
             r = (diff / minute);
-            return r + " 分钟前";
+            return ctx.getString(R.string.time_minutes_ago, (int) r);
         }
-        return "刚刚";
+        return ctx.getString(R.string.time_just_now);
     }
 
     public String getOnlineTime(long time) {

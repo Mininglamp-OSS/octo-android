@@ -77,12 +77,12 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
             override fun onResult(code: Int, msg: String?) {
                 wkVBinding.btnDoJoin.isEnabled = true
                 if (code == 200) {
-                    showToast("已加入 Space")
+                    showToast(getString(R.string.space_joined))
                     fetchSpacesAndGo()
                 } else if (msg != null && (msg.contains("已经是") || msg.contains("已是") || msg.contains("already"))) {
                     fetchSpacesAndGo()
                 } else {
-                    showToast(msg ?: "邀请码无效或已过期")
+                    showToast(msg ?: getString(R.string.space_invite_invalid))
                 }
             }
         })
@@ -95,7 +95,7 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
                     MsgModel.getInstance().setCurrentSpaceId(list[0].space_id, list[0].name ?: "")
                     goToTab()
                 } else {
-                    showToast("加入失败，请重试")
+                    showToast(getString(R.string.space_join_failed))
                 }
             }
 

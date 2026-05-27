@@ -14,6 +14,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import com.chat.base.R;
+
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
@@ -43,7 +45,7 @@ public class WKPdfViewActivity extends AppCompatActivity {
         setContentView(scrollView);
 
         loadingTv = new TextView(this);
-        loadingTv.setText("加载中...");
+        loadingTv.setText(getString(R.string.pdf_loading));
         loadingTv.setGravity(Gravity.CENTER);
         loadingTv.setPadding(0, 200, 0, 0);
         loadingTv.setTextSize(15);
@@ -132,7 +134,7 @@ public class WKPdfViewActivity extends AppCompatActivity {
             } catch (Exception e) {
                 String errMsg = e.getMessage();
                 runOnUiThread(() -> {
-                    loadingTv.setText("加载失败: " + errMsg);
+                    loadingTv.setText(getString(R.string.pdf_load_failed, errMsg));
                     loadingTv.setTextColor(0xFFE53935);
                 });
             } finally {

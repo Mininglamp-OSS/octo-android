@@ -143,7 +143,7 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
                 adapter.setList(new ArrayList<>(allActiveList));
                 if (!allActiveList.isEmpty()) {
                     wkVBinding.sectionTitleTv.setVisibility(View.VISIBLE);
-                    wkVBinding.sectionTitleTv.setText(String.format("已加入子区 - %d", allActiveList.size()));
+                    wkVBinding.sectionTitleTv.setText(getString(R.string.joined_threads_count, allActiveList.size()));
                 } else {
                     wkVBinding.sectionTitleTv.setVisibility(View.GONE);
                 }

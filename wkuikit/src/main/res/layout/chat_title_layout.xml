@@ -75,7 +75,7 @@
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
                     android:lines="1"
-                    android:text="名字"
+                    tools:text="Name"
                     android:textColor="@color/colorDark"
                     android:textSize="@dimen/font_size_16"
                     android:textStyle="bold"

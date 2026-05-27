@@ -100,7 +100,7 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
                     + " msgListNull=" + listNull
                     + " rawJson=" + (contentJson != null ? contentJson.substring(0, Math.min(contentJson.length(), 500)) : "null");
             CrashReport.postCatchedException(new IllegalStateException("MultiForwardDetail 数据异常: " + detail));
-            showToast("传入数据有误！");
+            showToast(getString(R.string.toast_invalid_data));
             finish();
             return;
         }

@@ -122,6 +122,8 @@
     <string name="exit_group_tips">After logging out, other members in the group chat will not be notified, and the group chat messages will no longer be accepted</string>
     <string name="download_open">Download and Open</string>
     <string name="online">Online</string>
+    <string name="online_status_text">Online</string>
+    <string name="search_contacts_placeholder">Search contacts, AI, groups</string>
     <string name="delete_select_msg">Delete now?</string>
     <string name="chat_records">Chat History</string>
     <string name="chat_title_records">Chat History for %s</string>
@@ -192,6 +194,7 @@
     <string name="change_text_size">Adjust then slider below to change text size.</string>
     <string name="set_text_size_feedback">Text size in chats,menus,and Moments will be changed.If you have any questions of feedback,please contact the %s Team.</string>
     <string name="pc_login">Logged into %s for Web.</string>
+    <string name="str_connected">Connected</string>
     <string name="wk_kit_phone_notice_close">Mobile notifications disabled</string>
     <string name="choose_members">Choose Members</string>
     <string name="video_call">Video Call</string>
@@ -365,5 +368,193 @@
     <string name="realname_verify_token_fail">Could not start verification, please try again</string>
     <string name="realname_verify_no_browser">No browser available</string>
     <string name="realname_verify_refresh_success">Verification complete</string>
+
+    <!-- i18n: Follow/Unfollow toast -->
+    <string name="toast_unfollowed">%1$s unfollowed</string>
+    <string name="toast_unfollow_failed">Failed to unfollow</string>
+    <string name="toast_followed_to_category">%1$s added to %2$s</string>
+    <string name="toast_followed">%1$s added to Followed</string>
+    <string name="toast_follow_failed">Failed to follow</string>
+    <string name="toast_select_space_first">Please select a Space first</string>
+
+    <!-- i18n: Voice recording -->
+    <string name="voice_record_failed">Recording failed</string>
+    <string name="voice_too_short">Too short</string>
+    <string name="voice_file_error">Recording file error</string>
+    <string name="voice_recognize_failed_retry">Recognition failed, please retry</string>
+    <string name="voice_recognize_failed">Recognition failed</string>
+    <string name="voice_release_to_text">Release to convert</string>
+    <string name="voice_recognizing">Recognizing...</string>
+    <string name="voice_release_to_cancel">Release to cancel</string>
+    <string name="voice_release_to_send">Release to send audio</string>
+    <string name="voice_hold_to_continue">Hold to continue</string>
+    <string name="voice_send">Send</string>
+    <string name="voice_pill_cancel">Cancel</string>
+    <string name="voice_pill_send_original">Slide here\nto send audio</string>
+
+    <!-- i18n: Thread list -->
+    <string name="joined_threads_count">Joined Threads - %d</string>
+
+    <!-- i18n: My fragment -->
+    <string name="short_no_format">%1$s ID: %2$s</string>
+
+    <!-- i18n: Misc toast -->
+    <string name="toast_invalid_data">Invalid data</string>
+    <string name="toast_no_contacts">No contacts on this device</string>
+    <string name="toast_backup_save_error">Failed to save backup</string>
+
+    <!-- i18n: Chat panel -->
+    <string name="mention_everyone">Everyone</string>
+    <string name="mention_all_ai">All AI</string>
+    <string name="engine_label">Built-in Engine ▾</string>
+    <string name="hold_to_talk">Hold to talk</string>
+    <string name="btn_cancel">Cancel</string>
+
+    <!-- i18n: Bot fallback menus -->
+    <string name="bot_cmd_quickstart">AI Agent Quick Start</string>
+    <string name="bot_cmd_newbot">Create new bot</string>
+    <string name="bot_cmd_mybots">View my bots</string>
+    <string name="bot_cmd_connect">Get connection prompt</string>
+    <string name="bot_cmd_disconnect">Disconnect Agent</string>
+    <string name="bot_cmd_setname">Rename bot</string>
+    <string name="bot_cmd_setdescription">Edit bot description</string>
+    <string name="bot_cmd_deletebot">Delete bot</string>
+    <string name="bot_cmd_token">View Token</string>
+    <string name="bot_cmd_revoke">Reset Token</string>
+    <string name="bot_cmd_pending">View pending requests</string>
+    <string name="bot_cmd_approve_request">Approve request</string>
+    <string name="bot_cmd_reject_request">Reject request</string>
+    <string name="bot_cmd_cancel">Cancel operation</string>
+    <string name="bot_cmd_help">Show help</string>
+
+    <!-- i18n: Follow tab -->
+    <string name="str_group_chat">Followed</string>
+    <string name="str_private_chat">Recent</string>
+    <string name="follow_empty_title">Follow conversations that matter</string>
+    <string name="follow_empty_desc">Keep important groups, DMs, and threads in one place</string>
+    <string name="follow_empty_create_btn">＋ New Group</string>
+    <string name="follow_conversation">Follow</string>
+    <string name="unfollow_conversation">Unfollow</string>
+    <string name="section_pinned">Pinned</string>
+    <string name="section_channels">Channels</string>
+    <string name="create_category">Create Group</string>
+    <string name="create_category_title">Create Group</string>
+    <string name="create_category_hint">Enter group name, e.g. "Design", "Marketing"…</string>
+    <string name="create_category_label">Group Name</string>
+    <string name="create_category_helper">Use a descriptive name for quick access, max 20 chars</string>
+    <string name="create_category_btn">Create</string>
+    <string name="section_ungrouped">Ungrouped</string>
+    <string name="move_to_category">Move to Group</string>
+    <string name="remove_from_category">Remove from Group</string>
+    <string name="move_to_front">Move to Top</string>
+    <string name="reorder_category">Reorder Groups</string>
+    <string name="reorder_items">Reorder</string>
+    <string name="reorder_done">Done</string>
+    <string name="reorder_version_conflict">Order updated by another device</string>
+    <string name="rename_category">Rename</string>
+    <string name="rename_category_title">Rename Group</string>
+    <string name="rename_category_hint">Enter group name</string>
+    <string name="delete_category">Delete Group</string>
+    <string name="delete_category_confirm">Chats in this group will be moved to Ungrouped</string>
+    <string name="group_md_configured">Configured v%d</string>
+    <string name="group_md_not_configured">Not configured</string>
+    <string name="group_md_readonly_hint">GROUP.md not configured</string>
+    <string name="group_md_exceed_limit">Content exceeds size limit</string>
+
+    <!-- i18n: Space switch -->
+    <string name="yuj_318_space_switch_slow_hint">Syncing conversations, network is slow…please wait</string>
+    <string name="yuj_321_space_switch_timeout_toast">Sync is slow, please wait</string>
+    <string name="yuj_312_space_switch_syncing_fmt">Syncing "%1$s"…</string>
+
+    <!-- i18n: Thread expand/collapse -->
+    <string name="str_expand_threads">%d threads</string>
+    <string name="str_collapse_threads">Collapse %d threads</string>
+
+    <!-- i18n: Bot -->
+    <string name="bot_add_friend">Add Friend</string>
+    <string name="bot_apply_message">Message</string>
+    <string name="bot_apply_message_hint">Enter a message</string>
+    <string name="bot_cmd_approve">Approve</string>
+    <string name="bot_cmd_reject">Reject</string>
+    <string name="bot_commands_label">Commands</string>
+    <string name="bot_creator_label">Creator</string>
+    <string name="bot_description_label">About</string>
+    <string name="bot_id_label">Bot ID</string>
+    <string name="bot_no_description">No description</string>
+    <string name="bot_status_add">Add</string>
+    <string name="bot_status_pending">Pending</string>
+
+    <!-- i18n: Contacts -->
+    <string name="contacts_bots_count">%d AI</string>
+    <string name="contacts_bots_store_count">%d available AI</string>
+    <string name="contacts_groups_count">%d groups</string>
+    <string name="contacts_members_count">%d contacts</string>
+    <string name="contacts_section_bot_store">AI Store</string>
+    <string name="contacts_section_bots">AI</string>
+    <string name="contacts_section_empty">No data</string>
+    <string name="contacts_section_groups">My Groups</string>
+    <string name="contacts_section_members">Contacts</string>
+
+    <!-- i18n: App -->
+    <string name="click_again_to_finish">Tap again to finish</string>
+    <string name="exit_app_msg">Are you sure you want to exit?</string>
+    <string name="exit_app_title">Exit</string>
+    <string name="group_avatar">Group Avatar</string>
+    <string name="upload_fail">Upload failed</string>
+    <string name="upload_success">Upload successful</string>
+    <string name="voice_newline">Newline</string>
+
+    <!-- i18n: Network status -->
+    <string name="net_connected_duration_min">Connected: %d min</string>
+    <string name="net_connected_duration_sec">Connected: %d sec</string>
+    <string name="net_latency">Latency: %dms</string>
+    <string name="net_status_connected">Status: Connected</string>
+    <string name="net_status_connecting">Status: Connecting</string>
+    <string name="net_status_disconnected">Status: Disconnected</string>
+    <string name="release_to_cancel">Release to cancel</string>
+    <string name="release_to_send_slide_to_cancel">Release to send, slide up to cancel</string>
+
+    <!-- i18n: Space -->
+    <string name="space_create">Create Space</string>
+    <string name="space_create_desc_label">Description</string>
+    <string name="space_create_name_label">Name</string>
+    <string name="space_create_title">Create Space</string>
+    <string name="space_desc_hint">Enter Space description (optional)</string>
+    <string name="space_description">Description</string>
+    <string name="space_disband">Disband Space</string>
+    <string name="space_disband_tips">All members will be removed. Are you sure?</string>
+    <string name="space_invite">Invite Members</string>
+    <string name="space_invite_code">Invite Code</string>
+    <string name="space_invite_code_copied">Invite code copied</string>
+    <string name="space_invite_code_empty">Invite code cannot be empty</string>
+    <string name="space_invite_link_copied">Invite link copied</string>
+    <string name="space_join">Join Space</string>
+    <string name="space_join_hint">Enter invite code</string>
+    <string name="space_join_title">Join Space</string>
+    <string name="space_leave">Leave Space</string>
+    <string name="space_leave_tips">Are you sure you want to leave this Space?</string>
+    <string name="space_members">Members</string>
+    <string name="space_name">Name</string>
+    <string name="space_name_empty">Space name cannot be empty</string>
+    <string name="space_name_hint">Enter Space name</string>
+    <string name="space_remove_member">Remove Member</string>
+    <string name="space_remove_member_tips">Remove %s from this Space?</string>
+    <string name="space_role_admin">Admin</string>
+    <string name="space_role_member">Member</string>
+    <string name="space_role_owner">Owner</string>
+    <string name="space_settings">Space Settings</string>
+    <string name="space_show_all">Show All</string>
+    <string name="space_title">Space</string>
+
+    <!-- i18n: Thread management -->
+    <string name="str_close_thread">Close Thread</string>
+    <string name="str_close_thread_confirm">Close this thread? All members will lose access.</string>
+    <string name="str_rename_thread">Rename Thread</string>
+    <string name="str_rename_thread_hint">Enter thread name</string>
+    <string name="str_rename_thread_no_permission">Only the creator or group admin can rename</string>
+    <string name="str_thread_closed_tip">This thread has been closed</string>
+    <string name="str_thread_name_empty">Thread name cannot be empty</string>
+    <string name="group_md">GROUP.md</string>
+    <string name="group_md_byte_count">%1$d / %2$d bytes</string>
 </resources>
 

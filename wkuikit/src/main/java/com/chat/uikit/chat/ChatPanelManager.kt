@@ -1141,7 +1141,7 @@ class ChatPanelManager(
                 wkMsg.baseContentMsgModel = textContent
                 wkMsg.channelInfo = iConversationContext.chatChannelInfo
                 wkMsg.robotID = menu.robot_id
-                Log.e("ID是：", menu.robot_id)
+                Log.e("robotId", menu.robot_id)
                 WKSendMsgUtils.getInstance().sendMessage(wkMsg)
             }
         }
@@ -1212,22 +1212,23 @@ class ChatPanelManager(
     }
 
     private fun botFatherFallbackMenus(): List<WKRobotMenuEntity> {
+        val ctx = iConversationContext.chatActivity
         val cmds = arrayOf(
-            "quickstart" to "AI Agent 快速入门",
-            "newbot" to "创建新机器人",
-            "mybots" to "查看我的机器人",
-            "connect" to "获取连接 prompt",
-            "disconnect" to "断开 Agent 连接",
-            "setname" to "修改机器人名称",
-            "setdescription" to "修改机器人描述",
-            "deletebot" to "删除机器人",
-            "token" to "查看 Token",
-            "revoke" to "重置 Token",
-            "pending" to "查看待处理的好友申请",
-            "approve" to "通过好友申请",
-            "reject" to "拒绝好友申请",
-            "cancel" to "取消当前操作",
-            "help" to "显示帮助"
+            "quickstart" to ctx.getString(R.string.bot_cmd_quickstart),
+            "newbot" to ctx.getString(R.string.bot_cmd_newbot),
+            "mybots" to ctx.getString(R.string.bot_cmd_mybots),
+            "connect" to ctx.getString(R.string.bot_cmd_connect),
+            "disconnect" to ctx.getString(R.string.bot_cmd_disconnect),
+            "setname" to ctx.getString(R.string.bot_cmd_setname),
+            "setdescription" to ctx.getString(R.string.bot_cmd_setdescription),
+            "deletebot" to ctx.getString(R.string.bot_cmd_deletebot),
+            "token" to ctx.getString(R.string.bot_cmd_token),
+            "revoke" to ctx.getString(R.string.bot_cmd_revoke),
+            "pending" to ctx.getString(R.string.bot_cmd_pending),
+            "approve" to ctx.getString(R.string.bot_cmd_approve_request),
+            "reject" to ctx.getString(R.string.bot_cmd_reject_request),
+            "cancel" to ctx.getString(R.string.bot_cmd_cancel),
+            "help" to ctx.getString(R.string.bot_cmd_help)
         )
         return cmds.map { (cmd, desc) ->
             WKRobotMenuEntity().apply { this.cmd = cmd; this.remark = desc }
@@ -1837,15 +1838,16 @@ class ChatPanelManager(
     ) {
         val ctx = iConversationContext.chatActivity
         val labelToSentinel: List<Pair<String, String>> = mutableListOf<Pair<String, String>>().apply {
-            // @所有人 系
+            // @所有人 — locale-independent canonical aliases + current locale resource
             add("所有人" to "-1")
             add("All People" to "-1")
+            add("Everyone" to "-1")
             add("all" to "-1")
-            add(ctx.getString(R.string.all) to "-1")
-            // @所有AI 系
+            add(ctx.getString(R.string.mention_everyone) to "-1")
+            // @所有AI — locale-independent canonical aliases + current locale resource
             add("所有AI" to "-2")
             add("All AIs" to "-2")
-            add(ctx.getString(R.string.all_ais) to "-2")
+            add(ctx.getString(R.string.mention_all_ai) to "-2")
         }
             // 去重（不同 locale 可能落到同一字面量）
             .distinctBy { it.first.lowercase() + "|" + it.second }
@@ -2393,7 +2395,7 @@ class ChatPanelManager(
 
         // "自研引擎 ▾" label (iOS: centered, 40pt above bubble)
         val engineLabel = AppCompatTextView(ctx).apply {
-            this.text = "自研引擎 ▾"
+            this.text = ctx.getString(R.string.engine_label)
             setTextColor(android.graphics.Color.WHITE)
             textSize = 13f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -2470,7 +2472,7 @@ class ChatPanelManager(
             gravity = android.view.Gravity.CENTER_HORIZONTAL
         })
         val cancelLabel = AppCompatTextView(ctx).apply {
-            this.text = "取消"
+            this.text = ctx.getString(R.string.btn_cancel)
             setTextColor(android.graphics.Color.argb(255, 204, 204, 204))
             textSize = 11f
             gravity = android.view.Gravity.CENTER
@@ -2502,7 +2504,7 @@ class ChatPanelManager(
             gravity = android.view.Gravity.CENTER_HORIZONTAL
         })
         val micLabel = AppCompatTextView(ctx).apply {
-            this.text = "按住继续"
+            this.text = ctx.getString(R.string.voice_hold_to_continue)
             setTextColor(android.graphics.Color.argb(255, 204, 204, 204))
             textSize = 11f
             gravity = android.view.Gravity.CENTER
@@ -2541,7 +2543,7 @@ class ChatPanelManager(
 
         // Send button (iOS: 72x52pt pill, gray 0.92 bg, 16pt semibold)
         val sendBtn = AppCompatTextView(ctx).apply {
-            this.text = "发送"
+            this.text = ctx.getString(R.string.voice_send)
             setTextColor(android.graphics.Color.argb(255, 38, 38, 51))
             textSize = 16f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -2630,7 +2632,7 @@ class ChatPanelManager(
 
         // Hint label (iOS: "松手 转文字，上滑取消", white, 14sp medium)
         val hint = AppCompatTextView(ctx).apply {
-            this.text = "松手 转文字"
+            this.text = ctx.getString(R.string.voice_release_to_text)
             setTextColor(android.graphics.Color.WHITE)
             textSize = 14f
             setTypeface(typeface, android.graphics.Typeface.BOLD)

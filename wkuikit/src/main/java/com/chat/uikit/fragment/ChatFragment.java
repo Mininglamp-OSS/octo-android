@@ -2987,9 +2987,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         String displayName = getChannelDisplayName(item.channelID, item.channelType);
         ICommonListener listener = (code, msg) -> {
             if (code == HttpResponseCode.success) {
-                WKToastUtils.getInstance().showToastNormal(displayName + " 已取消关注");
+                WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_unfollowed, displayName));
             } else {
-                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : "取消关注失败");
+                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : getString(R.string.toast_unfollow_failed));
             }
         };
         if (targetType == SidebarItemEntity.TARGET_TYPE_DM) {
@@ -3035,9 +3035,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         String displayName = getChannelDisplayName(peerUid, WKChannelType.PERSONAL);
         FollowModel.getInstance().followDM(peerUid, categoryId, (code, msg) -> {
             if (code == HttpResponseCode.success) {
-                WKToastUtils.getInstance().showToastNormal(displayName + " 已添加到 " + categoryName + " 分组");
+                WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_followed_to_category, displayName, categoryName));
             } else {
-                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : "添加到关注失败");
+                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : getString(R.string.toast_follow_failed));
             }
         });
     }
@@ -3049,13 +3049,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 CategoryModel.getInstance().moveGroup(groupNo, categoryId, (code2, msg2) -> {
                     if (code2 == HttpResponseCode.success) {
                         loadCategories();
-                        WKToastUtils.getInstance().showToastNormal(displayName + " 已添加到 " + categoryName + " 分组");
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_followed_to_category, displayName, categoryName));
                     } else {
-                        WKToastUtils.getInstance().showToastNormal(displayName + " 已添加到关注");
+                        WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_followed, displayName));
                     }
                 });
             } else {
-                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : "添加到关注失败");
+                WKToastUtils.getInstance().showToastNormal(msg != null ? msg : getString(R.string.toast_follow_failed));
             }
         });
     }
@@ -3070,22 +3070,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                             if (code3 == HttpResponseCode.success) {
                                 loadCategories();
                                 String catName = categoryName != null ? categoryName : "";
-                                WKToastUtils.getInstance().showToastNormal(displayName + " 已添加到 " + catName + " 分组");
+                                WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_followed_to_category, displayName, catName));
                             } else {
-                                WKToastUtils.getInstance().showToastNormal(msg3 != null ? msg3 : "添加到关注失败");
+                                WKToastUtils.getInstance().showToastNormal(msg3 != null ? msg3 : getString(R.string.toast_follow_failed));
                             }
                         });
                     });
                 } else {
-                    WKToastUtils.getInstance().showToastNormal(msg != null ? msg : "添加到关注失败");
+                    WKToastUtils.getInstance().showToastNormal(msg != null ? msg : getString(R.string.toast_follow_failed));
                 }
             });
         } else {
             FollowModel.getInstance().followThread(threadChannelId, (code, msg) -> {
                 if (code == HttpResponseCode.success) {
-                    WKToastUtils.getInstance().showToastNormal(displayName + " 已添加到关注");
+                    WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_followed, displayName));
                 } else {
-                    WKToastUtils.getInstance().showToastNormal(msg != null ? msg : "添加到关注失败");
+                    WKToastUtils.getInstance().showToastNormal(msg != null ? msg : getString(R.string.toast_follow_failed));
                 }
             });
         }
@@ -3849,7 +3849,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (getActivity() == null) return;
         String spaceId = MsgModel.getInstance().getCurrentSpaceId();
         if (TextUtils.isEmpty(spaceId)) {
-            WKToastUtils.getInstance().showToastNormal("请先选择 Space");
+            WKToastUtils.getInstance().showToastNormal(getString(R.string.toast_select_space_first));
             return;
         }
         Context ctx = requireContext();

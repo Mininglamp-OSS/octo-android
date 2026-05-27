@@ -188,4 +188,39 @@
     <string name="group_join_cross_space_action">切换到%1$s查看</string>
     <!--  · 聊天气泡作者名右侧 ✓ 徽章 contentDescription -->
     <string name="realname_verified_badge_cd">已实名</string>
+
+    <!-- i18n: Network errors -->
+    <string name="error_auth_failed">认证失败</string>
+    <string name="error_not_found">请求地址不存在</string>
+    <string name="error_request_failed">请求失败(%d)</string>
+    <string name="error_network_failed">网络连接失败</string>
+    <string name="error_network_exception">网络请求异常</string>
+
+    <!-- i18n: PDF viewer -->
+    <string name="pdf_loading">加载中...</string>
+    <string name="pdf_load_failed">加载失败: %s</string>
+
+    <!-- i18n: Download/Install -->
+    <string name="download_new_version">%s 新版本下载</string>
+    <string name="download_in_progress">下载中...</string>
+    <string name="install_failed">安装失败</string>
+
+    <!-- i18n: Diagnostic -->
+    <string name="diagnostic_no_logs">暂无诊断日志</string>
+    <string name="diagnostic_share_failed">分享失败</string>
+    <string name="diagnostic_share_title">发送诊断日志</string>
+
+    <!-- i18n: Auth dialog -->
+    <string name="auth_dialog_message">当前网页需要授权</string>
+
+    <!-- i18n: Time relative -->
+    <string name="time_years_ago">%d 年前</string>
+    <string name="time_months_ago">%d 月前</string>
+    <string name="time_days_ago">%d 天前</string>
+    <string name="time_hours_ago">%d 小时前</string>
+    <string name="time_minutes_ago">%d 分钟前</string>
+    <string name="time_just_now">刚刚</string>
+    <string name="time_format_month_day">M月d日</string>
+    <string name="time_format_year_month_day">yyyy年M月d日</string>
+    <string name="time_format_year_month_day_full">yyyy年MM月dd日</string>
 </resources>

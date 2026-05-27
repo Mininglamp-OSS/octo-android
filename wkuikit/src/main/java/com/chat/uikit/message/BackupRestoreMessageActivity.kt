@@ -106,7 +106,7 @@ class BackupRestoreMessageActivity : WKBaseActivity<ActBackupMessageLayoutBindin
             WKFileUtils.getInstance()
                 .writeTxtToFile(jsonArray.toString(), path, object : IWriteText {
                     override fun onFail() {
-                        showToast("保存备份数据错误")
+                        showToast(getString(R.string.toast_backup_save_error))
                     }
 
                     override fun onSuccess() {

@@ -2810,6 +2810,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
             List<ChatConversationMsg> sectionItems = new ArrayList<>();
             for (SidebarItemEntity item : sidebarItems) {
+                if (item.target_type == SidebarItemEntity.TARGET_TYPE_THREAD) continue;
                 String key = !TextUtils.isEmpty(item.channel_id) ? item.channel_id : item.target_id;
                 ChatConversationMsg msg = channelMap.get(key);
                 if (msg != null) {
@@ -2832,6 +2833,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         List<SidebarItemEntity> uncategorized = itemsByCategory.get("");
         if (uncategorized != null) {
             for (SidebarItemEntity item : uncategorized) {
+                if (item.target_type == SidebarItemEntity.TARGET_TYPE_THREAD) continue;
                 String key = !TextUtils.isEmpty(item.channel_id) ? item.channel_id : item.target_id;
                 ChatConversationMsg msg = channelMap.get(key);
                 if (msg != null) {

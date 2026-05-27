@@ -5,6 +5,7 @@ import android.util.Log;
 
 import com.chat.base.config.WKConstants;
 import com.chat.uikit.BuildConfig;
+import com.xinbida.wukongim.WKIM;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,6 +92,10 @@ public class FollowedKeysStore {
                         if (gen != reloadGeneration) return;
                         if (BuildConfig.DEBUG) Log.d("FollowedKeysStore", "reload SUCCESS: items=" + response.items.size()
                                 + " followVersion=" + response.follow_version);
+                        if (response.space_memberships != null) {
+                            WKIM.getInstance().getConversationManager()
+                                    .applySpaceMemberships(response.space_memberships);
+                        }
                         applyItems(response.items, response.follow_version);
                     }
 

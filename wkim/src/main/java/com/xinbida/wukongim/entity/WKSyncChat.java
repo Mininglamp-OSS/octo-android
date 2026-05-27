@@ -3,7 +3,6 @@ package com.xinbida.wukongim.entity;
 import java.util.List;
 
 /**
- * 2020-10-09 14:49
  * 同步会话
  */
 public class WKSyncChat {
@@ -12,4 +11,5 @@ public class WKSyncChat {
     public String uid;
     public List<WKSyncConvMsg> conversations;
     public List<WKChannelState> channel_status;
+    public List<WKSpaceMembership> space_memberships;
 }

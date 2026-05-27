@@ -448,31 +448,26 @@ public class MsgModel extends WKBaseModel {
         return currentSpaceName;
     }
 
+    private static final int SYNC_CHAT_MAX_RETRY = 2;
+    private static final long SYNC_CHAT_RETRY_BASE_DELAY_MS = 1000L;
+
     public void syncChat(String last_msg_seqs, int msg_count, long version, ISyncConversationChatBack iSyncConversationChatBack) {
+        String spaceId = currentSpaceId.isEmpty() ? null : currentSpaceId;
+        doSyncChat(last_msg_seqs, msg_count, version, spaceId, iSyncConversationChatBack, 0);
+    }
+
+    private void doSyncChat(String last_msg_seqs, int msg_count, long version,
+                            String spaceId, ISyncConversationChatBack iSyncConversationChatBack, int attempt) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("last_msg_seqs", last_msg_seqs);
         jsonObject.put("msg_count", msg_count);
         jsonObject.put("version", version);
         jsonObject.put("device_uuid", WKConstants.getDeviceUUID());
-        String spaceId = currentSpaceId.isEmpty() ? null : currentSpaceId;
-        //  Phase 2 · T6 埋点：sync request-out / response-in。
-        //
-        // review（2026-05-04）指出：原版用 Trace.beginSection 在 IO 线程 begin，
-        // onSuccess/onFail 在主线程 end，但 Android `android.os.Trace` API 是
-        // per-thread stack——跨线程 begin/end 无法配对：
-        //   1) IO 线程 begin 永远不 end → perfetto 图里段悬挂
-        //   2) 主线程 endSection 可能错误关闭主线程上当时最外层的其他段（例如
-        //      YUJ312-onRefreshList-rebuild）。
-        //
-        // 修复方案（推荐 · 拍板）：syncChat 是唯一跨线程段，直接去掉
-        // beginSection/endSection 调用，只保留 Log.d 时间戳。Debug only 性能分析
-        // 场景下，Perfetto 的 logcat view 可对齐 "YUJ312" 标签 + elapsedRealtime
-        // 戳；其余 7 段（都在主线程 OR 同一后台线程内闭合）配对不受影响。
         final long yuj312SyncStartMs = BuildConfig.DEBUG ? SystemClock.elapsedRealtime() : 0L;
         if (BuildConfig.DEBUG) {
             android.util.Log.d("YUJ312", "sync-request-out space_id=" + spaceId
                     + " version=" + version + " msg_count=" + msg_count
-                    + " ts=" + yuj312SyncStartMs);
+                    + " attempt=" + attempt + " ts=" + yuj312SyncStartMs);
         }
         request(createService(MsgService.class).syncChat(jsonObject, spaceId), new IRequestResultListener<>() {
             @Override
@@ -512,12 +507,25 @@ public class MsgModel extends WKBaseModel {
             public void onFail(int code, String msg) {
                 if (BuildConfig.DEBUG) {
                     android.util.Log.d("YUJ312", "sync-response-fail code=" + code + " msg=" + msg
-                            + " rtt=" + (SystemClock.elapsedRealtime() - yuj312SyncStartMs) + "ms");
+                            + " attempt=" + attempt + " rtt=" + (SystemClock.elapsedRealtime() - yuj312SyncStartMs) + "ms");
                 }
-                iSyncConversationChatBack.onBack(null);
+                if (code >= 500 && attempt < SYNC_CHAT_MAX_RETRY) {
+                    long delay = SYNC_CHAT_RETRY_BASE_DELAY_MS * (1L << attempt);
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        String currentSpace = currentSpaceId.isEmpty() ? null : currentSpaceId;
+                        boolean spaceChanged = (spaceId == null && currentSpace != null)
+                                || (spaceId != null && !spaceId.equals(currentSpace));
+                        if (spaceChanged) {
+                            iSyncConversationChatBack.onBack(null);
+                            return;
+                        }
+                        doSyncChat(last_msg_seqs, msg_count, version, spaceId, iSyncConversationChatBack, attempt + 1);
+                    }, delay);
+                } else {
+                    iSyncConversationChatBack.onBack(null);
+                }
             }
         });
-
     }
 
     public void ackDeviceUUID() {

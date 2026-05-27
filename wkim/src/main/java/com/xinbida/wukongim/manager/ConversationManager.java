@@ -19,6 +19,7 @@ import com.xinbida.wukongim.entity.WKMsgReaction;
 import com.xinbida.wukongim.entity.WKSyncChat;
 import com.xinbida.wukongim.entity.WKSyncConvMsgExtra;
 import com.xinbida.wukongim.entity.WKSyncRecent;
+import com.xinbida.wukongim.entity.WKSpaceMembership;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.interfaces.IAllConversations;
 import com.xinbida.wukongim.interfaces.IDeleteConversationMsg;
@@ -89,15 +90,19 @@ public class ConversationManager extends BaseManager {
      * {@link com.xinbida.wukongim.entity.WKChannelType#GROUP} 写入，读侧也只在 GROUP
      * 路径上查；保持简洁）。
      */
-    private final ConcurrentHashMap<String, String> convSyncSpaceMap = new ConcurrentHashMap<>();
+    static final class SpaceCacheSnapshot {
+        final ConcurrentHashMap<String, String> spaceMap;
+        final ConcurrentHashMap<String, String> externalMap;
 
-    /**
-     * GH dmwork-android#251 Round-2：conversation sync 响应里 resolved 的当前用户在该群
-     * 的 {@code my_source_space_id}（channelID → my_source_space_id）独立缓存。
-     * 与 {@link #convSyncSpaceMap} 同理：不写 {@link com.xinbida.wukongim.entity.WKChannel#remoteExtraMap}
-     * 是为了规避 {@code ChannelManager.updateChannel} 的整体替换语义。
-     */
-    private final ConcurrentHashMap<String, String> convSyncExternalMap = new ConcurrentHashMap<>();
+        SpaceCacheSnapshot(ConcurrentHashMap<String, String> spaceMap,
+                           ConcurrentHashMap<String, String> externalMap) {
+            this.spaceMap = spaceMap;
+            this.externalMap = externalMap;
+        }
+    }
+
+    private volatile SpaceCacheSnapshot spaceCacheSnapshot =
+            new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
 
     private ConversationManager() {
     }
@@ -467,11 +472,9 @@ public class ConversationManager extends BaseManager {
                     conversationMsg.parentChannelType = WKChannelType.COMMUNITY;
                 }
                 // octo-server PR #154 / GH dmwork-android#251：conv sync 响应里 resolved 的
-                // space_id / my_source_space_id 在 GROUP 类型上预填到 channel.remoteExtraMap，
-                // 用来消除 SpaceFilter.shouldSkipChannelForSpace 的两个 fail-open 窗口
-                // （my-row-not-cached-fail-open 与末尾 fail-open）。老后端无此字段时跳过，
-                // 行为退化到原 fail-open 路径，保持向后兼容。
-                if (channelType == WKChannelType.GROUP) {
+                // space_id / my_source_space_id 在 GROUP 类型上预填到独立缓存。
+                // 有 space_memberships 全量数据时跳过逐条 prefill，由末尾统一覆盖。
+                if (channelType == WKChannelType.GROUP && syncChat.space_memberships == null) {
                     String _spaceId = syncChat.conversations.get(i).space_id;
                     String _mySource = syncChat.conversations.get(i).my_source_space_id;
                     if (com.xinbida.wukongim.BuildConfig.DEBUG) {
@@ -515,6 +518,8 @@ public class ConversationManager extends BaseManager {
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
             MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
         }
+        // 在 UI 通知之前应用全量 space 缓存，确保主线程过滤时数据已就绪
+        applySpaceMemberships(syncChat.space_memberships);
         List<WKUIConversationMsg> uiMsgList = new ArrayList<>();
         WKDBHelper txHelper = WKIMApplication.getInstance().getDbHelper();
         if (WKCommonUtils.isNotEmpty(conversationMsgList)) {
@@ -607,26 +612,10 @@ public class ConversationManager extends BaseManager {
     }
 
     /**
-     * GH dmwork-android#251 / octo-server PR #154 / Round-2 修法：把 conversation sync
-     * 响应里 resolved 的 Space 字段写进独立的内存缓存（{@link #convSyncSpaceMap} /
-     * {@link #convSyncExternalMap}），由 {@code SpaceFilter} 作为
-     * {@code channel.remoteExtraMap} / member DB 的兜底数据源读出。
+     * 老后端 fallback：把 conversation sync 响应里逐条的 space_id / my_source_space_id
+     * 写入 {@link #spaceCacheSnapshot} 的当前 map。仅在 space_memberships 字段缺失时使用。
      *
-     * <p><b>Round-1 → Round-2 关键变更</b>：原版本写入
-     * {@link com.xinbida.wukongim.entity.WKChannel#remoteExtraMap}，但
-     * {@code ChannelManager.updateChannel(WKChannel)} 在 channelInfo 异步水合时会做
-     * <b>整体替换</b>（{@code wkChannelList[i].remoteExtraMap = channel.remoteExtraMap}），
-     * channelInfo 自带的 remoteExtraMap 通常只含 {@code space_id} 不含
-     * {@code my_source_space_id} → conv sync 预填的数据被覆盖 → 竞态又回来了。
-     * 改用独立 ConcurrentHashMap 后，channelInfo 水合路径不会触碰它，从根上消除覆盖窗口。
-     *
-     * <p>语义：value 非空 put / value 空 remove —— Round-3 修复 stale-cache 漏洞，
-     * 服务端显式清空 {@code space_id} / {@code my_source_space_id} 时同步清除本地条目。
-     * channelInfo / member DB 一旦给出权威值，{@code SpaceFilter} 优先读权威源，本缓存自动让位。
-     *
-     * <p>老后端未部署 PR #154 时 {@code spaceId} / {@code mySourceSpaceId} 均为 null，
-     * 此时 put 不会触发（hasXxx==false），remove 在空 map 上等价 no-op，
-     * 行为退化到原 fail-open 路径，保持向后兼容。
+     * <p>新后端返回 space_memberships 时由 {@link #applySpaceMemberships} 原子替换整个快照。
      */
     private void prefillSpaceExtrasFromConvSync(String channelID,
                                                 byte channelType,
@@ -640,23 +629,49 @@ public class ConversationManager extends BaseManager {
         boolean hasMySource = mySourceSpaceId != null && !mySourceSpaceId.isEmpty();
 
         try {
-            // Round-3：value 非空时 put 写入；服务端在后续 sync 中显式清空对应字段
-            // （例如群被移出 space / 当前用户退出 space 关系）时，必须主动 remove 旧条目，
-            // 否则 SpaceFilter 会拿到陈旧 fallback 误判频道归属。老后端从来不回这两个字段，
-            // 缓存一直为空，remove 等价于 no-op，老路径行为不变。
+            SpaceCacheSnapshot snapshot = spaceCacheSnapshot;
             if (hasSpaceId) {
-                convSyncSpaceMap.put(channelID, spaceId);
+                snapshot.spaceMap.put(channelID, spaceId);
             } else {
-                convSyncSpaceMap.remove(channelID);
+                snapshot.spaceMap.remove(channelID);
             }
             if (hasMySource) {
-                convSyncExternalMap.put(channelID, mySourceSpaceId);
+                snapshot.externalMap.put(channelID, mySourceSpaceId);
             } else {
-                convSyncExternalMap.remove(channelID);
+                snapshot.externalMap.remove(channelID);
             }
         } catch (Throwable t) {
             // 单条 conv 的预填失败不应阻断批量落盘；下一次 sync 或 channelInfo 异步路径会补齐。
             WKLoggerUtils.getInstance().e(TAG, "prefillSpaceExtrasFromConvSync failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * 用服务端返回的全量 space_memberships 覆盖内存缓存，彻底消除 Space 消息串问题。
+     * memberships 为 null 时表示老后端未部署此字段，跳过不处理（保持向后兼容）。
+     */
+    public void applySpaceMemberships(List<WKSpaceMembership> memberships) {
+        if (memberships == null) return;
+        try {
+            ConcurrentHashMap<String, String> newSpaceMap = new ConcurrentHashMap<>();
+            ConcurrentHashMap<String, String> newExternalMap = new ConcurrentHashMap<>();
+            for (WKSpaceMembership m : memberships) {
+                if (m == null || m.channel_id == null || m.channel_id.isEmpty()) continue;
+                if (m.space_id != null && !m.space_id.isEmpty()) {
+                    newSpaceMap.put(m.channel_id, m.space_id);
+                }
+                if (m.my_source_space_id != null && !m.my_source_space_id.isEmpty()) {
+                    newExternalMap.put(m.channel_id, m.my_source_space_id);
+                }
+            }
+            spaceCacheSnapshot = new SpaceCacheSnapshot(newSpaceMap, newExternalMap);
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                android.util.Log.d("ConvSync", "[SpaceMemberships] applied: "
+                        + memberships.size() + " entries, spaceMap=" + newSpaceMap.size()
+                        + " externalMap=" + newExternalMap.size());
+            }
+        } catch (Throwable t) {
+            WKLoggerUtils.getInstance().e(TAG, "applySpaceMemberships failed: " + t.getMessage());
         }
     }
 
@@ -677,8 +692,7 @@ public class ConversationManager extends BaseManager {
      */
     public void clearConvSyncSpaceCache() {
         try {
-            convSyncSpaceMap.clear();
-            convSyncExternalMap.clear();
+            spaceCacheSnapshot = new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
         } catch (Throwable t) {
             WKLoggerUtils.getInstance().e(TAG, "clearConvSyncSpaceCache failed: " + t.getMessage());
         }
@@ -697,7 +711,7 @@ public class ConversationManager extends BaseManager {
     @androidx.annotation.Nullable
     public String getConvSyncSpaceId(String channelID) {
         if (TextUtils.isEmpty(channelID)) return null;
-        return convSyncSpaceMap.get(channelID);
+        return spaceCacheSnapshot.spaceMap.get(channelID);
     }
 
     /**
@@ -713,6 +727,6 @@ public class ConversationManager extends BaseManager {
     @androidx.annotation.Nullable
     public String getConvSyncMySourceSpaceId(String channelID) {
         if (TextUtils.isEmpty(channelID)) return null;
-        return convSyncExternalMap.get(channelID);
+        return spaceCacheSnapshot.externalMap.get(channelID);
     }
 }

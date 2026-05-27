@@ -1394,10 +1394,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         // 子区未读（allThreadConversations 独立于 allConversations）
+        long threeDaysAgoForBadge = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
                 continue;
+            long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
+            if (ts <= 0 || ts <= threeDaysAgoForBadge) continue;
             recentUnread += threadMsg.uiConversationMsg.unreadCount;
         }
         // 关注 Tab 未读
@@ -1434,10 +1437,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         // 关注的子区未读
+        long threeDaysAgoForFollow = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
                 continue;
+            long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
+            if (ts <= 0 || ts <= threeDaysAgoForFollow) continue;
             String channelID = threadMsg.uiConversationMsg.channelID;
             if (store.isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, channelID)) {
                 count += threadMsg.uiConversationMsg.unreadCount;
@@ -2779,6 +2785,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         for (ChatConversationMsg msg : snapshot) {
             if (msg == null || msg.uiConversationMsg == null) continue;
             channelMap.put(msg.uiConversationMsg.channelID, msg);
+        }
+        long threeDaysAgo = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
+        for (ChatConversationMsg threadMsg : allThreadConversations) {
+            if (threadMsg == null || threadMsg.uiConversationMsg == null) continue;
+            long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
+            if (ts <= 0 || ts <= threeDaysAgo) continue;
+            channelMap.put(threadMsg.uiConversationMsg.channelID, threadMsg);
         }
 
         List<ChatConversationMsg> displayList = new ArrayList<>();

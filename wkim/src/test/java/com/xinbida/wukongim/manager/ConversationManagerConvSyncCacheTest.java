@@ -28,8 +28,7 @@ public class ConversationManagerConvSyncCacheTest {
 
     private ConversationManager mgr;
     private Method prefill;
-    private ConcurrentHashMap<String, String> spaceMap;
-    private ConcurrentHashMap<String, String> externalMap;
+    private Field snapshotField;
 
     @Before
     @SuppressWarnings("unchecked")
@@ -41,24 +40,34 @@ public class ConversationManagerConvSyncCacheTest {
                 String.class, byte.class, String.class, String.class);
         prefill.setAccessible(true);
 
-        Field spaceField = ConversationManager.class.getDeclaredField("convSyncSpaceMap");
-        spaceField.setAccessible(true);
-        spaceMap = (ConcurrentHashMap<String, String>) spaceField.get(mgr);
+        snapshotField = ConversationManager.class.getDeclaredField("spaceCacheSnapshot");
+        snapshotField.setAccessible(true);
 
-        Field externalField = ConversationManager.class.getDeclaredField("convSyncExternalMap");
-        externalField.setAccessible(true);
-        externalMap = (ConcurrentHashMap<String, String>) externalField.get(mgr);
-
-        // 单例可能被其他 test 污染，每次跑前清干净。
         mgr.clearConvSyncSpaceCache();
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConcurrentHashMap<String, String> getSpaceMap() throws Exception {
+        Object snapshot = snapshotField.get(mgr);
+        Field f = snapshot.getClass().getDeclaredField("spaceMap");
+        f.setAccessible(true);
+        return (ConcurrentHashMap<String, String>) f.get(snapshot);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConcurrentHashMap<String, String> getExternalMap() throws Exception {
+        Object snapshot = snapshotField.get(mgr);
+        Field f = snapshot.getClass().getDeclaredField("externalMap");
+        f.setAccessible(true);
+        return (ConcurrentHashMap<String, String>) f.get(snapshot);
     }
 
     @Test
     public void prefillWritesNonEmptyValues() throws Exception {
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
 
-        assertEquals("space-A", spaceMap.get("ch1"));
-        assertEquals("ext-A", externalMap.get("ch1"));
+        assertEquals("space-A", getSpaceMap().get("ch1"));
+        assertEquals("ext-A", getExternalMap().get("ch1"));
         assertEquals("space-A", mgr.getConvSyncSpaceId("ch1"));
         assertEquals("ext-A", mgr.getConvSyncMySourceSpaceId("ch1"));
     }
@@ -67,25 +76,23 @@ public class ConversationManagerConvSyncCacheTest {
     @Test
     public void prefillRemovesEntriesWhenSpaceIdGoesEmpty() throws Exception {
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
-        assertEquals("space-A", spaceMap.get("ch1"));
+        assertEquals("space-A", getSpaceMap().get("ch1"));
 
-        // 服务端在下一次 sync 中把 space_id 清空（群被移出 space）
         prefill.invoke(mgr, "ch1", (byte) 2, "", "ext-A");
 
-        assertNull("space_id 空值必须从 map 中移除", spaceMap.get("ch1"));
-        assertEquals("my_source_space_id 仍在则保留", "ext-A", externalMap.get("ch1"));
+        assertNull("space_id 空值必须从 map 中移除", getSpaceMap().get("ch1"));
+        assertEquals("my_source_space_id 仍在则保留", "ext-A", getExternalMap().get("ch1"));
     }
 
     @Test
     public void prefillRemovesEntriesWhenMySourceGoesEmpty() throws Exception {
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
-        assertEquals("ext-A", externalMap.get("ch1"));
+        assertEquals("ext-A", getExternalMap().get("ch1"));
 
-        // 当前用户退出该 space 关系
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", null);
 
-        assertNull("my_source_space_id 空值必须从 map 中移除", externalMap.get("ch1"));
-        assertEquals("space_id 仍在则保留", "space-A", spaceMap.get("ch1"));
+        assertNull("my_source_space_id 空值必须从 map 中移除", getExternalMap().get("ch1"));
+        assertEquals("space_id 仍在则保留", "space-A", getSpaceMap().get("ch1"));
     }
 
     @Test
@@ -93,8 +100,8 @@ public class ConversationManagerConvSyncCacheTest {
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
         prefill.invoke(mgr, "ch1", (byte) 2, null, null);
 
-        assertNull(spaceMap.get("ch1"));
-        assertNull(externalMap.get("ch1"));
+        assertNull(getSpaceMap().get("ch1"));
+        assertNull(getExternalMap().get("ch1"));
     }
 
     /** Blocker 2：clearConvSyncSpaceCache 必须把两张 map 清空（跨用户泄漏防御）。 */
@@ -102,22 +109,56 @@ public class ConversationManagerConvSyncCacheTest {
     public void clearConvSyncSpaceCacheEmptiesBothMaps() throws Exception {
         prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
         prefill.invoke(mgr, "ch2", (byte) 2, "space-B", "ext-B");
-        assertEquals(2, spaceMap.size());
-        assertEquals(2, externalMap.size());
+        assertEquals(2, getSpaceMap().size());
+        assertEquals(2, getExternalMap().size());
 
         mgr.clearConvSyncSpaceCache();
 
-        assertTrue("convSyncSpaceMap 必须被清空", spaceMap.isEmpty());
-        assertTrue("convSyncExternalMap 必须被清空", externalMap.isEmpty());
+        assertTrue("convSyncSpaceMap 必须被清空", getSpaceMap().isEmpty());
+        assertTrue("convSyncExternalMap 必须被清空", getExternalMap().isEmpty());
         assertNull(mgr.getConvSyncSpaceId("ch1"));
         assertNull(mgr.getConvSyncMySourceSpaceId("ch2"));
     }
 
     @Test
-    public void clearConvSyncSpaceCacheIsIdempotent() {
+    public void clearConvSyncSpaceCacheIsIdempotent() throws Exception {
         mgr.clearConvSyncSpaceCache();
-        mgr.clearConvSyncSpaceCache(); // 不应抛
-        assertTrue(spaceMap.isEmpty());
-        assertTrue(externalMap.isEmpty());
+        mgr.clearConvSyncSpaceCache();
+        assertTrue(getSpaceMap().isEmpty());
+        assertTrue(getExternalMap().isEmpty());
+    }
+
+    @Test
+    public void applySpaceMembershipsReplacesAllEntries() throws Exception {
+        prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
+        assertEquals("space-A", getSpaceMap().get("ch1"));
+
+        java.util.List<com.xinbida.wukongim.entity.WKSpaceMembership> memberships = new java.util.ArrayList<>();
+        com.xinbida.wukongim.entity.WKSpaceMembership m = new com.xinbida.wukongim.entity.WKSpaceMembership();
+        m.channel_id = "ch2";
+        m.space_id = "space-B";
+        m.my_source_space_id = "ext-B";
+        memberships.add(m);
+
+        mgr.applySpaceMemberships(memberships);
+
+        assertNull("旧条目应被替换掉", getSpaceMap().get("ch1"));
+        assertEquals("space-B", getSpaceMap().get("ch2"));
+        assertEquals("ext-B", getExternalMap().get("ch2"));
+    }
+
+    @Test
+    public void applySpaceMembershipsNullIsNoOp() throws Exception {
+        prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
+        mgr.applySpaceMemberships(null);
+        assertEquals("null 不应清空缓存", "space-A", getSpaceMap().get("ch1"));
+    }
+
+    @Test
+    public void applySpaceMembershipsEmptyListClearsAll() throws Exception {
+        prefill.invoke(mgr, "ch1", (byte) 2, "space-A", "ext-A");
+        mgr.applySpaceMemberships(new java.util.ArrayList<>());
+        assertTrue("空列表应清空所有缓存", getSpaceMap().isEmpty());
+        assertTrue(getExternalMap().isEmpty());
     }
 }

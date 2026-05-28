@@ -1007,8 +1007,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     if (!TextUtils.isEmpty(allMsg.uiConversationMsg.channelID)
                             && allMsg.uiConversationMsg.channelID.equals(uiConversationMsg.channelID)
                             && allMsg.uiConversationMsg.channelType == uiConversationMsg.channelType) {
-                        // Space 过滤
-                        if (isMessageFromOtherSpace(uiConversationMsg.getWkMsg())) {
+                        // Space 过滤（YUJ-2270 回归修复 · 对齐 resetData 单条路径 L1610）：
+                        // 旧实现只走 isMessageFromOtherSpace（仅检查 msg.content 的 space_id），
+                        // GROUP 消息 payload 不带 space_id → 命中即放行 → allConversations 里
+                        // 残留的跨 Space 群被新消息 bump（lastMsgTimestamp / unreadCount）→
+                        // 后续 sortMsg 把它顶到当前 Space 列表顶部。WSS 迁移后 batch
+                        // 投递更频繁，多消息分支被命中概率上升，问题暴露。
+                        // 修复：与 resetData 单条路径用同一 gate（GROUP 走 channel 级
+                        // SpaceFilter，COMMUNITY_TOPIC 走父群判定，PERSONAL/SystemBot 与原路径一致），
+                        // 命中即跳过 entry 更新，不 bump、不 sort。
+                        if (isCrossSpaceRealtimePush(uiConversationMsg)) {
                             isAdd = false;
                             break;
                         }

@@ -55,6 +55,21 @@ public class WKIMApplication {
     private String fileDir = "wkIM";
     private WKSyncMsgMode syncMsgMode;
 
+    /**
+     * YUJ-2226: WSS 灰度开关。默认 true（优先 wss_addr → ws_addr → tcp_addr）。
+     * 设为 false 时强制走原有 xSocket TCP 路径（仅消费 tcp_addr），用于线上回退。
+     * 可通过 {@link #setUseWSS(boolean)} 在 App 启动 / 远端配置回调里覆盖。
+     */
+    private volatile boolean useWSS = true;
+
+    public boolean isUseWSS() {
+        return useWSS;
+    }
+
+    public void setUseWSS(boolean useWSS) {
+        this.useWSS = useWSS;
+    }
+
     public WKSyncMsgMode getSyncMsgMode() {
         if (syncMsgMode == null) syncMsgMode = WKSyncMsgMode.READ;
         return syncMsgMode;

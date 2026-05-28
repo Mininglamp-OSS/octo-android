@@ -48,6 +48,11 @@ import org.xsocket.connection.IConnection;
 import org.xsocket.connection.INonBlockingConnection;
 import org.xsocket.connection.NonBlockingConnection;
 
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.WebSocket;
+import okio.ByteString;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
@@ -104,6 +109,24 @@ public class WKConnection {
     private int port;
     public volatile INonBlockingConnection connection;
     volatile ConnectionClient connectionClient;
+
+    /**
+     * YUJ-2226: WebSocket 传输层（OkHttp）。与 {@link #connection}（xSocket TCP）互斥使用：
+     * 同一时刻只有一条活跃链路。{@link #usingWebSocket} 标记当前激活的传输方式。
+     *
+     * <p>OkHttp listener 回调由内部 dispatcher 单线程串行投递，因此 WS 路径不再需要
+     * 像 xSocket 那样在 onConnect/onData 上加 connectionLock 防御并发——锁仍保留，
+     * 但 WS 路径不依赖它做 ordering。</p>
+     */
+    public volatile WebSocket webSocket;
+    private volatile WebSocketConnectionClient webSocketClient;
+    /** 当前是否走 OkHttp WebSocket（true）还是 xSocket TCP（false）。 */
+    private volatile boolean usingWebSocket = false;
+    /**
+     * 共享的 OkHttpClient 实例。pingInterval=60s 提供 WS 控制帧心跳作为 wkproto Ping 的额外保活；
+     * readTimeout=0 表示长连接不超时（消息间隔可能远大于默认 10s）。
+     */
+    private volatile OkHttpClient sharedHttpClient;
     private long requestIPTime;
     private long connAckTime;
     private final long requestIPTimeoutTime = 6;
@@ -423,6 +446,125 @@ public class WKConnection {
             return;
         }
 
+        // YUJ-2226: 根据 MsgModel.getChatIp 返回的 ip 字段前缀分发到 WS / TCP 路径。
+        // wss:// 或 ws:// 前缀 → OkHttp WebSocket；否则走原 xSocket TCP。
+        // useWSS 灰度开关在 MsgModel 那一层已经决定不返回 ws/wss URL，所以此处无需额外判断。
+        final boolean wantWebSocket = isWebSocketUrl(ip)
+                && WKIMApplication.getInstance().isUseWSS();
+
+        if (wantWebSocket) {
+            connectViaWebSocket(executor);
+        } else {
+            connectViaTcp(executor);
+        }
+    }
+
+    private static boolean isWebSocketUrl(String addr) {
+        if (TextUtils.isEmpty(addr)) return false;
+        String lower = addr.toLowerCase();
+        return lower.startsWith("ws://") || lower.startsWith("wss://");
+    }
+
+    private OkHttpClient getOrCreateHttpClient() {
+        OkHttpClient cached = sharedHttpClient;
+        if (cached != null) return cached;
+        synchronized (this) {
+            if (sharedHttpClient == null) {
+                sharedHttpClient = new OkHttpClient.Builder()
+                        // YUJ-2226: WS 控制帧心跳，与上层 60s wkproto Ping 双层保活，更早感知断连
+                        .pingInterval(60, TimeUnit.SECONDS)
+                        // 长连接禁用读超时（消息间隔可能远大于默认值，受 wkproto Ping 兜底即可）
+                        .readTimeout(0, TimeUnit.MILLISECONDS)
+                        .connectTimeout(10, TimeUnit.SECONDS)
+                        .writeTimeout(15, TimeUnit.SECONDS)
+                        .retryOnConnectionFailure(false)
+                        .build();
+            }
+            return sharedHttpClient;
+        }
+    }
+
+    /**
+     * YUJ-2226: WebSocket 路径。等价于原 xSocket connSocket() 的功能，但用 OkHttp 实现。
+     *
+     * 关键差异：
+     * - 不再用 CountDownLatch 等 onConnect。OkHttp listener 回调由 dispatcher 串行投递，
+     *   onOpen 触发后我们直接发 ConnectPacket，让上层基于 connAck 推进状态机。
+     * - 不再设置 idleTimeoutMillis / connectionTimeoutMillis（OkHttpClient 已配 connectTimeout
+     *   + pingInterval，等价覆盖）。
+     */
+    private void connectViaWebSocket(ExecutorService executor) {
+        try {
+            executor.execute(() -> {
+                try {
+                    // 关闭现有连接
+                    closeConnect();
+
+                    final String newSocketId = UUID.randomUUID().toString().replace("-", "");
+                    final String url = ip; // ip 字段此处为完整 wss:// / ws:// URL（见 MsgModel.getChatIp）
+
+                    Request req;
+                    try {
+                        req = new Request.Builder().url(url).build();
+                    } catch (IllegalArgumentException badUrl) {
+                        WKLoggerUtils.getInstance().e(TAG, "无效的 WebSocket URL: " + url);
+                        forcedReconnection();
+                        return;
+                    }
+
+                    WebSocketConnectionClient newClient = new WebSocketConnectionClient(
+                            newSocketId,
+                            ws -> {
+                                // onOpen 回调。此时已成功 HTTP Upgrade，发出 wkproto ConnectPacket。
+                                isReConnecting = false;
+                                connCount = 0;
+                                sendConnectMsg();
+                            });
+
+                    OkHttpClient client = getOrCreateHttpClient();
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[WKConnection] connecting to " + url);
+                    WebSocket newWs = client.newWebSocket(req, newClient);
+
+                    // 原子性地更新连接相关的字段
+                    boolean locked = false;
+                    try {
+                        locked = tryLockWithTimeout();
+                        if (!locked) {
+                            WKLoggerUtils.getInstance().e(TAG, "连接锁获取失败，放弃 WS 连接");
+                            try { newWs.cancel(); } catch (Exception ignored) {}
+                            forcedReconnection();
+                            return;
+                        }
+                        webSocketClient = newClient;
+                        webSocket = newWs;
+                        connection = null;
+                        connectionClient = null;
+                        usingWebSocket = true;
+                        socketSingleID = newSocketId;
+                    } finally {
+                        if (locked) connectionLock.unlock();
+                    }
+                    // OkHttp 内部异步建连。后续状态推进由 onOpen / onFailure / onClosed 回调驱动；
+                    // 这里不再 await——避免阻塞 WKConnection-Worker 线程；连接超时由 OkHttp connectTimeout 兜底。
+                } catch (Exception e) {
+                    WKLoggerUtils.getInstance().e(TAG, "WS 连接异常: " + e.getMessage() + " 地址：" + ip);
+                    if (!executor.isShutdown()) {
+                        forcedReconnection();
+                    }
+                } finally {
+                    setConnectingState(false);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            WKLoggerUtils.getInstance().e(TAG, "WS 连接任务被拒绝执行: " + e.getMessage());
+            setConnectingState(false);
+        }
+    }
+
+    /**
+     * 原 xSocket TCP 连接路径。useWSS=false 或服务端未下发 ws/wss 地址时仍然可用。
+     */
+    private void connectViaTcp(ExecutorService executor) {
         try {
             executor.execute(() -> {
                 try {
@@ -473,6 +615,9 @@ public class WKConnection {
                     synchronized (connectionLock) {
                         connectionClient = newClient;
                         connection = newConnection;
+                        webSocket = null;
+                        webSocketClient = null;
+                        usingWebSocket = false;
                         socketSingleID = newSocketId;
                     }
 
@@ -764,17 +909,31 @@ public class WKConnection {
                 }
             }
 
-            INonBlockingConnection currentConnection = this.connection;
-            if (currentConnection == null || !currentConnection.isOpen()) {
-                WKLoggerUtils.getInstance().w(TAG, " sendMessage: Connection is null or not open, attempting reconnection for: " + mBaseMsg.packetType);
-                reconnection();
-                return;
-            }
-
-            int status = MessageHandler.getInstance().sendMessage(currentConnection, mBaseMsg);
-            if (BuildConfig.DEBUG && mBaseMsg.packetType == WKMsgType.PING) {
-                Log.d("MsgDebug", "[Heartbeat] PING sent, writeStatus=" + status
-                        + " connOpen=" + currentConnection.isOpen());
+            // YUJ-2226: 根据当前激活的传输层分发写路径。两条路径返回值约定一致。
+            int status;
+            if (usingWebSocket) {
+                WebSocket currentWs = this.webSocket;
+                if (currentWs == null) {
+                    WKLoggerUtils.getInstance().w(TAG, " sendMessage(WS): WebSocket is null, attempting reconnection for: " + mBaseMsg.packetType);
+                    reconnection();
+                    return;
+                }
+                status = MessageHandler.getInstance().sendMessage(currentWs, mBaseMsg);
+                if (BuildConfig.DEBUG && mBaseMsg.packetType == WKMsgType.PING) {
+                    Log.d("MsgDebug", "[Heartbeat] PING sent (WS), writeStatus=" + status);
+                }
+            } else {
+                INonBlockingConnection currentConnection = this.connection;
+                if (currentConnection == null || !currentConnection.isOpen()) {
+                    WKLoggerUtils.getInstance().w(TAG, " sendMessage: Connection is null or not open, attempting reconnection for: " + mBaseMsg.packetType);
+                    reconnection();
+                    return;
+                }
+                status = MessageHandler.getInstance().sendMessage(currentConnection, mBaseMsg);
+                if (BuildConfig.DEBUG && mBaseMsg.packetType == WKMsgType.PING) {
+                    Log.d("MsgDebug", "[Heartbeat] PING sent, writeStatus=" + status
+                            + " connOpen=" + currentConnection.isOpen());
+                }
             }
             if (status == 0) {
                 WKLoggerUtils.getInstance().e(TAG, "发消息失败 (status 0 from MessageHandler), attempting reconnection for: " + mBaseMsg.packetType);
@@ -1013,6 +1172,10 @@ public class WKConnection {
                 WKLoggerUtils.getInstance().e(TAG, "获取锁超时，connectionIsNull检查失败");
                 return true; // 保守起见，如果获取锁失败就认为连接为空
             }
+            // YUJ-2226: 两条路径任一活跃即视为非空。
+            if (usingWebSocket) {
+                return webSocket == null;
+            }
             return connection == null || !connection.isOpen();
         } finally {
             if (locked) {
@@ -1094,8 +1257,11 @@ public class WKConnection {
             if (sendingMsgHashMap != null) {
                 sendingMsgHashMap.clear();
             }
-            // 清理连接客户端
+            // 清理连接客户端（TCP + WS 两路）
             connectionClient = null;
+            // YUJ-2226: 同步清理 WebSocket 状态，避免 stopAll 后残留引用阻止下次重连。
+            webSocketClient = null;
+            usingWebSocket = false;
 
             // 关闭线程池
             shutdownExecutor();
@@ -1108,13 +1274,92 @@ public class WKConnection {
         }
     }
 
-    private void closeConnect() {
-        final INonBlockingConnection connectionToCloseActual;
+    /**
+     * YUJ-2226: WebSocketConnectionClient 在 onClosed / onFailure 时回调到这里，触发重连。
+     *
+     * @param ws      触发回调的 WebSocket
+     * @param planned true=本端主动关闭（onClosed code=1000），false=异常断开
+     */
+    void handleWebSocketDisconnected(WebSocket ws, boolean planned) {
+        boolean locked = false;
+        try {
+            locked = tryLockWithTimeout();
+            if (!locked) {
+                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，handleWebSocketDisconnected 失败");
+                return;
+            }
+            // 仅处理当前 ws 的断开事件
+            if (ws != null && webSocket != null && ws != webSocket) {
+                return;
+            }
+            // 把当前 ws 引用清空，让 connectionIsNull() 立刻返回 true
+            webSocket = null;
+            webSocketClient = null;
+        } finally {
+            if (locked) connectionLock.unlock();
+        }
 
+        if (planned) {
+            WKLoggerUtils.getInstance().i(TAG, "WebSocket 主动断开，不触发重连");
+            return;
+        }
+        if (!WKIMApplication.getInstance().isCanConnect || isClosing.get()) {
+            return;
+        }
+        // 与 ConnectionClient.onDisconnect 的语义一致：异常断开 → 重连
+        forcedReconnection();
+    }
+
+    private void closeConnect() {
         if (!isClosing.compareAndSet(false, true)) {
             WKLoggerUtils.getInstance().i(TAG, " Close operation already in progress");
             return;
         }
+
+        // YUJ-2226: WebSocket 路径走独立的关闭流程。OkHttp WebSocket 自带异步关闭语义，
+        // 无需像 xSocket 那样起单独的 ConnectionCloser 线程 + timeout 兜底。
+        WebSocket wsToClose = null;
+        boolean closeWs = false;
+        boolean lockedWs = false;
+        try {
+            lockedWs = tryLockWithTimeout();
+            if (!lockedWs) {
+                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，closeConnect(WS) 失败");
+                isClosing.set(false);
+                return;
+            }
+            if (usingWebSocket) {
+                closeWs = true;
+                wsToClose = webSocket;
+                webSocket = null;
+                webSocketClient = null;
+                // 不立即把 usingWebSocket 翻 false——避免在重连过程中被误判为 TCP 路径走错分支。
+                // 下一次 connSocket() 会按地址前缀重新设置 usingWebSocket。
+            }
+        } finally {
+            if (lockedWs) connectionLock.unlock();
+        }
+
+        if (closeWs) {
+            try {
+                if (wsToClose != null) {
+                    // 1000=normal closure。OkHttp 会异步完成 close handshake。
+                    boolean accepted = wsToClose.close(1000, "client close");
+                    if (!accepted) {
+                        // close 已在进行中或 socket 已关闭——直接 cancel 避免泄漏。
+                        wsToClose.cancel();
+                    }
+                }
+            } catch (Exception e) {
+                WKLoggerUtils.getInstance().e(TAG, "关闭 WebSocket 异常: " + e.getMessage());
+            } finally {
+                isClosing.set(false);
+            }
+            return;
+        }
+
+        // 以下为原 xSocket TCP 关闭路径（保留作为 useWSS=false 时的回退）。
+        final INonBlockingConnection connectionToCloseActual;
 
         boolean locked = false;
         try {

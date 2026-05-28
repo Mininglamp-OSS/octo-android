@@ -18,7 +18,12 @@ package com.chat.uikit.message;
 
 /**
  * 2020-07-20 23:24
+ *
+ * Response payload of /users/{uid}/im. WuKongIM 同时返回 tcp / ws / wss 三种入口地址，
+ * 客户端按优先级 wss_addr → ws_addr → tcp_addr 选用（YUJ-2226）。
  */
 public class Ipentity {
     public String tcp_addr;
+    public String ws_addr;
+    public String wss_addr;
 }

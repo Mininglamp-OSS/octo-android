@@ -105,6 +105,39 @@ public class MessageHandler {
         }
     }
 
+    /**
+     * YUJ-2226: WebSocket 写路径，与 xSocket {@code sendMessage(INonBlockingConnection, ...)} 对应。
+     *
+     * 返回值约定与 xSocket 版一致：1 = 已成功投递（OkHttp 内部异步排队），0 = 失败需触发重连。
+     * OkHttp {@code WebSocket#send(ByteString)} 把帧排进出站队列后立即返回 true；
+     * 如果队列已满或 socket 已关闭，会返回 false——此时按 0 处理触发上层重连。
+     */
+    int sendMessage(okhttp3.WebSocket webSocket, WKBaseMsg msg) {
+        if (msg == null) {
+            return 1;
+        }
+        byte[] bytes = WKProto.getInstance().encodeMsg(msg);
+        if (bytes == null || bytes.length == 0) {
+            WKLoggerUtils.getInstance().e(TAG, "发送了非法包:" + msg.packetType);
+            return 1;
+        }
+        if (webSocket == null) {
+            WKLoggerUtils.getInstance().e(TAG, "发消息异常: webSocket 为空");
+            return 0;
+        }
+        try {
+            boolean enqueued = webSocket.send(okio.ByteString.of(bytes));
+            if (!enqueued) {
+                WKLoggerUtils.getInstance().e(TAG, "WebSocket.send 返回 false，链路可能已关闭");
+                return 0;
+            }
+            return 1;
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "发消息异常 WebSocket: " + e.getMessage());
+            return 0;
+        }
+    }
+
 
     private volatile List<WKSyncMsg> receivedMsgList;
     private final Object receivedMsgListLock = new Object();

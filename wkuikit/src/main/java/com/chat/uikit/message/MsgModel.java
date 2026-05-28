@@ -295,9 +295,32 @@ public class MsgModel extends WKBaseModel {
         request(createService(MsgService.class).getImIp(WKConfig.getInstance().getUid()), new IRequestResultListener<>() {
             @Override
             public void onSuccess(Ipentity result) {
-                if (result != null && !TextUtils.isEmpty(result.tcp_addr)) {
+                if (result == null) {
+                    iChatIp.onResult(HttpResponseCode.error, "", "0");
+                    return;
+                }
+                // YUJ-2226: 地址优先级 wss_addr → ws_addr → tcp_addr。
+                // WSS / WS 直接把完整 URL 作为 ip 字段透传给 SDK，port 给一个占位值
+                // （WKConnection 看到 ws://*** / wss://*** 前缀会走 OkHttp WebSocket 路径，
+                //  否则走原有 xSocket TCP 路径）。useWSS=false 时跳过 wss/ws，强制回退 TCP。
+                final boolean useWSS = com.xinbida.wukongim.WKIMApplication.getInstance().isUseWSS();
+                if (useWSS && !TextUtils.isEmpty(result.wss_addr)) {
+                    iChatIp.onResult(HttpResponseCode.success, result.wss_addr, "443");
+                    return;
+                }
+                if (useWSS && !TextUtils.isEmpty(result.ws_addr)) {
+                    iChatIp.onResult(HttpResponseCode.success, result.ws_addr, "80");
+                    return;
+                }
+                if (!TextUtils.isEmpty(result.tcp_addr)) {
                     String[] strings = result.tcp_addr.split(":");
-                    iChatIp.onResult(HttpResponseCode.success, strings[0], strings[1]);
+                    if (strings.length >= 2) {
+                        iChatIp.onResult(HttpResponseCode.success, strings[0], strings[1]);
+                    } else {
+                        iChatIp.onResult(HttpResponseCode.error, "", "0");
+                    }
+                } else {
+                    iChatIp.onResult(HttpResponseCode.error, "", "0");
                 }
             }
 

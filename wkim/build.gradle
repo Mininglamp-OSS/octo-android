@@ -60,6 +60,12 @@ dependencies {
     embedded "androidx.sqlite:sqlite-ktx:2.5.1"
     embedded 'org.whispersystems:curve25519-android:0.5.0'
     embedded 'org.whispersystems:signal-protocol-android:2.8.1'
+
+    // YUJ-2226: WSS 迁移。OkHttp WebSocket 作为新的主传输，xSocket 灰度期保留为
+    // useWSS=false 时的回退路径。运行期 OkHttp 由 wkbase 的 api 'com.squareup.okhttp3:okhttp:5.1.0'
+    // 透传过来，这里仅声明 compileOnly 让编译可见，避免 wkim 模块重复打包 OkHttp。
+    compileOnly 'com.squareup.okhttp3:okhttp:5.1.0'
+    testImplementation 'com.squareup.okhttp3:okhttp:5.1.0'
     
     // multidex 通常不需要打包进去，保持 implementation
     implementation 'com.android.support:multidex:1.0.3'

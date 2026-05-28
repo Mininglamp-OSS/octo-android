@@ -28,21 +28,21 @@ import okhttp3.WebSocketListener;
 import okio.ByteString;
 
 /**
- * YUJ-2226: WebSocket transport listener — 与 {@link ConnectionClient}（xSocket）对应的 OkHttp 版。
+ * YUJ-2245: WebSocket transport listener — WebSocket-only 客户端的唯一长连接 listener。
  *
- * Responsibilities mirror the xSocket path：
+ * Responsibilities：
  * <ul>
- *   <li>{@code onOpen}     ↔ {@code onConnect}            （连接建立，触发 ConnectPacket）</li>
- *   <li>{@code onMessage}  ↔ {@code onData}               （收 binary 帧 → wkproto 解码）</li>
- *   <li>{@code onClosing}/{@code onClosed} ↔ {@code onDisconnect}</li>
- *   <li>{@code onFailure}  ↔ {@code onConnectException} + {@code onIdleTimeout}</li>
+ *   <li>{@code onOpen}     — 连接建立，触发 wkproto ConnectPacket</li>
+ *   <li>{@code onMessage}  — 收 binary 帧 → wkproto 解码</li>
+ *   <li>{@code onClosing} / {@code onClosed} — 对端要求关闭 / 链路落地</li>
+ *   <li>{@code onFailure}  — 连接异常 / 空闲超时 → 重连</li>
  * </ul>
  *
- * OkHttp 的 listener 回调由内部 dispatcher 单线程串行投递，因此**不需要**像 xSocket 那样
- * 在 onConnect/onData 里加 connectionLock 保护——竞态在源头就被消除。
+ * OkHttp 的 listener 回调由内部 dispatcher 单线程串行投递，
+ * 因此 onOpen/onMessage 不需要在外侧加锁做 ordering——竞态在源头就被消除。
  *
  * The listener does not own any wkproto 状态机；它把字节交给 {@link WKConnection#receivedData}
- * 与 {@link MessageHandler#cutBytes} 复用编解码层。这是 YUJ-2226 的核心保证：
+ * 与 {@link MessageHandler#cutBytes} 复用编解码层。这是 WSS 迁移的核心保证：
  * 协议层零改动，只换传输层。
  */
 class WebSocketConnectionClient extends WebSocketListener {
@@ -83,7 +83,7 @@ class WebSocketConnectionClient extends WebSocketListener {
             WKLoggerUtils.getInstance().w(TAG, "丢弃非当前 WS 的消息 socketSingleId=" + socketSingleId);
             return;
         }
-        // wkproto 二进制帧。直接交给 receivedData → cutBytes 解析，与 xSocket 路径同构。
+        // wkproto 二进制帧。直接交给 receivedData → cutBytes 解析。
         byte[] data = bytes.toByteArray();
         if (BuildConfig.DEBUG) {
             android.util.Log.d("MsgDebug", "[WS] onMessage(binary) len=" + data.length);

@@ -523,24 +523,40 @@ public class WKConnection {
 
                     OkHttpClient client = getOrCreateHttpClient();
                     if (BuildConfig.DEBUG) Log.d("MsgDebug", "[WKConnection] connecting to " + url);
-                    WebSocket newWs = client.newWebSocket(req, newClient);
 
-                    // 原子性地更新连接相关的字段
+                    // YUJ-2236 P0#2: 修复 onOpen 与字段赋值的 race。
+                    // 旧实现先 newWebSocket() 异步建连，再赋值 usingWebSocket / webSocket。
+                    // 在低延迟环境下 onOpen 可能抢先到达，sendConnectMsg → sendMessage 读到
+                    // usingWebSocket=false 走 TCP 分支看到 connection==null，触发 reconnection 把
+                    // CONNECT 包丢掉。修复：先在锁内把 usingWebSocket 翻 true、清 TCP 字段，再
+                    // 调 newWebSocket，最后把返回的 WebSocket 引用写回——同样在锁内。onOpen 中的
+                    // sendMessage 走 tryLockWithTimeout 会被该锁阻塞直到字段全部就绪。
                     boolean locked = false;
+                    WebSocket newWs = null;
                     try {
                         locked = tryLockWithTimeout();
                         if (!locked) {
                             WKLoggerUtils.getInstance().e(TAG, "连接锁获取失败，放弃 WS 连接");
-                            try { newWs.cancel(); } catch (Exception ignored) {}
                             forcedReconnection();
                             return;
                         }
-                        webSocketClient = newClient;
-                        webSocket = newWs;
+                        // 1) 先把 transport 标志和 TCP 字段就位
+                        usingWebSocket = true;
                         connection = null;
                         connectionClient = null;
-                        usingWebSocket = true;
+                        webSocketClient = newClient;
                         socketSingleID = newSocketId;
+
+                        // 2) 在持锁状态下创建 WebSocket。即使 onOpen 在 dispatcher 线程立即触发，
+                        //    其 sendConnectMsg → sendMessage 会因 tryLockWithTimeout 阻塞，
+                        //    直到本块结束 webSocket 引用已写入。
+                        newWs = client.newWebSocket(req, newClient);
+                        webSocket = newWs;
+                    } catch (Exception e) {
+                        if (newWs != null) {
+                            try { newWs.cancel(); } catch (Exception ignored) {}
+                        }
+                        throw e;
                     } finally {
                         if (locked) connectionLock.unlock();
                     }
@@ -578,9 +594,22 @@ public class WKConnection {
                     AtomicBoolean connectSuccess = new AtomicBoolean(false);
 
                     ConnectionClient newClient = new ConnectionClient(iNonBlockingConnection -> {
+                        // YUJ-2236 P1: 与 connectViaWebSocket / closeConnect / handleLoginStatus
+                        // 等路径统一使用 ReentrantLock（tryLockWithTimeout）。原 synchronized
+                        // (connectionLock) 走的是 Java 内置 monitor，与 ReentrantLock 互不互斥，
+                        // transport 切换时存在「字段半发布」窗口。
                         INonBlockingConnection currentConn = null;
-                        synchronized (connectionLock) {
+                        boolean cbLocked = false;
+                        try {
+                            cbLocked = tryLockWithTimeout();
+                            if (!cbLocked) {
+                                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，TCP onConnect 回调读取 connection 失败");
+                                connectLatch.countDown();
+                                return;
+                            }
                             currentConn = connection;
+                        } finally {
+                            if (cbLocked) connectionLock.unlock();
                         }
 
                         if (iNonBlockingConnection == null || currentConn == null ||
@@ -611,14 +640,26 @@ public class WKConnection {
                     INonBlockingConnection newConnection = new NonBlockingConnection(ip, port, newClient);
                     newConnection.setAttachment(newSocketId);
 
-                    // 原子性地更新连接相关的字段
-                    synchronized (connectionLock) {
+                    // 原子性地更新连接相关的字段（YUJ-2236 P1: 与 WS 路径统一使用 ReentrantLock）
+                    boolean tcpLocked = false;
+                    try {
+                        tcpLocked = tryLockWithTimeout();
+                        if (!tcpLocked) {
+                            WKLoggerUtils.getInstance().e(TAG, "获取锁超时，TCP 字段更新失败");
+                            try { newConnection.close(); } catch (Exception ignored) {}
+                            if (!executor.isShutdown()) {
+                                forcedReconnection();
+                            }
+                            return;
+                        }
                         connectionClient = newClient;
                         connection = newConnection;
                         webSocket = null;
                         webSocketClient = null;
                         usingWebSocket = false;
                         socketSingleID = newSocketId;
+                    } finally {
+                        if (tcpLocked) connectionLock.unlock();
                     }
 
                     // 等待连接完成或超时
@@ -648,14 +689,22 @@ public class WKConnection {
         }
     }
 
-    // 使用CAS操作设置连接状态
+    // 使用CAS操作设置连接状态（YUJ-2236 P1: 与其它路径统一走 ReentrantLock）
     private boolean setConnectingState(boolean connecting) {
-        synchronized (connectionLock) {
+        boolean locked = false;
+        try {
+            locked = tryLockWithTimeout();
+            if (!locked) {
+                WKLoggerUtils.getInstance().e(TAG, "获取锁超时，setConnectingState 失败");
+                return false;
+            }
             if (connecting && isConnecting) {
                 return false;
             }
             isConnecting = connecting;
             return true;
+        } finally {
+            if (locked) connectionLock.unlock();
         }
     }
 
@@ -774,7 +823,9 @@ public class WKConnection {
                                     WKLoggerUtils.getInstance().e(TAG, "获取锁超时，setSyncOfflineMsg回调处理失败");
                                     return;
                                 }
-                                if (connection != null && !isClosing.get()) {
+                                // YUJ-2236 P0#1: WSS 路径下 connection 永远是 null，必须用 !connectionIsNull()
+                                // 才能同时覆盖 WS（webSocket != null）和 TCP（connection != null）两条传输。
+                                if (!connectionIsNull() && !isClosing.get()) {
                                     connectStatus = WKConnectStatus.success;
                                     MessageHandler.getInstance().saveReceiveMsg();
                                     WKIMApplication.getInstance().isCanConnect = true;
@@ -804,7 +855,9 @@ public class WKConnection {
                                 WKLoggerUtils.getInstance().e(TAG, "获取锁超时，setSyncConversationListener 连接态更新失败");
                                 return;
                             }
-                            if (connection != null && !isClosing.get()) {
+                            // YUJ-2236 P0#1: WSS 路径下 connection 永远是 null，必须用 !connectionIsNull()
+                            // 才能同时覆盖 WS 和 TCP 两条传输，避免登录后永久卡在 syncMsg。
+                            if (!connectionIsNull() && !isClosing.get()) {
                                 connectStatus = WKConnectStatus.success;
                                 WKIMApplication.getInstance().isCanConnect = true;
                                 MessageHandler.getInstance().sendAck();
@@ -1429,7 +1482,14 @@ public class WKConnection {
             } catch (Exception e) {
                 WKLoggerUtils.getInstance().e(TAG, "Exception during async connection close for " + connectionToCloseActual.getId() + ": " + e.getMessage());
             } finally {
-                synchronized (connectionLock) {
+                // YUJ-2236 P1: 与其它路径统一使用 ReentrantLock，避免与 synchronized 互不互斥导致
+                // 字段半发布。
+                boolean closeLocked = false;
+                try {
+                    closeLocked = tryLockWithTimeout();
+                    if (!closeLocked) {
+                        WKLoggerUtils.getInstance().e(TAG, "获取锁超时，close finally 路径退化为无锁更新");
+                    }
                     isClosing.set(false);
                     // Only trigger reconnection if we're still supposed to be connected
                     if (WKIMApplication.getInstance().isCanConnect && connectStatus != WKConnectStatus.kicked) {
@@ -1439,6 +1499,8 @@ public class WKConnection {
                             }
                         }, 1000);
                     }
+                } finally {
+                    if (closeLocked) connectionLock.unlock();
                 }
             }
         }, "ConnectionCloser");

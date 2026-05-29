@@ -128,7 +128,7 @@ public class WKPushApplication {
 //            String appId = AGConnectServicesConfig.fromContext(context).getString("client/app_id");
             // 输入token标识"HCM"
             String tokenScope = "HCM";
-            String token = HmsInstanceId.getInstance(context).getToken(PushKeys.huaweiAPPID, tokenScope);
+            String token = HmsInstanceId.getInstance(context).getToken(BuildConfig.HUAWEI_APP_ID, tokenScope);
             // 判断token是否为空
             if (!TextUtils.isEmpty(token)) {
                 Log.e("华为推送token", token);
@@ -139,13 +139,13 @@ public class WKPushApplication {
     }
 
     private void initXiaoMiPush(Context context) {
-        MiPushClient.registerPush(context, PushKeys.xiaoMiAppID, PushKeys.xiaoMiAppKey);
+        MiPushClient.registerPush(context, BuildConfig.XIAOMI_APP_ID, BuildConfig.XIAOMI_APP_KEY);
     }
 
     private void initOPPO() {
         HeytapPushManager.init(mContext.get(), true);
         //  P-11: AppExecutors.io() 取代 new Thread()
-        AppExecutors.io().execute(() -> HeytapPushManager.register(mContext.get(), PushKeys.oppoAppKey, PushKeys.oppoAppSecret, new ICallBackResultService() {
+        AppExecutors.io().execute(() -> HeytapPushManager.register(mContext.get(), BuildConfig.OPPO_APP_KEY, BuildConfig.OPPO_APP_SECRET, new ICallBackResultService() {
             @Override
             public void onRegister(int i, String s) {
                 if (i == 0) {
@@ -250,11 +250,11 @@ public class WKPushApplication {
             }
         }else {
             if (!TextUtils.isEmpty(WKConfig.getInstance().getUid())) {
-                if (OsUtils.isEmui() && !TextUtils.isEmpty(PushKeys.huaweiAPPID)) {
+                if (OsUtils.isEmui() && !TextUtils.isEmpty(BuildConfig.HUAWEI_APP_ID)) {
                     AppExecutors.io().execute(() -> getHuaWeiToken(mContext.get()));
-                } else if (OsUtils.isMiui() && !TextUtils.isEmpty(PushKeys.xiaoMiAppID)) {
+                } else if (OsUtils.isMiui() && !TextUtils.isEmpty(BuildConfig.XIAOMI_APP_ID)) {
                     initXiaoMiPush(mContext.get());
-                } else if (OsUtils.isOppo() && !TextUtils.isEmpty(PushKeys.oppoAppKey)) {
+                } else if (OsUtils.isOppo() && !TextUtils.isEmpty(BuildConfig.OPPO_APP_KEY)) {
                     initOPPO();
                 } else if (OsUtils.isVivo() && !TextUtils.isEmpty(BuildConfig.VIVO_API_KEY)) {
                     initVIVO();

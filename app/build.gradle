@@ -16,7 +16,7 @@ if (localPropertiesFile.exists()) {
     localProperties.load(new FileInputStream(localPropertiesFile))
 }
 
-def appId = localProperties.getProperty('applicationId', 'com.example-app.octo')
+def appId = localProperties.getProperty('applicationId', 'com.example.app.octo')
 
 android {
     signingConfigs {

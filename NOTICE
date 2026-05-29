@@ -1,48 +1,41 @@
-OctoIM Android
-Copyright 2026-present OctoIM contributors
+OCTO Android
+Copyright 2026 MININGLAMP Technology and the OCTO contributors
 
-Licensed under the Apache License, Version 2.0.
+This product includes software developed by the following projects:
 
-This product includes software developed by:
+* TangSengDaoDaoAndroid
+  https://github.com/TangSengDaoDao/TangSengDaoDaoAndroid
+  Copyright TangSengDaoDao contributors
+  Licensed under the Apache License, Version 2.0
+  OCTO Android is a derivative work with significant modifications.
 
-1. WuKongIM Android SDK (com.xinbida.wukongim)
-   Copyright WuKongIM contributors
-   Licensed under the Apache License, Version 2.0
-   https://github.com/WuKongIM/WuKongIMAndroidSDK
+* WuKongIM
+  https://github.com/WuKongIM/WuKongIM
+  Copyright WuKongIM contributors
+  Licensed under the Apache License, Version 2.0
+  Used as the underlying real-time messaging core via octo-server.
 
-2. xSocket (wkim/libs/xSocket-2.8.15.jar)
-   Copyright xSocket contributors
-   Licensed under the GNU Lesser General Public License v2.1
+See LICENSE for full license text.
 
-3. SvgHelper (wkbase/.../utils/SvgHelper.java)
-   Copyright Larva Labs, LLC
-   Modified by Nikolai Kudashov
-   Licensed under the Apache License, Version 2.0
+--------------------------------------------------------------------
+Third-party components requiring attribution
+--------------------------------------------------------------------
 
-4. ViewDragHelper (wkbase/.../views/swipeback/ViewDragHelper.java)
-   Copyright 2013 The Android Open Source Project
-   Licensed under the Apache License, Version 2.0
+The OCTO Android client bundles third-party SDKs and libraries typical
+for a modern native Android application:
 
-5. Scroller (wkbase/.../ui/components/Scroller.java)
-   Copyright 2006 The Android Open Source Project
-   Licensed under the Apache License, Version 2.0
+  - AndroidX libraries (Apache-2.0) — Google
+  - Kotlin standard library (Apache-2.0) — JetBrains
+  - Firebase Messaging SDK (Apache-2.0) — Google (BYO-Firebase-project;
+    see overlay/octo-android/firebase-template.md)
+  - OkHttp / Retrofit (Apache-2.0) — Square
+  - Glide / Coil image loaders (Apache-2.0)
+  - Material Components for Android (Apache-2.0)
+  - WuKongIM Android client SDK (Apache-2.0)
 
-6. NumberPicker (wkbase/.../ui/components/NumberPicker.java)
-   Copyright 2008 The Android Open Source Project
-   Licensed under the Apache License, Version 2.0
+A full per-dependency license inventory should be regenerated via
+`./gradlew app:dependencies` before shipping a downstream release.
 
-7. OPPO Push SDK (MyLibs/oppopush/)
-   Copyright OPPO
-   Proprietary — see OPPO developer documentation
-
-8. Xiaomi Push SDK (MyLibs/xiaomipush/)
-   Copyright Xiaomi
-   Proprietary — see Xiaomi developer documentation
-
-9. Vivo Push SDK (MyLibs/vivopush/)
-   Copyright Vivo
-   Proprietary — see Vivo developer documentation
-
-10. Lottie Animation Library
-    Copyright Airbnb, Licensed under the Apache License, Version 2.0
-    https://github.com/airbnb/lottie-android
+The fork ships with a placeholder applicationId `com.example.octo`. See
+`README-BUNDLE-ID.md` for the full set of changes needed before building
+a signed / distributable APK or AAB.

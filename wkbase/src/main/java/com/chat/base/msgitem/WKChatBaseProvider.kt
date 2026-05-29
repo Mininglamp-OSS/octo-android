@@ -105,8 +105,12 @@ import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.message.type.WKSendMsgResult
 import com.xinbida.wukongim.msgmodel.WKVoiceContent
-import com.octoim.rlottie.RLottieDrawable
-import com.octoim.rlottie.RLottieImageView
+import com.airbnb.lottie.LottieAnimationView
+import com.airbnb.lottie.LottieDrawable
+import com.airbnb.lottie.LottieProperty
+import com.airbnb.lottie.SimpleColorFilter
+import com.airbnb.lottie.model.KeyPath
+import com.airbnb.lottie.value.LottieValueCallback
 import java.util.Objects
 import kotlin.math.abs
 import kotlin.math.max
@@ -1014,7 +1018,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         val isPlayAnimation = uiChatMsgItemEntity.isUpdateStatus
         val msgTimeTv = parentView.findViewById<TextView>(R.id.msgTimeTv)
         val editedTv = parentView.findViewById<TextView>(R.id.editedTv)
-        val statusIV = parentView.findViewById<RLottieImageView>(R.id.statusIV)
+        val statusIV = parentView.findViewById<LottieAnimationView>(R.id.statusIV)
         val pinIV = parentView.findViewById<AppCompatImageView>(R.id.pinIV)
         if (msgTimeTv == null || mMsg == null) return
         var msgTime = mMsg.timestamp
@@ -1031,7 +1035,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         pinIV.visibility = if (uiChatMsgItemEntity.isPinned == 1) VISIBLE else GONE
         msgTimeTv.text = WKTimeUtils.getInstance().getMsgTimeStr(msgTime * 1000)
         val isShowNormalColor: Boolean
-        val drawable: RLottieDrawable
+        var animRawRes: Int = R.raw.ticks_single
         var autoRepeat = false
         if (mMsg.type == WKContentType.WK_IMAGE || mMsg.type == WKContentType.WK_GIF || mMsg.type == WKContentType.WK_VIDEO || mMsg.type == WKContentType.WK_VECTOR_STICKER || mMsg.type == WKContentType.WK_EMOJI_STICKER || mMsg.type == WKContentType.WK_LOCATION) {
             isShowNormalColor = false
@@ -1050,44 +1054,20 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         if (mMsg.remoteExtra.needUpload == 1) mMsg.status = WKSendMsgResult.send_loading
         if (fromType == WKChatIteMsgFromType.SEND) {
             if (mMsg.setting.receipt == 1 && mMsg.remoteExtra.readedCount > 0) {
-                drawable = RLottieDrawable(
-                    context,
-                    R.raw.ticks_double,
-                    "ticks_double",
-                    AndroidUtilities.dp(18f),
-                    AndroidUtilities.dp(18f)
-                )
+                animRawRes = R.raw.ticks_double
             } else {
                 when (mMsg.status) {
                     WKSendMsgResult.send_success -> {
-                        drawable = RLottieDrawable(
-                            context,
-                            R.raw.ticks_single,
-                            "ticks_single",
-                            AndroidUtilities.dp(18f),
-                            AndroidUtilities.dp(18f)
-                        )
+                        animRawRes = R.raw.ticks_single
                     }
 
                     WKSendMsgResult.send_loading -> {
                         autoRepeat = true
-                        drawable = RLottieDrawable(
-                            context,
-                            R.raw.msg_sending,
-                            "msg_sending",
-                            AndroidUtilities.dp(18f),
-                            AndroidUtilities.dp(18f)
-                        )
+                        animRawRes = R.raw.msg_sending
                     }
 
                     else -> {
-                        drawable = RLottieDrawable(
-                            context,
-                            R.raw.error,
-                            "error",
-                            AndroidUtilities.dp(18f),
-                            AndroidUtilities.dp(18f)
-                        )
+                        animRawRes = R.raw.error
                         statusIV.setOnClickListener {
 
                             if (mMsg.status == WKSendMsgResult.send_success) return@setOnClickListener
@@ -1145,27 +1125,35 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                     }
                 }
             }
-            if (mMsg.status <= WKSendMsgResult.send_success) {
-                statusIV.colorFilter =
-                    PorterDuffColorFilter(
-                        ContextCompat.getColor(
-                            context,
-                            if (isShowNormalColor) R.color.color999 else R.color.white
-                        ), PorterDuff.Mode.MULTIPLY
+            statusIV.repeatCount = if (autoRepeat) LottieDrawable.INFINITE else 0
+            statusIV.setAnimation(animRawRes)
+            if (mMsg.status <= WKSendMsgResult.send_success || mMsg.status == WKSendMsgResult.send_loading) {
+                val tintColor = if (mMsg.status <= WKSendMsgResult.send_success) {
+                    ContextCompat.getColor(
+                        context,
+                        if (isShowNormalColor) R.color.color999 else R.color.white
                     )
+                } else {
+                    ContextCompat.getColor(context, R.color.color999)
+                }
+                statusIV.addValueCallback(
+                    KeyPath("**"),
+                    LottieProperty.COLOR_FILTER,
+                    LottieValueCallback(SimpleColorFilter(tintColor))
+                )
             } else {
-                statusIV.colorFilter =
-                    PorterDuffColorFilter(
-                        ContextCompat.getColor(
-                            context, R.color.white
-                        ), PorterDuff.Mode.MULTIPLY
-                    )
+                statusIV.addValueCallback(
+                    KeyPath("**"),
+                    LottieProperty.COLOR_FILTER,
+                    LottieValueCallback(null)
+                )
             }
-            statusIV.setAutoRepeat(autoRepeat)
-            statusIV.setAnimation(drawable)
             if (autoRepeat || isPlayAnimation) {
                 statusIV.playAnimation()
-            } else drawable.currentFrame = drawable.framesCount - 1
+            } else {
+                statusIV.cancelAnimation()
+                statusIV.progress = 1f
+            }
         } else {
             statusIV.visibility = GONE
         }

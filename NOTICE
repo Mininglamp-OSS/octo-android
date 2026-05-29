@@ -43,10 +43,6 @@ This product includes software developed by:
    Copyright Vivo
    Proprietary — see Vivo developer documentation
 
-10. RLottie Animation Library (MyLibs/rlottie/lottiev1.aar)
-    Native rlottie engine: Copyright Samsung, Licensed under the MIT License
-    https://github.com/Samsung/rlottie
-    Java/JNI wrapper classes (com.octoim.rlottie.*):
-      Copyright 2026-present OctoIM contributors
-      Licensed under the Apache License, Version 2.0
-    Clean-room implementation — no Telegram/GPL code remains.
+10. Lottie Animation Library
+    Copyright Airbnb, Licensed under the Apache License, Version 2.0
+    https://github.com/airbnb/lottie-android

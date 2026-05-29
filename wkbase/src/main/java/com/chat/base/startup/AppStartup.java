@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       WKBaseApplication 基础单例）。此工具类 <b>不</b> 提供 Phase-A API——
  *       本来就是直写代码，不需要调度。</li>
  *   <li><b>Phase-B（异步，首屏不依赖）</b>：通过 {@link #postPhaseB} 交给
- *       {@link AppExecutors#io()} 立即执行；Bugly、RLottie、push token 握手、
+ *       {@link AppExecutors#io()} 立即执行；Bugly、push token 握手、
  *       WKIM 初始化 + 监听都归此阶段。</li>
  *   <li><b>Phase-C（idle 后）</b>：通过 {@link #postPhaseC} 挂到主线程
  *       {@link MessageQueue.IdleHandler}，首帧渲染完进入 idle 时再投递到

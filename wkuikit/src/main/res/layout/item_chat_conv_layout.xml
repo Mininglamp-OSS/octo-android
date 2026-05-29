@@ -127,7 +127,7 @@
                     android:layout_gravity="center_vertical"
                     android:layout_marginStart="5dp">
 
-                    <com.octoim.rlottie.RLottieImageView
+                    <com.airbnb.lottie.LottieAnimationView
                         android:id="@+id/statusIV"
                         android:layout_width="22dp"
                         android:layout_height="22dp"

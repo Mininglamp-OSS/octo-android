@@ -85,8 +85,12 @@ import com.xinbida.wukongim.entity.WKUIConversationMsg;
 import com.xinbida.wukongim.message.type.WKSendMsgResult;
 
 import org.jetbrains.annotations.NotNull;
-import com.octoim.rlottie.RLottieDrawable;
-import com.octoim.rlottie.RLottieImageView;
+import com.airbnb.lottie.LottieAnimationView;
+import com.airbnb.lottie.LottieDrawable;
+import com.airbnb.lottie.LottieProperty;
+import com.airbnb.lottie.SimpleColorFilter;
+import com.airbnb.lottie.model.KeyPath;
+import com.airbnb.lottie.value.LottieValueCallback;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -952,8 +956,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void setStatus(BaseViewHolder helper, WKUIConversationMsg item, boolean isPlayAnimation) {
-        RLottieImageView sendingMsgIv = helper.getView(R.id.statusIV);
-        RLottieDrawable drawable;
+        LottieAnimationView sendingMsgIv = helper.getView(R.id.statusIV);
+        int animRawRes;
         boolean autoRepeat = false;
         int status = WKSendMsgResult.send_success;
         if (item.getWkMsg() != null) {
@@ -961,42 +965,45 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         boolean isSend = item.getWkMsg() != null && item.getWkMsg().isDeleted == 0 && !TextUtils.isEmpty(item.getWkMsg().fromUID) && item.getWkMsg().fromUID.equals(WKConfig.getInstance().getUid());
         if (isSend) {
-            boolean isSingle = true;
             sendingMsgIv.setVisibility(View.VISIBLE);
-            boolean isError = false;
+            int filterColor = 0;
+            boolean applyColorFilter = true;
             if (status == WKSendMsgResult.send_success) {
-                // 自己发送
                 if (item.getWkMsg().setting.receipt == 1 && item.getWkMsg().remoteExtra.readedCount > 0) {
-                    drawable = new RLottieDrawable(getContext(), R.raw.ticks_double, "ticks_double", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
-                    isSingle = false;
+                    animRawRes = R.raw.ticks_double;
                 } else {
-                    drawable = new RLottieDrawable(getContext(), R.raw.ticks_single, "ticks_single", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
+                    animRawRes = R.raw.ticks_single;
                 }
-                sendingMsgIv.setColorFilter(new PorterDuffColorFilter(Theme.colorAccount, PorterDuff.Mode.MULTIPLY));
+                filterColor = Theme.colorAccount;
             } else if (status == WKSendMsgResult.send_loading) {
                 autoRepeat = true;
-                drawable = new RLottieDrawable(getContext(), R.raw.msg_sending, "msg_sending", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
-                sendingMsgIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getContext(), R.color.color999), PorterDuff.Mode.MULTIPLY));
+                animRawRes = R.raw.msg_sending;
+                filterColor = ContextCompat.getColor(getContext(), R.color.color999);
             } else {
-                isError = true;
-                sendingMsgIv.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getContext(), R.color.white), PorterDuff.Mode.MULTIPLY));
-                drawable = new RLottieDrawable(getContext(), R.raw.error, "error", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
+                applyColorFilter = false;
+                animRawRes = R.raw.error;
             }
-            sendingMsgIv.setAutoRepeat(autoRepeat);
+            sendingMsgIv.setRepeatCount(autoRepeat ? LottieDrawable.INFINITE : 0);
+            sendingMsgIv.setAnimation(animRawRes);
+            if (applyColorFilter) {
+                sendingMsgIv.addValueCallback(
+                        new KeyPath("**"),
+                        LottieProperty.COLOR_FILTER,
+                        new LottieValueCallback<>(new SimpleColorFilter(filterColor))
+                );
+            } else {
+                sendingMsgIv.addValueCallback(
+                        new KeyPath("**"),
+                        LottieProperty.COLOR_FILTER,
+                        new LottieValueCallback<>(null)
+                );
+            }
 
             if (autoRepeat || isPlayAnimation) {
-                sendingMsgIv.setAnimation(drawable);
                 sendingMsgIv.playAnimation();
             } else {
-                if (isError) {
-                    sendingMsgIv.setAnimation(drawable);
-                } else {
-                    if (isSingle) {
-                        sendingMsgIv.setImageDrawable(Theme.getTicksSingleDrawable());
-                    } else {
-                        sendingMsgIv.setImageDrawable(Theme.getTicksDoubleDrawable());
-                    }
-                }
+                sendingMsgIv.cancelAnimation();
+                sendingMsgIv.setProgress(1f);
             }
         } else {
             sendingMsgIv.setVisibility(View.GONE);

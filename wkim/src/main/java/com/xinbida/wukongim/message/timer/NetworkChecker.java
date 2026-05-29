@@ -35,7 +35,6 @@ public class NetworkChecker {
             WKLoggerUtils.getInstance().e("无网络连接...");
             WKConnection.getInstance().checkSendingMsg();
         } else {
-            //有网络
             if (WKConnection.getInstance().connectionIsNull() || isForcedReconnect) {
                 WKConnection.getInstance().reconnection();
                 isForcedReconnect = false;

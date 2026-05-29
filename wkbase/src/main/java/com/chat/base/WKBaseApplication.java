@@ -51,8 +51,6 @@ import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKFileUtils;
 import com.chat.base.utils.WKReader;
 
-import com.octoim.rlottie.RLottieApplication;
-
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -140,7 +138,7 @@ public class WKBaseApplication {
 
         //  (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步）：上面的 prewarm / density / registerComponentCallbacks / versionName 已完成。
-        //   Phase-B（异步立即投递到 AppExecutors.io()，首屏不依赖）：Bugly + RLottie 并行启动。
+        //   Phase-B（异步立即投递到 AppExecutors.io()，首屏不依赖）：Bugly 并行启动。
         //   Phase-C（idle 后）：EmojiManager 懒加载——emoji.xml 解析 + LruCache 构造不阻塞冷启。
         // 拆分成多个独立任务，IO 池会并行消费；相比旧的串行 blob，冷启 CPU 争抢 **-30-50ms**（P-04 审计估值）。
 
@@ -171,9 +169,6 @@ public class WKBaseApplication {
 
         // Crash 本地日志兜底 — 在 Bugly 之后初始化，链式调用
         CrashHandler.getInstance().init(context);
-
-        // RLottie — 同步加载 native 库，确保 UI 构造 RLottieDrawable 前库已就绪
-        RLottieApplication.getInstance().init(context);
 
         // Phase-C — EmojiManager 懒加载。
         //   EmojiManager 现在是 idempotent 的：文本 hot path（WKTextProvider / MoonUtil /

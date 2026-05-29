@@ -109,9 +109,11 @@ class WebSocketConnectionClient extends WebSocketListener {
 
     @Override
     public void onClosed(WebSocket webSocket, int code, String reason) {
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.util.Log.w("MsgDebug", "[WS] onClosed code=" + code + " reason=" + reason + " isCurrent=" + isCurrentSocket(webSocket));
+        }
         WKLoggerUtils.getInstance().i(TAG, "WebSocket onClosed code=" + code + " reason=" + reason);
         if (!isCurrentSocket(webSocket)) {
-            // 旧 socket 收到延迟的 close，不应触发重连。
             return;
         }
         WKConnection.getInstance().handleWebSocketDisconnected(webSocket, /*planned=*/ code == 1000);
@@ -119,6 +121,9 @@ class WebSocketConnectionClient extends WebSocketListener {
 
     @Override
     public void onFailure(WebSocket webSocket, Throwable t, @Nullable Response response) {
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.util.Log.e("MsgDebug", "[WS] onFailure err=" + (t == null ? "null" : t.getClass().getSimpleName() + ":" + t.getMessage()) + " isCurrent=" + isCurrentSocket(webSocket));
+        }
         WKLoggerUtils.getInstance().e(TAG, "WebSocket onFailure socketSingleId=" + socketSingleId
                 + " err=" + (t == null ? "null" : t.getClass().getSimpleName() + ":" + t.getMessage())
                 + " httpCode=" + (response == null ? -1 : response.code()));

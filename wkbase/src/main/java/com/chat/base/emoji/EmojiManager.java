@@ -84,7 +84,7 @@ public class EmojiManager {
      *  (P-04) · 空载 / 重复调用幂等化。
      *
      * 旧路径是 {@code WKBaseApplication.init} 里把本方法塞进同一个 {@code new Thread()}
-     * 跟 Bugly / RLottie 抢 CPU。新 AppStartup 把它挪到 Phase-C（idle 后），
+     * 跟 Bugly 抢 CPU。新 AppStartup 把它挪到 Phase-C（idle 后），
      * 但文本渲染（{@code WKTextProvider}、{@code MoonUtil}、{@code SelectTextHelper}、
      * {@code WKUIChatMsgItemEntity}）在 Phase-C 之前就可能读 {@link #getPattern()}，
      * 所以这里做 double-checked locking：

@@ -362,6 +362,7 @@ public class ConversationManager extends BaseManager {
     public void setSyncConversationListener(ISyncConversationChatBack iSyncConversationChatBack) {
         if (iSyncConversationChat == null) {
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) android.util.Log.e("MsgDebug", "[SYNC_BUG] iSyncConversationChat is NULL! callback will NOT fire, connectStatus will stay syncMsg forever");
             return;
         }
         //  C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正

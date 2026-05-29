@@ -25,12 +25,9 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.ui.Theme;
-import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.login.R;
 import com.chat.login.databinding.ActWebLoginLayoutBinding;
-
-import com.octoim.rlottie.RLottieDrawable;
 
 public class WKWebLoginActivity extends WKBaseActivity<ActWebLoginLayoutBinding> {
     @Override
@@ -51,9 +48,8 @@ public class WKWebLoginActivity extends WKBaseActivity<ActWebLoginLayoutBinding>
         wkVBinding.nameTv.setText(String.format(getString(R.string.web_side), getString(R.string.app_name)));
         Theme.setPressedBackground(wkVBinding.copyIv);
 
-        RLottieDrawable drawable = new RLottieDrawable(this, R.raw.qrcode_web, "", AndroidUtilities.dp(180), AndroidUtilities.dp(180), false, null);
-        wkVBinding.imageView.setAutoRepeat(false);
-        wkVBinding.imageView.setAnimation(drawable);
+        wkVBinding.imageView.setRepeatCount(0);
+        wkVBinding.imageView.setAnimation(R.raw.qrcode_web);
         wkVBinding.imageView.playAnimation();
     }
 

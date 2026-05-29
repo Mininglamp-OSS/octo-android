@@ -47,7 +47,7 @@ import androidx.core.content.ContextCompat;
 import com.chat.base.R;
 import com.chat.base.WKBaseApplication;
 
-import com.octoim.rlottie.RLottieImageView;
+import androidx.appcompat.widget.AppCompatImageView;
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
@@ -122,7 +122,7 @@ public class SvgHelper {
         private static long lastUpdateTime;
         private static Runnable shiftRunnable;
         private static WeakReference<Drawable> shiftDrawable;
-        private RLottieImageView parentImageReceiver;
+        private AppCompatImageView parentImageReceiver;
         private int currentColor;
         private String currentColorKey;
         private float colorAlpha;
@@ -253,7 +253,7 @@ public class SvgHelper {
             commands.add(command);
         }
 
-        public void setParent(RLottieImageView imageReceiver) {
+        public void setParent(AppCompatImageView imageReceiver) {
             parentImageReceiver = imageReceiver;
         }
 

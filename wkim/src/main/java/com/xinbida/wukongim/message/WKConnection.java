@@ -717,6 +717,7 @@ public class WKConnection {
                                 WKIMApplication.getInstance().isCanConnect = true;
                                 MessageHandler.getInstance().sendAck();
                                 resendMsg();
+                                sendMessage(new com.xinbida.wukongim.protocol.WKPingMsg());
                                 WKIM.getInstance().getConnectionManager().setConnectionStatus(WKConnectStatus.success, WKConnectReason.ConnectSuccess);
                             }
                         } finally {
@@ -726,6 +727,7 @@ public class WKConnection {
                         }
                     };
 
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SYNC_FLOW] about to sync, connectStatus=" + connectStatus);
                     if (!SyncGate.allow("wkConnectionSync")) {
                         // 守卫已被上层注册且拒绝本次 sync（已有 sync 进行中 / 500ms 内
                         // 重复触发）。不调 setSyncConversationListener，避免 saveSyncChat 与
@@ -733,6 +735,7 @@ public class WKConnection {
                         markConnected.run();
                     } else {
                         WKIM.getInstance().getConversationManager().setSyncConversationListener(syncChat -> {
+                            if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SYNC_FLOW] sync callback FIRED, about to markConnected");
                             try {
                                 markConnected.run();
                             } finally {
@@ -801,16 +804,19 @@ public class WKConnection {
         try {
             locked = tryLockWithTimeout();
             if (!locked) {
+                if (BuildConfig.DEBUG) Log.e("MsgDebug", "[SEND_TRACE] FAILED: lock timeout, packetType=" + mBaseMsg.packetType);
                 WKLoggerUtils.getInstance().e(TAG, "获取锁超时，sendMessage失败");
                 return;
             }
 
             if (mBaseMsg.packetType != WKMsgType.CONNECT) {
                 if (connectStatus == WKConnectStatus.syncMsg) {
+                    if (BuildConfig.DEBUG) Log.w("MsgDebug", "[SEND_TRACE] BLOCKED by syncMsg, packetType=" + mBaseMsg.packetType);
                     WKLoggerUtils.getInstance().i(TAG, " sendMessage: In syncMsg status, message not sent: " + mBaseMsg.packetType);
                     return;
                 }
                 if (connectStatus != WKConnectStatus.success) {
+                    if (BuildConfig.DEBUG) Log.w("MsgDebug", "[SEND_TRACE] BLOCKED by status=" + connectStatus + ", packetType=" + mBaseMsg.packetType);
                     WKLoggerUtils.getInstance().w(TAG, " sendMessage: Not in success status (is " + connectStatus + "), attempting reconnection for: " + mBaseMsg.packetType);
                     reconnection();
                     return;
@@ -820,15 +826,21 @@ public class WKConnection {
             // YUJ-2245: WebSocket-only 写路径。
             WebSocket currentWs = this.webSocket;
             if (currentWs == null) {
+                if (BuildConfig.DEBUG) Log.e("MsgDebug", "[SEND_TRACE] FAILED: webSocket is null, packetType=" + mBaseMsg.packetType);
                 WKLoggerUtils.getInstance().w(TAG, " sendMessage(WS): WebSocket is null, attempting reconnection for: " + mBaseMsg.packetType);
                 reconnection();
                 return;
             }
             int status = MessageHandler.getInstance().sendMessage(currentWs, mBaseMsg);
-            if (BuildConfig.DEBUG && mBaseMsg.packetType == WKMsgType.PING) {
-                Log.d("MsgDebug", "[Heartbeat] PING sent (WS), writeStatus=" + status);
+            if (BuildConfig.DEBUG) {
+                if (mBaseMsg.packetType == WKMsgType.PING) {
+                    Log.d("MsgDebug", "[Heartbeat] PING sent (WS), writeStatus=" + status);
+                } else if (mBaseMsg.packetType == WKMsgType.SEND) {
+                    Log.d("MsgDebug", "[SEND_TRACE] OK: ws.send returned status=" + status);
+                }
             }
             if (status == 0) {
+                if (BuildConfig.DEBUG) Log.e("MsgDebug", "[SEND_TRACE] FAILED: ws.send returned 0, packetType=" + mBaseMsg.packetType);
                 WKLoggerUtils.getInstance().e(TAG, "发消息失败 (status 0 from MessageHandler), attempting reconnection for: " + mBaseMsg.packetType);
                 reconnection();
             }
@@ -1020,6 +1032,7 @@ public class WKConnection {
                 if (msg.header != null && !msg.header.noPersist) {
                     addSendingMsg(sendMsg);
                 }
+                if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SEND_TRACE] about to sendMessage(WKBaseMsg), clientSeq=" + sendMsg.clientSeq + " connStatus=" + connectStatus + " wsNull=" + (webSocket == null));
                 sendMessage(sendMsg);
             }
         }

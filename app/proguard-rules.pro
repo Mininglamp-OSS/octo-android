@@ -329,6 +329,3 @@
 -keep public enum com.bumptech.glide.load.resource.bitmap.ImageHeaderParser$** {
   **[] $VALUES;  public *;
 }
-
-# RLottie clean-room (MIT)
--keep class com.octoim.rlottie.** { *; }

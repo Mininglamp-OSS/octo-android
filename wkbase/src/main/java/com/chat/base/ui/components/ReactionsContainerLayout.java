@@ -58,8 +58,7 @@ import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.views.RecyclerListView;
 
-import com.octoim.rlottie.RLottieDrawable;
-import com.octoim.rlottie.RLottieImageView;
+import com.airbnb.lottie.LottieAnimationView;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -516,7 +515,7 @@ public class ReactionsContainerLayout extends FrameLayout {
 
     public final class ReactionHolderView extends FrameLayout {
         //        public AppCompatImageView backupImageView;
-        public RLottieImageView pressedBackupImageView;
+        public LottieAnimationView pressedBackupImageView;
         public ReactionSticker currentReaction;
         public float sideScale = 1f;
         private boolean isEnter;
@@ -524,15 +523,15 @@ public class ReactionsContainerLayout extends FrameLayout {
         Runnable playRunnable = new Runnable() {
             @Override
             public void run() {
-                if (pressedBackupImageView.getAnimatedDrawable() != null && !pressedBackupImageView.getAnimatedDrawable().isRunning()) {
-                    pressedBackupImageView.getAnimatedDrawable().start();
+                if (!pressedBackupImageView.isAnimating()) {
+                    pressedBackupImageView.playAnimation();
                 }
             }
         };
 
         ReactionHolderView(Context context) {
             super(context);
-            pressedBackupImageView = new RLottieImageView(context) {
+            pressedBackupImageView = new LottieAnimationView(context) {
                 @Override
                 public void invalidate() {
                     super.invalidate();
@@ -545,9 +544,8 @@ public class ReactionsContainerLayout extends FrameLayout {
         private void setReaction(ReactionSticker react) {
             resetAnimation();
             currentReaction = react;
-            RLottieDrawable drawable = new RLottieDrawable(getContext(), currentReaction.resourceID, currentReaction.name, AndroidUtilities.dp(30), AndroidUtilities.dp(30));
-            pressedBackupImageView.setAutoRepeat(false);
-            pressedBackupImageView.setAnimation(drawable);
+            pressedBackupImageView.setRepeatCount(0);
+            pressedBackupImageView.setAnimation(currentReaction.resourceID);
             pressedBackupImageView.playAnimation();
         }
 
@@ -569,12 +567,10 @@ public class ReactionsContainerLayout extends FrameLayout {
 
         public void resetAnimation() {
             AndroidUtilities.cancelRunOnUIThread(playRunnable);
-            if (pressedBackupImageView.getAnimatedDrawable() != null) {
-                if (animationEnabled) {
-                    pressedBackupImageView.getAnimatedDrawable().setCurrentFrame(0, false, true);
-                } else {
-                    pressedBackupImageView.getAnimatedDrawable().setCurrentFrame(pressedBackupImageView.getAnimatedDrawable().getFramesCount() - 1, false, true);
-                }
+            if (animationEnabled) {
+                pressedBackupImageView.setProgress(0f);
+            } else {
+                pressedBackupImageView.setProgress(1f);
             }
             isEnter = false;
         }

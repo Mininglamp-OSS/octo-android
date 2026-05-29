@@ -36,14 +36,14 @@ import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 
-import com.octoim.rlottie.RLottieImageView;
+import androidx.appcompat.widget.AppCompatImageView;
 
 @SuppressLint("ViewConstructor")
 public class ActionBarMenuSubItem extends FrameLayout {
 
     private final TextView textView;
     private TextView subtextView;
-    private final RLottieImageView imageView;
+    private final AppCompatImageView imageView;
     private CheckBox checkView;
     private ImageView rightIcon;
 
@@ -70,7 +70,7 @@ public class ActionBarMenuSubItem extends FrameLayout {
         updateBackground();
         setPadding(AndroidUtilities.dp(15), 0, AndroidUtilities.dp(15), 0);
 
-        imageView = new RLottieImageView(context);
+        imageView = new AppCompatImageView(context);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
         imageView.setColorFilter(new PorterDuffColorFilter(iconColor, PorterDuff.Mode.MULTIPLY));
         addView(imageView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.CENTER_VERTICAL | (AndroidUtilities.isRTL ? Gravity.END : Gravity.START)));
@@ -264,8 +264,8 @@ public class ActionBarMenuSubItem extends FrameLayout {
     }
 
     public void onItemShown() {
-        if (imageView.getAnimatedDrawable() != null) {
-            imageView.getAnimatedDrawable().start();
+        if (imageView.getDrawable() instanceof android.graphics.drawable.Animatable) {
+            ((android.graphics.drawable.Animatable) imageView.getDrawable()).start();
         }
     }
 

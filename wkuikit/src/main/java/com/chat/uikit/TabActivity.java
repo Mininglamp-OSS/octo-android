@@ -66,7 +66,7 @@ import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
 import com.chat.uikit.user.service.UserModel;
 
-import com.octoim.rlottie.RLottieImageView;
+import androidx.appcompat.widget.AppCompatImageView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,7 +81,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     CounterView contactsCounterView;
     //    CounterView workplaceCounterView;
     View contactsSpotView;
-    RLottieImageView chatIV, contactsIV, meIV;
+    AppCompatImageView chatIV, contactsIV, meIV;
     private TextView chatTV, contactsTV, meTV;
     private long lastClickChatTabTime = 0L;
     private final boolean isShowTabText = true;
@@ -125,11 +125,11 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @Override
     protected void initView() {
         // ===== 关键路径：先设置 ViewPager + Tab，让第一帧尽快渲染 =====
-        chatIV = new RLottieImageView(this);
-        contactsIV = new RLottieImageView(this);
-        meIV = new RLottieImageView(this);
+        chatIV = new AppCompatImageView(this);
+        contactsIV = new AppCompatImageView(this);
+        meIV = new AppCompatImageView(this);
         // : drawable 只在 ViewHolder 初始化时 setImageResource 一次；
-        // 后续切 tab 只通过 tintTab 改 ColorFilter，避免 RLottieImageView
+        // 后续切 tab 只通过 tintTab 改 ColorFilter，避免
         // 每次 setImageResource 都重新解析 drawable + invalidate。
         chatIV.setImageResource(R.drawable.ic_tab_message);
         contactsIV.setImageResource(R.drawable.ic_tab_contacts);
@@ -419,7 +419,7 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         );
     }
 
-    private void tintTab(RLottieImageView iv, boolean selected) {
+    private void tintTab(AppCompatImageView iv, boolean selected) {
         int color = ContextCompat.getColor(this, selected ? R.color.tab_text_selected : R.color.tab_text_normal);
         iv.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
     }

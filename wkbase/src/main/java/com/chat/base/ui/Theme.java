@@ -62,8 +62,6 @@ import com.chat.base.ui.components.RoundTextView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.SvgHelper;
 
-import com.octoim.rlottie.RLottieDrawable;
-
 import java.lang.reflect.Method;
 
 public class Theme {
@@ -214,27 +212,6 @@ public class Theme {
     public static boolean isDark() {
         String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
         return wk_theme_pref.equals(DARK_MODE);
-    }
-
-    private static Drawable ticksSingleDrawable;
-    private static Drawable ticksDoubleDrawable;
-
-    public static Drawable getTicksSingleDrawable() {
-        if (ticksSingleDrawable == null) {
-            RLottieDrawable drawable = new RLottieDrawable(WKBaseApplication.getInstance().getContext(), R.raw.ticks_single, "ticks_single", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
-            drawable.setCurrentFrame(drawable.getFramesCount() - 1);
-            ticksSingleDrawable = drawable.getCurrent();
-        }
-        return ticksSingleDrawable;
-    }
-
-    public static Drawable getTicksDoubleDrawable() {
-        if (ticksDoubleDrawable == null) {
-            RLottieDrawable drawable = new RLottieDrawable(WKBaseApplication.getInstance().getContext(), R.raw.ticks_double, "ticks_double", AndroidUtilities.dp(22), AndroidUtilities.dp(22));
-            drawable.setCurrentFrame(drawable.getFramesCount() - 1);
-            ticksDoubleDrawable = drawable.getCurrent();
-        }
-        return ticksDoubleDrawable;
     }
 
     public static RoundTextView getChannelCategoryTV(Context context, String text, int bgColor, int textColor, int borderColor) {

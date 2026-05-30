@@ -18,6 +18,8 @@ package com.chat.uikit.chat.search
 
 import android.os.Build
 import android.text.Html
+import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
@@ -26,6 +28,7 @@ import com.chat.base.msgitem.WKContentType
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
+import com.chat.uikit.chat.provider.WKFileProvider
 import com.chat.uikit.search.remote.GlobalAdapter
 
 class SearchMessageAdapter :
@@ -46,11 +49,22 @@ class SearchMessageAdapter :
             holder.setText(R.id.nameTv, Html.fromHtml(item.channel.getHtmlName()))
         }
         val contentTv = holder.getView<TextView>(R.id.contentTv)
+        val fileTagIv = holder.getView<ImageView>(R.id.fileTagIv)
+        val type = item.getContentType()
+
+        if (type == WKContentType.WK_FILE) {
+            fileTagIv.visibility = View.VISIBLE
+            val extension = item.payload["extension"] as? String ?: ""
+            val fileName = item.payload["name"] as? String ?: ""
+            WKFileProvider.setFileIcon(fileTagIv, extension, fileName)
+        } else {
+            fileTagIv.visibility = View.GONE
+        }
+
         val rawContent = item.payload["content"]
         if (rawContent is String && rawContent.isNotEmpty() && !rawContent.contains("<mark>")) {
             contentTv.text = GlobalAdapter.highlightKeyword(rawContent, keyword)
         } else {
-            val type = item.getContentType()
             if (type == WKContentType.WK_TEXT) {
                 contentTv.text = Html.fromHtml(item.getHtmlText(), Html.FROM_HTML_MODE_LEGACY)
             } else if (type == WKContentType.WK_FILE) {

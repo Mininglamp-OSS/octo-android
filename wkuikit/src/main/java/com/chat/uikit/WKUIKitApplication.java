@@ -699,6 +699,20 @@ public class WKUIKitApplication {
             return null;
         });
 
+        // 搜索消息按文件搜索
+        EndpointManager.getInstance().setMethod("search_message_with_file", EndpointCategory.wkSearchChatContent, 97, object -> {
+            if (object instanceof WKChannel) {
+                return new SearchChatContentMenu(WKBaseApplication.getInstance().getContext().getString(R.string.uikit_search_for_file), (channelID, channelType) -> {
+                    Intent intent = new Intent(WKBaseApplication.getInstance().getContext(), com.chat.uikit.chat.search.file.SearchWithFileActivity.class);
+                    intent.putExtra("channel_id", ((WKChannel) object).channelID);
+                    intent.putExtra("channel_type", ((WKChannel) object).channelType);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    WKBaseApplication.getInstance().getContext().startActivity(intent);
+                });
+            }
+            return null;
+        });
+
     }
 
     public void sendChooseChatBack(List<WKChannel> list) {
@@ -1006,4 +1020,5 @@ public class WKUIKitApplication {
         sureTv.setTextColor(ContextCompat.getColor(context, R.color.colorAccent));
 
     }
+
 }

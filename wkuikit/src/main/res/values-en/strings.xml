@@ -305,7 +305,8 @@
     <string name="uikit_today">Today</string>
     <string name="uikit_search_for_date">Date</string>
     <string name="uikit_go_to_chat_item">Go to chat</string>
-    <string name="uikit_search_for_image">Image</string>
+    <string name="uikit_search_for_image">Photos &amp; Videos</string>
+    <string name="uikit_search_for_file">File</string>
     <string name="contacts_section_group_chat">Groups</string>
     <string name="contacts_section_added_ai">Added AI</string>
     <string name="contacts_all">All</string>

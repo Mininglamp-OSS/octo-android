@@ -96,8 +96,8 @@ dependencies {
     api 'jp.wasabeef:glide-transformations:4.3.0'
     api('com.squareup.okhttp3:okhttp:5.1.0')
     // https://github.com/LuckSiege/PictureSelector
-    api 'io.github.lucksiege:pictureselector:v3.11.2'
-    implementation 'io.github.lucksiege:compress:v3.11.2'
+    api 'io.github.lucksiege:pictureselector:v3.11.3'
+    implementation 'io.github.lucksiege:compress:v3.11.3'
     //刷新
     api 'io.github.scwang90:refresh-layout-kernel:2.1.1'      //核心必须依赖
     api 'io.github.scwang90:refresh-header-classics:2.1.1'    //经典刷新头

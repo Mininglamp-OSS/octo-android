@@ -231,7 +231,9 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     }
 
     private void forward(SearchImgEntity entity) {
-        WKMessageContent finalWKMessageContent = entity.message.getMessageModel();
+        WKMessageContent finalWKMessageContent = entity.originalContent != null
+                ? entity.originalContent
+                : entity.message.getMessageModel();
         if (finalWKMessageContent == null) {
             return;
         }
@@ -287,6 +289,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
                     SearchImgEntity entity = new SearchImgEntity();
                     entity.date = date;
                     entity.url = showUrl;
+                    entity.originalContent = msg.baseContentMsgModel;
 
                     GlobalMessage gm = new GlobalMessage();
                     gm.setMessage_seq((long) msg.messageSeq);

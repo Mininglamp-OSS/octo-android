@@ -149,7 +149,9 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
     }
 
     private void forward(SearchFileEntity entity) {
-        WKMessageContent content = entity.message.getMessageModel();
+        WKMessageContent content = entity.originalContent != null
+                ? entity.originalContent
+                : entity.message.getMessageModel();
         if (content == null) return;
 
         EndpointManager.getInstance().invoke(EndpointSID.showChooseChatView,
@@ -192,6 +194,7 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
                         entity.fileName = fileContent.name != null ? fileContent.name : "";
                         entity.extension = fileContent.extension != null ? fileContent.extension : "";
                         entity.fileSize = fileContent.size;
+                        entity.originalContent = fileContent;
 
                         GlobalMessage gm = new GlobalMessage();
                         gm.setMessage_seq(msg.messageSeq);

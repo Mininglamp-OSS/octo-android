@@ -18,6 +18,7 @@ package com.chat.uikit.chat.search.image;
 
 import com.chad.library.adapter.base.entity.MultiItemEntity;
 import com.chat.base.entity.GlobalMessage;
+import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 /**
  * 3/23/21 10:31 AM
@@ -26,6 +27,7 @@ import com.chat.base.entity.GlobalMessage;
 public class SearchImgEntity implements MultiItemEntity {
     public int itemType;
     public GlobalMessage message;
+    public WKMessageContent originalContent;
     public String url;
     public String date;
 //    public String clientMsgNo;

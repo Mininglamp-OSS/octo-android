@@ -94,6 +94,12 @@ public class WKFileContent extends WKMediaMessageContent implements Parcelable {
     }
 
     @Override
+    public String getSearchableWord() {
+        String prefix = WKBaseApplication.getInstance().getContext().getString(R.string.last_message_file);
+        return name != null ? prefix + name : prefix;
+    }
+
+    @Override
     public String getDisplayContent() {
         return WKBaseApplication.getInstance().getContext().getString(R.string.last_message_file);
     }

@@ -1121,7 +1121,8 @@ public class MsgDbManager {
                 " m.client_seq else ''END client_seq, CASE count(*) WHEN 1 THEN m.searchable_word else '' end searchable_word," +
                 " CASE count(*) WHEN 1 THEN m.order_seq ELSE 0 END order_seq " +
                 "from " + channel + " c LEFT JOIN " + message + " m ON m.channel_id = c.channel_id and " +
-                "m.channel_type = c.channel_type WHERE m.is_deleted=0 and searchable_word LIKE ? GROUP BY " +
+                "m.channel_type = c.channel_type LEFT JOIN " + messageExtra + " e ON m.message_id = e.message_id " +
+                "WHERE m.is_deleted=0 and IFNULL(e.revoke,0)=0 and searchable_word LIKE ? GROUP BY " +
                 "c.channel_id, c.channel_type ORDER BY m.created_at DESC limit 100";
         Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{"%" + searchKey + "%"});
         if (cursor == null) {
@@ -1190,22 +1191,20 @@ public class MsgDbManager {
         if (TextUtils.isEmpty(channelID) || contentTypes == null || contentTypes.length == 0) {
             return null;
         }
-        String whereStr = "";
-        for (int contentType : contentTypes) {
-            if (TextUtils.isEmpty(whereStr)) {
-                whereStr = String.valueOf(contentType);
-            } else {
-                whereStr = "," + contentType;
-            }
+        StringBuilder whereBuilder = new StringBuilder();
+        for (int i = 0; i < contentTypes.length; i++) {
+            if (i > 0) whereBuilder.append(",");
+            whereBuilder.append(contentTypes[i]);
         }
+        String inClause = whereBuilder.toString();
         Object[] args;
         String sql;
         if (oldestOrderSeq <= 0) {
-            args = new Object[]{channelID, channelType, whereStr};
-            sql = "select * from (select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id= " + messageExtra + ".message_id where " + message + ".channel_id=? and " + message + ".channel_type=? and " + message + ".type<>0 and " + message + ".type<>99 and " + message + ".type in (?)) where is_deleted=0 and revoke=0 order by order_seq desc limit 0," + limit;
+            args = new Object[]{channelID, channelType};
+            sql = "select * from (select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id= " + messageExtra + ".message_id where " + message + ".channel_id=? and " + message + ".channel_type=? and " + message + ".type<>0 and " + message + ".type<>99 and " + message + ".type in (" + inClause + ")) where is_deleted=0 and revoke=0 order by order_seq desc limit 0," + limit;
         } else {
-            args = new Object[]{channelID, channelType, oldestOrderSeq, whereStr};
-            sql = "select * from (select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id= " + messageExtra + ".message_id where " + message + ".channel_id=? and " + message + ".channel_type=? and " + message + ".order_seq<? and " + message + ".type<>0 and " + message + ".type<>99 and " + message + ".type in (?)) where is_deleted=0 and revoke=0 order by order_seq desc limit 0," + limit;
+            args = new Object[]{channelID, channelType, oldestOrderSeq};
+            sql = "select * from (select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id= " + messageExtra + ".message_id where " + message + ".channel_id=? and " + message + ".channel_type=? and " + message + ".order_seq<? and " + message + ".type<>0 and " + message + ".type<>99 and " + message + ".type in (" + inClause + ")) where is_deleted=0 and revoke=0 order by order_seq desc limit 0," + limit;
         }
         List<WKMsg> wkMsgs = new ArrayList<>();
         try (Cursor cursor = WKIMApplication

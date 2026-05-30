@@ -37,6 +37,7 @@ import com.chat.base.entity.GlobalSearchReq;
 import com.chat.base.entity.ImagePopupBottomSheetItem;
 import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.net.HttpResponseCode;
 import com.chat.base.search.GlobalSearchModel;
 import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
@@ -56,12 +57,16 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
+import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 3/23/21 10:07 AM
@@ -72,6 +77,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     private byte channelType;
     private SearchWithImgAdapter adapter;
     private int page = 1;
+    private final Set<Long> seenSeqs = new HashSet<>();
 
     @Override
     protected ActSearchMsgImgLayoutBinding getViewBinding() {
@@ -80,7 +86,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
 
     @Override
     protected void setTitle(TextView titleTv) {
-        titleTv.setText(R.string.image);
+        titleTv.setText(R.string.uikit_search_for_image);
     }
 
     @Override
@@ -199,7 +205,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
                 msg.getChannel().getChannel_id(),
                 msg.getChannel().getChannel_type()
         );
-        EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(SearchWithImgActivity.this, channelID, WKChannelType.GROUP, orderSeq, false));
+        EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(SearchWithImgActivity.this, channelID, channelType, orderSeq, false));
     }
 
 
@@ -225,7 +231,9 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     }
 
     private void forward(SearchImgEntity entity) {
-        WKMessageContent finalWKMessageContent = entity.message.getMessageModel();
+        WKMessageContent finalWKMessageContent = entity.originalContent != null
+                ? entity.originalContent
+                : entity.message.getMessageModel();
         if (finalWKMessageContent == null) {
             return;
         }
@@ -244,73 +252,144 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     }
 
     private void getData() {
+        // 本地搜索
+        List<SearchImgEntity> localEntities = new ArrayList<>();
+
+        if (page == 1) {
+            seenSeqs.clear();
+            List<WKMsg> localMsgs = WKIM.getInstance().getMsgManager()
+                    .searchMsgWithChannelAndContentTypes(channelID, channelType, 0, 200,
+                            new int[]{WKContentType.WK_IMAGE, WKContentType.WK_VIDEO});
+            if (WKReader.isNotEmpty(localMsgs)) {
+                for (WKMsg msg : localMsgs) {
+                    if (com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(msg)) continue;
+                    if (msg.baseContentMsgModel == null) continue;
+                    if (!seenSeqs.add((long) msg.messageSeq)) continue;
+
+                    String showUrl = "";
+                    if (msg.baseContentMsgModel instanceof WKImageContent imgContent) {
+                        if (!TextUtils.isEmpty(imgContent.localPath) && new File(imgContent.localPath).exists()) {
+                            showUrl = imgContent.localPath;
+                        }
+                        if (TextUtils.isEmpty(showUrl)) {
+                            showUrl = WKApiConfig.getShowUrl(imgContent.url);
+                        }
+                    } else if (msg.baseContentMsgModel instanceof WKVideoContent videoContent) {
+                        if (!TextUtils.isEmpty(videoContent.coverLocalPath) && new File(videoContent.coverLocalPath).exists()) {
+                            showUrl = videoContent.coverLocalPath;
+                        }
+                        if (TextUtils.isEmpty(showUrl) && !TextUtils.isEmpty(videoContent.cover)) {
+                            showUrl = WKApiConfig.getShowUrl(videoContent.cover);
+                        }
+                    }
+                    if (TextUtils.isEmpty(showUrl)) continue;
+
+                    String date = WKTimeUtils.getInstance().time2YearMonth(msg.timestamp * 1000);
+                    addDateHeaderIfNeeded(localEntities, date);
+
+                    SearchImgEntity entity = new SearchImgEntity();
+                    entity.date = date;
+                    entity.url = showUrl;
+                    entity.originalContent = msg.baseContentMsgModel;
+
+                    GlobalMessage gm = new GlobalMessage();
+                    gm.setMessage_seq((long) msg.messageSeq);
+                    gm.setFrom_uid(msg.fromUID != null ? msg.fromUID : "");
+                    gm.setTimestamp(msg.timestamp);
+                    gm.setClient_msg_no(msg.clientMsgNO != null ? msg.clientMsgNO : "");
+                    com.chat.base.entity.GlobalChannel gc = new com.chat.base.entity.GlobalChannel();
+                    gc.setChannel_id(channelID);
+                    gc.setChannel_type(channelType);
+                    gm.setChannel(gc);
+                    HashMap<String, Object> payloadMap = new HashMap<>();
+                    payloadMap.put("type", msg.type);
+                    gm.setPayload(payloadMap);
+                    entity.message = gm;
+
+                    localEntities.add(entity);
+                }
+            }
+        }
+
+        // API 搜索
         ArrayList<Integer> contentType = new ArrayList<>();
         contentType.add(WKContentType.WK_IMAGE);
+        contentType.add(WKContentType.WK_VIDEO);
         GlobalSearchReq req = new GlobalSearchReq(1, "", channelID, channelType, "", "", contentType, page, 20, 0, 0);
         GlobalSearchModel.INSTANCE.search(req, (code, s, globalSearch) -> {
             wkVBinding.refreshLayout.finishLoadMore();
             wkVBinding.refreshLayout.finishRefresh();
-            if (WKReader.isNotEmpty(globalSearch.messages)) {
-                List<SearchImgEntity> fileEntityList = new ArrayList<>();
-                // 构造数据
+
+            List<SearchImgEntity> merged = new ArrayList<>(localEntities);
+
+            if (code == HttpResponseCode.success && globalSearch != null && WKReader.isNotEmpty(globalSearch.messages)) {
                 for (GlobalMessage msg : globalSearch.messages) {
+                    if (!seenSeqs.add(msg.getMessage_seq())) continue;
+
                     WKMessageContent content = msg.getMessageModel();
-                    if (content == null) {
-                        continue;
-                    }
-                    WKImageContent msgModel = null;
-                    if (content instanceof WKImageContent) {
-                        msgModel = (WKImageContent) content;
-                    }
-                    if (msgModel == null) {
-                        continue;
-                    }
-                    String date = WKTimeUtils.getInstance().time2YearMonth(msg.getTimestamp() * 1000);
-                    if (WKReader.isNotEmpty(fileEntityList)) {
-                        if (!fileEntityList.get(fileEntityList.size() - 1).date.equals(date)) {
-                            SearchImgEntity entity = new SearchImgEntity();
-                            entity.date = date;
-                            entity.itemType = 1;
-                            fileEntityList.add(entity);
+                    if (content == null) continue;
+
+                    String showUrl = "";
+                    if (content instanceof WKImageContent imgModel) {
+                        if (!TextUtils.isEmpty(imgModel.localPath) && new File(imgModel.localPath).exists()) {
+                            showUrl = imgModel.localPath;
+                        }
+                        if (TextUtils.isEmpty(showUrl)) {
+                            showUrl = WKApiConfig.getShowUrl(imgModel.url);
+                        }
+                    } else if (content instanceof WKVideoContent videoModel) {
+                        if (!TextUtils.isEmpty(videoModel.coverLocalPath) && new File(videoModel.coverLocalPath).exists()) {
+                            showUrl = videoModel.coverLocalPath;
+                        }
+                        if (TextUtils.isEmpty(showUrl) && !TextUtils.isEmpty(videoModel.cover)) {
+                            showUrl = WKApiConfig.getShowUrl(videoModel.cover);
                         }
                     } else {
-                        SearchImgEntity entity = new SearchImgEntity();
-                        entity.date = date;
-                        entity.itemType = 1;
-                        fileEntityList.add(entity);
+                        continue;
                     }
+                    if (TextUtils.isEmpty(showUrl)) continue;
+
+                    String date = WKTimeUtils.getInstance().time2YearMonth(msg.getTimestamp() * 1000);
+                    addDateHeaderIfNeeded(merged, date);
+
                     SearchImgEntity entity = new SearchImgEntity();
                     entity.date = date;
                     entity.message = msg;
-
-                    String showUrl = "";
-                    if (!TextUtils.isEmpty(msgModel.localPath)) {
-                        File file = new File(msgModel.localPath);
-                        if (file.exists()) {
-                            showUrl = msgModel.localPath;
-                        }
-                    }
-                    if (TextUtils.isEmpty(showUrl)) {
-                        showUrl = WKApiConfig.getShowUrl(msgModel.url);
-                    }
                     entity.url = showUrl;
-                    fileEntityList.add(entity);
+                    merged.add(entity);
                 }
-                if (WKReader.isNotEmpty(adapter.getData())) {
-                    SearchImgEntity entity = adapter.getData().get(adapter.getData().size() - 1);
-                    if (entity.date.equals(fileEntityList.get(0).date)) {
-                        fileEntityList.remove(0);
-                    }
-                }
-                adapter.addData(fileEntityList);
-            } else {
+            }
+
+            if (merged.isEmpty()) {
                 wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
                 if (page == 1) {
                     wkVBinding.refreshLayout.setEnableLoadMore(false);
                     wkVBinding.nodataTv.setVisibility(View.VISIBLE);
                 }
+            } else {
+                wkVBinding.nodataTv.setVisibility(View.GONE);
+                if (page == 1) {
+                    adapter.setList(merged);
+                } else {
+                    adapter.addData(merged);
+                }
             }
             return null;
         });
+    }
+
+    private void addDateHeaderIfNeeded(List<SearchImgEntity> list, String date) {
+        String lastDate = null;
+        if (WKReader.isNotEmpty(list)) {
+            lastDate = list.get(list.size() - 1).date;
+        } else if (WKReader.isNotEmpty(adapter.getData())) {
+            lastDate = adapter.getData().get(adapter.getData().size() - 1).date;
+        }
+        if (!date.equals(lastDate)) {
+            SearchImgEntity header = new SearchImgEntity();
+            header.date = date;
+            header.itemType = 1;
+            list.add(header);
+        }
     }
 }

@@ -308,7 +308,8 @@
     <string name="uikit_today">今天</string>
     <string name="uikit_search_for_date">日期</string>
     <string name="uikit_go_to_chat_item">定位到聊天</string>
-    <string name="uikit_search_for_image">图片</string>
+    <string name="uikit_search_for_image">图片与视频</string>
+    <string name="uikit_search_for_file">文件</string>
 
     <string name="space_title">Space</string>
     <string name="space_create">创建 Space</string>

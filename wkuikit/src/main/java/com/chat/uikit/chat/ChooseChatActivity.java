@@ -31,6 +31,8 @@ import androidx.annotation.NonNull;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.endpoint.EndpointManager;
+import com.chat.base.endpoint.entity.ChooseContactsMenu;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.ui.components.SegmentTabView;
 import com.chat.base.utils.SoftKeyboardUtils;
@@ -40,7 +42,6 @@ import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.category.CategoryEntity;
 import com.chat.uikit.category.CategoryModel;
 import com.chat.uikit.chat.adapter.ChooseChatAdapter;
-import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.databinding.ActChooseChatLayoutBinding;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.thread.service.ThreadModel;
@@ -160,10 +161,23 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         initAdapter(wkVBinding.recyclerView, chooseChatAdapter);
 
         wkVBinding.createTv.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ChooseContactsActivity.class);
-            if (WKUIKitApplication.getInstance().getMessageContentList() != null)
-                intent.putParcelableArrayListExtra("msgContentList", (ArrayList<? extends Parcelable>) WKUIKitApplication.getInstance().getMessageContentList());
-            startActivity(intent);
+            ChooseContactsMenu contactsMenu = new ChooseContactsMenu(9, true, false, null, selectedList -> {
+                if (WKReader.isNotEmpty(selectedList)) {
+                    if (isChoose && WKUIKitApplication.getInstance().getMessageContentList() != null) {
+                        WKUIKitApplication.getInstance().showChatConfirmDialog(this, selectedList, WKUIKitApplication.getInstance().getMessageContentList(), new WKUIKitApplication.IShowChatConfirm() {
+                            @Override
+                            public void onBack(@NonNull List<WKChannel> list, @NonNull List<com.xinbida.wukongim.msgmodel.WKMessageContent> messageContentList) {
+                                WKUIKitApplication.getInstance().sendChooseChatBack(list);
+                                finish();
+                            }
+                        });
+                    } else {
+                        WKUIKitApplication.getInstance().sendChooseChatBack(selectedList);
+                        finish();
+                    }
+                }
+            });
+            EndpointManager.getInstance().invoke("choose_contacts", contactsMenu);
         });
 
         segmentTabView = new SegmentTabView(this,

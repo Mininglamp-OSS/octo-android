@@ -105,6 +105,7 @@
         <activity android:name="com.chat.uikit.chat.search.member.SearchWithMemberActivity" />
         <activity android:name="com.chat.uikit.chat.search.date.SearchWithDateActivity" />
         <activity android:name="com.chat.uikit.chat.search.image.SearchWithImgActivity" />
+        <activity android:name="com.chat.uikit.chat.search.file.SearchWithFileActivity" />
 
         <service
             android:name="com.chat.uikit.AliveJobService"

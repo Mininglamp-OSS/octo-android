@@ -177,6 +177,7 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
                     .searchMsgWithChannelAndContentTypes(channelID, channelType, 0, 200, new int[]{WKContentType.WK_FILE});
             if (WKReader.isNotEmpty(localMsgs)) {
                 for (WKMsg msg : localMsgs) {
+                    if (com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(msg)) continue;
                     if (msg.baseContentMsgModel instanceof WKFileContent fileContent) {
                         // 按文件名过滤
                         if (!TextUtils.isEmpty(searchKeyword) && fileContent.name != null
@@ -276,14 +277,13 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
     }
 
     private void addDateHeaderIfNeeded(List<SearchFileEntity> list, String date) {
+        String lastDate = null;
         if (WKReader.isNotEmpty(list)) {
-            if (!list.get(list.size() - 1).date.equals(date)) {
-                SearchFileEntity header = new SearchFileEntity();
-                header.date = date;
-                header.itemType = SearchFileEntity.TYPE_DATE_HEADER;
-                list.add(header);
-            }
-        } else {
+            lastDate = list.get(list.size() - 1).date;
+        } else if (WKReader.isNotEmpty(adapter.getData())) {
+            lastDate = adapter.getData().get(adapter.getData().size() - 1).date;
+        }
+        if (!date.equals(lastDate)) {
             SearchFileEntity header = new SearchFileEntity();
             header.date = date;
             header.itemType = SearchFileEntity.TYPE_DATE_HEADER;

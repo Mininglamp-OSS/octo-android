@@ -1121,7 +1121,8 @@ public class MsgDbManager {
                 " m.client_seq else ''END client_seq, CASE count(*) WHEN 1 THEN m.searchable_word else '' end searchable_word," +
                 " CASE count(*) WHEN 1 THEN m.order_seq ELSE 0 END order_seq " +
                 "from " + channel + " c LEFT JOIN " + message + " m ON m.channel_id = c.channel_id and " +
-                "m.channel_type = c.channel_type WHERE m.is_deleted=0 and searchable_word LIKE ? GROUP BY " +
+                "m.channel_type = c.channel_type LEFT JOIN " + messageExtra + " e ON m.message_id = e.message_id " +
+                "WHERE m.is_deleted=0 and IFNULL(e.revoke,0)=0 and searchable_word LIKE ? GROUP BY " +
                 "c.channel_id, c.channel_type ORDER BY m.created_at DESC limit 100";
         Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, new Object[]{"%" + searchKey + "%"});
         if (cursor == null) {

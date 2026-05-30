@@ -262,6 +262,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
                             new int[]{WKContentType.WK_IMAGE, WKContentType.WK_VIDEO});
             if (WKReader.isNotEmpty(localMsgs)) {
                 for (WKMsg msg : localMsgs) {
+                    if (com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(msg)) continue;
                     if (msg.baseContentMsgModel == null) continue;
                     if (!seenSeqs.add((long) msg.messageSeq)) continue;
 
@@ -378,14 +379,13 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     }
 
     private void addDateHeaderIfNeeded(List<SearchImgEntity> list, String date) {
+        String lastDate = null;
         if (WKReader.isNotEmpty(list)) {
-            if (!list.get(list.size() - 1).date.equals(date)) {
-                SearchImgEntity header = new SearchImgEntity();
-                header.date = date;
-                header.itemType = 1;
-                list.add(header);
-            }
-        } else {
+            lastDate = list.get(list.size() - 1).date;
+        } else if (WKReader.isNotEmpty(adapter.getData())) {
+            lastDate = adapter.getData().get(adapter.getData().size() - 1).date;
+        }
+        if (!date.equals(lastDate)) {
             SearchImgEntity header = new SearchImgEntity();
             header.date = date;
             header.itemType = 1;

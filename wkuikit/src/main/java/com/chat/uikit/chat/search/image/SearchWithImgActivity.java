@@ -77,6 +77,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     private byte channelType;
     private SearchWithImgAdapter adapter;
     private int page = 1;
+    private final Set<Long> seenSeqs = new HashSet<>();
 
     @Override
     protected ActSearchMsgImgLayoutBinding getViewBinding() {
@@ -251,9 +252,9 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     private void getData() {
         // 本地搜索
         List<SearchImgEntity> localEntities = new ArrayList<>();
-        Set<Long> seenSeqs = new HashSet<>();
 
         if (page == 1) {
+            seenSeqs.clear();
             List<WKMsg> localMsgs = WKIM.getInstance().getMsgManager()
                     .searchMsgWithChannelAndContentTypes(channelID, channelType, 0, 200,
                             new int[]{WKContentType.WK_IMAGE, WKContentType.WK_VIDEO});

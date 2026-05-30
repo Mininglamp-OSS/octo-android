@@ -51,6 +51,8 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
     private SearchWithFileAdapter adapter;
     private int page = 1;
     private String searchKeyword = "";
+    private final Set<Long> seenSeqs = new HashSet<>();
+    private final android.os.Handler searchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override
     protected ActSearchMsgFileLayoutBinding getViewBinding() {
@@ -125,9 +127,13 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
             @Override
             public void afterTextChanged(Editable editable) {
                 searchKeyword = editable.toString().trim();
-                page = 1;
-                adapter.setList(new ArrayList<>());
-                getData();
+                searchHandler.removeCallbacksAndMessages(null);
+                searchHandler.postDelayed(() -> {
+                    page = 1;
+                    seenSeqs.clear();
+                    adapter.setList(new ArrayList<>());
+                    getData();
+                }, 300);
             }
         });
     }
@@ -163,7 +169,6 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
     private void getData() {
         // 本地搜索：按类型查出所有文件消息
         List<SearchFileEntity> localFileEntities = new ArrayList<>();
-        Set<Long> seenSeqs = new HashSet<>();
 
         if (page == 1) {
             List<WKMsg> localMsgs = WKIM.getInstance().getMsgManager()

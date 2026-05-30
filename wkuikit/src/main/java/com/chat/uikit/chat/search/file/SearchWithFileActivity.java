@@ -132,6 +132,8 @@ public class SearchWithFileActivity extends WKBaseActivity<ActSearchMsgFileLayou
                     page = 1;
                     seenSeqs.clear();
                     adapter.setList(new ArrayList<>());
+                    wkVBinding.refreshLayout.setEnableLoadMore(true);
+                    wkVBinding.nodataTv.setVisibility(View.GONE);
                     getData();
                 }, 300);
             }

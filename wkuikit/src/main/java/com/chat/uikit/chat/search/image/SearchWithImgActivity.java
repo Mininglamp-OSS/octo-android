@@ -205,7 +205,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
                 msg.getChannel().getChannel_id(),
                 msg.getChannel().getChannel_type()
         );
-        EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(SearchWithImgActivity.this, channelID, WKChannelType.GROUP, orderSeq, false));
+        EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(SearchWithImgActivity.this, channelID, channelType, orderSeq, false));
     }
 
 

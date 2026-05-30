@@ -54,17 +54,17 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     // 使用 embedded 配置来包含需要打包进 AAR 的依赖
-    embedded "net.zetetic:sqlcipher-android:4.9.0"
+    embedded "net.zetetic:sqlcipher-android:4.16.0"
 //    embedded "net.zetetic:android-database-sqlcipher:4.5.4"
-    embedded "androidx.sqlite:sqlite-ktx:2.5.1"
+    embedded "androidx.sqlite:sqlite-ktx:2.6.2"
     embedded 'org.whispersystems:curve25519-android:0.5.0'
     embedded 'org.whispersystems:signal-protocol-android:2.8.1'
 
     // YUJ-2245: WebSocket-only 长连接传输，使用 OkHttp WebSocket。
     // 运行期 OkHttp 由 wkbase 的 api 'com.squareup.okhttp3:okhttp:5.1.0' 透传过来，
     // 这里仅声明 compileOnly 让编译可见，避免 wkim 模块重复打包 OkHttp。
-    compileOnly 'com.squareup.okhttp3:okhttp:5.1.0'
-    testImplementation 'com.squareup.okhttp3:okhttp:5.1.0'
+    compileOnly 'com.squareup.okhttp3:okhttp:5.3.2'
+    testImplementation 'com.squareup.okhttp3:okhttp:5.3.2'
     
     // multidex 通常不需要打包进去，保持 implementation
     implementation 'com.android.support:multidex:1.0.3'

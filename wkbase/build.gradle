@@ -82,7 +82,7 @@ dependencies {
 //    api 'com.android.support:design:29.0.0'
     api 'androidx.recyclerview:recyclerview:1.3.2'
     api 'androidx.viewpager2:viewpager2:1.1.0'
-    api "io.github.cymchad:BaseRecyclerViewAdapterHelper:3.0.14"
+    api "io.github.cymchad:BaseRecyclerViewAdapterHelper:4.0.3"
 
     api 'com.github.li-xiaojun:XPopup:2.9.19'
     api 'androidx.multidex:multidex:2.0.1'

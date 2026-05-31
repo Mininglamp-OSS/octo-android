@@ -419,6 +419,10 @@ public class WKVoiceViewManager {
         nameEntries.sort((a, b) -> b[0].length() - a[0].length());
 
         String allName = "所有人";
+        // 三态 mention 广播 token：@所有AI（中文 canonical + 英文别名）。
+        // sentinel uid "-2" 与 ChatPanelManager send path / 键盘路径对齐 → mention.ais=1。
+        String aisName = "所有AI";
+        String aisEnName = "All AIs";
         StringBuilder result = new StringBuilder();
         int i = 0;
         int len = text.length();
@@ -439,6 +443,32 @@ public class WKVoiceViewManager {
                 result.append("@").append(allName);
                 mentions.add(new MentionMatch("-1", allName, mentionOffset, allName.length() + 1));
                 i += 1 + allName.length();
+                if (i < len && text.charAt(i) == ' ') i++;
+                continue;
+            }
+            // 匹配 @所有AI（sentinel uid "-2"：ChatPanelManager send path 映射到 mention.ais=1）
+            if (rest.startsWith(aisName)
+                    && (rest.length() == aisName.length()
+                        || (!Character.isLetterOrDigit(rest.charAt(aisName.length()))
+                            && rest.charAt(aisName.length()) != '_'))) {
+                int mentionOffset = result.length();
+                result.append("@").append(aisName);
+                mentions.add(new MentionMatch("-2", aisName, mentionOffset, aisName.length() + 1));
+                i += 1 + aisName.length();
+                if (i < len && text.charAt(i) == ' ') i++;
+                continue;
+            }
+            // 匹配 @All AIs（英文别名，对齐 ChatPanelManager.scanBroadcastMentions）。
+            // 必须在 @all 之前判断，否则 "All AIs" 会被 @all 抢先命中。
+            if (rest.length() >= aisEnName.length()
+                    && rest.substring(0, aisEnName.length()).equalsIgnoreCase(aisEnName)
+                    && (rest.length() == aisEnName.length()
+                        || (!Character.isLetterOrDigit(rest.charAt(aisEnName.length()))
+                            && rest.charAt(aisEnName.length()) != '_'))) {
+                int mentionOffset = result.length();
+                result.append("@").append(aisName);
+                mentions.add(new MentionMatch("-2", aisName, mentionOffset, aisName.length() + 1));
+                i += 1 + aisEnName.length();
                 if (i < len && text.charAt(i) == ' ') i++;
                 continue;
             }

@@ -16,8 +16,6 @@
 
 package com.chat.base.space;
 
-import android.text.TextUtils;
-
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -95,7 +93,7 @@ public final class ConversationPreviewFilter {
     public static boolean isMessageCrossSpace(@Nullable WKUIConversationMsg uc,
                                               @Nullable String currentSpaceId) {
         if (uc == null) return false;
-        if (TextUtils.isEmpty(currentSpaceId)) return false;
+        if (isBlank(currentSpaceId)) return false;
 
         // GROUP / COMMUNITY_TOPIC 防御性兜底：跨 Space 频道直接视为 cross-space
         // （Layer A gate 已经挡掉 push，这里是冷启动 / DB 回放的二次保护）
@@ -127,7 +125,7 @@ public final class ConversationPreviewFilter {
             return false;
         }
         String msgSpaceId = SpaceFilter.extractSpaceIdFromMsg(msg);
-        if (!TextUtils.isEmpty(msgSpaceId)) {
+        if (!isBlank(msgSpaceId)) {
             return !currentSpaceId.equals(msgSpaceId);
         }
         // msg 无 space_id：SystemBot 视为污染隐藏；普通 DM 向前兼容
@@ -165,5 +163,10 @@ public final class ConversationPreviewFilter {
         if (uc == null) return 0;
         if (isMessageCrossSpace(uc)) return 0;
         return uc.unreadCount;
+    }
+
+    /** 本地空串判断，不依赖 {@link android.text.TextUtils}，便于纯 JVM 单元测试。 */
+    private static boolean isBlank(@Nullable String s) {
+        return s == null || s.isEmpty();
     }
 }

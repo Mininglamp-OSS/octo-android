@@ -40,6 +40,12 @@ WebSocket, and drives the same Lobster-agent conversation surface as
 - **Ships without secrets.** No `google-services.json`, no keystore, no Play Store listing bound to the upstream. You bring your own Firebase project, your own Bundle ID (`com.example.octo` placeholder → `com.yourcompany.octo`), your own keystore. All baked-out via the `octo-release` pipeline before this repo is published.
 - **Mirrors the web surface.** Same REST + WebSocket protocol as `octo-web`, same i18n resource keys (English · 简体中文), same Lobster identity / streaming / typing indicators — so feature work can land on both clients without a protocol fork.
 
+## 📥 Download
+
+Download the latest APK from [**Releases**](https://github.com/Mininglamp-OSS/octo-android/releases), install it on your device, and enter your own `octo-server` address on the login screen.
+
+> No build required — just install and connect to your deployment.
+
 ## 🚀 Quickstart
 
 **⚠️ Mandatory pre-flight** — this fork will **not** build a distributable

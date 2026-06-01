@@ -73,6 +73,7 @@ import com.chat.uikit.utils.PyingUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
+import com.xinbida.wukongim.entity.WKConversationMsg;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -569,7 +570,16 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
     private void updateHeaderCounts() {
         if (!isAdded()) return;
 
-        int groupCount = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP).size();
+        List<WKConversationMsg> groupConvs = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP);
+        int groupCount = 0;
+        if (groupConvs != null) {
+            for (WKConversationMsg conv : groupConvs) {
+                if (!TextUtils.isEmpty(conv.channelID)
+                        && !com.chat.base.space.SpaceFilter.shouldSkipChannelForSpace(conv.channelID, WKChannelType.GROUP)) {
+                    groupCount++;
+                }
+            }
+        }
 
         List<ContactsMenu> menuList = EndpointManager.getInstance().invokes(EndpointCategory.mailList, getActivity());
         for (ContactsMenu menu : menuList) {

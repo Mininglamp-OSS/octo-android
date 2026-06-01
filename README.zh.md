@@ -40,6 +40,12 @@
 - **开箱不带任何密钥。** 没有 `google-services.json`、没有 keystore、不绑任何 Play Store 上架。上游 `octo-release` 流水线在发布前就烘出所有敏感项 —— 你需要自带 Firebase 项目、自带 Bundle ID（从占位符 `com.example.octo` 改为 `com.yourcompany.octo`）、自带签名 keystore。
 - **与 Web 端保持对齐。** 与 `octo-web` 使用同一套 REST + WebSocket 协议、同一套 i18n key（英文 · 简体中文）、同一套 Lobster 身份 / 流式 / 输入提示逻辑 —— 特性工作可以同时在两端落地，不必分叉协议。
 
+## 📥 下载安装
+
+从 [**Releases**](https://github.com/Mininglamp-OSS/octo-android/releases) 页面下载最新 APK，安装后在登录页面输入你的 `octo-server` 服务端地址即可使用。
+
+> 无需编译 —— 直接安装，连接你的私有部署。
+
 ## 🚀 快速开始
 
 **⚠️ 发布前必做** —— 这份 fork **不**能直接产出可分发的 APK。请先替换三类占位产物：

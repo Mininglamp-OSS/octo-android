@@ -37,6 +37,7 @@ import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.HanziToPinyin;
+import com.chat.base.space.SpaceFilter;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.base.views.sidebar.listener.OnQuickSideBarTouchListener;
@@ -48,7 +49,7 @@ import com.chat.uikit.utils.PyingUtils;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
-import com.xinbida.wukongim.entity.WKConversationMsg;
+import com.xinbida.wukongim.entity.WKUIConversationMsg;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,6 +92,8 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
         wkVBinding.quickSideBarTipsView.setBackgroundColor(themeColor);
     }
 
+    private static final String LISTENER_KEY = "my_groups_list";
+
     @Override
     protected void initListener() {
         wkVBinding.quickSideBarView.setOnQuickSideBarTouchListener(this);
@@ -117,32 +120,42 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
                                 new ChatViewMenu(this, item.channel.channelID, WKChannelType.GROUP, 0, true));
                     }
                 }));
-    }
 
-    private boolean isDataLoaded = false;
+        WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo(LISTENER_KEY, (channel, isEnd) -> {
+            if (isEnd && channel != null && channel.channelType == WKChannelType.GROUP) {
+                runOnUiThread(this::loadData);
+            }
+        });
+    }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (!isDataLoaded) {
-            loadData();
-        }
+        loadData();
     }
 
     private void loadData() {
-        List<WKConversationMsg> conversations = WKIM.getInstance().getConversationManager()
-                .getWithChannelType(WKChannelType.GROUP);
+        List<WKUIConversationMsg> conversations = WKIM.getInstance().getConversationManager().getAll();
         List<GroupItem> items = new ArrayList<>();
         if (conversations != null) {
-            for (WKConversationMsg conv : conversations) {
+            for (WKUIConversationMsg conv : conversations) {
+                if (conv.channelType != WKChannelType.GROUP) continue;
                 if (TextUtils.isEmpty(conv.channelID)) continue;
-                WKChannel channel = WKIM.getInstance().getChannelManager()
-                        .getChannel(conv.channelID, WKChannelType.GROUP);
+                if (SpaceFilter.shouldSkipChannelForSpace(conv.channelID, WKChannelType.GROUP)) continue;
+                WKChannel channel = conv.getWkChannel();
+                if (channel == null) {
+                    channel = WKIM.getInstance().getChannelManager()
+                            .getChannel(conv.channelID, WKChannelType.GROUP);
+                }
                 if (channel == null) {
                     channel = new WKChannel(conv.channelID, WKChannelType.GROUP);
-                    channel.channelName = conv.channelID;
+                    WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
                 }
                 String showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
+                if (TextUtils.isEmpty(showName)) {
+                    showName = conv.channelID;
+                    WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
+                }
                 String pying;
                 if (!TextUtils.isEmpty(showName)) {
                     pying = PyingUtils.getInstance().isStartNum(showName)
@@ -166,10 +179,17 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
 
         if (WKReader.isEmpty(items)) {
             wkVBinding.nodataTv.setVisibility(View.VISIBLE);
+        } else {
+            wkVBinding.nodataTv.setVisibility(View.GONE);
         }
         groupAdapter.setList(items);
-        isDataLoaded = true;
         countTv.setText(String.format(getString(R.string.contacts_groups_count), items.size()));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(LISTENER_KEY);
     }
 
     private View createFooterView() {

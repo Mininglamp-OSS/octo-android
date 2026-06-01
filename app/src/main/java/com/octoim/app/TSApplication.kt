@@ -155,6 +155,10 @@ class TSApplication : MultiDexApplication() {
         val helper = AppFrontBackHelper()
         helper.register(this, object : AppFrontBackHelper.OnAppStatusListener {
             override fun onFront() {
+                // 对齐 iOS appDidBecomeActive：App 回前台时强制清除当前会话残留 typing。
+                // 后台/断连期间 bot 真实回复经 conversation-sync 直接落库，不走收消息隐式清除，
+                // 故回前台需显式 reset。ChatActivity 不在前台时该 endpoint 未注册，invoke 为 no-op。
+                EndpointManager.getInstance().invoke("reset_typing_on_foreground", null)
                 if (!TextUtils.isEmpty(WKConfig.getInstance().token)) {
                     if (WKBaseApplication.getInstance().disconnect) {
                         Handler(Looper.getMainLooper()).postDelayed({

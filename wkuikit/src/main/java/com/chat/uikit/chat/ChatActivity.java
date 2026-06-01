@@ -246,6 +246,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     boolean isMoreLoading = false;
     boolean isCanRefresh = true;
     private boolean isShowChatActivity = true;
+    // typing 超时兜底：收到 typing CMD 后 8s 内无真实消息跟上则自动清除，避免 typing 永久残留。
+    // Handler 绑定主线程 Looper，确保对 chatAdapter 的所有改动都在主线程，杜绝后台线程裸操作共享数据。
+    private static final long TYPING_TIMEOUT_MS = 8000L;
+    private final Handler typingTimeoutHandler = new Handler(Looper.getMainLooper());
+    private final Runnable typingTimeoutRunnable = () -> safeAdapterAction(this::removeTypingItem);
     LinearLayoutManager linearLayoutManager;
     private final List<WKReminder> reminderList = new ArrayList<>();
     private final List<WKReminder> groupApproveList = new ArrayList<>();
@@ -1039,6 +1044,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     }
                 }
             }
+            return null;
+        });
+        // 对齐 iOS appDidBecomeActive reset typing：App 回前台时强制清除残留 typing。
+        // 后台/断连期间 bot 真实回复经 conversation-sync 直接落库，不回调收消息隐式清除路径，
+        // 故需在回前台显式 reset。由 TSApplication.onFront() 经 EndpointManager 触发，运行在主线程。
+        EndpointManager.getInstance().setMethod("reset_typing_on_foreground", object -> {
+            safeAdapterAction(this::removeTypingItem);
             return null;
         });
     }
@@ -3450,6 +3462,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().remove("show_pinned_view");
         EndpointManager.getInstance().remove("tip_msg_in_chat");
         EndpointManager.getInstance().remove("reset_channel_all_pinned_msg");
+        EndpointManager.getInstance().remove("reset_typing_on_foreground");
+        // 撤销待执行的 typing 超时任务，避免 Activity 销毁后 Handler 回调泄漏
+        typingTimeoutHandler.removeCallbacks(typingTimeoutRunnable);
         ActManagerUtils.getInstance().removeActivity(this);
         if (disposable != null) {
             disposable.dispose();
@@ -3779,6 +3794,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     if (lastItem.wkMsg != null && lastItem.wkMsg.type == WKContentType.typing) {
                         chatAdapter.getData().remove(chatAdapter.getItemCount() - 1);
                         typingRemoved = true;
+                        // 真实消息已隐式清除 typing，撤销待执行的超时兜底任务避免误触
+                        typingTimeoutHandler.removeCallbacks(typingTimeoutRunnable);
                     }
                 }
 
@@ -3947,6 +3964,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void doTyping(WKChannel channel, String from_uid, WKChannelMember mChannelMember) {
+        // typing 显示/刷新即（重）启动 8s 超时兜底，若后续无真实消息跟上则自动清除
+        scheduleTypingTimeout();
         if (chatAdapter.getItemCount() > 0 && chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.type == WKContentType.typing) {
             chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.setFrom(channel);
             chatAdapter.getData().get(chatAdapter.getItemCount() - 1).wkMsg.fromUID = from_uid;
@@ -3986,6 +4005,26 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (!isShowHistory && !isCanLoadMore) {
                 scrollToEnd();
             }
+        }
+    }
+
+    // 启动/重置 typing 超时倒计时。每次收到 typing CMD 时调用：先撤销上一次的待执行任务，
+    // 再排入新的 8s 任务，等价 iOS 每条 typing 重置兜底 timer 的行为。必须在主线程调用。
+    private void scheduleTypingTimeout() {
+        typingTimeoutHandler.removeCallbacks(typingTimeoutRunnable);
+        typingTimeoutHandler.postDelayed(typingTimeoutRunnable, TYPING_TIMEOUT_MS);
+    }
+
+    // 清除当前会话末尾的 typing 指示器（若存在），并撤销待执行的超时任务。
+    // 收到真实消息隐式清除、超时兜底、回前台 reset 三条路径统一走这里。必须在主线程调用。
+    private void removeTypingItem() {
+        typingTimeoutHandler.removeCallbacks(typingTimeoutRunnable);
+        if (chatAdapter == null || chatAdapter.getItemCount() == 0) return;
+        int lastIndex = chatAdapter.getItemCount() - 1;
+        WKUIChatMsgItemEntity lastItem = chatAdapter.getData().get(lastIndex);
+        if (lastItem.wkMsg != null && lastItem.wkMsg.type == WKContentType.typing) {
+            chatAdapter.getData().remove(lastIndex);
+            chatAdapter.notifyItemRemoved(lastIndex);
         }
     }
 

@@ -139,56 +139,58 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
     }
 
     private void loadData() {
-        List<WKUIConversationMsg> conversations = WKIM.getInstance().getConversationManager().getAll();
-        List<GroupItem> items = new ArrayList<>();
-        if (conversations != null) {
-            for (WKUIConversationMsg conv : conversations) {
-                if (conv.channelType != WKChannelType.GROUP) continue;
-                if (TextUtils.isEmpty(conv.channelID)) continue;
-                if (SpaceFilter.shouldSkipChannelForSpace(conv.channelID, WKChannelType.GROUP)) continue;
-                WKChannel channel = conv.getWkChannel();
-                if (channel == null) {
-                    channel = WKIM.getInstance().getChannelManager()
-                            .getChannel(conv.channelID, WKChannelType.GROUP);
-                }
-                if (channel == null) {
-                    channel = new WKChannel(conv.channelID, WKChannelType.GROUP);
-                }
-                String showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
-                if (TextUtils.isEmpty(showName)) {
-                    showName = conv.channelID;
-                    if (fetchedChannelIds.add(conv.channelID)) {
-                        WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
+        WKIM.getInstance().getConversationManager().getAll(conversations -> {
+            List<GroupItem> items = new ArrayList<>();
+            if (conversations != null) {
+                for (WKUIConversationMsg conv : conversations) {
+                    if (conv.channelType != WKChannelType.GROUP) continue;
+                    if (TextUtils.isEmpty(conv.channelID)) continue;
+                    if (SpaceFilter.shouldSkipChannelForSpace(conv.channelID, WKChannelType.GROUP)) continue;
+                    WKChannel channel = conv.getWkChannel();
+                    if (channel == null) {
+                        channel = WKIM.getInstance().getChannelManager()
+                                .getChannel(conv.channelID, WKChannelType.GROUP);
                     }
+                    if (channel == null) {
+                        channel = new WKChannel(conv.channelID, WKChannelType.GROUP);
+                    }
+                    String showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
+                    if (TextUtils.isEmpty(showName)) {
+                        showName = conv.channelID;
+                        if (fetchedChannelIds.add(conv.channelID)) {
+                            WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
+                        }
+                    }
+                    String pying;
+                    if (!TextUtils.isEmpty(showName)) {
+                        pying = PyingUtils.getInstance().isStartNum(showName)
+                                ? "#" : HanziToPinyin.getInstance().getPY(showName);
+                    } else {
+                        pying = "#";
+                    }
+                    items.add(new GroupItem(channel, pying));
                 }
-                String pying;
-                if (!TextUtils.isEmpty(showName)) {
-                    pying = PyingUtils.getInstance().isStartNum(showName)
-                            ? "#" : HanziToPinyin.getInstance().getPY(showName);
-                } else {
-                    pying = "#";
-                }
-                items.add(new GroupItem(channel, pying));
             }
-        }
-        // Sort by pinyin, letters first, # at end
-        items.sort((a, b) -> {
-            if (a.pying == null) return 1;
-            if (b.pying == null) return -1;
-            boolean aIsLetter = !a.pying.isEmpty() && Character.isLetter(a.pying.charAt(0));
-            boolean bIsLetter = !b.pying.isEmpty() && Character.isLetter(b.pying.charAt(0));
-            if (aIsLetter && !bIsLetter) return -1;
-            if (!aIsLetter && bIsLetter) return 1;
-            return a.pying.compareToIgnoreCase(b.pying);
+            items.sort((a, b) -> {
+                if (a.pying == null) return 1;
+                if (b.pying == null) return -1;
+                boolean aIsLetter = !a.pying.isEmpty() && Character.isLetter(a.pying.charAt(0));
+                boolean bIsLetter = !b.pying.isEmpty() && Character.isLetter(b.pying.charAt(0));
+                if (aIsLetter && !bIsLetter) return -1;
+                if (!aIsLetter && bIsLetter) return 1;
+                return a.pying.compareToIgnoreCase(b.pying);
+            });
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (WKReader.isEmpty(items)) {
+                    wkVBinding.nodataTv.setVisibility(View.VISIBLE);
+                } else {
+                    wkVBinding.nodataTv.setVisibility(View.GONE);
+                }
+                groupAdapter.setList(items);
+                countTv.setText(String.format(getString(R.string.contacts_groups_count), items.size()));
+            });
         });
-
-        if (WKReader.isEmpty(items)) {
-            wkVBinding.nodataTv.setVisibility(View.VISIBLE);
-        } else {
-            wkVBinding.nodataTv.setVisibility(View.GONE);
-        }
-        groupAdapter.setList(items);
-        countTv.setText(String.format(getString(R.string.contacts_groups_count), items.size()));
     }
 
     @Override

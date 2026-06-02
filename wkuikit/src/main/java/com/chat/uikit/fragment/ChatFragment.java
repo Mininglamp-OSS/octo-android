@@ -885,6 +885,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 filterAndDisplay();
             });
         });
+        // space 缓存更新后重新过滤会话列表
+        WKIM.getInstance().getConversationManager().addOnSpaceCacheUpdateListener("chat_fragment", () -> {
+            if (getActivity() == null || !isAdded()) return;
+            AndroidUtilities.runOnUIThread(() -> filterAndDisplay());
+        });
         // 监听刷新最近列表
         WKIM.getInstance().getConversationManager().addOnRefreshMsgListListener("chat_fragment", list -> {
 
@@ -2301,6 +2306,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             // GH dmwork-android#251 / octo-server PR #154：把 conv sync 预填的
             // my_source_space_id 透传给 SpaceFilter，让 my-row sync 未就绪时也能给出权威判定。
             return com.chat.base.space.SpaceFilter.getConvSyncMySourceSpaceId(channelID, channelType);
+        }
+
+        @Override
+        public boolean isSpaceCacheAuthoritative() {
+            try {
+                return com.xinbida.wukongim.WKIM.getInstance().getConversationManager()
+                        .isSpaceCacheAuthoritative();
+            } catch (Throwable ignored) {
+                return false;
+            }
         }
     }
 
@@ -4249,6 +4264,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         WKIM.getInstance().getConversationManager().removeOnRefreshMsgListListener("chat_fragment");
         WKIM.getInstance().getConversationManager().removeOnRefreshMsgListener("chat_fragment");
         WKIM.getInstance().getConversationManager().removeOnDeleteMsgListener("chat_fragment");
+        WKIM.getInstance().getConversationManager().removeOnSpaceCacheUpdateListener("chat_fragment");
         WKIM.getInstance().getCMDManager().removeCmdListener("chat_fragment_cmd");
         WKIM.getInstance().getMsgManager().removeRefreshMsgListener("chat_fragment");
         WKIM.getInstance().getMsgManager().removeClearMsg("chat_fragment");

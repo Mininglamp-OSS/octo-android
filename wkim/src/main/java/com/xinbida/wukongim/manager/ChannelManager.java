@@ -156,7 +156,6 @@ public class ChannelManager extends BaseManager {
 
     public void saveOrUpdateChannel(WKChannel channel) {
         if (channel == null) return;
-        //先更改内存数据
         updateChannel(channel);
         setRefreshChannel(channel, true);
         ChannelDBManager.getInstance().insertOrUpdate(channel);

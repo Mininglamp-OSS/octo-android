@@ -48,7 +48,12 @@ class WKCardProvider : WKChatBaseProvider() {
         cardView.layoutParams.width = getViewWidth(from, uiChatMsgItemEntity)
         val cardNameTv = parentView.findViewById<TextView>(R.id.userNameTv)
         val cardAvatarIv = parentView.findViewById<AvatarView>(R.id.userCardAvatarIv)
-        val cardContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKCardContent
+        val cardContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKCardContent
+        if (cardContent == null) {
+            cardNameTv.text = uiChatMsgItemEntity.wkMsg.baseContentMsgModel?.displayContent
+                ?: context.getString(R.string.base_unknow_msg)
+            return
+        }
         cardNameTv.text = cardContent.name
         cardAvatarIv.showAvatar(cardContent.uid, WKChannelType.PERSONAL)
         resetCellBackground(parentView, uiChatMsgItemEntity, from)

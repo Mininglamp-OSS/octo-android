@@ -1267,7 +1267,7 @@ open class WKTextProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         super.refreshReply(adapterPosition, parentView, uiChatMsgItemEntity, from)
-        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKTextContent ?: return
         val replyContentRevokedTv = parentView.findViewWithTag<View>("replyRevokedTv")
         val replyContentLayout = parentView.findViewWithTag<View>("replyContentLayout")
         if (replyContentRevokedTv == null || replyContentLayout == null)
@@ -1408,7 +1408,7 @@ open class WKTextProvider : WKChatBaseProvider() {
         replyIV.scaleType = ImageView.ScaleType.CENTER
         replyContentLayout.addView(replyIV, LayoutHelper.createLinear(80, 80, 0f, 10f, 0f, 0f))
 
-        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKTextContent
+        val textModel = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKTextContent ?: return
         val mChannel = WKIM.getInstance().channelManager.getChannel(
             textModel.reply.from_uid, WKChannelType.PERSONAL
         )

@@ -90,7 +90,11 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 voiceWaveform.isFresh = false
             } else voiceWaveform.isFresh = uiChatMsgItemEntity.wkMsg.voiceStatus == 0
         }
-        val voiceContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKVoiceContent
+        val voiceContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVoiceContent
+        if (voiceContent == null) {
+            voiceTimeTv.text = context.getString(R.string.base_unknow_msg)
+            return
+        }
         voiceWaveform.layoutParams.width =
             getVoiceWidth(voiceContent.timeTrad, uiChatMsgItemEntity.wkMsg.flame)
         if (!TextUtils.isEmpty(voiceContent.waveform)) {
@@ -359,8 +363,8 @@ class WKVoiceProvider : WKChatBaseProvider() {
                     val flameSecond: Int =
                         if (uiChatMsgItemEntity.wkMsg.type == WKContentType.WK_VOICE) {
                             val voiceContent =
-                                uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKVoiceContent
-                            max(voiceContent.timeTrad, uiChatMsgItemEntity.wkMsg.flameSecond)
+                                uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVoiceContent
+                            max(voiceContent?.timeTrad ?: 0, uiChatMsgItemEntity.wkMsg.flameSecond)
                         } else {
                             uiChatMsgItemEntity.wkMsg.flameSecond
                         }

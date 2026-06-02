@@ -55,7 +55,14 @@ class WKMultiForwardProvider : WKChatBaseProvider() {
         val contentTv = parentView.findViewById<TextView>(R.id.contentTv)
         resetCellBackground(parentView, uiChatMsgItemEntity, from)
         val multiForwardContent =
-            uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKMultiForwardContent
+            uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKMultiForwardContent
+        if (multiForwardContent == null) {
+            titleTv.text = context.getString(R.string.chat_title_records, "")
+            contentTv.text = uiChatMsgItemEntity.wkMsg.baseContentMsgModel?.displayContent
+                ?: context.getString(R.string.base_unknow_msg)
+            addLongClick(contentLayout, uiChatMsgItemEntity)
+            return
+        }
         val title: String = if (multiForwardContent.channelType.toInt() == 1) {
             if (multiForwardContent.userList.size > 1) {
                 val sBuilder = StringBuilder()

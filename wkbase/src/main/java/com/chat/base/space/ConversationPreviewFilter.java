@@ -95,7 +95,7 @@ public final class ConversationPreviewFilter {
     public static boolean isMessageCrossSpace(@Nullable WKUIConversationMsg uc,
                                               @Nullable String currentSpaceId) {
         if (uc == null) return false;
-        if (TextUtils.isEmpty(currentSpaceId)) return false;
+        if (currentSpaceId == null || currentSpaceId.isEmpty()) return false;
 
         // GROUP / COMMUNITY_TOPIC 防御性兜底：跨 Space 频道直接视为 cross-space
         // （Layer A gate 已经挡掉 push，这里是冷启动 / DB 回放的二次保护）
@@ -127,7 +127,7 @@ public final class ConversationPreviewFilter {
             return false;
         }
         String msgSpaceId = SpaceFilter.extractSpaceIdFromMsg(msg);
-        if (!TextUtils.isEmpty(msgSpaceId)) {
+        if (msgSpaceId != null && !msgSpaceId.isEmpty()) {
             return !currentSpaceId.equals(msgSpaceId);
         }
         // msg 无 space_id：SystemBot 视为污染隐藏；普通 DM 向前兼容

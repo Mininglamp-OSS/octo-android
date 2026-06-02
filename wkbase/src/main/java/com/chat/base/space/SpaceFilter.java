@@ -432,7 +432,7 @@ public final class SpaceFilter {
             return true;
         }
 
-        // 8. 无 groupSpaceId 时：权威缓存下 fail-closed，非权威缓存下 fail-open
+        // 8. 无 groupSpaceId（新群 / channelInfo 未到）：fail-open 等数据补齐后自动修正
         String convSyncMySource = provider.getConvSyncMySourceSpaceId(channelID, channelType);
         if (!isBlank(convSyncMySource)) {
             if (currentSpaceId.equals(convSyncMySource)) {

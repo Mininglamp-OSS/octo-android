@@ -296,10 +296,10 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.contentTv, false)
                         val forwardContent =
-                            item.msg.baseContentMsgModel as com.chat.uikit.chat.msgmodel.WKMultiForwardContent
+                            item.msg.baseContentMsgModel as? com.chat.uikit.chat.msgmodel.WKMultiForwardContent
                         // 显示预览内容
                         val previewBuilder = StringBuilder()
-                        if (forwardContent.msgList != null) {
+                        if (forwardContent?.msgList != null) {
                             val size = kotlin.math.min(forwardContent.msgList.size, 3)
                             for (i in 0 until size) {
                                 val innerMsg = forwardContent.msgList[i]
@@ -321,7 +321,7 @@ class ChatMultiForwardDetailAdapter(
                         holder.setText(R.id.contentTv, displayText)
                         // 点击打开嵌套合并转发详情
                         holder.getView<TextView>(R.id.contentTv).setOnClickListener {
-                            val contentJson = forwardContent.encodeMsg().toString()
+                            val contentJson = forwardContent?.encodeMsg()?.toString() ?: return@setOnClickListener
                             val intent = android.content.Intent(
                                 context,
                                 com.chat.uikit.chat.ChatMultiForwardDetailActivity::class.java

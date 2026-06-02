@@ -447,7 +447,9 @@ public class ConversationManager extends BaseManager {
         runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
             dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
                 try {
-                    coldStartSyncDone = true;
+                    if (syncChat != null) {
+                        coldStartSyncDone = true;
+                    }
                     if (iSyncConversationChatBack != null) {
                         iSyncConversationChatBack.onBack(syncChat);
                     }

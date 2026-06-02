@@ -66,6 +66,16 @@ public class WKRichTextContent extends WKMessageContent {
     public static final String BLOCK_TYPE_TEXT = "text";
     public static final String BLOCK_TYPE_IMAGE = "image";
 
+    /**
+     * 纯 Java 空判，刻意不用 {@link TextUtils#isEmpty} —— 让 decode/encode/plain
+     * fallback 逻辑在 {@code unitTests.returnDefaultValues=true} 的 JVM 单测下也走真
+     * 分支（mockable android.jar 把 TextUtils.isEmpty stub 成恒返 false，会把空值当
+     * 非空，单测形同虚设）。对齐 WKMultiForwardContent decode 的同款约定。
+     */
+    private static boolean isBlank(String s) {
+        return s == null || s.isEmpty();
+    }
+
     /** 有序 block 列表（text / image 穿插）。 */
     public List<RichTextBlock> blocks = new ArrayList<>();
 
@@ -104,7 +114,7 @@ public class WKRichTextContent extends WKMessageContent {
                 }
             }
             jsonObject.put("content", contentArr);
-            if (!TextUtils.isEmpty(plain)) {
+            if (!isBlank(plain)) {
                 jsonObject.put("plain", plain);
             }
         } catch (JSONException e) {
@@ -139,7 +149,7 @@ public class WKRichTextContent extends WKMessageContent {
         if (jsonObject.has("plain") && !jsonObject.isNull("plain")) {
             plain = jsonObject.optString("plain");
         }
-        if (TextUtils.isEmpty(plain)) {
+        if (isBlank(plain)) {
             plain = buildPlainFromBlocks(blocks);
         }
         return this;
@@ -161,10 +171,10 @@ public class WKRichTextContent extends WKMessageContent {
             if (BLOCK_TYPE_IMAGE.equals(block.type)) {
                 sb.append(IMAGE_PLACEHOLDER);
             } else if (BLOCK_TYPE_TEXT.equals(block.type)) {
-                if (!TextUtils.isEmpty(block.text)) {
+                if (!isBlank(block.text)) {
                     sb.append(block.text);
                 }
-            } else if (!TextUtils.isEmpty(block.text)) {
+            } else if (!isBlank(block.text)) {
                 sb.append(block.text);
             }
         }

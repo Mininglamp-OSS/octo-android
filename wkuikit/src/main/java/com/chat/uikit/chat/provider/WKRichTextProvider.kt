@@ -24,6 +24,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
 import androidx.emoji2.widget.EmojiTextView
@@ -80,16 +81,25 @@ class WKRichTextProvider : WKChatBaseProvider() {
         contentLayout.gravity =
             if (from == WKChatIteMsgFromType.RECEIVED) Gravity.START else Gravity.END
 
+        // 群/社区里 RichText 接收消息显示发送者昵称：基类对 richText 跳过通用
+        // sender-name 路径（WKChatBaseProvider:464/190），故在 provider 内手动复用
+        // 基类 setFromName 渲染外部名字行（含实名徽章 / @Space 后缀逻辑）。
+        applyFromName(parentView, uiChatMsgItemEntity, from)
+
         val textColor = if (from == WKChatIteMsgFromType.SEND) {
             ContextCompat.getColor(context, R.color.colorDark)
         } else {
             ContextCompat.getColor(context, R.color.receive_text_color)
         }
 
+        // 文本块最大宽度：与文本消息一致取 getViewWidth(...)（pane 宽减头像/勾选/边距），
+        // 约束长文本块换行而非撑成超宽气泡 clip/溢出（对齐 WKTextProvider:1240）。
+        val textMaxWidth = getViewWidth(from, uiChatMsgItemEntity)
+
         val model = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKRichTextContent
         if (model == null) {
             // 解析失败兜底：展示已知 plain（若有），否则未知消息提示。
-            addTextBlock(blocksLayout, textColor, context.getString(R.string.base_unknow_msg))
+            addTextBlock(blocksLayout, textColor, context.getString(R.string.base_unknow_msg), textMaxWidth)
             addLongClick(contentTvLayout, uiChatMsgItemEntity)
             return
         }
@@ -97,7 +107,7 @@ class WKRichTextProvider : WKChatBaseProvider() {
         val blocks = model.blocks
         if (blocks.isNullOrEmpty()) {
             // 无 block：回退顶层 plain，仍为空则未知消息提示。
-            addTextBlock(blocksLayout, textColor, fallbackText(model))
+            addTextBlock(blocksLayout, textColor, fallbackText(model), textMaxWidth)
             addLongClick(contentTvLayout, uiChatMsgItemEntity)
             return
         }
@@ -109,7 +119,7 @@ class WKRichTextProvider : WKChatBaseProvider() {
                 else -> {
                     // text block 与未知 type（带 text）都走文本渲染，前向兼容二期扩展。
                     if (!TextUtils.isEmpty(block.text)) {
-                        addTextBlock(blocksLayout, textColor, block.text)
+                        addTextBlock(blocksLayout, textColor, block.text, textMaxWidth)
                     }
                 }
             }
@@ -117,11 +127,39 @@ class WKRichTextProvider : WKChatBaseProvider() {
 
         // 全部 block 渲染后内容仍为空（如纯未知 block 无 text）→ 回退 plain，勿留空气泡。
         if (blocksLayout.childCount == 0) {
-            addTextBlock(blocksLayout, textColor, fallbackText(model))
+            addTextBlock(blocksLayout, textColor, fallbackText(model), textMaxWidth)
         }
 
         // 复制 / 回复 / 转发 / 删除 / reaction 走基类标准长按菜单。
         addLongClick(contentTvLayout, uiChatMsgItemEntity)
+    }
+
+    /**
+     * 渲染发送者昵称行。RichText item 复用基类 chat_item_base_layout 的外部名字行
+     * （receivedNameTv，是 wkBaseContentLayout 的兄弟节点，非其后代），故从 parentView
+     * 的父容器 fullContentLayout 内查 receivedNameTv 再交给基类 setFromName 处理
+     * （群/社区可见、私聊隐藏、实名徽章、@Space 后缀均由 setFromName 内部统一裁决）。
+     *
+     * <p>full-bind（WKChatBaseProvider.showData → setData）与局部刷新
+     * （convert(payloads) → resetFromName）两条路径都需调用，避免首屏昵称不显示。
+     */
+    private fun applyFromName(
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        val receivedNameTv = (parentView.parent as? View)
+            ?.findViewById<TextView>(R.id.receivedNameTv) ?: return
+        setFromName(uiChatMsgItemEntity, from, receivedNameTv)
+    }
+
+    override fun resetFromName(
+        position: Int,
+        parentView: View,
+        uiChatMsgItemEntity: WKUIChatMsgItemEntity,
+        from: WKChatIteMsgFromType
+    ) {
+        applyFromName(parentView, uiChatMsgItemEntity, from)
     }
 
     /** block 渲染为空时的兜底文本：优先顶层 plain，否则未知消息提示。 */
@@ -133,7 +171,7 @@ class WKRichTextProvider : WKChatBaseProvider() {
         }
     }
 
-    private fun addTextBlock(parent: LinearLayout, textColor: Int, text: String?) {
+    private fun addTextBlock(parent: LinearLayout, textColor: Int, text: String?, maxWidth: Int) {
         val tv = EmojiTextView(context).apply {
             this.text = text ?: ""
             setTextColor(textColor)
@@ -143,6 +181,10 @@ class WKRichTextProvider : WKChatBaseProvider() {
             )
             setLineSpacing(2f * context.resources.displayMetrics.density, 1f)
             movementMethod = LinkMovementMethod.getInstance()
+            // 与文本消息一致：约束最大宽度，长文本块换行而非撑成超宽气泡 clip/溢出。
+            if (maxWidth > 0) {
+                this.maxWidth = maxWidth
+            }
         }
         parent.addView(
             tv,
@@ -154,16 +196,18 @@ class WKRichTextProvider : WKChatBaseProvider() {
     }
 
     private fun addImageBlock(parent: LinearLayout, block: WKRichTextContent.RichTextBlock) {
+        val showUrl = WKApiConfig.getShowUrl(block.url)
+        // URL 为空时不 addView：避免一个有尺寸的空白 ImageView 在气泡里留下空白矩形。
+        if (TextUtils.isEmpty(showUrl)) {
+            return
+        }
         val imageView = AppCompatImageView(context)
         val wh = ImageUtils.getInstance().getImageWidthAndHeightToTalk(block.width, block.height)
         val lp = LinearLayout.LayoutParams(wh[0], wh[1]).apply {
             topMargin = AndroidUtilities.dp(4f)
             bottomMargin = AndroidUtilities.dp(4f)
         }
-        val showUrl = WKApiConfig.getShowUrl(block.url)
-        if (!TextUtils.isEmpty(showUrl)) {
-            GlideUtils.getInstance().showImg(context, showUrl, wh[0], wh[1], imageView)
-        }
+        GlideUtils.getInstance().showImg(context, showUrl, wh[0], wh[1], imageView)
         parent.addView(imageView, lp)
     }
 

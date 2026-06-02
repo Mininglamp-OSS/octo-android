@@ -90,7 +90,11 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 voiceWaveform.isFresh = false
             } else voiceWaveform.isFresh = uiChatMsgItemEntity.wkMsg.voiceStatus == 0
         }
-        val voiceContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVoiceContent ?: return
+        val voiceContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVoiceContent
+        if (voiceContent == null) {
+            voiceTimeTv.text = context.getString(R.string.base_unknow_msg)
+            return
+        }
         voiceWaveform.layoutParams.width =
             getVoiceWidth(voiceContent.timeTrad, uiChatMsgItemEntity.wkMsg.flame)
         if (!TextUtils.isEmpty(voiceContent.waveform)) {

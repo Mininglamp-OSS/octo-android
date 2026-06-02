@@ -47,6 +47,7 @@ public class SpaceFilterTest {
         final String mySourceSpaceId;
         boolean mineCached;
         String convSyncMySourceSpaceId; // GH #251：conv sync 预填的 my_source_space_id
+        boolean authoritative; // space_memberships 缓存是否权威
         int getChannelSpaceIdCalls;
         int getMyMembershipSourceSpaceIdCalls;
         int isMyMembershipCachedCalls;
@@ -65,6 +66,11 @@ public class SpaceFilterTest {
 
         StubProvider withConvSyncMySource(String value) {
             this.convSyncMySourceSpaceId = value;
+            return this;
+        }
+
+        StubProvider withAuthoritative(boolean value) {
+            this.authoritative = value;
             return this;
         }
 
@@ -90,6 +96,11 @@ public class SpaceFilterTest {
         public String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
             getConvSyncMySourceSpaceIdCalls++;
             return convSyncMySourceSpaceId;
+        }
+
+        @Override
+        public boolean isSpaceCacheAuthoritative() {
+            return authoritative;
         }
     }
 
@@ -412,5 +423,58 @@ public class SpaceFilterTest {
         assertFalse(SpaceFilter.shouldSkipMessageForSpace(null, SPACE_A));
         assertFalse(SpaceFilter.shouldSkipMessageForSpace(null, ""));
         assertFalse(SpaceFilter.shouldSkipMessageForSpace(null, null));
+    }
+
+    // ------------------------------------------------------------------
+    // space_memberships 权威缓存 — 消除 fail-open 泄漏
+    //
+    // 当 space_memberships 缓存为权威时（applySpaceMemberships 已执行），
+    // SpaceFilter 应当基于 space_id 和 my_source_space_id 做确定性判定，
+    // 不再走 fail-open 路径。
+    // ------------------------------------------------------------------
+
+    @Test
+    public void authoritative_groupInOtherSpace_noMySource_skips() {
+        // 权威缓存：群属 Space B，my_source_space_id 为空（非外部成员）→ 直接 skip，不 fail-open
+        StubProvider p = new StubProvider(SPACE_B, null, /*mineCached=*/false)
+                .withAuthoritative(true);
+        assertTrue(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        // 不应走 member DB 查询（权威缓存直接判定）
+        assertEquals(0, p.isMyMembershipCachedCalls);
+        assertEquals(0, p.getMyMembershipSourceSpaceIdCalls);
+    }
+
+    @Test
+    public void authoritative_groupInSameSpace_doesNotSkip() {
+        // 权威缓存：群属当前 Space → cached-match → 不跳过
+        StubProvider p = new StubProvider(SPACE_A, null, /*mineCached=*/false)
+                .withAuthoritative(true);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void authoritative_externalMember_doesNotSkip() {
+        // 权威缓存：群属 Space B，my_source_space_id=A → 外部成员 → 不跳过
+        StubProvider p = new StubProvider(SPACE_B, null, /*mineCached=*/false)
+                .withConvSyncMySource(SPACE_A)
+                .withAuthoritative(true);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void authoritative_noGroupSpaceId_notInMemberships_failOpen() {
+        // 权威缓存但没有 groupSpaceId（新群还没 sync）→ fail-open，等 channelInfo/sync 到了自动修正
+        StubProvider p = new StubProvider(null, null, /*mineCached=*/false)
+                .withAuthoritative(true);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void nonAuthoritative_fallsBackToFailOpen() {
+        // 非权威缓存（老后端 / 首次 sync 前）→ 保留 fail-open 行为
+        StubProvider p = new StubProvider(SPACE_B, null, /*mineCached=*/false)
+                .withAuthoritative(false);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+        assertEquals(1, p.isMyMembershipCachedCalls);
     }
 }

@@ -67,7 +67,7 @@ class WKFileProvider : WKChatBaseProvider() {
         val progressBar = parentView.findViewById<ProgressBar>(R.id.fileProgressBar)
         val contentLayout = parentView.findViewById<BubbleLayout>(R.id.contentLayout)
 
-        val fileContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKFileContent
+        val fileContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKFileContent ?: return
 
         fileNameTv.text = fileContent.name ?: ""
         fileSizeTv.text = formatFileSize(fileContent.size)

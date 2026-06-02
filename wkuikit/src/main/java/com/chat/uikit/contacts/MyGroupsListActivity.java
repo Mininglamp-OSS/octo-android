@@ -126,6 +126,9 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
                 runOnUiThread(this::loadData);
             }
         });
+        WKIM.getInstance().getConversationManager().addOnSpaceCacheUpdateListener(LISTENER_KEY, () -> {
+            runOnUiThread(this::loadData);
+        });
     }
 
     @Override
@@ -190,6 +193,7 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
     protected void onDestroy() {
         super.onDestroy();
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo(LISTENER_KEY);
+        WKIM.getInstance().getConversationManager().removeOnSpaceCacheUpdateListener(LISTENER_KEY);
     }
 
     private View createFooterView() {

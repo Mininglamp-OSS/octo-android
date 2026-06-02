@@ -121,6 +121,10 @@ public final class SpaceFilter {
         default String getConvSyncMySourceSpaceId(String channelID, byte channelType) {
             return null;
         }
+
+        default boolean isSpaceCacheAuthoritative() {
+            return false;
+        }
     }
 
     private static final ChannelInfoProvider DEFAULT_PROVIDER = new ChannelInfoProvider() {
@@ -217,6 +221,15 @@ public final class SpaceFilter {
             } catch (Throwable ignored) {
                 // SDK 未就绪或线程异常时返回 null，让上层走 fail-open / member sync 兜底
                 return null;
+            }
+        }
+
+        @Override
+        public boolean isSpaceCacheAuthoritative() {
+            try {
+                return WKIM.getInstance().getConversationManager().isSpaceCacheAuthoritative();
+            } catch (Throwable ignored) {
+                return false;
             }
         }
     };
@@ -371,7 +384,7 @@ public final class SpaceFilter {
         // 读不到时兜底用 channel_id 前缀（prefix 的 spaceId 就是群归属）。
         String groupSpaceId = provider.getChannelSpaceId(channelID, channelType);
         if (isBlank(groupSpaceId)) {
-            groupSpaceId = prefix; // prefix 不匹配当前 space 时 fall-through 到这里
+            groupSpaceId = prefix;
         }
 
         if (!isBlank(groupSpaceId)) {
@@ -381,9 +394,6 @@ public final class SpaceFilter {
                 return false;
             }
 
-            // GH #251 / octo-server PR #154：在 my-row 还没 sync 之前先尝试用 conv sync
-            // 写入的 my_source_space_id 做权威判定。conv sync 已经携带这个字段时，无需
-            // 等 member sync —— 直接走 cached-external-member / cached-mismatch 判定。
             String convSyncMySource = provider.getConvSyncMySourceSpaceId(channelID, channelType);
             if (!isBlank(convSyncMySource)) {
                 if (currentSpaceId.equals(convSyncMySource)) {
@@ -396,7 +406,14 @@ public final class SpaceFilter {
                 return true;
             }
 
-            // P2 #2: 我自己的 subscriber 行未缓存时 fail-open，避免竞态错杀
+            boolean authoritative = provider.isSpaceCacheAuthoritative();
+            if (authoritative) {
+                diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, null, null,
+                        "cached-mismatch", true);
+                return true;
+            }
+
+            // 非权威缓存（老后端 / 首次 sync 前）：保留 member DB 检查 + fail-open 兜底
             boolean myCached = provider.isMyMembershipCached(channelID, channelType);
             if (!myCached) {
                 diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, null, Boolean.FALSE,
@@ -412,12 +429,10 @@ public final class SpaceFilter {
             }
             diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, mySourceSpaceId, Boolean.TRUE,
                     "cached-mismatch", true);
-            return true; // cached-mismatch（我的 row 已 sync 且非外部成员）
+            return true;
         }
 
-        // 8. fail-open: 无任何 Space 信息——但在 fall-through 之前再尝试一次 conv sync
-        // my_source_space_id（即使后端没回 group space_id，只要 my_source_space_id 不为空，
-        // 就能判断我是不是当前 Space 的外部成员）。GH #251 / octo-server PR #154。
+        // 8. 无 groupSpaceId 时：权威缓存下 fail-closed，非权威缓存下 fail-open
         String convSyncMySource = provider.getConvSyncMySourceSpaceId(channelID, channelType);
         if (!isBlank(convSyncMySource)) {
             if (currentSpaceId.equals(convSyncMySource)) {

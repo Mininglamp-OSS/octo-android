@@ -93,18 +93,34 @@ public class ConversationManager extends BaseManager {
     static final class SpaceCacheSnapshot {
         final ConcurrentHashMap<String, String> spaceMap;
         final ConcurrentHashMap<String, String> externalMap;
+        final boolean authoritative;
 
         SpaceCacheSnapshot(ConcurrentHashMap<String, String> spaceMap,
-                           ConcurrentHashMap<String, String> externalMap) {
+                           ConcurrentHashMap<String, String> externalMap,
+                           boolean authoritative) {
             this.spaceMap = spaceMap;
             this.externalMap = externalMap;
+            this.authoritative = authoritative;
         }
     }
 
     private volatile SpaceCacheSnapshot spaceCacheSnapshot =
-            new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+            new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+
+    private static final String SPACE_PREFS_NAME = "wk_space_memberships";
+    private static final String PREF_KEY_SPACE_MAP = "space_map";
+    private static final String PREF_KEY_EXTERNAL_MAP = "external_map";
+    private volatile boolean spaceCacheLoadedFromDisk = false;
+    private volatile boolean coldStartSyncDone = false;
 
     private ConversationManager() {
+    }
+
+    private void ensureSpaceCacheLoaded() {
+        if (!spaceCacheLoadedFromDisk) {
+            spaceCacheLoadedFromDisk = true;
+            loadSpaceCacheFromDisk();
+        }
     }
 
     private static class ConversationManagerBinder {
@@ -123,6 +139,31 @@ public class ConversationManager extends BaseManager {
     private ConcurrentHashMap<String, IDeleteConversationMsg> iDeleteMsgList;
     // 同步最近会话
     private ISyncConversationChat iSyncConversationChat;
+
+    private ConcurrentHashMap<String, Runnable> spaceCacheUpdateListeners;
+
+    public void addOnSpaceCacheUpdateListener(String key, Runnable listener) {
+        if (TextUtils.isEmpty(key) || listener == null) return;
+        if (spaceCacheUpdateListeners == null) {
+            spaceCacheUpdateListeners = new ConcurrentHashMap<>();
+        }
+        spaceCacheUpdateListeners.put(key, listener);
+    }
+
+    public void removeOnSpaceCacheUpdateListener(String key) {
+        if (TextUtils.isEmpty(key) || spaceCacheUpdateListeners == null) return;
+        spaceCacheUpdateListeners.remove(key);
+    }
+
+    private void notifySpaceCacheUpdated() {
+        if (spaceCacheUpdateListeners == null) return;
+        for (Runnable listener : spaceCacheUpdateListeners.values()) {
+            try {
+                listener.run();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
 
     /**
      * 查询会话记录消息
@@ -393,7 +434,9 @@ public class ConversationManager extends BaseManager {
             }
         }
         syncInFlightSince = now;
-        final long version = ConversationDbManager.getInstance().queryMaxVersion();
+        final long dbVersion = ConversationDbManager.getInstance().queryMaxVersion();
+        final long version = coldStartSyncDone ? dbVersion : 0;
+        coldStartSyncDone = true;
         final String lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
         WKLoggerUtils.getInstance().e(TAG,
                 "setSyncConversationListener begin (version=" + version
@@ -665,15 +708,26 @@ public class ConversationManager extends BaseManager {
                     newExternalMap.put(m.channel_id, m.my_source_space_id);
                 }
             }
-            spaceCacheSnapshot = new SpaceCacheSnapshot(newSpaceMap, newExternalMap);
+            spaceCacheSnapshot = new SpaceCacheSnapshot(newSpaceMap, newExternalMap, true);
+            saveSpaceCacheToDisk(newSpaceMap, newExternalMap);
             if (com.xinbida.wukongim.BuildConfig.DEBUG) {
-                android.util.Log.d("ConvSync", "[SpaceMemberships] applied: "
-                        + memberships.size() + " entries, spaceMap=" + newSpaceMap.size()
+                String caller = Thread.currentThread().getStackTrace().length > 3
+                        ? Thread.currentThread().getStackTrace()[3].toString() : "unknown";
+                android.util.Log.d("ConvSync", "[SpaceMemberships] applied by " + caller
+                        + ": " + memberships.size() + " entries, spaceMap=" + newSpaceMap.size()
                         + " externalMap=" + newExternalMap.size());
+                for (WKSpaceMembership m : memberships) {
+                    if (m != null && m.channel_id != null) {
+                        android.util.Log.d("ConvSync", "[SpaceMemberships] channel_id=" + m.channel_id
+                                + " space_id=" + m.space_id
+                                + " my_source_space_id=" + m.my_source_space_id);
+                    }
+                }
             }
         } catch (Throwable t) {
             WKLoggerUtils.getInstance().e(TAG, "applySpaceMemberships failed: " + t.getMessage());
         }
+        notifySpaceCacheUpdated();
     }
 
     /**
@@ -693,9 +747,82 @@ public class ConversationManager extends BaseManager {
      */
     public void clearConvSyncSpaceCache() {
         try {
-            spaceCacheSnapshot = new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+            spaceCacheSnapshot = new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+            clearSpaceCacheFromDisk();
         } catch (Throwable t) {
             WKLoggerUtils.getInstance().e(TAG, "clearConvSyncSpaceCache failed: " + t.getMessage());
+        }
+    }
+
+    private void loadSpaceCacheFromDisk() {
+        try {
+            android.content.Context ctx = WKIMApplication.getInstance().getContext();
+            if (ctx == null) return;
+            android.content.SharedPreferences prefs = ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            String spaceJson = prefs.getString(PREF_KEY_SPACE_MAP, null);
+            String extJson = prefs.getString(PREF_KEY_EXTERNAL_MAP, null);
+            if (spaceJson == null && extJson == null) return;
+            ConcurrentHashMap<String, String> spaceMap = new ConcurrentHashMap<>();
+            ConcurrentHashMap<String, String> extMap = new ConcurrentHashMap<>();
+            if (spaceJson != null) {
+                org.json.JSONObject obj = new org.json.JSONObject(spaceJson);
+                java.util.Iterator<String> keys = obj.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    spaceMap.put(key, obj.getString(key));
+                }
+            }
+            if (extJson != null) {
+                org.json.JSONObject obj = new org.json.JSONObject(extJson);
+                java.util.Iterator<String> keys = obj.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    extMap.put(key, obj.getString(key));
+                }
+            }
+            spaceCacheSnapshot = new SpaceCacheSnapshot(spaceMap, extMap, true);
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                android.util.Log.d("ConvSync", "[loadSpaceCacheFromDisk] spaceMap=" + spaceMap.size()
+                        + " externalMap=" + extMap.size());
+            }
+        } catch (Throwable t) {
+            WKLoggerUtils.getInstance().e(TAG, "loadSpaceCacheFromDisk failed: " + t.getMessage());
+        }
+    }
+
+    private void saveSpaceCacheToDisk(ConcurrentHashMap<String, String> spaceMap,
+                                      ConcurrentHashMap<String, String> extMap) {
+        try {
+            android.content.Context ctx = WKIMApplication.getInstance().getContext();
+            if (ctx == null) return;
+            org.json.JSONObject spaceObj = new org.json.JSONObject();
+            for (java.util.Map.Entry<String, String> e : spaceMap.entrySet()) {
+                spaceObj.put(e.getKey(), e.getValue());
+            }
+            org.json.JSONObject extObj = new org.json.JSONObject();
+            for (java.util.Map.Entry<String, String> e : extMap.entrySet()) {
+                extObj.put(e.getKey(), e.getValue());
+            }
+            ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(PREF_KEY_SPACE_MAP, spaceObj.toString())
+                    .putString(PREF_KEY_EXTERNAL_MAP, extObj.toString())
+                    .apply();
+        } catch (Throwable t) {
+            WKLoggerUtils.getInstance().e(TAG, "saveSpaceCacheToDisk failed: " + t.getMessage());
+        }
+    }
+
+    private void clearSpaceCacheFromDisk() {
+        try {
+            android.content.Context ctx = WKIMApplication.getInstance().getContext();
+            if (ctx == null) return;
+            ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .clear()
+                    .apply();
+        } catch (Throwable t) {
+            WKLoggerUtils.getInstance().e(TAG, "clearSpaceCacheFromDisk failed: " + t.getMessage());
         }
     }
 
@@ -712,7 +839,15 @@ public class ConversationManager extends BaseManager {
     @androidx.annotation.Nullable
     public String getConvSyncSpaceId(String channelID) {
         if (TextUtils.isEmpty(channelID)) return null;
-        return spaceCacheSnapshot.spaceMap.get(channelID);
+        ensureSpaceCacheLoaded();
+        SpaceCacheSnapshot snapshot = spaceCacheSnapshot;
+        String result = snapshot.spaceMap.get(channelID);
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.util.Log.d("ConvSync", "[getConvSyncSpaceId] channelID=" + channelID
+                    + " result=" + result
+                    + " spaceMap.size=" + snapshot.spaceMap.size());
+        }
+        return result;
     }
 
     /**
@@ -728,6 +863,20 @@ public class ConversationManager extends BaseManager {
     @androidx.annotation.Nullable
     public String getConvSyncMySourceSpaceId(String channelID) {
         if (TextUtils.isEmpty(channelID)) return null;
-        return spaceCacheSnapshot.externalMap.get(channelID);
+        ensureSpaceCacheLoaded();
+        SpaceCacheSnapshot snapshot = spaceCacheSnapshot;
+        String result = snapshot.externalMap.get(channelID);
+        if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+            android.util.Log.d("ConvSync", "[getConvSyncMySourceSpaceId] channelID=" + channelID
+                    + " result=" + result
+                    + " externalMap.size=" + snapshot.externalMap.size()
+                    + " spaceMap.contains=" + snapshot.spaceMap.containsKey(channelID));
+        }
+        return result;
+    }
+
+    public boolean isSpaceCacheAuthoritative() {
+        ensureSpaceCacheLoaded();
+        return spaceCacheSnapshot.authoritative;
     }
 }

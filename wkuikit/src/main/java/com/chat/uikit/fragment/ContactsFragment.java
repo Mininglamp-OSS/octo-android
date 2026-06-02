@@ -304,6 +304,12 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
                     .subscribeOn(Schedulers.io()).subscribe(r -> {}, e -> {});
         }
         loadContacts(false);
+        WKIM.getInstance().getConversationManager().addOnSpaceCacheUpdateListener("contacts_fragment", () -> {
+            if (getActivity() == null || !isAdded()) return;
+            getActivity().runOnUiThread(() -> {
+                updateHeaderCounts();
+            });
+        });
     }
 
     @Override
@@ -789,5 +795,6 @@ public class ContactsFragment extends WKBaseFragment<FragContactsLayoutBinding> 
         EndpointManager.getInstance().remove("contacts_refresh_mail");
         EndpointManager.getInstance().remove(WKConstants.refreshContacts);
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("contacts_fragment_refresh_channel");
+        WKIM.getInstance().getConversationManager().removeOnSpaceCacheUpdateListener("contacts_fragment");
     }
 }

@@ -64,7 +64,7 @@ class WKVideoProvider : WKChatBaseProvider() {
         from: WKChatIteMsgFromType
     ) {
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
-        val videoContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKVideoContent
+        val videoContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVideoContent ?: return
         val coverImageView = parentView.findViewById<FilterImageView>(R.id.coverImageView)
         val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
         setCorners(from, uiChatMsgItemEntity, coverImageView, blurView)
@@ -185,7 +185,7 @@ class WKVideoProvider : WKChatBaseProvider() {
         coverImageView: ImageView,
         coverUrl: String
     ) {
-        val videoContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as WKVideoContent
+        val videoContent = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKVideoContent ?: return
         val videoUrl = if (!TextUtils.isEmpty(videoContent.localPath)) {
             val file = File(videoContent.localPath)
             if (file.exists()) videoContent.localPath else WKApiConfig.getShowUrl(videoContent.url)

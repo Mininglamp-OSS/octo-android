@@ -361,8 +361,8 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 val flameSecond: Int =
                     if (msgItemEntity.wkMsg.type == WKContentType.WK_VOICE) {
                         val voiceContent =
-                            msgItemEntity.wkMsg.baseContentMsgModel as WKVoiceContent
-                        max(voiceContent.timeTrad, msgItemEntity.wkMsg.flameSecond)
+                            msgItemEntity.wkMsg.baseContentMsgModel as? WKVoiceContent
+                        max(voiceContent?.timeTrad ?: 0, msgItemEntity.wkMsg.flameSecond)
                     } else {
                         msgItemEntity.wkMsg.flameSecond
                     }

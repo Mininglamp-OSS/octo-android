@@ -161,17 +161,17 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.gifIv, true)
                         holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.imageView, false)
-                        val imgMsgModel = item.msg.baseContentMsgModel as WKImageContent
+                        val imgMsgModel = item.msg.baseContentMsgModel as? WKImageContent
                         var showUrl: String
-                        if (!TextUtils.isEmpty(imgMsgModel.localPath)) {
+                        if (imgMsgModel != null && !TextUtils.isEmpty(imgMsgModel.localPath)) {
                             showUrl = imgMsgModel.localPath
                             val file = File(showUrl)
                             if (!file.exists()) {
                                 //如果本地文件被删除就显示网络图片
-                                showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
+                                showUrl = WKApiConfig.getShowUrl(imgMsgModel?.url ?: "")
                             }
                         } else {
-                            showUrl = WKApiConfig.getShowUrl(imgMsgModel.url)
+                            showUrl = WKApiConfig.getShowUrl(imgMsgModel?.url ?: "")
                         }
                         GlideUtils.getInstance().showImg(
                             context,
@@ -184,13 +184,13 @@ class ChatMultiForwardDetailAdapter(
                                 showImages(
                                     tempUrl,
                                     holder.getView(R.id.imageView),
-                                    imgMsgModel
+                                    imgMsgModel ?: item.msg.baseContentMsgModel
                                 )
                             }
                         val layoutParams: ViewGroup.LayoutParams =
                             holder.getView<View>(R.id.imageView).layoutParams
                         val ints = ImageUtils.getInstance()
-                            .getImageWidthAndHeightToTalk(imgMsgModel.width, imgMsgModel.height)
+                            .getImageWidthAndHeightToTalk(imgMsgModel?.width ?: 0, imgMsgModel?.height ?: 0)
                         layoutParams.height = ints[1]
                         layoutParams.width = ints[0]
                         holder.getView<View>(R.id.imageView).layoutParams = layoutParams
@@ -208,13 +208,13 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.fileLayout, true)
                         holder.setGone(R.id.progressView, false)
                         holder.setGone(R.id.playIv, false)
-                        val videoModel = item.msg.baseContentMsgModel as WKVideoContent
+                        val videoModel = item.msg.baseContentMsgModel as? WKVideoContent
                         var coverURL = ""
-                        if (!TextUtils.isEmpty(videoModel.coverLocalPath)) {
+                        if (videoModel != null && !TextUtils.isEmpty(videoModel.coverLocalPath)) {
                             val file = File(videoModel.coverLocalPath)
                             if (file.exists()) coverURL = videoModel.coverLocalPath
                         } else {
-                            coverURL = WKApiConfig.getShowUrl(videoModel.cover)
+                            coverURL = WKApiConfig.getShowUrl(videoModel?.cover ?: "")
                         }
                         GlideUtils.getInstance().showImg(
                             context,
@@ -224,7 +224,7 @@ class ChatMultiForwardDetailAdapter(
                         val layoutParams: ViewGroup.LayoutParams =
                             holder.getView<View>(R.id.imageView).layoutParams
                         val ints = ImageUtils.getInstance()
-                            .getImageWidthAndHeightToTalk(videoModel.width, videoModel.height)
+                            .getImageWidthAndHeightToTalk(videoModel?.width ?: 0, videoModel?.height ?: 0)
                         layoutParams.height = ints[1]
                         layoutParams.width = ints[0]
                         holder.getView<View>(R.id.imageView).layoutParams = layoutParams
@@ -234,12 +234,12 @@ class ChatMultiForwardDetailAdapter(
                         holder.getView<View>(R.id.imageView)
                             .setOnClickListener {
                                 val videoUrl: String =
-                                    if (!TextUtils.isEmpty(videoModel.localPath)) {
-                                        val file = File(videoModel.localPath)
+                                    if (!TextUtils.isEmpty(videoModel?.localPath)) {
+                                        val file = File(videoModel!!.localPath)
                                         if (!file.exists()) {
                                             WKApiConfig.getShowUrl(videoModel.url)
                                         } else videoModel.localPath
-                                    } else WKApiConfig.getShowUrl(videoModel.url)
+                                    } else WKApiConfig.getShowUrl(videoModel?.url ?: "")
 
                                 EndpointManager.getInstance().invoke(
                                     "play_video",
@@ -263,10 +263,10 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentLayout, true)
                         holder.setGone(R.id.fileLayout, true)
                         val wkGifContent =
-                            item.msg.baseContentMsgModel as WKGifContent
+                            item.msg.baseContentMsgModel as? WKGifContent
                         GlideUtils.getInstance().showImg(
                             context,
-                            WKApiConfig.getShowUrl(wkGifContent.url),
+                            WKApiConfig.getShowUrl(wkGifContent?.url ?: ""),
                             holder.getView(R.id.gifIv)
                         )
                     }
@@ -276,17 +276,17 @@ class ChatMultiForwardDetailAdapter(
                         holder.setGone(R.id.contentLayout, true)
                         holder.setGone(R.id.gifIv, true)
                         holder.setGone(R.id.fileLayout, false)
-                        val fileContent = item.msg.baseContentMsgModel as WKFileContent
+                        val fileContent = item.msg.baseContentMsgModel as? WKFileContent
                         WKFileProvider.setFileIcon(
                             holder.getView(R.id.fileIconIv),
-                            fileContent.extension, fileContent.name
+                            fileContent?.extension, fileContent?.name
                         )
-                        holder.setText(R.id.fileNameTv, fileContent.name ?: "")
-                        holder.setText(R.id.fileSizeTv, WKFileProvider.formatFileSize(fileContent.size))
+                        holder.setText(R.id.fileNameTv, fileContent?.name ?: "")
+                        holder.setText(R.id.fileSizeTv, WKFileProvider.formatFileSize(fileContent?.size ?: 0))
                         val progressBar = holder.getView<android.widget.ProgressBar>(R.id.fileProgressBar)
                         progressBar.visibility = View.GONE
                         holder.getView<View>(R.id.fileLayout).setOnClickListener {
-                            handleForwardFileClick(fileContent, progressBar)
+                            if (fileContent != null) handleForwardFileClick(fileContent, progressBar)
                         }
                     }
 

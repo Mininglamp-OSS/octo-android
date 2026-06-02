@@ -467,7 +467,7 @@ class ChatPanelManager(
     }
 
     fun showEditLayout(mMsg: WKMsg) {
-        val textModel = mMsg.baseContentMsgModel as WKTextContent
+        val textModel = mMsg.baseContentMsgModel as? WKTextContent ?: return
         var content = textModel.displayContent
         if (!TextUtils.isEmpty(mMsg.remoteExtra.contentEdit)) {
             val json = JSONObject(mMsg.remoteExtra.contentEdit)

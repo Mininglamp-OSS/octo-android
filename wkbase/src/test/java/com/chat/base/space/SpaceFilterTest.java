@@ -435,12 +435,11 @@ public class SpaceFilterTest {
 
     @Test
     public void authoritative_groupInOtherSpace_noMySource_skips() {
-        // 权威缓存：群属 Space B，my_source_space_id 为空（非外部成员）→ 直接 skip，不 fail-open
+        // 权威缓存：群属 Space B，convSync 和 member DB 均无外部成员关系 → skip
         StubProvider p = new StubProvider(SPACE_B, null, /*mineCached=*/false)
                 .withAuthoritative(true);
         assertTrue(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
-        // 不应走 member DB 查询（权威缓存直接判定）
-        assertEquals(0, p.isMyMembershipCachedCalls);
+        assertEquals(1, p.isMyMembershipCachedCalls);
         assertEquals(0, p.getMyMembershipSourceSpaceIdCalls);
     }
 
@@ -457,6 +456,14 @@ public class SpaceFilterTest {
         // 权威缓存：群属 Space B，my_source_space_id=A → 外部成员 → 不跳过
         StubProvider p = new StubProvider(SPACE_B, null, /*mineCached=*/false)
                 .withConvSyncMySource(SPACE_A)
+                .withAuthoritative(true);
+        assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
+    }
+
+    @Test
+    public void authoritative_externalMemberInMemberDbOnly_doesNotSkip() {
+        // 权威缓存：群属 Space B，convSync 无 my_source_space_id，但 member DB 有 source=A → 不跳过
+        StubProvider p = new StubProvider(SPACE_B, /*mySourceSpaceId=*/SPACE_A, /*mineCached=*/true)
                 .withAuthoritative(true);
         assertFalse(SpaceFilter.shouldSkipChannelForSpace("group001", GROUP, SPACE_A, p));
     }

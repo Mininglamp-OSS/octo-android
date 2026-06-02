@@ -408,6 +408,15 @@ public final class SpaceFilter {
 
             boolean authoritative = provider.isSpaceCacheAuthoritative();
             if (authoritative) {
+                boolean myCached = provider.isMyMembershipCached(channelID, channelType);
+                if (myCached) {
+                    String mySourceSpaceId = provider.getMyMembershipSourceSpaceId(channelID, channelType);
+                    if (!isBlank(mySourceSpaceId) && currentSpaceId.equals(mySourceSpaceId)) {
+                        diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, mySourceSpaceId, Boolean.TRUE,
+                                "cached-external-member", false);
+                        return false;
+                    }
+                }
                 diagLog(channelID, channelType, currentSpaceId, groupSpaceId, prefix, null, null,
                         "cached-mismatch", true);
                 return true;

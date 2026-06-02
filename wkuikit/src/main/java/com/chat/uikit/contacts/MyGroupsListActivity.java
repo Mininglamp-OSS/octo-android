@@ -93,6 +93,7 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
     }
 
     private static final String LISTENER_KEY = "my_groups_list";
+    private final java.util.Set<String> fetchedChannelIds = new java.util.HashSet<>();
 
     @Override
     protected void initListener() {
@@ -152,12 +153,13 @@ public class MyGroupsListActivity extends WKBaseActivity<ActContactsListLayoutBi
                 }
                 if (channel == null) {
                     channel = new WKChannel(conv.channelID, WKChannelType.GROUP);
-                    WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
                 }
                 String showName = TextUtils.isEmpty(channel.channelRemark) ? channel.channelName : channel.channelRemark;
                 if (TextUtils.isEmpty(showName)) {
                     showName = conv.channelID;
-                    WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
+                    if (fetchedChannelIds.add(conv.channelID)) {
+                        WKIM.getInstance().getChannelManager().fetchChannelInfo(conv.channelID, WKChannelType.GROUP);
+                    }
                 }
                 String pying;
                 if (!TextUtils.isEmpty(showName)) {

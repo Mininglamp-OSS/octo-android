@@ -698,7 +698,7 @@ public class ConversationManager extends BaseManager {
      * memberships 为 null 时表示老后端未部署此字段，跳过不处理（保持向后兼容）。
      */
     public void applySpaceMemberships(List<WKSpaceMembership> memberships) {
-        if (memberships == null) return;
+        if (memberships == null || memberships.isEmpty()) return;
         try {
             ConcurrentHashMap<String, String> newSpaceMap = new ConcurrentHashMap<>();
             ConcurrentHashMap<String, String> newExternalMap = new ConcurrentHashMap<>();

@@ -704,10 +704,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.recyclerView.setItemViewCacheSize(20);
 
         //  phase2 perf (A4) +  round3 fix (review W1): Text/Image 两类高频 viewType 回收池上限 5 → 20。
-        // 原先还有 richText (14)，但 WKUIKitApplication 未注册该 provider，ChatAdapter.getItemType 不会返回 14，配置池是 no-op，删除。
+        // richText (14) provider 已在 WKUIKitApplication 注册，getItemType 会返回 14，
+        // 图文混排同属高频 viewType，沿用同一回收池上限。
         RecyclerView.RecycledViewPool msgPool = wkVBinding.recyclerView.getRecycledViewPool();
         msgPool.setMaxRecycledViews(WKContentType.WK_TEXT, 20);
         msgPool.setMaxRecycledViews(WKContentType.WK_IMAGE, 20);
+        msgPool.setMaxRecycledViews(WKContentType.richText, 20);
 
         // Message effect overlay — 添加到 content 根 FrameLayout 顶层，覆盖整个内容区域
         messageEffectOverlay = new com.chat.base.msgeffect.MessageEffectOverlayView(this);

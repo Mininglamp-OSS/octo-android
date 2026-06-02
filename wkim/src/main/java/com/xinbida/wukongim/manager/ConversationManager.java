@@ -110,6 +110,7 @@ public class ConversationManager extends BaseManager {
     private static final String SPACE_PREFS_NAME = "wk_space_memberships";
     private static final String PREF_KEY_SPACE_MAP = "space_map";
     private static final String PREF_KEY_EXTERNAL_MAP = "external_map";
+    private static final String PREF_KEY_UID = "cache_uid";
     private volatile boolean spaceCacheLoadedFromDisk = false;
     private volatile boolean coldStartSyncDone = false;
 
@@ -436,7 +437,6 @@ public class ConversationManager extends BaseManager {
         syncInFlightSince = now;
         final long dbVersion = ConversationDbManager.getInstance().queryMaxVersion();
         final long version = coldStartSyncDone ? dbVersion : 0;
-        coldStartSyncDone = true;
         final String lastMsgSeqStr = ConversationDbManager.getInstance().queryLastMsgSeqs();
         WKLoggerUtils.getInstance().e(TAG,
                 "setSyncConversationListener begin (version=" + version
@@ -447,6 +447,7 @@ public class ConversationManager extends BaseManager {
         runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
             dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
                 try {
+                    coldStartSyncDone = true;
                     if (iSyncConversationChatBack != null) {
                         iSyncConversationChatBack.onBack(syncChat);
                     }
@@ -748,7 +749,8 @@ public class ConversationManager extends BaseManager {
     public void clearConvSyncSpaceCache() {
         try {
             spaceCacheSnapshot = new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
-            clearSpaceCacheFromDisk();
+            spaceCacheLoadedFromDisk = false;
+            coldStartSyncDone = false;
         } catch (Throwable t) {
             WKLoggerUtils.getInstance().e(TAG, "clearConvSyncSpaceCache failed: " + t.getMessage());
         }
@@ -759,6 +761,12 @@ public class ConversationManager extends BaseManager {
             android.content.Context ctx = WKIMApplication.getInstance().getContext();
             if (ctx == null) return;
             android.content.SharedPreferences prefs = ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            String cachedUid = prefs.getString(PREF_KEY_UID, null);
+            String currentUid = WKIMApplication.getInstance().getUid();
+            if (cachedUid == null || !cachedUid.equals(currentUid)) {
+                clearSpaceCacheFromDisk();
+                return;
+            }
             String spaceJson = prefs.getString(PREF_KEY_SPACE_MAP, null);
             String extJson = prefs.getString(PREF_KEY_EXTERNAL_MAP, null);
             if (spaceJson == null && extJson == null) return;
@@ -803,8 +811,10 @@ public class ConversationManager extends BaseManager {
             for (java.util.Map.Entry<String, String> e : extMap.entrySet()) {
                 extObj.put(e.getKey(), e.getValue());
             }
+            String uid = WKIMApplication.getInstance().getUid();
             ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
                     .edit()
+                    .putString(PREF_KEY_UID, uid)
                     .putString(PREF_KEY_SPACE_MAP, spaceObj.toString())
                     .putString(PREF_KEY_EXTERNAL_MAP, extObj.toString())
                     .apply();

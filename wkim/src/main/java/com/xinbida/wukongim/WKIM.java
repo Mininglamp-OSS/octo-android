@@ -93,8 +93,6 @@ public class WKIM {
 
         initialized = false;
         WKIMApplication.getInstance().closeDbHelper();
-        // GH dmwork-android#251 Round-3：进程内 conv sync space 缓存跨用户必须清空，
-        // 避免 logout 路径被绕过（例如崩溃后直接 init 另一个账号）时残留前一用户的 my_source_space_id。
         getConversationManager().clearConvSyncSpaceCache();
         WKIMApplication.getInstance().initContext(context);
         WKIMApplication.getInstance().setUid(uid);

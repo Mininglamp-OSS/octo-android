@@ -699,6 +699,13 @@ public class ConversationManager extends BaseManager {
      */
     public void applySpaceMemberships(List<WKSpaceMembership> memberships) {
         if (memberships == null) return;
+        if (memberships.isEmpty()) {
+            spaceCacheSnapshot = new SpaceCacheSnapshot(
+                    new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+            saveSpaceCacheToDisk(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+            notifySpaceCacheUpdated();
+            return;
+        }
         try {
             ConcurrentHashMap<String, String> newSpaceMap = new ConcurrentHashMap<>();
             ConcurrentHashMap<String, String> newExternalMap = new ConcurrentHashMap<>();

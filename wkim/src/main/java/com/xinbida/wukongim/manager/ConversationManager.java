@@ -111,6 +111,7 @@ public class ConversationManager extends BaseManager {
     private static final String PREF_KEY_SPACE_MAP = "space_map";
     private static final String PREF_KEY_EXTERNAL_MAP = "external_map";
     private static final String PREF_KEY_UID = "cache_uid";
+    private static final String PREF_KEY_AUTHORITATIVE = "authoritative";
     private volatile boolean spaceCacheLoadedFromDisk = false;
     private volatile boolean coldStartSyncDone = false;
 
@@ -797,7 +798,8 @@ public class ConversationManager extends BaseManager {
                     extMap.put(key, obj.getString(key));
                 }
             }
-            spaceCacheSnapshot = new SpaceCacheSnapshot(spaceMap, extMap, true);
+            spaceCacheSnapshot = new SpaceCacheSnapshot(spaceMap, extMap,
+                    prefs.getBoolean(PREF_KEY_AUTHORITATIVE, false));
             if (com.xinbida.wukongim.BuildConfig.DEBUG) {
                 android.util.Log.d("ConvSync", "[loadSpaceCacheFromDisk] spaceMap=" + spaceMap.size()
                         + " externalMap=" + extMap.size());
@@ -821,9 +823,11 @@ public class ConversationManager extends BaseManager {
                 extObj.put(e.getKey(), e.getValue());
             }
             String uid = WKIMApplication.getInstance().getUid();
+            boolean auth = spaceCacheSnapshot.authoritative;
             ctx.getSharedPreferences(SPACE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
                     .edit()
                     .putString(PREF_KEY_UID, uid)
+                    .putBoolean(PREF_KEY_AUTHORITATIVE, auth)
                     .putString(PREF_KEY_SPACE_MAP, spaceObj.toString())
                     .putString(PREF_KEY_EXTERNAL_MAP, extObj.toString())
                     .apply();

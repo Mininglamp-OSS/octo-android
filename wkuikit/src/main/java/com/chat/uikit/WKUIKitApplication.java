@@ -824,6 +824,14 @@ public class WKUIKitApplication {
                                 return;
                             }
 
+                            // 图文混排（RichText=14）发送侧聚合（Phase 1，对称 web#227）：
+                            // 输入框已有文本 + 本次全是静态图片（无 video / 无走 sticker 的 gif）时，
+                            // 聚合成单条 type=14（text 块在前、image 块按选取顺序在后），
+                            // 而非逐张发独立 image。其余情况落到下方原有逐条发送，零回归。
+                            if (tryAggregateRichTextMixed(iConversationContext, paths)) {
+                                return;
+                            }
+
                             for (int i = 0, size = paths.size(); i < size; i++) {
                                 String path = paths.get(i).path;
                                 if (paths.get(i).model == ChooseResultModel.video) {
@@ -873,6 +881,38 @@ public class WKUIKitApplication {
 
     public interface IShowChatConfirm {
         void onBack(@NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList);
+    }
+
+    /**
+     * 图文混排（RichText=14）发送侧聚合判定（Phase 1）。
+     *
+     * <p>仅当本次相册选择<strong>全是静态图片</strong>（无 video、无 gif——gif 走表情/原图
+     * 逐条路径不变）时才尝试聚合。把图片本地路径按选取顺序收集后交给
+     * {@link IConversationContext#trySendRichTextMixed(List)}：若输入框有待发文本则聚合成
+     * 单条 type=14 并返回 true（本次发送已被接管）；否则返回 false，调用方继续走原有逐条
+     * 发送（纯图片零回归）。
+     *
+     * @return true 表示已聚合发送，调用方应直接返回；false 表示未接管，继续原逐条逻辑。
+     */
+    private boolean tryAggregateRichTextMixed(IConversationContext iConversationContext, List<ChooseResult> paths) {
+        if (paths == null || paths.isEmpty()) {
+            return false;
+        }
+        List<String> imagePaths = new ArrayList<>();
+        for (ChooseResult result : paths) {
+            if (result == null || result.model != ChooseResultModel.image
+                    || TextUtils.isEmpty(result.path)) {
+                return false; // 含 video / 空路径 → 不聚合，走原逐条路径。
+            }
+            if (WKFileUtils.getInstance().isGif(result.path)) {
+                return false; // gif 走表情/原图逐条路径，不纳入图文混排。
+            }
+            imagePaths.add(result.path);
+        }
+        if (imagePaths.isEmpty()) {
+            return false;
+        }
+        return iConversationContext.trySendRichTextMixed(imagePaths);
     }
 
     public void showChatConfirmDialog(@NonNull Context context, @NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, final IShowChatConfirm iShowChatConfirm) {

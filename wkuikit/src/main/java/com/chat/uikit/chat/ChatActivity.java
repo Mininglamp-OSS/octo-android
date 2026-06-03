@@ -1427,6 +1427,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // channel 残留的 snapshot 命中新 channel 的 applyDataToAdapter）
         unreadStartSnapshotOrderSeq = 0;
         tipsSnapshotOrderSeq = 0;
+        // 图文混排 in-flight 快照（YUJ-2872 🔴 defect d，Jerry-Xin 复审）：必须随 channel
+        // 切换清掉，否则旧 channel 一条混排发送 in-flight 期间切到新 channel 时，快照残留 +
+        // channelId 已变 → (a) 新 channel 里发同串文本被发送键 isPendingRichTextDuplicate
+        // 静默吞掉（消息丢失）；(b) 旧 send 的 onEnqueued 用新 channelId 误清新 channel 的
+        // 落盘草稿 / 输入框。in-flight 上传随旧 Activity 状态作废，快照不再有意义，直接清零。
+        pendingRichTextSnapshot = null;
         unreadStartMsgOrderSeq = 0;
         tipsOrderSeq = 0;
         lastPreviewMsgOrderSeq = 0;

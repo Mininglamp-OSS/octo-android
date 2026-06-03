@@ -66,4 +66,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-messaging'
 
+    // host-side 单测（ExampleUnitTest）需要显式挂载 junit（与 wkscan 同处理）。
+    testImplementation 'junit:junit:4.13.2'
+
 }

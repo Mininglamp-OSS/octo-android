@@ -98,7 +98,13 @@ public class WKRichTextContent extends WKMessageContent {
         return block;
     }
 
-    /** 构造 image block（url 已上传得到 + 本地量出的尺寸；尺寸必填 >0，对齐 octo-lib 契约）。 */
+    /**
+     * 构造 image block（url 已上传得到 + 本地量出的尺寸）。尺寸<em>正常应 &gt;0</em>（对齐
+     * octo-lib 契约，发送侧用 {@code inJustDecodeBounds} 本地量取）；但当本地文件无法解码
+     * 时会传入 {@code 0×0}——此时把它当作<strong>"尺寸未知"哨兵</strong>原样保留，由接收侧
+     * （宽高相等走方形占位渲染）与 server {@code #232 Finalize}（重算覆盖 plain/尺寸）兜底，
+     * 不在此处臆造一个错误纵横比。
+     */
     public static RichTextBlock makeImageBlock(String url, int width, int height) {
         RichTextBlock block = new RichTextBlock();
         block.type = BLOCK_TYPE_IMAGE;

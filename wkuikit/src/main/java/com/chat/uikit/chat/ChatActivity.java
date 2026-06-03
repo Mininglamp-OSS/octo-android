@@ -3073,6 +3073,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (TextUtils.isEmpty(StringUtils.replaceBlank(rawText))) {
             return false; // 无文本 → 纯图片，交回原逐条发送路径。
         }
+        // 重复发送拦截 · 相册再选图路径（YUJ-2872 🔴 defect b，对称发送键拦截）：
+        // 一条混排发送 in-flight 期间，被消费的文本仍留在输入框（YUJ-2832 崩溃恢复）。
+        // 若用户此时再开相册选第二批图，本方法会再次读到同一段留存文本，聚合出第二条
+        // RichText —— text 块与第一条重复。命中（输入框文本仍等于 in-flight 快照）时
+        // <strong>不再消费这段文本</strong>：返回 false 交回逐条图片发送路径，让第二批
+        // 图片照常发出，但不重复发文本。用户若改了文本即视为新意图，放行正常聚合。
+        if (com.chat.uikit.chat.manager.WKRichTextSender
+                .isDuplicatePendingText(pendingRichTextSnapshot, rawText)) {
+            return false;
+        }
         // 文本超字节上限：不聚合（与发送键路径同源阈值）。交回逐条图片发送，
         // 超限文本留在输入框，由发送键走 showTextToFileAlert 转文件，避免发出超限 payload。
         if (chatPanelManager.isTextOverByteLimit(rawText)) {

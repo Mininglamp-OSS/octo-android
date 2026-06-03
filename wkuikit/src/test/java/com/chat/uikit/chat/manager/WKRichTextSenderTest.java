@@ -285,6 +285,21 @@ public class WKRichTextSenderTest {
     }
 
     /**
+     * 🔴 defect b 第二道门（相册再选图路径）：in-flight 混排发送期间用户再开相册选第二批图，
+     * trySendRichTextMixed 会再次读到留存文本——若仍等于 in-flight 快照则<strong>不重复
+     * 消费</strong>（交回逐条图片发送，第二批图照常发出但不重发文本）。用 send 同款去重判定，
+     * 保证两道门语义一致：相同 → 不聚合（true 表示拦截/不消费）；文本已改 → 正常聚合。
+     */
+    @Test
+    public void duplicatePendingText_blocksAlbumRepick_butAllowsNewText() {
+        final String inFlight = "第一批配文";
+        // 第二批选图时输入框仍是 in-flight 那段文本 → 不再聚合消费（交回逐条图片路径）。
+        assertTrue(WKRichTextSender.isDuplicatePendingText(inFlight, "第一批配文"));
+        // 用户在等待期间改了配文 → 新意图，第二批应正常聚合。
+        assertFalse(WKRichTextSender.isDuplicatePendingText(inFlight, "第二批新配文"));
+    }
+
+    /**
      * 🔴 shouldClearComposer 边界：null 快照 / 文本已变 → 不清；完全相同 → 清。
      */
     @Test

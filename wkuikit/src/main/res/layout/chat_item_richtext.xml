@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  图文混排消息（RichText=14）item 布局。结构对齐 chat_item_text：外层 contentLayout
+  控制左右对齐，BubbleLayout 提供气泡背景，内部 blocksLayout 由 provider 按 block
+  数组顺序动态填充 text / image 子 View，末尾挂消息时间/状态。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/contentLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clickable="true"
+    android:focusable="true"
+    android:orientation="horizontal">
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/contentTvLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center|start"
+        android:minWidth="40dp"
+        android:minHeight="40dp"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/chat_bubble_padding_lr"
+        android:paddingTop="@dimen/chat_bubble_padding_tb"
+        android:paddingEnd="@dimen/chat_bubble_padding_lr"
+        android:paddingBottom="@dimen/chat_bubble_padding_tb"
+        android:visibility="visible"
+        app:shadowRadius="0dp">
+
+        <LinearLayout
+            android:id="@+id/richBlocksLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <include
+            android:id="@+id/msgTimeView"
+            layout="@layout/wk_msg_status_layout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|bottom" />
+
+    </com.chat.base.views.BubbleLayout>
+</LinearLayout>

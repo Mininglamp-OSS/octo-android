@@ -100,6 +100,7 @@ import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.uikit.chat.manager.FaceManger;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
+import com.chat.uikit.chat.msgmodel.WKRichTextContent;
 import com.chat.base.msgcontent.WKFileContent;
 import com.chat.uikit.chat.provider.WKFileProvider;
 import com.chat.uikit.chat.provider.WKVideoProvider;
@@ -114,6 +115,7 @@ import com.chat.uikit.chat.provider.WKPromptNewMsgProvider;
 import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
+import com.chat.uikit.chat.provider.WKRichTextProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
 import com.chat.uikit.thread.CreateThreadActivity;
 import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
@@ -306,11 +308,13 @@ public class WKUIKitApplication {
 
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKThreadCreatedContent.class);
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKRichTextContent.class);
         //添加消息item
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.msgPromptNewMsg, new WKPromptNewMsgProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.richText, new WKRichTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.spanEmptyView, new WKSpanEmptyProvider());
@@ -323,6 +327,11 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
+        // 图文混排 Phase 1 仅接收渲染：禁用转发/回复/多选（多选工具栏含转发，
+        // 且不逐条复核 isCanForward，故一并关闭，留 Phase 2 发送端），保留
+        // 复制/删除/reaction/撤回等接收侧操作。
+        // 参数顺序：forward, withdraw, multipleChoice, reply, reaction, pin。
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(false, true, false, false, true, true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
@@ -342,6 +351,18 @@ public class WKUIKitApplication {
                     if (msg.remoteExtra.contentEditMsgModel != null) {
                         content = msg.remoteExtra.contentEditMsgModel.getDisplayContent();
                     }
+                    ClipboardManager cm = (ClipboardManager) iConversationContext.getChatActivity().getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData mClipData = ClipData.newPlainText("Label", content);
+                    assert cm != null;
+                    cm.setPrimaryClip(mClipData);
+                    WKToastUtils.getInstance().showToastNormal(iConversationContext.getChatActivity().getString(R.string.copyed));
+                });
+            }
+            if (wkMsg.type == WKContentType.richText) {
+                // 图文混排复制取顶层 plain（server 权威纯文本，勿丢字）。
+                return new ChatItemPopupMenu(R.mipmap.msg_copy, getContext().getString(R.string.copy), (msg, iConversationContext) -> {
+                    String content = msg.baseContentMsgModel != null
+                            ? msg.baseContentMsgModel.getDisplayContent() : "";
                     ClipboardManager cm = (ClipboardManager) iConversationContext.getChatActivity().getSystemService(Context.CLIPBOARD_SERVICE);
                     ClipData mClipData = ClipData.newPlainText("Label", content);
                     assert cm != null;

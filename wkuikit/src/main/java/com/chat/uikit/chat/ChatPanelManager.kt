@@ -416,6 +416,64 @@ class ChatPanelManager(
         return this.editText
     }
 
+    /**
+     * 文本字节是否超过输入框上限（与发送键文本路径同一阈值）。图文混排聚合发送前用它做
+     * 同源校验，避免绕过 [showTextToFileAlert] 发出超限 payload。
+     */
+    fun isTextOverByteLimit(text: String): Boolean {
+        return messageTextMaxBytes > 0 && text.toByteArray(Charsets.UTF_8).size > messageTextMaxBytes
+    }
+
+    /** 弹出"转为文件发送"确认框（供超限文本复用，与发送键路径同源）。 */
+    fun promptTextToFile(text: String) {
+        showTextToFileAlert(text)
+    }
+
+    /**
+     * 把当前输入框的 @mention（三态 humans/ais + 群成员 uids）应用到给定消息体。
+     *
+     * 供图文混排（RichText=14）聚合发送复用——与发送键文本路径【同源】，
+     * 保证群 @ 通知（含 @所有AI）不丢。刻意不写 entities：图文混排的 plain 非权威，
+     * 且 entity offset 是相对纯文本块的字符偏移，跨 block 拼接后无意义。
+     *
+     * 复用既有 [scanPlainTextMentions] / [expandRobotMembersIntoUids]，与 sendIV 文本
+     * 发送逻辑保持单一来源。
+     */
+    fun applyInputMentionsTo(content: WKMessageContent, text: String) {
+        val list = editText.allUIDs.toMutableList()
+        val entities = editText.allEntity.toMutableList()
+
+        if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+            iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC
+        ) {
+            scanPlainTextMentions(text, entities, list)
+        }
+
+        if (list.isEmpty()) return
+
+        val mInfo = WKMentionInfo()
+        val uidList: MutableList<String> = ArrayList()
+        for (uid in list) {
+            when {
+                uid.equals("-1", ignoreCase = true) -> {
+                    content.mentionHumans = 1
+                    mInfo.humans = true
+                }
+                uid == "-2" -> {
+                    content.mentionAis = 1
+                    mInfo.ais = true
+                }
+                else -> uidList.add(uid)
+            }
+        }
+        // @所有AI 命中时把会话内 robot 成员展开到 mention.uids，兼容旧 adapter。
+        if (content.mentionAis == 1) {
+            expandRobotMembersIntoUids(uidList)
+        }
+        mInfo.uids = uidList
+        content.mentionInfo = mInfo
+    }
+
     fun showReplyLayout(mMsg: WKMsg) {
         var showName: String? = ""
         if (mMsg.from != null) {
@@ -1495,6 +1553,14 @@ class ChatPanelManager(
             var content = StringUtils.replaceBlank(editText.text.toString())
             if (!TextUtils.isEmpty(content)) {
                 content = editText.text.toString()
+
+                // 重复发送拦截（YUJ-2872 🔴 defect b）：图文混排发送 in-flight 期间，被消费
+                // 的文本仍留在输入框（YUJ-2832 崩溃恢复）。此时点发送键会把同一段可见文本作为
+                // 独立纯文本单发 → 重复文本 + 之后那条 RichText。命中（与 in-flight 快照完全
+                // 相同）则吞掉这次点击；文本被改动即视为新意图，放行。
+                if (iConversationContext.isPendingRichTextDuplicate(content)) {
+                    return@setOnClickListener
+                }
 
                 // 检查文本字节大小是否超过限制
                 val textBytes = content.toByteArray(Charsets.UTF_8)

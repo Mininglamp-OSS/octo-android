@@ -105,6 +105,7 @@ import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.UserUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
@@ -269,6 +270,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private int hideChannelAllPinnedMessage = 0;
     private PanelSwitchHelper mHelper;
     private ChatPanelManager chatPanelManager;
+    // 图文混排（RichText=14）一条 in-flight 发送消费的输入框文本快照（YUJ-2872 🔴）。
+    // 上传期间被消费的文本仍留在输入框（YUJ-2832 崩溃恢复），此快照用于：
+    //   (a) onEnqueued 清空时 snapshot-aware——仅当输入框仍等于它才清，绝不擦用户新草稿；
+    //   (b) 拦截手动发送键把同一段可见文本重复单发（重复文本 + 之后的 RichText）。
+    // 仅主线程读写（send 启动 / onEnqueued 回调 / 发送键点击都在主线程）。null = 无 in-flight。
+    private String pendingRichTextSnapshot;
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
     private final String loginUID = WKConfig.getInstance().getUid();
@@ -1420,6 +1427,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // channel 残留的 snapshot 命中新 channel 的 applyDataToAdapter）
         unreadStartSnapshotOrderSeq = 0;
         tipsSnapshotOrderSeq = 0;
+        // 图文混排 in-flight 快照（YUJ-2872 🔴 defect d，Jerry-Xin 复审）：必须随 channel
+        // 切换清掉，否则旧 channel 一条混排发送 in-flight 期间切到新 channel 时，快照残留 +
+        // channelId 已变 → (a) 新 channel 里发同串文本被发送键 isPendingRichTextDuplicate
+        // 静默吞掉（消息丢失）；(b) 旧 send 的 onEnqueued 用新 channelId 误清新 channel 的
+        // 落盘草稿 / 输入框。in-flight 上传随旧 Activity 状态作废，快照不再有意义，直接清零。
+        pendingRichTextSnapshot = null;
         unreadStartMsgOrderSeq = 0;
         tipsOrderSeq = 0;
         lastPreviewMsgOrderSeq = 0;
@@ -3035,6 +3048,189 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
             }
         }
+    }
+
+    /**
+     * 发送到<strong>指定捕获频道</strong>（YUJ-2872 🔴 跨频道路由）。图文混排延迟入队时
+     * Activity 可能已被复用切到别的频道（{@link #onNewIntent} 改写 channelId/channelType），
+     * 此路径按发起时捕获的 {@code destChannel} 落库，<em>不读</em> mutable 字段，避免把用 A
+     * 频道凭证上传的图片错投到当前 B 频道。
+     *
+     * <p>仅当捕获频道仍等于当前频道时才执行那些只对「当前会话 UI」有意义的副作用
+     * （清未读红点滚动、子区首发自动加入）；已切走时跳过，避免污染新会话。
+     */
+    @Override
+    public void sendMessageToChannel(WKMessageContent messageContent, WKChannel destChannel) {
+        if (destChannel == null || TextUtils.isEmpty(destChannel.channelID)) {
+            sendMessage(messageContent); // 没捕获到目标 → 回退原行为（当前会话）。
+            return;
+        }
+        boolean isCurrentChannel = destChannel.channelID.equals(channelId)
+                && destChannel.channelType == channelType;
+        if (isCurrentChannel && redDot > 0) {
+            wkVBinding.chatUnreadLayout.newMsgLayout.performClick();
+        }
+        // DM space_id 按目标频道类型判定（不依赖 mutable channelType）。
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId) && destChannel.channelType == WKChannelType.PERSONAL) {
+            messageContent.spaceId = spaceId;
+        }
+        WKMsg wkMsg = new WKMsg();
+        wkMsg.channelID = destChannel.channelID;
+        wkMsg.channelType = destChannel.channelType;
+        wkMsg.type = messageContent.type;
+        wkMsg.baseContentMsgModel = messageContent;
+        WKChannel channelInfo = WKIM.getInstance().getChannelManager()
+                .getChannel(destChannel.channelID, destChannel.channelType);
+        wkMsg.setChannelInfo(channelInfo != null ? channelInfo : destChannel);
+        WKSendMsgUtils.getInstance().sendMessage(wkMsg);
+
+        if (isCurrentChannel && destChannel.channelType == WKChannelType.COMMUNITY_TOPIC
+                && !hasJoinedThread) {
+            hasJoinedThread = true;
+            String[] parsed = ThreadModel.getInstance().parseChannelId(destChannel.channelID);
+            if (parsed != null) {
+                ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
+            }
+        }
+    }
+
+    /**
+     * 图文混排（RichText=14）发送侧聚合入口（Phase 1，对称 web#227）。
+     *
+     * <p>仅当输入框含待发文本时接管：把文本与本次选取的图片聚合成单条 type=14
+     * （text 块在前、image 块按选取顺序在后），mention（三态 humans/ais + 群成员 uids）
+     * 与发送键文本路径同源复用。<strong>输入框仅在消息真正入队后才清空</strong>（见
+     * WKRichTextSender 的 onEnqueued）——上传未完成期间文本留在输入框可恢复，保证
+     * 「文本必达」（YUJ-2832 P1）。无文本则返回 false，调用方继续走原有逐张图片发送
+     * （纯图片零回归）。
+     *
+     * <p>编辑态 / 回复态下不接管（保持既有逐条语义），由 sendMessage 的特化路径处理。
+     */
+    @Override
+    public boolean trySendRichTextMixed(List<String> imageLocalPaths) {
+        if (imageLocalPaths == null || imageLocalPaths.isEmpty()) {
+            return false;
+        }
+        if (chatPanelManager == null || chatPanelManager.getEditText() == null
+                || chatPanelManager.getEditText().getText() == null) {
+            return false;
+        }
+        // 编辑 / 回复态走既有特化路径，不聚合（避免破坏 edit/reply 语义）。
+        if (editMsg != null || replyWKMsg != null) {
+            return false;
+        }
+        String rawText = chatPanelManager.getEditText().getText().toString();
+        if (TextUtils.isEmpty(StringUtils.replaceBlank(rawText))) {
+            return false; // 无文本 → 纯图片，交回原逐条发送路径。
+        }
+        // 重复发送拦截 · 相册再选图路径（YUJ-2872 🔴 defect b，对称发送键拦截）：
+        // 一条混排发送 in-flight 期间，被消费的文本仍留在输入框（YUJ-2832 崩溃恢复）。
+        // 若用户此时再开相册选第二批图，本方法会再次读到同一段留存文本，聚合出第二条
+        // RichText —— text 块与第一条重复。命中（输入框文本仍等于 in-flight 快照）时
+        // <strong>不再消费这段文本</strong>：返回 false 交回逐条图片发送路径，让第二批
+        // 图片照常发出，但不重复发文本。用户若改了文本即视为新意图，放行正常聚合。
+        if (com.chat.uikit.chat.manager.WKRichTextSender
+                .isDuplicatePendingText(pendingRichTextSnapshot, rawText)) {
+            return false;
+        }
+        // 文本超字节上限：不聚合（与发送键路径同源阈值）。交回逐条图片发送，
+        // 超限文本留在输入框，由发送键走 showTextToFileAlert 转文件，避免发出超限 payload。
+        if (chatPanelManager.isTextOverByteLimit(rawText)) {
+            return false;
+        }
+
+        com.chat.uikit.chat.msgmodel.WKRichTextContent content =
+                new com.chat.uikit.chat.msgmodel.WKRichTextContent();
+        // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
+        chatPanelManager.applyInputMentionsTo(content, rawText);
+
+        // 文本必达（YUJ-2832 P1）：图片上传是异步的，sendMessage 要等所有上传回调完成
+        // 才落库入队。绝不能在上传开始时就清空输入框——否则进程被杀 / Activity 销毁 /
+        // 上传始终未回调时，文本既不在输入框也没入队 → 丢消息回归。改为仅在消息真正
+        // 入队后（onEnqueued）才清空；上传未完成期间文本留在输入框，由草稿持久化兜底可恢复。
+        //
+        // snapshot-aware 清空（YUJ-2872 🔴 defect a，对齐 web#227 第二轮）：上传可耗时数秒，
+        // 用户在等待期间可能又打了新草稿。本次 send 入队后绝不能无条件清空——只有当输入框
+        // 仍恰好等于本次消费的 rawText 快照时才清；否则保留用户新打的内容。
+        // pendingRichTextSnapshot 同时供发送键拦截重复发送（defect b）使用。
+        pendingRichTextSnapshot = rawText;
+        // 捕获本次发送的目标频道快照（YUJ-2872 🔴 跨频道路由）：上传可耗时数秒，回调触发时
+        // Activity 可能已切到别的频道。落库与清落盘草稿都按这个捕获值走，不读 mutable 字段。
+        final WKChannel sendChannel = getChatChannelInfo();
+        com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths,
+                () -> {
+                    // 仅当回调到达时仍停留在<em>发起时</em>那个频道，才动 in-memory 输入框
+                    // （YUJ-2872 🔴 跨频道）：已切走时这个输入框属于新频道，绝不能清它。
+                    boolean stillOnSendChannel = sendChannel != null
+                            && sendChannel.channelID != null
+                            && sendChannel.channelID.equals(channelId)
+                            && sendChannel.channelType == channelType;
+                    if (stillOnSendChannel && chatPanelManager != null
+                            && chatPanelManager.getEditText() != null
+                            && chatPanelManager.getEditText().getText() != null) {
+                        String current = chatPanelManager.getEditText().getText().toString();
+                        if (com.chat.uikit.chat.manager.WKRichTextSender
+                                .shouldClearComposer(rawText, current)) {
+                            chatPanelManager.getEditText().setText(null);
+                        }
+                    }
+                    // 同时清掉<em>已持久化</em>的草稿（YUJ-2872 🔴 defect c，Jerry-Xin 复审）：
+                    // 上传期间文本有意留在输入框（崩溃恢复），若用户在上传完成前离开会话，
+                    // 离场 teardown（persistOldChannelEditState / persistCurrentChannelEditState /
+                    // saveEditContent）会把这段“即将发出”的可见文本落成 server 草稿。等本次
+                    // 入队后只清了内存 EditText 却不清落盘草稿 → 重开会话又恢复出已发文本，
+                    // 既是 stale UI 又是一键重复发送。按捕获频道清（跨频道安全），且仅当落盘
+                    // 草稿仍恰好等于本次消费的快照时清；用户新打的草稿（不等于快照）保留不误删。
+                    clearPersistedDraftIfMatches(sendChannel, rawText);
+                    // in-flight 结束：清快照，发送键不再拦截。
+                    if (rawText.equals(pendingRichTextSnapshot)) {
+                        pendingRichTextSnapshot = null;
+                    }
+                });
+        return true;
+    }
+
+    /**
+     * 清掉<em>已持久化</em>的草稿——仅当它仍恰好等于本次混排发送消费的快照（YUJ-2872
+     * 🔴 defect c）。图文混排上传期间文本有意留在输入框（崩溃恢复），用户若在上传完成前
+     * 离开会话，离场 teardown 会把这段可见文本落成 server/本地草稿；本次发送入队后必须把
+     * 这条草稿一并清掉，否则重开会话又把已发文本恢复出来 = stale UI + 一键重复发送。
+     *
+     * <p>按<em>捕获</em>的 {@code destChannel} 清（YUJ-2872 🔴 跨频道路由）：上传期间 Activity
+     * 可能已切走，不能读 mutable 字段，否则会去清错频道的草稿 / 漏清目标频道。
+     *
+     * <p>幂等且不误删：用 {@link com.chat.uikit.chat.manager.WKRichTextSender#shouldClearComposer}
+     * 同款“快照 vs 现值”判定——离场后用户又打的新草稿（不等于快照）保留不动。
+     */
+    private void clearPersistedDraftIfMatches(WKChannel destChannel, String consumedSnapshot) {
+        if (destChannel == null || TextUtils.isEmpty(destChannel.channelID)) {
+            return;
+        }
+        WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                .getMsgExtraWithChannel(destChannel.channelID, destChannel.channelType);
+        if (extra == null || TextUtils.isEmpty(extra.draft)) {
+            return; // 没落盘草稿（用户没离场，或离场后已被别处清空）→ 无需处理。
+        }
+        if (!com.chat.uikit.chat.manager.WKRichTextSender
+                .shouldClearComposer(consumedSnapshot, extra.draft)) {
+            return; // 落盘草稿已是用户新打的内容（≠ 本次快照）→ 保留，不误删。
+        }
+        // 落盘草稿仍是这段已发文本 → 清空（保留浏览位置等其它 extra 字段）。
+        MsgModel.getInstance().updateCoverExtra(destChannel.channelID, destChannel.channelType,
+                extra.browseTo, extra.keepMessageSeq, extra.keepOffsetY, "");
+    }
+
+    /**
+     * 重复发送拦截（YUJ-2872 🔴 defect b）：一条图文混排发送 in-flight 期间，被消费的文本
+     * 仍留在输入框（YUJ-2832 崩溃恢复）。此时用户手动点发送键会把<em>同一段</em>可见文本
+     * 作为独立纯文本单发出去 → 重复文本消息 + 之后那条 RichText。命中（候选文本与 in-flight
+     * 快照完全相同）时返回 true，发送键路径应吞掉这次点击。文本被改动即视为新意图，放行。
+     */
+    @Override
+    public boolean isPendingRichTextDuplicate(String candidateText) {
+        return com.chat.uikit.chat.manager.WKRichTextSender
+                .isDuplicatePendingText(pendingRichTextSnapshot, candidateText);
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {

@@ -174,4 +174,106 @@ public class WKRichTextContentTest {
         c.decodeMsg(null);
         assertNotNull(c.blocks);
     }
+
+    // ---------------------------------------------------------------------
+    // 发送侧（Phase 1 图文混排）：工厂 / URL 安全 / plain 占位 / encode↔decode 往返
+    // ---------------------------------------------------------------------
+
+    @Test
+    public void send_create_interleavesTextThenImagesAndFillsPlaceholderPlain() {
+        java.util.List<WKRichTextContent.RichTextBlock> blocks = new java.util.ArrayList<>();
+        blocks.add(WKRichTextContent.makeTextBlock("看图"));
+        blocks.add(WKRichTextContent.makeImageBlock("https://x/a.png", 100, 200));
+        blocks.add(WKRichTextContent.makeImageBlock("https://x/b.png", 50, 60));
+
+        WKRichTextContent c = WKRichTextContent.create(blocks);
+
+        assertEquals(3, c.blocks.size());
+        assertTrue(c.blocks.get(0).isText());
+        assertTrue(c.blocks.get(1).isImage());
+        assertTrue(c.blocks.get(2).isImage());
+        // plain 仅本地占位（image → 占位 wire token），非权威，server #232 覆盖。
+        assertEquals("看图" + WKRichTextContent.IMAGE_PLACEHOLDER
+                + WKRichTextContent.IMAGE_PLACEHOLDER, c.plain);
+    }
+
+    @Test
+    public void send_encodeDecode_roundTripsMixedPayload() throws JSONException {
+        java.util.List<WKRichTextContent.RichTextBlock> blocks = new java.util.ArrayList<>();
+        blocks.add(WKRichTextContent.makeTextBlock("hi"));
+        blocks.add(WKRichTextContent.makeImageBlock("https://x/z.png", 30, 40));
+        WKRichTextContent sent = WKRichTextContent.create(blocks);
+
+        // 发送侧 encode → wire JSON。
+        JSONObject wire = sent.encodeMsg();
+        assertNotNull(wire);
+        assertTrue(wire.has("content"));
+
+        // 接收侧 decode 同一 wire，断言字段逐项对称。
+        WKRichTextContent received = new WKRichTextContent();
+        received.decodeMsg(wire);
+
+        assertEquals(2, received.blocks.size());
+        assertTrue(received.blocks.get(0).isText());
+        assertEquals("hi", received.blocks.get(0).text);
+        assertTrue(received.blocks.get(1).isImage());
+        assertEquals("https://x/z.png", received.blocks.get(1).url);
+        assertEquals(30, received.blocks.get(1).width);
+        assertEquals(40, received.blocks.get(1).height);
+        assertEquals("hi" + WKRichTextContent.IMAGE_PLACEHOLDER, received.plain);
+    }
+
+    @Test
+    public void send_encode_imageBlockOmitsTextField_byteHygiene() throws JSONException {
+        // image block 不应在 wire 写出 text 字段（字节卫生，与接收侧/server 契约对齐）。
+        java.util.List<WKRichTextContent.RichTextBlock> blocks = new java.util.ArrayList<>();
+        blocks.add(WKRichTextContent.makeImageBlock("https://x/i.png", 10, 10));
+        WKRichTextContent c = WKRichTextContent.create(blocks);
+
+        JSONObject wire = c.encodeMsg();
+        JSONArray content = wire.optJSONArray("content");
+        assertNotNull(content);
+        JSONObject imgJson = content.optJSONObject(0);
+        assertEquals(WKRichTextContent.BLOCK_TYPE_IMAGE, imgJson.optString("type"));
+        assertTrue(imgJson.has("url"));
+        assertTrue(imgJson.has("width"));
+        assertTrue(imgJson.has("height"));
+        // image block 不写 text 键。
+        assertTrue(!imgJson.has("text"));
+    }
+
+    @Test
+    public void send_isSafeImageUrl_allowsHttpAndRelative_blocksInjection() {
+        // 放行 http/https 与以 / 开头的 server 相对路径。
+        assertTrue(WKRichTextContent.isSafeImageUrl("https://cdn/x.png"));
+        assertTrue(WKRichTextContent.isSafeImageUrl("http://cdn/x.png"));
+        assertTrue(WKRichTextContent.isSafeImageUrl("HTTPS://cdn/x.png"));
+        assertTrue(WKRichTextContent.isSafeImageUrl("/0/123/abc.png"));
+
+        // 阻断带 // 的注入向量。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("javascript:alert(1)"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("data:image/png;base64,AAAA"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("file:///etc/passwd"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("vbscript:msgbox"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("ftp://host/x.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl(""));
+        assertTrue(!WKRichTextContent.isSafeImageUrl(null));
+
+        // YUJ-2832 🟡：白名单——不带 :// 的伪 scheme 旧黑名单逻辑会误放行，现必须拒绝。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("mailto:a@b.com"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("content://media/external/images/1"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("tel:10086"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("sms:10086"));
+        // 不以 / 开头的裸相对名（无 scheme）也拒绝——server 资源路径恒以 / 开头。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("abc.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("../../etc/passwd"));
+
+        // YUJ-2872 🟡：收紧为单斜杠相对路径——以 // 开头的 protocol-relative URL 会被
+        // 解析成外站绝对地址（//evil.host/x → https://evil.host/x），与「仅 server 相对
+        // 路径」契约不符，必须拒绝。单斜杠相对路径仍放行。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("//evil.host/x.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("//cdn.attacker.com/a/b.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("  //evil.host/x.png"));
+        assertTrue(WKRichTextContent.isSafeImageUrl("/single/slash/ok.png"));
+    }
 }

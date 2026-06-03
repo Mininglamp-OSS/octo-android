@@ -131,6 +131,11 @@ public class WKRichTextContent extends WKMessageContent {
      * {@code //}）的串都不以 {@code /} 开头，自然落入拒绝分支，{@code javascript:} /
      * {@code data:} / {@code file:} / {@code vbscript:} 等向量被一并堵死。上传成功但
      * URL 不安全的图片应被跳过。
+     *
+     * <p>YUJ-2872 🟡：进一步收紧——只放行<em>单斜杠</em> server 相对路径，拒绝以
+     * {@code //} 开头的 protocol-relative URL（如 {@code //evil.host/x.png}）。后者会被
+     * 浏览器 / WebView 解析成 {@code https://evil.host/x.png} 指向任意外站，与本方法注释
+     * 声称的「仅 server 相对路径」契约不符，构成开放重定向 / 外链注入面。
      */
     public static boolean isSafeImageUrl(String url) {
         if (isBlank(url)) {
@@ -140,9 +145,11 @@ public class WKRichTextContent extends WKMessageContent {
         if (lower.startsWith("http://") || lower.startsWith("https://")) {
             return true;
         }
-        // 白名单：仅 server 相对路径（以 / 开头且不含 scheme）。带任意 scheme 的串
-        // ——含 mailto:/content:/tel: 这类不带 // 的伪 scheme——都不以 / 开头，落此拒绝。
-        return lower.startsWith("/");
+        // 白名单：仅<strong>单斜杠</strong> server 相对路径（以 / 开头、但不以 // 开头，
+        // 且不含 scheme）。带任意 scheme 的串——含 mailto:/content:/tel: 这类不带 // 的
+        // 伪 scheme——都不以 / 开头，落此拒绝；以 // 开头的 protocol-relative URL 会被
+        // 解析成外站绝对地址，同样拒绝。
+        return lower.startsWith("/") && !lower.startsWith("//");
     }
 
     /**

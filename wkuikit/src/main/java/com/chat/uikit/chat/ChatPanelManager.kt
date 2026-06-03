@@ -1554,6 +1554,14 @@ class ChatPanelManager(
             if (!TextUtils.isEmpty(content)) {
                 content = editText.text.toString()
 
+                // 重复发送拦截（YUJ-2872 🔴 defect b）：图文混排发送 in-flight 期间，被消费
+                // 的文本仍留在输入框（YUJ-2832 崩溃恢复）。此时点发送键会把同一段可见文本作为
+                // 独立纯文本单发 → 重复文本 + 之后那条 RichText。命中（与 in-flight 快照完全
+                // 相同）则吞掉这次点击；文本被改动即视为新意图，放行。
+                if (iConversationContext.isPendingRichTextDuplicate(content)) {
+                    return@setOnClickListener
+                }
+
                 // 检查文本字节大小是否超过限制
                 val textBytes = content.toByteArray(Charsets.UTF_8)
                 if (messageTextMaxBytes > 0 && textBytes.size > messageTextMaxBytes) {

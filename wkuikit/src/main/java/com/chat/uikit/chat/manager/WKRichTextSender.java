@@ -103,6 +103,41 @@ public final class WKRichTextSender {
         }
     }
 
+    /**
+     * Snapshot-aware 清空判定（YUJ-2872 🔴 defect a，对齐 web#227 第二轮 isEditorUnchanged）。
+     *
+     * <p>图片上传是异步的，消息要等所有上传回调完成才入队（{@link OnEnqueued}）。在那之前
+     * 输入框保留待发文本（YUJ-2832 崩溃恢复）。若用户在等待期间又打了新草稿，则<em>较早</em>
+     * 那条 send 入队后<strong>绝不能</strong>无条件清空输入框——否则把用户新打的内容擦掉。
+     * 仅当输入框<em>仍然恰好</em>等于本次消费的快照文本时才清；否则保留更新后的草稿。
+     *
+     * @param consumedSnapshot   本次混排发送消费的输入框文本快照（send 入参 text）
+     * @param currentComposerText 入队回调触发时输入框的当前文本
+     * @return true 表示可以安全清空（输入框未变）；false 表示用户已打新草稿，须保留
+     */
+    public static boolean shouldClearComposer(String consumedSnapshot, String currentComposerText) {
+        if (consumedSnapshot == null) {
+            return false;
+        }
+        return consumedSnapshot.equals(currentComposerText);
+    }
+
+    /**
+     * 重复发送判定（YUJ-2872 🔴 defect b，对齐 web#227 sendingRef 防重入）。
+     *
+     * <p>一条混排发送 in-flight 期间，被消费的文本仍留在输入框（YUJ-2832 崩溃恢复）。此时
+     * 用户手动点发送键会把<em>同一段</em>可见文本作为一条独立纯文本消息单发出去 → 重复文本
+     * 消息 + 之后那条 RichText。命中（候选手动发送文本与 in-flight 快照完全相同）时调用方
+     * 应吞掉这次点击。文本被改动（哪怕一个字符）即视为用户的新意图，放行。
+     *
+     * @param pendingSnapshot in-flight 混排发送消费的文本快照（无 in-flight 时为 null）
+     * @param candidateText   手动发送键将要发出的文本
+     * @return true 表示这是 in-flight 混排发送的重复，手动发送须被拦截
+     */
+    public static boolean isDuplicatePendingText(String pendingSnapshot, String candidateText) {
+        return pendingSnapshot != null && pendingSnapshot.equals(candidateText);
+    }
+
     private static volatile ImageUploader uploader = defaultUploader();
 
     @VisibleForTesting

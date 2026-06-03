@@ -270,6 +270,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private int hideChannelAllPinnedMessage = 0;
     private PanelSwitchHelper mHelper;
     private ChatPanelManager chatPanelManager;
+    // 图文混排（RichText=14）一条 in-flight 发送消费的输入框文本快照（YUJ-2872 🔴）。
+    // 上传期间被消费的文本仍留在输入框（YUJ-2832 崩溃恢复），此快照用于：
+    //   (a) onEnqueued 清空时 snapshot-aware——仅当输入框仍等于它才清，绝不擦用户新草稿；
+    //   (b) 拦截手动发送键把同一段可见文本重复单发（重复文本 + 之后的 RichText）。
+    // 仅主线程读写（send 启动 / onEnqueued 回调 / 发送键点击都在主线程）。null = 无 in-flight。
+    private String pendingRichTextSnapshot;
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
     private final String loginUID = WKConfig.getInstance().getUid();
@@ -3082,13 +3088,40 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 才落库入队。绝不能在上传开始时就清空输入框——否则进程被杀 / Activity 销毁 /
         // 上传始终未回调时，文本既不在输入框也没入队 → 丢消息回归。改为仅在消息真正
         // 入队后（onEnqueued）才清空；上传未完成期间文本留在输入框，由草稿持久化兜底可恢复。
+        //
+        // snapshot-aware 清空（YUJ-2872 🔴 defect a，对齐 web#227 第二轮）：上传可耗时数秒，
+        // 用户在等待期间可能又打了新草稿。本次 send 入队后绝不能无条件清空——只有当输入框
+        // 仍恰好等于本次消费的 rawText 快照时才清；否则保留用户新打的内容。
+        // pendingRichTextSnapshot 同时供发送键拦截重复发送（defect b）使用。
+        pendingRichTextSnapshot = rawText;
         com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths,
                 () -> {
-                    if (chatPanelManager != null && chatPanelManager.getEditText() != null) {
-                        chatPanelManager.getEditText().setText(null);
+                    if (chatPanelManager != null && chatPanelManager.getEditText() != null
+                            && chatPanelManager.getEditText().getText() != null) {
+                        String current = chatPanelManager.getEditText().getText().toString();
+                        if (com.chat.uikit.chat.manager.WKRichTextSender
+                                .shouldClearComposer(rawText, current)) {
+                            chatPanelManager.getEditText().setText(null);
+                        }
+                    }
+                    // in-flight 结束：清快照，发送键不再拦截。
+                    if (rawText.equals(pendingRichTextSnapshot)) {
+                        pendingRichTextSnapshot = null;
                     }
                 });
         return true;
+    }
+
+    /**
+     * 重复发送拦截（YUJ-2872 🔴 defect b）：一条图文混排发送 in-flight 期间，被消费的文本
+     * 仍留在输入框（YUJ-2832 崩溃恢复）。此时用户手动点发送键会把<em>同一段</em>可见文本
+     * 作为独立纯文本单发出去 → 重复文本消息 + 之后那条 RichText。命中（候选文本与 in-flight
+     * 快照完全相同）时返回 true，发送键路径应吞掉这次点击。文本被改动即视为新意图，放行。
+     */
+    @Override
+    public boolean isPendingRichTextDuplicate(String candidateText) {
+        return com.chat.uikit.chat.manager.WKRichTextSender
+                .isDuplicatePendingText(pendingRichTextSnapshot, candidateText);
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {

@@ -267,5 +267,13 @@ public class WKRichTextContentTest {
         // 不以 / 开头的裸相对名（无 scheme）也拒绝——server 资源路径恒以 / 开头。
         assertTrue(!WKRichTextContent.isSafeImageUrl("abc.png"));
         assertTrue(!WKRichTextContent.isSafeImageUrl("../../etc/passwd"));
+
+        // YUJ-2872 🟡：收紧为单斜杠相对路径——以 // 开头的 protocol-relative URL 会被
+        // 解析成外站绝对地址（//evil.host/x → https://evil.host/x），与「仅 server 相对
+        // 路径」契约不符，必须拒绝。单斜杠相对路径仍放行。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("//evil.host/x.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("//cdn.attacker.com/a/b.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("  //evil.host/x.png"));
+        assertTrue(WKRichTextContent.isSafeImageUrl("/single/slash/ok.png"));
     }
 }

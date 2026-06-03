@@ -201,6 +201,125 @@ public class WKRichTextSenderTest {
     }
 
     // ---------------------------------------------------------------------
+    // YUJ-2872 🔴 composer-state race + 重复发送（对齐 web#227 第二轮 snapshot-aware）。
+    // ---------------------------------------------------------------------
+
+    /**
+     * 🔴 defect a 核心回归：上传 pending 期间用户打了新草稿，较早那条 send 入队后
+     * <strong>绝不能</strong>清掉新草稿。模拟 ChatActivity 的 onEnqueued snapshot-aware
+     * 清空逻辑：仅当输入框仍等于被消费的快照时才清。
+     */
+    @Test
+    public void draftTypedDuringUpload_survivesAfterEnqueue() {
+        // 受控 uploader：先攒回调，待"用户打新草稿"后再放行，复刻异步上传期间的竞态。
+        final ImageUploaderGate gate = new ImageUploaderGate("https://cdn/a.png");
+        WKRichTextSender.setUploaderForTest(gate);
+
+        // 模拟输入框：发送时消费的快照文本。
+        final String consumedSnapshot = "上线方案";
+        final StringBuilder composer = new StringBuilder(consumedSnapshot);
+
+        WKRichTextContent content = new WKRichTextContent();
+        WKRichTextSender.send(context, content, consumedSnapshot, Arrays.asList("/sd/a.png"),
+                () -> {
+                    // ChatActivity.onEnqueued 的 snapshot-aware 清空逻辑。
+                    if (WKRichTextSender.shouldClearComposer(consumedSnapshot, composer.toString())) {
+                        composer.setLength(0);
+                    }
+                });
+
+        // 上传 pending 期间用户打了一条全新的草稿（覆盖了仍留存的旧文本）。
+        composer.setLength(0);
+        composer.append("下一条新消息");
+
+        // 现在上传回调到达 → RichText 入队 → onEnqueued 触发。
+        gate.release();
+
+        // RichText 确实入队（旧文本必达）。
+        assertEquals(1, context.sent.size());
+        assertTrue(context.sent.get(0) instanceof WKRichTextContent);
+        // 关键：用户在等待期间新打的草稿没有被擦掉。
+        assertEquals("下一条新消息", composer.toString());
+    }
+
+    /**
+     * 🔴 对照组：上传 pending 期间用户<em>没动</em>输入框，入队后正常清空（输入框未变）。
+     */
+    @Test
+    public void composerUnchangedDuringUpload_clearedAfterEnqueue() {
+        final ImageUploaderGate gate = new ImageUploaderGate("https://cdn/a.png");
+        WKRichTextSender.setUploaderForTest(gate);
+
+        final String consumedSnapshot = "看这张图";
+        final StringBuilder composer = new StringBuilder(consumedSnapshot);
+
+        WKRichTextContent content = new WKRichTextContent();
+        WKRichTextSender.send(context, content, consumedSnapshot, Arrays.asList("/sd/a.png"),
+                () -> {
+                    if (WKRichTextSender.shouldClearComposer(consumedSnapshot, composer.toString())) {
+                        composer.setLength(0);
+                    }
+                });
+
+        gate.release();
+
+        assertEquals(1, context.sent.size());
+        // 输入框未变 → 清空。
+        assertEquals("", composer.toString());
+    }
+
+    /**
+     * 🔴 defect b：in-flight 混排发送期间，发送键拦截把同一段可见文本重复单发；
+     * 文本被改动则放行。直接断言去重判定，不产生重复文本消息。
+     */
+    @Test
+    public void duplicatePendingText_blocksManualResend_butAllowsEditedText() {
+        final String pending = "同一段文本";
+        // 与 in-flight 快照完全相同 → 拦截（避免重复文本消息）。
+        assertTrue(WKRichTextSender.isDuplicatePendingText(pending, "同一段文本"));
+        // 用户改动了文本（哪怕一字）→ 新意图，放行。
+        assertFalse(WKRichTextSender.isDuplicatePendingText(pending, "同一段文本!"));
+        assertFalse(WKRichTextSender.isDuplicatePendingText(pending, "别的内容"));
+        // 无 in-flight（快照 null）→ 永不拦截。
+        assertFalse(WKRichTextSender.isDuplicatePendingText(null, "同一段文本"));
+    }
+
+    /**
+     * 🔴 shouldClearComposer 边界：null 快照 / 文本已变 → 不清；完全相同 → 清。
+     */
+    @Test
+    public void shouldClearComposer_onlyWhenComposerStillEqualsSnapshot() {
+        assertTrue(WKRichTextSender.shouldClearComposer("abc", "abc"));
+        assertFalse(WKRichTextSender.shouldClearComposer("abc", "abcd"));
+        assertFalse(WKRichTextSender.shouldClearComposer("abc", ""));
+        assertFalse(WKRichTextSender.shouldClearComposer(null, "abc"));
+        assertFalse(WKRichTextSender.shouldClearComposer("abc", null));
+    }
+
+    // ---------------------------------------------------------------------
+
+    /** 受控 uploader：把单张图片的成功回调延迟到 {@link #release()} 调用时再触发。 */
+    private static final class ImageUploaderGate implements WKRichTextSender.ImageUploader {
+        private final String downloadUrl;
+        private Result pending;
+
+        ImageUploaderGate(String downloadUrl) {
+            this.downloadUrl = downloadUrl;
+        }
+
+        @Override
+        public void upload(WKChannel channel, String localPath, Result result) {
+            this.pending = result;
+        }
+
+        void release() {
+            if (pending != null) {
+                pending.onSuccess(downloadUrl);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
 
     /** 最小 IConversationContext 测试替身：记录入队消息，其余方法 no-op。 */
     private static final class CapturingContext implements IConversationContext {

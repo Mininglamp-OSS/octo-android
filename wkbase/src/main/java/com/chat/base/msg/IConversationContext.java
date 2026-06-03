@@ -101,4 +101,20 @@ public interface IConversationContext {
     default boolean trySendRichTextMixed(java.util.List<String> imageLocalPaths) {
         return false;
     }
+
+    /**
+     * 图文混排（RichText=14）发送 in-flight 期间的重复发送拦截（YUJ-2872 🔴）。
+     *
+     * <p>一条混排发送在等图片异步上传完成期间，被消费的文本仍留在输入框（YUJ-2832 崩溃
+     * 恢复语义）。若用户此时手动点发送键，会把<strong>同一段</strong>可见文本作为一条独立
+     * 纯文本消息单发出去 → 重复文本消息 + 之后那条 RichText。本方法返回 true 表示候选发送
+     * 文本与 in-flight 混排消费的文本完全相同，发送键路径应吞掉这次点击；文本被改动（即
+     * 用户的新意图）或无 in-flight 时返回 false（放行）。
+     *
+     * @param candidateText 发送键将要发出的文本
+     * @return true 表示是 in-flight 混排发送的重复，应拦截；false 表示放行
+     */
+    default boolean isPendingRichTextDuplicate(String candidateText) {
+        return false;
+    }
 }

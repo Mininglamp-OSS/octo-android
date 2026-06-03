@@ -3051,6 +3051,51 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
+     * 发送到<strong>指定捕获频道</strong>（YUJ-2872 🔴 跨频道路由）。图文混排延迟入队时
+     * Activity 可能已被复用切到别的频道（{@link #onNewIntent} 改写 channelId/channelType），
+     * 此路径按发起时捕获的 {@code destChannel} 落库，<em>不读</em> mutable 字段，避免把用 A
+     * 频道凭证上传的图片错投到当前 B 频道。
+     *
+     * <p>仅当捕获频道仍等于当前频道时才执行那些只对「当前会话 UI」有意义的副作用
+     * （清未读红点滚动、子区首发自动加入）；已切走时跳过，避免污染新会话。
+     */
+    @Override
+    public void sendMessageToChannel(WKMessageContent messageContent, WKChannel destChannel) {
+        if (destChannel == null || TextUtils.isEmpty(destChannel.channelID)) {
+            sendMessage(messageContent); // 没捕获到目标 → 回退原行为（当前会话）。
+            return;
+        }
+        boolean isCurrentChannel = destChannel.channelID.equals(channelId)
+                && destChannel.channelType == channelType;
+        if (isCurrentChannel && redDot > 0) {
+            wkVBinding.chatUnreadLayout.newMsgLayout.performClick();
+        }
+        // DM space_id 按目标频道类型判定（不依赖 mutable channelType）。
+        String spaceId = MsgModel.getInstance().getCurrentSpaceId();
+        if (!TextUtils.isEmpty(spaceId) && destChannel.channelType == WKChannelType.PERSONAL) {
+            messageContent.spaceId = spaceId;
+        }
+        WKMsg wkMsg = new WKMsg();
+        wkMsg.channelID = destChannel.channelID;
+        wkMsg.channelType = destChannel.channelType;
+        wkMsg.type = messageContent.type;
+        wkMsg.baseContentMsgModel = messageContent;
+        WKChannel channelInfo = WKIM.getInstance().getChannelManager()
+                .getChannel(destChannel.channelID, destChannel.channelType);
+        wkMsg.setChannelInfo(channelInfo != null ? channelInfo : destChannel);
+        WKSendMsgUtils.getInstance().sendMessage(wkMsg);
+
+        if (isCurrentChannel && destChannel.channelType == WKChannelType.COMMUNITY_TOPIC
+                && !hasJoinedThread) {
+            hasJoinedThread = true;
+            String[] parsed = ThreadModel.getInstance().parseChannelId(destChannel.channelID);
+            if (parsed != null) {
+                ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
+            }
+        }
+    }
+
+    /**
      * 图文混排（RichText=14）发送侧聚合入口（Phase 1，对称 web#227）。
      *
      * <p>仅当输入框含待发文本时接管：把文本与本次选取的图片聚合成单条 type=14
@@ -3110,9 +3155,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 仍恰好等于本次消费的 rawText 快照时才清；否则保留用户新打的内容。
         // pendingRichTextSnapshot 同时供发送键拦截重复发送（defect b）使用。
         pendingRichTextSnapshot = rawText;
+        // 捕获本次发送的目标频道快照（YUJ-2872 🔴 跨频道路由）：上传可耗时数秒，回调触发时
+        // Activity 可能已切到别的频道。落库与清落盘草稿都按这个捕获值走，不读 mutable 字段。
+        final WKChannel sendChannel = getChatChannelInfo();
         com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths,
                 () -> {
-                    if (chatPanelManager != null && chatPanelManager.getEditText() != null
+                    // 仅当回调到达时仍停留在<em>发起时</em>那个频道，才动 in-memory 输入框
+                    // （YUJ-2872 🔴 跨频道）：已切走时这个输入框属于新频道，绝不能清它。
+                    boolean stillOnSendChannel = sendChannel != null
+                            && sendChannel.channelID != null
+                            && sendChannel.channelID.equals(channelId)
+                            && sendChannel.channelType == channelType;
+                    if (stillOnSendChannel && chatPanelManager != null
+                            && chatPanelManager.getEditText() != null
                             && chatPanelManager.getEditText().getText() != null) {
                         String current = chatPanelManager.getEditText().getText().toString();
                         if (com.chat.uikit.chat.manager.WKRichTextSender
@@ -3125,9 +3180,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     // 离场 teardown（persistOldChannelEditState / persistCurrentChannelEditState /
                     // saveEditContent）会把这段“即将发出”的可见文本落成 server 草稿。等本次
                     // 入队后只清了内存 EditText 却不清落盘草稿 → 重开会话又恢复出已发文本，
-                    // 既是 stale UI 又是一键重复发送。故仅当落盘草稿仍恰好等于本次消费的快照
-                    // 时清掉它；用户离场后新打的草稿（不等于快照）保留，不误删。
-                    clearPersistedDraftIfMatches(rawText);
+                    // 既是 stale UI 又是一键重复发送。按捕获频道清（跨频道安全），且仅当落盘
+                    // 草稿仍恰好等于本次消费的快照时清；用户新打的草稿（不等于快照）保留不误删。
+                    clearPersistedDraftIfMatches(sendChannel, rawText);
                     // in-flight 结束：清快照，发送键不再拦截。
                     if (rawText.equals(pendingRichTextSnapshot)) {
                         pendingRichTextSnapshot = null;
@@ -3142,15 +3197,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 离开会话，离场 teardown 会把这段可见文本落成 server/本地草稿；本次发送入队后必须把
      * 这条草稿一并清掉，否则重开会话又把已发文本恢复出来 = stale UI + 一键重复发送。
      *
+     * <p>按<em>捕获</em>的 {@code destChannel} 清（YUJ-2872 🔴 跨频道路由）：上传期间 Activity
+     * 可能已切走，不能读 mutable 字段，否则会去清错频道的草稿 / 漏清目标频道。
+     *
      * <p>幂等且不误删：用 {@link com.chat.uikit.chat.manager.WKRichTextSender#shouldClearComposer}
      * 同款“快照 vs 现值”判定——离场后用户又打的新草稿（不等于快照）保留不动。
      */
-    private void clearPersistedDraftIfMatches(String consumedSnapshot) {
-        if (TextUtils.isEmpty(channelId)) {
+    private void clearPersistedDraftIfMatches(WKChannel destChannel, String consumedSnapshot) {
+        if (destChannel == null || TextUtils.isEmpty(destChannel.channelID)) {
             return;
         }
         WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
-                .getMsgExtraWithChannel(channelId, channelType);
+                .getMsgExtraWithChannel(destChannel.channelID, destChannel.channelType);
         if (extra == null || TextUtils.isEmpty(extra.draft)) {
             return; // 没落盘草稿（用户没离场，或离场后已被别处清空）→ 无需处理。
         }
@@ -3159,7 +3217,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return; // 落盘草稿已是用户新打的内容（≠ 本次快照）→ 保留，不误删。
         }
         // 落盘草稿仍是这段已发文本 → 清空（保留浏览位置等其它 extra 字段）。
-        MsgModel.getInstance().updateCoverExtra(channelId, channelType,
+        MsgModel.getInstance().updateCoverExtra(destChannel.channelID, destChannel.channelType,
                 extra.browseTo, extra.keepMessageSeq, extra.keepOffsetY, "");
     }
 

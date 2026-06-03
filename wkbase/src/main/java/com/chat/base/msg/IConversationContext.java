@@ -31,6 +31,21 @@ public interface IConversationContext {
     //发送消息到当前会话
     void sendMessage(WKMessageContent wkMessageContent);
 
+    /**
+     * 发送消息到<strong>指定</strong>频道（YUJ-2872 🔴 跨频道路由）。用于<em>延迟入队</em>
+     * 场景：图文混排发送在等图片异步上传期间，承载它的 Activity 可能已被复用切到别的频道
+     * （{@code ChatActivity.onNewIntent} 改写了 mutable 的 channelId/channelType）。若此时
+     * 回调仍走 {@link #sendMessage} 读 mutable 字段，消息会被错投到当前频道（用 A 频道凭证
+     * 上传的图片落到 B 频道 = 隐私/路由 bug）。调用方应在发起时<strong>捕获</strong>目标频道
+     * （{@link #getChatChannelInfo()}），入队时传回这里按捕获的频道落库，不受字段变更影响。
+     *
+     * <p>默认实现委派回 {@link #sendMessage}（无跨频道语义的实现保持原行为）。
+     */
+    default void sendMessageToChannel(WKMessageContent wkMessageContent,
+                                      com.xinbida.wukongim.entity.WKChannel channel) {
+        sendMessage(wkMessageContent);
+    }
+
     //获取当前会话到频道信息
     WKChannel getChatChannelInfo();
 

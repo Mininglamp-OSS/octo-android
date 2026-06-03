@@ -170,7 +170,7 @@ public final class WKRichTextSender {
         }
         WKChannel channel = context.getChatChannelInfo();
         if (channel == null) {
-            sendTextFallback(context, content, text, onEnqueued);
+            sendTextFallback(context, null, content, text, onEnqueued);
             return;
         }
         List<String> paths = imagePaths != null ? imagePaths : new ArrayList<>();
@@ -191,7 +191,7 @@ public final class WKRichTextSender {
                                    int[] failedCount,
                                    OnEnqueued onEnqueued) {
         if (index >= paths.size()) {
-            finish(context, content, text, imageBlocks, failedCount[0], onEnqueued);
+            finish(context, channel, content, text, imageBlocks, failedCount[0], onEnqueued);
             return;
         }
         String localPath = paths.get(index);
@@ -227,6 +227,7 @@ public final class WKRichTextSender {
      * 入队成功后触发 {@code onEnqueued}（调用方据此清空输入框，保证文本必达）。
      */
     private static void finish(IConversationContext context,
+                               WKChannel channel,
                                WKRichTextContent content,
                                String text,
                                List<WKRichTextContent.RichTextBlock> imageBlocks,
@@ -235,7 +236,7 @@ public final class WKRichTextSender {
         if (imageBlocks.isEmpty()) {
             // 所有图片都失败/不安全 → 文本仍要落地。
             toastFailIfAny(context, failedCount);
-            sendTextFallback(context, content, text, onEnqueued);
+            sendTextFallback(context, channel, content, text, onEnqueued);
             return;
         }
 
@@ -250,7 +251,9 @@ public final class WKRichTextSender {
         content.plain = WKRichTextContent.buildPlainFromBlocks(blocks);
 
         toastFailIfAny(context, failedCount);
-        context.sendMessage(content);
+        // 按<em>捕获</em>的频道落库（YUJ-2872 🔴 跨频道路由）：上传期间 Activity 可能已切到
+        // 别的频道，绝不能读 mutable 字段，否则消息错投。channel 为本次发起时捕获的目标。
+        enqueueToChannel(context, content, channel);
         notifyEnqueued(onEnqueued);
     }
 
@@ -259,6 +262,7 @@ public final class WKRichTextSender {
      * 保证群 @ 通知（含 @所有AI）不因降级而丢失。入队后触发 {@code onEnqueued}。
      */
     private static void sendTextFallback(IConversationContext context,
+                                         WKChannel channel,
                                          WKRichTextContent richHolder,
                                          String text,
                                          OnEnqueued onEnqueued) {
@@ -274,8 +278,24 @@ public final class WKRichTextSender {
         // 路径会走到这里，发出纯文本单条，与既有发送键文本路径同语义——@ 通知靠上面的
         // mentionAll/humans/ais + mentionInfo.uids 三态基字段保证不丢；entities 只影响接收侧
         // 高亮渲染，且其跨 block 的 offset 在降级为纯文本后已失去意义，故不迁移。
-        context.sendMessage(textContent);
+        enqueueToChannel(context, textContent, channel);
         notifyEnqueued(onEnqueued);
+    }
+
+    /**
+     * 按<em>捕获</em>的目标频道落库（YUJ-2872 🔴 跨频道路由）。延迟入队期间 Activity 可能已
+     * 被复用切到别的频道；若 {@code channel} 已捕获就走 {@link IConversationContext#sendMessageToChannel}
+     * 锁定目标，避免错投。{@code channel} 为 null（无法获取频道）时回退 {@link IConversationContext#sendMessage}
+     * 保持原行为。
+     */
+    private static void enqueueToChannel(IConversationContext context,
+                                         WKMessageContent messageContent,
+                                         WKChannel channel) {
+        if (channel != null) {
+            context.sendMessageToChannel(messageContent, channel);
+        } else {
+            context.sendMessage(messageContent);
+        }
     }
 
     private static void notifyEnqueued(OnEnqueued onEnqueued) {

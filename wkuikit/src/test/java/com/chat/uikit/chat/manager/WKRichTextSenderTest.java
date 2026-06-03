@@ -269,6 +269,56 @@ public class WKRichTextSenderTest {
     }
 
     /**
+     * 🔴 跨频道路由回归（Jerry-Xin 复审 defect）：在 A 频道发起图文混排，上传完成<em>前</em>
+     * Activity 被复用切到 B 频道（getChatChannelInfo 改变）。入队必须落到<strong>发起时
+     * 捕获的 A 频道</strong>，而非当前 B 频道——否则用 A 凭证上传的图片错投到 B（隐私/路由
+     * bug）。本测试断言 sender 走 sendMessageToChannel 且目标恒为捕获的 A。
+     */
+    @Test
+    public void delayedEnqueue_routesToCapturedChannel_notSwitchedChannel() {
+        final ImageUploaderGate gate = new ImageUploaderGate("https://cdn/a.png");
+        WKRichTextSender.setUploaderForTest(gate);
+
+        // 发起时当前频道 = A，sender 在 send() 内部捕获它。
+        context.currentChannel = new WKChannel("channelA", (byte) 2);
+        WKRichTextContent content = new WKRichTextContent();
+        WKRichTextSender.send(context, content, "配文", Arrays.asList("/sd/a.png"), null);
+
+        // 上传 pending 期间用户切到 B 频道（Activity 复用，mutable 频道被改写）。
+        context.currentChannel = new WKChannel("channelB", (byte) 1);
+
+        // 现在上传回调到达 → 入队。
+        gate.release();
+
+        assertEquals(1, context.sent.size());
+        assertTrue(context.sent.get(0) instanceof WKRichTextContent);
+        // 关键：落库目标是发起时捕获的 A，不是切换后的 B。
+        WKChannel routed = context.sentChannels.get(0);
+        assertTrue("must route via sendMessageToChannel with captured channel", routed != null);
+        assertEquals("channelA", routed.channelID);
+        assertEquals((byte) 2, routed.channelType);
+    }
+
+    /**
+     * 🔴 跨频道路由回归（降级路径）：全图上传失败降级纯文本时，同样必须落到捕获频道。
+     */
+    @Test
+    public void delayedEnqueue_textFallback_routesToCapturedChannel() {
+        WKRichTextSender.setUploaderForTest((channel, localPath, result) -> result.onFailure());
+
+        context.currentChannel = new WKChannel("channelA", (byte) 2);
+        WKRichTextContent content = new WKRichTextContent();
+        WKRichTextSender.send(context, content, "只有文字会留下", Arrays.asList("/sd/a.png"), null);
+
+        // 全图失败是同步发生的（uploader 立即 onFailure），但路由仍须按捕获频道。
+        assertEquals(1, context.sent.size());
+        assertTrue(context.sent.get(0) instanceof WKTextContent);
+        WKChannel routed = context.sentChannels.get(0);
+        assertTrue(routed != null);
+        assertEquals("channelA", routed.channelID);
+    }
+
+    /**
      * 🔴 defect b：in-flight 混排发送期间，发送键拦截把同一段可见文本重复单发；
      * 文本被改动则放行。直接断言去重判定，不产生重复文本消息。
      */
@@ -355,15 +405,26 @@ public class WKRichTextSenderTest {
     /** 最小 IConversationContext 测试替身：记录入队消息，其余方法 no-op。 */
     private static final class CapturingContext implements IConversationContext {
         final List<WKMessageContent> sent = new ArrayList<>();
+        // 跨频道路由回归用：模拟 ChatActivity 可被复用切到别的频道。
+        WKChannel currentChannel = new WKChannel("c1", (byte) 2);
+        // 记录每条消息<em>实际</em>落库的目标频道（null 表示走了无频道的 sendMessage）。
+        final List<WKChannel> sentChannels = new ArrayList<>();
 
         @Override
         public void sendMessage(WKMessageContent wkMessageContent) {
             sent.add(wkMessageContent);
+            sentChannels.add(null);
+        }
+
+        @Override
+        public void sendMessageToChannel(WKMessageContent wkMessageContent, WKChannel channel) {
+            sent.add(wkMessageContent);
+            sentChannels.add(channel);
         }
 
         @Override
         public WKChannel getChatChannelInfo() {
-            return new WKChannel("c1", (byte) 2);
+            return currentChannel;
         }
 
         @Override

@@ -105,6 +105,7 @@ import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.UserUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
@@ -3035,6 +3036,51 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 ThreadModel.getInstance().joinThread(parsed[0], parsed[1], (code, msg) -> {});
             }
         }
+    }
+
+    /**
+     * 图文混排（RichText=14）发送侧聚合入口（Phase 1，对称 web#227）。
+     *
+     * <p>仅当输入框含待发文本时接管：把文本与本次选取的图片聚合成单条 type=14
+     * （text 块在前、image 块按选取顺序在后），mention（三态 humans/ais + 群成员 uids）
+     * 与发送键文本路径同源复用，发送后清空输入框、关闭顶部提示。无文本则返回 false，
+     * 调用方继续走原有逐张图片发送（纯图片零回归）。
+     *
+     * <p>编辑态 / 回复态下不接管（保持既有逐条语义），由 sendMessage 的特化路径处理。
+     */
+    @Override
+    public boolean trySendRichTextMixed(List<String> imageLocalPaths) {
+        if (imageLocalPaths == null || imageLocalPaths.isEmpty()) {
+            return false;
+        }
+        if (chatPanelManager == null || chatPanelManager.getEditText() == null
+                || chatPanelManager.getEditText().getText() == null) {
+            return false;
+        }
+        // 编辑 / 回复态走既有特化路径，不聚合（避免破坏 edit/reply 语义）。
+        if (editMsg != null || replyWKMsg != null) {
+            return false;
+        }
+        String rawText = chatPanelManager.getEditText().getText().toString();
+        if (TextUtils.isEmpty(StringUtils.replaceBlank(rawText))) {
+            return false; // 无文本 → 纯图片，交回原逐条发送路径。
+        }
+        // 文本超字节上限：不聚合（与发送键路径同源阈值）。交回逐条图片发送，
+        // 超限文本留在输入框，由发送键走 showTextToFileAlert 转文件，避免发出超限 payload。
+        if (chatPanelManager.isTextOverByteLimit(rawText)) {
+            return false;
+        }
+
+        com.chat.uikit.chat.msgmodel.WKRichTextContent content =
+                new com.chat.uikit.chat.msgmodel.WKRichTextContent();
+        // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
+        chatPanelManager.applyInputMentionsTo(content, rawText);
+
+        com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths);
+
+        // 与文本发送一致：清空输入框、关闭顶部提示条。
+        chatPanelManager.getEditText().setText(null);
+        return true;
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {

@@ -86,4 +86,19 @@ public interface IConversationContext {
 
     // 选择文件发送
     void chooseFile();
+
+    /**
+     * 图文混排（RichText=14）发送侧聚合（Phase 1）。
+     *
+     * <p>当输入框含待发文本时，把传入的图片本地路径与文本聚合成<strong>一条</strong>
+     * type=14 消息（text 块在前、image 块按选取顺序在后），上传图片得 URL 后落库发送，
+     * 并清空输入框；返回 true 表示本次发送已被接管。若输入框无文本则返回 false，调用方
+     * 继续走原有逐条图片发送（纯图片零回归）。
+     *
+     * @param imageLocalPaths 本次选取的静态图片本地路径（按选取顺序，调用方已过滤 video/gif）
+     * @return true 已聚合发送；false 未接管
+     */
+    default boolean trySendRichTextMixed(java.util.List<String> imageLocalPaths) {
+        return false;
+    }
 }

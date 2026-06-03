@@ -86,6 +86,62 @@ public class WKRichTextContent extends WKMessageContent {
         type = WKContentType.richText;
     }
 
+    // ---------------------------------------------------------------------
+    // 发送侧工厂（Phase 1 图文混排，与接收侧 decode 共址，复用同一份权威 schema）
+    // ---------------------------------------------------------------------
+
+    /** 构造 text block。 */
+    public static RichTextBlock makeTextBlock(String text) {
+        RichTextBlock block = new RichTextBlock();
+        block.type = BLOCK_TYPE_TEXT;
+        block.text = text;
+        return block;
+    }
+
+    /** 构造 image block（url 已上传得到 + 本地量出的尺寸；尺寸必填 >0，对齐 octo-lib 契约）。 */
+    public static RichTextBlock makeImageBlock(String url, int width, int height) {
+        RichTextBlock block = new RichTextBlock();
+        block.type = BLOCK_TYPE_IMAGE;
+        block.url = url;
+        block.width = width;
+        block.height = height;
+        return block;
+    }
+
+    /**
+     * 由有序 block 列表构造一条可发送的 RichText 消息。plain 仅填本地占位（image →
+     * {@link #IMAGE_PLACEHOLDER} 这一 wire token，非本地化文案），server #232 Finalize
+     * 会重算覆盖——client 不是 plain 的权威来源。
+     */
+    public static WKRichTextContent create(List<RichTextBlock> blocks) {
+        WKRichTextContent content = new WKRichTextContent();
+        content.blocks = blocks != null ? blocks : new ArrayList<>();
+        content.plain = buildPlainFromBlocks(content.blocks);
+        return content;
+    }
+
+    /**
+     * 图片 URL 安全校验（与接收侧 / web isSafeUrl / octo-lib URL allowlist 对称）：
+     * 放行 http/https 绝对地址与 server 相对路径（{@code WKApiConfig#getShowUrl} 会前缀
+     * baseUrl），阻断 {@code javascript:} / {@code data:} / {@code file:} / {@code vbscript:}
+     * 等注入向量。上传成功但 URL 不安全的图片应被跳过。
+     */
+    public static boolean isSafeImageUrl(String url) {
+        if (isBlank(url)) {
+            return false;
+        }
+        String lower = url.trim().toLowerCase();
+        if (lower.startsWith("javascript:") || lower.startsWith("data:")
+                || lower.startsWith("file:") || lower.startsWith("vbscript:")) {
+            return false;
+        }
+        if (lower.startsWith("http://") || lower.startsWith("https://")) {
+            return true;
+        }
+        // 无 scheme 的相对路径视为 server 资源路径（安全）；带其它 scheme 一律拒绝。
+        return !lower.contains("://");
+    }
+
     /**
      * 序列化回 RichText payload（content block 数组 + 顶层 plain），与 decodeMsg
      * 对称。Phase 1 不主动发送 RichText，但 SDK 在转存 / 引用 / 合并转发等路径会

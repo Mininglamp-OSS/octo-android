@@ -25,6 +25,7 @@ jobs:
     uses: Mininglamp-OSS/.github/.github/workflows/reusable-codeql.yml@main
     with:
       language: java-kotlin
+      build-command: ./gradlew assembleDevDebug
     permissions:
       actions: read
       contents: read

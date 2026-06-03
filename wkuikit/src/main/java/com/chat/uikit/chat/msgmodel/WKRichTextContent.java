@@ -122,24 +122,27 @@ public class WKRichTextContent extends WKMessageContent {
 
     /**
      * 图片 URL 安全校验（与接收侧 / web isSafeUrl / octo-lib URL allowlist 对称）：
-     * 放行 http/https 绝对地址与 server 相对路径（{@code WKApiConfig#getShowUrl} 会前缀
-     * baseUrl），阻断 {@code javascript:} / {@code data:} / {@code file:} / {@code vbscript:}
-     * 等注入向量。上传成功但 URL 不安全的图片应被跳过。
+     * <strong>白名单</strong>放行——只接受 http/https 绝对地址，或以 {@code /} 开头的
+     * server 相对路径（{@code WKApiConfig#getShowUrl} 会前缀 baseUrl）。其余一律拒绝。
+     *
+     * <p>之所以改成纯白名单（而非旧版「不含 {@code ://} 即放行」黑名单）：旧逻辑会把
+     * {@code mailto:x} / {@code content:x} / {@code tel:x} 这类<em>不带 {@code //} 的伪
+     * scheme</em> 当成相对路径放行，留下注入面。现在凡是带 scheme（无论是否带
+     * {@code //}）的串都不以 {@code /} 开头，自然落入拒绝分支，{@code javascript:} /
+     * {@code data:} / {@code file:} / {@code vbscript:} 等向量被一并堵死。上传成功但
+     * URL 不安全的图片应被跳过。
      */
     public static boolean isSafeImageUrl(String url) {
         if (isBlank(url)) {
             return false;
         }
         String lower = url.trim().toLowerCase();
-        if (lower.startsWith("javascript:") || lower.startsWith("data:")
-                || lower.startsWith("file:") || lower.startsWith("vbscript:")) {
-            return false;
-        }
         if (lower.startsWith("http://") || lower.startsWith("https://")) {
             return true;
         }
-        // 无 scheme 的相对路径视为 server 资源路径（安全）；带其它 scheme 一律拒绝。
-        return !lower.contains("://");
+        // 白名单：仅 server 相对路径（以 / 开头且不含 scheme）。带任意 scheme 的串
+        // ——含 mailto:/content:/tel: 这类不带 // 的伪 scheme——都不以 / 开头，落此拒绝。
+        return lower.startsWith("/");
     }
 
     /**

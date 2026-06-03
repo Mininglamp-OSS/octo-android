@@ -19,6 +19,8 @@ package com.chat.uikit.chat.manager;
 import android.graphics.BitmapFactory;
 import android.text.TextUtils;
 
+import androidx.annotation.VisibleForTesting;
+
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.net.ud.WKUploader;
 import com.chat.base.utils.WKToastUtils;
@@ -50,17 +52,67 @@ import java.util.UUID;
  * downloadUrl 再塞 block，故本类先逐张上传（顺序串行，天然保序）。
  *
  * <p>安全：每张图上传后用 {@link WKRichTextContent#isSafeImageUrl(String)} 校验
- * http/https，阻断 {@code javascript:}/{@code data:}/{@code file:} 注入；不安全或上传
- * 失败的图片跳过并 Toast。
+ * http/https 或 server 相对路径，阻断 {@code javascript:}/{@code data:}/{@code file:}
+ * 等注入；不安全或上传失败的图片跳过并 Toast。
  *
  * <p>原子性（对齐 YUJ-2740 元教训②）：文本<strong>始终落成一条消息</strong>——只要有
  * ≥1 张有效图片就发图文混排单条；若所有图片都失败，则降级发纯文本（text 不丢失）。
  * mention（三态 humans/ais + 群成员 uids）由调用方在传入的 {@code content} 上预置，
  * 全部图片失败降级时同样迁移到纯文本消息，保证群 @ 通知不丢。
+ *
+ * <p><strong>文本必达（YUJ-2832 P1 修复）</strong>：图片上传是异步的，
+ * {@link IConversationContext#sendMessage} 要等所有上传回调完成才落库入队。在那之前，
+ * 调用方<em>绝不能</em>提前清空输入框——否则进程被杀 / Activity 销毁 / 上传始终未回调
+ * 时，用户文本既不在输入框、也没作为本地 outgoing message 落库，造成相对 text/media
+ * 路径（立即入队）的丢消息回归。为此 {@code send} 接收一个 {@link OnEnqueued} 回调，
+ * <strong>仅在消息真正入队后</strong>（混排单条或纯文本降级）才触发；上传未完成期间文本
+ * 留在输入框，由 ChatActivity 的草稿持久化兜底，可恢复。
  */
 public final class WKRichTextSender {
 
     private WKRichTextSender() {
+    }
+
+    /**
+     * 消息已持久入队的回调。<strong>仅</strong>在 {@link IConversationContext#sendMessage}
+     * 真正被调用（混排单条或纯文本降级落库）后触发；上传未完成 / 全程无消息入队时
+     * 永不触发，保证调用方据此清空输入框时「文本已必达」。在主线程触发（WKUploader
+     * 回调已 post 回主 looper）。
+     */
+    public interface OnEnqueued {
+        void onEnqueued();
+    }
+
+    /**
+     * 单张图片上传抽象（可注入测试替身）。生产实现走 {@link WKUploader} 两步（取凭证
+     * → PUT），回调在主线程。把它抽成 seam 是为了让「上传未完成 → 文本仍可恢复 / 不被
+     * 提前清空」这条 P1 回归可在纯 JVM 单测下被断言。
+     */
+    public interface ImageUploader {
+        /**
+         * @param channel   目标频道
+         * @param localPath 图片本地路径
+         * @param result    上传结果回调（成功给 downloadUrl；失败 / 未完成则不调用 onSuccess）
+         */
+        void upload(WKChannel channel, String localPath, Result result);
+
+        interface Result {
+            void onSuccess(String downloadUrl);
+
+            void onFailure();
+        }
+    }
+
+    private static volatile ImageUploader uploader = defaultUploader();
+
+    @VisibleForTesting
+    static void setUploaderForTest(ImageUploader testUploader) {
+        uploader = testUploader != null ? testUploader : defaultUploader();
+    }
+
+    @VisibleForTesting
+    static void resetUploader() {
+        uploader = defaultUploader();
     }
 
     /**
@@ -70,22 +122,25 @@ public final class WKRichTextSender {
      * @param content    调用方已预置 mention 基字段（mentionInfo/mentionHumans/mentionAis）的 RichText 载体
      * @param text       输入框原始文本（保证落地，不丢字）
      * @param imagePaths 本次选取的图片本地路径（按选取顺序）
+     * @param onEnqueued 消息真正入队后的回调；调用方应在此（且仅在此）清空输入框，
+     *                   保证「文本必达」。可为 null。
      */
     public static void send(IConversationContext context,
                             WKRichTextContent content,
                             String text,
-                            List<String> imagePaths) {
+                            List<String> imagePaths,
+                            OnEnqueued onEnqueued) {
         if (context == null || content == null) {
             return;
         }
         WKChannel channel = context.getChatChannelInfo();
         if (channel == null) {
-            sendTextFallback(context, content, text);
+            sendTextFallback(context, content, text, onEnqueued);
             return;
         }
         List<String> paths = imagePaths != null ? imagePaths : new ArrayList<>();
         uploadNext(context, channel, content, text, paths, 0,
-                new ArrayList<>(), new int[]{0});
+                new ArrayList<>(), new int[]{0}, onEnqueued);
     }
 
     /**
@@ -98,61 +153,54 @@ public final class WKRichTextSender {
                                    List<String> paths,
                                    int index,
                                    List<WKRichTextContent.RichTextBlock> imageBlocks,
-                                   int[] failedCount) {
+                                   int[] failedCount,
+                                   OnEnqueued onEnqueued) {
         if (index >= paths.size()) {
-            finish(context, content, text, imageBlocks, failedCount[0]);
+            finish(context, content, text, imageBlocks, failedCount[0], onEnqueued);
             return;
         }
         String localPath = paths.get(index);
         if (TextUtils.isEmpty(localPath)) {
             failedCount[0]++;
-            uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount);
+            uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
             return;
         }
         int[] dims = decodeImageSize(localPath);
-        WKUploader.getInstance().getUploadCredentials(channel.channelID, channel.channelType, localPath,
-                (uploadUrl, downloadUrl, contentType, contentDisposition) -> {
-                    if (TextUtils.isEmpty(uploadUrl) || TextUtils.isEmpty(downloadUrl)) {
-                        failedCount[0]++;
-                        uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount);
-                        return;
-                    }
-                    WKUploader.getInstance().putUpload(uploadUrl, localPath, contentType, contentDisposition,
-                            UUID.randomUUID().toString().replaceAll("-", ""),
-                            new WKUploader.IUploadBack() {
-                                @Override
-                                public void onSuccess(String url) {
-                                    // 安全对称：上传成功也要校验 scheme，阻断 javascript:/data:/file:。
-                                    if (!WKRichTextContent.isSafeImageUrl(downloadUrl)) {
-                                        failedCount[0]++;
-                                    } else {
-                                        imageBlocks.add(WKRichTextContent.makeImageBlock(downloadUrl, dims[0], dims[1]));
-                                    }
-                                    uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount);
-                                }
+        uploader.upload(channel, localPath, new ImageUploader.Result() {
+            @Override
+            public void onSuccess(String downloadUrl) {
+                // 安全对称：上传成功也要校验 scheme，阻断 javascript:/data:/file:。
+                if (!WKRichTextContent.isSafeImageUrl(downloadUrl)) {
+                    failedCount[0]++;
+                } else {
+                    imageBlocks.add(WKRichTextContent.makeImageBlock(downloadUrl, dims[0], dims[1]));
+                }
+                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
+            }
 
-                                @Override
-                                public void onError() {
-                                    failedCount[0]++;
-                                    uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount);
-                                }
-                            });
-                });
+            @Override
+            public void onFailure() {
+                failedCount[0]++;
+                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
+            }
+        });
     }
 
     /**
      * 全部图片处理完毕：拼装有序 block（text 在前、image 按序在后）→ 发单条 RichText；
      * 若无任何有效图片，降级发纯文本（原子性：text 不丢）。失败有跳过时 Toast 提示。
+     * 入队成功后触发 {@code onEnqueued}（调用方据此清空输入框，保证文本必达）。
      */
     private static void finish(IConversationContext context,
                                WKRichTextContent content,
                                String text,
                                List<WKRichTextContent.RichTextBlock> imageBlocks,
-                               int failedCount) {
+                               int failedCount,
+                               OnEnqueued onEnqueued) {
         if (imageBlocks.isEmpty()) {
             // 所有图片都失败/不安全 → 文本仍要落地。
             toastFailIfAny(context, failedCount);
-            sendTextFallback(context, content, text);
+            sendTextFallback(context, content, text, onEnqueued);
             return;
         }
 
@@ -168,15 +216,17 @@ public final class WKRichTextSender {
 
         toastFailIfAny(context, failedCount);
         context.sendMessage(content);
+        notifyEnqueued(onEnqueued);
     }
 
     /**
      * 降级纯文本发送：把已预置在 RichText 载体上的 mention 基字段迁移到 WKTextContent，
-     * 保证群 @ 通知（含 @所有AI）不因降级而丢失。
+     * 保证群 @ 通知（含 @所有AI）不因降级而丢失。入队后触发 {@code onEnqueued}。
      */
     private static void sendTextFallback(IConversationContext context,
                                          WKRichTextContent richHolder,
-                                         String text) {
+                                         String text,
+                                         OnEnqueued onEnqueued) {
         if (TextUtils.isEmpty(text)) {
             return;
         }
@@ -186,6 +236,13 @@ public final class WKRichTextSender {
         textContent.mentionAis = richHolder.mentionAis;
         textContent.mentionInfo = richHolder.mentionInfo;
         context.sendMessage(textContent);
+        notifyEnqueued(onEnqueued);
+    }
+
+    private static void notifyEnqueued(OnEnqueued onEnqueued) {
+        if (onEnqueued != null) {
+            onEnqueued.onEnqueued();
+        }
     }
 
     private static void toastFailIfAny(IConversationContext context, int failedCount) {
@@ -207,5 +264,30 @@ public final class WKRichTextSender {
         } catch (Throwable t) {
             return new int[]{0, 0};
         }
+    }
+
+    /** 生产上传实现：WKUploader 两步（取凭证 → PUT），回调已 post 回主线程。 */
+    private static ImageUploader defaultUploader() {
+        return (channel, localPath, result) ->
+                WKUploader.getInstance().getUploadCredentials(channel.channelID, channel.channelType, localPath,
+                        (uploadUrl, downloadUrl, contentType, contentDisposition) -> {
+                            if (TextUtils.isEmpty(uploadUrl) || TextUtils.isEmpty(downloadUrl)) {
+                                result.onFailure();
+                                return;
+                            }
+                            WKUploader.getInstance().putUpload(uploadUrl, localPath, contentType, contentDisposition,
+                                    UUID.randomUUID().toString().replaceAll("-", ""),
+                                    new WKUploader.IUploadBack() {
+                                        @Override
+                                        public void onSuccess(String url) {
+                                            result.onSuccess(downloadUrl);
+                                        }
+
+                                        @Override
+                                        public void onError() {
+                                            result.onFailure();
+                                        }
+                                    });
+                        });
     }
 }

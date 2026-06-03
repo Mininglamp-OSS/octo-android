@@ -244,13 +244,13 @@ public class WKRichTextContentTest {
 
     @Test
     public void send_isSafeImageUrl_allowsHttpAndRelative_blocksInjection() {
-        // 放行 http/https 与无 scheme 相对路径（server 资源）。
+        // 放行 http/https 与以 / 开头的 server 相对路径。
         assertTrue(WKRichTextContent.isSafeImageUrl("https://cdn/x.png"));
         assertTrue(WKRichTextContent.isSafeImageUrl("http://cdn/x.png"));
         assertTrue(WKRichTextContent.isSafeImageUrl("HTTPS://cdn/x.png"));
         assertTrue(WKRichTextContent.isSafeImageUrl("/0/123/abc.png"));
 
-        // 阻断注入向量。
+        // 阻断带 // 的注入向量。
         assertTrue(!WKRichTextContent.isSafeImageUrl("javascript:alert(1)"));
         assertTrue(!WKRichTextContent.isSafeImageUrl("data:image/png;base64,AAAA"));
         assertTrue(!WKRichTextContent.isSafeImageUrl("file:///etc/passwd"));
@@ -258,5 +258,14 @@ public class WKRichTextContentTest {
         assertTrue(!WKRichTextContent.isSafeImageUrl("ftp://host/x.png"));
         assertTrue(!WKRichTextContent.isSafeImageUrl(""));
         assertTrue(!WKRichTextContent.isSafeImageUrl(null));
+
+        // YUJ-2832 🟡：白名单——不带 :// 的伪 scheme 旧黑名单逻辑会误放行，现必须拒绝。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("mailto:a@b.com"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("content://media/external/images/1"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("tel:10086"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("sms:10086"));
+        // 不以 / 开头的裸相对名（无 scheme）也拒绝——server 资源路径恒以 / 开头。
+        assertTrue(!WKRichTextContent.isSafeImageUrl("abc.png"));
+        assertTrue(!WKRichTextContent.isSafeImageUrl("../../etc/passwd"));
     }
 }

@@ -3043,8 +3043,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      *
      * <p>仅当输入框含待发文本时接管：把文本与本次选取的图片聚合成单条 type=14
      * （text 块在前、image 块按选取顺序在后），mention（三态 humans/ais + 群成员 uids）
-     * 与发送键文本路径同源复用，发送后清空输入框、关闭顶部提示。无文本则返回 false，
-     * 调用方继续走原有逐张图片发送（纯图片零回归）。
+     * 与发送键文本路径同源复用。<strong>输入框仅在消息真正入队后才清空</strong>（见
+     * WKRichTextSender 的 onEnqueued）——上传未完成期间文本留在输入框可恢复，保证
+     * 「文本必达」（YUJ-2832 P1）。无文本则返回 false，调用方继续走原有逐张图片发送
+     * （纯图片零回归）。
      *
      * <p>编辑态 / 回复态下不接管（保持既有逐条语义），由 sendMessage 的特化路径处理。
      */
@@ -3076,10 +3078,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
         chatPanelManager.applyInputMentionsTo(content, rawText);
 
-        com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths);
-
-        // 与文本发送一致：清空输入框、关闭顶部提示条。
-        chatPanelManager.getEditText().setText(null);
+        // 文本必达（YUJ-2832 P1）：图片上传是异步的，sendMessage 要等所有上传回调完成
+        // 才落库入队。绝不能在上传开始时就清空输入框——否则进程被杀 / Activity 销毁 /
+        // 上传始终未回调时，文本既不在输入框也没入队 → 丢消息回归。改为仅在消息真正
+        // 入队后（onEnqueued）才清空；上传未完成期间文本留在输入框，由草稿持久化兜底可恢复。
+        com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, imageLocalPaths,
+                () -> {
+                    if (chatPanelManager != null && chatPanelManager.getEditText() != null) {
+                        chatPanelManager.getEditText().setText(null);
+                    }
+                });
         return true;
     }
 

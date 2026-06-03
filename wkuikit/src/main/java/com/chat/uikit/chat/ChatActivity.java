@@ -3114,12 +3114,47 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             chatPanelManager.getEditText().setText(null);
                         }
                     }
+                    // 同时清掉<em>已持久化</em>的草稿（YUJ-2872 🔴 defect c，Jerry-Xin 复审）：
+                    // 上传期间文本有意留在输入框（崩溃恢复），若用户在上传完成前离开会话，
+                    // 离场 teardown（persistOldChannelEditState / persistCurrentChannelEditState /
+                    // saveEditContent）会把这段“即将发出”的可见文本落成 server 草稿。等本次
+                    // 入队后只清了内存 EditText 却不清落盘草稿 → 重开会话又恢复出已发文本，
+                    // 既是 stale UI 又是一键重复发送。故仅当落盘草稿仍恰好等于本次消费的快照
+                    // 时清掉它；用户离场后新打的草稿（不等于快照）保留，不误删。
+                    clearPersistedDraftIfMatches(rawText);
                     // in-flight 结束：清快照，发送键不再拦截。
                     if (rawText.equals(pendingRichTextSnapshot)) {
                         pendingRichTextSnapshot = null;
                     }
                 });
         return true;
+    }
+
+    /**
+     * 清掉<em>已持久化</em>的草稿——仅当它仍恰好等于本次混排发送消费的快照（YUJ-2872
+     * 🔴 defect c）。图文混排上传期间文本有意留在输入框（崩溃恢复），用户若在上传完成前
+     * 离开会话，离场 teardown 会把这段可见文本落成 server/本地草稿；本次发送入队后必须把
+     * 这条草稿一并清掉，否则重开会话又把已发文本恢复出来 = stale UI + 一键重复发送。
+     *
+     * <p>幂等且不误删：用 {@link com.chat.uikit.chat.manager.WKRichTextSender#shouldClearComposer}
+     * 同款“快照 vs 现值”判定——离场后用户又打的新草稿（不等于快照）保留不动。
+     */
+    private void clearPersistedDraftIfMatches(String consumedSnapshot) {
+        if (TextUtils.isEmpty(channelId)) {
+            return;
+        }
+        WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
+                .getMsgExtraWithChannel(channelId, channelType);
+        if (extra == null || TextUtils.isEmpty(extra.draft)) {
+            return; // 没落盘草稿（用户没离场，或离场后已被别处清空）→ 无需处理。
+        }
+        if (!com.chat.uikit.chat.manager.WKRichTextSender
+                .shouldClearComposer(consumedSnapshot, extra.draft)) {
+            return; // 落盘草稿已是用户新打的内容（≠ 本次快照）→ 保留，不误删。
+        }
+        // 落盘草稿仍是这段已发文本 → 清空（保留浏览位置等其它 extra 字段）。
+        MsgModel.getInstance().updateCoverExtra(channelId, channelType,
+                extra.browseTo, extra.keepMessageSeq, extra.keepOffsetY, "");
     }
 
     /**

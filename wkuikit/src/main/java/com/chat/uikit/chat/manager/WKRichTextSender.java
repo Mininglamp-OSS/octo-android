@@ -270,6 +270,10 @@ public final class WKRichTextSender {
         textContent.mentionHumans = richHolder.mentionHumans;
         textContent.mentionAis = richHolder.mentionAis;
         textContent.mentionInfo = richHolder.mentionInfo;
+        // 注意：此处<em>有意</em>不迁移 mention 的 entities（@ 高亮区间）。仅全图失败的降级
+        // 路径会走到这里，发出纯文本单条，与既有发送键文本路径同语义——@ 通知靠上面的
+        // mentionAll/humans/ais + mentionInfo.uids 三态基字段保证不丢；entities 只影响接收侧
+        // 高亮渲染，且其跨 block 的 offset 在降级为纯文本后已失去意义，故不迁移。
         context.sendMessage(textContent);
         notifyEnqueued(onEnqueued);
     }

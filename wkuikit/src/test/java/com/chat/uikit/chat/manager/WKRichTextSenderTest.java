@@ -311,6 +311,22 @@ public class WKRichTextSenderTest {
         assertFalse(WKRichTextSender.shouldClearComposer("abc", null));
     }
 
+    /**
+     * 🔴 defect c（Jerry-Xin 复审）：上传期间用户离开会话 → 留存的“即将发出”文本被离场
+     * teardown 落成草稿。本次发送入队后，{@code ChatActivity.clearPersistedDraftIfMatches}
+     * 用同一个 {@link WKRichTextSender#shouldClearComposer} 谓词判定<em>落盘草稿</em>是否
+     * 仍等于本次消费的快照：相同 → 清掉草稿（避免重开会话恢复出已发文本 = stale UI + 一键
+     * 重复发送）；离场后用户又改了草稿（≠ 快照）→ 保留不误删。与内存 EditText 清空同语义。
+     */
+    @Test
+    public void persistedDraftClearDecision_matchesConsumedSnapshot_butKeepsNewerDraft() {
+        final String consumed = "上传中的配文";
+        // 落盘草稿仍是这段已发文本 → 应清掉。
+        assertTrue(WKRichTextSender.shouldClearComposer(consumed, "上传中的配文"));
+        // 离场后用户又打了新草稿 → 不是本次快照 → 保留。
+        assertFalse(WKRichTextSender.shouldClearComposer(consumed, "离场后新打的草稿"));
+    }
+
     // ---------------------------------------------------------------------
 
     /** 受控 uploader：把单张图片的成功回调延迟到 {@link #release()} 调用时再触发。 */

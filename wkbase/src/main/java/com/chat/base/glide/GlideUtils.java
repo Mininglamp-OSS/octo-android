@@ -166,7 +166,7 @@ public class GlideUtils {
                                 .into(imageView);
                     } else {
                         Glide.with(context)
-                                .load(new MyGlideUrlWithId(url, key)).dontAnimate()
+                                .load(new MyGlideUrlWithId(url, key))
                                 .apply(options)
                                 .into(imageView);
                     }
@@ -199,7 +199,7 @@ public class GlideUtils {
                     if (targetH <= 0) targetH = AndroidUtilities.dp(96);
                     RequestOptions avatarOpts = GlideRequestOptions.getInstance()
                             .headRequestOption(targetW, targetH);
-                    Glide.with(context).load(new MyGlideUrlWithId(url, cacheKey)).dontAnimate()
+                    Glide.with(context).load(new MyGlideUrlWithId(url, cacheKey))
                             .thumbnail(0.1f)
                             .apply(avatarOpts)
                             .into(imageView);

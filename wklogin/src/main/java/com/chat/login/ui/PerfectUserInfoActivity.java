@@ -16,10 +16,15 @@
 
 package com.chat.login.ui;
 
+import android.content.Intent;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+
+import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
@@ -31,6 +36,7 @@ import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
+import com.chat.base.utils.AnimatedImageUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.login.R;
 import com.chat.login.databinding.ActPerfectUserInfoLayoutBinding;
@@ -108,14 +114,15 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
             @Override
             public void onBack(List<ChooseResult> paths) {
                 if (WKReader.isNotEmpty(paths)) {
-                    path = paths.get(0).path;
-                    LoginModel.getInstance().uploadAvatar(path, code -> {
-                        if (code == HttpResponseCode.success) {
-                            GlideUtils.getInstance().showAvatarImg(PerfectUserInfoActivity.this, WKConfig.getInstance().getUid(), WKChannelType.PERSONAL, "", wkVBinding.avatarView.imageView);
-                            wkVBinding.coverIv.setVisibility(View.GONE);
-                        }
-                    });
-
+                    String selectedPath = paths.get(0).path;
+                    if (TextUtils.isEmpty(selectedPath)) return;
+                    if (AnimatedImageUtils.isAnimatedGif(selectedPath)) {
+                        Intent intent = new Intent(PerfectUserInfoActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                        intent.putExtra("path", selectedPath);
+                        gifPreviewLauncher.launch(intent);
+                    } else {
+                        uploadAvatar(selectedPath);
+                    }
                 }
             }
 
@@ -125,4 +132,24 @@ public class PerfectUserInfoActivity extends WKBaseActivity<ActPerfectUserInfoLa
             }
         });
     }
+
+    private void uploadAvatar(String filePath) {
+        path = filePath;
+        LoginModel.getInstance().uploadAvatar(path, code -> {
+            if (code == HttpResponseCode.success) {
+                GlideUtils.getInstance().showAvatarImg(PerfectUserInfoActivity.this, WKConfig.getInstance().getUid(), WKChannelType.PERSONAL, "", wkVBinding.avatarView.imageView);
+                wkVBinding.coverIv.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private final ActivityResultLauncher<Intent> gifPreviewLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    String confirmedPath = result.getData().getStringExtra("path");
+                    if (!TextUtils.isEmpty(confirmedPath)) {
+                        uploadAvatar(confirmedPath);
+                    }
+                }
+            });
 }

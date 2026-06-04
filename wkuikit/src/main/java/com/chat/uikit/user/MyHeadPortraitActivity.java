@@ -28,6 +28,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.act.WKCropImageActivity;
+import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -38,6 +39,7 @@ import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.ImageUtils;
+import com.chat.base.utils.AnimatedImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKPermissions;
 import com.chat.base.utils.WKReader;
@@ -165,7 +167,12 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
                 if (WKReader.isNotEmpty(paths)) {
                     String path = paths.get(0).path;
                     if (!TextUtils.isEmpty(path)) {
-                        Intent intent = new Intent(MyHeadPortraitActivity.this, WKCropImageActivity.class);
+                        Intent intent;
+                        if (AnimatedImageUtils.isAnimatedGif(path)) {
+                            intent = new Intent(MyHeadPortraitActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                        } else {
+                            intent = new Intent(MyHeadPortraitActivity.this, WKCropImageActivity.class);
+                        }
                         intent.putExtra("path", path);
                         chooseResultLac.launch(intent);
                     }

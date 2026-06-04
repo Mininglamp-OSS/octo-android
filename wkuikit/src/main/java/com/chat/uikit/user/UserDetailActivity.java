@@ -42,6 +42,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKCropImageActivity;
+import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -62,6 +63,7 @@ import com.chat.base.utils.StringUtils;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.NormalClickableContent;
 import com.chat.base.ui.components.NormalClickableSpan;
+import com.chat.base.utils.AnimatedImageUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.SoftKeyboardUtils;
@@ -756,7 +758,12 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         if (!WKReader.isNotEmpty(paths)) return;
                         String path = paths.get(0).path;
                         if (TextUtils.isEmpty(path)) return;
-                        Intent intent = new Intent(UserDetailActivity.this, WKCropImageActivity.class);
+                        Intent intent;
+                        if (AnimatedImageUtils.isAnimatedGif(path)) {
+                            intent = new Intent(UserDetailActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                        } else {
+                            intent = new Intent(UserDetailActivity.this, WKCropImageActivity.class);
+                        }
                         intent.putExtra("path", path);
                         botAvatarCropLauncher.launch(intent);
                     }

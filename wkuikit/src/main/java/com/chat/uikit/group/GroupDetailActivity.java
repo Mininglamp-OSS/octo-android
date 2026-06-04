@@ -26,6 +26,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKCropImageActivity;
+import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
 import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
@@ -42,6 +43,7 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.glide.ChooseMimeType;
 import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
+import com.chat.base.utils.AnimatedImageUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
@@ -697,8 +699,14 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             @Override
             public void onBack(List<ChooseResult> paths) {
                 if (WKReader.isNotEmpty(paths) && !TextUtils.isEmpty(paths.get(0).path)) {
-                    Intent intent = new Intent(GroupDetailActivity.this, WKCropImageActivity.class);
-                    intent.putExtra("path", paths.get(0).path);
+                    String path = paths.get(0).path;
+                    Intent intent;
+                    if (AnimatedImageUtils.isAnimatedGif(path)) {
+                        intent = new Intent(GroupDetailActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                    } else {
+                        intent = new Intent(GroupDetailActivity.this, WKCropImageActivity.class);
+                    }
+                    intent.putExtra("path", path);
                     cropResultLauncher.launch(intent);
                 }
             }

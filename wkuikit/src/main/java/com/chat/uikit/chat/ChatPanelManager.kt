@@ -196,7 +196,8 @@ class ChatPanelManager(
 
     // 图文混排（RichText=14）输入框附件托盘（Phase 2，对齐 web#237）。
     // 选中的静态图以缩略图挂在输入框上方，可继续打字 / 多批追加 / 拖拽调序 / 单张移除；
-    // 点发送时按托盘真实当前顺序整体打成单条 type=14（真·穿插）。模型纯数据、可单测；
+    // 点发送时按托盘真实当前顺序整体打成单条 type=14（文本块在前 + 图片按托盘顺序；真·块级
+    // 文/图交错留 Phase 3）。模型纯数据、可单测；
     // trayLayout / trayRecyclerView 只是它的渲染镜像。仅主线程读写。
     private val richTextTray = WKRichTextComposeModel()
     private var trayLayout: LinearLayout? = null
@@ -1571,7 +1572,7 @@ class ChatPanelManager(
         }
         sendIV.setOnClickListener {
             // 图文混排（RichText=14）输入框附件托盘（Phase 2，对齐 web#237）：托盘非空时，
-            // 点发送 = 把文本 + 托盘有序图片整体打成单条 type=14（真·穿插），而非发纯文本。
+            // 点发送 = 把文本 + 托盘有序图片整体打成单条 type=14（文本块在前 + 图片按托盘顺序），而非发纯文本。
             // 若托盘发送未被接管（如进入 reply/edit 态，sendRichTextTray 返回 false），则<em>不</em>
             // 拦截，继续走下方原有文本 / reply / edit 发送路径，避免发送键失灵。
             if (!richTextTray.isEmpty() && flushRichTextTraySend()) {

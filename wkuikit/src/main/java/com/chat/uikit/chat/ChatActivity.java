@@ -3268,7 +3268,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     /**
-     * 发送输入框附件托盘（Phase 2 真·穿插）：把文本 + 托盘有序图片整体打成单条 type=14。
+     * 发送输入框附件托盘（Phase 2）：把文本 + 托盘有序图片整体打成单条 type=14
+     *（文本块在前 + 图片按托盘顺序；真·块级文/图交错留 Phase 3）。
      *
      * <p>复用 Phase 1 {@link com.chat.uikit.chat.manager.WKRichTextSender#send} 的全部已验证
      * 能力——串行上传保序、原子性（text 必达 / 全图失败降级纯文本）、跨频道路由（捕获发起
@@ -3276,7 +3277,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      * 的图片路径与文本传进去，并把入队回调透传给 ChatPanelManager 做 UI 收口。
      *
      * <p>与 Phase 1 {@link #trySendRichTextMixed} 的区别：那条是「相册选图即聚合」（顺序固定），
-     * 本条是「点发送时聚合托盘」（顺序可调，真·穿插）。两者共用同一发送器与同一 in-flight
+     * 本条是「点发送时聚合托盘」（图片顺序可调；文本块在前、图片顺序在后）。两者共用同一发送器与同一 in-flight
      * 快照机制（pendingRichTextSnapshot），保证重复发送拦截 / 跨频道安全一致。
      */
     @Override

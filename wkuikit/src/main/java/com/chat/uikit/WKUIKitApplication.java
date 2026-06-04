@@ -827,7 +827,8 @@ public class WKUIKitApplication {
                             // 图文混排（RichText=14）发送侧入口（Phase 2，对齐 web#237）：
                             // 输入框附件托盘——本次全是静态图片（无 video / 无走 sticker 的 gif）时，
                             // 把图片加入输入框上方的缩略图托盘（不立即发送），用户可继续打字 / 调序 /
-                            // 移除，点发送时整体按真实顺序打成单条 type=14（真·穿插）。其余情况
+                            // 移除，点发送时整体按真实顺序打成单条 type=14（文本块在前 + 图片按
+                            // 托盘顺序；真·块级文/图交错留 Phase 3）。其余情况
                             // （含 video / gif）落到下方原有逐条发送，零回归。
                             if (tryAddRichTextTray(iConversationContext, paths)) {
                                 return;
@@ -894,7 +895,8 @@ public class WKUIKitApplication {
      * 调用方继续走原有逐条发送（含 video/gif，零回归）。
      *
      * <p>与 Phase 1 的差别：Phase 1 是「输入框有文本才聚合、选图即发、顺序固定」；Phase 2 改为
-     * 「选图即入托盘、可继续编辑调序、点发送才聚合（真·穿插）」。纯图片（无文本）也入托盘——
+     * 「选图即入托盘、可继续编辑调序、点发送才聚合（文本块在前 + 图片按托盘顺序；真·块级
+     * 文/图交错留 Phase 3）」。纯图片（无文本）也入托盘——
      * 用户可补文字或直接发送。
      *
      * @return true 表示已加入托盘，调用方应直接返回；false 表示未接管，继续原逐条逻辑。

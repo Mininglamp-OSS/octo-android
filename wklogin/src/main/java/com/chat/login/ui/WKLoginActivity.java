@@ -144,6 +144,18 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
             return true;
         });
+        wkVBinding.heroLogoIv.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    longPressHandler.postDelayed(longPressRunnable, 1500);
+                    break;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    longPressHandler.removeCallbacks(longPressRunnable);
+                    break;
+            }
+            return true;
+        });
         wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
         wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
 

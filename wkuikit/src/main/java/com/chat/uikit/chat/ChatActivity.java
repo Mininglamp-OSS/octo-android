@@ -276,6 +276,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     //   (b) 拦截手动发送键把同一段可见文本重复单发（重复文本 + 之后的 RichText）。
     // 仅主线程读写（send 启动 / onEnqueued 回调 / 发送键点击都在主线程）。null = 无 in-flight。
     private String pendingRichTextSnapshot;
+    // 图文混排托盘发送的「世代令牌」（Phase 2）。每次切频道（resetPerChannelState）自增，作废
+    // 所有更早 in-flight 发送的异步回调。仅靠「捕获频道 == 当前频道」不足以防 stale：用户在 A
+    // 发起→切走（作废旧 UI）→切回 A→在 A 又发起一条新 send，此时旧回调的频道判等又成立，会用
+    // 旧回调清掉/复位新 send 的托盘 + 输入框。回调发起时捕获本世代值，触发时比对：不等即丢弃。
+    private int richTextTraySendGeneration = 0;
     private ActChatLayoutBinding wkVBinding;
     private int unfilledHeight = 0;
     private final String loginUID = WKConfig.getInstance().getUid();
@@ -1433,6 +1438,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         // 静默吞掉（消息丢失）；(b) 旧 send 的 onEnqueued 用新 channelId 误清新 channel 的
         // 落盘草稿 / 输入框。in-flight 上传随旧 Activity 状态作废，快照不再有意义，直接清零。
         pendingRichTextSnapshot = null;
+        // 切频道作废所有更早的托盘发送异步回调（Phase 2 stale-callback 防护）：自增世代，
+        // 旧回调触发时世代不等即丢弃，避免「A 发起→切走→切回 A→新发起」时旧回调误清新 send。
+        richTextTraySendGeneration++;
         unreadStartMsgOrderSeq = 0;
         tipsOrderSeq = 0;
         lastPreviewMsgOrderSeq = 0;
@@ -1496,6 +1504,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (chatPanelManager.getEditText() != null) {
                 chatPanelManager.getEditText().setText("");
             }
+            // 图文混排输入框附件托盘（Phase 2）：切频道必须清空，否则旧频道选的图残留到新
+            // 频道，发送时会把上一会话的图发到当前会话（隐私/路由 bug）。与 pendingRichTextSnapshot
+            // 同款随频道作废语义。
+            chatPanelManager.clearRichTextTray();
         }
     }
 
@@ -3231,6 +3243,118 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     public boolean isPendingRichTextDuplicate(String candidateText) {
         return com.chat.uikit.chat.manager.WKRichTextSender
                 .isDuplicatePendingText(pendingRichTextSnapshot, candidateText);
+    }
+
+    /**
+     * 图文混排（RichText=14）<strong>输入框附件托盘</strong>入口（Phase 2，对齐 web#237）。
+     *
+     * <p>把本次选取的静态图片加入输入框上方托盘（不立即发送），用户可继续打字 / 调序 / 移除，
+     * 点发送时才走 {@link #sendRichTextTray}。编辑 / 回复态下不接管（保持既有特化语义），返回
+     * false 让调用方走原有逐条图片发送路径，零回归。
+     */
+    @Override
+    public boolean addImagesToRichTextTray(List<String> imageLocalPaths) {
+        if (imageLocalPaths == null || imageLocalPaths.isEmpty()) {
+            return false;
+        }
+        if (chatPanelManager == null) {
+            return false;
+        }
+        // 编辑 / 回复态走既有特化路径，不入托盘（避免破坏 edit/reply 语义）。
+        if (editMsg != null || replyWKMsg != null) {
+            return false;
+        }
+        return chatPanelManager.addImagesToRichTextTray(imageLocalPaths);
+    }
+
+    /**
+     * 发送输入框附件托盘（Phase 2）：把文本 + 托盘有序图片整体打成单条 type=14
+     *（文本块在前 + 图片按托盘顺序；真·块级文/图交错留 Phase 3）。
+     *
+     * <p>复用 Phase 1 {@link com.chat.uikit.chat.manager.WKRichTextSender#send} 的全部已验证
+     * 能力——串行上传保序、原子性（text 必达 / 全图失败降级纯文本）、跨频道路由（捕获发起
+     * 频道，上传期间切频道也不错投）、snapshot 清空（绝不擦用户新草稿）。本方法只把托盘顺序
+     * 的图片路径与文本传进去，并把入队回调透传给 ChatPanelManager 做 UI 收口。
+     *
+     * <p>与 Phase 1 {@link #trySendRichTextMixed} 的区别：那条是「相册选图即聚合」（顺序固定），
+     * 本条是「点发送时聚合托盘」（图片顺序可调；文本块在前、图片顺序在后）。两者共用同一发送器与同一 in-flight
+     * 快照机制（pendingRichTextSnapshot），保证重复发送拦截 / 跨频道安全一致。
+     */
+    @Override
+    public boolean sendRichTextTray(String text, List<String> orderedImagePaths, Runnable onEnqueued, Runnable onComplete) {
+        if (orderedImagePaths == null || orderedImagePaths.isEmpty()) {
+            return false;
+        }
+        if (editMsg != null || replyWKMsg != null) {
+            return false;
+        }
+        final String rawText = text != null ? text : "";
+
+        com.chat.uikit.chat.msgmodel.WKRichTextContent content =
+                new com.chat.uikit.chat.msgmodel.WKRichTextContent();
+        // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
+        if (chatPanelManager != null) {
+            chatPanelManager.applyInputMentionsTo(content, rawText);
+        }
+
+        // in-flight 快照（YUJ-2872 🔴）：托盘发送期间被消费的文本仍可能留在输入框直到 onEnqueued，
+        // 与发送键 / 相册再选图共用同一拦截，避免重复单发同段文本。仅当有文本时设快照才有意义。
+        if (!TextUtils.isEmpty(rawText)) {
+            pendingRichTextSnapshot = rawText;
+        }
+        // 捕获发起频道（YUJ-2872 🔴 跨频道路由）：上传可耗时数秒，回调触发时可能已切频道。
+        final WKChannel sendChannel = getChatChannelInfo();
+        // 捕获本次发送的世代令牌：切频道会自增世代，作废这条 in-flight 的所有回调（即便后来
+        // 又切回同一频道、又发起新 send，也不会被本次旧回调误清）。
+        final int sendGeneration = richTextTraySendGeneration;
+        com.chat.uikit.chat.manager.WKRichTextSender.send(this, content, rawText, orderedImagePaths,
+                () -> {
+                    // 清掉已持久化草稿（YUJ-2872 🔴 defect c）：按<em>捕获</em>频道清、且仅当落盘草稿
+                    // 仍等于本次消费快照时清——与频道切换 / 世代无关，始终安全（消息确实已发到
+                    // 捕获频道）。故放在世代闸门<em>之前</em>无条件执行：即使上传期间切了频道，被发到
+                    // 捕获频道的这条消息留下的草稿也必须清，否则重开该会话会恢复出已发文本 = stale
+                    // UI + 一键重复发送。
+                    if (!TextUtils.isEmpty(rawText)) {
+                        clearPersistedDraftIfMatches(sendChannel, rawText);
+                    }
+                    // 世代过期（期间切过频道）：仅丢弃下面的「当前 UI / 快照」操作，绝不动新频道状态。
+                    if (sendGeneration != richTextTraySendGeneration) {
+                        return;
+                    }
+                    // in-flight 结束：清快照（发送键 / 相册再选图不再拦截）。
+                    if (rawText.equals(pendingRichTextSnapshot)) {
+                        pendingRichTextSnapshot = null;
+                    }
+                    // 仅当回调到达时仍停留在发起频道，才动 UI（清托盘 / 输入框）；已切走时
+                    // 这套 UI 属于新频道，绝不能动它。
+                    boolean stillOnSendChannel = sendChannel != null
+                            && sendChannel.channelID != null
+                            && sendChannel.channelID.equals(channelId)
+                            && sendChannel.channelType == channelType;
+                    if (stillOnSendChannel && onEnqueued != null) {
+                        onEnqueued.run();
+                    }
+                },
+                () -> {
+                    // 世代过期（期间切过频道）：丢弃 onComplete，绝不复位新 send 的 in-flight 标志。
+                    if (sendGeneration != richTextTraySendGeneration) {
+                        return;
+                    }
+                    // 终态回调：复位托盘 in-flight 防重入标志。覆盖「全图失败且无文本→什么都没发」
+                    // 这种 onEnqueued 永不触发的终态，否则发送键会永久失灵。也清快照兜底
+                    // （onEnqueued 未触发时快照仍可能残留）。仅当仍在发起频道时复位托盘标志。
+                    if (rawText.equals(pendingRichTextSnapshot)) {
+                        pendingRichTextSnapshot = null;
+                    }
+                    boolean stillOnSendChannel = sendChannel != null
+                            && sendChannel.channelID != null
+                            && sendChannel.channelID.equals(channelId)
+                            && sendChannel.channelType == channelType;
+                    if (stillOnSendChannel && onComplete != null) {
+                        onComplete.run();
+                    }
+                });
+        return true;
     }
 
     private boolean isUpdate(WKMessageContent messageContent) {

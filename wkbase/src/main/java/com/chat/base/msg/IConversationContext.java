@@ -132,4 +132,45 @@ public interface IConversationContext {
     default boolean isPendingRichTextDuplicate(String candidateText) {
         return false;
     }
+
+    /**
+     * 图文混排（RichText=14）<strong>输入框附件托盘</strong>入口（Phase 2，对齐 web#237）。
+     *
+     * <p>把本次选取的静态图片<strong>加入输入框上方的缩略图托盘</strong>而非立即逐张发送：
+     * 用户可继续打字、可多批追加、可调序、可移除，点发送时按托盘真实顺序整体打成单条
+     * type=14（真·穿插）。返回 true 表示已加入托盘（本次相册选择被托盘接管）。
+     *
+     * <p>与 Phase 1 的 {@link #trySendRichTextMixed(List)} 的区别：后者是「选图即聚合发送」
+     * （顺序固定、不可调），Phase 2 改为「选图先入托盘、发送时才聚合」。Phase 2 入口启用后，
+     * 静态图片的相册选择统一走本方法（不再走 trySendRichTextMixed 的即时聚合，也不再逐张发）。
+     *
+     * @param imageLocalPaths 本次选取的静态图片本地路径（按选取顺序，调用方已过滤 video/gif）
+     * @return true 表示已加入托盘；false 表示未接管（调用方继续原有逐条发送，零回归）
+     */
+    default boolean addImagesToRichTextTray(java.util.List<String> imageLocalPaths) {
+        return false;
+    }
+
+    /**
+     * 发送输入框附件托盘（Phase 2）：把 {@code text} 与 {@code orderedImagePaths}（托盘当前
+     * 真实顺序）整体打成单条 type=14（真·穿插）。复用 Phase 1
+     * {@code WKRichTextSender} 的原子性 / 跨频道路由 / 文本必达 / snapshot 清空能力——
+     * 只动入口/UX，不碰 wire schema（硬约束 #3）。
+     *
+     * <p>原子性：消息真正入队后才触发 {@code onEnqueued}（主线程），调用方应在其中且仅在其中
+     * 清空托盘 + 输入框，保证「文本 / 图片必达」（承接 Phase 1 YUJ-2832/2872 教训）。
+     *
+     * @param text             输入框原始文本（可空白；空白时发纯图片混排或退化逐张）
+     * @param orderedImagePaths 托盘当前顺序的图片本地路径（非空）
+     * @param onEnqueued       入队后回调（主线程触发），用于清空托盘 / 输入框；可为 null
+     * @param onComplete       发送流程任何终态都触发的回调（含「全图失败且无文本→什么都没发」），
+     *                         用于复位托盘 in-flight 防重入标志；可为 null
+     * @return true 表示已接管发送；false 表示未接管（调用方保留托盘 / 输入框）
+     */
+    default boolean sendRichTextTray(String text,
+                                     java.util.List<String> orderedImagePaths,
+                                     Runnable onEnqueued,
+                                     Runnable onComplete) {
+        return false;
+    }
 }

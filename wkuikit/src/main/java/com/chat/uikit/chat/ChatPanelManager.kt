@@ -47,6 +47,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.DefaultItemAnimator
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chad.library.adapter.base.BaseQuickAdapter
@@ -93,8 +94,11 @@ import com.chat.base.views.FullyGridLayoutManager
 import com.chat.base.views.NoEventRecycleView
 import com.chat.uikit.R
 import com.chat.uikit.chat.adapter.WKChatToolBarAdapter
+import com.chat.uikit.chat.adapter.WKRichTextTrayAdapter
 import com.chat.uikit.view.voice.HoldToTalkManager
 import com.chat.uikit.chat.manager.SendMsgEntity
+import com.chat.uikit.chat.manager.WKRichTextComposeModel
+import com.chat.uikit.chat.manager.WKRichTextSender
 import com.chat.uikit.chat.manager.WKSendMsgUtils
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent
 import com.chat.uikit.contacts.service.FriendModel
@@ -190,6 +194,22 @@ class ChatPanelManager(
     // 相册有新图
     private var newImageLayout: LinearLayout? = null
 
+    // 图文混排（RichText=14）输入框附件托盘（Phase 2，对齐 web#237）。
+    // 选中的静态图以缩略图挂在输入框上方，可继续打字 / 多批追加 / 拖拽调序 / 单张移除；
+    // 点发送时按托盘真实当前顺序整体打成单条 type=14（文本块在前 + 图片按托盘顺序；真·块级
+    // 文/图交错留 Phase 3）。模型纯数据、可单测；
+    // trayLayout / trayRecyclerView 只是它的渲染镜像。仅主线程读写。
+    private val richTextTray = WKRichTextComposeModel()
+    private var trayLayout: LinearLayout? = null
+    private var trayRecyclerView: RecyclerView? = null
+    private var trayAdapter: WKRichTextTrayAdapter? = null
+    // 托盘发送 in-flight 防重入（对齐 Phase 1 YUJ-2872 defect b / web#227 sendingRef）：
+    // 一条托盘发送在等图片异步上传期间，托盘 + 文本仍留在 UI（仅内存，进程死会丢失托盘图片，
+    // 文本草稿另有持久化）。若此时用户再点发送键，会把同一批 tray + text 再打一条 → 重复
+    // type=14。此标志在发送发起时置 true、入队回调（或切频道清空）时复位，期间吞掉重复发送。
+    // pendingRichTextSnapshot 只挡纯文本路径，纯图片托盘无文本快照，故必须用本标志兜住图片重复。
+    private var richTextTraySending = false
+
     // 回复 | 编辑
     private var chatTopView: LinearLayout? = null
 
@@ -247,6 +267,7 @@ class ChatPanelManager(
         initChatTopView()
         initFlame()
         initNewImageView()
+        initRichTextTray()
         initHoldToTalk()
         EndpointManager.getInstance().invoke(
             "initInputPanel",
@@ -1550,6 +1571,13 @@ class ChatPanelManager(
             EndpointManager.getInstance().invoke("show_rich_edit", iConversationContext)
         }
         sendIV.setOnClickListener {
+            // 图文混排（RichText=14）输入框附件托盘（Phase 2，对齐 web#237）：托盘非空时，
+            // 点发送 = 把文本 + 托盘有序图片整体打成单条 type=14（文本块在前 + 图片按托盘顺序），而非发纯文本。
+            // 若托盘发送未被接管（如进入 reply/edit 态，sendRichTextTray 返回 false），则<em>不</em>
+            // 拦截，继续走下方原有文本 / reply / edit 发送路径，避免发送键失灵。
+            if (!richTextTray.isEmpty() && flushRichTextTraySend()) {
+                return@setOnClickListener
+            }
             var content = StringUtils.replaceBlank(editText.text.toString())
             if (!TextUtils.isEmpty(content)) {
                 content = editText.text.toString()
@@ -1670,8 +1698,14 @@ class ChatPanelManager(
                         }
                         isShowSendBtn = true
                     } else {
-                        isShowSendBtn = false
-                        sendIV.visibility = View.GONE
+                        // 文本为空白：托盘有图时仍保留发送键（Phase 2 纯图片托盘可发）。
+                        if (!richTextTray.isEmpty()) {
+                            isShowSendBtn = true
+                            sendIV.visibility = View.VISIBLE
+                        } else {
+                            isShowSendBtn = false
+                            sendIV.visibility = View.GONE
+                        }
                     }
                     if (flame == 1) {
                         CommonAnim.getInstance().showOrHide(flameIV, false, true)
@@ -1680,8 +1714,14 @@ class ChatPanelManager(
                     if (flame == 1) {
                         CommonAnim.getInstance().showOrHide(flameIV, true, true)
                     }
-                    isShowSendBtn = false
-                    sendIV.visibility = View.GONE
+                    // 文本清空：托盘有图时仍保留发送键（Phase 2 纯图片托盘可发）。
+                    if (!richTextTray.isEmpty()) {
+                        isShowSendBtn = true
+                        sendIV.visibility = View.VISIBLE
+                    } else {
+                        isShowSendBtn = false
+                        sendIV.visibility = View.GONE
+                    }
                 }
                 // slash command detection for bot chats
                 val fullText = s.toString()
@@ -2438,8 +2478,10 @@ class ChatPanelManager(
             voiceToggleBtn.setImageResource(R.mipmap.ic_voice_toggle)
             editTextContainer.visibility = View.VISIBLE
             holdToTalkBtn.visibility = View.GONE
-            val hasText = !editText.text.isNullOrBlank()
-            sendIV.visibility = if (hasText) View.VISIBLE else View.GONE
+            // 退出语音模式后发送键可见性须同时考虑「已暂存的图文托盘」，否则纯图托盘 +
+            // 空文本会让发送键消失（trapped tray，CR P1）。updateSendBtnForTray() 已 OR 进
+            // !richTextTray.isEmpty()，且此处已退出 isVoiceMode 故不会被其早返回短路。
+            updateSendBtnForTray()
             holdToTalkManager?.cancelRecording()
         }
     }
@@ -3756,5 +3798,240 @@ class ChatPanelManager(
             text,
             uid
         )
+    }
+
+    // =====================================================================
+    // 图文混排（RichText=14）输入框附件托盘（Phase 2，对齐 web#237）
+    // =====================================================================
+
+    /**
+     * 构建输入框上方的附件托盘缩略图条（横向 RecyclerView + 拖拽调序），挂在
+     * followScrollLayout（与 newImageLayout / remind 等输入区附属视图同一层）。默认隐藏，
+     * 托盘非空时显示。完全代码构建，不新增 layout xml，与既有附属视图做法一致。
+     */
+    private fun initRichTextTray() {
+        val layout = LinearLayout(iConversationContext.chatActivity)
+        layout.orientation = LinearLayout.HORIZONTAL
+        layout.visibility = View.GONE
+        layout.setBackgroundColor(
+            ContextCompat.getColor(iConversationContext.chatActivity, R.color.chat_face_tab_bg)
+        )
+        layout.setPadding(
+            AndroidUtilities.dp(8f),
+            AndroidUtilities.dp(6f),
+            AndroidUtilities.dp(8f),
+            AndroidUtilities.dp(6f)
+        )
+
+        val recyclerView = RecyclerView(iConversationContext.chatActivity)
+        recyclerView.layoutManager = LinearLayoutManager(
+            iConversationContext.chatActivity,
+            LinearLayoutManager.HORIZONTAL,
+            false
+        )
+        val adapter = WKRichTextTrayAdapter(
+            iConversationContext.chatActivity,
+            richTextTray,
+            onRemove = { id ->
+                // 发送进行中禁止 remove：flushRichTextTraySend 已快照 orderedPaths，
+                // 此时 ✕ 会让用户以为取消了某图，但冻结快照仍会上传发出，
+                // 随后 onEnqueued 清空托盘 → 被删的图还是发了（ghost-send，CR P2）。
+                // 与 add 路径同步由 richTextTraySending 门控。
+                if (richTextTraySending) return@WKRichTextTrayAdapter
+                if (richTextTray.removeById(id)) {
+                    refreshRichTextTray()
+                }
+            },
+            onReorder = {
+                // 顺序已变：发送 payload 会按模型新顺序打包，无需额外动作。
+            }
+        )
+        recyclerView.adapter = adapter
+
+        // 长按拖拽调序：ItemTouchHelper 逐格 onMove 把 UI 交换映射回模型（真实顺序）。
+        val touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.START or ItemTouchHelper.END, 0
+        ) {
+            override fun onMove(
+                rv: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                // 发送进行中禁止拖拽调序：同 onRemove，冻结快照已取，
+                // 此时调序不会反映到实际发送 payload，会误导用户（CR P2）。
+                if (richTextTraySending) return false
+                return adapter.onItemMove(
+                    viewHolder.bindingAdapterPosition,
+                    target.bindingAdapterPosition
+                )
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                // 不支持滑动删除（删除走缩略图右上角 ✕，语义更明确）。
+            }
+
+            override fun isLongPressDragEnabled(): Boolean = true
+        })
+        touchHelper.attachToRecyclerView(recyclerView)
+
+        layout.addView(
+            recyclerView,
+            LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT,
+                AndroidUtilities.dp(72f)
+            )
+        )
+        followScrollLayout.addView(
+            layout,
+            LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT,
+                LayoutHelper.WRAP_CONTENT,
+                Gravity.BOTTOM
+            )
+        )
+
+        trayLayout = layout
+        trayRecyclerView = recyclerView
+        trayAdapter = adapter
+    }
+
+    /**
+     * 把本次选取的静态图片加入托盘末尾（Phase 2 入口）。加入后刷新缩略图条并更新发送键
+     * 可见性（托盘非空即便没文本也允许发送）。返回 true 表示已接管。
+     *
+     * <p>in-flight 期间拒绝加入（YUJ-2872 同款防护）：一条托盘发送已捕获 orderedPaths 在异步
+     * 上传中，其 onEnqueued 会 clearRichTextTray() 清空整个托盘。若此时把新一批图加进<em>同一个</em>
+     * 托盘，它们既不在本次发送快照里、又会被这次 clear 抹掉 → 静默丢图。故 in-flight 期间不接管，
+     * 返回 false 让调用方走原逐条发送（新图照常单发出去，不丢）。
+     */
+    fun addImagesToRichTextTray(imageLocalPaths: List<String>?): Boolean {
+        if (imageLocalPaths.isNullOrEmpty()) {
+            return false
+        }
+        if (richTextTraySending) {
+            return false
+        }
+        // 语音模式下选图入托盘：先切回键盘模式，否则 editTextContainer / sendIV 都隐藏，纯图片
+        // 托盘没有发送入口，图片像是卡住了。toggleVoiceMode 会恢复输入框容器，随后 refresh 补显
+        // 发送键。
+        if (isVoiceMode) {
+            toggleVoiceMode()
+        }
+        val added = richTextTray.addAll(imageLocalPaths)
+        if (added <= 0) {
+            return false
+        }
+        refreshRichTextTray()
+        return true
+    }
+
+    /** 托盘当前是否有待发图片。 */
+    fun hasRichTextTrayImages(): Boolean = !richTextTray.isEmpty()
+
+    /**
+     * 点发送键时把「输入框文本 + 托盘有序图片」聚合为一条 type=14 发出（Phase 2 输入框
+     * 附件托盘；真·穿插的文/图块交错排序留 Phase 3）。委派给 ChatActivity 的发送侧聚合实现
+     * （复用 Phase 1 WKRichTextSender 的原子性 / 跨频道路由 / 文本必达 / snapshot 清空等已验证
+     * 能力），本方法只负责：in-flight 防重入、超字节校验、组装顺序参数、入队后清空托盘 + 输入框。
+     *
+     * <p>原子性（承接 Phase 1 教训）：托盘与输入框的清空必须在<strong>消息真正入队后</strong>
+     * 才做（onEnqueued）。上传未完成期间图片留在托盘、文本留在输入框。注：托盘仅内存态，
+     * 进程死会丢失托盘图片（文本草稿另有持久化）——这是 accepted scope 的 UX 非对称，非发送原子性回归。
+     *
+     * @return true 表示本次点击已被托盘发送接管（含「超字节弹转文件框」）；false 表示未接管
+     *         （如进入 reply/edit 态），调用方应继续走原有文本 / reply / edit 发送路径。
+     */
+    private fun flushRichTextTraySend(): Boolean {
+        // in-flight 防重入：上一次托盘发送还在上传图片期间，吞掉重复点击，避免重复 type=14。
+        if (richTextTraySending) {
+            return true
+        }
+        val rawTextRaw = editText.text?.toString() ?: ""
+        // 纯空白（只有空格 / 换行）归一化为 ""：否则 WKRichTextSender 的 TextUtils.isEmpty("  ")
+        // 判为非空，会发出空白 text block，甚至在全图失败降级时发一条空白纯文本。与
+        // previewBlocks 的「空白不出 text 块」语义一致。
+        val rawText = if (rawTextRaw.isBlank()) "" else rawTextRaw
+        val orderedPaths = richTextTray.orderedPaths()
+        if (orderedPaths.isEmpty()) {
+            return false
+        }
+        // 文本超字节上限：交回发送键转文件路径（与纯文本同源阈值），不发超限 payload。
+        if (!TextUtils.isEmpty(rawText) && isTextOverByteLimit(rawText)) {
+            showTextToFileAlert(rawText)
+            return true
+        }
+        richTextTraySending = true
+        val handled = iConversationContext.sendRichTextTray(rawText, orderedPaths, {
+            // 入队后回调（主线程）：清托盘 + 清输入框。snapshot 由 ChatActivity 侧把关跨频道
+            // / 新草稿安全，这里只在回调里做 UI 收口。
+            clearRichTextTray()
+            // snapshot-aware 清输入框（对齐 Phase 1 YUJ-2872 defect a）：上传可耗时数秒，用户
+            // 在等待期间可能又打了新草稿。只有当输入框仍恰好等于<em>发起时</em>的原始可见内容
+            // （rawTextRaw，含空白）时才清，否则保留用户新打的内容，绝不擦新草稿。
+            val current = editText.text?.toString() ?: ""
+            if (WKRichTextSender.shouldClearComposer(rawTextRaw, current)) {
+                editText.text = null
+                lastInputTime = 0
+            }
+            if (chatTopView?.visibility == View.VISIBLE) {
+                CommonAnim.getInstance().animateClose(chatTopView)
+            }
+        }, {
+            // 终态回调（主线程）：复位 in-flight 防重入标志。覆盖「全图失败且无文本→什么都没发」
+            // 这种 onEnqueued 永不触发的终态，否则发送键会永久失灵；并更新发送键可见性。
+            richTextTraySending = false
+            updateSendBtnForTray()
+        })
+        if (!handled) {
+            // 上下文未接管（如 reply/edit 态 sendRichTextTray 返回 false）。复位 in-flight 标志，
+            // 返回 false 让发送键继续走原有文本 / reply / edit 路径。托盘图片保留（用户退出
+            // reply/edit 后可再发）。
+            richTextTraySending = false
+            return false
+        }
+        return true
+    }
+
+    /** 清空托盘（发送入队后、或切换频道时调用）并刷新 UI。 */
+    fun clearRichTextTray() {
+        // 切频道也会走到这里：复位 in-flight 标志，避免旧频道一条托盘发送 in-flight 时切到
+        // 新频道后，标志残留把新频道的托盘发送永久卡住。
+        richTextTraySending = false
+        if (richTextTray.isEmpty() && trayLayout?.visibility != View.VISIBLE) {
+            return
+        }
+        richTextTray.clear()
+        refreshRichTextTray()
+    }
+
+    /** 同步托盘 UI（显隐 + 列表刷新 + 发送键可见性）到模型当前状态。 */
+    private fun refreshRichTextTray() {
+        trayAdapter?.notifyDataSetChanged()
+        val hasItems = !richTextTray.isEmpty()
+        trayLayout?.visibility = if (hasItems) View.VISIBLE else View.GONE
+        updateSendBtnForTray()
+    }
+
+    /**
+     * 托盘非空时，即便输入框没有文本也应允许发送（纯图片托盘 → 发单条 RichText，
+     * 或退化为逐张图片由发送路径决定）。文本存在与否的发送键显隐仍由 TextWatcher 管理，
+     * 这里只在「有图无字」时把发送键补显出来；「无图无字」时不强制显示。
+     */
+    private fun updateSendBtnForTray() {
+        if (isVoiceMode) {
+            return
+        }
+        val hasText = !TextUtils.isEmpty(StringUtils.replaceBlank(editText.text?.toString() ?: ""))
+        val hasTrayImages = !richTextTray.isEmpty()
+        if (hasTrayImages || hasText) {
+            if (!isShowSendBtn) {
+                sendIV.clearColorFilter()
+                sendIV.visibility = View.VISIBLE
+            }
+            isShowSendBtn = true
+        } else {
+            isShowSendBtn = false
+            sendIV.visibility = View.GONE
+        }
     }
 }

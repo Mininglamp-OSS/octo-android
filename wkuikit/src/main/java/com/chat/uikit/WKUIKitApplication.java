@@ -824,11 +824,13 @@ public class WKUIKitApplication {
                                 return;
                             }
 
-                            // 图文混排（RichText=14）发送侧聚合（Phase 1，对称 web#227）：
-                            // 输入框已有文本 + 本次全是静态图片（无 video / 无走 sticker 的 gif）时，
-                            // 聚合成单条 type=14（text 块在前、image 块按选取顺序在后），
-                            // 而非逐张发独立 image。其余情况落到下方原有逐条发送，零回归。
-                            if (tryAggregateRichTextMixed(iConversationContext, paths)) {
+                            // 图文混排（RichText=14）发送侧入口（Phase 2，对齐 web#237）：
+                            // 输入框附件托盘——本次全是静态图片（无 video / 无走 sticker 的 gif）时，
+                            // 把图片加入输入框上方的缩略图托盘（不立即发送），用户可继续打字 / 调序 /
+                            // 移除，点发送时整体按真实顺序打成单条 type=14（文本块在前 + 图片按
+                            // 托盘顺序；真·块级文/图交错留 Phase 3）。其余情况
+                            // （含 video / gif）落到下方原有逐条发送，零回归。
+                            if (tryAddRichTextTray(iConversationContext, paths)) {
                                 return;
                             }
 
@@ -884,17 +886,22 @@ public class WKUIKitApplication {
     }
 
     /**
-     * 图文混排（RichText=14）发送侧聚合判定（Phase 1）。
+     * 图文混排（RichText=14）发送侧入口判定（Phase 2，输入框附件托盘，对齐 web#237）。
      *
      * <p>仅当本次相册选择<strong>全是静态图片</strong>（无 video、无 gif——gif 走表情/原图
-     * 逐条路径不变）时才尝试聚合。把图片本地路径按选取顺序收集后交给
-     * {@link IConversationContext#trySendRichTextMixed(List)}：若输入框有待发文本则聚合成
-     * 单条 type=14 并返回 true（本次发送已被接管）；否则返回 false，调用方继续走原有逐条
-     * 发送（纯图片零回归）。
+     * 逐条路径不变）时才尝试加入托盘。把图片本地路径按选取顺序收集后交给
+     * {@link IConversationContext#addImagesToRichTextTray(List)}：成功加入返回 true（本次选择
+     * 已被托盘接管，不立即发送，等用户点发送时按真实顺序聚合成单条 type=14）；否则返回 false，
+     * 调用方继续走原有逐条发送（含 video/gif，零回归）。
      *
-     * @return true 表示已聚合发送，调用方应直接返回；false 表示未接管，继续原逐条逻辑。
+     * <p>与 Phase 1 的差别：Phase 1 是「输入框有文本才聚合、选图即发、顺序固定」；Phase 2 改为
+     * 「选图即入托盘、可继续编辑调序、点发送才聚合（文本块在前 + 图片按托盘顺序；真·块级
+     * 文/图交错留 Phase 3）」。纯图片（无文本）也入托盘——
+     * 用户可补文字或直接发送。
+     *
+     * @return true 表示已加入托盘，调用方应直接返回；false 表示未接管，继续原逐条逻辑。
      */
-    private boolean tryAggregateRichTextMixed(IConversationContext iConversationContext, List<ChooseResult> paths) {
+    private boolean tryAddRichTextTray(IConversationContext iConversationContext, List<ChooseResult> paths) {
         if (paths == null || paths.isEmpty()) {
             return false;
         }
@@ -902,7 +909,7 @@ public class WKUIKitApplication {
         for (ChooseResult result : paths) {
             if (result == null || result.model != ChooseResultModel.image
                     || TextUtils.isEmpty(result.path)) {
-                return false; // 含 video / 空路径 → 不聚合，走原逐条路径。
+                return false; // 含 video / 空路径 → 不入托盘，走原逐条路径。
             }
             if (WKFileUtils.getInstance().isGif(result.path)) {
                 return false; // gif 走表情/原图逐条路径，不纳入图文混排。
@@ -912,7 +919,7 @@ public class WKUIKitApplication {
         if (imagePaths.isEmpty()) {
             return false;
         }
-        return iConversationContext.trySendRichTextMixed(imagePaths);
+        return iConversationContext.addImagesToRichTextTray(imagePaths);
     }
 
     public void showChatConfirmDialog(@NonNull Context context, @NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, final IShowChatConfirm iShowChatConfirm) {

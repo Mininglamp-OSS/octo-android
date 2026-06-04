@@ -84,6 +84,19 @@ public final class WKRichTextSender {
     }
 
     /**
+     * 发送流程<strong>终态</strong>回调（Phase 2 输入框附件托盘）。与 {@link OnEnqueued} 不同：
+     * {@code onEnqueued} 只在「消息真正入队」时触发（保证文本必达语义）；本回调在发送流程
+     * <em>任何终态</em>都触发一次（混排入队 / 纯文本降级入队 / <strong>全图失败且无文本→什么都没发</strong>）。
+     *
+     * <p>存在意义：托盘用一个 {@code richTextTraySending} in-flight 标志防重入，必须在流程结束时
+     * 复位。纯图片托盘若所有图片上传失败、又没有文本可降级，{@code onEnqueued} 永不触发 →
+     * 标志将永久卡住、发送键失灵。本回调保证这种「什么都没发」的终态也能复位标志。在主线程触发。
+     */
+    public interface OnComplete {
+        void onComplete();
+    }
+
+    /**
      * 单张图片上传抽象（可注入测试替身）。生产实现走 {@link WKUploader} 两步（取凭证
      * → PUT），回调在主线程。把它抽成 seam 是为了让「上传未完成 → 文本仍可恢复 / 不被
      * 提前清空」这条 P1 回归可在纯 JVM 单测下被断言。
@@ -165,17 +178,35 @@ public final class WKRichTextSender {
                             String text,
                             List<String> imagePaths,
                             OnEnqueued onEnqueued) {
+        send(context, content, text, imagePaths, onEnqueued, null);
+    }
+
+    /**
+     * 发起图文混排聚合发送（Phase 2 重载：带终态回调）。
+     *
+     * @param onComplete 发送流程<strong>任何终态</strong>都触发一次的回调（含「全图失败且无
+     *                   文本→什么都没发」），用于复位托盘 in-flight 防重入标志。可为 null。
+     *                   见 {@link OnComplete}。
+     */
+    public static void send(IConversationContext context,
+                            WKRichTextContent content,
+                            String text,
+                            List<String> imagePaths,
+                            OnEnqueued onEnqueued,
+                            OnComplete onComplete) {
         if (context == null || content == null) {
+            notifyComplete(onComplete);
             return;
         }
         WKChannel channel = context.getChatChannelInfo();
         if (channel == null) {
             sendTextFallback(context, null, content, text, onEnqueued);
+            notifyComplete(onComplete);
             return;
         }
         List<String> paths = imagePaths != null ? imagePaths : new ArrayList<>();
         uploadNext(context, channel, content, text, paths, 0,
-                new ArrayList<>(), new int[]{0}, onEnqueued);
+                new ArrayList<>(), new int[]{0}, onEnqueued, onComplete);
     }
 
     /**
@@ -189,15 +220,16 @@ public final class WKRichTextSender {
                                    int index,
                                    List<WKRichTextContent.RichTextBlock> imageBlocks,
                                    int[] failedCount,
-                                   OnEnqueued onEnqueued) {
+                                   OnEnqueued onEnqueued,
+                                   OnComplete onComplete) {
         if (index >= paths.size()) {
-            finish(context, channel, content, text, imageBlocks, failedCount[0], onEnqueued);
+            finish(context, channel, content, text, imageBlocks, failedCount[0], onEnqueued, onComplete);
             return;
         }
         String localPath = paths.get(index);
         if (TextUtils.isEmpty(localPath)) {
             failedCount[0]++;
-            uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
+            uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued, onComplete);
             return;
         }
         int[] dims = decodeImageSize(localPath);
@@ -210,13 +242,13 @@ public final class WKRichTextSender {
                 } else {
                     imageBlocks.add(WKRichTextContent.makeImageBlock(downloadUrl, dims[0], dims[1]));
                 }
-                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
+                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued, onComplete);
             }
 
             @Override
             public void onFailure() {
                 failedCount[0]++;
-                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued);
+                uploadNext(context, channel, content, text, paths, index + 1, imageBlocks, failedCount, onEnqueued, onComplete);
             }
         });
     }
@@ -225,6 +257,7 @@ public final class WKRichTextSender {
      * 全部图片处理完毕：拼装有序 block（text 在前、image 按序在后）→ 发单条 RichText；
      * 若无任何有效图片，降级发纯文本（原子性：text 不丢）。失败有跳过时 Toast 提示。
      * 入队成功后触发 {@code onEnqueued}（调用方据此清空输入框，保证文本必达）。
+     * 无论是否入队，最终都触发 {@code onComplete}（复位托盘 in-flight 标志）。
      */
     private static void finish(IConversationContext context,
                                WKChannel channel,
@@ -232,11 +265,13 @@ public final class WKRichTextSender {
                                String text,
                                List<WKRichTextContent.RichTextBlock> imageBlocks,
                                int failedCount,
-                               OnEnqueued onEnqueued) {
+                               OnEnqueued onEnqueued,
+                               OnComplete onComplete) {
         if (imageBlocks.isEmpty()) {
-            // 所有图片都失败/不安全 → 文本仍要落地。
+            // 所有图片都失败/不安全 → 文本仍要落地（有文本时降级；无文本则什么都不发）。
             toastFailIfAny(context, failedCount);
             sendTextFallback(context, channel, content, text, onEnqueued);
+            notifyComplete(onComplete);
             return;
         }
 
@@ -255,6 +290,7 @@ public final class WKRichTextSender {
         // 别的频道，绝不能读 mutable 字段，否则消息错投。channel 为本次发起时捕获的目标。
         enqueueToChannel(context, content, channel);
         notifyEnqueued(onEnqueued);
+        notifyComplete(onComplete);
     }
 
     /**
@@ -301,6 +337,12 @@ public final class WKRichTextSender {
     private static void notifyEnqueued(OnEnqueued onEnqueued) {
         if (onEnqueued != null) {
             onEnqueued.onEnqueued();
+        }
+    }
+
+    private static void notifyComplete(OnComplete onComplete) {
+        if (onComplete != null) {
+            onComplete.onComplete();
         }
     }
 

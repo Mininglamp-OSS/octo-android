@@ -203,16 +203,11 @@ class ChatPanelManager(
     private var trayRecyclerView: RecyclerView? = null
     private var trayAdapter: WKRichTextTrayAdapter? = null
     // 托盘发送 in-flight 防重入（对齐 Phase 1 YUJ-2872 defect b / web#227 sendingRef）：
-    // 一条托盘发送在等图片异步上传期间，托盘 + 文本仍留在 UI（崩溃恢复）。若此时用户再点发送
-    // 键，会把同一批 tray + text 再打一条 → 重复 type=14。此标志在发送发起时置 true、入队回调
-    // （或切频道清空）时复位，期间吞掉重复发送。pendingRichTextSnapshot 只挡纯文本路径，纯图片
-    // 托盘无文本快照，故必须用本标志兜住图片重复。
+    // 一条托盘发送在等图片异步上传期间，托盘 + 文本仍留在 UI（仅内存，进程死会丢失托盘图片，
+    // 文本草稿另有持久化）。若此时用户再点发送键，会把同一批 tray + text 再打一条 → 重复
+    // type=14。此标志在发送发起时置 true、入队回调（或切频道清空）时复位，期间吞掉重复发送。
+    // pendingRichTextSnapshot 只挡纯文本路径，纯图片托盘无文本快照，故必须用本标志兜住图片重复。
     private var richTextTraySending = false
-    // 托盘发送 in-flight 防重入（对齐 Phase 1 YUJ-2872 defect b / web#227 sendingRef）：
-    // 一条托盘发送在等图片异步上传期间，托盘 + 文本仍留在 UI（崩溃恢复）。若此时用户再点发送
-    // 键，会把同一批 tray + text 再打一条 → 重复 type=14。此标志在发送发起时置 true、入队回调
-    // （或切频道清空）时复位，期间吞掉重复发送。pendingRichTextSnapshot 只挡纯文本路径，纯图片
-    // 托盘无文本快照，故必须用本标志兜住图片重复。
 
     // 回复 | 编辑
     private var chatTopView: LinearLayout? = null
@@ -2482,8 +2477,10 @@ class ChatPanelManager(
             voiceToggleBtn.setImageResource(R.mipmap.ic_voice_toggle)
             editTextContainer.visibility = View.VISIBLE
             holdToTalkBtn.visibility = View.GONE
-            val hasText = !editText.text.isNullOrBlank()
-            sendIV.visibility = if (hasText) View.VISIBLE else View.GONE
+            // 退出语音模式后发送键可见性须同时考虑「已暂存的图文托盘」，否则纯图托盘 +
+            // 空文本会让发送键消失（trapped tray，CR P1）。updateSendBtnForTray() 已 OR 进
+            // !richTextTray.isEmpty()，且此处已退出 isVoiceMode 故不会被其早返回短路。
+            updateSendBtnForTray()
             holdToTalkManager?.cancelRecording()
         }
     }
@@ -3835,6 +3832,11 @@ class ChatPanelManager(
             iConversationContext.chatActivity,
             richTextTray,
             onRemove = { id ->
+                // 发送进行中禁止 remove：flushRichTextTraySend 已快照 orderedPaths，
+                // 此时 ✕ 会让用户以为取消了某图，但冻结快照仍会上传发出，
+                // 随后 onEnqueued 清空托盘 → 被删的图还是发了（ghost-send，CR P2）。
+                // 与 add 路径同步由 richTextTraySending 门控。
+                if (richTextTraySending) return@WKRichTextTrayAdapter
                 if (richTextTray.removeById(id)) {
                     refreshRichTextTray()
                 }
@@ -3854,6 +3856,9 @@ class ChatPanelManager(
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder
             ): Boolean {
+                // 发送进行中禁止拖拽调序：同 onRemove，冻结快照已取，
+                // 此时调序不会反映到实际发送 payload，会误导用户（CR P2）。
+                if (richTextTraySending) return false
                 return adapter.onItemMove(
                     viewHolder.bindingAdapterPosition,
                     target.bindingAdapterPosition
@@ -3923,13 +3928,14 @@ class ChatPanelManager(
     fun hasRichTextTrayImages(): Boolean = !richTextTray.isEmpty()
 
     /**
-     * 点发送键时把「输入框文本 + 托盘有序图片」整体发出（Phase 2 真·穿插）。委派给
-     * ChatActivity 的发送侧聚合实现（复用 Phase 1 WKRichTextSender 的原子性 / 跨频道路由 /
-     * 文本必达 / snapshot 清空等已验证能力），本方法只负责：in-flight 防重入、超字节校验、
-     * 组装顺序参数、入队后清空托盘 + 输入框。
+     * 点发送键时把「输入框文本 + 托盘有序图片」聚合为一条 type=14 发出（Phase 2 输入框
+     * 附件托盘；真·穿插的文/图块交错排序留 Phase 3）。委派给 ChatActivity 的发送侧聚合实现
+     * （复用 Phase 1 WKRichTextSender 的原子性 / 跨频道路由 / 文本必达 / snapshot 清空等已验证
+     * 能力），本方法只负责：in-flight 防重入、超字节校验、组装顺序参数、入队后清空托盘 + 输入框。
      *
      * <p>原子性（承接 Phase 1 教训）：托盘与输入框的清空必须在<strong>消息真正入队后</strong>
-     * 才做（onEnqueued）。上传未完成期间图片留在托盘、文本留在输入框，可恢复。
+     * 才做（onEnqueued）。上传未完成期间图片留在托盘、文本留在输入框。注：托盘仅内存态，
+     * 进程死会丢失托盘图片（文本草稿另有持久化）——这是 accepted scope 的 UX 非对称，非发送原子性回归。
      *
      * @return true 表示本次点击已被托盘发送接管（含「超字节弹转文件框」）；false 表示未接管
      *         （如进入 reply/edit 态），调用方应继续走原有文本 / reply / edit 发送路径。

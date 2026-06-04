@@ -8,11 +8,12 @@ on:
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    # paths-ignore is intentionally NOT set here — workflow-level path filtering
+    # prevents GitHub from creating any check run, which deadlocks required-status
+    # checks on docs-only PRs. Path-based skipping is handled by the `changes`
+    # preflight job below instead (dorny/paths-filter produces "skipped" statuses
+    # that GitHub counts as passing for required checks).
   workflow_dispatch:
 
 permissions: {}
@@ -22,8 +23,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name == 'pull_request' && steps.filter.outputs.code || 'true' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050 # v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            code:
+              - '!**/*.md'
+              - '!docs/**'
+              - '!.github/ISSUE_TEMPLATE/**'
+
   build:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [changes]
+    if: |
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
+      needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

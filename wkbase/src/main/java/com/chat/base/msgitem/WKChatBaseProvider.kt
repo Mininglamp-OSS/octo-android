@@ -1207,10 +1207,25 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
      */
     private fun canWithdraw(mMsg: WKMsg): Boolean {
         var isManager = false
-        if (mMsg.channelType == WKChannelType.GROUP) {
+        if (mMsg.channelType == WKChannelType.GROUP
+            || mMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            var memberChannelID = mMsg.channelID
+            var memberChannelType = mMsg.channelType
+            if (mMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                val channel = WKIM.getInstance().channelManager.getChannel(
+                    mMsg.channelID, mMsg.channelType
+                )
+                if (channel != null && !TextUtils.isEmpty(channel.parentChannelID)) {
+                    memberChannelID = channel.parentChannelID
+                    memberChannelType = channel.parentChannelType
+                } else if (mMsg.channelID.contains("____")) {
+                    memberChannelID = mMsg.channelID.substringBefore("____")
+                    memberChannelType = WKChannelType.GROUP
+                }
+            }
             val member = WKIM.getInstance().channelMembersManager.getMember(
-                mMsg.channelID,
-                mMsg.channelType,
+                memberChannelID,
+                memberChannelType,
                 WKConfig.getInstance().uid
             )
             if (member != null && member.role != WKChannelMemberRole.normal) {

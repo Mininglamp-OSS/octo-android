@@ -24,19 +24,23 @@ import android.graphics.drawable.BitmapDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
+import com.chat.base.msgeffect.video.ActionVideoEffectPlayer
 import com.tencent.bugly.crashreport.CrashReport
 import com.xinbida.wukongim.entity.WKMsg
 import java.lang.ref.WeakReference
 
 class MessageEffectManager(
     activity: Activity,
-    private val overlayView: MessageEffectOverlayView
+    private val overlayView: MessageEffectOverlayView,
+    private val contentRoot: ViewGroup? = null
 ) {
     private val activityRef = WeakReference(activity)
     private val handler = Handler(Looper.getMainLooper())
     private val triggeredSet = HashSet<String>()
     private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private var actionVideoPlayer: ActionVideoEffectPlayer? = null
 
     // 收集阶段：打开聊天时短暂收集所有可见的未读效果消息，只播放最后一条
     private var collectPhase = true
@@ -101,6 +105,11 @@ class MessageEffectManager(
             bestCandidate = null
             if (activityRef.get()?.isFinishing == true) return
 
+            if (candidate.effectType is MessageEffectType.ActionVideo) {
+                playEffect(candidate.effectType, candidate.bubbleView?.get(), candidate.avatarBitmap)
+                return
+            }
+
             val cx = overlayView.width / 2f
             val cy = overlayView.height * 0.8f
             val sourceRect = RectF(cx - 50f, cy - 50f, cx + 50f, cy + 50f)
@@ -111,6 +120,15 @@ class MessageEffectManager(
     }
 
     private fun playEffect(effectType: MessageEffectType, bubbleView: View?, avatarBitmap: Bitmap?) {
+        if (effectType is MessageEffectType.ActionVideo) {
+            val root = contentRoot ?: return
+            val activity = activityRef.get() ?: return
+            if (actionVideoPlayer == null) {
+                actionVideoPlayer = ActionVideoEffectPlayer(activity)
+            }
+            actionVideoPlayer?.play(root)
+            return
+        }
         val sourceRect = calculateSourceRect(bubbleView)
         overlayView.playEffect(effectType, sourceRect, avatarBitmap)
     }
@@ -186,6 +204,8 @@ class MessageEffectManager(
         collectRunnable?.let { handler.removeCallbacks(it) }
         handler.removeCallbacksAndMessages(null)
         overlayView.cancelAll()
+        actionVideoPlayer?.cancel()
+        actionVideoPlayer = null
         bestCandidate = null
     }
 

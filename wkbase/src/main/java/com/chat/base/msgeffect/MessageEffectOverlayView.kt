@@ -94,6 +94,7 @@ class MessageEffectOverlayView @JvmOverloads constructor(
             is MessageEffectType.Hearts -> HeartsEffect(type, sourceRect, w, h)
             is MessageEffectType.Confetti -> ConfettiEffect(type, sourceRect, w, h)
             is MessageEffectType.ThumbsUp -> ThumbsUpEffect(type, sourceRect, w, h)
+            is MessageEffectType.ActionVideo -> null
         }
     }
 

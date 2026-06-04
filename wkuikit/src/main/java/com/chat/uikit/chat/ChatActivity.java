@@ -730,7 +730,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         messageEffectOverlay.setVisibility(View.INVISIBLE);
         FrameLayout contentRoot = findViewById(android.R.id.content);
         contentRoot.addView(messageEffectOverlay, effectLP);
-        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay);
+        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay, contentRoot);
         chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
             if (messageEffectManager != null) {
                 messageEffectManager.onMessageVisible(item.wkMsg, itemView);

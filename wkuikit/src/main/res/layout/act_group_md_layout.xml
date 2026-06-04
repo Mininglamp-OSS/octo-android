@@ -13,7 +13,9 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
+        <!-- 编辑模式：原始 Markdown 文本 -->
         <androidx.core.widget.NestedScrollView
+            android:id="@+id/editScrollView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:fillViewport="true">
@@ -33,6 +35,34 @@
                 android:textSize="14sp" />
 
         </androidx.core.widget.NestedScrollView>
+
+        <!-- 只读模式：渲染后的 Markdown -->
+        <ScrollView
+            android:id="@+id/renderScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/renderLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="15dp">
+
+                <TextView
+                    android:id="@+id/renderTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="4dp"
+                    android:textColor="@color/colorDark"
+                    android:textIsSelectable="true"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+        </ScrollView>
 
         <LinearLayout
             android:id="@+id/readonlyHintLayout"

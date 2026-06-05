@@ -237,4 +237,6 @@
 
     <!-- i18n: RichText -->
     <string name="richtext_image_limit">You can select up to %d images</string>
+    <string name="richtext_caption_title">Add Caption</string>
+    <string name="richtext_caption_hint">Say something…</string>
 </resources>

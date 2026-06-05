@@ -276,10 +276,10 @@ public final class WKRichTextSender {
         }
 
         List<WKRichTextContent.RichTextBlock> blocks = new ArrayList<>();
+        blocks.addAll(imageBlocks);
         if (!TextUtils.isEmpty(text)) {
             blocks.add(WKRichTextContent.makeTextBlock(text));
         }
-        blocks.addAll(imageBlocks);
 
         content.blocks = blocks;
         // plain 非权威：仅填本地占位（image → 占位 wire token），server #232 Finalize 覆盖。

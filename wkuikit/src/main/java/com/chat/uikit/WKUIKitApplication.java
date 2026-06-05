@@ -331,7 +331,7 @@ public class WKUIKitApplication {
         // 且不逐条复核 isCanForward，故一并关闭，留 Phase 2 发送端），保留
         // 复制/删除/reaction/撤回等接收侧操作。
         // 参数顺序：forward, withdraw, multipleChoice, reply, reaction, pin。
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(false, true, false, false, true, true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
@@ -907,12 +907,14 @@ public class WKUIKitApplication {
         }
         List<String> imagePaths = new ArrayList<>();
         for (ChooseResult result : paths) {
-            if (result == null || result.model != ChooseResultModel.image
-                    || TextUtils.isEmpty(result.path)) {
-                return false; // 含 video / 空路径 → 不入托盘，走原逐条路径。
+            if (result == null || TextUtils.isEmpty(result.path)) {
+                continue;
+            }
+            if (result.model != ChooseResultModel.image) {
+                return false;
             }
             if (WKFileUtils.getInstance().isGif(result.path)) {
-                return false; // gif 走表情/原图逐条路径，不纳入图文混排。
+                continue;
             }
             imagePaths.add(result.path);
         }

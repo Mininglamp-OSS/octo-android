@@ -3292,8 +3292,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         com.chat.uikit.chat.msgmodel.WKRichTextContent content =
                 new com.chat.uikit.chat.msgmodel.WKRichTextContent();
-        // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
-        if (chatPanelManager != null) {
+        if (pendingCaptionMentionUids != null && !pendingCaptionMentionUids.isEmpty()
+                || pendingCaptionMentionAll) {
+            com.xinbida.wukongim.entity.WKMentionInfo mInfo = new com.xinbida.wukongim.entity.WKMentionInfo();
+            if (pendingCaptionMentionAll) {
+                content.mentionHumans = 1;
+                mInfo.humans = true;
+            }
+            if (pendingCaptionMentionUids != null) {
+                mInfo.uids = new ArrayList<>(pendingCaptionMentionUids);
+            }
+            content.mentionInfo = mInfo;
+        } else if (chatPanelManager != null) {
             chatPanelManager.applyInputMentionsTo(content, rawText);
         }
 
@@ -3853,6 +3863,23 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().invoke("stop_screen_shot", this);
     }
 
+
+    private List<String> pendingCaptionMentionUids;
+    private boolean pendingCaptionMentionAll;
+
+    ActivityResultLauncher<Intent> richTextCaptionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+            List<String> paths = result.getData().getStringArrayListExtra("paths");
+            String caption = result.getData().getStringExtra("caption");
+            pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
+            pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
+            if (paths != null && !paths.isEmpty()) {
+                sendRichTextTray(caption != null ? caption : "", paths, null, null);
+            }
+            pendingCaptionMentionUids = null;
+            pendingCaptionMentionAll = false;
+        }
+    });
 
     ActivityResultLauncher<Intent> previewNewImgResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {

@@ -233,4 +233,6 @@
 
     <!-- i18n: RichText -->
     <string name="richtext_image_limit">最多只能选择 %d 张图片</string>
+    <string name="richtext_caption_title">添加描述</string>
+    <string name="richtext_caption_hint">说点什么…</string>
 </resources>

@@ -33,13 +33,13 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterInside
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.chat.base.config.WKApiConfig
-import com.chat.base.glide.GlideUtils
 import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKMsgBgType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.WKDialogUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.WKRichTextContent
@@ -119,13 +119,17 @@ class WKRichTextProvider : WKChatBaseProvider() {
             return
         }
 
+        val allImageUrls = blocks.filter { it != null && it.isImage() }
+            .mapNotNull { WKApiConfig.getShowUrl(it.url) }
+            .filter { it.isNotEmpty() }
+
         var imageCount = 0
         for (block in blocks) {
             if (block == null) continue
             when {
                 block.isImage() -> {
                     if (imageCount < MAX_RENDER_IMAGES) {
-                        addImageBlock(blocksLayout, block)
+                        addImageBlock(blocksLayout, block, allImageUrls, imageCount)
                         imageCount++
                     }
                 }
@@ -208,7 +212,7 @@ class WKRichTextProvider : WKChatBaseProvider() {
         )
     }
 
-    private fun addImageBlock(parent: LinearLayout, block: WKRichTextContent.RichTextBlock) {
+    private fun addImageBlock(parent: LinearLayout, block: WKRichTextContent.RichTextBlock, allImageUrls: List<String>, imageIndex: Int) {
         val showUrl = WKApiConfig.getShowUrl(block.url)
         if (TextUtils.isEmpty(showUrl)) return
 
@@ -229,6 +233,15 @@ class WKRichTextProvider : WKChatBaseProvider() {
             .transform(CenterInside(), RoundedCorners(AndroidUtilities.dp(8f)))
             .override(w, h)
             .into(imageView)
+
+        imageView.setOnClickListener {
+            val imgList = allImageUrls.map { it as Any }.toMutableList()
+            val ivList = mutableListOf<ImageView?>(imageView)
+            for (i in 1 until imgList.size) ivList.add(null)
+            WKDialogUtils.getInstance().showImagePopup(
+                context, imgList, ivList, imageView, imageIndex, null, null, null
+            )
+        }
 
         parent.addView(imageView, lp)
     }

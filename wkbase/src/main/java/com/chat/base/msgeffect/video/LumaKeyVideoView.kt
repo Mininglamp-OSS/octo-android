@@ -23,6 +23,9 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.Surface
 import android.view.TextureView
@@ -41,9 +44,15 @@ class LumaKeyVideoView @JvmOverloads constructor(
     private var mediaPlayer: MediaPlayer? = null
     private var pendingAfd: AssetFileDescriptor? = null
     private var firstFrameNotified = false
-    private var frameBitmap: Bitmap? = null
+    private var captureBitmap: Bitmap? = null
+    private var displayBitmap: Bitmap? = null
     private var pixelBuffer: IntArray? = null
     private val drawMatrix = Matrix()
+    private var workerThread: HandlerThread? = null
+    private var workerHandler: Handler? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var processing = false
 
     private val decoderView: TextureView
     private val renderView: View
@@ -53,6 +62,9 @@ class LumaKeyVideoView @JvmOverloads constructor(
     private var maskH = 0
 
     init {
+        workerThread = HandlerThread("LumaKeyWorker").apply { start() }
+        workerHandler = Handler(workerThread!!.looper)
+
         decoderView = TextureView(context)
         decoderView.alpha = 0f
         decoderView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -69,7 +81,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
 
         renderView = object : View(context) {
             override fun onDraw(canvas: Canvas) {
-                val bmp = frameBitmap ?: return
+                val bmp = displayBitmap ?: return
                 drawMatrix.reset()
                 drawMatrix.setScale(
                     width.toFloat() / bmp.width,
@@ -114,22 +126,35 @@ class LumaKeyVideoView @JvmOverloads constructor(
     }
 
     private fun processFrame() {
+        if (processing) return
+        processing = true
+
         val bw = PROCESS_WIDTH
         val bh = PROCESS_HEIGHT
-
-        if (frameBitmap == null || frameBitmap!!.width != bw || frameBitmap!!.height != bh) {
-            frameBitmap = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+        if (captureBitmap == null || captureBitmap!!.width != bw || captureBitmap!!.height != bh) {
+            captureBitmap = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
         }
-
-        decoderView.getBitmap(frameBitmap!!)
-        applyLumaKey(frameBitmap!!)
-
-        if (!firstFrameNotified) {
-            firstFrameNotified = true
-            onFirstFrame?.invoke()
+        if (displayBitmap == null || displayBitmap!!.width != bw || displayBitmap!!.height != bh) {
+            displayBitmap = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
         }
+        decoderView.getBitmap(captureBitmap!!)
 
-        renderView.invalidate()
+        workerHandler?.post {
+            try {
+                applyLumaKey(captureBitmap!!)
+            } catch (_: Exception) {}
+            mainHandler.post {
+                val temp = displayBitmap
+                displayBitmap = captureBitmap
+                captureBitmap = temp
+                processing = false
+                if (!firstFrameNotified) {
+                    firstFrameNotified = true
+                    onFirstFrame?.invoke()
+                }
+                renderView.invalidate()
+            }
+        }
     }
 
     private fun applyLumaKey(bitmap: Bitmap) {
@@ -200,8 +225,13 @@ class LumaKeyVideoView @JvmOverloads constructor(
         mediaPlayer = null
         try { videoSurface?.release() } catch (_: Exception) {}
         videoSurface = null
-        frameBitmap?.recycle()
-        frameBitmap = null
+        workerThread?.quitSafely()
+        workerThread = null
+        workerHandler = null
+        captureBitmap?.recycle()
+        captureBitmap = null
+        displayBitmap?.recycle()
+        displayBitmap = null
         pixelBuffer = null
     }
 

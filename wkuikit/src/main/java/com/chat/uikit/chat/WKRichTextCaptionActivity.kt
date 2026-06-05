@@ -60,8 +60,7 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
     private lateinit var gridAdapter: GridAdapter
     private var channelId = ""
     private var channelType: Byte = WKChannelType.GROUP
-    private val mentionUids = mutableListOf<String>()
-    private var mentionAll = false
+    private var existingMentionUids: List<String> = emptyList()
     private var mentionAdapter: RemindMemberAdapter? = null
     private var suppressMentionDetection = false
     private var mentionQueryLength = 0
@@ -75,6 +74,7 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
         imagePaths.addAll(paths)
         channelId = intent.getStringExtra("channelId") ?: ""
         channelType = intent.getByteExtra("channelType", WKChannelType.GROUP)
+        existingMentionUids = intent.getStringArrayListExtra("existingMentionUids") ?: emptyList()
 
         val existingCaption = intent.getStringExtra("caption")
         if (!existingCaption.isNullOrBlank()) {
@@ -130,13 +130,16 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
 
         binding.sendBtn.setOnClickListener {
             val caption = binding.captionEt.text?.toString() ?: ""
-            val currentUids = binding.captionEt.allUIDs
-            val hasAll = currentUids.contains("-1")
-            val hasAis = currentUids.contains("-2")
+            val modalUids = binding.captionEt.allUIDs
+            val allUids = LinkedHashSet<String>()
+            allUids.addAll(existingMentionUids)
+            allUids.addAll(modalUids)
+            val hasAll = allUids.contains("-1")
+            val hasAis = allUids.contains("-2")
             val result = Intent()
             result.putStringArrayListExtra("paths", ArrayList(imagePaths))
             result.putExtra("caption", caption)
-            result.putStringArrayListExtra("mentionUids", ArrayList(currentUids))
+            result.putStringArrayListExtra("mentionUids", ArrayList(allUids))
             result.putExtra("mentionAll", hasAll)
             result.putExtra("mentionAis", hasAis)
             setResult(RESULT_OK, result)
@@ -214,7 +217,6 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
                 } else {
                     memberEntity.memberName = getString(R.string.all)
                     memberEntity.memberUID = "-1"
-                    mentionAll = true
                 }
             }
             var showName = memberEntity.memberName
@@ -223,10 +225,6 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
             )
             if (channel != null && !TextUtils.isEmpty(channel.channelName)) {
                 showName = channel.channelName
-            }
-
-            if (memberEntity.memberUID != "-1" && memberEntity.memberUID != "-2") {
-                mentionUids.add(memberEntity.memberUID)
             }
 
             val et = binding.captionEt

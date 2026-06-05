@@ -3931,6 +3931,10 @@ class ChatPanelManager(
         val existingText = editText.text?.toString() ?: ""
         if (existingText.isNotBlank()) {
             intent.putExtra("caption", existingText)
+            val existingUids = editText.allUIDs
+            if (existingUids.isNotEmpty()) {
+                intent.putStringArrayListExtra("existingMentionUids", ArrayList(existingUids))
+            }
             editText.text = null
         }
         (iConversationContext.chatActivity as? ChatActivity)

@@ -3931,6 +3931,7 @@ class ChatPanelManager(
         val existingText = editText.text?.toString() ?: ""
         if (existingText.isNotBlank()) {
             intent.putExtra("caption", existingText)
+            editText.text = null
         }
         (iConversationContext.chatActivity as? ChatActivity)
             ?.richTextCaptionLauncher?.launch(intent)

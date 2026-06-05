@@ -42,6 +42,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
     private var pendingAfd: AssetFileDescriptor? = null
     private var firstFrameNotified = false
     private var frameBitmap: Bitmap? = null
+    private var pixelBuffer: IntArray? = null
     private val drawMatrix = Matrix()
 
     private val decoderView: TextureView
@@ -134,7 +135,11 @@ class LumaKeyVideoView @JvmOverloads constructor(
     private fun applyLumaKey(bitmap: Bitmap) {
         val w = bitmap.width
         val h = bitmap.height
-        val pixels = IntArray(w * h)
+        val size = w * h
+        if (pixelBuffer == null || pixelBuffer!!.size != size) {
+            pixelBuffer = IntArray(size)
+        }
+        val pixels = pixelBuffer!!
         bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
 
         if (maskW != w || maskH != h) {
@@ -197,6 +202,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
         videoSurface = null
         frameBitmap?.recycle()
         frameBitmap = null
+        pixelBuffer = null
     }
 
     companion object {

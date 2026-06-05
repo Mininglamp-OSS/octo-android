@@ -119,17 +119,20 @@ class WKRichTextProvider : WKChatBaseProvider() {
             return
         }
 
-        val allImageUrls = blocks.filter { it != null && it.isImage() }
-            .mapNotNull { WKApiConfig.getShowUrl(it.url) }
-            .filter { it.isNotEmpty() }
-
+        val allImageUrls = mutableListOf<String>()
         var imageCount = 0
+        var renderedImageIndex = 0
         for (block in blocks) {
             if (block == null) continue
             when {
                 block.isImage() -> {
                     if (imageCount < MAX_RENDER_IMAGES) {
-                        addImageBlock(blocksLayout, block, allImageUrls, imageCount)
+                        val showUrl = WKApiConfig.getShowUrl(block.url)
+                        if (!TextUtils.isEmpty(showUrl)) {
+                            allImageUrls.add(showUrl)
+                            addImageBlock(blocksLayout, block, allImageUrls, renderedImageIndex)
+                            renderedImageIndex++
+                        }
                         imageCount++
                     }
                 }

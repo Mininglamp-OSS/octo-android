@@ -3897,6 +3897,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             pendingCaptionMentionUids = null;
             pendingCaptionMentionAll = false;
             pendingCaptionMentionAis = false;
+        } else if (result.getResultCode() == Activity.RESULT_CANCELED && result.getData() != null) {
+            String restored = result.getData().getStringExtra("caption");
+            if (restored != null && !restored.isEmpty() && chatPanelManager != null) {
+                chatPanelManager.getEditText().setText(restored);
+                chatPanelManager.getEditText().setSelection(restored.length());
+            }
         }
     });
 

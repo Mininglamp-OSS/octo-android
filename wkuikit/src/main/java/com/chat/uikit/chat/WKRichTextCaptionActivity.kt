@@ -124,7 +124,7 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         binding.cancelBtn.setOnClickListener {
-            setResult(RESULT_CANCELED)
+            returnCaptionOnCancel()
             finish()
         }
 
@@ -248,6 +248,18 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
         binding.mentionRecyclerView.visibility = View.GONE
     }
 
+    private fun returnCaptionOnCancel() {
+        val caption = binding.captionEt.text?.toString() ?: ""
+        val result = Intent()
+        result.putExtra("caption", caption)
+        setResult(RESULT_CANCELED, result)
+    }
+
+    override fun onBackPressed() {
+        returnCaptionOnCancel()
+        super.onBackPressed()
+    }
+
     private fun openImagePicker() {
         val remaining = WKRichTextComposeModel.MAX_IMAGES - imagePaths.size
         if (remaining <= 0) {
@@ -357,7 +369,7 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
                         imagePaths.removeAt(pos)
                         notifyDataSetChanged()
                         if (imagePaths.isEmpty()) {
-                            setResult(RESULT_CANCELED)
+                            returnCaptionOnCancel()
                             finish()
                         }
                     }

@@ -86,13 +86,16 @@ class LumaKeyVideoView @JvmOverloads constructor(
         if (st != null) initMediaPlayer(st)
     }
 
+    private var videoSurface: Surface? = null
+
     private fun initMediaPlayer(st: SurfaceTexture) {
         val afd = pendingAfd ?: return
         pendingAfd = null
         try {
+            videoSurface = Surface(st)
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                setSurface(Surface(st))
+                setSurface(videoSurface)
                 setVolume(0f, 0f)
                 isLooping = false
                 setOnPreparedListener { it.start() }
@@ -103,6 +106,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
                 setOnCompletionListener { post { onVideoEnd?.invoke() } }
                 prepareAsync()
             }
+            afd.close()
         } catch (e: Exception) {
             post { onVideoEnd?.invoke() }
         }
@@ -186,11 +190,11 @@ class LumaKeyVideoView @JvmOverloads constructor(
     }
 
     fun release() {
-        try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
-        } catch (_: Exception) {}
+        try { mediaPlayer?.stop() } catch (_: Exception) {}
+        try { mediaPlayer?.release() } catch (_: Exception) {}
+        mediaPlayer = null
+        try { videoSurface?.release() } catch (_: Exception) {}
+        videoSurface = null
         frameBitmap?.recycle()
         frameBitmap = null
     }

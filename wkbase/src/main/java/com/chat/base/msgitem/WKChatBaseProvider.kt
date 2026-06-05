@@ -1217,11 +1217,10 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 )
                 if (channel != null && !TextUtils.isEmpty(channel.parentChannelID)) {
                     memberChannelID = channel.parentChannelID
-                    memberChannelType = channel.parentChannelType
                 } else if (mMsg.channelID.contains("____")) {
                     memberChannelID = mMsg.channelID.substringBefore("____")
-                    memberChannelType = WKChannelType.GROUP
                 }
+                memberChannelType = WKChannelType.GROUP
             }
             val member = WKIM.getInstance().channelMembersManager.getMember(
                 memberChannelID,

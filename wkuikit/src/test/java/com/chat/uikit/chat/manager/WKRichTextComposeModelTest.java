@@ -137,17 +137,17 @@ public class WKRichTextComposeModelTest {
     }
 
     @Test
-    public void previewBlocks_textFirst_thenImagesInTrayOrder() {
+    public void previewBlocks_imagesFirst_thenText() {
         WKRichTextComposeModel model = new WKRichTextComposeModel();
         model.addAll(Arrays.asList("/a.png", "/b.png"));
         List<WKRichTextContentBlocks> blocks = model.previewBlocks("hello");
         assertEquals(3, blocks.size());
-        assertTrue(blocks.get(0).isText());
-        assertEquals("hello", blocks.get(0).text);
+        assertTrue(blocks.get(0).isImage());
+        assertEquals("/a.png", blocks.get(0).localPath);
         assertTrue(blocks.get(1).isImage());
-        assertEquals("/a.png", blocks.get(1).localPath);
-        assertTrue(blocks.get(2).isImage());
-        assertEquals("/b.png", blocks.get(2).localPath);
+        assertEquals("/b.png", blocks.get(1).localPath);
+        assertTrue(blocks.get(2).isText());
+        assertEquals("hello", blocks.get(2).text);
     }
 
     @Test

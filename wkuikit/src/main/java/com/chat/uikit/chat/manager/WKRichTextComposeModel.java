@@ -166,13 +166,12 @@ public final class WKRichTextComposeModel {
      */
     @NonNull
     public List<WKRichTextContentBlocks> previewBlocks(String text) {
-        // 复用 WKRichTextContent 的 block 工厂以保证字段与 wire 一致。
         List<WKRichTextContentBlocks> blocks = new ArrayList<>();
-        if (text != null && !text.trim().isEmpty()) {
-            blocks.add(WKRichTextContentBlocks.text(text));
-        }
         for (TrayItem item : items) {
             blocks.add(WKRichTextContentBlocks.image(item.localPath));
+        }
+        if (text != null && !text.trim().isEmpty()) {
+            blocks.add(WKRichTextContentBlocks.text(text));
         }
         return blocks;
     }

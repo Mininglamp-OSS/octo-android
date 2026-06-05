@@ -258,7 +258,7 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
         segments.add(rendered.subSequence(start, rendered.length()));
 
         CharSequence firstSegment = trimEdgeNewlines(segments.get(0));
-        if (firstSegment.toString().isBlank()) {
+        if (isBlank(firstSegment)) {
             wkVBinding.renderTv.setVisibility(View.GONE);
         } else {
             wkVBinding.renderTv.setVisibility(View.VISIBLE);
@@ -271,7 +271,7 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
 
             if (i + 1 < segments.size()) {
                 CharSequence nextSegment = trimEdgeNewlines(segments.get(i + 1));
-                if (nextSegment.toString().isBlank()) continue;
+                if (isBlank(nextSegment)) continue;
 
                 TextView extraTv = new TextView(this);
                 extraTv.setText(nextSegment);
@@ -283,6 +283,14 @@ public class GroupMdActivity extends WKBaseActivity<ActGroupMdLayoutBinding> {
                 wkVBinding.renderLayout.addView(extraTv);
             }
         }
+    }
+
+    private static boolean isBlank(CharSequence cs) {
+        if (cs == null) return true;
+        for (int i = 0; i < cs.length(); i++) {
+            if (!Character.isWhitespace(cs.charAt(i))) return false;
+        }
+        return true;
     }
 
     private CharSequence trimEdgeNewlines(CharSequence cs) {

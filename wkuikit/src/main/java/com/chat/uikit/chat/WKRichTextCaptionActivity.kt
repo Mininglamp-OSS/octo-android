@@ -64,6 +64,7 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
     private var mentionAll = false
     private var mentionAdapter: RemindMemberAdapter? = null
     private var suppressMentionDetection = false
+    private var mentionQueryLength = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,11 +130,15 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
 
         binding.sendBtn.setOnClickListener {
             val caption = binding.captionEt.text?.toString() ?: ""
+            val currentUids = binding.captionEt.allUIDs
+            val hasAll = currentUids.contains("-1")
+            val hasAis = currentUids.contains("-2")
             val result = Intent()
             result.putStringArrayListExtra("paths", ArrayList(imagePaths))
             result.putExtra("caption", caption)
-            result.putStringArrayListExtra("mentionUids", ArrayList(mentionUids))
-            result.putExtra("mentionAll", mentionAll)
+            result.putStringArrayListExtra("mentionUids", ArrayList(currentUids))
+            result.putExtra("mentionAll", hasAll)
+            result.putExtra("mentionAis", hasAis)
             setResult(RESULT_OK, result)
             finish()
         }
@@ -147,7 +152,25 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 if (suppressMentionDetection) return
                 if (count == 1 && s != null && start < s.length && s[start] == '@') {
+                    mentionQueryLength = 0
                     showMemberPicker()
+                } else if (binding.mentionRecyclerView.visibility == View.VISIBLE) {
+                    if (count >= 1 && before == 0) {
+                        mentionQueryLength += count
+                    } else if (count == 0 && before >= 1) {
+                        mentionQueryLength = (mentionQueryLength - before).coerceAtLeast(0)
+                    }
+                    if (mentionQueryLength > 0) {
+                        val text = binding.captionEt.text?.toString() ?: ""
+                        val cursorPos = binding.captionEt.selectionStart
+                        val atPos = cursorPos - mentionQueryLength - 1
+                        if (atPos >= 0 && atPos < text.length && text[atPos] == '@') {
+                            val query = text.substring(atPos + 1, cursorPos)
+                            mentionAdapter?.onSearch(query)
+                        }
+                    } else {
+                        mentionAdapter?.onNormal()
+                    }
                 }
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -207,10 +230,14 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
             }
 
             val et = binding.captionEt
-            et.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+            val deleteCount = 1 + mentionQueryLength
+            for (i in 0 until deleteCount) {
+                et.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+            }
             suppressMentionDetection = true
             et.addSpan("@$showName ", memberEntity.memberUID)
             suppressMentionDetection = false
+            mentionQueryLength = 0
             hideMentionList()
         }
 

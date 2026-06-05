@@ -3293,14 +3293,24 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         com.chat.uikit.chat.msgmodel.WKRichTextContent content =
                 new com.chat.uikit.chat.msgmodel.WKRichTextContent();
         if (pendingCaptionMentionUids != null && !pendingCaptionMentionUids.isEmpty()
-                || pendingCaptionMentionAll) {
+                || pendingCaptionMentionAll || pendingCaptionMentionAis) {
             com.xinbida.wukongim.entity.WKMentionInfo mInfo = new com.xinbida.wukongim.entity.WKMentionInfo();
             if (pendingCaptionMentionAll) {
                 content.mentionHumans = 1;
                 mInfo.humans = true;
             }
+            if (pendingCaptionMentionAis) {
+                content.mentionAis = 1;
+                mInfo.ais = true;
+            }
             if (pendingCaptionMentionUids != null) {
-                mInfo.uids = new ArrayList<>(pendingCaptionMentionUids);
+                List<String> filteredUids = new ArrayList<>();
+                for (String uid : pendingCaptionMentionUids) {
+                    if (!"-1".equals(uid) && !"-2".equals(uid)) {
+                        filteredUids.add(uid);
+                    }
+                }
+                mInfo.uids = filteredUids;
             }
             content.mentionInfo = mInfo;
         } else if (chatPanelManager != null) {
@@ -3866,6 +3876,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private List<String> pendingCaptionMentionUids;
     private boolean pendingCaptionMentionAll;
+    private boolean pendingCaptionMentionAis;
 
     ActivityResultLauncher<Intent> richTextCaptionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
@@ -3873,9 +3884,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             String caption = result.getData().getStringExtra("caption");
             pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
             pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
+            pendingCaptionMentionAis = result.getData().getBooleanExtra("mentionAis", false);
             if (paths != null && !paths.isEmpty()) {
                 String text = caption != null ? caption : "";
                 if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
+                    sendRichTextTray("", paths, null, null);
                     chatPanelManager.promptTextToFile(text);
                 } else {
                     sendRichTextTray(text, paths, null, null);
@@ -3883,6 +3896,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
             pendingCaptionMentionUids = null;
             pendingCaptionMentionAll = false;
+            pendingCaptionMentionAis = false;
         }
     });
 

@@ -327,10 +327,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
-        // 图文混排 Phase 1 仅接收渲染：禁用转发/回复/多选（多选工具栏含转发，
-        // 且不逐条复核 isCanForward，故一并关闭，留 Phase 2 发送端），保留
-        // 复制/删除/reaction/撤回等接收侧操作。
-        // 参数顺序：forward, withdraw, multipleChoice, reply, reaction, pin。
+        // 图文混排：全功能启用（转发/撤回/多选/回复/reaction/pin）。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
@@ -906,6 +903,7 @@ public class WKUIKitApplication {
             return false;
         }
         List<String> imagePaths = new ArrayList<>();
+        boolean hasGif = false;
         for (ChooseResult result : paths) {
             if (result == null || TextUtils.isEmpty(result.path)) {
                 continue;
@@ -914,11 +912,11 @@ public class WKUIKitApplication {
                 return false;
             }
             if (WKFileUtils.getInstance().isGif(result.path)) {
-                continue;
+                hasGif = true;
             }
             imagePaths.add(result.path);
         }
-        if (imagePaths.isEmpty()) {
+        if (hasGif || imagePaths.isEmpty()) {
             return false;
         }
         return iConversationContext.addImagesToRichTextTray(imagePaths);

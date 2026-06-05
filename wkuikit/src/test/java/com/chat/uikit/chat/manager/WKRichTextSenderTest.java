@@ -170,11 +170,11 @@ public class WKRichTextSenderTest {
 
         assertEquals(1, context.sent.size());
         WKRichTextContent rich = (WKRichTextContent) context.sent.get(0);
-        // text + 1 张安全 image（bad 被跳过）。
+        // image 在前、text 在后（bad 被跳过）。
         assertEquals(2, rich.blocks.size());
-        assertTrue(rich.blocks.get(0).isText());
-        assertTrue(rich.blocks.get(1).isImage());
-        assertEquals("https://cdn/ok.png", rich.blocks.get(1).url);
+        assertTrue(rich.blocks.get(0).isImage());
+        assertEquals("https://cdn/ok.png", rich.blocks.get(0).url);
+        assertTrue(rich.blocks.get(1).isText());
         assertEquals(1, clearedCount[0]);
     }
 

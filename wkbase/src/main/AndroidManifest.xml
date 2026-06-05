@@ -17,6 +17,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".act.WKCropImageActivity" />
+        <activity android:name=".act.WKAnimatedAvatarPreviewActivity" />
         <activity android:name=".act.WKMarkdownViewActivity" />
         <activity android:name=".act.WKPdfViewActivity" />
 

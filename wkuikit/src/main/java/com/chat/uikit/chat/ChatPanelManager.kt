@@ -3911,17 +3911,34 @@ class ChatPanelManager(
         if (richTextTraySending) {
             return false
         }
-        // 语音模式下选图入托盘：先切回键盘模式，否则 editTextContainer / sendIV 都隐藏，纯图片
-        // 托盘没有发送入口，图片像是卡住了。toggleVoiceMode 会恢复输入框容器，随后 refresh 补显
-        // 发送键。
-        if (isVoiceMode) {
-            toggleVoiceMode()
+        val limitedPaths = if (imageLocalPaths.size > WKRichTextComposeModel.MAX_IMAGES) {
+            val msg = String.format(
+                iConversationContext.chatActivity.getString(com.chat.base.R.string.richtext_image_limit),
+                WKRichTextComposeModel.MAX_IMAGES
+            )
+            com.chat.base.utils.WKToastUtils.getInstance().showToastNormal(msg)
+            imageLocalPaths.take(WKRichTextComposeModel.MAX_IMAGES)
+        } else {
+            imageLocalPaths
         }
-        val added = richTextTray.addAll(imageLocalPaths)
-        if (added <= 0) {
-            return false
+        val intent = android.content.Intent(
+            iConversationContext.chatActivity,
+            WKRichTextCaptionActivity::class.java
+        )
+        intent.putStringArrayListExtra("paths", ArrayList(limitedPaths))
+        intent.putExtra("channelId", iConversationContext.chatChannelInfo.channelID)
+        intent.putExtra("channelType", iConversationContext.chatChannelInfo.channelType)
+        val existingText = editText.text?.toString() ?: ""
+        if (existingText.isNotBlank()) {
+            intent.putExtra("caption", existingText)
+            val existingUids = editText.allUIDs
+            if (existingUids.isNotEmpty()) {
+                intent.putStringArrayListExtra("existingMentionUids", ArrayList(existingUids))
+            }
+            editText.text = null
         }
-        refreshRichTextTray()
+        (iConversationContext.chatActivity as? ChatActivity)
+            ?.richTextCaptionLauncher?.launch(intent)
         return true
     }
 

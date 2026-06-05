@@ -730,7 +730,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         messageEffectOverlay.setVisibility(View.INVISIBLE);
         FrameLayout contentRoot = findViewById(android.R.id.content);
         contentRoot.addView(messageEffectOverlay, effectLP);
-        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay);
+        messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay, contentRoot);
         chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
             if (messageEffectManager != null) {
                 messageEffectManager.onMessageVisible(item.wkMsg, itemView);
@@ -3292,8 +3292,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         com.chat.uikit.chat.msgmodel.WKRichTextContent content =
                 new com.chat.uikit.chat.msgmodel.WKRichTextContent();
-        // mention 合并：与发送键文本路径同源（三态 humans/ais + 群成员 uids 不丢）。
-        if (chatPanelManager != null) {
+        if (pendingCaptionMentionUids != null && !pendingCaptionMentionUids.isEmpty()
+                || pendingCaptionMentionAll || pendingCaptionMentionAis) {
+            com.xinbida.wukongim.entity.WKMentionInfo mInfo = new com.xinbida.wukongim.entity.WKMentionInfo();
+            if (pendingCaptionMentionAll) {
+                content.mentionHumans = 1;
+                mInfo.humans = true;
+            }
+            if (pendingCaptionMentionAis) {
+                content.mentionAis = 1;
+                mInfo.ais = true;
+            }
+            if (pendingCaptionMentionUids != null) {
+                List<String> filteredUids = new ArrayList<>();
+                for (String uid : pendingCaptionMentionUids) {
+                    if (!"-1".equals(uid) && !"-2".equals(uid)) {
+                        filteredUids.add(uid);
+                    }
+                }
+                mInfo.uids = filteredUids;
+            }
+            content.mentionInfo = mInfo;
+        } else if (chatPanelManager != null) {
             chatPanelManager.applyInputMentionsTo(content, rawText);
         }
 
@@ -3853,6 +3873,38 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().invoke("stop_screen_shot", this);
     }
 
+
+    private List<String> pendingCaptionMentionUids;
+    private boolean pendingCaptionMentionAll;
+    private boolean pendingCaptionMentionAis;
+
+    ActivityResultLauncher<Intent> richTextCaptionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+            List<String> paths = result.getData().getStringArrayListExtra("paths");
+            String caption = result.getData().getStringExtra("caption");
+            pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
+            pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
+            pendingCaptionMentionAis = result.getData().getBooleanExtra("mentionAis", false);
+            if (paths != null && !paths.isEmpty()) {
+                String text = caption != null ? caption : "";
+                if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
+                    sendRichTextTray("", paths, null, null);
+                    chatPanelManager.promptTextToFile(text);
+                } else {
+                    sendRichTextTray(text, paths, null, null);
+                }
+            }
+            pendingCaptionMentionUids = null;
+            pendingCaptionMentionAll = false;
+            pendingCaptionMentionAis = false;
+        } else if (result.getResultCode() == Activity.RESULT_CANCELED && result.getData() != null) {
+            String restored = result.getData().getStringExtra("caption");
+            if (restored != null && !restored.isEmpty() && chatPanelManager != null) {
+                chatPanelManager.getEditText().setText(restored);
+                chatPanelManager.getEditText().setSelection(restored.length());
+            }
+        }
+    });
 
     ActivityResultLauncher<Intent> previewNewImgResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {

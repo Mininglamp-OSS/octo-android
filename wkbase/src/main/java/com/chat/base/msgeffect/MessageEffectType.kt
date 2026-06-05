@@ -23,6 +23,7 @@ sealed class MessageEffectType(val durationMs: Long) {
     object Hearts : MessageEffectType(3000L)
     object Confetti : MessageEffectType(10000L)
     object ThumbsUp : MessageEffectType(7500L)
+    object ActionVideo : MessageEffectType(4000L)
 
     companion object {
         private val heartEmojis = listOf("❤️", "💗", "💕", "💖", "💘", "❤")
@@ -30,6 +31,8 @@ sealed class MessageEffectType(val durationMs: Long) {
 
         fun detect(text: String?): MessageEffectType? {
             if (text.isNullOrEmpty()) return null
+            val trimmed = text.trim()
+            if (trimmed == "[崇尚行动]") return ActionVideo
             return when {
                 text.contains("[使命必达]") -> Rocket
                 text.contains("💣") -> Bomb

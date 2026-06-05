@@ -254,7 +254,7 @@ public final class WKRichTextSender {
     }
 
     /**
-     * 全部图片处理完毕：拼装有序 block（text 在前、image 按序在后）→ 发单条 RichText；
+     * 全部图片处理完毕：拼装有序 block（image 按序在前、text 在后）→ 发单条 RichText；
      * 若无任何有效图片，降级发纯文本（原子性：text 不丢）。失败有跳过时 Toast 提示。
      * 入队成功后触发 {@code onEnqueued}（调用方据此清空输入框，保证文本必达）。
      * 无论是否入队，最终都触发 {@code onComplete}（复位托盘 in-flight 标志）。
@@ -276,10 +276,10 @@ public final class WKRichTextSender {
         }
 
         List<WKRichTextContent.RichTextBlock> blocks = new ArrayList<>();
+        blocks.addAll(imageBlocks);
         if (!TextUtils.isEmpty(text)) {
             blocks.add(WKRichTextContent.makeTextBlock(text));
         }
-        blocks.addAll(imageBlocks);
 
         content.blocks = blocks;
         // plain 非权威：仅填本地占位（image → 占位 wire token），server #232 Finalize 覆盖。

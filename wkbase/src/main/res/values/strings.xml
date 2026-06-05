@@ -223,4 +223,16 @@
     <string name="time_format_month_day">M月d日</string>
     <string name="time_format_year_month_day">yyyy年M月d日</string>
     <string name="time_format_year_month_day_full">yyyy年MM月dd日</string>
+
+    <!-- i18n: Animated avatar -->
+    <string name="animated_avatar_title">动图头像</string>
+    <string name="animated_avatar_size_format">动图头像 · 约 %.1f MB</string>
+    <string name="animated_avatar_too_large">动图头像不能超过 5MB</string>
+    <string name="btn_reselect">重新选择</string>
+    <string name="btn_confirm_upload">确认上传</string>
+
+    <!-- i18n: RichText -->
+    <string name="richtext_image_limit">最多只能选择 %d 张图片</string>
+    <string name="richtext_caption_title">添加描述</string>
+    <string name="richtext_caption_hint">说点什么…</string>
 </resources>

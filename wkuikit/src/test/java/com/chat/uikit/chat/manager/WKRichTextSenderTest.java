@@ -114,12 +114,12 @@ public class WKRichTextSenderTest {
         WKMessageContent sent = context.sent.get(0);
         assertTrue(sent instanceof WKRichTextContent);
         WKRichTextContent rich = (WKRichTextContent) sent;
-        // text 块在前、两张 image 块按序在后。
+        // image 块按序在前、text 块在后（对齐 iOS 布局：图片在前文字在后）。
         assertEquals(3, rich.blocks.size());
-        assertTrue(rich.blocks.get(0).isText());
-        assertEquals("看图", rich.blocks.get(0).text);
+        assertTrue(rich.blocks.get(0).isImage());
         assertTrue(rich.blocks.get(1).isImage());
-        assertTrue(rich.blocks.get(2).isImage());
+        assertTrue(rich.blocks.get(2).isText());
+        assertEquals("看图", rich.blocks.get(2).text);
         // onEnqueued 恰一次。
         assertEquals(1, clearedCount[0]);
     }
@@ -170,11 +170,11 @@ public class WKRichTextSenderTest {
 
         assertEquals(1, context.sent.size());
         WKRichTextContent rich = (WKRichTextContent) context.sent.get(0);
-        // text + 1 张安全 image（bad 被跳过）。
+        // image 在前、text 在后（bad 被跳过）。
         assertEquals(2, rich.blocks.size());
-        assertTrue(rich.blocks.get(0).isText());
-        assertTrue(rich.blocks.get(1).isImage());
-        assertEquals("https://cdn/ok.png", rich.blocks.get(1).url);
+        assertTrue(rich.blocks.get(0).isImage());
+        assertEquals("https://cdn/ok.png", rich.blocks.get(0).url);
+        assertTrue(rich.blocks.get(1).isText());
         assertEquals(1, clearedCount[0]);
     }
 

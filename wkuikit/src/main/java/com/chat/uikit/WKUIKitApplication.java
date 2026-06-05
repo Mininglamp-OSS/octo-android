@@ -327,11 +327,8 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
-        // 图文混排 Phase 1 仅接收渲染：禁用转发/回复/多选（多选工具栏含转发，
-        // 且不逐条复核 isCanForward，故一并关闭，留 Phase 2 发送端），保留
-        // 复制/删除/reaction/撤回等接收侧操作。
-        // 参数顺序：forward, withdraw, multipleChoice, reply, reaction, pin。
-        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(false, true, false, false, true, true));
+        // 图文混排：全功能启用（转发/撤回/多选/回复/reaction/pin）。
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));
@@ -906,17 +903,20 @@ public class WKUIKitApplication {
             return false;
         }
         List<String> imagePaths = new ArrayList<>();
+        boolean hasGif = false;
         for (ChooseResult result : paths) {
-            if (result == null || result.model != ChooseResultModel.image
-                    || TextUtils.isEmpty(result.path)) {
-                return false; // 含 video / 空路径 → 不入托盘，走原逐条路径。
+            if (result == null || TextUtils.isEmpty(result.path)) {
+                continue;
+            }
+            if (result.model != ChooseResultModel.image) {
+                return false;
             }
             if (WKFileUtils.getInstance().isGif(result.path)) {
-                return false; // gif 走表情/原图逐条路径，不纳入图文混排。
+                hasGif = true;
             }
             imagePaths.add(result.path);
         }
-        if (imagePaths.isEmpty()) {
+        if (hasGif || imagePaths.isEmpty()) {
             return false;
         }
         return iConversationContext.addImagesToRichTextTray(imagePaths);

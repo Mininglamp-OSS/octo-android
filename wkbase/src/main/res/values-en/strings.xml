@@ -227,4 +227,16 @@
     <string name="str_send_message_hint">Leave a message</string>
     <string name="str_someone">The other party</string>
     <string name="str_text_exceed_limit_tip">Text exceeds the limit. Send as a document instead?</string>
+
+    <!-- i18n: Animated avatar -->
+    <string name="animated_avatar_title">Animated Avatar</string>
+    <string name="animated_avatar_size_format">Animated avatar · approx. %.1f MB</string>
+    <string name="animated_avatar_too_large">Animated avatar cannot exceed 5 MB</string>
+    <string name="btn_reselect">Reselect</string>
+    <string name="btn_confirm_upload">Confirm Upload</string>
+
+    <!-- i18n: RichText -->
+    <string name="richtext_image_limit">You can select up to %d images</string>
+    <string name="richtext_caption_title">Add Caption</string>
+    <string name="richtext_caption_hint">Say something…</string>
 </resources>

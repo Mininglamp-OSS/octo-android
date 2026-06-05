@@ -45,6 +45,8 @@ import java.util.List;
  */
 public final class WKRichTextComposeModel {
 
+    public static final int MAX_IMAGES = 9;
+
     /** 托盘中的单个附件项（当前仅静态图片；id 用于 UI diff / 拖拽稳定标识）。 */
     public static final class TrayItem {
         public final long id;
@@ -102,6 +104,9 @@ public final class WKRichTextComposeModel {
         for (String path : localPaths) {
             if (path == null || path.isEmpty()) {
                 continue;
+            }
+            if (items.size() >= MAX_IMAGES) {
+                break;
             }
             items.add(new TrayItem(nextId++, path));
             added++;
@@ -161,13 +166,12 @@ public final class WKRichTextComposeModel {
      */
     @NonNull
     public List<WKRichTextContentBlocks> previewBlocks(String text) {
-        // 复用 WKRichTextContent 的 block 工厂以保证字段与 wire 一致。
         List<WKRichTextContentBlocks> blocks = new ArrayList<>();
-        if (text != null && !text.trim().isEmpty()) {
-            blocks.add(WKRichTextContentBlocks.text(text));
-        }
         for (TrayItem item : items) {
             blocks.add(WKRichTextContentBlocks.image(item.localPath));
+        }
+        if (text != null && !text.trim().isEmpty()) {
+            blocks.add(WKRichTextContentBlocks.text(text));
         }
         return blocks;
     }

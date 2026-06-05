@@ -3874,7 +3874,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
             pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
             if (paths != null && !paths.isEmpty()) {
-                sendRichTextTray(caption != null ? caption : "", paths, null, null);
+                String text = caption != null ? caption : "";
+                if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
+                    chatPanelManager.promptTextToFile(text);
+                } else {
+                    sendRichTextTray(text, paths, null, null);
+                }
             }
             pendingCaptionMentionUids = null;
             pendingCaptionMentionAll = false;

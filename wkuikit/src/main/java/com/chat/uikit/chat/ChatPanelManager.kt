@@ -3928,6 +3928,10 @@ class ChatPanelManager(
         intent.putStringArrayListExtra("paths", ArrayList(limitedPaths))
         intent.putExtra("channelId", iConversationContext.chatChannelInfo.channelID)
         intent.putExtra("channelType", iConversationContext.chatChannelInfo.channelType)
+        val existingText = editText.text?.toString() ?: ""
+        if (existingText.isNotBlank()) {
+            intent.putExtra("caption", existingText)
+        }
         (iConversationContext.chatActivity as? ChatActivity)
             ?.richTextCaptionLauncher?.launch(intent)
         return true

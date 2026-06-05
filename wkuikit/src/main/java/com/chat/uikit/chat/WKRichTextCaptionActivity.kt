@@ -75,6 +75,12 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
         channelId = intent.getStringExtra("channelId") ?: ""
         channelType = intent.getByteExtra("channelType", WKChannelType.GROUP)
 
+        val existingCaption = intent.getStringExtra("caption")
+        if (!existingCaption.isNullOrBlank()) {
+            binding.captionEt.setText(existingCaption)
+            binding.captionEt.setSelection(existingCaption.length)
+        }
+
         setupGrid()
         setupListeners()
         setupMentionDetection()

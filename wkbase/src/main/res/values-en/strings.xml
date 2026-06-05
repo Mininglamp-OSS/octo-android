@@ -234,4 +234,7 @@
     <string name="animated_avatar_too_large">Animated avatar cannot exceed 5 MB</string>
     <string name="btn_reselect">Reselect</string>
     <string name="btn_confirm_upload">Confirm Upload</string>
+
+    <!-- i18n: RichText -->
+    <string name="richtext_image_limit">You can select up to %d images</string>
 </resources>

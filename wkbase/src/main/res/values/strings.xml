@@ -230,4 +230,7 @@
     <string name="animated_avatar_too_large">动图头像不能超过 5MB</string>
     <string name="btn_reselect">重新选择</string>
     <string name="btn_confirm_upload">确认上传</string>
+
+    <!-- i18n: RichText -->
+    <string name="richtext_image_limit">最多只能选择 %d 张图片</string>
 </resources>

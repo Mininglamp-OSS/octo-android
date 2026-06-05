@@ -45,6 +45,8 @@ import java.util.List;
  */
 public final class WKRichTextComposeModel {
 
+    public static final int MAX_IMAGES = 9;
+
     /** 托盘中的单个附件项（当前仅静态图片；id 用于 UI diff / 拖拽稳定标识）。 */
     public static final class TrayItem {
         public final long id;
@@ -102,6 +104,9 @@ public final class WKRichTextComposeModel {
         for (String path : localPaths) {
             if (path == null || path.isEmpty()) {
                 continue;
+            }
+            if (items.size() >= MAX_IMAGES) {
+                break;
             }
             items.add(new TrayItem(nextId++, path));
             added++;

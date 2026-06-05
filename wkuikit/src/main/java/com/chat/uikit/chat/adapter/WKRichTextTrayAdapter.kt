@@ -68,10 +68,12 @@ class WKRichTextTrayAdapter(
         cell.addView(thumb, thumbLp)
 
         val remove = AppCompatImageView(context)
-        remove.setImageResource(R.mipmap.themes_deletecolor)
+        remove.setImageResource(com.chat.base.R.drawable.ic_tray_remove)
+        remove.setBackgroundResource(com.chat.base.R.drawable.bg_tray_remove_btn)
+        remove.scaleType = android.widget.ImageView.ScaleType.CENTER
         val removeLp = FrameLayout.LayoutParams(
-            AndroidUtilities.dp(18f),
-            AndroidUtilities.dp(18f),
+            AndroidUtilities.dp(22f),
+            AndroidUtilities.dp(22f),
             Gravity.TOP or Gravity.END
         )
         cell.addView(remove, removeLp)

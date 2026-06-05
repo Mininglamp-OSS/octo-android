@@ -3918,6 +3918,13 @@ class ChatPanelManager(
             toggleVoiceMode()
         }
         val added = richTextTray.addAll(imageLocalPaths)
+        if (added < imageLocalPaths.size) {
+            val msg = String.format(
+                iConversationContext.chatActivity.getString(com.chat.base.R.string.richtext_image_limit),
+                WKRichTextComposeModel.MAX_IMAGES
+            )
+            com.chat.base.utils.WKToastUtils.getInstance().showToastNormal(msg)
+        }
         if (added <= 0) {
             return false
         }

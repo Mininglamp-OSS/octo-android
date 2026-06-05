@@ -23,11 +23,15 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
 import androidx.emoji2.widget.EmojiTextView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CenterInside
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.chat.base.config.WKApiConfig
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msgitem.WKChatBaseProvider
@@ -36,7 +40,6 @@ import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKMsgBgType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.utils.AndroidUtilities
-import com.chat.base.utils.ImageUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.WKRichTextContent
@@ -60,6 +63,10 @@ import com.chat.uikit.chat.msgmodel.WKRichTextContent
  * <p>所有渲染逻辑封装在本 provider，未触碰宿主 ChatActivity / ChatFragment。
  */
 class WKRichTextProvider : WKChatBaseProvider() {
+
+    companion object {
+        private const val MAX_RENDER_IMAGES = 20
+    }
 
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
         return LayoutInflater.from(context).inflate(R.layout.chat_item_richtext, parentView, false)
@@ -112,10 +119,16 @@ class WKRichTextProvider : WKChatBaseProvider() {
             return
         }
 
+        var imageCount = 0
         for (block in blocks) {
             if (block == null) continue
             when {
-                block.isImage() -> addImageBlock(blocksLayout, block)
+                block.isImage() -> {
+                    if (imageCount < MAX_RENDER_IMAGES) {
+                        addImageBlock(blocksLayout, block)
+                        imageCount++
+                    }
+                }
                 else -> {
                     // text block 与未知 type（带 text）都走文本渲染，前向兼容二期扩展。
                     if (!TextUtils.isEmpty(block.text)) {
@@ -197,18 +210,35 @@ class WKRichTextProvider : WKChatBaseProvider() {
 
     private fun addImageBlock(parent: LinearLayout, block: WKRichTextContent.RichTextBlock) {
         val showUrl = WKApiConfig.getShowUrl(block.url)
-        // URL 为空时不 addView：避免一个有尺寸的空白 ImageView 在气泡里留下空白矩形。
-        if (TextUtils.isEmpty(showUrl)) {
-            return
+        if (TextUtils.isEmpty(showUrl)) return
+
+        val maxLength = AndroidUtilities.dp(220f)
+        val (w, h) = scaleToFit(block.width, block.height, maxLength)
+
+        val imageView = AppCompatImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
         }
-        val imageView = AppCompatImageView(context)
-        val wh = ImageUtils.getInstance().getImageWidthAndHeightToTalk(block.width, block.height)
-        val lp = LinearLayout.LayoutParams(wh[0], wh[1]).apply {
+        val lp = LinearLayout.LayoutParams(w, h).apply {
             topMargin = AndroidUtilities.dp(4f)
             bottomMargin = AndroidUtilities.dp(4f)
         }
-        GlideUtils.getInstance().showImg(context, showUrl, wh[0], wh[1], imageView)
+
+        Glide.with(context)
+            .load(showUrl)
+            .transform(CenterInside(), RoundedCorners(AndroidUtilities.dp(8f)))
+            .override(w, h)
+            .into(imageView)
+
         parent.addView(imageView, lp)
+    }
+
+    private fun scaleToFit(origW: Int, origH: Int, maxLength: Int): Pair<Int, Int> {
+        if (origW <= 0 || origH <= 0) return Pair(maxLength, maxLength)
+        val scale = minOf(maxLength.toFloat() / origW, maxLength.toFloat() / origH, 1f)
+        val w = (origW * scale).toInt().coerceAtLeast(AndroidUtilities.dp(60f))
+        val h = (origH * scale).toInt().coerceAtLeast(AndroidUtilities.dp(60f))
+        return Pair(w, h)
     }
 
     override val itemViewType: Int

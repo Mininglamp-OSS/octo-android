@@ -443,17 +443,25 @@ public class ConversationDbManager {
 
     public WKConversationMsgExtra queryMsgExtraWithChannel(String channelID, byte channelType) {
         WKConversationMsgExtra msgExtra = null;
-        String selection = "channel_id=? and channel_type=?";
-        Cursor cursor = WKIMApplication
-                .getInstance()
-                .getDbHelper().select(conversationExtra, selection, new String[]{channelID, String.valueOf(channelType)}, null);
-        if (cursor != null) {
-            if (cursor.moveToFirst()) {
-                msgExtra = serializeMsgExtra(cursor);
+        try {
+            String selection = "channel_id=? and channel_type=?";
+            Cursor cursor = WKIMApplication
+                    .getInstance()
+                    .getDbHelper().select(conversationExtra, selection, new String[]{channelID, String.valueOf(channelType)}, null);
+            if (cursor != null) {
+                if (cursor.moveToFirst()) {
+                    msgExtra = serializeMsgExtra(cursor);
+                }
+                cursor.close();
             }
-            cursor.close();
+        } catch (Exception ignored) {
         }
         return msgExtra;
+    }
+
+    public List<WKConversationMsgExtra> queryMsgExtrasForChannelIds(List<String> channelIds) {
+        if (channelIds == null || channelIds.isEmpty()) return new ArrayList<>();
+        return queryWithExtraChannelIds(channelIds);
     }
 
     private List<WKConversationMsgExtra> queryWithExtraChannelIds(List<String> channelIds) {
@@ -466,6 +474,7 @@ public class ConversationDbManager {
                 WKConversationMsgExtra extra = serializeMsgExtra(cursor);
                 list.add(extra);
             }
+        } catch (Exception ignored) {
         }
         return list;
     }

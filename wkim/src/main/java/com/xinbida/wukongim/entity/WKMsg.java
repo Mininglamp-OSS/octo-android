@@ -234,6 +234,15 @@ public class WKMsg implements Parcelable {
         return memberOfFrom;
     }
 
+    /**
+     * 返回已缓存的发送者成员信息，不触发数据库查询。
+     * 用于主线程批量刷新场景（onRefreshChannel / onRefreshChannelMember），
+     * 避免对未加载的消息发起同步 DB 查询导致 ANR。
+     */
+    public WKChannelMember getMemberOfFromIfCached() {
+        return memberOfFrom;
+    }
+
     public void setMemberOfFrom(WKChannelMember memberOfFrom) {
         this.memberOfFrom = memberOfFrom;
     }

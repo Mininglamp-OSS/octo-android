@@ -168,6 +168,7 @@
 -keep class com.chat.uikit.chat.msgmodel.** { *; }
 -keep class com.chat.uikit.enity.** { *; }
 -keep class com.chat.uikit.thread.service.entity.** { *; }
+-keep class com.chat.uikit.thread.msgmodel.** { *; }
 -keep class com.chat.uikit.sidebar.SidebarItemEntity { *; }
 -keep class com.chat.uikit.sidebar.SidebarSyncResponse { *; }
 -keep class com.chat.uikit.sidebar.FollowModel$FollowSortItem { *; }

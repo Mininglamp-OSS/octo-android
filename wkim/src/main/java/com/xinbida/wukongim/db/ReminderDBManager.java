@@ -74,6 +74,8 @@ public class ReminderDBManager {
         if (dbHelper == null) return false;
         try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{prefix, reminderType})) {
             return cursor != null && cursor.moveToFirst();
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

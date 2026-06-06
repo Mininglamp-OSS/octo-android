@@ -83,64 +83,66 @@ class ProhibitWordDB private constructor() {
     }
 
     fun getMaxVersion(): Long {
-        if (WKBaseApplication.getInstance().dbHelper == null) {
-            return 0
+        val helper = WKBaseApplication.getInstance().dbHelper ?: return 0
+        if (helper.isClosed) return 0
+        try {
+            val sql = "select * from $table order by `version` desc limit 1"
+            val cursor: Cursor = helper.rawQuery(sql, null) ?: return 0
+            cursor.use {
+                cursor.moveToFirst()
+                if (!cursor.isAfterLast) {
+                    return serialize(cursor).version
+                }
+            }
+        } catch (_: Exception) {
         }
-        val sql = "select * from $table order by `version` desc limit 1"
-        val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, null)
-        cursor.moveToFirst()
-        var num = 0L
-        if (!cursor.isAfterLast) {
-            val word = serialize(cursor)
-            num = word.version
-            cursor.moveToNext()
-        }
-        cursor.close()
-        return num
+        return 0
     }
 
     fun getAll(): ArrayList<ProhibitWord> {
-        val sql = "select * from $table where is_deleted=0"
         val result = ArrayList<ProhibitWord>()
-        if (WKBaseApplication.getInstance().dbHelper != null) {
-            val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, null)
-                ?: return result
-            run {
+        val helper = WKBaseApplication.getInstance().dbHelper ?: return result
+        if (helper.isClosed) return result
+        try {
+            val sql = "select * from $table where is_deleted=0"
+            val cursor: Cursor = helper.rawQuery(sql, null) ?: return result
+            cursor.use {
                 cursor.moveToFirst()
                 while (!cursor.isAfterLast) {
                     result.add(serialize(cursor))
                     cursor.moveToNext()
                 }
             }
-            cursor.close()
+        } catch (_: Exception) {
         }
         return result
     }
 
     private fun queryWithsIds(list: List<Int>): List<ProhibitWord> {
         if (list.isEmpty()) return ArrayList()
-        val placeholders = StringBuilder()
-        val args = arrayOfNulls<String>(list.size)
-        for ((index, id) in list.withIndex()) {
-            if (index != 0) {
-                placeholders.append(",")
-            }
-            placeholders.append("?")
-            args[index] = id.toString()
-        }
-        val sql = "select * from $table where sid in (${placeholders})"
         val result = ArrayList<ProhibitWord>()
-        if (WKBaseApplication.getInstance().dbHelper != null) {
-            val cursor: Cursor = WKBaseApplication.getInstance().dbHelper.rawQuery(sql, args)
-                ?: return result
-            run {
+        val helper = WKBaseApplication.getInstance().dbHelper ?: return result
+        if (helper.isClosed) return result
+        try {
+            val placeholders = StringBuilder()
+            val args = arrayOfNulls<String>(list.size)
+            for ((index, id) in list.withIndex()) {
+                if (index != 0) {
+                    placeholders.append(",")
+                }
+                placeholders.append("?")
+                args[index] = id.toString()
+            }
+            val sql = "select * from $table where sid in (${placeholders})"
+            val cursor: Cursor = helper.rawQuery(sql, args) ?: return result
+            cursor.use {
                 cursor.moveToFirst()
                 while (!cursor.isAfterLast) {
                     result.add(serialize(cursor))
                     cursor.moveToNext()
                 }
             }
-            cursor.close()
+        } catch (_: Exception) {
         }
         return result
     }

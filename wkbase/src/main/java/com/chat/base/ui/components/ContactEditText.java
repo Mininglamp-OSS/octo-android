@@ -328,9 +328,9 @@ public class ContactEditText extends AppCompatAutoCompleteTextView {
     public boolean onTextContextMenuItem(int id) {
         if (id == android.R.id.paste) {
             ClipboardManager cm = (ClipboardManager) getContext().getSystemService(CLIPBOARD_SERVICE);
-            assert cm != null;
+            if (cm == null) return super.onTextContextMenuItem(id);
             ClipData data = cm.getPrimaryClip();
-            assert data != null;
+            if (data == null || data.getItemCount() == 0) return super.onTextContextMenuItem(id);
             ClipData.Item item = data.getItemAt(0);
             String editContent = "";
             if (item.getText() != null)

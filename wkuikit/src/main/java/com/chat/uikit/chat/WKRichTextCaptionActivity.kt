@@ -136,12 +136,33 @@ class WKRichTextCaptionActivity : AppCompatActivity() {
             allUids.addAll(modalUids)
             val hasAll = allUids.contains("-1")
             val hasAis = allUids.contains("-2")
+
+            val mentionEntities = binding.captionEt.allEntity
+            var entitiesJson: String? = null
+            if (mentionEntities != null && mentionEntities.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                for (e in mentionEntities) {
+                    if (e.type != com.chat.base.msg.ChatContentSpanType.mention) continue
+                    val obj = org.json.JSONObject()
+                    obj.put("uid", e.value)
+                    obj.put("offset", e.offset)
+                    obj.put("length", e.length)
+                    arr.put(obj)
+                }
+                if (arr.length() > 0) {
+                    entitiesJson = arr.toString()
+                }
+            }
+
             val result = Intent()
             result.putStringArrayListExtra("paths", ArrayList(imagePaths))
             result.putExtra("caption", caption)
             result.putStringArrayListExtra("mentionUids", ArrayList(allUids))
             result.putExtra("mentionAll", hasAll)
             result.putExtra("mentionAis", hasAis)
+            if (entitiesJson != null) {
+                result.putExtra("mentionEntities", entitiesJson)
+            }
             setResult(RESULT_OK, result)
             finish()
         }

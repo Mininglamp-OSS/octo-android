@@ -1562,11 +1562,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         chatAdapter.getData().get(i).wkMsg.setFrom(channel);
                         isRefresh = true;
                     }
-                    if (chatAdapter.getData().get(i).wkMsg.getMemberOfFrom() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberRemark = channel.channelRemark;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberName = channel.channelName;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatar = channel.avatar;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatarCacheKey = channel.avatarCacheKey;
+                    if (chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
+                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channel.channelRemark;
+                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channel.channelName;
+                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channel.avatar;
+                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatarCacheKey = channel.avatarCacheKey;
                         isRefresh = true;
                     }
                     if (chatAdapter.getData().get(i).wkMsg.baseContentMsgModel != null && WKReader.isNotEmpty(chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities)) {
@@ -1597,10 +1597,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     } else {
                         //成员名字改变
                         for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                            if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFrom() != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberUID) && chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberUID.equals(channelMember.memberUID)) {
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberName = channelMember.memberName;
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberRemark = channelMember.memberRemark;
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFrom().memberAvatar = channelMember.memberAvatar;
+                            if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID) && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channelMember.memberUID)) {
+                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channelMember.memberName;
+                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channelMember.memberRemark;
+                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channelMember.memberAvatar;
                                 chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
                                 chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
                             }
@@ -3313,6 +3313,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 mInfo.uids = filteredUids;
             }
             content.mentionInfo = mInfo;
+            if (pendingCaptionMentionEntities != null && !pendingCaptionMentionEntities.isEmpty()) {
+                content.entities = pendingCaptionMentionEntities;
+            }
         } else if (chatPanelManager != null) {
             chatPanelManager.applyInputMentionsTo(content, rawText);
         }
@@ -3877,6 +3880,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     private List<String> pendingCaptionMentionUids;
     private boolean pendingCaptionMentionAll;
     private boolean pendingCaptionMentionAis;
+    private List<com.xinbida.wukongim.msgmodel.WKMsgEntity> pendingCaptionMentionEntities;
 
     ActivityResultLauncher<Intent> richTextCaptionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
@@ -3885,6 +3889,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
             pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
             pendingCaptionMentionAis = result.getData().getBooleanExtra("mentionAis", false);
+            pendingCaptionMentionEntities = parseMentionEntitiesFromJson(
+                    result.getData().getStringExtra("mentionEntities"));
             if (paths != null && !paths.isEmpty()) {
                 String text = caption != null ? caption : "";
                 if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
@@ -3897,6 +3903,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             pendingCaptionMentionUids = null;
             pendingCaptionMentionAll = false;
             pendingCaptionMentionAis = false;
+            pendingCaptionMentionEntities = null;
         } else if (result.getResultCode() == Activity.RESULT_CANCELED && result.getData() != null) {
             String restored = result.getData().getStringExtra("caption");
             if (restored != null && !restored.isEmpty() && chatPanelManager != null) {
@@ -3940,6 +3947,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         }
     });
+
+    private static List<com.xinbida.wukongim.msgmodel.WKMsgEntity> parseMentionEntitiesFromJson(String json) {
+        if (TextUtils.isEmpty(json)) return null;
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(json);
+            List<com.xinbida.wukongim.msgmodel.WKMsgEntity> result = new ArrayList<>();
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONObject obj = arr.getJSONObject(i);
+                com.xinbida.wukongim.msgmodel.WKMsgEntity entity = new com.xinbida.wukongim.msgmodel.WKMsgEntity();
+                entity.type = com.chat.base.msg.ChatContentSpanType.getMention();
+                entity.value = obj.optString("uid", "");
+                entity.offset = obj.optInt("offset", -1);
+                entity.length = obj.optInt("length", 0);
+                if (!entity.value.isEmpty() && entity.offset >= 0 && entity.length > 0) {
+                    result.add(entity);
+                }
+            }
+            return result.isEmpty() ? null : result;
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+    }
 
     private void handleFileResult(android.net.Uri uri) {
         try {
@@ -4411,6 +4440,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] findPositionByMsg=" + i + " listSize=" + list.size());
         if (i >= 0 && i < list.size()) {
             {
+                WKUIChatMsgItemEntity entity = list.get(i);
                 boolean isNotify = false;
                 if (wkMsg.messageSeq > maxMsgSeq) {
                     maxMsgSeq = wkMsg.messageSeq;
@@ -4418,72 +4448,72 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 if (wkMsg.messageSeq > lastVisibleMsgSeq) {
                     lastVisibleMsgSeq = wkMsg.messageSeq;
                 }
-                if (list.get(i).wkMsg.remoteExtra.revoke != wkMsg.remoteExtra.revoke) {
+                if (entity.wkMsg.remoteExtra.revoke != wkMsg.remoteExtra.revoke) {
                     isNotify = true;
-                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] REVOKE CHANGED: msgID=" + wkMsg.messageID + " old=" + list.get(i).wkMsg.remoteExtra.revoke + " new=" + wkMsg.remoteExtra.revoke);
+                    if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] REVOKE CHANGED: msgID=" + wkMsg.messageID + " old=" + entity.wkMsg.remoteExtra.revoke + " new=" + wkMsg.remoteExtra.revoke);
                 }
                 // 消息撤回
-                list.get(i).wkMsg.remoteExtra.revoke = wkMsg.remoteExtra.revoke;
-                list.get(i).wkMsg.remoteExtra.revoker = wkMsg.remoteExtra.revoker;
-                if (list.get(i).wkMsg.status != WKSendMsgResult.send_success && wkMsg.status == WKSendMsgResult.send_success) {
+                entity.wkMsg.remoteExtra.revoke = wkMsg.remoteExtra.revoke;
+                entity.wkMsg.remoteExtra.revoker = wkMsg.remoteExtra.revoker;
+                if (entity.wkMsg.status != WKSendMsgResult.send_success && wkMsg.status == WKSendMsgResult.send_success) {
                     WKPlaySound.getInstance().playOutMsg(R.raw.sound_out);
                 }
                 boolean isResetStatus = false;
                 boolean isResetListener = false;
                 boolean isResetData = false;
                 boolean isResetReaction = false;
-                if (list.get(i).wkMsg.status != wkMsg.status
-                        || (list.get(i).wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && list.get(i).wkMsg.remoteExtra.readedCount == 0)
-                        || list.get(i).wkMsg.remoteExtra.editedAt != wkMsg.remoteExtra.editedAt
+                if (entity.wkMsg.status != wkMsg.status
+                        || (entity.wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && entity.wkMsg.remoteExtra.readedCount == 0)
+                        || entity.wkMsg.remoteExtra.editedAt != wkMsg.remoteExtra.editedAt
                 ) {
-                    list.get(i).isUpdateStatus = true;
+                    entity.isUpdateStatus = true;
                     isResetStatus = true;
                 }
-                if (list.get(i).wkMsg.remoteExtra.isPinned != wkMsg.remoteExtra.isPinned) {
+                if (entity.wkMsg.remoteExtra.isPinned != wkMsg.remoteExtra.isPinned) {
                     isResetStatus = true;
                 }
-                list.get(i).wkMsg.voiceStatus = wkMsg.voiceStatus;
+                entity.wkMsg.voiceStatus = wkMsg.voiceStatus;
 
                 if (hideChannelAllPinnedMessage == 0) {
-                    list.get(i).isPinned = wkMsg.remoteExtra.isPinned;
+                    entity.isPinned = wkMsg.remoteExtra.isPinned;
                 } else {
-                    list.get(i).isPinned = 0;
+                    entity.isPinned = 0;
                 }
-                if (list.get(i).wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && !isResetStatus) {
+                if (entity.wkMsg.remoteExtra.readedCount != wkMsg.remoteExtra.readedCount && !isResetStatus) {
                     isResetListener = true;
                 }
-                list.get(i).wkMsg.remoteExtra.isPinned = wkMsg.remoteExtra.isPinned;
-                list.get(i).wkMsg.remoteExtra.readed = wkMsg.remoteExtra.readed;
-                list.get(i).wkMsg.remoteExtra.readedCount = wkMsg.remoteExtra.readedCount;
-                list.get(i).wkMsg.remoteExtra.needUpload = wkMsg.remoteExtra.needUpload;
-                if (list.get(i).wkMsg.remoteExtra.readedCount == 0) {
-                    list.get(i).wkMsg.remoteExtra.unreadCount = count - 1;
+                entity.wkMsg.remoteExtra.isPinned = wkMsg.remoteExtra.isPinned;
+                entity.wkMsg.remoteExtra.readed = wkMsg.remoteExtra.readed;
+                entity.wkMsg.remoteExtra.readedCount = wkMsg.remoteExtra.readedCount;
+                entity.wkMsg.remoteExtra.needUpload = wkMsg.remoteExtra.needUpload;
+                if (entity.wkMsg.remoteExtra.readedCount == 0) {
+                    entity.wkMsg.remoteExtra.unreadCount = count - 1;
                 } else
-                    list.get(i).wkMsg.remoteExtra.unreadCount = wkMsg.remoteExtra.unreadCount;
-                if ((TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit)) || (!TextUtils.isEmpty(list.get(i).wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit) && !list.get(i).wkMsg.remoteExtra.contentEdit.equals(wkMsg.remoteExtra.contentEdit))) {
-                    list.get(i).wkMsg.remoteExtra.editedAt = wkMsg.remoteExtra.editedAt;
-                    list.get(i).wkMsg.remoteExtra.contentEdit = wkMsg.remoteExtra.contentEdit;
-                    list.get(i).wkMsg.remoteExtra.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
-                    list.get(i).isUpdateStatus = true;
-                    list.get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
+                    entity.wkMsg.remoteExtra.unreadCount = wkMsg.remoteExtra.unreadCount;
+                if ((TextUtils.isEmpty(entity.wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit)) || (!TextUtils.isEmpty(entity.wkMsg.remoteExtra.contentEdit) && !TextUtils.isEmpty(wkMsg.remoteExtra.contentEdit) && !entity.wkMsg.remoteExtra.contentEdit.equals(wkMsg.remoteExtra.contentEdit))) {
+                    entity.wkMsg.remoteExtra.editedAt = wkMsg.remoteExtra.editedAt;
+                    entity.wkMsg.remoteExtra.contentEdit = wkMsg.remoteExtra.contentEdit;
+                    entity.wkMsg.remoteExtra.contentEditMsgModel = wkMsg.remoteExtra.contentEditMsgModel;
+                    entity.isUpdateStatus = true;
+                    entity.formatSpans(ChatActivity.this, entity.wkMsg);
                     isResetData = true;
                 }
 
-                list.get(i).wkMsg.isDeleted = wkMsg.isDeleted;
-                list.get(i).wkMsg.messageID = wkMsg.messageID;
-                list.get(i).wkMsg.messageSeq = wkMsg.messageSeq;
-                list.get(i).wkMsg.orderSeq = wkMsg.orderSeq;
+                entity.wkMsg.isDeleted = wkMsg.isDeleted;
+                entity.wkMsg.messageID = wkMsg.messageID;
+                entity.wkMsg.messageSeq = wkMsg.messageSeq;
+                entity.wkMsg.orderSeq = wkMsg.orderSeq;
                 if ((wkMsg.localExtraMap != null && !wkMsg.localExtraMap.isEmpty())) {
                     isNotify = true;
                 }
-                if (isRefreshReaction(list.get(i).wkMsg.reactionList, wkMsg.reactionList)) {
+                if (isRefreshReaction(entity.wkMsg.reactionList, wkMsg.reactionList)) {
                     isResetReaction = true;
                 }
-                list.get(i).wkMsg.localExtraMap = wkMsg.localExtraMap;
-                list.get(i).wkMsg.content = wkMsg.content;
-                list.get(i).wkMsg.reactionList = wkMsg.reactionList;
-                list.get(i).wkMsg.baseContentMsgModel = wkMsg.baseContentMsgModel;
-                list.get(i).wkMsg.status = wkMsg.status;
+                entity.wkMsg.localExtraMap = wkMsg.localExtraMap;
+                entity.wkMsg.content = wkMsg.content;
+                entity.wkMsg.reactionList = wkMsg.reactionList;
+                entity.wkMsg.baseContentMsgModel = wkMsg.baseContentMsgModel;
+                entity.wkMsg.status = wkMsg.status;
                 if (isNotify) {
                     EndpointManager.getInstance().invoke("stop_reaction_animation", null);
                     chatAdapter.notifyItemChanged(i);
@@ -4498,21 +4528,21 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         chatAdapter.notifyData(i);
                     }
                     if (isResetReaction) {
-                        list.get(i).isRefreshReaction = true;
-                        chatAdapter.notifyItemChanged(i, list.get(i));
-                        //chatAdapter.notifyReaction(i, wkMsg.reactionList);
+                        entity.isRefreshReaction = true;
+                        chatAdapter.notifyItemChanged(i, entity);
                     }
                 }
 
-                if (list.get(i).wkMsg.remoteExtra.revoke == 1) {
+                if (entity.wkMsg.remoteExtra.revoke == 1) {
                     int finalI = i;
                     new Handler(Looper.getMainLooper()).postDelayed(() -> {
                         int previousIndex = finalI - 1;
                         int nextIndex = finalI + 1;
-                        if (previousIndex >= 0 && list.get(previousIndex).wkMsg.remoteExtra.revoke == 0) {
+                        List<WKUIChatMsgItemEntity> currentList = chatAdapter.getData();
+                        if (previousIndex >= 0 && previousIndex < currentList.size() && currentList.get(previousIndex).wkMsg.remoteExtra.revoke == 0) {
                             chatAdapter.notifyItemChanged(previousIndex);
                         }
-                        if (nextIndex <= chatAdapter.getData().size() - 1 && list.get(nextIndex).wkMsg.remoteExtra.revoke == 0) {
+                        if (nextIndex >= 0 && nextIndex < currentList.size() && currentList.get(nextIndex).wkMsg.remoteExtra.revoke == 0) {
                             chatAdapter.notifyItemChanged(nextIndex);
                         }
                     }, 200);

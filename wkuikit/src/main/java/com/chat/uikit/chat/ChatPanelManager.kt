@@ -454,8 +454,8 @@ class ChatPanelManager(
      * 把当前输入框的 @mention（三态 humans/ais + 群成员 uids）应用到给定消息体。
      *
      * 供图文混排（RichText=14）聚合发送复用——与发送键文本路径【同源】，
-     * 保证群 @ 通知（含 @所有AI）不丢。刻意不写 entities：图文混排的 plain 非权威，
-     * 且 entity offset 是相对纯文本块的字符偏移，跨 block 拼接后无意义。
+     * 保证群 @ 通知（含 @所有AI）不丢。同时写入 mention.entities（offset/length/uid），
+     * 使接收侧可高亮并点击 @mention 跳转个人名片。
      *
      * 复用既有 [scanPlainTextMentions] / [expandRobotMembersIntoUids]，与 sendIV 文本
      * 发送逻辑保持单一来源。
@@ -493,6 +493,11 @@ class ChatPanelManager(
         }
         mInfo.uids = uidList
         content.mentionInfo = mInfo
+
+        val mentionEntities = entities.filter { it.type == ChatContentSpanType.mention }
+        if (mentionEntities.isNotEmpty()) {
+            content.entities = mentionEntities
+        }
     }
 
     fun showReplyLayout(mMsg: WKMsg) {

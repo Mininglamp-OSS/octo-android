@@ -28,6 +28,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.chat.base.msg.MentionEntityHelper;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -188,6 +190,37 @@ public class WKRichTextContent extends WKMessageContent {
             jsonObject.put("content", contentArr);
             if (!isBlank(plain)) {
                 jsonObject.put("plain", plain);
+            }
+
+            // mention 数据：与 WKMentionTextContent 同模式，将 mention.entities 写入
+            // payload。SDK 的 getSendPayload 检查 json.has("mention")，已包含则不覆盖。
+            boolean hasUids = mentionInfo != null && mentionInfo.uids != null && !mentionInfo.uids.isEmpty();
+            boolean hasMentionAll = mentionAll == 1;
+            boolean hasHumans = mentionHumans == 1 || (mentionInfo != null && mentionInfo.humans);
+            boolean hasAis = mentionAis == 1;
+            if (hasUids || hasMentionAll || hasHumans || hasAis) {
+                JSONObject mentionJson = new JSONObject();
+                if (hasMentionAll) {
+                    mentionJson.put("all", 1);
+                }
+                if (hasHumans) {
+                    mentionJson.put("humans", 1);
+                }
+                if (hasAis) {
+                    mentionJson.put("ais", 1);
+                }
+                if (hasUids) {
+                    JSONArray uidsArr = new JSONArray();
+                    for (String uid : mentionInfo.uids) {
+                        uidsArr.put(uid);
+                    }
+                    mentionJson.put("uids", uidsArr);
+                }
+                JSONArray mentionEntitiesArr = MentionEntityHelper.buildMentionEntitiesJson(entities);
+                if (mentionEntitiesArr != null) {
+                    mentionJson.put("entities", mentionEntitiesArr);
+                }
+                jsonObject.put("mention", mentionJson);
             }
         } catch (JSONException e) {
             e.printStackTrace();

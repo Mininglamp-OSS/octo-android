@@ -28,6 +28,7 @@ import com.chat.uikit.R;
 import com.chat.uikit.chat.msgmodel.WKRichTextContent;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
+import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
 
 import java.util.ArrayList;
@@ -285,6 +286,12 @@ public final class WKRichTextSender {
         // plain 非权威：仅填本地占位（image → 占位 wire token），server #232 Finalize 覆盖。
         content.plain = WKRichTextContent.buildPlainFromBlocks(blocks);
 
+        // entity offset 调整：composer 产生的 offset 是 text-block-local 的（相对于纯文本），
+        // 但 wire 上 offset 必须相对于 plain（含 [图片] 占位符）。在此处一次性调整，
+        // 使 encodeMsg() 和 SDK getSendPayload() 两条序列化路径都拿到正确的 plain-relative 偏移。
+        // 同时过滤哨兵 UID（-1/-2），广播仅由 mention.all/humans/ais 标志位承担。
+        adjustEntitiesForPlain(content, imageBlocks.size());
+
         toastFailIfAny(context, failedCount);
         // 按<em>捕获</em>的频道落库（YUJ-2872 🔴 跨频道路由）：上传期间 Activity 可能已切到
         // 别的频道，绝不能读 mutable 字段，否则消息错投。channel 为本次发起时捕获的目标。
@@ -390,5 +397,23 @@ public final class WKRichTextSender {
                                         }
                                     });
                         });
+    }
+
+    /**
+     * 将 content.entities 从 text-block-local 偏移调整为 plain-relative 偏移，
+     * 并过滤掉哨兵 UID（-1/-2）。调整量 = 前置图片数 × IMAGE_PLACEHOLDER 长度。
+     * 在 blocks 组装完成后、入队前调用，确保 encodeMsg() 和 SDK getSendPayload()
+     * 两条序列化路径都拿到一致的 plain-relative 偏移。
+     */
+    private static void adjustEntitiesForPlain(WKRichTextContent content, int imageCount) {
+        if (content.entities == null || content.entities.isEmpty()) return;
+        int imageOffset = imageCount * WKRichTextContent.IMAGE_PLACEHOLDER.length();
+        List<WKMsgEntity> adjusted = new ArrayList<>();
+        for (WKMsgEntity entity : content.entities) {
+            if ("-1".equals(entity.value) || "-2".equals(entity.value)) continue;
+            entity.offset += imageOffset;
+            adjusted.add(entity);
+        }
+        content.entities = adjusted;
     }
 }

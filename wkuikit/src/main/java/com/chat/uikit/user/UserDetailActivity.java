@@ -756,6 +756,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     @Override
                     public void onBack(List<ChooseResult> paths) {
                         if (!WKReader.isNotEmpty(paths)) return;
+                        if (isFinishing() || isDestroyed()) return;
                         String path = paths.get(0).path;
                         if (TextUtils.isEmpty(path)) return;
                         Intent intent;

@@ -32,6 +32,8 @@ import com.chat.base.external.ExternalViewerResolver;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.StringUtils;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.chat.base.views.NoEventRecycleView;
 import com.chat.uikit.R;
 import com.xinbida.wukongim.WKIM;
@@ -201,7 +203,10 @@ public class RemindMemberAdapter extends BaseQuickAdapter<GroupMemberEntity, Bas
         } else {
             addData(memberList);
         }
-        ((NoEventRecycleView) getRecyclerView()).setItemCount(getItemCount());
+        RecyclerView rv = getRecyclerView();
+        if (rv instanceof NoEventRecycleView) {
+            ((NoEventRecycleView) rv).setItemCount(getItemCount());
+        }
     }
 
     public String getSearchKey() {

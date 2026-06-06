@@ -143,7 +143,12 @@ public class WKPushApplication {
     }
 
     private void initOPPO() {
-        HeytapPushManager.init(mContext.get(), true);
+        try {
+            HeytapPushManager.init(mContext.get(), true);
+        } catch (Throwable e) {
+            Log.w("Push", "OPPO push init failed", e);
+            return;
+        }
         //  P-11: AppExecutors.io() 取代 new Thread()
         AppExecutors.io().execute(() -> HeytapPushManager.register(mContext.get(), BuildConfig.OPPO_APP_KEY, BuildConfig.OPPO_APP_SECRET, new ICallBackResultService() {
             @Override

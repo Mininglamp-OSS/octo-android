@@ -950,6 +950,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 }
                 spaceConversationKeys.clear();
                 List<ChatConversationMsg> uiList = new ArrayList<>();
+                // 批量预加载 extras（草稿等），1 次 DB 查询替代 N 次
+                List<String> extraChannelIds = new ArrayList<>();
+                for (WKUIConversationMsg uiConversationMsg : list) {
+                    extraChannelIds.add(uiConversationMsg.channelID);
+                }
+                java.util.Map<String, WKConversationMsgExtra> extrasMap =
+                        WKIM.getInstance().getConversationManager().getMsgExtrasForChannels(extraChannelIds);
                 for (WKUIConversationMsg uiConversationMsg : list) {
                     // 私聊 Space 未读数适配：跨 Space 消息不计入未读（参考 iOS）
                     adjustPersonalForSpace(uiConversationMsg);
@@ -978,9 +985,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     if (reject) {
                         continue;
                     }
-                    // sync 结果不含 conversation_extra（草稿等），从本地 DB 补充
-                    WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
-                            .getMsgExtraWithChannel(uiConversationMsg.channelID, uiConversationMsg.channelType);
+                    // sync 结果不含 conversation_extra（草稿等），从预加载的批量结果补充
+                    WKConversationMsgExtra extra = extrasMap.get(uiConversationMsg.channelID + ":" + uiConversationMsg.channelType);
                     if (extra != null) {
                         uiConversationMsg.setRemoteMsgExtra(extra);
                     }
@@ -1246,11 +1252,17 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
         // syncCoverExtra 完成后刷新草稿等 extra 信息
         EndpointManager.getInstance().setMethod("refresh_conversation_extras", object -> {
+            List<String> channelIds = new ArrayList<>();
+            for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
+                if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
+                channelIds.add(chatConversationAdapter.getData().get(i).uiConversationMsg.channelID);
+            }
+            java.util.Map<String, WKConversationMsgExtra> extrasMap =
+                    WKIM.getInstance().getConversationManager().getMsgExtrasForChannels(channelIds);
             for (int i = 0, size = chatConversationAdapter.getData().size(); i < size; i++) {
                 if (chatConversationAdapter.getData().get(i).isSectionHeader) continue;
                 WKUIConversationMsg convMsg = chatConversationAdapter.getData().get(i).uiConversationMsg;
-                WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
-                        .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
+                WKConversationMsgExtra extra = extrasMap.get(convMsg.channelID + ":" + convMsg.channelType);
                 if (extra != null) {
                     convMsg.setRemoteMsgExtra(extra);
                     chatConversationAdapter.getData().get(i).isResetContent = true;
@@ -1993,12 +2005,21 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 在 onResume 中调用，确保无论 syncCoverExtra 何时完成都能显示草稿。
      */
     private void refreshExtrasIfNeeded() {
+        // 批量预加载需要补充草稿的 extras
+        List<String> channelIds = new ArrayList<>();
+        for (ChatConversationMsg allMsg : allConversations) {
+            WKUIConversationMsg convMsg = allMsg.uiConversationMsg;
+            if (convMsg.getRemoteMsgExtra() == null || TextUtils.isEmpty(convMsg.getRemoteMsgExtra().draft)) {
+                channelIds.add(convMsg.channelID);
+            }
+        }
+        java.util.Map<String, WKConversationMsgExtra> extrasMap =
+                WKIM.getInstance().getConversationManager().getMsgExtrasForChannels(channelIds);
         // 刷新 allConversations（覆盖所有 tab 的会话）
         for (ChatConversationMsg allMsg : allConversations) {
             WKUIConversationMsg convMsg = allMsg.uiConversationMsg;
             if (convMsg.getRemoteMsgExtra() == null || TextUtils.isEmpty(convMsg.getRemoteMsgExtra().draft)) {
-                WKConversationMsgExtra extra = WKIM.getInstance().getConversationManager()
-                        .getMsgExtraWithChannel(convMsg.channelID, convMsg.channelType);
+                WKConversationMsgExtra extra = extrasMap.get(convMsg.channelID + ":" + convMsg.channelType);
                 if (extra != null && !TextUtils.isEmpty(extra.draft)) {
                     convMsg.setRemoteMsgExtra(extra);
                     allMsg.isResetContent = true;

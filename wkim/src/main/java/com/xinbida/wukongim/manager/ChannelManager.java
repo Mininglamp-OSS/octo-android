@@ -77,6 +77,16 @@ public class ChannelManager extends BaseManager {
     }
 
     /**
+     * 仅从内存缓存返回频道信息，不触发 DB 查询。
+     * 用于主线程渲染路径（RecyclerView bind），避免 cache miss 时
+     * 同步 DB 查询导致 ANR。
+     */
+    public WKChannel getChannelIfCached(String channelID, byte channelType) {
+        if (TextUtils.isEmpty(channelID)) return null;
+        return channelInfoCache.get(cacheKey(channelID, channelType));
+    }
+
+    /**
      *  · 慢路径：cache miss 时走 synchronized + list 线性扫描 + DB fallback。
      *
      * <p>保留 {@link #wkChannelList} 的原有语义是因为别的路径（比如

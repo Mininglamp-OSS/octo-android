@@ -16,8 +16,14 @@
 
 package com.chat.uikit.chat.provider
 
+import android.graphics.Color
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -33,35 +39,24 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterInside
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.chat.base.config.WKApiConfig
+import com.chat.base.msg.ChatContentSpanType
 import com.chat.base.msgitem.WKChatBaseProvider
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKMsgBgType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
+import com.chat.base.ui.components.NormalClickableContent
+import com.chat.base.ui.components.NormalClickableSpan
 import com.chat.base.utils.AndroidUtilities
 import com.chat.base.utils.WKDialogUtils
+import com.chat.base.ui.Theme
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.WKRichTextContent
+import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKChannelType
+import com.xinbida.wukongim.msgmodel.WKMsgEntity
 
-/**
- * 图文混排消息（RichText=14）接收渲染 provider（Phase 1，仅接收）。
- *
- * <p>消费 {@link WKRichTextContent#blocks}，按数组顺序在气泡内垂直穿插 text /
- * image 子 View：
- * <ul>
- *   <li>text block → [EmojiTextView]，MVP 锁纯文本（不渲 markdown），emoji 仍由
- *       EmojiTextView 渲染；</li>
- *   <li>image block → [AppCompatImageView] + Glide 内联加载，尺寸走与图片消息
- *       一致的 [ImageUtils.getImageWidthAndHeightToTalk]。</li>
- * </ul>
- *
- * <p>复制 / 回复 / 转发 / 删除 / 撤回 / reaction 等长按操作复用基类标准
- * [addLongClick] 弹出菜单；复制项由 WKUIKitApplication 注册的 wkChatPopupItem
- * 菜单提供，取顶层 plain（{@link WKRichTextContent#getDisplayContent}），勿丢字。
- *
- * <p>所有渲染逻辑封装在本 provider，未触碰宿主 ChatActivity / ChatFragment。
- */
 class WKRichTextProvider : WKChatBaseProvider() {
 
     companion object {
@@ -81,16 +76,12 @@ class WKRichTextProvider : WKChatBaseProvider() {
         val contentLayout = parentView.findViewById<LinearLayout>(R.id.contentLayout)
         val contentTvLayout = parentView.findViewById<BubbleLayout>(R.id.contentTvLayout)
         val blocksLayout = parentView.findViewById<LinearLayout>(R.id.richBlocksLayout)
-        // RecyclerView 复用：每次重建子 View，避免残留上一条消息内容。
         blocksLayout.removeAllViews()
 
         resetCellBackground(parentView, uiChatMsgItemEntity, from)
         contentLayout.gravity =
             if (from == WKChatIteMsgFromType.RECEIVED) Gravity.START else Gravity.END
 
-        // 群/社区里 RichText 接收消息显示发送者昵称：基类对 richText 跳过通用
-        // sender-name 路径（WKChatBaseProvider:464/190），故在 provider 内手动复用
-        // 基类 setFromName 渲染外部名字行（含实名徽章 / @Space 后缀逻辑）。
         applyFromName(parentView, uiChatMsgItemEntity, from)
 
         val textColor = if (from == WKChatIteMsgFromType.SEND) {
@@ -99,13 +90,10 @@ class WKRichTextProvider : WKChatBaseProvider() {
             ContextCompat.getColor(context, R.color.receive_text_color)
         }
 
-        // 文本块最大宽度：与文本消息一致取 getViewWidth(...)（pane 宽减头像/勾选/边距），
-        // 约束长文本块换行而非撑成超宽气泡 clip/溢出（对齐 WKTextProvider:1240）。
         val textMaxWidth = getViewWidth(from, uiChatMsgItemEntity)
 
         val model = uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKRichTextContent
         if (model == null) {
-            // 解析失败兜底：展示已知 plain（若有），否则未知消息提示。
             addTextBlock(blocksLayout, textColor, context.getString(R.string.base_unknow_msg), textMaxWidth)
             addLongClick(contentTvLayout, uiChatMsgItemEntity)
             return
@@ -113,19 +101,34 @@ class WKRichTextProvider : WKChatBaseProvider() {
 
         val blocks = model.blocks
         if (blocks.isNullOrEmpty()) {
-            // 无 block：回退顶层 plain，仍为空则未知消息提示。
             addTextBlock(blocksLayout, textColor, fallbackText(model), textMaxWidth)
             addLongClick(contentTvLayout, uiChatMsgItemEntity)
             return
         }
 
+        val mentionEntities = uiChatMsgItemEntity.wkMsg.baseContentMsgModel?.entities
+            ?.filter { it.type == ChatContentSpanType.mention }
+            ?: emptyList()
+
+        val isSelfDarkBubble = Theme.isDark()
+                && from == WKChatIteMsgFromType.SEND
+        val mentionColor = if (isSelfDarkBubble) Color.WHITE else Theme.colorAccount
+
+        val wkMsg = uiChatMsgItemEntity.wkMsg
+        val broadcastsAll = wkMsg.baseContentMsgModel.mentionAll == 1
+                || wkMsg.baseContentMsgModel.mentionHumans == 1
+                || (wkMsg.baseContentMsgModel.mentionInfo?.humans == true)
+        val broadcastsAis = wkMsg.baseContentMsgModel.mentionAis == 1
+
         val allImageUrls = mutableListOf<String>()
         var imageCount = 0
         var renderedImageIndex = 0
+        var plainOffset = 0
         for (block in blocks) {
             if (block == null) continue
             when {
                 block.isImage() -> {
+                    plainOffset += WKRichTextContent.IMAGE_PLACEHOLDER.length
                     if (imageCount < MAX_RENDER_IMAGES) {
                         val showUrl = WKApiConfig.getShowUrl(block.url)
                         if (!TextUtils.isEmpty(showUrl)) {
@@ -137,32 +140,36 @@ class WKRichTextProvider : WKChatBaseProvider() {
                     }
                 }
                 else -> {
-                    // text block 与未知 type（带 text）都走文本渲染，前向兼容二期扩展。
                     if (!TextUtils.isEmpty(block.text)) {
-                        addTextBlock(blocksLayout, textColor, block.text, textMaxWidth)
+                        val blockLen = block.text.length
+                        val blockEntities = if (mentionEntities.isNotEmpty()) {
+                            val startOff = plainOffset
+                            val endOff = plainOffset + blockLen
+                            mentionEntities.filter { e ->
+                                e.offset >= startOff && (e.offset + e.length) <= endOff
+                            }
+                        } else {
+                            emptyList()
+                        }
+                        addTextBlock(
+                            blocksLayout, textColor, block.text, textMaxWidth,
+                            blockEntities, plainOffset, mentionColor,
+                            uiChatMsgItemEntity,
+                            broadcastsAll, broadcastsAis
+                        )
+                        plainOffset += blockLen
                     }
                 }
             }
         }
 
-        // 全部 block 渲染后内容仍为空（如纯未知 block 无 text）→ 回退 plain，勿留空气泡。
         if (blocksLayout.childCount == 0) {
             addTextBlock(blocksLayout, textColor, fallbackText(model), textMaxWidth)
         }
 
-        // 复制 / 回复 / 转发 / 删除 / reaction 走基类标准长按菜单。
         addLongClick(contentTvLayout, uiChatMsgItemEntity)
     }
 
-    /**
-     * 渲染发送者昵称行。RichText item 复用基类 chat_item_base_layout 的外部名字行
-     * （receivedNameTv，是 wkBaseContentLayout 的兄弟节点，非其后代），故从 parentView
-     * 的父容器 fullContentLayout 内查 receivedNameTv 再交给基类 setFromName 处理
-     * （群/社区可见、私聊隐藏、实名徽章、@Space 后缀均由 setFromName 内部统一裁决）。
-     *
-     * <p>full-bind（WKChatBaseProvider.showData → setData）与局部刷新
-     * （convert(payloads) → resetFromName）两条路径都需调用，避免首屏昵称不显示。
-     */
     private fun applyFromName(
         parentView: View,
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
@@ -182,7 +189,6 @@ class WKRichTextProvider : WKChatBaseProvider() {
         applyFromName(parentView, uiChatMsgItemEntity, from)
     }
 
-    /** block 渲染为空时的兜底文本：优先顶层 plain，否则未知消息提示。 */
     private fun fallbackText(model: WKRichTextContent): String {
         return if (!TextUtils.isEmpty(model.plain)) {
             model.plain
@@ -191,9 +197,30 @@ class WKRichTextProvider : WKChatBaseProvider() {
         }
     }
 
-    private fun addTextBlock(parent: LinearLayout, textColor: Int, text: String?, maxWidth: Int) {
+    private fun addTextBlock(
+        parent: LinearLayout,
+        textColor: Int,
+        text: String?,
+        maxWidth: Int,
+        mentionEntities: List<WKMsgEntity> = emptyList(),
+        blockTextOffset: Int = 0,
+        mentionColor: Int = 0,
+        uiEntity: WKUIChatMsgItemEntity? = null,
+        broadcastsAll: Boolean = false,
+        broadcastsAis: Boolean = false
+    ) {
+        val rawText = text ?: ""
+        val spannable = buildMentionSpans(
+            rawText, mentionEntities, blockTextOffset, mentionColor, uiEntity,
+            broadcastsAll, broadcastsAis
+        )
+
         val tv = EmojiTextView(context).apply {
-            this.text = text ?: ""
+            if (spannable != null) {
+                setText(spannable, TextView.BufferType.SPANNABLE)
+            } else {
+                this.text = rawText
+            }
             setTextColor(textColor)
             setTextSize(
                 TypedValue.COMPLEX_UNIT_PX,
@@ -201,7 +228,6 @@ class WKRichTextProvider : WKChatBaseProvider() {
             )
             setLineSpacing(2f * context.resources.displayMetrics.density, 1f)
             movementMethod = LinkMovementMethod.getInstance()
-            // 与文本消息一致：约束最大宽度，长文本块换行而非撑成超宽气泡 clip/溢出。
             if (maxWidth > 0) {
                 this.maxWidth = maxWidth
             }
@@ -213,6 +239,134 @@ class WKRichTextProvider : WKChatBaseProvider() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
+    }
+
+    private fun buildMentionSpans(
+        text: String,
+        mentionEntities: List<WKMsgEntity>,
+        blockTextOffset: Int,
+        mentionColor: Int,
+        uiEntity: WKUIChatMsgItemEntity?,
+        broadcastsAll: Boolean,
+        broadcastsAis: Boolean
+    ): SpannableStringBuilder? {
+        val hasEntities = mentionEntities.isNotEmpty()
+        val hasBroadcasts = broadcastsAll || broadcastsAis
+        if (!hasEntities && !hasBroadcasts) return null
+
+        val ssb = SpannableStringBuilder(text)
+
+        if (hasEntities && uiEntity != null) {
+            val sortedEntities = mentionEntities.sortedByDescending { it.offset }
+            var lastProcessedStart = Int.MAX_VALUE
+            for (entity in sortedEntities) {
+                val localStart = entity.offset - blockTextOffset
+                val localEnd = localStart + entity.length
+                if (localStart < 0 || localEnd > ssb.length || localEnd > lastProcessedStart) continue
+                lastProcessedStart = localStart
+
+                val uid = entity.value ?: continue
+                val isSentinel = uid == "-1" || uid == "-2"
+
+                var showName = ssb.subSequence(localStart, localEnd).toString()
+                if (!isSentinel) {
+                    val channel = WKIM.getInstance().channelManager.getChannelIfCached(uid, WKChannelType.PERSONAL)
+                    if (channel != null) {
+                        val name = if (TextUtils.isEmpty(channel.channelRemark)) channel.channelName else channel.channelRemark
+                        if (!TextUtils.isEmpty(name)) {
+                            showName = if (name.startsWith("@")) name else "@$name"
+                            showName = "$showName "
+                        }
+                    }
+                }
+
+                val nameSpan = SpannableStringBuilder(showName)
+                nameSpan.setSpan(StyleSpan(Typeface.BOLD), 0, showName.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+                if (!isSentinel && uiEntity.iLinkClick != null) {
+                    val wkMsg = uiEntity.wkMsg
+                    val groupNo = if (wkMsg.channelType == WKChannelType.GROUP
+                        || wkMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                        wkMsg.channelID
+                    } else ""
+                    val clickContent = "$uid|$groupNo"
+                    nameSpan.setSpan(
+                        NormalClickableSpan(
+                            false, mentionColor,
+                            NormalClickableContent(NormalClickableContent.NormalClickableTypes.Remind, clickContent),
+                            object : NormalClickableSpan.IClick {
+                                override fun onClick(view: View) {
+                                    uiEntity.iLinkClick.onShowUserDetail(uid, groupNo)
+                                }
+                            }
+                        ),
+                        0, showName.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                } else {
+                    nameSpan.setSpan(
+                        ForegroundColorSpan(mentionColor),
+                        0, showName.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+
+                ssb.replace(localStart, localEnd, nameSpan)
+            }
+        }
+
+        if (hasBroadcasts) {
+            applyBroadcastHighlight(ssb, mentionColor, broadcastsAll, broadcastsAis)
+        }
+
+        return ssb
+    }
+
+    private fun applyBroadcastHighlight(
+        ssb: SpannableStringBuilder,
+        mentionColor: Int,
+        broadcastsAll: Boolean,
+        broadcastsAis: Boolean
+    ) {
+        val tokens = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        if (broadcastsAll) {
+            addToken(tokens, seen, "@所有人")
+            addToken(tokens, seen, "@All People")
+            addToken(tokens, seen, "@All")
+            addToken(tokens, seen, "@" + context.getString(R.string.base_mention_all))
+        }
+        if (broadcastsAis) {
+            addToken(tokens, seen, "@所有AI")
+            addToken(tokens, seen, "@All AIs")
+            addToken(tokens, seen, "@" + context.getString(R.string.base_mention_all_ais))
+        }
+        tokens.sortByDescending { it.length }
+
+        val currentText = ssb.toString()
+        for (token in tokens) {
+            var fromIndex = 0
+            while (fromIndex < currentText.length) {
+                val idx = currentText.indexOf(token, fromIndex)
+                if (idx < 0) break
+                val end = idx + token.length
+                if (end < currentText.length) {
+                    val nextCh = currentText[end]
+                    if (nextCh.isLetterOrDigit() || nextCh == '_') {
+                        fromIndex = idx + 1
+                        continue
+                    }
+                }
+                ssb.setSpan(ForegroundColorSpan(mentionColor), idx, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                ssb.setSpan(StyleSpan(Typeface.BOLD), idx, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                fromIndex = end
+            }
+        }
+    }
+
+    private fun addToken(tokens: MutableList<String>, seen: MutableSet<String>, token: String) {
+        val key = token.lowercase()
+        if (key.length <= 1 || seen.contains(key)) return
+        seen.add(key)
+        tokens.add(token)
     }
 
     private fun addImageBlock(parent: LinearLayout, block: WKRichTextContent.RichTextBlock, allImageUrls: List<String>, imageIndex: Int) {

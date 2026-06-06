@@ -348,6 +348,19 @@ public class ConversationManager extends BaseManager {
         return ConversationDbManager.getInstance().queryMsgExtraWithChannel(channelID, channelType);
     }
 
+    /**
+     * 批量查询会话 extras（草稿等），一次 DB 查询替代 N 次单条查询。
+     * 返回 Map 以 channelID:channelType 为复合 key。
+     */
+    public java.util.Map<String, WKConversationMsgExtra> getMsgExtrasForChannels(java.util.List<String> channelIds) {
+        java.util.Map<String, WKConversationMsgExtra> map = new java.util.HashMap<>();
+        java.util.List<WKConversationMsgExtra> list = ConversationDbManager.getInstance().queryMsgExtrasForChannelIds(channelIds);
+        for (WKConversationMsgExtra extra : list) {
+            map.put(extra.channelID + ":" + extra.channelType, extra);
+        }
+        return map;
+    }
+
     public void updateMsgExtra(WKConversationMsgExtra extra) {
         boolean result = ConversationDbManager.getInstance().insertOrUpdateMsgExtra(extra);
         if (result) {

@@ -165,6 +165,7 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
             @Override
             public void onBack(List<ChooseResult> paths) {
                 if (WKReader.isNotEmpty(paths)) {
+                    if (isFinishing() || isDestroyed()) return;
                     String path = paths.get(0).path;
                     if (!TextUtils.isEmpty(path)) {
                         Intent intent;

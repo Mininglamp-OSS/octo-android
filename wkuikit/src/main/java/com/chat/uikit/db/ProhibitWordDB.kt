@@ -94,7 +94,8 @@ class ProhibitWordDB private constructor() {
                     return serialize(cursor).version
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("ProhibitWordDB", "getMaxVersion error", e)
         }
         return 0
     }
@@ -113,7 +114,8 @@ class ProhibitWordDB private constructor() {
                     cursor.moveToNext()
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("ProhibitWordDB", "getAll error", e)
         }
         return result
     }
@@ -142,7 +144,8 @@ class ProhibitWordDB private constructor() {
                     cursor.moveToNext()
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("ProhibitWordDB", "queryWithsIds error", e)
         }
         return result
     }

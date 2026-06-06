@@ -3894,6 +3894,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (paths != null && !paths.isEmpty()) {
                 String text = caption != null ? caption : "";
                 if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
+                    pendingCaptionMentionUids = null;
+                    pendingCaptionMentionAll = false;
+                    pendingCaptionMentionAis = false;
+                    pendingCaptionMentionEntities = null;
                     sendRichTextTray("", paths, null, null);
                     chatPanelManager.promptTextToFile(text);
                 } else {

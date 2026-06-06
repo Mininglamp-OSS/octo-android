@@ -74,7 +74,8 @@ public class ReminderDBManager {
         if (dbHelper == null) return false;
         try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{prefix, reminderType})) {
             return cursor != null && cursor.moveToFirst();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "hasUndoneReminderWithChannelPrefix error");
             return false;
         }
     }

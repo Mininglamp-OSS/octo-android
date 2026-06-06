@@ -123,11 +123,12 @@ class WKRichTextProvider : WKChatBaseProvider() {
         val allImageUrls = mutableListOf<String>()
         var imageCount = 0
         var renderedImageIndex = 0
-        var textOffset = 0
+        var plainOffset = 0
         for (block in blocks) {
             if (block == null) continue
             when {
                 block.isImage() -> {
+                    plainOffset += WKRichTextContent.IMAGE_PLACEHOLDER.length
                     if (imageCount < MAX_RENDER_IMAGES) {
                         val showUrl = WKApiConfig.getShowUrl(block.url)
                         if (!TextUtils.isEmpty(showUrl)) {
@@ -142,8 +143,8 @@ class WKRichTextProvider : WKChatBaseProvider() {
                     if (!TextUtils.isEmpty(block.text)) {
                         val blockLen = block.text.length
                         val blockEntities = if (mentionEntities.isNotEmpty()) {
-                            val startOff = textOffset
-                            val endOff = textOffset + blockLen
+                            val startOff = plainOffset
+                            val endOff = plainOffset + blockLen
                             mentionEntities.filter { e ->
                                 e.offset >= startOff && (e.offset + e.length) <= endOff
                             }
@@ -152,11 +153,11 @@ class WKRichTextProvider : WKChatBaseProvider() {
                         }
                         addTextBlock(
                             blocksLayout, textColor, block.text, textMaxWidth,
-                            blockEntities, textOffset, mentionColor,
+                            blockEntities, plainOffset, mentionColor,
                             uiChatMsgItemEntity,
                             broadcastsAll, broadcastsAis
                         )
-                        textOffset += blockLen
+                        plainOffset += blockLen
                     }
                 }
             }
@@ -269,7 +270,7 @@ class WKRichTextProvider : WKChatBaseProvider() {
 
                 var showName = ssb.subSequence(localStart, localEnd).toString()
                 if (!isSentinel) {
-                    val channel = WKIM.getInstance().channelManager.getChannel(uid, WKChannelType.PERSONAL)
+                    val channel = WKIM.getInstance().channelManager.getChannelIfCached(uid, WKChannelType.PERSONAL)
                     if (channel != null) {
                         val name = if (TextUtils.isEmpty(channel.channelRemark)) channel.channelName else channel.channelRemark
                         if (!TextUtils.isEmpty(name)) {

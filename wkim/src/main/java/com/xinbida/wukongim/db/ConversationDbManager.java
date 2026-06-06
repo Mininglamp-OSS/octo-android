@@ -454,7 +454,8 @@ public class ConversationDbManager {
                 }
                 cursor.close();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "queryMsgExtraWithChannel error");
         }
         return msgExtra;
     }
@@ -466,15 +467,20 @@ public class ConversationDbManager {
 
     private List<WKConversationMsgExtra> queryWithExtraChannelIds(List<String> channelIds) {
         List<WKConversationMsgExtra> list = new ArrayList<>();
-        try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().select(conversationExtra, "channel_id in (" + WKCursor.getPlaceholders(channelIds.size()) + ")", channelIds.toArray(new String[0]), null)) {
-            if (cursor == null) {
-                return list;
+        // SQLite 变量上限 999，分片查询避免超限
+        int chunkSize = 500;
+        for (int start = 0; start < channelIds.size(); start += chunkSize) {
+            int end = Math.min(start + chunkSize, channelIds.size());
+            List<String> chunk = channelIds.subList(start, end);
+            try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().select(conversationExtra, "channel_id in (" + WKCursor.getPlaceholders(chunk.size()) + ")", chunk.toArray(new String[0]), null)) {
+                if (cursor == null) continue;
+                for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
+                    WKConversationMsgExtra extra = serializeMsgExtra(cursor);
+                    list.add(extra);
+                }
+            } catch (Exception e) {
+                WKLoggerUtils.getInstance().e(TAG, "queryWithExtraChannelIds chunk error");
             }
-            for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
-                WKConversationMsgExtra extra = serializeMsgExtra(cursor);
-                list.add(extra);
-            }
-        } catch (Exception ignored) {
         }
         return list;
     }

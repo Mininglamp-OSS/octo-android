@@ -28,7 +28,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.MentionEntityHelper;
+import com.xinbida.wukongim.msgmodel.WKMsgEntity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -216,7 +218,7 @@ public class WKRichTextContent extends WKMessageContent {
                     }
                     mentionJson.put("uids", uidsArr);
                 }
-                JSONArray mentionEntitiesArr = MentionEntityHelper.buildMentionEntitiesJson(entities);
+                JSONArray mentionEntitiesArr = buildPlainRelativeEntitiesJson(entities, blocks);
                 if (mentionEntitiesArr != null) {
                     mentionJson.put("entities", mentionEntitiesArr);
                 }
@@ -258,6 +260,45 @@ public class WKRichTextContent extends WKMessageContent {
             plain = buildPlainFromBlocks(blocks);
         }
         return this;
+    }
+
+    /**
+     * 将 block-local 的 entity offset 转换为 plain-relative 后构建 JSON 数组。
+     * 遍历 blocks 计算每个 text block 在 plain 中的起始偏移（前面的 image block
+     * 各占 IMAGE_PLACEHOLDER 长度），把落在该 text block 内的 entity offset 加上
+     * 该偏移量，使 wire 上的 offset 相对于 plain 文本。
+     */
+    private static JSONArray buildPlainRelativeEntitiesJson(
+            List<WKMsgEntity> entities, List<RichTextBlock> blocks) {
+        if (entities == null || entities.isEmpty() || blocks == null) return null;
+        int plainOffset = 0;
+        int textBlockPlainStart = -1;
+        for (RichTextBlock block : blocks) {
+            if (block == null) continue;
+            if (BLOCK_TYPE_IMAGE.equals(block.type)) {
+                plainOffset += IMAGE_PLACEHOLDER.length();
+            } else {
+                if (textBlockPlainStart < 0) {
+                    textBlockPlainStart = plainOffset;
+                }
+                String text = block.text;
+                plainOffset += (text != null ? text.length() : 0);
+            }
+        }
+        if (textBlockPlainStart < 0) textBlockPlainStart = 0;
+        JSONArray arr = new JSONArray();
+        for (WKMsgEntity entity : entities) {
+            if (!ChatContentSpanType.getMention().equals(entity.type)) continue;
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("uid", entity.value);
+                obj.put("offset", entity.offset + textBlockPlainStart);
+                obj.put("length", entity.length);
+                arr.put(obj);
+            } catch (JSONException ignored) {
+            }
+        }
+        return arr.length() > 0 ? arr : null;
     }
 
     /**

@@ -231,6 +231,7 @@ class WKVideoProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val coverImageView = parentView.findViewById<FilterImageView>(R.id.coverImageView)
+            ?: return
         addLongClick(coverImageView, uiChatMsgItemEntity)
     }
 

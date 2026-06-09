@@ -1,27 +1,23 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
+  # Weekly deep scan only — CodeQL is the slow, cross-function SAST tier.
+  # NOTE: no per-PR SAST remains after this change. Per-PR CI runs the repo's
+  # own lint + osv-scanner (dependency CVEs); CodeQL moves to a weekly deep scan
+  # + manual dispatch. Findings still land in the Security tab. Detection latency
+  # for new code-level vulnerabilities widens to up to ~7 days.
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: codeql-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   analyze:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     uses: Mininglamp-OSS/.github/.github/workflows/reusable-codeql.yml@v1
     with:
       language: java-kotlin

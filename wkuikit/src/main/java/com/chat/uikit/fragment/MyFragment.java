@@ -143,6 +143,12 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
     }
 
     @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        longPressHandler.removeCallbacks(longPressRunnable);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         //  (#227)：displayName 合并 —— 实名态下用 realname，否则用 nickname

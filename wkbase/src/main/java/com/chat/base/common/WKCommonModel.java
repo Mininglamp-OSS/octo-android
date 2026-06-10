@@ -211,6 +211,16 @@ public class WKCommonModel extends WKBaseModel {
             }
             wkChannel.remoteExtraMap.put("space_id", entity.space_id);
         }
+        // bot_creator_uid 由 /users/{uid} 写入本地，channels API 可能不返回；保留已有值
+        if (localChannel != null && localChannel.remoteExtraMap != null) {
+            Object creatorUid = localChannel.remoteExtraMap.get("bot_creator_uid");
+            if (creatorUid instanceof String && ((String) creatorUid).length() > 0) {
+                if (wkChannel.remoteExtraMap == null) {
+                    wkChannel.remoteExtraMap = new HashMap<>();
+                }
+                wkChannel.remoteExtraMap.putIfAbsent("bot_creator_uid", creatorUid);
+            }
+        }
         hashMap.put(WKChannelExtras.beDeleted, entity.be_deleted);
         hashMap.put(WKChannelExtras.beBlacklist, entity.be_blacklist);
         hashMap.put(WKChannelExtras.notice, entity.notice);

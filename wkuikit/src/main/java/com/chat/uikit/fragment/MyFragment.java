@@ -48,6 +48,8 @@ import java.util.List;
 public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
     private PersonalItemAdapter adapter;
     private boolean isAppConfigLoaded = false;
+    private final android.os.Handler longPressHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable longPressRunnable;
 
     @Override
     protected FragMyLayoutBinding getViewBinding() {
@@ -102,8 +104,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         }));
         SingleClickUtil.onSingleClick(wkVBinding.cardLayout, view -> gotoMyInfo());
         // 隐藏入口：长按头像 3 秒修改 API 地址
-        final android.os.Handler longPressHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        final Runnable longPressRunnable = () -> {
+        longPressRunnable = () -> {
             if (getActivity() == null) return;
             ApiUrlDialog dialog = new ApiUrlDialog(getActivity());
             dialog.setOnConfirmListener(url -> {
@@ -133,6 +134,12 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
 
     void gotoMyInfo() {
         startActivity(new Intent(getActivity(), MyInfoActivity.class));
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        longPressHandler.removeCallbacks(longPressRunnable);
     }
 
     @Override

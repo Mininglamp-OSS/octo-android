@@ -407,6 +407,14 @@ public class UserModel extends WKBaseModel {
                     WKChannelMember member = buildMemberFromUserInfo(result.group_member);
                     WKIM.getInstance().getChannelMembersManager().save(member);
                 }
+                if (result.robot == 1 && !TextUtils.isEmpty(result.bot_creator_uid)) {
+                    WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
+                    if (ch != null) {
+                        if (ch.remoteExtraMap == null) ch.remoteExtraMap = new java.util.HashMap<>();
+                        ch.remoteExtraMap.put("bot_creator_uid", result.bot_creator_uid);
+                        WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
+                    }
+                }
                 if (iUserInfo != null) {
                     iUserInfo.onResult(HttpResponseCode.success, "", result);
                 }

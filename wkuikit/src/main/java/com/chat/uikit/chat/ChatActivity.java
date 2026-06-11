@@ -1784,6 +1784,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         MsgModel.getInstance().syncExtraMsg(channelId, channelType);
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
         getChannelState();
+        prefetchBotCreatorUids();
 
         // : do NOT clear the adapter here. The previous setList(empty)
         // caused a visible white-screen flash while getData() is waiting on
@@ -1848,6 +1849,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         hideOrShowRightView(member == null || member.isDeleted != 1);
                         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
                         chatPanelManager.showOrHideForbiddenView();
+                        prefetchBotCreatorUids();
                     }
                 });
             } else {
@@ -2774,6 +2776,26 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (channelType == WKChannelType.GROUP) {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);
             hideOrShowRightView(member == null || member.isDeleted == 0);
+        }
+    }
+
+    private void prefetchBotCreatorUids() {
+        if (channelType == WKChannelType.PERSONAL) {
+            WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
+            if (channel != null && channel.robot == 1
+                    && (channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey("bot_creator_uid"))) {
+                UserModel.getInstance().getUserInfo(channelId, "", null);
+            }
+        } else if (channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) {
+            List<WKChannelMember> robotMembers = WKIM.getInstance().getChannelMembersManager().getRobotMembers(channelId, channelType);
+            if (WKReader.isNotEmpty(robotMembers)) {
+                for (WKChannelMember bot : robotMembers) {
+                    WKChannel botChannel = WKIM.getInstance().getChannelManager().getChannel(bot.memberUID, WKChannelType.PERSONAL);
+                    if (botChannel == null || botChannel.remoteExtraMap == null || !botChannel.remoteExtraMap.containsKey("bot_creator_uid")) {
+                        UserModel.getInstance().getUserInfo(bot.memberUID, "", null);
+                    }
+                }
+            }
         }
     }
 

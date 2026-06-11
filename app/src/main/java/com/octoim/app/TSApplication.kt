@@ -134,6 +134,8 @@ class TSApplication : MultiDexApplication() {
         } else {
             WKApiConfig.initBaseURLIncludeIP(apiURL)
         }
+        WKApiConfig.termsUrl = BuildConfig.TERMS_URL
+        WKApiConfig.privacyUrl = BuildConfig.PRIVACY_URL
     }
 
     private fun getAppPackageName(): String {

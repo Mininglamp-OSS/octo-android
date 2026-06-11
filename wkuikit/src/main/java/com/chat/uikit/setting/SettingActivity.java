@@ -232,7 +232,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
         });
         SingleClickUtil.onSingleClick(wkVBinding.thirdShareLayout, view1 -> {
             Intent intent = new Intent(this, WKWebViewActivity.class);
-            intent.putExtra("url", WKApiConfig.baseWebUrl + "sdkinfo.html");
+            intent.putExtra("url", WKApiConfig.privacyUrl);
             startActivity(intent);
         });
     }

@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onClick(view: View) {
                         startActivity(
                             Intent(Intent.ACTION_VIEW,
-                                Uri.parse(WKApiConfig.baseWebUrl + "user_agreement.html"))
+                                Uri.parse(WKApiConfig.termsUrl))
                         )
                     }
                 }), userAgreementIndex, userAgreementIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -139,7 +139,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onClick(view: View) {
                         startActivity(
                             Intent(Intent.ACTION_VIEW,
-                                Uri.parse(WKApiConfig.baseWebUrl + "privacy_policy.html"))
+                                Uri.parse(WKApiConfig.privacyUrl))
                         )
                     }
                 }), privacyPolicyIndex, privacyPolicyIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE

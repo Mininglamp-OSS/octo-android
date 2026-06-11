@@ -30,4 +30,6 @@ public class WKChannelExtras {
     public final static String allowViewHistoryMsg = "allow_view_history_msg";
     // 群类型
     public final static String groupType = "group_type";
+    // Bot 创建者 uid
+    public final static String botCreatorUid = "bot_creator_uid";
 }

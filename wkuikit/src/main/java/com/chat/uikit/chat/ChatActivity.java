@@ -1525,8 +1525,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 showChannelName(channel);
                 if (channelType == WKChannelType.PERSONAL) {
                     for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                        if (channel.channelID.equals(chatAdapter.getData().get(i).wkMsg.fromUID)) {
-                            chatAdapter.getData().get(i).wkMsg.setFrom(channel);
+                        WKMsg msg = chatAdapter.getData().get(i).wkMsg;
+                        if (msg != null && channel.channelID.equals(msg.fromUID)) {
+                            msg.setFrom(channel);
                         }
                     }
                 }
@@ -2786,11 +2787,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     }
 
+    private final java.util.Set<String> botCreatorFetchedUids = new java.util.HashSet<>();
+
     private void prefetchBotCreatorUids() {
         if (channelType == WKChannelType.PERSONAL) {
             WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
             if (channel != null && channel.robot == 1
-                    && (channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey("bot_creator_uid"))) {
+                    && (channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey(WKChannelExtras.botCreatorUid))
+                    && botCreatorFetchedUids.add(channelId)) {
                 UserModel.getInstance().getUserInfo(channelId, "", null);
             }
         } else if (channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) {
@@ -2798,7 +2802,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (WKReader.isNotEmpty(robotMembers)) {
                 for (WKChannelMember bot : robotMembers) {
                     WKChannel botChannel = WKIM.getInstance().getChannelManager().getChannel(bot.memberUID, WKChannelType.PERSONAL);
-                    if (botChannel == null || botChannel.remoteExtraMap == null || !botChannel.remoteExtraMap.containsKey("bot_creator_uid")) {
+                    if ((botChannel == null || botChannel.remoteExtraMap == null || !botChannel.remoteExtraMap.containsKey(WKChannelExtras.botCreatorUid))
+                            && botCreatorFetchedUids.add(bot.memberUID)) {
                         UserModel.getInstance().getUserInfo(bot.memberUID, "", null);
                     }
                 }

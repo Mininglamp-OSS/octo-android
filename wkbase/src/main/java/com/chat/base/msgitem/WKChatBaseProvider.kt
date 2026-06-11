@@ -101,6 +101,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
+import com.xinbida.wukongim.entity.WKChannelExtras
 import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.message.type.WKSendMsgResult
@@ -1248,7 +1249,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         if (mMsg.fromUID == loginUid) return false
         val fromChannel = mMsg.from ?: return false
         if (fromChannel.robot != 1) return false
-        val creatorUid = fromChannel.remoteExtraMap?.get("bot_creator_uid") as? String
+        val creatorUid = fromChannel.remoteExtraMap?.get(WKChannelExtras.botCreatorUid) as? String
         return !TextUtils.isEmpty(creatorUid) && creatorUid == loginUid
     }
 

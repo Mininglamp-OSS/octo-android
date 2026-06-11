@@ -168,6 +168,13 @@ public class FriendModel extends WKBaseModel {
                         hashMap.put(WKChannelExtras.sourceDesc, list.get(i).source_desc);
                         hashMap.put(WKChannelExtras.chatPwdOn, list.get(i).chat_pwd_on);
                         hashMap.put(WKChannelExtras.vercode, list.get(i).vercode);
+                        WKChannel existing = WKIM.getInstance().getChannelManager().getChannel(channel.channelID, channel.channelType);
+                        if (existing != null && existing.remoteExtraMap != null) {
+                            Object creatorUid = existing.remoteExtraMap.get(WKChannelExtras.botCreatorUid);
+                            if (creatorUid instanceof String && ((String) creatorUid).length() > 0) {
+                                hashMap.put(WKChannelExtras.botCreatorUid, creatorUid);
+                            }
+                        }
                         channel.remoteExtraMap = hashMap;
                         channels.add(channel);
                         if (list.get(i).version > tempVersion) {

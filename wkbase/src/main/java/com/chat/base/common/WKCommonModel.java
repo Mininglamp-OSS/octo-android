@@ -216,14 +216,14 @@ public class WKCommonModel extends WKBaseModel {
             if (wkChannel.remoteExtraMap == null) {
                 wkChannel.remoteExtraMap = new HashMap<>();
             }
-            wkChannel.remoteExtraMap.put("bot_creator_uid", entity.bot_creator_uid);
+            wkChannel.remoteExtraMap.put(WKChannelExtras.botCreatorUid, entity.bot_creator_uid);
         } else if (localChannel != null && localChannel.remoteExtraMap != null) {
-            Object creatorUid = localChannel.remoteExtraMap.get("bot_creator_uid");
+            Object creatorUid = localChannel.remoteExtraMap.get(WKChannelExtras.botCreatorUid);
             if (creatorUid instanceof String && ((String) creatorUid).length() > 0) {
                 if (wkChannel.remoteExtraMap == null) {
                     wkChannel.remoteExtraMap = new HashMap<>();
                 }
-                wkChannel.remoteExtraMap.put("bot_creator_uid", creatorUid);
+                wkChannel.remoteExtraMap.put(WKChannelExtras.botCreatorUid, creatorUid);
             }
         }
         hashMap.put(WKChannelExtras.beDeleted, entity.be_deleted);

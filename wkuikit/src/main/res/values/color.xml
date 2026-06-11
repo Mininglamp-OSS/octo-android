@@ -17,7 +17,7 @@
     <color name="external_member_badge_text">#FFFFFF</color>
     <!-- 「来自 XX」副标题颜色 -->
     <color name="external_member_source_text">#9C27B0</color>
-    <color name="tab_text_normal">#999999</color>
-    <color name="tab_text_selected">#7761F4</color>
+    <color name="tab_text_normal">#BBBBBD</color>
+    <color name="tab_text_selected">#1C1C23</color>
     <color name="tab_bg">#f6f6f6</color>
 </resources>

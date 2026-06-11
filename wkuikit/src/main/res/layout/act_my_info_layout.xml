@@ -19,67 +19,88 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/homeColor"
-                android:orientation="vertical">
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="12dp">
 
+                <!-- Group 1: 头像 / 姓名 / App号 / 我的二维码 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@color/white"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@drawable/bg_me_card"
                     android:orientation="vertical">
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="15dp"
-                        android:background="@color/homeColor" />
-
+                    <!-- 头像 -->
                     <LinearLayout
                         android:id="@+id/headLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/head_portrait" />
+                            android:text="@string/head_portrait"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <com.chat.base.ui.components.AvatarView
                             android:id="@+id/avatarView"
-                            android:layout_gravity="center"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"/>
+                            android:layout_width="32dp"
+                            android:layout_height="32dp" />
 
                         <androidx.appcompat.widget.AppCompatImageView
-                            style="@style/arrow_right_iv"
-                            android:layout_marginStart="10dp" />
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:layout_marginStart="10dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
 
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="0.5dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="#E5E5E5" />
+
+                    <!-- 姓名 -->
                     <LinearLayout
                         android:id="@+id/nameLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/name" />
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/name"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/nameTv"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
                             android:layout_marginStart="10dp"
                             android:layout_marginEnd="6dp"
-                            android:layout_weight="2"
+                            android:layout_weight="1"
                             android:gravity="end"
                             android:textColor="@color/color999"
-                            android:textSize="16sp" />
+                            android:textSize="14sp" />
 
-                        <!--  (#227)：名字旁边 ✓ 蓝色勾 + 已实名 tag -->
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/realnameVerifiedIv"
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:layout_gravity="center_vertical"
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
                             android:src="@drawable/ic_realname_verified"
                             android:contentDescription="@string/realname_verified_tag"
                             android:visibility="gone" />
@@ -88,8 +109,7 @@
                             android:id="@+id/realnameVerifiedTag"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginStart="6dp"
+                            android:layout_marginStart="4dp"
                             android:layout_marginEnd="4dp"
                             android:background="@drawable/bg_realname_verified_tag"
                             android:paddingStart="6dp"
@@ -98,81 +118,137 @@
                             android:paddingBottom="1dp"
                             android:text="@string/realname_verified_tag"
                             android:textColor="#2196F3"
-                            android:textSize="11sp"
+                            android:textSize="10sp"
                             android:visibility="gone" />
 
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:layout_marginStart="6dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
 
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="0.5dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="#E5E5E5" />
+
+                    <!-- App号 -->
                     <LinearLayout
                         android:id="@+id/identityLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
                             android:id="@+id/idLeftTv"
-                            style="@style/leftTextView"
-                            android:text="@string/identity" />
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/identity"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/identityTv"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
                             android:layout_marginStart="10dp"
                             android:layout_marginEnd="10dp"
-                            android:layout_weight="2"
+                            android:layout_weight="1"
                             android:gravity="end"
                             android:textColor="@color/color999"
-                            android:textSize="16sp" />
+                            android:textSize="14sp" />
 
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/identityIv"
-                            style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/qrLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/my_qr" />
-
-                        <androidx.appcompat.widget.AppCompatImageView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:tint="@color/color999"
-                            android:layout_gravity="center_vertical"
-                            android:src="@mipmap/msg_qrcode" />
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
 
                     <View
                         android:layout_width="match_parent"
-                        android:layout_height="15dp"
-                        android:background="@color/homeColor" />
+                        android:layout_height="0.5dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="#E5E5E5" />
+
+                    <!-- 我的二维码 -->
+                    <LinearLayout
+                        android:id="@+id/qrLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/my_qr"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginEnd="6dp"
+                            android:src="@mipmap/msg_qrcode"
+                            android:tint="@color/color999" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Group 2: 性别 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_me_card"
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:id="@+id/sexLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/sex" />
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/sex"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/sexTv"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginStart="10dp"
-                            android:layout_marginEnd="10dp"
-                            android:layout_weight="1"
-                            android:gravity="end"
+                            android:layout_marginEnd="6dp"
                             android:textColor="@color/color999"
-                            android:textSize="16sp" />
+                            android:textSize="14sp" />
 
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>

@@ -15,4 +15,6 @@
     <color name="external_member_badge_text">#FFFFFF</color>
     <color name="external_member_source_text">#CE93D8</color>
     <color name="tab_bg">#08090B</color>
+    <color name="tab_text_normal">#8CFFFFFF</color>
+    <color name="tab_text_selected">#FFFFFF</color>
 </resources>

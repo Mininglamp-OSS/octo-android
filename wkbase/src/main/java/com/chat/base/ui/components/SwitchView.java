@@ -71,9 +71,9 @@ public class SwitchView extends View {
 //    private String thumbCheckedColorKey = Theme.key_windowBackgroundWhite;
 
     private int trackColorKey = Theme.getSwitchViewTrackColor();
-    private int trackCheckedColorKey = Theme.colorAccountDisable;
+    private int trackCheckedColorKey = Theme.isDark() ? 0xFFD0D1D2 : 0xFF1C1C23;
     private int thumbColorKey = Theme.getSwitchViewThumbColor();
-    private int thumbCheckedColorKey = Theme.colorAccount;
+    private int thumbCheckedColorKey = 0xFFFFFFFF;
 
     private Drawable iconDrawable;
     private int lastIconColor;

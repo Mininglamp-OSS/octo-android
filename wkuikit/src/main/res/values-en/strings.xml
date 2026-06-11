@@ -85,7 +85,7 @@
     <string name="sex">Sex</string>
     <string name="male">Male</string>
     <string name="female">Female</string>
-    <string name="personal_info">Info</string>
+    <string name="personal_info">Personal Info</string>
     <string name="qr_desc">Scan the OR Code to add me on %s</string>
     <string name="clear_msg">Clear Chat Storage</string>
     <string name="clear_img_cache">Clear Images Cache</string>
@@ -162,7 +162,7 @@
     <string name="user_detail_info">Profile settings</string>
     <string name="delete_conver_msg_tips">After deleting, the chat message record will be cleared</string>
     <string name="remove_conver_msg_tips">Sure not to show this chat?</string>
-    <string name="language">Languages/多语言</string>
+    <string name="language">Language</string>
     <string name="disabled">Disabled</string>
     <string name="enabled">Enabled</string>
     <string name="scan_user_qr">Scan QR code business card</string>
@@ -287,7 +287,7 @@
     <string name="open_new_rtc_notice">Open audio and video invitation notifications</string>
     <string name="open_new_rtc_notice_desc">In the category classification of the system notification permission page, open the \'Audio and Video Invitation Notification\' page, enable \'Allow Notification\' and \'Vibration\', and select the \'Sound\' option</string>
     <string name="tab_text_chat">Chat</string>
-    <string name="tab_text_contacts">Contacts</string>
+    <string name="tab_text_contacts">Context</string>
     <string name="tab_text_me">Me</string>
     <string name="invitation_sent">Invitation sent</string>
     <string name="find_chat_content">Search Chat History</string>
@@ -557,5 +557,13 @@
     <string name="str_thread_name_empty">Thread name cannot be empty</string>
     <string name="group_md">GROUP.md</string>
     <string name="group_md_byte_count">%1$d / %2$d bytes</string>
+    <string name="contacts_title">Contacts</string>
+    <string name="appearance">Appearance</string>
+    <string name="appearance_system">Follow System</string>
+    <string name="appearance_light">Light Mode</string>
+    <string name="appearance_dark">Dark Mode</string>
+    <string name="copied">Copied</string>
+    <string name="storage_space">Storage</string>
+    <string name="privacy">Privacy</string>
 </resources>
 

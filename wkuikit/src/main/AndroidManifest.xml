@@ -34,6 +34,7 @@
         <activity
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
+        <activity android:name=".contacts.ContactsActivity" />
 
         <activity android:name=".contacts.NewFriendsActivity"
             android:launchMode="singleTop" />

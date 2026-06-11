@@ -16,26 +16,16 @@
 
 package com.chat.uikit.setting;
 
-import android.view.View;
 import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
-import com.chat.base.config.WKConstants;
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.net.HttpResponseCode;
-import com.chat.base.utils.systembar.WKOSUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActMsgNoticesSetLayoutBinding;
 import com.chat.uikit.user.service.UserModel;
-import com.xinbida.wukongim.entity.WKChannelType;
 
-/**
- * 2020-06-30 13:31
- * 新消息通知设置
- */
 public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLayoutBinding> {
     UserInfoEntity userInfoEntity;
 
@@ -56,7 +46,6 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
 
     @Override
     protected void initView() {
-        wkVBinding.voiceShockDescTv.setText(String.format(getString(R.string.voice_shock_desc), getString(R.string.app_name)));
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
@@ -64,10 +53,7 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
         wkVBinding.voiceSwitch.setChecked(userInfoEntity.setting.voice_on == 1);
         wkVBinding.shockSwitch.setChecked(userInfoEntity.setting.shock_on == 1);
         wkVBinding.newMsgNoticeDetailSwitch.setChecked(userInfoEntity.setting.msg_show_detail == 1);
-        View keepAliveView = (View) EndpointManager.getInstance().invoke("show_keep_alive_item", this);
-        if (keepAliveView != null) {
-            wkVBinding.keepAliveLayout.addView(keepAliveView);
-        }
+        updateChildSwitchState(userInfoEntity.setting.new_msg_notice == 1);
     }
 
     @Override
@@ -75,6 +61,7 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
         wkVBinding.newMsgNoticeSwitch.setOnCheckedChangeListener((compoundButton, b) -> {
             if (compoundButton.isPressed()) {
                 userInfoEntity.setting.new_msg_notice = b ? 1 : 0;
+                updateChildSwitchState(b);
                 UserModel.getInstance().updateUserSetting("new_msg_notice", userInfoEntity.setting.new_msg_notice, (code, msg) -> {
                     if (code == HttpResponseCode.success) {
                         WKConfig.getInstance().saveUserInfo(userInfoEntity);
@@ -112,11 +99,15 @@ public class MsgNoticesSettingActivity extends WKBaseActivity<ActMsgNoticesSetLa
                 });
             }
         });
-        wkVBinding.openNoticeLayout.setOnClickListener(v -> {
-            WKOSUtils.openChannelSetting(this, WKConstants.newMsgChannelID);
-        });
-        wkVBinding.openRTCNoticeLayout.setOnClickListener(v -> {
-            WKOSUtils.openChannelSetting(this, WKConstants.newRTCChannelID);
-        });
+    }
+
+    private void updateChildSwitchState(boolean masterOn) {
+        float alpha = masterOn ? 1.0f : 0.4f;
+        wkVBinding.detailRow.setAlpha(alpha);
+        wkVBinding.voiceRow.setAlpha(alpha);
+        wkVBinding.shockRow.setAlpha(alpha);
+        wkVBinding.newMsgNoticeDetailSwitch.setEnabled(masterOn);
+        wkVBinding.voiceSwitch.setEnabled(masterOn);
+        wkVBinding.shockSwitch.setEnabled(masterOn);
     }
 }

@@ -19,6 +19,7 @@ package com.chat.uikit.fragment;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.TextView;
 
@@ -26,7 +27,6 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.endpoint.entity.PersonalInfoMenu;
 import com.chat.base.ui.Theme;
-import com.chat.base.ui.components.SwitchView;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.uikit.R;
 
@@ -35,8 +35,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 
 public class PersonalItemAdapter extends BaseQuickAdapter<PersonalInfoMenu, BaseViewHolder> {
-
-    static final String SID_DARK_MODE = "dark_mode_toggle";
 
     PersonalItemAdapter(List<PersonalInfoMenu> list) {
         super(R.layout.item_frag_me_layout, list);
@@ -47,38 +45,21 @@ public class PersonalItemAdapter extends BaseQuickAdapter<PersonalInfoMenu, Base
         holder.setText(R.id.nameTv, menu.text);
         holder.setVisible(R.id.newVersionIv, menu.isNewVersionIv);
 
-        boolean isDarkModeItem = SID_DARK_MODE.equals(menu.sid);
-        String webLoginText = getContext().getString(R.string.web_login);
-        boolean isWebLogin = menu.text.equals(webLoginText);
-
-        // detail text (网页端 shows "已连接")
         TextView detailTv = holder.getView(R.id.detailTv);
-        if (isWebLogin) {
+        if (!TextUtils.isEmpty(menu.detail)) {
             detailTv.setVisibility(View.VISIBLE);
-            detailTv.setText(getContext().getString(R.string.str_connected));
+            detailTv.setText(menu.detail);
         } else {
             detailTv.setVisibility(View.GONE);
         }
 
-        SwitchView darkSwitch = holder.getView(R.id.darkModeSwitch);
         View arrowIv = holder.getView(R.id.arrowIv);
-        if (isDarkModeItem) {
-            darkSwitch.setVisibility(View.VISIBLE);
-            arrowIv.setVisibility(View.GONE);
-            darkSwitch.setOnCheckedChangeListener(null);
-            darkSwitch.setChecked(Theme.getTheme().equals(Theme.DARK_MODE));
-            darkSwitch.setOnCheckedChangeListener((view, checked) ->
-                    Theme.setTheme(checked ? Theme.DARK_MODE : Theme.LIGHT_MODE));
-        } else {
-            darkSwitch.setVisibility(View.GONE);
-            arrowIv.setVisibility(View.VISIBLE);
-        }
+        arrowIv.setVisibility(menu.showArrow ? View.VISIBLE : View.GONE);
 
-        // grouped card corners
         int position = holder.getBindingAdapterPosition();
         int dataSize = getData().size();
 
-        boolean isGroupEnd = isLastInGroup(position);
+        boolean isGroupEnd = menu.isGroupEnd || position >= dataSize - 1;
         boolean isGroupStart = isFirstInGroup(position);
         boolean isSingle = isGroupStart && isGroupEnd;
 
@@ -107,19 +88,10 @@ public class PersonalItemAdapter extends BaseQuickAdapter<PersonalInfoMenu, Base
         bottomView.setVisibility(isGroupEnd && position < dataSize - 1 ? View.VISIBLE : View.GONE);
     }
 
-    private boolean isLastInGroup(int position) {
-        PersonalInfoMenu current = getItem(position);
-        if (current == null) return true;
-        if (SID_DARK_MODE.equals(current.sid)) return true;
-        String webLoginText = getContext().getString(R.string.web_login);
-        if (current.text.equals(webLoginText)) return true;
-        int dataSize = getData().size();
-        return position >= dataSize - 1;
-    }
-
     private boolean isFirstInGroup(int position) {
         if (position <= 0) return true;
-        return isLastInGroup(position - 1);
+        PersonalInfoMenu prev = getItem(position - 1);
+        return prev != null && prev.isGroupEnd;
     }
 
     private StateListDrawable createPressedDrawable(float[] corners, boolean isDark) {

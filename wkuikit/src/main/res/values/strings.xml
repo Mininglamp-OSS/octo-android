@@ -89,7 +89,7 @@
     <string name="sex">性别</string>
     <string name="male">男</string>
     <string name="female">女</string>
-    <string name="personal_info">个人信息</string>
+    <string name="personal_info">个人资料</string>
     <string name="qr_desc">扫一扫上面的二维码图案，加我%s</string>
     <string name="clear_msg">清空聊天记录</string>
     <string name="clear_img_cache">清空图片缓存</string>
@@ -164,7 +164,7 @@
     <string name="user_detail_info">资料设置</string>
     <string name="delete_conver_msg_tips">删除后，将清空该聊天的消息记录</string>
     <string name="remove_conver_msg_tips">确定不显示该聊天？</string>
-    <string name="language">Languages/多语言</string>
+    <string name="language">语言</string>
     <string name="disabled">未开启</string>
     <string name="enabled">已开启</string>
     <string name="scan_user_qr">扫描二维码名片</string>
@@ -290,7 +290,7 @@
     <string name="str_connected">已连接</string>
     <string name="search_contacts_placeholder">搜索联系人、AI、群聊</string>
     <string name="tab_text_chat">消息</string>
-    <string name="tab_text_contacts">联系人</string>
+    <string name="tab_text_contacts">上下文</string>
     <string name="tab_text_me">我</string>
     <string name="invitation_sent">邀请已发送</string>
     <string name="find_chat_content">查找聊天记录</string>
@@ -555,5 +555,13 @@
     <string name="bot_cmd_reject_request">拒绝好友申请</string>
     <string name="bot_cmd_cancel">取消当前操作</string>
     <string name="bot_cmd_help">显示帮助</string>
+    <string name="contacts_title">通讯录</string>
+    <string name="appearance">外观</string>
+    <string name="appearance_system">跟随系统</string>
+    <string name="appearance_light">浅色模式</string>
+    <string name="appearance_dark">深色模式</string>
+    <string name="copied">已复制</string>
+    <string name="storage_space">存储空间</string>
+    <string name="privacy">隐私</string>
 </resources>
 

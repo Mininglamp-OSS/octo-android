@@ -19,292 +19,274 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/homeColor"
-                android:orientation="vertical">
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="12dp"
+                android:paddingBottom="30dp">
 
+                <!-- Group 1: 实名认证 -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:background="@color/white"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@drawable/bg_me_card"
                     android:orientation="vertical">
 
-                    <!--  (#227) · OCTO 实名认证入口。
-                         未认证：「去认证」→ Custom Tabs 直跳 Aegis 账户页
-                           ( · Aegis OIDC v3 Phase 2b，不再走 verify-token)。
-                         已认证：「已认证 · YYYY-MM」灰色文字，不可点。 -->
                     <LinearLayout
                         android:id="@+id/realnameLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/realname_verification" />
+                            android:text="@string/realname_verification"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/realnameStatusTv"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginEnd="10dp"
-                            android:gravity="end"
+                            android:layout_marginEnd="6dp"
                             android:textColor="@color/color999"
                             android:textSize="14sp" />
 
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/realnameArrowIv"
-                            style="@style/arrow_right_iv" />
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
+                </LinearLayout>
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
-
-                    <LinearLayout
-                        android:id="@+id/darkLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/dark_night" />
-
-                        <TextView
-                            android:id="@+id/darkStatusTv"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginEnd="10dp"
-                            android:layout_weight="1"
-                            android:gravity="end"
-                            android:text="@string/disabled"
-                            android:textColor="@color/color999" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
+                <!-- Group 2: 语言 / 存储空间 / 隐私 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_me_card"
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:id="@+id/languageLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/language" />
-
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/fontSizeLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/font_size" />
-
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/chatBgLayout"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical" />
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
-
-
-                    <LinearLayout
-                        android:id="@+id/msgBackupLayout"
-                        style="@style/layoutBg"
-                        android:visibility="gone">
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/backup_message" />
-
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/msgRecoveryLayout"
-                        style="@style/layoutBg"
-                        android:visibility="gone">
+                            android:text="@string/language"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/recovery_message" />
+                            android:id="@+id/languageValueTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="6dp"
+                            android:textColor="@color/color999"
+                            android:textSize="14sp" />
 
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
 
                     <View
                         android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor"
-                        android:visibility="gone" />
-
-                    <LinearLayout
-                        android:id="@+id/clearChatMsgLayout"
-                        style="@style/layoutBg"
-                        android:visibility="gone">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/clear_msg" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
+                        android:layout_height="0.5dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="#E5E5E5" />
 
                     <LinearLayout
                         android:id="@+id/clearImgCacheLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="@string/clear_img_cache" />
+                            android:text="@string/storage_space"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/imageCacheTv"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="center_vertical"
-                            android:layout_marginEnd="10dp"
-                            android:layout_weight="1"
-                            android:gravity="end"
-                            android:textColor="@color/color999" />
+                            android:layout_marginEnd="6dp"
+                            android:textColor="@color/color999"
+                            android:textSize="14sp" />
 
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
 
                     <View
                         android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:visibility="gone"
-                        android:background="@color/homeColor" />
-
-
-                    <LinearLayout
-                        android:id="@+id/moduleLayout"
-                        style="@style/layoutBg"
-                        android:visibility="gone">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/choose_module" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
+                        android:layout_height="0.5dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="#E5E5E5" />
 
                     <LinearLayout
                         android:id="@+id/thirdShareLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/third_party_sharing_list" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/errorLogLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/error_data" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-
-                    </LinearLayout>
-
-                    <View
                         android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
-
-                    <LinearLayout
-                        android:id="@+id/destroyAccountLayout"
-                        style="@style/layoutBg">
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/destroy_account" />
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/privacy"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
 
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
+                </LinearLayout>
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
+                <!-- Group 3: 关于 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_me_card"
+                    android:orientation="vertical">
 
                     <LinearLayout
                         android:id="@+id/aboutLayout"
-                        style="@style/layoutBg">
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
 
                         <TextView
-                            style="@style/leftTextView"
-                            android:text="@string/about" />
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/about"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/aboutVersionTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="6dp"
+                            android:textColor="@color/color999"
+                            android:textSize="14sp" />
 
                         <androidx.appcompat.widget.AppCompatImageView
                             android:id="@+id/newVersionIv"
                             android:layout_width="30dp"
                             android:layout_height="20dp"
-                            android:layout_gravity="center_vertical"
+                            android:layout_marginEnd="6dp"
                             android:src="@mipmap/icon_new_version"
                             android:visibility="invisible" />
 
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
                     </LinearLayout>
+                </LinearLayout>
 
-                    <View
+                <!-- Group 4: 注销账号 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_me_card"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/destroyAccountLayout"
                         android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:background="@color/homeColor" />
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/destroy_account"
+                            android:textColor="@color/colorDark"
+                            android:textSize="16sp" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="7dp"
+                            android:layout_height="12dp"
+                            android:src="@drawable/ic_arrow_right" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Group 5: 退出登录 (red outlined button) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="16dp"
+                    android:orientation="vertical">
 
                     <TextView
                         android:id="@+id/loginOutTv"
-                        style="@style/layoutBg"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
+                        android:background="@drawable/bg_logout_btn"
                         android:gravity="center"
                         android:text="@string/login_out"
-                        android:textColor="@color/red"
-                        android:textSize="@dimen/font_size_16" />
+                        android:textColor="#F65E58"
+                        android:textSize="16sp" />
                 </LinearLayout>
 
-                <Space
+                <!-- Hidden layouts for compatibility -->
+                <LinearLayout
+                    android:id="@+id/chatBgLayout"
                     android:layout_width="match_parent"
-                    android:layout_height="30dp" />
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </com.scwang.smart.refresh.layout.SmartRefreshLayout>

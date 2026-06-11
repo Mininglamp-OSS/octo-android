@@ -30,11 +30,8 @@ import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.ChatBgItemMenu;
 import com.chat.base.entity.UserInfoEntity;
 import com.chat.base.realname.AegisVerifyUrlResolver;
-import com.chat.base.ui.Theme;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.AppExecutors;
 import com.chat.base.utils.DataCleanManager;
@@ -45,9 +42,6 @@ import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.databinding.ActSettingLayoutBinding;
-import com.chat.uikit.message.BackupRestoreMessageActivity;
-import com.xinbida.wukongim.WKIM;
-import com.xinbida.wukongim.entity.WKChannelType;
 
 /**
  * 2020-03-22 21:11
@@ -80,7 +74,7 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     @Override
     protected void setTitle(TextView titleTv) {
-        titleTv.setText(R.string.setting);
+        titleTv.setText(R.string.currency);
     }
 
     @Override
@@ -94,7 +88,36 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
     protected void initView() {
         getCacheSize();
         renderRealnameStatus();
-        EndpointManager.getInstance().invoke("set_chat_bg_view", new ChatBgItemMenu(this, wkVBinding.chatBgLayout, "", WKChannelType.PERSONAL));
+        updateLanguageDisplay();
+        // 显示版本号
+        String versionName = WKDeviceUtils.getInstance().getVersionName(this);
+        int versionCode = 0;
+        try {
+            versionCode = (int) getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+        } catch (Exception ignored) {}
+        wkVBinding.aboutVersionTv.setText("v" + versionName + " (" + versionCode + ")");
+    }
+
+    private void updateLanguageDisplay() {
+        int langType = com.chat.base.utils.language.WKMultiLanguageUtil.getInstance().getLanguageType();
+        String langName;
+        switch (langType) {
+            case com.chat.base.utils.language.WKLanguageType.LANGUAGE_EN:
+                langName = "English";
+                break;
+            case com.chat.base.utils.language.WKLanguageType.LANGUAGE_CHINESE_SIMPLIFIED:
+                langName = "简体中文";
+                break;
+            case com.chat.base.utils.language.WKLanguageType.LANGUAGE_CHINESE_TRADITIONAL:
+                langName = "繁體中文";
+                break;
+            default:
+                // 跟随系统时显示当前实际语言
+                String sysLang = getResources().getConfiguration().locale.getLanguage();
+                langName = "zh".equals(sysLang) ? "简体中文" : "English";
+                break;
+        }
+        wkVBinding.languageValueTv.setText(langName);
     }
 
     @Override
@@ -184,20 +207,12 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
 
     @Override
     protected void initListener() {
-        String wk_theme_pref = Theme.getTheme();
-        if (wk_theme_pref.equals(Theme.DARK_MODE)) {
-            wkVBinding.darkStatusTv.setText(R.string.enabled);
-        } else {
-            wkVBinding.darkStatusTv.setText(R.string.disabled);
-        }
         wkVBinding.loginOutTv.setOnClickListener(v -> WKDialogUtils.getInstance().showDialog(this, getString(R.string.login_out), getString(R.string.login_out_dialog), true, "", getString(R.string.login_out), 0, 0, index -> {
             if (index == 1) {
-                // 与 Web/iOS 一致：直接执行本地退出，不调用 user/quit
                 WKUIKitApplication.getInstance().exitLogin(0);
             }
         }));
         SingleClickUtil.onSingleClick(wkVBinding.languageLayout, view1 -> startActivity(new Intent(this, WKLanguageActivity.class)));
-        SingleClickUtil.onSingleClick(wkVBinding.darkLayout, view1 -> startActivity(new Intent(this, WKThemeSettingActivity.class)));
         wkVBinding.clearImgCacheLayout.setOnClickListener(v -> showDialog(getString(R.string.clear_img_cache_tips), index -> {
             if (index == 1) {
                 DataCleanManager.clearAllCache(SettingActivity.this);
@@ -205,16 +220,8 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
                 wkVBinding.imageCacheTv.setText(str);
             }
         }));
-        wkVBinding.clearChatMsgLayout.setOnClickListener(v -> showDialog(getString(R.string.clear_all_msg_tips), index -> {
-            if (index == 1) {
-                WKIM.getInstance().getConversationManager().clearAll();
-                WKIM.getInstance().getMsgManager().clearAll();
-            }
-        }));
-        SingleClickUtil.onSingleClick(wkVBinding.moduleLayout, view1 -> startActivity(new Intent(this, AppModulesActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.destroyAccountLayout, view1 -> startActivity(new Intent(this, DestroyAccountActivity.class)));
         SingleClickUtil.onSingleClick(wkVBinding.aboutLayout, view1 -> startActivity(new Intent(this, WKAboutActivity.class)));
-        SingleClickUtil.onSingleClick(wkVBinding.fontSizeLayout, view1 -> startActivity(new Intent(this, WKSetFontSizeActivity.class)));
         WKCommonModel.getInstance().getAppNewVersion(false, version -> {
             String v = WKDeviceUtils.getInstance().getVersionName(this);
             if (version != null && !TextUtils.isEmpty(version.url) && WKDeviceUtils.getInstance().isNewerVersion(version.version, v)) {
@@ -223,24 +230,11 @@ public class SettingActivity extends WKBaseActivity<ActSettingLayoutBinding> {
                 wkVBinding.newVersionIv.setVisibility(View.GONE);
             }
         });
-
-        SingleClickUtil.onSingleClick(wkVBinding.msgBackupLayout, view1 -> {
-            Intent intent = new Intent(this, BackupRestoreMessageActivity.class);
-            intent.putExtra("handle_type", 1);
-            startActivity(intent);
-        });
-        SingleClickUtil.onSingleClick(wkVBinding.msgRecoveryLayout, view1 -> {
-            Intent intent = new Intent(this, BackupRestoreMessageActivity.class);
-            intent.putExtra("handle_type", 2);
-            startActivity(intent);
-        });
         SingleClickUtil.onSingleClick(wkVBinding.thirdShareLayout, view1 -> {
             Intent intent = new Intent(this, WKWebViewActivity.class);
             intent.putExtra("url", WKApiConfig.baseWebUrl + "sdkinfo.html");
             startActivity(intent);
         });
-        SingleClickUtil.onSingleClick(wkVBinding.errorLogLayout, view1 -> startActivity(new Intent(this, ErrorLogsActivity.class)));
-
     }
 
 

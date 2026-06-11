@@ -194,16 +194,14 @@ public class Theme {
     }
 
     public static int getSwitchViewTrackColor() {
-        String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
-        if (wk_theme_pref.equals(DARK_MODE)) {
+        if (isDark()) {
             return 0xFF585858;
         } else
             return Theme.colorCCC;
     }
 
     public static int getSwitchViewThumbColor() {
-        String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
-        if (wk_theme_pref.equals(DARK_MODE)) {
+        if (isDark()) {
             return 0xFF212223;
         } else
             return 0xFFFFFFFF;

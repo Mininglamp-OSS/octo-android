@@ -67,7 +67,7 @@
                         android:layout_height="0.5dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="#E5E5E5" />
+                        android:background="@color/dividerColor" />
 
                     <!-- 姓名 -->
                     <LinearLayout
@@ -133,7 +133,7 @@
                         android:layout_height="0.5dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="#E5E5E5" />
+                        android:background="@color/dividerColor" />
 
                     <!-- App号 -->
                     <LinearLayout
@@ -176,7 +176,7 @@
                         android:layout_height="0.5dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="#E5E5E5" />
+                        android:background="@color/dividerColor" />
 
                     <!-- 我的二维码 -->
                     <LinearLayout

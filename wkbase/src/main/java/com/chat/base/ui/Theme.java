@@ -211,7 +211,17 @@ public class Theme {
 
     public static boolean isDark() {
         String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
-        return wk_theme_pref.equals(DARK_MODE);
+        if (wk_theme_pref.equals(DARK_MODE)) return true;
+        if (wk_theme_pref.equals(DEFAULT_MODE)) {
+            try {
+                Context ctx = com.chat.base.WKBaseApplication.getInstance().getContext();
+                if (ctx != null) {
+                    int mode = ctx.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+                    return mode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+                }
+            } catch (Exception ignored) {}
+        }
+        return false;
     }
 
     public static RoundTextView getChannelCategoryTV(Context context, String text, int bgColor, int textColor, int borderColor) {

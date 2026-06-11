@@ -1523,6 +1523,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (channel == null) return;
             if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
                 showChannelName(channel);
+                if (channelType == WKChannelType.PERSONAL) {
+                    for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                        if (channel.channelID.equals(chatAdapter.getData().get(i).wkMsg.fromUID)) {
+                            chatAdapter.getData().get(i).wkMsg.setFrom(channel);
+                        }
+                    }
+                }
                 if (channelType == WKChannelType.COMMUNITY_TOPIC) {
                     wkVBinding.topLayout.avatarView.defaultAvatarTv.setVisibility(View.GONE);
                     wkVBinding.topLayout.avatarView.imageView.setVisibility(View.VISIBLE);

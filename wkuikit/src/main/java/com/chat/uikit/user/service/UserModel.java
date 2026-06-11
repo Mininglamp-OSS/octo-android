@@ -409,11 +409,13 @@ public class UserModel extends WKBaseModel {
                 }
                 if (result.robot == 1 && !TextUtils.isEmpty(result.bot_creator_uid)) {
                     WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
-                    if (ch != null) {
-                        if (ch.remoteExtraMap == null) ch.remoteExtraMap = new java.util.HashMap<>();
-                        ch.remoteExtraMap.put("bot_creator_uid", result.bot_creator_uid);
-                        WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
+                    if (ch == null) {
+                        ch = new WKChannel(uid, WKChannelType.PERSONAL);
+                        ch.channelName = result.name;
                     }
+                    if (ch.remoteExtraMap == null) ch.remoteExtraMap = new java.util.HashMap<>();
+                    ch.remoteExtraMap.put("bot_creator_uid", result.bot_creator_uid);
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
                 }
                 if (iUserInfo != null) {
                     iUserInfo.onResult(HttpResponseCode.success, "", result);

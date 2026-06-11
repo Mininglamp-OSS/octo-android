@@ -123,10 +123,7 @@ class MainActivity : AppCompatActivity() {
                 NormalClickableContent(NormalClickableContent.NormalClickableTypes.Other, ""),
                 object : NormalClickableSpan.IClick {
                     override fun onClick(view: View) {
-                        startActivity(
-                            Intent(Intent.ACTION_VIEW,
-                                Uri.parse(WKApiConfig.termsUrl))
-                        )
+                        openUrl(WKApiConfig.termsUrl)
                     }
                 }), userAgreementIndex, userAgreementIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )
@@ -137,10 +134,7 @@ class MainActivity : AppCompatActivity() {
                 NormalClickableContent(NormalClickableContent.NormalClickableTypes.Other, ""),
                 object : NormalClickableSpan.IClick {
                     override fun onClick(view: View) {
-                        startActivity(
-                            Intent(Intent.ACTION_VIEW,
-                                Uri.parse(WKApiConfig.privacyUrl))
-                        )
+                        openUrl(WKApiConfig.privacyUrl)
                     }
                 }), privacyPolicyIndex, privacyPolicyIndex + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
         )
@@ -166,6 +160,14 @@ class MainActivity : AppCompatActivity() {
             } else {
                 finish()
             }
+        }
+    }
+
+    private fun openUrl(url: String) {
+        if (url.isEmpty()) return
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
         }
     }
 }

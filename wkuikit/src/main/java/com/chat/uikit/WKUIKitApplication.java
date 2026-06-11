@@ -135,6 +135,7 @@ import com.chat.uikit.message.ProhibitWordModel;
 import com.chat.uikit.search.AddFriendsActivity;
 import com.chat.uikit.setting.MsgNoticesSettingActivity;
 import com.chat.uikit.setting.SettingActivity;
+import com.chat.uikit.setting.WKThemeSettingActivity;
 import com.chat.uikit.user.UserDetailActivity;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -394,17 +395,53 @@ public class WKUIKitApplication {
         });
 
         //添加个人中心
-        EndpointManager.getInstance().setMethod("personal_center_currency", EndpointCategory.personalCenter, 2, object -> new PersonalInfoMenu(R.mipmap.icon_setting, mContext.get().getString(R.string.currency), () -> {
-            Intent intent = new Intent(mContext.get(), SettingActivity.class);
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-            mContext.get().startActivity(intent);
-        }));
-        EndpointManager.getInstance().setMethod("personal_center_new_msg_notice", EndpointCategory.personalCenter, 3, object -> new PersonalInfoMenu(R.mipmap.icon_notice, mContext.get().getString(R.string.new_msg_notice), () -> {
+        // 通讯录 (独占一组，排最前)
+        EndpointManager.getInstance().setMethod("personal_center_contacts", EndpointCategory.personalCenter, 19000, object -> {
+            PersonalInfoMenu menu = new PersonalInfoMenu(0, mContext.get().getString(R.string.contacts_title), () -> {
+                Intent intent = new Intent(mContext.get(), com.chat.uikit.contacts.ContactsActivity.class);
+                intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                mContext.get().startActivity(intent);
+            });
+            menu.isGroupEnd = true;
+            return menu;
+        });
+        // 网页端 (独占一组，无箭头)
+        EndpointManager.getInstance().setMethod("personal_center_web_login", EndpointCategory.personalCenter, 18000, object -> {
+            PersonalInfoMenu menu = new PersonalInfoMenu(R.mipmap.icon_web_login, mContext.get().getString(R.string.web_login), () -> EndpointManager.getInstance().invoke("show_web_login_desc", mContext.get()));
+            menu.showArrow = false;
+            menu.detail = mContext.get().getString(R.string.str_connected);
+            menu.isGroupEnd = true;
+            return menu;
+        });
+        // 外观
+        EndpointManager.getInstance().setMethod("personal_center_appearance", EndpointCategory.personalCenter, 9000, object -> {
+            PersonalInfoMenu menu = new PersonalInfoMenu(0, mContext.get().getString(R.string.appearance), () -> {
+                Intent intent = new Intent(mContext.get(), WKThemeSettingActivity.class);
+                intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                mContext.get().startActivity(intent);
+            });
+            String theme = com.chat.base.ui.Theme.getTheme();
+            if (theme.equals(com.chat.base.ui.Theme.DARK_MODE)) {
+                menu.detail = mContext.get().getString(R.string.appearance_dark);
+            } else if (theme.equals(com.chat.base.ui.Theme.LIGHT_MODE)) {
+                menu.detail = mContext.get().getString(R.string.appearance_light);
+            } else {
+                menu.detail = mContext.get().getString(R.string.appearance_system);
+            }
+            return menu;
+        });
+        // 新消息通知
+        EndpointManager.getInstance().setMethod("personal_center_new_msg_notice", EndpointCategory.personalCenter, 8000, object -> new PersonalInfoMenu(R.mipmap.icon_notice, mContext.get().getString(R.string.new_msg_notice), () -> {
             Intent intent = new Intent(mContext.get(), MsgNoticesSettingActivity.class);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
             mContext.get().startActivity(intent);
         }));
-        EndpointManager.getInstance().setMethod("personal_center_web_login", EndpointCategory.personalCenter, 1000, object -> new PersonalInfoMenu(R.mipmap.icon_web_login, mContext.get().getString(R.string.web_login), () -> EndpointManager.getInstance().invoke("show_web_login_desc", mContext.get())));
+        // 通用
+        EndpointManager.getInstance().setMethod("personal_center_currency", EndpointCategory.personalCenter, 6000, object -> new PersonalInfoMenu(R.mipmap.icon_setting, mContext.get().getString(R.string.currency), () -> {
+            Intent intent = new Intent(mContext.get(), SettingActivity.class);
+            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+            mContext.get().startActivity(intent);
+        }));
 
         //添加通讯录
         EndpointManager.getInstance().setMethod(EndpointCategory.mailList + "_friends", EndpointCategory.mailList, 100,

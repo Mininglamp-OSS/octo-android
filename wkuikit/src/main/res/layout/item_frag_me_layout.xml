@@ -5,14 +5,14 @@
     android:id="@+id/itemRootLayout"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="15dp"
-    android:layout_marginEnd="15dp"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
     android:orientation="vertical">
 
     <LinearLayout
         android:id="@+id/contentRow"
         android:layout_width="match_parent"
-        android:layout_height="50dp"
+        android:layout_height="52dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
@@ -46,20 +46,13 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
-        <com.chat.base.ui.components.SwitchView
-            android:id="@+id/darkModeSwitch"
-            android:layout_width="50dp"
-            android:layout_height="30dp"
-            android:layout_gravity="center_vertical"
-            android:visibility="gone" />
-
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/arrowIv"
             android:layout_width="7dp"
             android:layout_height="12dp"
             android:layout_gravity="center_vertical"
             android:layout_marginStart="6dp"
-            android:src="@mipmap/ic_arrow_right" />
+            android:src="@drawable/ic_arrow_right" />
     </LinearLayout>
 
     <View
@@ -68,7 +61,7 @@
         android:layout_height="0.5dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
-        android:background="#E5E5E5" />
+        android:background="@color/dividerColor" />
 
     <View
         android:id="@+id/bottomView"

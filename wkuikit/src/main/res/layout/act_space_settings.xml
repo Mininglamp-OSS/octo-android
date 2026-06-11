@@ -83,7 +83,7 @@
                     android:layout_width="16dp"
                     android:layout_height="16dp"
                     android:layout_marginStart="4dp"
-                    android:src="@mipmap/ic_ab_back"
+                    android:src="@drawable/ic_nav_back"
                     android:rotation="180"
                     android:tint="@color/color999" />
             </LinearLayout>

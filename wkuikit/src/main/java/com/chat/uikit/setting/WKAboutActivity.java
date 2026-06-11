@@ -59,12 +59,10 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
             showWebView("https://beian.miit.gov.cn/#/home");
         });
         SingleClickUtil.onSingleClick(wkVBinding.privacyPolicyLayout, view1 -> {
-            // 隐私政策
-            showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html");
+            showWebView(WKApiConfig.privacyUrl);
         });
         SingleClickUtil.onSingleClick(wkVBinding.userAgreementLayout, view1 -> {
-            // 用户协议
-            showWebView(WKApiConfig.baseWebUrl + "user_agreement.html");
+            showWebView(WKApiConfig.termsUrl);
         });
         SingleClickUtil.onSingleClick(wkVBinding.checkNewVersionLayout, view1 -> checkNewVersion(true));
         SingleClickUtil.onSingleClick(wkVBinding.exportDiagLogLayout, view1 -> DiagnosticLogFile.share(this));

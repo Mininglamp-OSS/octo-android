@@ -30,7 +30,7 @@
             android:layout_marginEnd="10dp"
             android:tint="@color/colorDark"
             android:layout_marginBottom="5dp"
-            android:src="@mipmap/ic_ab_back" />
+            android:src="@drawable/ic_nav_back" />
 
 
         <FrameLayout

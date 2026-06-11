@@ -70,25 +70,12 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
                 break;
             }
         }
-        // 将网页端移到最前面，对齐 iOS 分组顺序
-        for (int i = 0; i < endpoints.size(); i++) {
-            if (endpoints.get(i).text.equals(getString(R.string.web_login))) {
-                PersonalInfoMenu webItem = endpoints.remove(i);
-                endpoints.add(0, webItem);
-                break;
-            }
-        }
-        // 深色模式开关插入第一行
-        PersonalInfoMenu darkModeItem = new PersonalInfoMenu(
-                PersonalItemAdapter.SID_DARK_MODE, 0,
-                getString(R.string.dark_night), null);
-        endpoints.add(0, darkModeItem);
         adapter.setList(endpoints);
     }
 
     @Override
     protected void initPresenter() {
-        wkVBinding.avatarView.setSize(55);
+        wkVBinding.avatarView.setSize(48);
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
@@ -103,6 +90,15 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
             }
         }));
         SingleClickUtil.onSingleClick(wkVBinding.cardLayout, view -> gotoMyInfo());
+        wkVBinding.copyShortNoIv.setOnClickListener(v -> {
+            com.chat.base.entity.UserInfoEntity me = WKConfig.getInstance().getUserInfo();
+            if (!TextUtils.isEmpty(me.short_no)) {
+                android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                        requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("short_no", me.short_no));
+                com.chat.base.utils.WKToastUtils.getInstance().showToast(getString(R.string.copied));
+            }
+        });
         // 隐藏入口：长按头像 3 秒修改 API 地址
         longPressRunnable = () -> {
             if (getActivity() == null) return;
@@ -162,6 +158,7 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
         String shortNo = me.short_no;
         if (!TextUtils.isEmpty(shortNo)) {
             wkVBinding.shortNoTv.setVisibility(android.view.View.VISIBLE);
+            wkVBinding.copyShortNoIv.setVisibility(android.view.View.VISIBLE);
             wkVBinding.shortNoTv.setText(getString(R.string.short_no_format, getString(R.string.app_name), shortNo));
         }
 
@@ -174,7 +171,6 @@ public class MyFragment extends WKBaseFragment<FragMyLayoutBinding> {
             buildCode = "";
         }
         wkVBinding.statusTv.setText(getString(R.string.online_status_text) + " · Android v" + versionName + "(" + buildCode + ")");
-        wkVBinding.versionTv.setText(getString(R.string.app_name) + " · v" + versionName + " (" + buildCode + ")");
 
         if (null != adapter) {
             try {

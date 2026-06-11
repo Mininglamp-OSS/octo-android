@@ -9,119 +9,199 @@
 
     <include layout="@layout/wk_title_bar_layout" />
 
-    <ImageView
-        android:id="@+id/aboutIconIv"
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:layout_gravity="center"
-        android:layout_marginTop="50dp"
-        android:src="@mipmap/ic_launcher"
-        android:background="@drawable/bg_about_icon"
-        android:clipToOutline="true"
-        android:contentDescription="@string/app_name" />
-
-    <TextView
-        android:id="@+id/appNameTv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="30dp"
-        android:text="@string/app_name"
-        android:textColor="@color/colorDark"
-        android:textSize="@dimen/font_size_22"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/versionTv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="10dp"
-        android:text="@string/app_name"
-        android:textColor="@color/colorDark"
-        android:textSize="@dimen/font_size_18" />
-
-    <LinearLayout
-        android:id="@+id/userAgreementLayout"
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="30dp"
-        android:background="@color/layoutColor"
-        android:orientation="vertical">
-
-        <LinearLayout style="@style/layoutBg">
-
-            <TextView
-                style="@style/leftTextView"
-                android:text="@string/kit_user_agreement" />
-
-            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/privacyPolicyLayout"
-            style="@style/layoutBg">
-
-            <TextView
-                style="@style/leftTextView"
-                android:text="@string/kit_privacy_policy" />
-
-            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="15dp"
-            android:background="@color/homeColor" />
-
-        <LinearLayout
-            android:id="@+id/checkNewVersionLayout"
-            style="@style/layoutBg">
-
-            <TextView
-                style="@style/leftTextView"
-                android:text="@string/check_new_version" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/newVersionIv"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:layout_gravity="center_vertical"
-                android:src="@mipmap/icon_new_version"
-                android:visibility="invisible" />
-
-            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-        </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="15dp"
-            android:background="@color/homeColor" />
-
-        <LinearLayout
-            android:id="@+id/exportDiagLogLayout"
-            style="@style/layoutBg">
-
-            <TextView
-                style="@style/leftTextView"
-                android:text="@string/export_diag_log" />
-
-            <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <View
-        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- App Icon + Name + Version -->
+            <ImageView
+                android:id="@+id/aboutIconIv"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="40dp"
+                android:background="@drawable/bg_about_icon"
+                android:clipToOutline="true"
+                android:contentDescription="@string/app_name"
+                android:src="@mipmap/ic_launcher" />
+
+            <TextView
+                android:id="@+id/appNameTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:text="@string/app_name"
+                android:textColor="@color/colorDark"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/versionTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/color999"
+                android:textSize="14sp" />
+
+            <!-- Group 1: 用户协议 / 隐私政策 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginTop="30dp"
+                android:background="@drawable/bg_me_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/userAgreementLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/kit_user_agreement"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="7dp"
+                        android:layout_height="12dp"
+                        android:src="@drawable/ic_arrow_right" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0.5dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@color/dividerColor" />
+
+                <LinearLayout
+                    android:id="@+id/privacyPolicyLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/kit_privacy_policy"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="7dp"
+                        android:layout_height="12dp"
+                        android:src="@drawable/ic_arrow_right" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Group 2: 检查新版本 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_me_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/checkNewVersionLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/check_new_version"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:id="@+id/newVersionIv"
+                        android:layout_width="30dp"
+                        android:layout_height="20dp"
+                        android:layout_marginEnd="6dp"
+                        android:src="@mipmap/icon_new_version"
+                        android:visibility="invisible" />
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="7dp"
+                        android:layout_height="12dp"
+                        android:src="@drawable/ic_arrow_right" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Group 3: 导出诊断日志 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_me_card"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/exportDiagLogLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/export_diag_log"
+                        android:textColor="@color/colorDark"
+                        android:textSize="16sp" />
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="7dp"
+                        android:layout_height="12dp"
+                        android:src="@drawable/ic_arrow_right" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
     <TextView
         android:id="@+id/icpTV"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center|bottom"
-        android:layout_marginBottom="50dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="30dp"
         android:gravity="center"
+        android:textColor="@color/color999"
+        android:textSize="12sp"
         android:visibility="gone" />
 
 </LinearLayout>

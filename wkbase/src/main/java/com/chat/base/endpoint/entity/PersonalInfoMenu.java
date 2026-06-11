@@ -23,6 +23,9 @@ package com.chat.base.endpoint.entity;
 public class PersonalInfoMenu extends BaseEndpoint {
     public IPersonalInfoMenuClick iPersonalInfoMenuClick;
     public boolean isNewVersionIv = false;
+    public boolean showArrow = true;
+    public String detail;
+    public boolean isGroupEnd = false;
 
     public PersonalInfoMenu(String sid, int imgResourceID, String text, IPersonalInfoMenuClick iPersonalInfoMenuClick) {
         this.imgResourceID = imgResourceID;

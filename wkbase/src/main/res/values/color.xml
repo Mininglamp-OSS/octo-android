@@ -107,4 +107,5 @@
         <item>#2887C4</item>
         <item>#52A98B</item>
     </array>
+    <color name="dividerColor">#E5E5E5</color>
 </resources>

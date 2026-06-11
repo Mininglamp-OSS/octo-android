@@ -41,7 +41,7 @@
         android:layout_marginStart="15dp"
         android:layout_marginTop="30dp"
         android:background="@drawable/shape_corner_rectangle"
-        android:src="@mipmap/ic_ab_back" />
+        android:src="@drawable/ic_nav_back" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/rightIV"

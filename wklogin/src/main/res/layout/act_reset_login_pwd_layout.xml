@@ -19,7 +19,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="30dp"
         android:layout_marginTop="40dp"
-        android:src="@mipmap/ic_ab_back" />
+        android:src="@drawable/ic_nav_back" />
 
     <RelativeLayout
         android:layout_width="match_parent"

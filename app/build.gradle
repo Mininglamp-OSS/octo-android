@@ -52,6 +52,9 @@ android {
 //            abiFilters 'armeabi', 'armeabi-v7a', 'arm64-v8a', 'x86'
         }
         compileSdkPreview = "UpsideDownCake"
+
+        buildConfigField "String", "TERMS_URL", "\"${localProperties.getProperty('TERMS_URL', '')}\""
+        buildConfigField "String", "PRIVACY_URL", "\"${localProperties.getProperty('PRIVACY_URL', '')}\""
     }
 
     flavorDimensions "env"

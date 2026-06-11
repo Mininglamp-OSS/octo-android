@@ -70,6 +70,7 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
         wkVBinding.refreshLayout.setEnableOverScrollDrag(true);
         wkVBinding.refreshLayout.setEnableLoadMore(false);
         wkVBinding.refreshLayout.setEnableRefresh(false);
+        wkVBinding.avatarView.setSize(32);
         UserInfoEntity userInfoEntity = WKConfig.getInstance().getUserInfo();
         WKAPPConfig appConfig = WKConfig.getInstance().getAppConfig();
         if (userInfoEntity.short_status == 1 || appConfig.shortno_edit_off == 1) {

@@ -128,12 +128,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         chatIV = new AppCompatImageView(this);
         contactsIV = new AppCompatImageView(this);
         meIV = new AppCompatImageView(this);
-        // : drawable 只在 ViewHolder 初始化时 setImageResource 一次；
-        // 后续切 tab 只通过 tintTab 改 ColorFilter，避免
-        // 每次 setImageResource 都重新解析 drawable + invalidate。
-        chatIV.setImageResource(R.drawable.ic_tab_message);
-        contactsIV.setImageResource(R.drawable.ic_tab_contacts);
-        meIV.setImageResource(R.drawable.ic_tab_me);
+        chatIV.setImageResource(R.drawable.ic_tab_message_normal);
+        contactsIV.setImageResource(R.drawable.ic_tab_context_normal);
+        meIV.setImageResource(R.drawable.ic_tab_me_normal);
         chatTV = new TextView(this);
         contactsTV = new TextView(this);
         meTV = new TextView(this);
@@ -419,30 +416,30 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         );
     }
 
-    private void tintTab(AppCompatImageView iv, boolean selected) {
-        int color = ContextCompat.getColor(this, selected ? R.color.tab_text_selected : R.color.tab_text_normal);
-        iv.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
-    }
-
     private void playAnimation(int index) {
-        // : i_chat 顶部双击滚动逻辑依赖 lastClickChatTabTime 在首次进入聊天 tab 时置 0；
-        // 即便 tab 未变也需要走这一行，因此放在 early-return 之前。
         if (index == 0) {
             lastClickChatTabTime = 0;
         }
 
-        // : tab 未变时跳过重复 tint / setImageResource / setTextColor。
-        // ViewPager2 onPageSelected 与 BottomNavigationView OnItemSelectedListener
-        // 有时会对同一次切换双重回调，这里保证每次真正的切换只着色一次。
         if (currentTabIndex == index) {
             return;
         }
         currentTabIndex = index;
 
-        // drawable 已在 initView 阶段 setImageResource 一次，这里只更新 ColorFilter。
-        tintTab(chatIV, index == 0);
-        tintTab(contactsIV, index == 1);
-        tintTab(meIV, index == 2);
+        chatIV.setImageResource(index == 0 ? R.drawable.ic_tab_message_selected : R.drawable.ic_tab_message_normal);
+        contactsIV.setImageResource(index == 1 ? R.drawable.ic_tab_context_selected : R.drawable.ic_tab_context_normal);
+        meIV.setImageResource(index == 2 ? R.drawable.ic_tab_me_selected : R.drawable.ic_tab_me_normal);
+
+        boolean isDark = Theme.isDark();
+        if (isDark) {
+            chatIV.setColorFilter(index == 0 ? 0xFFFFFFFF : 0x8CFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN);
+            contactsIV.setColorFilter(index == 1 ? 0xFFFFFFFF : 0x8CFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN);
+            meIV.setColorFilter(index == 2 ? 0xFFFFFFFF : 0x8CFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN);
+        } else {
+            chatIV.clearColorFilter();
+            contactsIV.clearColorFilter();
+            meIV.clearColorFilter();
+        }
 
         if (isShowTabText) {
             int selectedColor = ContextCompat.getColor(this, R.color.tab_text_selected);

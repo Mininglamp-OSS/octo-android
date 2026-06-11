@@ -27,6 +27,8 @@ import com.xinbida.wukongim.entity.WKChannelType;
 public class WKApiConfig {
     public static String baseUrl = "";
     public static String baseWebUrl = "";
+    public static String termsUrl = "";
+    public static String privacyUrl = "";
 
     public static void initBaseURL(String apiURL) {
         baseUrl = apiURL + "/v1/";

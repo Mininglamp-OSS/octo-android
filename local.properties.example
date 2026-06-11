@@ -38,3 +38,7 @@ PROD_WEB_BASE_URL=https://your-prod-server.com/web/
 # OPPO Maven repository credentials (optional, uses local AAR fallback)
 # OPPO_MAVEN_USER=
 # OPPO_MAVEN_PASSWORD=
+
+# Legal URLs (optional, falls back to baseWebUrl + user_agreement.html / privacy_policy.html)
+# TERMS_URL=https://your-domain.com/terms.pdf
+# PRIVACY_URL=https://your-domain.com/privacy.pdf

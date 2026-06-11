@@ -408,7 +408,7 @@ public class UserModel extends WKBaseModel {
                     WKChannelMember member = buildMemberFromUserInfo(result.group_member);
                     WKIM.getInstance().getChannelMembersManager().save(member);
                 }
-                if (result.robot == 1) {
+                if (result.robot == 1 && !TextUtils.isEmpty(result.bot_creator_uid)) {
                     WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
                     if (ch == null) {
                         ch = new WKChannel(uid, WKChannelType.PERSONAL);
@@ -416,8 +416,7 @@ public class UserModel extends WKBaseModel {
                         ch.robot = 1;
                     }
                     if (ch.remoteExtraMap == null) ch.remoteExtraMap = new java.util.HashMap<>();
-                    String creatorUid = TextUtils.isEmpty(result.bot_creator_uid) ? "" : result.bot_creator_uid;
-                    ch.remoteExtraMap.put(WKChannelExtras.botCreatorUid, creatorUid);
+                    ch.remoteExtraMap.put(WKChannelExtras.botCreatorUid, result.bot_creator_uid);
                     WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
                 }
                 if (iUserInfo != null) {

@@ -1523,6 +1523,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (channel == null) return;
             if (channel.channelID.equals(channelId) && channel.channelType == channelType) { //同一个会话
                 showChannelName(channel);
+                if (channelType == WKChannelType.PERSONAL) {
+                    for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                        WKMsg msg = chatAdapter.getData().get(i).wkMsg;
+                        if (msg != null && channel.channelID.equals(msg.fromUID)) {
+                            msg.setFrom(channel);
+                        }
+                    }
+                }
                 if (channelType == WKChannelType.COMMUNITY_TOPIC) {
                     wkVBinding.topLayout.avatarView.defaultAvatarTv.setVisibility(View.GONE);
                     wkVBinding.topLayout.avatarView.imageView.setVisibility(View.VISIBLE);
@@ -1784,6 +1792,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         MsgModel.getInstance().syncExtraMsg(channelId, channelType);
         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
         getChannelState();
+        prefetchBotCreatorUids();
 
         // : do NOT clear the adapter here. The previous setList(empty)
         // caused a visible white-screen flash while getData() is waiting on
@@ -1848,6 +1857,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         hideOrShowRightView(member == null || member.isDeleted != 1);
                         WKRobotModel.getInstance().syncRobotData(getChatChannelInfo());
                         chatPanelManager.showOrHideForbiddenView();
+                        prefetchBotCreatorUids();
                     }
                 });
             } else {
@@ -2774,6 +2784,30 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (channelType == WKChannelType.GROUP) {
             WKChannelMember member = WKIM.getInstance().getChannelMembersManager().getMember(channelId, channelType, loginUID);
             hideOrShowRightView(member == null || member.isDeleted == 0);
+        }
+    }
+
+    private final java.util.Set<String> botCreatorFetchedUids = new java.util.HashSet<>();
+
+    private void prefetchBotCreatorUids() {
+        if (channelType == WKChannelType.PERSONAL) {
+            WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
+            if (channel != null && channel.robot == 1
+                    && (channel.remoteExtraMap == null || !channel.remoteExtraMap.containsKey(WKChannelExtras.botCreatorUid))
+                    && botCreatorFetchedUids.add(channelId)) {
+                UserModel.getInstance().getUserInfo(channelId, "", null);
+            }
+        } else if (channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) {
+            List<WKChannelMember> robotMembers = WKIM.getInstance().getChannelMembersManager().getRobotMembers(channelId, channelType);
+            if (WKReader.isNotEmpty(robotMembers)) {
+                for (WKChannelMember bot : robotMembers) {
+                    WKChannel botChannel = WKIM.getInstance().getChannelManager().getChannel(bot.memberUID, WKChannelType.PERSONAL);
+                    if ((botChannel == null || botChannel.remoteExtraMap == null || !botChannel.remoteExtraMap.containsKey(WKChannelExtras.botCreatorUid))
+                            && botCreatorFetchedUids.add(bot.memberUID)) {
+                        UserModel.getInstance().getUserInfo(bot.memberUID, "", null);
+                    }
+                }
+            }
         }
     }
 

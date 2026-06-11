@@ -211,6 +211,21 @@ public class WKCommonModel extends WKBaseModel {
             }
             wkChannel.remoteExtraMap.put("space_id", entity.space_id);
         }
+        // bot_creator_uid 同样是顶层字段（仅 robot channel 下发），存入 remoteExtraMap
+        if (!TextUtils.isEmpty(entity.bot_creator_uid)) {
+            if (wkChannel.remoteExtraMap == null) {
+                wkChannel.remoteExtraMap = new HashMap<>();
+            }
+            wkChannel.remoteExtraMap.put(WKChannelExtras.botCreatorUid, entity.bot_creator_uid);
+        } else if (localChannel != null && localChannel.remoteExtraMap != null) {
+            Object creatorUid = localChannel.remoteExtraMap.get(WKChannelExtras.botCreatorUid);
+            if (creatorUid instanceof String && ((String) creatorUid).length() > 0) {
+                if (wkChannel.remoteExtraMap == null) {
+                    wkChannel.remoteExtraMap = new HashMap<>();
+                }
+                wkChannel.remoteExtraMap.put(WKChannelExtras.botCreatorUid, creatorUid);
+            }
+        }
         hashMap.put(WKChannelExtras.beDeleted, entity.be_deleted);
         hashMap.put(WKChannelExtras.beBlacklist, entity.be_blacklist);
         hashMap.put(WKChannelExtras.notice, entity.notice);

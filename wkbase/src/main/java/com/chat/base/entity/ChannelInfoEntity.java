@@ -45,6 +45,7 @@ public class ChannelInfoEntity {
     public int flame_second;
     public int device_flag;
     public String space_id;
+    public String bot_creator_uid;
     public Map extra;
 
 

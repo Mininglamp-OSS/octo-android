@@ -101,6 +101,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
+import com.xinbida.wukongim.entity.WKChannelExtras
 import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.message.type.WKSendMsgResult
@@ -1231,13 +1232,25 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 isManager = true
             }
         }
+
+        val isBotOwner = isBotOwner(mMsg)
+
         var revokeSecond = WKConfig.getInstance().appConfig.revoke_second
-        if (revokeSecond == -1 && (mMsg.fromUID == WKConfig.getInstance().uid || isManager)) {
+        if (revokeSecond == -1 && (mMsg.fromUID == WKConfig.getInstance().uid || isManager || isBotOwner)) {
             return true
         }
         if (revokeSecond == 0) revokeSecond = 120
         return (WKTimeUtils.getInstance().currentSeconds - mMsg.timestamp < revokeSecond
-                && mMsg.fromUID == WKConfig.getInstance().uid && mMsg.status == WKSendMsgResult.send_success) || (isManager && mMsg.status == WKSendMsgResult.send_success)
+                && (mMsg.fromUID == WKConfig.getInstance().uid || isBotOwner) && mMsg.status == WKSendMsgResult.send_success) || (isManager && mMsg.status == WKSendMsgResult.send_success)
+    }
+
+    private fun isBotOwner(mMsg: WKMsg): Boolean {
+        val loginUid = WKConfig.getInstance().uid
+        if (mMsg.fromUID == loginUid) return false
+        val fromChannel = mMsg.from ?: return false
+        if (fromChannel.robot != 1) return false
+        val creatorUid = fromChannel.remoteExtraMap?.get(WKChannelExtras.botCreatorUid) as? String
+        return !TextUtils.isEmpty(creatorUid) && creatorUid == loginUid
     }
 
     open fun getMsgConfig(msgType: Int): MsgConfig {

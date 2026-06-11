@@ -50,6 +50,7 @@ import com.chat.uikit.enity.VerifyTokenResponse;
 import com.chat.uikit.group.service.entity.GroupMember;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
+import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelMemberExtras;
 import com.xinbida.wukongim.entity.WKChannelType;
@@ -406,6 +407,17 @@ public class UserModel extends WKBaseModel {
                 if (result.group_member != null) {
                     WKChannelMember member = buildMemberFromUserInfo(result.group_member);
                     WKIM.getInstance().getChannelMembersManager().save(member);
+                }
+                if (result.robot == 1 && !TextUtils.isEmpty(result.bot_creator_uid)) {
+                    WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(uid, WKChannelType.PERSONAL);
+                    if (ch == null) {
+                        ch = new WKChannel(uid, WKChannelType.PERSONAL);
+                        ch.channelName = result.name;
+                        ch.robot = 1;
+                    }
+                    if (ch.remoteExtraMap == null) ch.remoteExtraMap = new java.util.HashMap<>();
+                    ch.remoteExtraMap.put(WKChannelExtras.botCreatorUid, result.bot_creator_uid);
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(ch);
                 }
                 if (iUserInfo != null) {
                     iUserInfo.onResult(HttpResponseCode.success, "", result);

@@ -70,7 +70,9 @@ class WKVideoProvider : WKChatBaseProvider() {
             return
         }
         val coverImageView = parentView.findViewById<FilterImageView>(R.id.coverImageView)
+            ?: return
         val blurView = parentView.findViewById<ShapeBlurView>(R.id.blurView)
+            ?: return
         setCorners(from, uiChatMsgItemEntity, coverImageView, blurView)
 
         val progressTv = parentView.findViewById<TextView>(R.id.progressTv)
@@ -231,6 +233,7 @@ class WKVideoProvider : WKChatBaseProvider() {
     ) {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val coverImageView = parentView.findViewById<FilterImageView>(R.id.coverImageView)
+            ?: return
         addLongClick(coverImageView, uiChatMsgItemEntity)
     }
 

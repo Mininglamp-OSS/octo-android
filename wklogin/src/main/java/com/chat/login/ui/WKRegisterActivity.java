@@ -99,8 +99,8 @@ public class WKRegisterActivity extends WKBaseActivity<ActRegisterLayoutBinding>
         wkVBinding.authCheckBox.setEnabled(true);
         wkVBinding.authCheckBox.setChecked(false, true);
 
-        wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
-        wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
+        wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.privacyUrl));
+        wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.termsUrl));
         wkVBinding.registerAppTv.setText(String.format(getString(R.string.register_app), getString(R.string.app_name)));
 
         // 正式环境：显示验证码输入区域，账号输入提示改为邮箱

@@ -156,8 +156,8 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             }
             return true;
         });
-        wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "privacy_policy.html"));
-        wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.baseWebUrl + "user_agreement.html"));
+        wkVBinding.privacyPolicyTv.setOnClickListener(v -> showWebView(WKApiConfig.privacyUrl));
+        wkVBinding.userAgreementTv.setOnClickListener(v -> showWebView(WKApiConfig.termsUrl));
 
         wkVBinding.nameEt.addTextChangedListener(new TextWatcher() {
             @Override

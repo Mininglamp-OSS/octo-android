@@ -59,9 +59,19 @@ object SummaryApiClient {
     private fun resolveBaseUrl(): String {
         val base = WKApiConfig.baseUrl.orEmpty()
         if (base.isEmpty()) return ""
-        // 把末尾 "/v1/" 替换为 "/summary/api/v1/"
-        val trimmed = base.removeSuffix("/v1/").removeSuffix("/v1")
-        return if (trimmed.endsWith("/")) "${trimmed}summary/api/v1/" else "$trimmed/summary/api/v1/"
+        // 1:1 对齐 iOS [OctoSummaryAPI init]: 取 scheme://host[:port] 部分,
+        // 丢掉 baseUrl 上的任何 path (例如 /api/v1/), 再拼 /summary/api/v1/。
+        // 项目实际 baseUrl 是 "https://im.deepminer.com.cn/api/v1/" 这种带 /api 中段
+        // 的形式, 直接 removeSuffix("/v1/") 会保留 /api 段, 拼出 /api/summary/api/v1/
+        // 命中后端 404。这里用 java.net.URL 解析 host, 与 iOS NSURL 取法一致。
+        val origin = runCatching {
+            val u = java.net.URL(base)
+            val portPart = if (u.port > 0) ":${u.port}" else ""
+            "${u.protocol}://${u.host}$portPart"
+        }.getOrNull() ?: base.removeSuffix("/v1/").removeSuffix("/v1")
+        val resolved = "$origin/summary/api/v1/"
+        android.util.Log.i("SummaryApi", "baseUrl resolved: source=$base -> resolved=$resolved")
+        return resolved
     }
 
     private fun build(baseUrl: String): SummaryApiService {

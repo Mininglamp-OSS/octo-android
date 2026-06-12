@@ -130,4 +130,10 @@
     <string name="summary_related_chat_title">关联聊天记录</string>
     <string name="summary_related_open_original">原消息 →</string>
 
+    <!-- ===== 搜索 + 空态 ===== -->
+    <string name="summary_search_placeholder">搜索总结</string>
+    <string name="summary_search_no_match">没有找到相关总结</string>
+    <string name="summary_empty_title">还没有总结记录</string>
+    <string name="summary_empty_subtitle">让 AI 帮你梳理群聊和工作中的关键信息</string>
+
 </resources>

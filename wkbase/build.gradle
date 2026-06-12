@@ -121,6 +121,12 @@ dependencies {
     api "androidx.emoji2:emoji2-views:1.6.0"
     api 'org.jsoup:jsoup:1.21.2'
     api 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
+    api 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    // ViewModel + viewModelScope (Summary 模块 ViewModel 需要); 版本固定到本地已缓存,
+    // 离线网络也能编。后续若整个项目升级 lifecycle 这里跟随。
+    api 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
+    api 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
+    api 'androidx.activity:activity-ktx:1.8.0'
     api 'com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer:v10.0.0'
     api 'com.airbnb.android:lottie:6.6.2'
     api project(path: ':wkim')

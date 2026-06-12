@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 智能总结列表页. 1:1 对齐 iOS OctoSummaryListVC (含 1fd3ecc 提交):
+   - title bar (沿用 wk_title_bar_layout, 标题"智能总结" + 返回)
+   - inline 搜索条 (灰底胶囊 + 放大镜 + 输入框, 36dp 高, 16dp margin)
+   - filter tabs (44dp 高)
+   - SmartRefreshLayout > RecyclerView (下拉刷新 + 上拉加载 + OverScroll bounce)
+   - 真空态 view (居中, 仅 items.empty + keyword.empty 时显示)
+   - 搜索无结果 emptyLabel (居中靠上, items.empty + keyword.notEmpty 时显示)
+   - FAB (黑色胶囊, 底部 16dp 上方 ~16dp 视觉间距)
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/summary_list_bg"
+        android:orientation="vertical">
+
+        <include layout="@layout/wk_title_bar_layout" />
+
+        <!-- inline 搜索条 -->
+        <FrameLayout
+            android:id="@+id/searchPill"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_summary_search_pill">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="start|center_vertical"
+                android:layout_marginStart="12dp"
+                android:src="@drawable/ic_summary_magnifier"
+                app:tint="@color/summary_text_secondary"
+                android:contentDescription="@null" />
+
+            <EditText
+                android:id="@+id/searchEt"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="@null"
+                android:hint="@string/summary_search_placeholder"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="@color/summary_text_primary"
+                android:textColorHint="@color/summary_text_placeholder"
+                android:textSize="14sp"
+                android:textCursorDrawable="@null"
+                tools:ignore="Autofill,LabelFor,TextContrastCheck" />
+        </FrameLayout>
+
+        <com.chat.uikit.summary.list.SummaryFilterTabsView
+            android:id="@+id/filterTabs"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="4dp" />
+
+        <com.scwang.smart.refresh.layout.SmartRefreshLayout
+            android:id="@+id/refreshLayout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <com.scwang.smart.refresh.header.ClassicsHeader
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/listRv"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="100dp" />
+
+                <!-- 真空态 (无 keyword 也无数据) -->
+                <include
+                    android:id="@+id/emptyState"
+                    layout="@layout/view_summary_empty_state"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="-40dp"
+                    android:visibility="gone" />
+
+                <!-- 搜索无结果一行文案 -->
+                <TextView
+                    android:id="@+id/emptySearchTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal|top"
+                    android:layout_marginTop="100dp"
+                    android:gravity="center"
+                    android:text="@string/summary_search_no_match"
+                    android:textColor="@color/summary_text_secondary"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+    </LinearLayout>
+
+    <!-- FAB: 黑色胶囊 + sparkle + 发起总结 -->
+    <LinearLayout
+        android:id="@+id/createFab"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/bg_summary_fab"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="6dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_summary_spark"
+            app:tint="@color/summary_fab_fg"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="@string/summary_create_fab"
+            android:textColor="@color/summary_fab_fg"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>

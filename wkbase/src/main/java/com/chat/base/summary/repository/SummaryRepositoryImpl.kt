@@ -60,23 +60,31 @@ class SummaryRepositoryImpl(
         block: suspend (SummaryApiService) -> Response<JSONObject>,
         extract: (Any?) -> T,
     ): Result<T> = runCatching {
-        val resp = block(api)
+        val resp = try {
+            block(api)
+        } catch (e: Exception) {
+            android.util.Log.e("SummaryApi", "call threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            throw e
+        }
         val httpStatus = resp.code()
         val body: JSONObject? = resp.body()
+        val urlForLog = resp.raw().request.url.toString()
         if (!resp.isSuccessful) {
-            // 用 errorBody 解 envelope 拿后端 message;失败再回退到默认 message
+            // 注意: parseErrorMessage 会调 errorBody().string() 把 buffer 消费掉,
+            // 一次性拿到 message, 同时打日志, 不要在这里再读 errorBody。
             val msg = parseErrorMessage(resp)
+            android.util.Log.w("SummaryApi", "<- $httpStatus $urlForLog message=$msg")
             throw SummaryException(httpStatus = httpStatus, apiCode = -1, message = msg)
         }
+        android.util.Log.i("SummaryApi", "<- $httpStatus $urlForLog body=${body?.toJSONString()?.take(400)}")
         if (body == null) {
             throw SummaryException(httpStatus = httpStatus, apiCode = -1, message = null)
         }
-        val code = body.intOf("code")
-        if (code != 0) {
-            val msg = body.getString("message") ?: body.getString("msg")
-            throw SummaryException(httpStatus = httpStatus, apiCode = code, message = msg)
-        }
-        extract(body["data"])
+        // 与 iOS [OctoSummaryAPI request:] 一致: HTTP 2xx 即视为成功, code 字段不强校验,
+        // 直接取 data 字段透出 (data 为空则把整个 body 作为 data 传下去)。
+        val rawData = body["data"]
+        val data = rawData ?: body
+        extract(data)
     }
 
     private fun parseErrorMessage(resp: Response<JSONObject>): String? {
@@ -116,11 +124,13 @@ class SummaryRepositoryImpl(
         page: Int,
         pageSize: Int,
         filter: SummaryFilter,
+        keyword: String?,
     ): Result<SummaryListPage> {
         val params = buildMap {
             put("page", page.toString())
             put("page_size", pageSize.toString())
             filter.toApiStatus()?.let { put("status", it.toString()) }
+            keyword?.takeIf { it.isNotEmpty() }?.let { put("keyword", it) }
         }
         return callEnvelope({ it.listSummaries(params) }) { data ->
             val obj = asObject(data)

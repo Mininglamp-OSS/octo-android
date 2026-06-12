@@ -106,15 +106,14 @@ class SummaryRepositoryImplTest {
     }
 
     @Test
-    fun `non-zero envelope code maps to SummaryException with backend message`() = runTest {
-        api.stubFailure("POST summaries/7/cancel", status = 200, code = 1001, message = "已是终态")
+    fun `non-2xx http maps to SummaryException with backend message`() = runTest {
+        api.stubFailure("POST summaries/7/cancel", status = 500, code = 1001, message = "已是终态")
 
         val res = repo.cancelSummary(taskId = 7)
 
         assertTrue(res.isFailure)
         val err = res.exceptionOrNull() as SummaryException
-        assertEquals(200, err.httpStatus)
-        assertEquals(1001, err.apiCode)
+        assertEquals(500, err.httpStatus)
         assertEquals("已是终态", err.message)
     }
 

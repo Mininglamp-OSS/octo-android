@@ -44,6 +44,7 @@ interface SummaryRepository {
         page: Int,
         pageSize: Int = 20,
         filter: SummaryFilter = SummaryFilter.All,
+        keyword: String? = null,
     ): Result<SummaryListPage>
 
     suspend fun getSummaryDetail(taskId: Long): Result<SummaryDetail>

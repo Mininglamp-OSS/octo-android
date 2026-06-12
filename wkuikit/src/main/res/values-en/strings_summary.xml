@@ -118,4 +118,10 @@
     <string name="summary_related_chat_title">Related chat</string>
     <string name="summary_related_open_original">Open original →</string>
 
+    <!-- Search + empty state -->
+    <string name="summary_search_placeholder">Search summaries</string>
+    <string name="summary_search_no_match">No matching summaries</string>
+    <string name="summary_empty_title">No summaries yet</string>
+    <string name="summary_empty_subtitle">Let AI distill key points from your chats and work</string>
+
 </resources>

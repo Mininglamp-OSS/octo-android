@@ -234,10 +234,13 @@ private fun parseParticipants(json: JSONObject?): List<Participant> =
     json.arrOf("participants").mapModel(Participant::fromJson)
 
 /**
- * 注意 summaryPreview: 列表 API 不带正文,详情页拉到后客户端回填。
- * 用 var + Kotlin's data class copy 不便,这里破例用普通 class + var preview。
+ * 注意 summaryPreview / status / completedAt 几个 var: 列表 API 不带正文,详情页 hydrate
+ * 后客户端回填; 5s poller 轮询变更也会改 status; 乐观更新 (取消/重新生成) 也修。
+ *
+ * 保持 data class 是为了 ViewModel 用 .copy() 触发 RecyclerView DiffUtil 的内容差异
+ * 检测 — 直接 mutate 相同对象引用会让 DiffUtil 误判 "未变化"。
  */
-class SummaryListItem(
+data class SummaryListItem(
     val taskId: Long,
     val taskNo: String?,
     val title: String,

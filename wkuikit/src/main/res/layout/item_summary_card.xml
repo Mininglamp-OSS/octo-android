@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 智能总结列表 cell. 1:1 对齐 iOS OctoSummaryCardCell:
+   外层 16dp 左右 padding (sidePadding) + 8dp 卡间隔 (between cards) -> bottomMargin
+   卡内: 12dp top, 12dp inner left/right, 10dp bottom
+   行: initiator(18dp) + rowGap 4 + title(22dp) + rowGap 4 + body? + bodyToFooterGap 4 + footer(20dp)
+ 几何与 iOS OctoSummaryCardCell 的常量一一对应,改任何尺寸要同步两端。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginBottom="8dp">
+
+    <FrameLayout
+        android:id="@+id/cardRoot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_summary_card_normal"
+        android:padding="12dp">
+
+        <!-- 顶部行: initiator + (status badge 或 processing spinner) -->
+        <TextView
+            android:id="@+id/initiatorTv"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:layout_gravity="start|top"
+            android:layout_marginEnd="8dp"
+            android:textColor="@color/summary_text_secondary"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            tools:text="你发起 · 来自 项目群" />
+
+        <FrameLayout
+            android:id="@+id/statusBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="20dp"
+            android:layout_gravity="end|top"
+            android:background="@drawable/bg_summary_status_badge"
+            android:paddingHorizontal="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/statusBadgeTv"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="等待中" />
+        </FrameLayout>
+
+        <ProgressBar
+            android:id="@+id/processingSpinner"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="end|top"
+            android:indeterminateTint="@color/summary_purple"
+            android:visibility="gone" />
+
+        <!-- 标题 + body + footer 整体走垂直 LinearLayout, 起始 marginTop = 18 (initiator 高) + 4 (rowGap) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="22dp">
+
+            <TextView
+                android:id="@+id/titleTv"
+                android:layout_width="match_parent"
+                android:layout_height="22dp"
+                android:textColor="@color/summary_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end"
+                tools:text="2026 年 6 月项目周报" />
+
+            <TextView
+                android:id="@+id/bodyTv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/summary_text_muted"
+                android:textSize="12sp"
+                android:lineSpacingExtra="3dp"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:visibility="gone"
+                tools:text="本周完成 X 任务,推进 Y 项目..." />
+
+            <FrameLayout
+                android:id="@+id/footerRow"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:layout_marginTop="4dp">
+
+                <TextView
+                    android:id="@+id/footerTimeTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="start|center_vertical"
+                    android:textColor="@color/summary_text_secondary"
+                    android:textSize="12sp"
+                    tools:text="3 小时前" />
+
+                <ImageView
+                    android:id="@+id/moreBtn"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_summary_more_horiz"
+                    android:contentDescription="@string/summary_list_view_detail"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    app:tint="@color/summary_text_secondary"
+                    xmlns:app="http://schemas.android.com/apk/res-auto" />
+            </FrameLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

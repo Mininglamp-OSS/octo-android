@@ -124,5 +124,10 @@
             android:name="com.chat.uikit.chat.provider.FileSaveActivity"
             android:theme="@style/Theme.AppCompat.Translucent" />
 
+        <!-- 智能总结列表页 (上下文 Tab 主入口) -->
+        <activity
+            android:name="com.chat.uikit.summary.list.SmartSummaryListActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
     </application>
 </manifest>

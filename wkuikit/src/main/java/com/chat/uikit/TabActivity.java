@@ -42,12 +42,10 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.chat.base.adapter.WKFragmentStateAdapter;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.common.WKCommonModel;
-import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.MailListDot;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.CounterView;
@@ -55,15 +53,14 @@ import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
-import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
 import com.chat.base.utils.language.WKMultiLanguageUtil;
 import com.chat.base.utils.rxpermissions.RxPermissions;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.databinding.ActTabMainBinding;
 import com.chat.uikit.fragment.ChatFragment;
-import com.chat.uikit.fragment.ContactsFragment;
 import com.chat.uikit.fragment.MyFragment;
+import com.chat.uikit.summary.context.ContextFragment;
 import com.chat.uikit.user.service.UserModel;
 
 import androidx.appcompat.widget.AppCompatImageView;
@@ -150,7 +147,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
         meTV.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         List<Fragment> fragments = new ArrayList<>(3);
         fragments.add(new ChatFragment());
-        fragments.add(new ContactsFragment());
+        // tab[1] 由"联系人"换成"上下文" — 联系人入口已并入"我的"页, 上下文 tab 承载
+        // 智能总结及未来基于 IM 上下文的 AI 能力 (1:1 对齐 iOS OctoContextEntryVC)。
+        fragments.add(new ContextFragment());
         fragments.add(new MyFragment());
 
         wkVBinding.vp.setSaveEnabled(false);
@@ -347,20 +346,10 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     }
 
     private void getAllRedDot() {
-        boolean showDot = false;
-        int totalCount = 0;
-        int newFriendCount = WKSharedPreferencesUtil.getInstance().getInt(WKConfig.getInstance().getUid() + "_new_friend_count");
-        totalCount = totalCount + newFriendCount;
-        List<MailListDot> list = EndpointManager.getInstance().invokes(EndpointCategory.wkGetMailListRedDot, null);
-        if (WKReader.isNotEmpty(list)) {
-            for (MailListDot MailListDot : list) {
-                if (MailListDot != null) {
-                    totalCount += MailListDot.numCount;
-                    if (!showDot) showDot = MailListDot.showDot;
-                }
-            }
-        }
-        setContactCount(totalCount, showDot);
+        // tab[1] 已从"联系人"换为"上下文",好友邀请 / mailList 红点不再绑这个 tab。
+        // counter / spot view 保留是为不动 tab framelayout 几何, 但永远 0。
+        // 联系人红点的归位 (我的 tab 内显示) 不在本次 PR 范围。
+        setContactCount(0, false);
     }
 
     /**

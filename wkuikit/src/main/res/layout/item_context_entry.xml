@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 单元 94x100 (logical), 1:1 对齐 iOS OctoContextEntryGridCell:
+   padding-top 17dp -> 42dp 紫色圆角 sparkle 容器
+   gap 8dp
+   10sp 居中文字
+ 容器宽度让 GridLayoutManager(4) 自然均分,内部内容统一 94dp 视觉宽度由 SparkleIconView 自身 42dp 决定。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="100dp"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:paddingTop="17dp"
+    android:background="?android:attr/selectableItemBackgroundBorderless"
+    android:clickable="true"
+    android:focusable="true">
+
+    <com.chat.uikit.summary.context.SparkleIconView
+        android:id="@+id/sparkleView"
+        android:layout_width="42dp"
+        android:layout_height="42dp" />
+
+    <TextView
+        android:id="@+id/labelTv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:textSize="10sp"
+        android:textColor="?android:attr/textColorPrimary" />
+</LinearLayout>

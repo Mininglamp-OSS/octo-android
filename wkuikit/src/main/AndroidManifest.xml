@@ -146,5 +146,10 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 参与确认 -->
+        <activity
+            android:name="com.chat.uikit.summary.confirm.SmartSummaryConfirmActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
     </application>
 </manifest>

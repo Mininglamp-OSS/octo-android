@@ -58,6 +58,22 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
 
     private lateinit var markwon: Markwon
 
+    /**
+     * 转发到聊天: 启动 ChooseChatActivity 走 setResult 路径, 对选中的每个 channel 发一条
+     * WKTextContent (markdown 原文). 与项目其它转发入口同套机制, 但不弹"转发到 X 个聊天?"
+     * 二次确认对话框 (走 isChoose=false 路径直接 setResult).
+     */
+    private val forwardLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        @Suppress("DEPRECATION")
+        val channels = data.getParcelableArrayListExtra<com.xinbida.wukongim.entity.WKChannel>("list")
+            ?.toList().orEmpty()
+        forwardToChannels(channels)
+    }
+
     override fun getViewBinding(): ActSmartSummaryDetailBinding =
         ActSmartSummaryDetailBinding.inflate(layoutInflater)
 
@@ -113,10 +129,19 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         wkVBinding.bounceLayout.setEnableOverScrollBounce(true)
 
         wkVBinding.waitingActionBtn.setOnClickListener {
-            SummaryHud.show(this, R.string.summary_action_pending_pr6)
+            val detail = viewModel.state.value.detail ?: return@setOnClickListener
+            startActivity(
+                com.chat.uikit.summary.confirm.SmartSummaryConfirmActivity
+                    .newIntent(this, detail.taskId),
+            )
         }
         wkVBinding.footerForwardBtn.setOnClickListener {
-            SummaryHud.show(this, R.string.summary_action_forward_pending)
+            val content = viewModel.state.value.detail?.result?.content.orEmpty()
+            if (content.isEmpty()) {
+                SummaryHud.show(this, R.string.summary_forward_no_content)
+                return@setOnClickListener
+            }
+            forwardLauncher.launch(android.content.Intent(this, com.chat.uikit.chat.ChooseChatActivity::class.java))
         }
         wkVBinding.footerEditBtn.setOnClickListener {
             val detail = viewModel.state.value.detail ?: return@setOnClickListener
@@ -229,6 +254,27 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         val citations = viewModel.state.value.detail?.result?.citations.orEmpty()
         if (citations.isEmpty() || indices.isEmpty()) return
         SummaryRelatedChatSheet.show(supportFragmentManager, citations, indices)
+    }
+
+    private fun forwardToChannels(channels: List<com.xinbida.wukongim.entity.WKChannel>) {
+        if (channels.isEmpty()) return
+        val content = viewModel.state.value.detail?.result?.content.orEmpty()
+        if (content.isEmpty()) return
+        var ok = 0
+        var fail = 0
+        for (ch in channels) {
+            val tc = com.xinbida.wukongim.msgmodel.WKTextContent(content)
+            val opts = com.xinbida.wukongim.entity.WKSendOptions()
+            opts.setting.receipt = ch.receipt
+            val msg = com.xinbida.wukongim.WKIM.getInstance().msgManager.sendWithOptions(tc, ch, opts)
+            if (msg != null) ok++ else fail++
+        }
+        val text = if (fail == 0) {
+            getString(R.string.summary_forward_succeeded, ok)
+        } else {
+            getString(R.string.summary_forward_partial, ok, fail)
+        }
+        SummaryHud.show(this, text)
     }
 
     private fun confirmDelete() {

@@ -15,6 +15,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.FragmentManager
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.chat.base.summary.model.CitationContextMessage
@@ -22,9 +23,9 @@ import com.chat.base.summary.model.CitationItem
 import com.chat.uikit.R
 import com.chat.uikit.databinding.SheetSummaryRelatedChatBinding
 import com.chat.uikit.databinding.ItemSummaryRelatedChatBinding
-import com.chat.uikit.summary.SummaryHud
 import com.chat.uikit.summary.time.RelativeTime
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import kotlinx.coroutines.launch
 
 /**
  * 关联聊天 sheet, 1:1 对齐 iOS [OctoRelatedChatSheet]:
@@ -62,9 +63,31 @@ class SummaryRelatedChatSheet : BottomSheetDialogFragment() {
         binding.listRv.adapter = RowAdapter(rows) { row -> onJumpOriginal(row) }
     }
 
-    private fun onJumpOriginal(@Suppress("UNUSED_PARAMETER") row: Row) {
-        // PR6 接通真实跳转 (复用 ChatActivity router); 暂提示。
-        SummaryHud.show(requireContext(), R.string.summary_action_pending_pr6)
+    private fun onJumpOriginal(row: Row) {
+        val cid = row.channelId.orEmpty()
+        if (cid.isEmpty()) return
+        val activity = activity as? androidx.activity.ComponentActivity ?: return
+        val ctype = row.channelType.toByte()
+        val mseq = row.messageSeq
+        // ChatActivity 期待 orderSeq, citation 给的是 message_seq, 必须 getMessageOrderSeq
+        // 转换 + DB 查询走 IO 线程, 切回主线程触发跳转 + 关闭 sheet。
+        // 直接构造 Intent 启动, 不走 EndpointSID.chatView → ChatReuseNavigator 的 narrow 路径
+        // (它会加 REORDER_TO_FRONT, 配合 ChatActivity 默认返回行为 goBackToList → TabActivity
+        // (singleTask) 清栈, 用户按返回会落到上下文主页, 不是详情页). 加 from_summary_detail
+        // extra 让 ChatActivity 跳过 goBackToList, 走标准 finish 回详情。
+        activity.lifecycleScope.launch {
+            val orderSeq = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.xinbida.wukongim.WKIM.getInstance().msgManager
+                    .getMessageOrderSeq(mseq.toLong(), cid, ctype)
+            }
+            val intent = android.content.Intent(activity, com.chat.uikit.chat.ChatActivity::class.java)
+            intent.putExtra("channelId", cid)
+            intent.putExtra("channelType", ctype)
+            intent.putExtra("tipsOrderSeq", orderSeq)
+            intent.putExtra("from_summary_detail", true)
+            activity.startActivity(intent)
+            dismissAllowingStateLoss()
+        }
     }
 
     override fun onDestroyView() {

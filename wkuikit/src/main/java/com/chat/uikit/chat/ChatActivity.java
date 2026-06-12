@@ -2914,7 +2914,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     // 子区（COMMUNITY_TOPIC）不走 goBackToList 保活路径：子区是一次性
                     // 浏览，保活会导致折叠屏上反复进出子区时实例堆积，back 时逐个回退
                     // 像死循环。只有群聊/私聊等主会话才适合 reuse 优化。
-                    if (channelType != WKChannelType.COMMUNITY_TOPIC
+                    // from_summary_detail：从智能总结详情页跳过来的"原消息"路径，
+                    // 期望 back 时回详情页，而 goBackToList 会把 TabActivity (singleTask)
+                    // reorder 到顶 → 系统清掉中间 List/Detail，用户落到上下文主页 → 行为错。
+                    boolean fromSummaryDetail = getIntent().getBooleanExtra("from_summary_detail", false);
+                    if (!fromSummaryDetail
+                            && channelType != WKChannelType.COMMUNITY_TOPIC
                             && com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
                         return false;
                     }

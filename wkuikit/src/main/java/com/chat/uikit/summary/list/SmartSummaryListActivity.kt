@@ -60,7 +60,7 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
 
     override fun initView() {
         listAdapter = SummaryListAdapter().apply {
-            onItemClick { /* PR5 详情页 */ openDetailPlaceholder() }
+            onItemClick { item -> openDetail(item) }
             onMoreClick { item, anchor -> showActionMenu(item, anchor) }
         }
         wkVBinding.listRv.apply {
@@ -249,8 +249,11 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
         )
     }
 
-    private fun openDetailPlaceholder() {
-        Toast.makeText(this, "PR5 详情页待实装", Toast.LENGTH_SHORT).show()
+    private fun openDetail(item: SummaryListItem) {
+        startActivity(
+            com.chat.uikit.summary.detail.SmartSummaryDetailActivity
+                .newIntent(this, item.taskId)
+        )
     }
 
     private fun confirmDelete(item: SummaryListItem) {

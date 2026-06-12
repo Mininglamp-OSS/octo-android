@@ -136,4 +136,21 @@
     <string name="summary_empty_title">还没有总结记录</string>
     <string name="summary_empty_subtitle">让 AI 帮你梳理群聊和工作中的关键信息</string>
 
+    <!-- ===== 详情页 (新增, PR1 已有的不重复) ===== -->
+    <string name="summary_detail_nav_title">智能总结</string>
+    <string name="summary_detail_processing_title">AI正在分析聊天记录...</string>
+    <string name="summary_detail_unknown_error">未知错误</string>
+    <string name="summary_detail_cancelled_text">任务已取消</string>
+    <string name="summary_detail_load_failed">加载失败</string>
+    <string name="summary_detail_confirm_delete_title">确认删除</string>
+    <string name="summary_detail_confirm_delete_msg">删除后将无法恢复</string>
+    <string name="summary_chip_thread_prefix"># %1$s</string>
+    <string name="summary_chip_thread_with_parent"># %1$s · %2$s</string>
+    <string name="summary_action_pending_pr5">关联聊天 sheet 在 PR5 实装</string>
+    <string name="summary_action_pending_pr6">参与确认页在 PR6 实装</string>
+    <string name="summary_action_forward_pending">转发到聊天功能稍后接入</string>
+
+    <!-- ===== 编辑页 (新增, PR1 已有的不重复) ===== -->
+    <string name="summary_edit_save">保存</string>
+
 </resources>

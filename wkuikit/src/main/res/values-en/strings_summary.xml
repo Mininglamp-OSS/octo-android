@@ -124,4 +124,21 @@
     <string name="summary_empty_title">No summaries yet</string>
     <string name="summary_empty_subtitle">Let AI distill key points from your chats and work</string>
 
+    <!-- Detail page (new strings, PR1 ones not duplicated) -->
+    <string name="summary_detail_nav_title">Smart Summary</string>
+    <string name="summary_detail_processing_title">AI is analyzing chats...</string>
+    <string name="summary_detail_unknown_error">Unknown error</string>
+    <string name="summary_detail_cancelled_text">Task cancelled</string>
+    <string name="summary_detail_load_failed">Failed to load</string>
+    <string name="summary_detail_confirm_delete_title">Confirm delete</string>
+    <string name="summary_detail_confirm_delete_msg">This cannot be undone</string>
+    <string name="summary_chip_thread_prefix"># %1$s</string>
+    <string name="summary_chip_thread_with_parent"># %1$s · %2$s</string>
+    <string name="summary_action_pending_pr5">Related chat sheet coming in PR5</string>
+    <string name="summary_action_pending_pr6">Confirmation page coming in PR6</string>
+    <string name="summary_action_forward_pending">Forward-to-chat coming soon</string>
+
+    <!-- Edit page (new strings, PR1 ones not duplicated) -->
+    <string name="summary_edit_save">Save</string>
+
 </resources>

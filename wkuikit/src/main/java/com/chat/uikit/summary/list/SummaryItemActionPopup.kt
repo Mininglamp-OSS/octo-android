@@ -40,9 +40,9 @@ import com.chat.uikit.R
  *
  * 删除是危险操作 (红字), 由 destructive 标记控制。
  */
-internal class SummaryItemActionPopup private constructor(
+class SummaryItemActionPopup private constructor(
     private val context: Context,
-    private val item: SummaryListItem,
+    private val status: TaskStatus,
     private val onCancel: () -> Unit,
     private val onRegenerate: () -> Unit,
     private val onRetry: () -> Unit,
@@ -56,7 +56,7 @@ internal class SummaryItemActionPopup private constructor(
 
     init {
         val rows = mutableListOf<TextView>()
-        when (item.status) {
+        when (status) {
             TaskStatus.Processing, TaskStatus.Pending, TaskStatus.WaitingConfirm ->
                 rows += makeRow(R.string.summary_action_cancel_task, false) { onCancel() }
             TaskStatus.Completed ->
@@ -177,9 +177,21 @@ internal class SummaryItemActionPopup private constructor(
             onRetry: () -> Unit,
             onDelete: () -> Unit,
         ) {
+            showWithStatus(anchor, item.status, onCancel, onRegenerate, onRetry, onDelete)
+        }
+
+        /** 详情页 / 列表 cell 共用入口: 直接传 status, 不强依赖 SummaryListItem. */
+        fun showWithStatus(
+            anchor: View,
+            status: TaskStatus,
+            onCancel: () -> Unit,
+            onRegenerate: () -> Unit,
+            onRetry: () -> Unit,
+            onDelete: () -> Unit,
+        ) {
             SummaryItemActionPopup(
                 context = anchor.context,
-                item = item,
+                status = status,
                 onCancel = onCancel,
                 onRegenerate = onRegenerate,
                 onRetry = onRetry,

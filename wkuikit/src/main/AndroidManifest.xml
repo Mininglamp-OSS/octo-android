@@ -129,5 +129,16 @@
             android:name="com.chat.uikit.summary.list.SmartSummaryListActivity"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- 智能总结详情页 -->
+        <activity
+            android:name="com.chat.uikit.summary.detail.SmartSummaryDetailActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 编辑总结正文 -->
+        <activity
+            android:name="com.chat.uikit.summary.detail.SmartSummaryEditActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 </manifest>

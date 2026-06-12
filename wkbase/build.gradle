@@ -149,4 +149,6 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     // : 提供真实 org.json 实现，避免 Android stub 对 host-side JSON 测试返回默认值
     testImplementation 'org.json:json:20231013'
+    // Summary 模块: suspend repository 单元测试需要 runTest / TestDispatcher
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'
 }

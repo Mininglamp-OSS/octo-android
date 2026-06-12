@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主题紫: iOS #7F3BF5 -->
+    <color name="summary_purple">#FF7F3BF5</color>
+    <color name="summary_purple_10">#1A7F3BF5</color>
+    <color name="summary_purple_18">#2E7F3BF5</color>
+    <color name="summary_purple_20">#337F3BF5</color>
+    <color name="summary_purple_32">#527F3BF5</color>
+
+    <!-- 子区色 (teal): iOS #14B8A6 / 文字 #0E9B8C -->
+    <color name="summary_teal">#FF14B8A6</color>
+    <color name="summary_teal_text">#FF0E9B8C</color>
+    <color name="summary_teal_10">#1A14B8A6</color>
+
+    <!-- 状态徽章 -->
+    <color name="summary_orange">#FFFF9F1A</color>
+    <color name="summary_orange_10">#1AFF9F1A</color>
+    <color name="summary_red">#FFFF3B30</color>
+    <color name="summary_red_10">#1AFF3B30</color>
+
+    <!-- 背景 -->
+    <color name="summary_list_bg">#FFF5F6F7</color>
+    <color name="summary_list_bg_dark">#FF1C1C1E</color>
+    <color name="summary_card_bg">#D9FFFFFF</color>
+    <color name="summary_processing_bg">#F2FCF3FF</color>
+    <color name="summary_pill_bg">#FFF5F6F7</color>
+    <color name="summary_pill_bg_dark">#14FFFFFF</color>
+    <color name="summary_chip_border">#14000000</color>
+
+    <!-- 文字 -->
+    <color name="summary_text_primary">#FF1C1C23</color>
+    <color name="summary_text_secondary">#996B6B70</color>
+    <color name="summary_text_muted">#666B6B70</color>
+    <color name="summary_text_placeholder">#4D6B6B70</color>
+
+    <!-- FAB -->
+    <color name="summary_fab_bg">#FF000000</color>
+    <color name="summary_fab_fg">#FFFFFFFF</color>
+
+    <!-- citation 徽章背景 -->
+    <color name="summary_citation_bg">#287F3BF5</color>
+</resources>

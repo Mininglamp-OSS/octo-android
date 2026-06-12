@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 创建总结页. 1:1 对齐 iOS OctoSummaryCreateVC:
+   - title bar (固定 "创建总结") + 标题栏右侧 "开始总结" 按钮
+   - topic 卡: 大字号输入区 + 横向模板 chip 行
+   - source 卡: 选择聊天 (右侧 chevron) + 已选流式 pill
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F6F7"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="32dp">
+
+            <!-- topic 卡: 输入框 + 模板 chip 横滑 -->
+            <FrameLayout
+                android:id="@+id/topicCard"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:background="@drawable/bg_summary_topic_card">
+
+                <EditText
+                    android:id="@+id/topicEt"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginHorizontal="12dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="56dp"
+                    android:background="@null"
+                    android:gravity="top|start"
+                    android:hint="@string/summary_create_topic_placeholder"
+                    android:textColor="#1F1F1F"
+                    android:textColorHint="#4D000000"
+                    android:textCursorDrawable="@null"
+                    android:textSize="18sp"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:importantForAutofill="no"
+                    tools:ignore="Autofill,LabelFor" />
+
+                <HorizontalScrollView
+                    android:id="@+id/templateScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:layout_gravity="bottom"
+                    android:layout_marginBottom="12dp"
+                    android:scrollbars="none"
+                    android:overScrollMode="never">
+
+                    <LinearLayout
+                        android:id="@+id/templateRow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp" />
+                </HorizontalScrollView>
+            </FrameLayout>
+
+            <!-- source 卡: "选择聊天 *" + chevron + 已选 pill -->
+            <FrameLayout
+                android:id="@+id/sourceCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_summary_topic_card"
+                android:minHeight="78dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="12dp"
+                    android:layout_marginEnd="44dp">
+
+                    <TextView
+                        android:id="@+id/sourceFieldLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="22dp"
+                        android:textColor="#1F1F1F"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        tools:text="选择聊天 *" />
+
+                    <TextView
+                        android:id="@+id/sourcePlaceholder"
+                        android:layout_width="match_parent"
+                        android:layout_height="20dp"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/summary_create_chat_placeholder"
+                        android:textColor="#4D000000"
+                        android:textSize="14sp" />
+
+                    <com.chat.uikit.summary.create.SummarySelectedSourcesView
+                        android:id="@+id/selectedSources"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/sourceChevron"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="end|top"
+                    android:layout_marginEnd="4dp"
+                    android:layout_marginTop="4dp"
+                    android:padding="10dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_summary_chevron_right"
+                    app:tint="#4D000000"
+                    android:contentDescription="@null"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    xmlns:app="http://schemas.android.com/apk/res-auto" />
+            </FrameLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

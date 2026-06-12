@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 创建总结右上角"开始总结"按钮: 黑底白字小胶囊。
+ enable=true 时 alpha=1, disabled 时 alpha=0.5 由代码控制。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1F1F1F" />
+    <corners android:radius="16dp" />
+</shape>

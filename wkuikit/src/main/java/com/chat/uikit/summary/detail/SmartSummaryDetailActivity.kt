@@ -225,8 +225,10 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         }
     }
 
-    private fun onCitationTap(@Suppress("UNUSED_PARAMETER") indices: List<Int>) {
-        SummaryHud.show(this, R.string.summary_action_pending_pr5)
+    private fun onCitationTap(indices: List<Int>) {
+        val citations = viewModel.state.value.detail?.result?.citations.orEmpty()
+        if (citations.isEmpty() || indices.isEmpty()) return
+        SummaryRelatedChatSheet.show(supportFragmentManager, citations, indices)
     }
 
     private fun confirmDelete() {

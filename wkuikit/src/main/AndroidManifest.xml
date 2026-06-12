@@ -140,5 +140,11 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- 发起总结 -->
+        <activity
+            android:name="com.chat.uikit.summary.create.SmartSummaryCreateActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 </manifest>

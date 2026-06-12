@@ -51,6 +51,15 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
     /** 标志位: 当前 FAB 是否处于显示态, 避免重复动画。 */
     private var fabVisible: Boolean = true
 
+    /** 创建总结页关闭回调: RESULT_OK 时拉一次列表让新任务出现在顶部. */
+    private val createLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.reload()
+        }
+    }
+
     override fun getViewBinding(): ActSmartSummaryListBinding =
         ActSmartSummaryListBinding.inflate(layoutInflater)
 
@@ -96,8 +105,9 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
         }
 
         wkVBinding.createFab.setOnClickListener {
-            // PR4 真实创建页, 占位先 toast 让闭环可测
-            Toast.makeText(this, R.string.summary_create_fab, Toast.LENGTH_SHORT).show()
+            createLauncher.launch(
+                com.chat.uikit.summary.create.SmartSummaryCreateActivity.newIntent(this),
+            )
         }
 
         poller = SummaryStatusPoller(scope = lifecycleScope)

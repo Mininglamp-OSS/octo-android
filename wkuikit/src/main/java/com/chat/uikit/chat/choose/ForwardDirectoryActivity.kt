@@ -64,6 +64,14 @@ class ForwardDirectoryActivity : WKBaseActivity<ActForwardDirectoryLayoutBinding
     /** 选中态: uniqueKey ("channelId|channelType") → ForwardDirItem,跨 tab 共享。 */
     private val checkedItems = LinkedHashMap<String, ForwardDirItem>()
 
+    /**
+     * 单选模式 (调用方 ChooseChatActivity 透传 "singleSelect" extra). 与主页约束同口径:
+     * 老调用点 (RTC 拉人 / 单聊视频转发) 把 singleSelect=true 传到 ChooseChatActivity,
+     * 走"新建会话"路径若不约束多选会让回传 list 长度越界, 老协议消费方拿到第二个 channel
+     * 直接行为错乱。toggle 时若已选满 1 个就先清空再装新的, 视觉上退化成 radio 行为。
+     */
+    private var singleSelect = false
+
     private lateinit var adapter: ForwardDirAdapter
 
     override fun getViewBinding(): ActForwardDirectoryLayoutBinding =
@@ -88,6 +96,8 @@ class ForwardDirectoryActivity : WKBaseActivity<ActForwardDirectoryLayoutBinding
     }
 
     override fun initView() {
+        singleSelect = intent.getBooleanExtra("singleSelect", false)
+
         adapter = ForwardDirAdapter()
         initAdapter(wkVBinding.recyclerView, adapter)
 
@@ -254,11 +264,23 @@ class ForwardDirectoryActivity : WKBaseActivity<ActForwardDirectoryLayoutBinding
         if (checkedItems.containsKey(item.key)) {
             checkedItems.remove(item.key)
             item.isCheck = false
+            adapter.notifyItemChanged(adapter.data.indexOf(item))
         } else {
+            // 单选: 先清掉所有已选 (可能是当前 tab 也可能跨 tab; 跨 tab 的 item 不在
+            // adapter.data, 但 isCheck 字段直接置 false, 切回那个 tab applyFilter 会同步
+            // 视觉, 见下面 applyFilter 里 `for (item in source) item.isCheck = checkedItems.containsKey(...)`).
+            if (singleSelect && checkedItems.isNotEmpty()) {
+                for ((_, prev) in checkedItems) {
+                    prev.isCheck = false
+                    val idx = adapter.data.indexOf(prev)
+                    if (idx >= 0) adapter.notifyItemChanged(idx)
+                }
+                checkedItems.clear()
+            }
             checkedItems[item.key] = item
             item.isCheck = true
+            adapter.notifyItemChanged(adapter.data.indexOf(item))
         }
-        adapter.notifyItemChanged(adapter.data.indexOf(item))
         updateRightBtn()
     }
 

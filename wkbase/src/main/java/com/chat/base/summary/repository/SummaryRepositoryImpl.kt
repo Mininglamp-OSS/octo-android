@@ -35,6 +35,7 @@ import com.chat.base.summary.model.SummaryListPage
 import com.chat.base.summary.model.TopicTemplate
 import com.chat.base.summary.model.intOf
 import com.chat.base.summary.model.mapModel
+import com.chat.base.utils.WKLogUtils
 import retrofit2.Response
 
 /**
@@ -63,25 +64,40 @@ class SummaryRepositoryImpl(
         val resp = try {
             block(api)
         } catch (e: Exception) {
-            android.util.Log.e("SummaryApi", "call threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            // 仅在 debug 包打日志, 不输出 body 内容; 异常本身会被 runCatching 捕获后包成
+            // Result.failure 抛给上层, 这里只做线索留存。
+            WKLogUtils.e(LOG_TAG, "call threw: ${e.javaClass.simpleName}: ${e.message}", e)
             throw e
         }
         val httpStatus = resp.code()
         val body: JSONObject? = resp.body()
         val urlForLog = resp.raw().request.url.toString()
         if (!resp.isSuccessful) {
-            // 注意: parseErrorMessage 会调 errorBody().string() 把 buffer 消费掉,
+            // parseErrorMessage 会调 errorBody().string() 把 buffer 消费掉,
             // 一次性拿到 message, 同时打日志, 不要在这里再读 errorBody。
             val msg = parseErrorMessage(resp)
-            android.util.Log.w("SummaryApi", "<- $httpStatus $urlForLog message=$msg")
+            WKLogUtils.w(LOG_TAG, "<- $httpStatus $urlForLog message=$msg")
             throw SummaryException(httpStatus = httpStatus, apiCode = -1, message = msg)
         }
-        android.util.Log.i("SummaryApi", "<- $httpStatus $urlForLog body=${body?.toJSONString()?.take(400)}")
         if (body == null) {
+            WKLogUtils.w(LOG_TAG, "<- $httpStatus $urlForLog body=null")
             throw SummaryException(httpStatus = httpStatus, apiCode = -1, message = null)
         }
-        // 与 iOS [OctoSummaryAPI request:] 一致: HTTP 2xx 即视为成功, code 字段不强校验,
-        // 直接取 data 字段透出 (data 为空则把整个 body 作为 data 传下去)。
+        // 校验 envelope.code: HTTP 200 + code != 0 是后端业务失败 (与 [SummaryRepository]
+        // 注释 + [ApiEnvelope] 文档一致 — code == 0 才视为成功)。把 envelope.message
+        // 透出去给 UI 层, 方便用户看到具体错误原因。
+        // body 里没有 "code" 字段时 FastJson getIntValue 返回 0, 视为成功 (兼容裸 data 响应)。
+        val apiCode = body.getIntValue("code")
+        if (apiCode != 0) {
+            val msg = body.getString("message") ?: body.getString("msg")
+            WKLogUtils.w(LOG_TAG, "<- $httpStatus $urlForLog apiCode=$apiCode")
+            throw SummaryException(httpStatus = httpStatus, apiCode = apiCode, message = msg)
+        }
+        // 仅日志 url + status, 永不打 body —— body 含总结正文 / citation /
+        // 参与者上下文等私密 chat-derived 数据, 即使 debug 也不输出避免 logcat 抓取时泄露。
+        WKLogUtils.d(LOG_TAG, "<- $httpStatus $urlForLog ok")
+        // data 字段缺失时把整个 body 作为 data 透下去 (兼容部分 endpoint 直接把字段
+        // 平铺在顶层, 例如 listSummaries 的 items/total)。
         val rawData = body["data"]
         val data = rawData ?: body
         extract(data)
@@ -100,6 +116,10 @@ class SummaryRepositoryImpl(
     private fun asObject(data: Any?): JSONObject? = data as? JSONObject
 
     private fun asArray(data: Any?): JSONArray? = data as? JSONArray
+
+    private companion object {
+        const val LOG_TAG = "SummaryApi"
+    }
 
     // endregion
 

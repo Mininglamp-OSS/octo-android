@@ -117,6 +117,29 @@ class SummaryRepositoryImplTest {
         assertEquals("已是终态", err.message)
     }
 
+    /**
+     * HTTP 200 但 envelope.code != 0: 这是后端业务级失败 (例如 createSummary 返回
+     * `{"code":4001,"message":"模板已下线","data":null}`). 旧实现透传 data → createSummary
+     * 拿到 task_id=0 假装成功; 修复后必须走 SummaryException 路径, apiCode 透传给 UI。
+     */
+    @Test
+    fun `http 200 with non-zero envelope code maps to SummaryException`() = runTest {
+        api.stubFailure(
+            "POST summaries", status = 200, code = 4001, message = "模板已下线",
+        )
+
+        val res = repo.createSummary(
+            topic = "Demo",
+            sources = listOf(SourceItem(SourceType.GroupChat, "g1", "组群")),
+        )
+
+        assertTrue(res.isFailure)
+        val err = res.exceptionOrNull() as SummaryException
+        assertEquals(200, err.httpStatus)
+        assertEquals(4001, err.apiCode)
+        assertEquals("模板已下线", err.message)
+    }
+
     @Test
     fun `editSummary 409 surfaces as conflict exception`() = runTest {
         api.stubFailure("PUT summaries/3/edit", status = 409, code = -1, message = "stale")

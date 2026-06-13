@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import com.chat.base.base.WKBaseActivity
 import com.chat.base.summary.SummaryDeps
+import com.chat.base.summary.repository.SummaryException
 import com.chat.base.summary.repository.SummaryRepository
 import com.chat.base.utils.WKDialogUtils
 import com.chat.uikit.R
@@ -85,8 +86,11 @@ class SmartSummaryEditActivity : WKBaseActivity<ActSmartSummaryEditBinding>() {
         lifecycleScope.launch {
             val res = repository.editSummary(taskId, content, resultId)
             if (res.isFailure) {
-                val msg = res.exceptionOrNull()?.message.orEmpty()
-                val resId = if (msg.contains("409")) {
+                // 用 SummaryException.isConflict (httpStatus == 409) 判定编辑冲突, 不要靠
+                // message.contains("409") — 后端返回的 message 是业务文案 (e.g. "stale"),
+                // 不一定带 "409" 字串, 老逻辑会让冲突走"保存失败"通用文案丢失语义。
+                val ex = res.exceptionOrNull()
+                val resId = if (ex is SummaryException && ex.isConflict) {
                     R.string.summary_edit_conflict
                 } else R.string.summary_edit_save_failed
                 SummaryHud.show(this@SmartSummaryEditActivity, resId)

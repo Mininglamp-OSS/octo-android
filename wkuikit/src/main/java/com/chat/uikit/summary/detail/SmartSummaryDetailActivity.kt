@@ -381,14 +381,19 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
             val len = en - st
 
             // 防御后端 markdown 把整段正文也用 `##` 开头标成 H2 (实际生产数据出现过 179 字符的 H2):
-            // 真实标题通常 < 40 字符, 中长标题极少超过 60。超过阈值视为误识, 直接 removeSpan
-            // 把 HeadingSpan 拆掉让其退化成正文, 避免大字号 + 粗体 + 横线把整段正文吞掉。
+            // 真实标题通常 < 40 字符, CJK + emoji + 项目名拼起来中长标题极少超过 100。
+            // 超过阈值视为误识, 直接 removeSpan 把 HeadingSpan 拆掉让其退化成正文,
+            // 避免大字号 + 粗体 + 横线把整段正文吞掉。
             if (len > HEADING_MAX_LEN) {
                 out.removeSpan(s)
                 continue
             }
 
             val level = readHeadingLevel(s)
+            // 反射拿不到 level (markwon 升级改了字段名) → 跳过本段 patch, 让 HeadingSpan 走 markwon 默认
+            // 字号倍数 (~28/22/17sp), 视觉退化但不全部塌成 H1。错误已在 [headingLevelField] 初始化时
+            // 写一次日志, 不在这里逐 span 重复打。
+            if (level <= 0) continue
             // 字号梯度对齐 iOS OctoSummaryMarkdownRender (base 14):
             //   H1 19 (base+5) / H2 17 (base+3) / H3 16 (base+2) / H4-H6 = base
             // 关键是 H1 与 H2 必须差 ≥2sp 否则视觉上层级混在一起 (用户反馈"不协调")。
@@ -409,18 +414,32 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         return out
     }
 
-    private val headingLevelField by lazy {
+    /**
+     * 反射读 [io.noties.markwon.core.spans.HeadingSpan.level] (package-private final int)。
+     * markwon 4.6.2 (`wkbase/build.gradle` pin) 字段名稳定; 升级到任何 API 不兼容版本会让 getDeclaredField
+     * 抛 NoSuchFieldException, 这里 eager 初始化 + 日志告警, 让回归在第一次跑时就在 logcat 留痕,
+     * 而不是悄悄把所有 H1/H2/H3 渲染成同一个字号。
+     */
+    private val headingLevelField: java.lang.reflect.Field? = run {
         runCatching {
             io.noties.markwon.core.spans.HeadingSpan::class.java
                 .getDeclaredField("level").apply { isAccessible = true }
+        }.onFailure { e ->
+            com.chat.base.utils.WKLogUtils.e(
+                "SmartSummaryDetail",
+                "HeadingSpan.level reflection failed (markwon API change?), heading typography patch disabled: ${e.message}",
+            )
         }.getOrNull()
     }
 
-    /** 看起来超过这个长度的 "heading" 极大概率是后端 markdown 把正文用 `##` 开头错标的, 退回正文渲染. */
-    private val HEADING_MAX_LEN = 60
+    /** 看起来超过这个长度的 "heading" 极大概率是后端 markdown 把正文用 `##` 开头错标的, 退回正文渲染.
+     *  CJK 30 字 ≈ 60 字符, "项目名 + emoji + 中长副标题" 常突破 60; 100 是经验阈值, 实际生产 false-positive
+     *  最大 179 字符仍能被拦, 同时不误伤合法长标题. */
+    private val HEADING_MAX_LEN = 100
 
+    /** @return 1..6 表示 H1..H6, 0 表示反射失败 (调用方应跳过 size patch 让 markwon 走默认). */
     private fun readHeadingLevel(span: io.noties.markwon.core.spans.HeadingSpan): Int =
-        headingLevelField?.runCatching { getInt(span) }?.getOrNull() ?: 1
+        headingLevelField?.runCatching { getInt(span) }?.getOrNull() ?: 0
 
     private fun wideLp() = LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -577,21 +596,29 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         if (channels.isEmpty()) return
         val content = viewModel.state.value.detail?.result?.content.orEmpty()
         if (content.isEmpty()) return
-        var ok = 0
-        var fail = 0
-        for (ch in channels) {
-            val tc = com.xinbida.wukongim.msgmodel.WKTextContent(content)
-            val opts = com.xinbida.wukongim.entity.WKSendOptions()
-            opts.setting.receipt = ch.receipt
-            val msg = com.xinbida.wukongim.WKIM.getInstance().msgManager.sendWithOptions(tc, ch, opts)
-            if (msg != null) ok++ else fail++
+        // sendWithOptions 内部会落库 + 入队发送, 一次调用可能阻塞几十 ms; N 个 channel 串行
+        // 在主线程跑会拖 ANR 风险 (尤其网络慢时). 挪到 IO 线程串行发, 收尾切回主线程弹 HUD。
+        lifecycleScope.launch {
+            val (ok, fail) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                var okCount = 0
+                var failCount = 0
+                for (ch in channels) {
+                    val tc = com.xinbida.wukongim.msgmodel.WKTextContent(content)
+                    val opts = com.xinbida.wukongim.entity.WKSendOptions()
+                    opts.setting.receipt = ch.receipt
+                    val msg = com.xinbida.wukongim.WKIM.getInstance().msgManager
+                        .sendWithOptions(tc, ch, opts)
+                    if (msg != null) okCount++ else failCount++
+                }
+                okCount to failCount
+            }
+            val text = if (fail == 0) {
+                getString(R.string.summary_forward_succeeded, ok)
+            } else {
+                getString(R.string.summary_forward_partial, ok, fail)
+            }
+            SummaryHud.show(this@SmartSummaryDetailActivity, text)
         }
-        val text = if (fail == 0) {
-            getString(R.string.summary_forward_succeeded, ok)
-        } else {
-            getString(R.string.summary_forward_partial, ok, fail)
-        }
-        SummaryHud.show(this, text)
     }
 
     private fun confirmDelete() {

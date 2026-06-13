@@ -155,4 +155,7 @@
     <!-- ===== 编辑页 (新增, PR1 已有的不重复) ===== -->
     <string name="summary_edit_save">保存</string>
 
+    <!-- ===== 新建会话页 tab ===== -->
+    <string name="summary_dir_tab_bot">机器人</string>
+
 </resources>

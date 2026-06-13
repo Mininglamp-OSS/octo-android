@@ -143,4 +143,7 @@
     <!-- Edit page (new strings, PR1 ones not duplicated) -->
     <string name="summary_edit_save">Save</string>
 
+    <!-- New chat directory page tab -->
+    <string name="summary_dir_tab_bot">Bot</string>
+
 </resources>

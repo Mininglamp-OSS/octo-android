@@ -95,7 +95,7 @@ class ForwardDirectoryActivity : WKBaseActivity<ActForwardDirectoryLayoutBinding
             arrayOf(
                 getString(R.string.group_chat),
                 getString(R.string.contacts),
-                "Bot",
+                getString(R.string.summary_dir_tab_bot),
             ),
         )
         wkVBinding.tabsView.setOnTabSelectedListener { index ->

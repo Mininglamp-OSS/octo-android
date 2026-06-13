@@ -45,6 +45,14 @@ class SmartSummaryListViewModel(
 
     private var keywordDebounceJob: Job? = null
 
+    /**
+     * In-flight 列表请求 (reload / loadMore / setFilter / setKeyword 触发的). 仅 1 个,
+     * setKeyword 与 setFilter 在 launch 新请求前会取消旧的, 防止 keyword=A 的 loadMore
+     * 完成后把 A 的下一页 append 到已经切到 keyword=B 的列表上 (review 标记的"混页")。
+     * reload / loadMore 保留各自的 loading 守门, 不互相打断 (下拉刷新与上拉加载更多互斥)。
+     */
+    private var loadJob: Job? = null
+
     /** 已拉取过 preview 的 taskId → 清洗后正文 (200 字以内). 列表 item 间共享, 减少二次拉取. */
     private val previewCache = HashMap<Long, String>()
 
@@ -56,15 +64,23 @@ class SmartSummaryListViewModel(
     /** 首次进入页面或下拉刷新触发. */
     fun reload() {
         if (current.loading) return
+        val s = current
         _uiState.update { it.copy(loading = true, refreshing = true, page = 1) }
-        viewModelScope.launch { performLoad(page = 1, append = false) }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            performLoad(page = 1, append = false, filter = s.filter, keyword = s.keyword.trim())
+        }
     }
 
     fun loadMore() {
         if (current.loading || !current.hasMore) return
-        val nextPage = current.page + 1
+        val s = current
+        val nextPage = s.page + 1
         _uiState.update { it.copy(loading = true, loadingMore = true, page = nextPage) }
-        viewModelScope.launch { performLoad(page = nextPage, append = true) }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            performLoad(page = nextPage, append = true, filter = s.filter, keyword = s.keyword.trim())
+        }
     }
 
     fun setFilter(filter: SummaryFilter) {
@@ -73,7 +89,11 @@ class SmartSummaryListViewModel(
         // 避免出现 "旧→空→新" 三段过渡造成的视觉卡顿; 加载完成后 performLoad
         // 用 newItems 整体覆盖。同时不开启下拉刷新动画, 切 tab 是隐式刷新, 不要弹 header。
         _uiState.update { it.copy(filter = filter, loading = true, refreshing = false, page = 1) }
-        viewModelScope.launch { performLoad(page = 1, append = false) }
+        loadJob?.cancel()  // 抢占 in-flight (旧 filter 的请求结果若回来会被丢弃)
+        val keyword = current.keyword.trim()
+        loadJob = viewModelScope.launch {
+            performLoad(page = 1, append = false, filter = filter, keyword = keyword)
+        }
     }
 
     /**
@@ -92,8 +112,18 @@ class SmartSummaryListViewModel(
             delay(KEYWORD_DEBOUNCE_MILLIS)
             // debounce 期间 keyword 还可能再变, 用提交时刻的快照
             val applied = current.keyword.trim()
-            if (applied == effectiveKeyword(applied)) {
-                reload()
+            if (applied != effectiveKeyword(applied)) return@launch
+            // 关键 (review B1): keyword 改变是 fresh page-1 query, 必须 supersede in-flight,
+            // 不能走 reload() 的 loading 守门 (会把 debounce 完成时正好 in-flight 的 keyword 吞掉,
+            // 用户输入消失再无其它信号唤醒). 与 setFilter 同口径直接 force-launch + 抢占 loadJob,
+            // 避免旧 keyword 的 loadMore 回来 append 到新 keyword 列表 (混页 race)。
+            val filter = current.filter
+            _uiState.update {
+                it.copy(loading = true, refreshing = false, loadingMore = false, page = 1)
+            }
+            loadJob?.cancel()
+            loadJob = viewModelScope.launch {
+                performLoad(page = 1, append = false, filter = filter, keyword = applied)
             }
         }
     }
@@ -193,13 +223,27 @@ class SmartSummaryListViewModel(
 
     // endregion
 
-    private suspend fun performLoad(page: Int, append: Boolean) {
+    /**
+     * 网络拉取并合并入 state. [filter] / [keyword] 必须在 launch 处快照传入, 不要在
+     * 函数体内读 current.filter / current.keyword — 否则 setKeyword/setFilter 改完
+     * state 后, in-flight 请求带的还是旧值, 但回写时按新 state.items 做 append/replace,
+     * 会出现 "新 keyword 的 items + 旧 keyword 的下一页" 这种混页 race (review B1)。
+     */
+    private suspend fun performLoad(
+        page: Int,
+        append: Boolean,
+        filter: SummaryFilter,
+        keyword: String,
+    ) {
         val res = repository.listSummaries(
             page = page,
             pageSize = pageSize,
-            filter = current.filter,
-            keyword = current.keyword.trim().ifEmpty { null },
+            filter = filter,
+            keyword = keyword.ifEmpty { null },
         )
+        // 抢占式 cancel 时这里走 CancellationException 抛出 (callEnvelope 的 runCatching
+        // 会包成 Result.failure, 不过协程已 cancel 不会再走到 _uiState.update). 即使包装了,
+        // 下面的 isFailure 分支也只会写入 transientMessage, 没有 items 污染。
         if (res.isFailure) {
             _uiState.update {
                 it.copy(
@@ -214,14 +258,22 @@ class SmartSummaryListViewModel(
         }
         val pageRes = res.getOrThrow()
         _uiState.update { state ->
-            val merged = if (append) state.items + pageRes.items else pageRes.items
-            state.copy(
-                items = merged,
-                loading = false,
-                refreshing = false,
-                loadingMore = false,
-                hasMore = pageRes.items.size >= pageSize,
-            )
+            // 二次校验: state.filter / state.keyword 在我们 launch 后被 setFilter/setKeyword
+            // 改过, 说明这次响应已 stale, 丢弃 items 不合并 (loading flag 仍清掉避免卡死)。
+            // 实际 cancel 已经覆盖 99% 场景, 这里是兜底防止 cancel 信号还没传到时响应已 emit。
+            val stateStale = state.filter != filter || state.keyword.trim() != keyword
+            if (stateStale) {
+                state.copy(loading = false, refreshing = false, loadingMore = false)
+            } else {
+                val merged = if (append) state.items + pageRes.items else pageRes.items
+                state.copy(
+                    items = merged,
+                    loading = false,
+                    refreshing = false,
+                    loadingMore = false,
+                    hasMore = pageRes.items.size >= pageSize,
+                )
+            }
         }
         hydratePreview()
     }

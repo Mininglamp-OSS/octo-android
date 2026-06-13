@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chat.base.summary.SummaryDeps
 import com.chat.base.summary.model.SourceItem
+import com.chat.base.summary.model.SourceType
 import com.chat.base.summary.model.TopicTemplate
 import com.chat.base.summary.repository.SummaryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,13 @@ data class CreateUiState(
     val activeTemplateId: String? = null,
     val sources: List<SourceItem> = emptyList(),
     val submitting: Boolean = false,
+    /**
+     * 提交成功后的 HUD 文案。null 时 Activity 用默认 R.string.summary_create_success
+     * (列表 FAB 入口 / 编辑回流)。聊天页 sparkle 入口可改成引导式
+     * "已开始生成总结，可到 智能总结 查看进度", 1:1 对齐 iOS commit 333f247
+     * OctoSummaryCreateVC.submitSuccessHUDText.
+     */
+    val submitSuccessHudText: String? = null,
     val effect: CreateEffect? = null,
 ) {
     val canSubmit: Boolean get() = topic.isNotBlank() && sources.isNotEmpty() && !submitting
@@ -65,6 +73,36 @@ class SmartSummaryCreateViewModel(
 
     fun setSources(sources: List<SourceItem>) {
         _state.update { it.copy(sources = sources) }
+    }
+
+    /**
+     * 调用方在 newIntent 时传入引导式 HUD 文案 (聊天页 sparkle 入口),
+     * 替换提交成功后的默认"已创建总结任务"。
+     */
+    fun setSuccessHudText(text: String?) {
+        if (text.isNullOrBlank()) return
+        _state.update { it.copy(submitSuccessHudText = text) }
+    }
+
+    /**
+     * 已选 source 中如果是子区 (Thread) 且 name 为空或像 channelId (groupNo____shortId),
+     * 异步拉 ThreadModel.getThreadDetail 把真名回填——1:1 对齐 iOS commit 333f247
+     * OctoSummaryCreateVC.resolveThreadName。失败时占位"子区"两字, 不让用户看到 hex。
+     *
+     * 用 sourceId 反查列表索引, 避免用户编辑后 list mutation 把名字改错对象。
+     */
+    fun replaceThreadNameById(sourceId: String, real: String) {
+        if (real.isBlank()) return
+        _state.update { st ->
+            val idx = st.sources.indexOfFirst {
+                it.sourceType == SourceType.Thread && it.sourceId == sourceId
+            }
+            if (idx < 0) return@update st
+            val updated = st.sources.toMutableList().apply {
+                set(idx, st.sources[idx].copy(sourceName = real))
+            }
+            st.copy(sources = updated)
+        }
     }
 
     fun removeSource(item: SourceItem) {

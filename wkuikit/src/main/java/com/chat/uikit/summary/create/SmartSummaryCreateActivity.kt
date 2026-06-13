@@ -136,6 +136,20 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         )
         wkVBinding.sourceFieldLabel.text = labelText
 
+        // 引导式 HUD 文案 (聊天页 sparkle 入口传) → 提交成功后用这条替换默认。
+        intent.getStringExtra(EXTRA_SUCCESS_HUD_TEXT)?.takeIf { it.isNotBlank() }?.let {
+            viewModel.setSuccessHudText(it)
+        }
+
+        // 预填 sources (聊天页 sparkle 入口传当前 channel 单项)
+        @Suppress("DEPRECATION")
+        intent.getParcelableArrayListExtra<WKChannel>(EXTRA_PREFILLED_CHANNELS)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { channels ->
+                val sources = channels.mapNotNull { channelToSource(it) }
+                if (sources.isNotEmpty()) viewModel.setSources(sources)
+            }
+
         wkVBinding.topicEt.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -193,7 +207,13 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
             when (effect) {
                 is CreateEffect.ToastRes -> SummaryHud.show(this, effect.resId)
                 CreateEffect.Done -> {
-                    SummaryHud.show(this, R.string.summary_create_success)
+                    // 引导式文案 (聊天页 sparkle 入口) 优先, 否则默认"已创建总结任务"。
+                    // SummaryHud 用 Toast 实现, 不依赖当前 Activity 的 decorView,
+                    // finish 后会挂在 application context 自然漂浮在下一个 top Activity 上,
+                    // 这条规避了 iOS 那条"createVC 销毁带走 HUD"的 timing bug —— Android 这里不需要 dispatch。
+                    val msg = state.submitSuccessHudText
+                        ?: getString(R.string.summary_create_success)
+                    SummaryHud.show(this, msg)
                     setResult(Activity.RESULT_OK)
                     finish()
                 }
@@ -317,7 +337,27 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
 
     private fun pickSources() {
         // 直接启动 ChooseChatActivity 走 setResult 路径, 不再二次弹框
-        pickSourcesLauncher.launch(Intent(this, com.chat.uikit.chat.ChooseChatActivity::class.java))
+        // 把当前已选 sources 反向转回 WKChannel 传过去, 让用户进入选择页时已勾选项保持高亮——
+        // 1:1 对齐 iOS commit 333f247 OctoSummaryCreateVC + WKForwardSelectVC.preselectedChannels 二次编辑能力。
+        val intent = Intent(this, com.chat.uikit.chat.ChooseChatActivity::class.java)
+        val current = viewModel.state.value.sources
+        if (current.isNotEmpty()) {
+            val list = ArrayList<WKChannel>(current.size)
+            current.forEach { src ->
+                val ch = WKChannel(src.sourceId, when (src.sourceType) {
+                    SourceType.DirectMessage -> WKChannelType.PERSONAL
+                    SourceType.Thread -> WKChannelType.COMMUNITY_TOPIC
+                    SourceType.GroupChat -> WKChannelType.GROUP
+                })
+                ch.channelName = src.sourceName
+                list.add(ch)
+            }
+            intent.putParcelableArrayListExtra(
+                com.chat.uikit.chat.ChooseChatActivity.EXTRA_PRESELECTED_CHANNELS,
+                list,
+            )
+        }
+        pickSourcesLauncher.launch(intent)
     }
 
     private fun channelToSource(ch: WKChannel): SourceItem? {
@@ -326,11 +366,45 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
             WKChannelType.COMMUNITY_TOPIC -> SourceType.Thread
             else -> SourceType.GroupChat
         }
+        val raw = ch.channelName?.ifEmpty { null } ?: ch.channelRemark?.ifEmpty { null }
+        // 子区名兜底 (1:1 对齐 iOS commit 333f247 OctoSummaryCreateVC.acceptPickedChannels):
+        // ChannelInfo 经常没有 thread 名 (WKSDK 不缓存 thread 元数据), 直接退到 channelId 看起来像
+        // hex 串。先占位"子区", 同时异步去 ThreadModel.getThreadDetail 拿真名回填。
+        val displayName = if (type == SourceType.Thread) {
+            val looksHex = raw == null
+                || raw.contains(ThreadChannelIdSeparator)
+                || raw == ch.channelID
+            if (looksHex) {
+                val placeholder = getString(R.string.summary_thread_placeholder)
+                resolveThreadNameAsync(ch.channelID)
+                placeholder
+            } else raw
+        } else {
+            raw
+        }
         return SourceItem(
             sourceType = type,
             sourceId = ch.channelID,
-            sourceName = ch.channelName?.ifEmpty { null } ?: ch.channelRemark?.ifEmpty { null },
+            sourceName = displayName,
         )
+    }
+
+    /**
+     * 拉子区详情把 sourceName 替换成真名, 失败时静默 (列表里仍是占位"子区")。
+     * 用 channelId 反查 sourceId, 避免用户在 callback 期间删了 / 重选了别的 source 改错对象。
+     */
+    private fun resolveThreadNameAsync(threadChannelId: String) {
+        val parts = threadChannelId.split(ThreadChannelIdSeparator, limit = 2)
+        if (parts.size != 2 || parts[0].isEmpty() || parts[1].isEmpty()) return
+        val groupNo = parts[0]
+        val shortId = parts[1]
+        com.chat.uikit.thread.service.ThreadModel.getInstance().getThreadDetail(
+            groupNo, shortId,
+        ) { _, _, entity ->
+            val real = entity?.name ?: return@getThreadDetail
+            if (real.isBlank()) return@getThreadDetail
+            runOnUiThread { viewModel.replaceThreadNameById(threadChannelId, real) }
+        }
     }
 
     private fun localFallbackTemplates(): List<TopicTemplate> = listOf(
@@ -383,6 +457,20 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         private const val EXTRA_ORIGIN_CHANNEL_ID = "origin_channel_id"
         private const val EXTRA_ORIGIN_CHANNEL_TYPE = "origin_channel_type"
 
+        /**
+         * 聊天页 sparkle 入口预填的 channels (单条当前 channel),
+         * Activity 进入后转 source 喂给 viewModel。
+         */
+        const val EXTRA_PREFILLED_CHANNELS = "prefilled_channels"
+
+        /**
+         * 聊天页 sparkle 入口的"提交成功"HUD 文案。null/空时用默认"已创建总结任务"。
+         */
+        const val EXTRA_SUCCESS_HUD_TEXT = "success_hud_text"
+
+        /** ThreadModel 用的子区 channelId 分隔串 (groupNo____shortId). 拷贝一份避免依赖 ThreadModel 常量. */
+        private const val ThreadChannelIdSeparator = "____"
+
         fun newIntent(
             ctx: Context,
             originChannelId: String = "",
@@ -390,6 +478,27 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         ): Intent = Intent(ctx, SmartSummaryCreateActivity::class.java).apply {
             putExtra(EXTRA_ORIGIN_CHANNEL_ID, originChannelId)
             putExtra(EXTRA_ORIGIN_CHANNEL_TYPE, originChannelType)
+        }
+
+        /**
+         * 聊天页 sparkle 入口: 预填当前 channel + 引导式 HUD 文案。
+         * 1:1 对齐 iOS commit 333f247 WKConversationVC.openSummaryCreateForCurrentChannel.
+         *
+         * 注意: 不设置 EXTRA_ORIGIN_CHANNEL_*。iOS sparkle 入口只 setValue prefilledSources,
+         * 不动 originChannelId/Type, 提交时落到默认 ""/0。服务端对 origin_channel_type 有校验,
+         * 传具体值 (group=2 / thread=5 等) 会被拒绝创建失败,跟"上下文 → 选源 → 同一群"
+         * 路径行为不一致 (后者 originChannelType=0)。这里也保持空。
+         *
+         * @JvmStatic 让 Java 端 ChatActivity 直接静态调用, 不用走 .Companion. 链。
+         */
+        @JvmStatic
+        fun newIntentForChat(
+            ctx: Context,
+            channel: WKChannel,
+            successHudText: String,
+        ): Intent = Intent(ctx, SmartSummaryCreateActivity::class.java).apply {
+            putParcelableArrayListExtra(EXTRA_PREFILLED_CHANNELS, arrayListOf(channel))
+            putExtra(EXTRA_SUCCESS_HUD_TEXT, successHudText)
         }
     }
 }

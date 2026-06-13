@@ -135,13 +135,16 @@
                         android:textSize="14sp" />
                 </LinearLayout>
 
-                <!-- content 卡 (markdown / 失败 / 取消) -->
-                <FrameLayout
+                <!-- content 卡 (markdown / 失败 / 取消)。
+                     LinearLayout vertical 让 markdown 拆分后可承载 contentTv + 表格卡 + 后续文本段,
+                     与 ChatActivity 消息气泡 contentTvLayout 同结构, 复用 WKTextProvider 的渲染思路。 -->
+                <LinearLayout
                     android:id="@+id/contentCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_summary_detail_card"
+                    android:orientation="vertical"
                     android:padding="14dp"
                     android:visibility="gone">
 
@@ -153,7 +156,7 @@
                         android:textSize="14sp"
                         android:lineSpacingExtra="3dp"
                         android:textIsSelectable="false" />
-                </FrameLayout>
+                </LinearLayout>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
         </com.scwang.smart.refresh.layout.SmartRefreshLayout>

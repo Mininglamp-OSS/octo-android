@@ -56,6 +56,8 @@
     <string name="summary_create_chats_selected">%1$d chats selected</string>
     <string name="summary_create_success">Summary task created</string>
     <string name="summary_create_failed">Failed to create</string>
+    <string name="summary_thread_placeholder">Thread</string>
+    <string name="summary_chat_started_hint">Summary started — track progress in Smart Summary</string>
     <string name="summary_tpl_weekly_label">Team weekly</string>
     <string name="summary_tpl_chat_label">Summarize chat</string>
     <string name="summary_tpl_project_label">Project status</string>

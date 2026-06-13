@@ -139,6 +139,22 @@
             android:layout_marginStart="10dp"
             android:visibility="visible" />
 
+        <!-- 智能总结快速入口 sparkle, 1:1 对齐 iOS commit 333f247 WKConversationChannelHeader.summaryBtn.
+             用 lucide-sparkle 矢量描线 (ic_chat_summary_sparkle), 不用上下文 tab 那种紫底白色实心,
+             视觉上属于 nav 控件家族 (与 backIv 同色族)。
+             group/private/thread 全部显示, 点击直接打开 SmartSummaryCreateVC 预填当前 channel。 -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/summaryIv"
+            android:layout_width="32dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical"
+            android:contentDescription="@string/summary_create_title"
+            android:padding="4dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_chat_summary_sparkle"
+            android:tint="@color/titleBarIcon"
+            android:visibility="visible" />
+
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/moreIv"
             android:layout_width="40dp"

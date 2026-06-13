@@ -313,6 +313,29 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         EndpointManager.getInstance().invoke("wk_p2p_call", new RTCMenu(this, callType));
     }
 
+    /**
+     * 智能总结快速入口: 把当前 channel 转成 WKChannel 直接喂给 SmartSummaryCreateActivity 预填,
+     * 用户进去就只需要敲主题/选模板, 提交后 toast 引导式文案"已开始生成总结，可到「智能总结」查看进度"。
+     * 1:1 对齐 iOS commit 333f247 WKConversationVC.openSummaryCreateForCurrentChannel.
+     *
+     * 注意只填 prefilledSources, 不设 origin_channel; 后端对 origin_channel_type 严格校验,
+     * 传具体 type 会创建失败, iOS sparkle 入口也是默认空。
+     */
+    private void openSummaryCreate() {
+        WKChannel ch = new WKChannel(channelId, channelType);
+        WKChannel cur = getChatChannelInfo();
+        if (cur != null) {
+            // 优先取已显示在 header 的 name (与用户视觉一致), 缺省退到 channelId 不让 source pill 留空。
+            ch.channelName = !TextUtils.isEmpty(cur.channelName) ? cur.channelName : channelId;
+            ch.channelRemark = cur.channelRemark;
+        } else {
+            ch.channelName = channelId;
+        }
+        Intent intent = com.chat.uikit.summary.create.SmartSummaryCreateActivity.newIntentForChat(
+                this, ch, getString(R.string.summary_chat_started_hint));
+        startActivity(intent);
+    }
+
     private void toggleStatusBarMode() {
         Window window = getWindow();
         if (window == null) return;
@@ -689,6 +712,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         moreIV.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.colorDark), PorterDuff.Mode.MULTIPLY));
         moreIV.setBackground(Theme.createSelectorDrawable(Theme.getPressedColor()));
         moreIV.setVisibility(View.VISIBLE);
+
+        // 智能总结快速入口 sparkle (1:1 对齐 iOS commit 333f247 WKConversationVC openSummaryCreateForCurrentChannel):
+        // 群/私/子区都显示, ic_summary_spark + titleBarIcon tint 让它视觉上与 backIv 同色族属于 nav 控件家族,
+        // 不再用品牌紫做强调。客服 channel 隐藏,与 moreIv 隐藏条件同口径。
+        wkVBinding.topLayout.summaryIv.setColorFilter(
+                new PorterDuffColorFilter(ContextCompat.getColor(this, R.color.colorDark), PorterDuff.Mode.MULTIPLY));
+        wkVBinding.topLayout.summaryIv.setBackground(Theme.createSelectorDrawable(Theme.getPressedColor()));
+        wkVBinding.topLayout.summaryIv.setVisibility(
+                channelType == WKChannelType.CUSTOMER_SERVICE ? View.GONE : View.VISIBLE);
+        wkVBinding.topLayout.summaryIv.setOnClickListener(v -> openSummaryCreate());
 
         callIV = new AppCompatImageView(this);
         callIV.setImageResource(R.mipmap.ic_call);

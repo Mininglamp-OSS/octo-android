@@ -60,11 +60,28 @@ class SummaryRepositoryImpl(
     private suspend fun <T> callEnvelope(
         block: suspend (SummaryApiService) -> Response<JSONObject>,
         extract: (Any?) -> T,
-    ): Result<T> = runCatching {
+    ): Result<T> = try {
+        // 不能用 runCatching: 它捕 Throwable 包括 CancellationException, 调用方 (poller /
+        // VM) 取消请求时这里会把 cancellation 折叠成 Result.failure 让调用链继续走失败分支
+        // (e.g. 详情页 silent=false 时多 emit 一次 LoadFailed toast), 违反结构化并发约定。
+        // CancellationException 必须重抛让父协程的 cancel 信号正确传递。
+        Result.success(callEnvelopeInner(block, extract))
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }
+
+    private suspend fun <T> callEnvelopeInner(
+        block: suspend (SummaryApiService) -> Response<JSONObject>,
+        extract: (Any?) -> T,
+    ): T {
         val resp = try {
             block(api)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            // 仅在 debug 包打日志, 不输出 body 内容; 异常本身会被 runCatching 捕获后包成
+            // 仅在 debug 包打日志, 不输出 body 内容; 异常本身会被外层 try 捕获后包成
             // Result.failure 抛给上层, 这里只做线索留存。
             WKLogUtils.e(LOG_TAG, "call threw: ${e.javaClass.simpleName}: ${e.message}", e)
             throw e
@@ -100,7 +117,7 @@ class SummaryRepositoryImpl(
         // 平铺在顶层, 例如 listSummaries 的 items/total)。
         val rawData = body["data"]
         val data = rawData ?: body
-        extract(data)
+        return extract(data)
     }
 
     private fun parseErrorMessage(resp: Response<JSONObject>): String? {

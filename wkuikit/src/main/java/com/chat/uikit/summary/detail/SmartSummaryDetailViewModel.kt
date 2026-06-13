@@ -51,12 +51,19 @@ data class DetailUiState(
  *   - cancel / regenerate / delete 走乐观链路: toast + reload / close
  */
 class SmartSummaryDetailViewModel(
-    private val taskId: Long,
+    initialTaskId: Long,
     private val repository: SummaryRepository = SummaryDeps.repository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DetailUiState())
     val state = _state.asStateFlow()
+
+    /**
+     * 当前跟踪的 taskId. regenerate 成功后后端给新 task_id (旧任务进终态),
+     * 必须切到新 id 否则 loadDetail 会一直拉旧任务的终态, 用户看不到新生成的任务进度。
+     * 与 list VM performRegenerate 切 item.taskId 同语义。
+     */
+    private var trackedTaskId: Long = initialTaskId
 
     private var pollJob: Job? = null
 
@@ -74,7 +81,7 @@ class SmartSummaryDetailViewModel(
      */
     fun loadDetail(silent: Boolean = false) {
         viewModelScope.launch {
-            val res = repository.getSummaryDetail(taskId)
+            val res = repository.getSummaryDetail(trackedTaskId)
             if (res.isFailure) {
                 if (!silent) {
                     _state.update {
@@ -117,6 +124,14 @@ class SmartSummaryDetailViewModel(
                 emit(DetailEffect.Toast(DetailToastKind.RegenFailed))
                 return@launch
             }
+            // 后端给的新 task_id 必须切过去, 否则 loadDetail 一直拉旧任务的终态 (Cancelled),
+            // 用户在详情页看不到新生成的任务从 Processing 走到 Completed (与 list VM 同思路)。
+            val newId = res.getOrThrow()
+            if (newId > 0 && newId != tid) {
+                trackedTaskId = newId
+                // 旧 detail 已无效, 立刻清空让 loading 卡显示, 避免短暂闪现旧 cancelled 内容。
+                _state.update { it.copy(detail = null, loading = true) }
+            }
             emit(DetailEffect.Toast(DetailToastKind.RegenStarted))
             loadDetail()
         }
@@ -136,7 +151,13 @@ class SmartSummaryDetailViewModel(
 
     private fun schedulePollIfNeeded(status: TaskStatus) {
         pollJob?.cancel()
-        if (status != TaskStatus.Processing && status != TaskStatus.Pending) return
+        // 与 list VM activeStatusTaskIds 同口径: Pending / WaitingConfirm / Processing 都算活跃,
+        // 详情页若停在 WaitingConfirm 状态, 其他参与者点确认后必须能自动 flip 到 Processing,
+        // 不轮询的话用户得手动退出再进来才看得到, 与 list 行为不一致。
+        val isActive = status == TaskStatus.Processing
+            || status == TaskStatus.Pending
+            || status == TaskStatus.WaitingConfirm
+        if (!isActive) return
         pollJob = viewModelScope.launch {
             delay(POLL_INTERVAL_MS)
             // 后台 tick 走 silent=true: 失败不弹 toast 不打扰用户, 失败分支自身会重排

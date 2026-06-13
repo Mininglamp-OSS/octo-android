@@ -135,7 +135,7 @@
     <string name="is_forward">已转发</string>
     <string name="input_remark">请输入备注</string>
     <string name="send_to">发送给：</string>
-    <string name="create_new_chat">创建新的聊天</string>
+    <string name="create_new_chat">新建会话</string>
     <string name="lately_chat">最近聊天</string>
     <string name="request_add_frined">请求加好友</string>
     <string name="item_forward_count">[逐条转发]共%d条消息</string>

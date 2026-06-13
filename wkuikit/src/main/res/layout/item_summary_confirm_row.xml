@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 参与确认页 row (兼容 participant + source 两种用途, 通过控制 statusTv / checkIv 显隐区分).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="20dp">
+
+    <TextView
+        android:id="@+id/nameTv"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textColor="@color/summary_text_strong"
+        android:textSize="15sp"
+        tools:text="Name" />
+
+    <TextView
+        android:id="@+id/statusTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/summary_text_50"
+        android:textSize="13sp"
+        android:visibility="gone"
+        tools:text="Status" />
+
+    <ImageView
+        android:id="@+id/checkIv"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/ic_summary_check"
+        app:tint="@color/summary_purple"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+</LinearLayout>

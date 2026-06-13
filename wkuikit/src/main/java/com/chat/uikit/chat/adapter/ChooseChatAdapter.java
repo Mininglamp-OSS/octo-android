@@ -66,6 +66,11 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
         if (item != null && item.isSectionHeader) return TYPE_SECTION_HEADER;
         if (item != null && item.isThreadToggle) return TYPE_THREAD_TOGGLE;
         if (item != null && item.isThread) return TYPE_THREAD;
+        // 来自 conversationMsg 的子区(最近 tab 直接展示) 也走 thread 紧凑布局, 对齐 iOS
+        if (item != null && item.uiConveursationMsg != null
+                && item.uiConveursationMsg.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            return TYPE_THREAD;
+        }
         if (item != null && item.uiConveursationMsg != null
                 && item.uiConveursationMsg.channelType == WKChannelType.GROUP) {
             return TYPE_COMPACT;
@@ -105,8 +110,9 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
         ChooseChatActivity.ChooseChatEntity entity = (ChooseChatActivity.ChooseChatEntity) payloads.get(0);
         if (entity != null) {
             CheckBox checkBox = holder.getView(R.id.checkbox);
+            // 始终保持 drawBackground=true 让 border 一直可见, 见 setupCheckBox 注释
+            checkBox.setDrawBackground(true);
             checkBox.setChecked(item.isCheck, true);
-            checkBox.setDrawBackground(item.isCheck);
         }
     }
 
@@ -188,7 +194,18 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
     private void convertThread(@NonNull BaseViewHolder helper, ChooseChatActivity.ChooseChatEntity item) {
         CheckBox checkBox = helper.getView(R.id.checkbox);
         setupCheckBox(checkBox, item);
-        helper.setText(R.id.nameTv, item.threadName);
+        // 兼容两种数据源: (a) threadEntityCache 里的 isThread 条目用 threadName;
+        // (b) 最近 tab 里 conversationMsg 子区用 channelName.
+        String name;
+        if (item.isThread) {
+            name = item.threadName;
+        } else if (item.uiConveursationMsg != null && item.uiConveursationMsg.getWkChannel() != null) {
+            String n = item.uiConveursationMsg.getWkChannel().channelName;
+            name = TextUtils.isEmpty(n) ? "" : n;
+        } else {
+            name = "";
+        }
+        helper.setText(R.id.nameTv, name);
     }
 
     // ── 子区折叠/展开 toggle ────────────────────────────────────
@@ -208,11 +225,15 @@ public class ChooseChatAdapter extends BaseQuickAdapter<ChooseChatActivity.Choos
 
     private void setupCheckBox(CheckBox checkBox, ChooseChatActivity.ChooseChatEntity item) {
         checkBox.setResId(getContext(), R.mipmap.round_check2);
-        checkBox.setDrawBackground(item.isCheck);
+        // CheckBox.onDraw 在 !drawBackground && progress==0 时整个 return,
+        // 该组件原本设计是叠在头像上,未选中态故意空白让 avatar 当背景。
+        // 我们把 checkbox 挪到最左 (无 avatar 当背景), 所以未选中态也要画 border ring,
+        // 始终 setDrawBackground(true) 让 border 一直可见, 选中态 progress 把填充圆动起来。
+        checkBox.setDrawBackground(true);
         checkBox.setHasBorder(true);
-        checkBox.setStrokeWidth(AndroidUtilities.dp(2));
-        checkBox.setBorderColor(ContextCompat.getColor(getContext(), R.color.layoutColor));
-        checkBox.setSize(24);
+        checkBox.setStrokeWidth(AndroidUtilities.dp(1.5f));
+        checkBox.setBorderColor(ContextCompat.getColor(getContext(), R.color.color999));
+        checkBox.setSize(22);
         checkBox.setColor(Theme.colorAccount, ContextCompat.getColor(getContext(), R.color.white));
         checkBox.setVisibility(View.VISIBLE);
         checkBox.setChecked(item.isCheck, true);

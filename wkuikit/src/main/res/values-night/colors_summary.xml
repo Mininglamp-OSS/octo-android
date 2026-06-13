@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 上下文模块深色模式色板. 1:1 对齐 iOS OctoContext 模块:
+  - 页面背景 = systemBackground (黑)
+  - 卡片背景 = secondarySystemBackground (#1C1C1E)
+  - 文字按 labelColor + 0.6 / 0.5 / 0.4 / 0.3 alpha 翻转为白色 alpha
+  - HUD / submit 按钮反色 (白底黑字)
+-->
+<resources>
+    <!-- 表面 / 背景: iOS systemBackground / secondarySystemBackground -->
+    <color name="summary_list_bg">#FF000000</color>
+    <color name="summary_card_bg">#FF1C1C1E</color>
+    <color name="summary_surface">#FF1C1C1E</color>
+    <color name="summary_surface_alt">#332E2A47</color>
+    <color name="summary_processing_bg">#332E2A47</color>
+    <color name="summary_processing_stroke">#00000000</color>
+    <color name="summary_pill_bg">#14FFFFFF</color>
+    <color name="summary_search_pill_bg">#FF1C1C1E</color>
+    <color name="summary_action_popup_bg">#FF2C2C2E</color>
+    <color name="summary_chip_mute_bg">#1AFFFFFF</color>
+    <color name="summary_status_badge_bg">#33FFFFFF</color>
+    <color name="summary_footer_secondary_bg">#1AFFFFFF</color>
+    <color name="summary_grabber_bg">#33FFFFFF</color>
+    <color name="summary_waiting_action_bg">#14FFFFFF</color>
+    <color name="summary_related_context_bg">#14FFFFFF</color>
+    <color name="summary_related_hit_bg">#337F3BF5</color>
+
+    <!-- 描边翻转 -->
+    <color name="summary_chip_border">#14FFFFFF</color>
+    <color name="summary_stroke_6">#10FFFFFF</color>
+    <color name="summary_stroke_8">#14FFFFFF</color>
+    <color name="summary_stroke_12">#1FFFFFFF</color>
+    <color name="summary_stroke_20">#33FFFFFF</color>
+
+    <!-- 文字翻转 (white-based) -->
+    <color name="summary_text_strong">#FFFFFFFF</color>
+    <color name="summary_text_primary">#FFFFFFFF</color>
+    <color name="summary_text_70">#B3FFFFFF</color>
+    <color name="summary_text_60">#99FFFFFF</color>
+    <color name="summary_text_secondary">#99FFFFFF</color>
+    <color name="summary_text_50">#80FFFFFF</color>
+    <color name="summary_text_40">#66FFFFFF</color>
+    <color name="summary_text_muted">#66FFFFFF</color>
+    <color name="summary_text_30">#4DFFFFFF</color>
+    <color name="summary_text_placeholder">#4DFFFFFF</color>
+
+    <!-- 按钮反色: 深色态 → 白底黑字 -->
+    <color name="summary_button_solid_bg">#FFFFFFFF</color>
+    <color name="summary_button_solid_fg">#FF000000</color>
+    <color name="summary_fab_bg">#FFFFFFFF</color>
+    <color name="summary_fab_fg">#FF000000</color>
+
+    <!-- HUD 反色: 深色态 → 白底黑字 -->
+    <color name="summary_hud_bg">#CCFFFFFF</color>
+    <color name="summary_hud_fg">#FF000000</color>
+
+    <!-- teal 文字调亮 -->
+    <color name="summary_teal_text">#FF14B8A6</color>
+</resources>

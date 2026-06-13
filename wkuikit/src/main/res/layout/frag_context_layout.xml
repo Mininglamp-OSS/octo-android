@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 上下文 Tab 主页. 1:1 对齐 iOS OctoContextEntryVC + WKNavigationBar(largeTitle):
+   - 顶部 statusBarSpacer 走运行时 WindowInsets, 与 iOS UIApplication.statusBarFrame 等价
+   - 紧接 59dp 高的 title bar (iOS navHeight=44 + largeTitle 增量=15)
+   - 标题 22sp semibold, 左 padding 20dp, 垂直居中 (1:1 对应 iOS 22pt + lim_left=20)
+   - 内容 SmartRefreshLayout > RecyclerView, OverScroll 模拟 iOS alwaysBounceVertical
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:attr/colorBackground">
+
+    <View
+        android:id="@+id/statusBarSpacer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp" />
+
+    <FrameLayout
+        android:id="@+id/titleBar"
+        android:layout_width="match_parent"
+        android:layout_height="59dp">
+
+        <TextView
+            android:id="@+id/titleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginStart="20dp"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:text="@string/summary_tab_context"
+            tools:text="上下文" />
+    </FrameLayout>
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/bounceLayout"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/entriesRv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingHorizontal="10dp"
+            android:clipToPadding="false" />
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+</LinearLayout>

@@ -28,12 +28,12 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.ChooseContactsMenu;
 import com.chat.base.msgitem.WKChannelMemberRole;
+import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.components.SegmentTabView;
 import com.chat.base.utils.SoftKeyboardUtils;
 import com.chat.base.utils.WKReader;
@@ -42,6 +42,7 @@ import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.category.CategoryEntity;
 import com.chat.uikit.category.CategoryModel;
 import com.chat.uikit.chat.adapter.ChooseChatAdapter;
+import com.chat.uikit.chat.choose.ForwardDirectoryActivity;
 import com.chat.uikit.databinding.ActChooseChatLayoutBinding;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.thread.service.ThreadModel;
@@ -58,15 +59,33 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 选择会话页面 — 群聊/私聊 Tab + 群聊按分组展示 + 子区支持
+ * 选择会话页. 1:1 对齐 iOS WKForwardSelectVC:
+ *   - 关注 tab: 自定义分组(category) + 群下子区按需展开 + (将来) 已关注 DM
+ *   - 最近 tab: 完整会话列表(DM + 群 + 子区,不过滤),按置顶 + 时间排序
+ *   - "新建会话" 紫字按钮 → 跳 ForwardDirectoryActivity (3 tab 群聊/联系人/Bot)
+ *
+ * 对外契约保持不变: isChoose / singleSelect extra 行为 + setResult("list") 协议 byte-identical。
  */
 public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBinding> {
+    private static final int REQ_FORWARD_DIRECTORY = 0x9001;
+    /** 多选最大数量, 与主页 item tap 校验同口径; 老协议消费方按 9 上限消费. */
+    private static final int MAX_SELECT_COUNT = 9;
+
+    /**
+     * 进入页面时已选中的频道列表 (Parcelable<WKChannel>),用于"二次编辑": 例如发起总结
+     * 选过一批源后再次进入选择页, 这些频道应该自动打勾,而不是清空。
+     * 与 setResult("list") 协议同 key,不增加额外 extra 名,调用方传 putParcelableArrayListExtra
+     * (PRESELECTED_CHANNELS, list) 即可。
+     */
+    public static final String EXTRA_PRESELECTED_CHANNELS = "preselected_channels";
+
     private ChooseChatAdapter chooseChatAdapter;
     private Button rightBtn;
     private boolean isChoose;
@@ -74,7 +93,14 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
     private List<ChooseChatEntity> allList;
     private List<ChooseChatEntity> groupList;
-    private List<ChooseChatEntity> personalList;
+    /** 最近 tab 数据源, 装所有会话(不过滤),含 DM/群/子区,对齐 iOS recent tab 语义。 */
+    private List<ChooseChatEntity> recentList;
+
+    /**
+     * 来自 ForwardDirectoryActivity 的额外选中频道(主页 allList 中没有的群/Bot/老联系人),
+     * uniqueKey ("channelId|channelType") → WKChannel,确认时与本页选中合并。
+     */
+    private final LinkedHashMap<String, WKChannel> extraSelectedChannels = new LinkedHashMap<>();
 
     private int currentTab = 0;
     private SegmentTabView segmentTabView;
@@ -85,6 +111,15 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     private final Map<String, List<ChooseChatEntity>> threadEntityCache = new HashMap<>();
     private final Set<String> expandedThreadGroups = new HashSet<>();
     private boolean threadsLoaded = false;
+
+    /**
+     * 调用方通过 {@link #EXTRA_PRESELECTED_CHANNELS} 传入的预选频道列表,
+     * 在 initData / threads 载入完成后, 把对应 entity 标记 isCheck=true, 同时
+     * 对子区把父群 groupNo 加进 expandedThreadGroups 让父群默认展开,
+     * 主页 entity 找不到的(典型来自 ForwardDirectoryActivity 的群/Bot/老联系人)
+     * 入 extraSelectedChannels, 跨返回上下文不丢勾。
+     */
+    private ArrayList<WKChannel> preselectedChannels;
 
     @Override
     protected ActChooseChatLayoutBinding getViewBinding() {
@@ -106,23 +141,41 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     protected void rightButtonClick() {
         super.rightButtonClick();
 
+        // 收集已选: 必须遍历底层数据 (allList + threadEntityCache),不要只看
+        // chooseChatAdapter.getData() 那是当前可见行 — 搜索过滤 / tab 切换 / 父群折叠
+        // 都会让已勾选项暂时不在可见列表里; 与 getSelectedCount() 同口径,否则计数与实际
+        // 回传不一致,用户最后看到的"已选 N"会比真实回传多。
         List<WKChannel> list = new ArrayList<>();
         Set<String> addedIds = new HashSet<>();
-        for (int i = 0, size = chooseChatAdapter.getData().size(); i < size; i++) {
-            ChooseChatEntity entity = chooseChatAdapter.getData().get(i);
-            if (entity.isSectionHeader || entity.isThreadToggle) continue;
-            if (!entity.isCheck) continue;
-
-            if (entity.isThread) {
-                if (addedIds.add(entity.threadChannelId)) {
-                    WKChannel channel = new WKChannel(entity.threadChannelId, WKChannelType.COMMUNITY_TOPIC);
-                    channel.channelName = entity.threadName;
-                    list.add(channel);
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                ChooseChatEntity entity = allList.get(i);
+                if (!entity.isCheck) continue;
+                // allList 的子区是顶层 conversation (最近 tab 那种), wkChannel 直接拿
+                if (entity.uiConveursationMsg != null && entity.uiConveursationMsg.getWkChannel() != null) {
+                    String cid = entity.uiConveursationMsg.getWkChannel().channelID;
+                    if (!TextUtils.isEmpty(cid) && addedIds.add(cid)) {
+                        list.add(entity.uiConveursationMsg.getWkChannel());
+                    }
                 }
-            } else if (entity.uiConveursationMsg != null && entity.uiConveursationMsg.getWkChannel() != null) {
-                if (addedIds.add(entity.uiConveursationMsg.getWkChannel().channelID)) {
-                    list.add(entity.uiConveursationMsg.getWkChannel());
-                }
+            }
+        }
+        // threadEntityCache 装的是关注 tab 父群下挂载的子区 item, 与 allList 同 channelID
+        // 时被 addedIds 去重, 不重复添加。
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) {
+                if (!entity.isCheck) continue;
+                if (TextUtils.isEmpty(entity.threadChannelId)) continue;
+                if (!addedIds.add(entity.threadChannelId)) continue;
+                WKChannel channel = new WKChannel(entity.threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+                channel.channelName = entity.threadName;
+                list.add(channel);
+            }
+        }
+        // 合并 ForwardDirectoryActivity 带回的额外频道(去重 by channelID)
+        for (WKChannel ch : extraSelectedChannels.values()) {
+            if (ch != null && !TextUtils.isEmpty(ch.channelID) && addedIds.add(ch.channelID)) {
+                list.add(ch);
             }
         }
 
@@ -153,6 +206,8 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     protected void initPresenter() {
         isChoose = getIntent().getBooleanExtra("isChoose", false);
         singleSelect = getIntent().getBooleanExtra("singleSelect", false);
+        ArrayList<WKChannel> pre = getIntent().getParcelableArrayListExtra(EXTRA_PRESELECTED_CHANNELS);
+        preselectedChannels = pre != null ? pre : new ArrayList<>();
     }
 
     @Override
@@ -160,28 +215,13 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         chooseChatAdapter = new ChooseChatAdapter(new ArrayList<>());
         initAdapter(wkVBinding.recyclerView, chooseChatAdapter);
 
-        wkVBinding.createTv.setOnClickListener(v -> {
-            ChooseContactsMenu contactsMenu = new ChooseContactsMenu(9, true, false, null, selectedList -> {
-                if (WKReader.isNotEmpty(selectedList)) {
-                    if (isChoose && WKUIKitApplication.getInstance().getMessageContentList() != null) {
-                        WKUIKitApplication.getInstance().showChatConfirmDialog(this, selectedList, WKUIKitApplication.getInstance().getMessageContentList(), new WKUIKitApplication.IShowChatConfirm() {
-                            @Override
-                            public void onBack(@NonNull List<WKChannel> list, @NonNull List<com.xinbida.wukongim.msgmodel.WKMessageContent> messageContentList) {
-                                WKUIKitApplication.getInstance().sendChooseChatBack(list);
-                                finish();
-                            }
-                        });
-                    } else {
-                        WKUIKitApplication.getInstance().sendChooseChatBack(selectedList);
-                        finish();
-                    }
-                }
-            });
-            EndpointManager.getInstance().invoke("choose_contacts", contactsMenu);
-        });
+        wkVBinding.createTv.setOnClickListener(v -> openNewChatDirectory());
 
+        // 关注 tab 走 categoryList 分组 (与原 群聊 tab 同源), 最近 tab 装全量会话(DM+群+子区);
+        // 文案对齐 iOS WKForwardSelectVC 关注/最近, 不再用旧的"群聊/私聊"误导用户。
         segmentTabView = new SegmentTabView(this,
-                new String[]{getString(R.string.str_group_chat), getString(R.string.str_private_chat)});
+                new String[]{getString(R.string.summary_choose_chat_tab_followed),
+                        getString(R.string.summary_choose_chat_tab_recent)});
         wkVBinding.segmentTabContainer.addView(segmentTabView,
                 new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
@@ -196,6 +236,57 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 searchUser(searchText);
             }
         });
+    }
+
+    /**
+     * "新建会话" 紫字按钮: 跳 ForwardDirectoryActivity (3 tab 群聊/联系人/Bot),
+     * 选中频道回传后合并到 extraSelectedChannels,与本页 isCheck=true 项一起在确定时返回。
+     */
+    private void openNewChatDirectory() {
+        Intent intent = new Intent(this, ForwardDirectoryActivity.class);
+        // 透传 singleSelect: 主页约束是单选时, 新建会话路径也只能选一个,否则老调用点
+        // (如 RTC 拉人 / 单聊视频转发) 拿到列表协议会越界 — review 标记的契约漏。
+        intent.putExtra("singleSelect", singleSelect);
+        startActivityForResult(intent, REQ_FORWARD_DIRECTORY);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_FORWARD_DIRECTORY && resultCode == RESULT_OK && data != null) {
+            ArrayList<WKChannel> picked = data.getParcelableArrayListExtra("list");
+            if (picked == null || picked.isEmpty()) return;
+
+            // singleSelect 模式: 主页 isCheck + extraSelectedChannels 只允许保留 1 个,
+            // 与 ChooseChatActivity item 点击路径同口径。回传 picked 已经是单条 (新建会话页
+            // 自身已约束), 这里清掉主页所有已选 + 旧 extra, 让新建会话的选项成为唯一一个。
+            if (singleSelect) {
+                clearAllSelections();
+            } else {
+                // 多选: 检查合并后总数是否会超过 9, 是则截断 picked 只保留能容纳的部分,
+                // 与主页 item tap "max 9" 同语义 (showSingleBtnDialog 那条提示)。
+                int currentTotal = getSelectedCount();
+                int remaining = MAX_SELECT_COUNT - currentTotal;
+                if (remaining <= 0) {
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
+                    return;
+                }
+                if (picked.size() > remaining) {
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
+                    picked = new ArrayList<>(picked.subList(0, remaining));
+                }
+            }
+
+            for (WKChannel ch : picked) {
+                if (ch == null || TextUtils.isEmpty(ch.channelID)) continue;
+                // 与主页 isCheck 项去重, 已经在主页勾上的 channelID 不重复入 extra
+                // (避免 confirm 时 list 短暂超过 9 才被 dedup, 计数会比真实多)。
+                if (isAlreadyCheckedInMain(ch.channelID)) continue;
+                String key = ch.channelID + "|" + ch.channelType;
+                extraSelectedChannels.put(key, ch);
+            }
+            updateRightBtn();
+        }
     }
 
     @Override
@@ -223,21 +314,22 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
             boolean isSelect = !chooseChatEntity.isBan && !chooseChatEntity.isForbidden;
             if (isSelect) {
-                chooseChatEntity.isCheck = !chooseChatEntity.isCheck;
-                if (singleSelect && chooseChatEntity.isCheck) {
-                    // 单选模式：取消其他已选项
-                    for (int j = 0, s = chooseChatAdapter.getData().size(); j < s; j++) {
-                        ChooseChatEntity other = chooseChatAdapter.getData().get(j);
-                        if (other != chooseChatEntity && other.isCheck) {
-                            other.isCheck = false;
-                            adapter.notifyItemChanged(j + adapter.getHeaderLayoutCount(), other);
-                        }
-                    }
+                boolean wasCheck = chooseChatEntity.isCheck;
+                if (singleSelect && !wasCheck) {
+                    // 单选模式: 主页 tap 也走 clearAllSelections(), 统一清主页所有 isCheck +
+                    // threadEntityCache + extraSelectedChannels, 不要只遍历 visible rows —
+                    // 否则搜索 / 折叠 / 新建会话回流隐藏的已选项会和当前 tap 一起回传, 越界。
+                    // notifyDataSetChanged 已在 helper 内调用, 后面单独 notifyItemChanged 会
+                    // 让本行立即翻成选中态视觉响应。
+                    clearAllSelections();
+                    chooseChatEntity.isCheck = true;
+                } else {
+                    chooseChatEntity.isCheck = !wasCheck;
                 }
                 int selectCount = getSelectedCount();
-                if (!singleSelect && chooseChatEntity.isCheck && selectCount > 9) {
+                if (!singleSelect && chooseChatEntity.isCheck && selectCount > MAX_SELECT_COUNT) {
                     chooseChatEntity.isCheck = false;
-                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), 9));
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
                     adapter.notifyItemChanged(position + adapter.getHeaderLayoutCount());
                     return;
                 }
@@ -273,16 +365,66 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     }
 
     private int getSelectedCount() {
-        int count = 0;
-        for (int i = 0, size = allList.size(); i < size; i++) {
-            if (allList.get(i).isCheck) count++;
+        // 用 set 收集 channelID 去重: extraSelectedChannels 可能与主页 isCheck 项 channelID 重叠
+        // (用户在新建会话页选了主页也存在的群), 直接 size 相加会读高 1。这里与
+        // rightButtonClick 收集逻辑同口径, 显示计数与最终回传一致。
+        Set<String> ids = new HashSet<>();
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                ChooseChatEntity e = allList.get(i);
+                if (!e.isCheck) continue;
+                if (e.uiConveursationMsg != null && e.uiConveursationMsg.getWkChannel() != null) {
+                    ids.add(e.uiConveursationMsg.getWkChannel().channelID);
+                }
+            }
         }
         for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
             for (ChooseChatEntity entity : threadItems) {
-                if (entity.isCheck) count++;
+                if (entity.isCheck && !TextUtils.isEmpty(entity.threadChannelId)) {
+                    ids.add(entity.threadChannelId);
+                }
             }
         }
-        return count;
+        for (WKChannel ch : extraSelectedChannels.values()) {
+            if (ch != null && !TextUtils.isEmpty(ch.channelID)) ids.add(ch.channelID);
+        }
+        return ids.size();
+    }
+
+    /** 主页 isCheck=true 的项里是否已包含该 channelID (allList + threadEntityCache). */
+    private boolean isAlreadyCheckedInMain(String channelId) {
+        if (TextUtils.isEmpty(channelId)) return false;
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                ChooseChatEntity e = allList.get(i);
+                if (!e.isCheck) continue;
+                if (e.uiConveursationMsg != null && e.uiConveursationMsg.getWkChannel() != null
+                        && channelId.equals(e.uiConveursationMsg.getWkChannel().channelID)) {
+                    return true;
+                }
+            }
+        }
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) {
+                if (entity.isCheck && channelId.equals(entity.threadChannelId)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** singleSelect 模式下从新建会话页回流前清空所有已选, 让新选项成为唯一 1 个. */
+    private void clearAllSelections() {
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                allList.get(i).isCheck = false;
+            }
+        }
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) entity.isCheck = false;
+        }
+        extraSelectedChannels.clear();
+        // adapter 当前可见行同步刷新 (隐藏的会在 filterAndDisplay 时按 isCheck 渲染)
+        if (chooseChatAdapter != null) chooseChatAdapter.notifyDataSetChanged();
     }
 
     private void updateRightBtn() {
@@ -301,7 +443,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
             filterAndDisplay();
             return;
         }
-        List<ChooseChatEntity> source = currentTab == 0 ? groupList : personalList;
+        List<ChooseChatEntity> source = currentTab == 0 ? groupList : recentList;
         List<ChooseChatEntity> tempList = new ArrayList<>();
         String lowerContent = content.toLowerCase(Locale.getDefault());
         for (int i = 0, size = source.size(); i < size; i++) {
@@ -337,14 +479,16 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         List<WKUIConversationMsg> list = WKIM.getInstance().getConversationManager().getAll();
         allList = new ArrayList<>();
         groupList = new ArrayList<>();
-        personalList = new ArrayList<>();
+        recentList = new ArrayList<>();
 
         for (int i = 0, size = list.size(); i < size; i++) {
-            if (list.get(i).channelType == WKChannelType.COMMUNITY_TOPIC) continue;
-            ChooseChatEntity chooseChatEntity = new ChooseChatEntity(list.get(i));
-            if (list.get(i).getWkChannel() != null) {
-                WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(list.get(i).getWkChannel().channelID, list.get(i).getWkChannel().channelType, WKConfig.getInstance().getUid());
-                if (list.get(i).getWkChannel().forbidden == 1) {
+            WKUIConversationMsg conv = list.get(i);
+            // 当前 space 过滤,与消息列表/MyGroupsList 同口径,避免最近 tab 出现别 space 的群/子区
+            if (SpaceFilter.shouldSkipChannelForSpace(conv.channelID, conv.channelType)) continue;
+            ChooseChatEntity chooseChatEntity = new ChooseChatEntity(conv);
+            if (conv.getWkChannel() != null) {
+                WKChannelMember mChannelMember = WKIM.getInstance().getChannelMembersManager().getMember(conv.getWkChannel().channelID, conv.getWkChannel().channelType, WKConfig.getInstance().getUid());
+                if (conv.getWkChannel().forbidden == 1) {
                     if (mChannelMember != null) {
                         chooseChatEntity.isForbidden = mChannelMember.role == WKChannelMemberRole.normal;
                     }
@@ -353,15 +497,16 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                         chooseChatEntity.isForbidden = mChannelMember.forbiddenExpirationTime > 0;
                     else chooseChatEntity.isForbidden = false;
                 }
-                chooseChatEntity.isBan = list.get(i).getWkChannel().status == WKChannelStatus.statusDisabled;
+                chooseChatEntity.isBan = conv.getWkChannel().status == WKChannelStatus.statusDisabled;
             }
             allList.add(chooseChatEntity);
 
-            if (list.get(i).channelType == WKChannelType.GROUP) {
+            // 关注 tab 仍然只装 GROUP, 走 categoryList 分组 + 子区按需展开
+            if (conv.channelType == WKChannelType.GROUP) {
                 groupList.add(chooseChatEntity);
-            } else if (list.get(i).channelType == WKChannelType.PERSONAL) {
-                personalList.add(chooseChatEntity);
             }
+            // 最近 tab 装所有会话(DM + 群 + 子区), 不再过滤,对齐 iOS recent tab 语义
+            recentList.add(chooseChatEntity);
         }
 
         rightBtn.setVisibility(View.GONE);
@@ -393,6 +538,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     private void loadAllThreads() {
         if (WKConfig.getInstance().getAppConfig().thread_on != 1 || groupList.isEmpty()) {
             threadsLoaded = true;
+            applyPreselectionIfAny();
             filterAndDisplay();
             return;
         }
@@ -403,6 +549,7 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 pending[0]--;
                 if (pending[0] <= 0) {
                     threadsLoaded = true;
+                    applyPreselectionIfAny();
                     filterAndDisplay();
                 }
                 continue;
@@ -432,10 +579,82 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
                 pending[0]--;
                 if (pending[0] <= 0) {
                     threadsLoaded = true;
+                    applyPreselectionIfAny();
                     filterAndDisplay();
                 }
             });
         }
+    }
+
+    /**
+     * 把 {@link #preselectedChannels} 落到 entity.isCheck / extraSelectedChannels / expandedThreadGroups 三处。
+     * 触发时机: loadAllThreads 收尾 (threadsLoaded=true) 之后, filterAndDisplay 之前。
+     * 仅生效一次, 避免 search / tab 切换 / 子区 toggle 重复 reload 时把用户取消的勾再加回去。
+     *
+     * 1:1 对齐 iOS WKForwardSelectVC.viewDidLoad preselect 逻辑 (commit 333f247): 子区 key 用纯 channelId,
+     * 父群 groupNo 进 expandedThreadGroups 让用户能看到已勾选的子区。
+     */
+    private boolean preselectionApplied = false;
+
+    private void applyPreselectionIfAny() {
+        if (preselectionApplied) return;
+        preselectionApplied = true;
+        if (preselectedChannels == null || preselectedChannels.isEmpty()) return;
+
+        // 索引 allList 主入口数据 (DM + 群 + 子区会话项)
+        HashMap<String, ChooseChatEntity> mainIndex = new HashMap<>();
+        for (ChooseChatEntity e : allList) {
+            if (e.uiConveursationMsg != null && e.uiConveursationMsg.getWkChannel() != null) {
+                mainIndex.put(e.uiConveursationMsg.getWkChannel().channelID, e);
+            }
+        }
+        // 索引 threadEntityCache (子区条目)
+        HashMap<String, ChooseChatEntity> threadIndex = new HashMap<>();
+        for (List<ChooseChatEntity> items : threadEntityCache.values()) {
+            for (ChooseChatEntity te : items) {
+                if (!TextUtils.isEmpty(te.threadChannelId)) {
+                    threadIndex.put(te.threadChannelId, te);
+                }
+            }
+        }
+
+        for (WKChannel ch : preselectedChannels) {
+            if (ch == null || TextUtils.isEmpty(ch.channelID)) continue;
+            boolean matched = false;
+
+            if (ch.channelType == WKChannelType.COMMUNITY_TOPIC) {
+                // 子区可能出现在两处: 关注 tab 的 threadEntityCache (作为父群下的 thread item),
+                // 或最近 tab 的 allList/recentList (作为顶层会话 entity)。两处都打勾, 不漏。
+                ChooseChatEntity te = threadIndex.get(ch.channelID);
+                if (te != null) {
+                    te.isCheck = true;
+                    matched = true;
+                }
+                ChooseChatEntity me = mainIndex.get(ch.channelID);
+                if (me != null) {
+                    me.isCheck = true;
+                    matched = true;
+                }
+                // 父群 auto-expand: channelId 形如 "groupNo____shortId"
+                String[] parts = ch.channelID.split("____", 2);
+                if (parts.length == 2 && !TextUtils.isEmpty(parts[0])) {
+                    expandedThreadGroups.add(parts[0]);
+                }
+            } else {
+                ChooseChatEntity e = mainIndex.get(ch.channelID);
+                if (e != null) {
+                    e.isCheck = true;
+                    matched = true;
+                }
+            }
+
+            // 主页 / 子区缓存都没找到 → 走 extraSelectedChannels 兜底, 确认时仍能回传。
+            if (!matched) {
+                String key = ch.channelID + "|" + ch.channelType;
+                extraSelectedChannels.put(key, ch);
+            }
+        }
+        updateRightBtn();
     }
 
     private void filterAndDisplay() {
@@ -509,7 +728,10 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
             chooseChatAdapter.setList(displayList);
         } else {
-            chooseChatAdapter.setList(personalList);
+            // 最近 tab: 完整列表(DM + 群 + 子区)按置顶 + 时间排序
+            List<ChooseChatEntity> recent = new ArrayList<>(recentList);
+            sortByTopAndTime(recent);
+            chooseChatAdapter.setList(recent);
         }
     }
 

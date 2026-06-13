@@ -293,6 +293,14 @@ open class WKTextProvider : WKChatBaseProvider() {
                 contentTvLayout.paddingStart + contentTvLayout.paddingEnd
         }
 
+        // 修复 (与无表格分支同口径): 有表格的消息里如果文本段也含有序列表 (1. 2. 3.),
+        // OrderedListItemSpan.margin 不预测量, 文字 wrap 算不进序号宽度, 右侧字符被截断
+        // (用户报: msg=FB0A6657 raw=5011, ds=4123, tables=1 的 bullet/numbered 列表项 [1242][1245]
+        //  显示成 [124, 5] 被吃掉)。displaySpans 上的 OrderedListItemSpan 与后续 subSequence
+        // 出来的 segments 共享 span 对象引用 (SpannableStringInternal 复制时复用), 这里测一次
+        // 就能让所有 segments 拿到正确 margin。
+        io.noties.markwon.core.spans.OrderedListItemSpan.measure(contentTv, displaySpans)
+
         // 按占位符 \uFFFC 拆分文本为多段
         val fullText = displaySpans.toString()
         val placeholderPositions = mutableListOf<Int>()
@@ -370,7 +378,6 @@ open class WKTextProvider : WKChatBaseProvider() {
                 )
             )
         }
-
     }
 
     /** 去除 CharSequence 首尾的换行符，保留中间内容和 Span */

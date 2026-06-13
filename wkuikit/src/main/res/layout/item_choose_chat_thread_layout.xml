@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+ 选择会话 cell - 子区紧凑 (含 # 前缀). 1:1 对齐 iOS WKForwardSelectVC.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -10,10 +13,16 @@
         android:background="@drawable/layout_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="40dp"
+        android:paddingStart="15dp"
         android:paddingTop="7dp"
         android:paddingEnd="15dp"
         android:paddingBottom="7dp">
+
+        <com.chat.base.ui.components.CheckBox
+            android:id="@+id/checkbox"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="12dp" />
 
         <TextView
             android:layout_width="14dp"
@@ -27,22 +36,17 @@
             android:id="@+id/nameTv"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:lines="1"
             android:textColor="@color/color999"
             android:textSize="13sp" />
-
-        <com.chat.base.ui.components.CheckBox
-            android:id="@+id/checkbox"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="0.5dp"
-        android:layout_marginStart="54dp"
+        android:layout_marginStart="15dp"
         android:background="@color/homeColor" />
 </LinearLayout>

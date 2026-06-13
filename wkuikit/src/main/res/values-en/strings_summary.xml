@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="summary_tab_context">Context</string>
+    <string name="summary_entry_smart_summary">Smart Summary</string>
+    <string name="summary_common_cancel">Cancel</string>
+    <string name="summary_common_done">Done</string>
+    <string name="summary_common_delete">Delete</string>
+    <string name="summary_common_save">Save</string>
+    <string name="summary_common_network_error">Network error</string>
+    <string name="summary_common_load_failed">Failed to load</string>
+    <string name="summary_common_loading">Loading…</string>
+    <string name="summary_common_refreshing">Refreshing…</string>
+    <string name="summary_common_release_to_refresh">Release to refresh</string>
+    <string name="summary_common_empty">No summaries yet</string>
+    <string name="summary_common_unknown_chat">Unknown chat</string>
+    <string name="summary_common_unknown_error">Unknown error</string>
+    <string name="summary_common_untitled">(Untitled)</string>
+
+    <string name="summary_list_view_detail">View details</string>
+    <string name="summary_list_confirm_delete">Confirm deletion</string>
+    <string name="summary_list_delete_irreversible">This cannot be undone.</string>
+    <string name="summary_list_delete_failed">Failed to delete</string>
+    <string name="summary_filter_all">All</string>
+    <string name="summary_filter_pending">Pending</string>
+    <string name="summary_filter_waiting_confirm">Waiting for participants</string>
+    <string name="summary_filter_processing">Generating</string>
+    <string name="summary_filter_completed">Completed</string>
+    <string name="summary_filter_failed">Failed</string>
+
+    <string name="summary_card_creator_self">Created by you</string>
+    <string name="summary_card_creator_other">Created by %1$s</string>
+    <string name="summary_card_source_one">From %1$s</string>
+    <string name="summary_card_source_more">From %1$s and %2$d more %3$s</string>
+    <string name="summary_card_source_word_chat">chat</string>
+    <string name="summary_card_source_word_group">group chat</string>
+    <string name="summary_card_source_word_dm">direct message</string>
+    <string name="summary_card_processing">AI is analyzing chat history...</string>
+    <string name="summary_card_waiting_confirm">Waiting for participants to confirm...</string>
+    <string name="summary_card_status_failed">Failed</string>
+    <string name="summary_card_status_cancelled">Cancelled</string>
+    <string name="summary_card_status_waiting">Pending</string>
+    <string name="summary_card_task_cancelled">Task cancelled</string>
+
+    <string name="summary_time_just_now">Just now</string>
+    <string name="summary_time_minutes_ago">%1$d min ago</string>
+    <string name="summary_time_hours_ago">%1$d h ago</string>
+    <string name="summary_time_days_ago">%1$d d ago</string>
+
+    <string name="summary_create_title">New summary</string>
+    <string name="summary_create_fab">New summary</string>
+    <string name="summary_create_submit">Start summary</string>
+    <string name="summary_create_topic_placeholder">Enter a topic to summarize</string>
+    <string name="summary_create_choose_chat">Select chats</string>
+    <string name="summary_create_chat_placeholder">Select</string>
+    <string name="summary_create_chats_selected">%1$d chats selected</string>
+    <string name="summary_create_success">Summary task created</string>
+    <string name="summary_create_failed">Failed to create</string>
+    <string name="summary_thread_placeholder">Thread</string>
+    <string name="summary_chat_started_hint">Summary started — track progress in Smart Summary</string>
+    <string name="summary_tpl_weekly_label">Team weekly</string>
+    <string name="summary_tpl_chat_label">Summarize chat</string>
+    <string name="summary_tpl_project_label">Project status</string>
+    <string name="summary_tpl_task_label">Track progress</string>
+    <string name="summary_tpl_weekly_pattern">Summarize this week\'s work report</string>
+    <string name="summary_tpl_chat_pattern">Summarize key content in this chat</string>
+    <string name="summary_tpl_project_pattern">Summarize the progress of {project_name}</string>
+    <string name="summary_tpl_task_pattern">Summarize the status of {task_name}</string>
+    <string name="summary_tpl_project_placeholder">Project name</string>
+    <string name="summary_tpl_task_placeholder">Task name</string>
+
+    <string name="summary_search_chat_or_contacts">Search groups or contacts</string>
+    <string name="summary_chat_thread">Thread</string>
+
+    <string name="summary_detail_title">Summary details</string>
+    <string name="summary_detail_created_at">Created: %1$s</string>
+    <string name="summary_detail_processing_desc">This may take a moment. Please wait.</string>
+    <string name="summary_detail_waiting_title">Waiting for participant confirmation\nGeneration starts after all confirm.</string>
+    <string name="summary_detail_view_confirm">View confirmation status</string>
+    <string name="summary_detail_generation_failed">Generation failed:\n</string>
+    <string name="summary_detail_more_etc">more</string>
+
+    <string name="summary_action_edit">Edit</string>
+    <string name="summary_action_forward_to_chat">Forward to chat</string>
+    <string name="summary_action_regenerate">Regenerate</string>
+    <string name="summary_action_cancel_task">Cancel task</string>
+    <string name="summary_action_submit_mine">Submit mine</string>
+    <string name="summary_action_retry">Retry</string>
+    <string name="summary_action_edit_topic">Edit topic</string>
+    <string name="summary_regenerate_started">Regeneration started</string>
+    <string name="summary_cancelled">Cancelled</string>
+    <string name="summary_regenerate_failed">Failed to regenerate</string>
+    <string name="summary_cancel_failed">Failed to cancel</string>
+    <string name="summary_forward_no_content">No content to forward</string>
+    <string name="summary_forward_succeeded">Forwarded to %1$d chats</string>
+    <string name="summary_forward_partial">Succeeded %1$d / Failed %2$d</string>
+    <string name="summary_status_submitted">Submitted</string>
+
+    <string name="summary_edit_title">Edit summary</string>
+    <string name="summary_edit_conflict">Content has changed. Please refresh.</string>
+    <string name="summary_edit_save_failed">Failed to save</string>
+    <string name="summary_edit_discard_title">Discard changes?</string>
+    <string name="summary_edit_discard_msg">Unsaved changes will be lost.</string>
+    <string name="summary_edit_keep_editing">Keep editing</string>
+    <string name="summary_edit_discard">Discard</string>
+
+    <string name="summary_confirm_title">Participant confirmation</string>
+    <string name="summary_confirm_section_participants">Participants</string>
+    <string name="summary_confirm_section_sources">Sources</string>
+    <string name="summary_confirm_status_confirmed">Confirmed</string>
+    <string name="summary_confirm_status_declined">Declined</string>
+    <string name="summary_confirm_action">Confirm participation</string>
+    <string name="summary_confirm_pick_one_source">Select at least one source</string>
+    <string name="summary_confirm_success">Participation confirmed</string>
+    <string name="summary_confirm_submit_failed">Failed to submit</string>
+
+    <string name="summary_member_section_title">Member status</string>
+    <string name="summary_member_status_accepted">Accepted</string>
+
+    <string name="summary_related_chat_title">Related chat</string>
+    <string name="summary_related_open_original">Open original →</string>
+
+    <!-- Search + empty state -->
+    <string name="summary_search_placeholder">Search summaries</string>
+    <string name="summary_search_no_match">No matching summaries</string>
+    <string name="summary_empty_title">No summaries yet</string>
+    <string name="summary_empty_subtitle">Let AI distill key points from your chats and work</string>
+
+    <!-- Detail page (new strings, PR1 ones not duplicated) -->
+    <string name="summary_detail_nav_title">Smart Summary</string>
+    <string name="summary_detail_processing_title">AI is analyzing chats...</string>
+    <string name="summary_detail_unknown_error">Unknown error</string>
+    <string name="summary_detail_cancelled_text">Task cancelled</string>
+    <string name="summary_detail_load_failed">Failed to load</string>
+    <string name="summary_detail_confirm_delete_title">Confirm delete</string>
+    <string name="summary_detail_confirm_delete_msg">This cannot be undone</string>
+    <string name="summary_chip_thread_prefix"># %1$s</string>
+    <string name="summary_chip_thread_with_parent"># %1$s · %2$s</string>
+    <string name="summary_action_pending_pr5">Related chat sheet coming in PR5</string>
+    <string name="summary_action_pending_pr6">Confirmation page coming in PR6</string>
+    <string name="summary_action_forward_pending">Forward-to-chat coming soon</string>
+
+    <!-- Edit page (new strings, PR1 ones not duplicated) -->
+    <string name="summary_edit_save">Save</string>
+
+    <!-- New chat directory page tab -->
+    <string name="summary_dir_tab_bot">Bot</string>
+
+    <!-- Choose-chat page tabs (followed / recent) -->
+    <string name="summary_choose_chat_tab_followed">Followed</string>
+    <string name="summary_choose_chat_tab_recent">Recent</string>
+
+</resources>

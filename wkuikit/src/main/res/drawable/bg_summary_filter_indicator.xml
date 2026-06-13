@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 紫色 16x3dp 圆角 indicator, 1:1 对齐 iOS OctoSummaryFilterTabsView indicator. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/summary_purple" />
+    <corners android:radius="1.5dp" />
+</shape>

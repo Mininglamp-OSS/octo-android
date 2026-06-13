@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+ 选择会话 cell - 群聊紧凑 (无头像, # 前缀). 1:1 对齐 iOS WKForwardSelectVC.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -15,6 +18,12 @@
         android:paddingEnd="15dp"
         android:paddingBottom="8dp">
 
+        <com.chat.base.ui.components.CheckBox
+            android:id="@+id/checkbox"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="12dp" />
+
         <TextView
             android:id="@+id/hashTag"
             android:layout_width="18dp"
@@ -30,6 +39,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="6dp"
             android:ellipsize="end"
             android:fontFamily="sans-serif-medium"
             android:lines="1"
@@ -51,17 +61,11 @@
             android:layout_gravity="center_vertical"
             android:text="@string/group_ban"
             android:visibility="gone" />
-
-        <com.chat.base.ui.components.CheckBox
-            android:id="@+id/checkbox"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="0.5dp"
-        android:layout_marginStart="33dp"
+        android:layout_marginStart="15dp"
         android:background="@color/homeColor" />
 </LinearLayout>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 新建会话页. 1:1 对齐 iOS WKForwardDirectoryVC:
+   titlebar (右侧"确定(N)") → 搜索框 → 3-tab (群聊/联系人/Bot, 紫色下划线 indicator) → 列表
+ 联系人 tab 右侧叠 QuickSideBarView (A-Z 快捷定位), 与 ContactsFragment 同款.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <LinearLayout
+        android:id="@+id/searchLayout"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginHorizontal="15dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/radian_normal_layout">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:src="@mipmap/ic_ab_search"
+            android:tint="@color/color999" />
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/searchEt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:background="@color/transparent"
+            android:gravity="center|start"
+            android:hint="@string/str_search"
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:minHeight="40dp"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:singleLine="true"
+            android:textColor="@color/colorDark"
+            android:textColorHint="@color/color999"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <com.chat.uikit.chat.choose.ForwardDirTabsView
+        android:id="@+id/tabsView"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginTop="8dp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.chat.base.views.sidebar.QuickSideBarTipsView
+            android:id="@+id/quickSideBarTipsView"
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:layout_marginEnd="30dp"
+            android:visibility="invisible"
+            app:sidebarBackgroundColor="#7761F4"
+            app:sidebarTextColor="@android:color/white"
+            app:sidebarTextSize="@dimen/font_size_20" />
+
+        <com.chat.base.views.sidebar.QuickSideBarView
+            android:id="@+id/quickSideBarView"
+            android:layout_width="24dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center|end"
+            android:visibility="gone"
+            app:sidebarItemHeight="18dp"
+            app:sidebarTextColor="#999999"
+            app:sidebarTextColorChoose="#7761F4"
+            app:sidebarTextSize="@dimen/font_size_10"
+            app:sidebarTextSizeChoose="@dimen/font_size_10" />
+    </FrameLayout>
+</LinearLayout>

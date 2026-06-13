@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 黑色胶囊 FAB 背景, 圆角=半高 22dp (按钮高 44dp). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/summary_fab_bg" />
+    <corners android:radius="22dp" />
+</shape>

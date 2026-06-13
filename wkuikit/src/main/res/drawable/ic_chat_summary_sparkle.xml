@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  聊天 header 右上"快速总结"sparkle 入口图标。
+  1:1 对齐 iOS commit 333f247 WKConversationChannelHeader.octoSparkleImage:
+    lucide-sparkle 24x24 viewBox, 4 外尖 + 4 内凹,
+    描线 2pt, 圆角 line cap/join, 纯描边不填充。
+  与上下文 tab 入口的 紫底白色实心 sparkle (R.drawable.ic_summary_spark) 是两套视觉,
+  那套是 brand 入口 (强调色), 这套是 nav header 控件 (与 backIv / voice 同色族, 安静)。
+
+  实际颜色: ImageView 在 ChatActivity 里用 PorterDuffColorFilter(MULTIPLY) 染成 colorDark
+  (与 backIv 同色), 这里 strokeColor 用白色作为乘法基色。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M11.017,2.814 a1,1 0 0,1 1.966,0 l1.051,5.558 a2,2 0 0,0 1.594,1.594 l5.558,1.051 a1,1 0 0,1 0,1.966 l-5.558,1.051 a2,2 0 0,0 -1.594,1.594 l-1.051,5.558 a1,1 0 0,1 -1.966,0 l-1.051,-5.558 a2,2 0 0,0 -1.594,-1.594 l-5.558,-1.051 a1,1 0 0,1 0,-1.966 l5.558,-1.051 a2,2 0 0,0 1.594,-1.594 z" />
+</vector>

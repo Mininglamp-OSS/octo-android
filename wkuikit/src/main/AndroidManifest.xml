@@ -22,6 +22,9 @@
         <activity
             android:name=".chat.ChooseChatActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
+        <activity
+            android:name=".chat.choose.ForwardDirectoryActivity"
+            android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity android:name=".search.SearchUserActivity" />
         <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity
@@ -123,6 +126,33 @@
         <activity
             android:name="com.chat.uikit.chat.provider.FileSaveActivity"
             android:theme="@style/Theme.AppCompat.Translucent" />
+
+        <!-- 智能总结列表页 (上下文 Tab 主入口) -->
+        <activity
+            android:name="com.chat.uikit.summary.list.SmartSummaryListActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 智能总结详情页 -->
+        <activity
+            android:name="com.chat.uikit.summary.detail.SmartSummaryDetailActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 编辑总结正文 -->
+        <activity
+            android:name="com.chat.uikit.summary.detail.SmartSummaryEditActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 发起总结 -->
+        <activity
+            android:name="com.chat.uikit.summary.create.SmartSummaryCreateActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 参与确认 -->
+        <activity
+            android:name="com.chat.uikit.summary.confirm.SmartSummaryConfirmActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
     </application>
 </manifest>

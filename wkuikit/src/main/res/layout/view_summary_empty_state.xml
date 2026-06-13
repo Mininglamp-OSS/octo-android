@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 上下文列表真空态. 1:1 对齐 iOS OctoSummaryListVC.buildEmptyStateView:
+   84dp doc 图标 18% 透明 + 17sp semibold 标题 + 14sp 副标题 (lineSpacing 4).
+ 上偏 -40dp 让画面不死 center, 视觉重心更稳, 与 iOS 一致。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:paddingHorizontal="32dp">
+
+    <ImageView
+        android:id="@+id/emptyDocIv"
+        android:layout_width="84dp"
+        android:layout_height="84dp"
+        android:src="@drawable/ic_summary_empty_doc"
+        android:tint="@color/summary_text_secondary"
+        android:alpha="0.18"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/emptyTitleTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:gravity="center"
+        android:text="@string/summary_empty_title"
+        android:textColor="@color/summary_text_primary"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/emptySubtitleTv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp"
+        android:text="@string/summary_empty_subtitle"
+        android:textColor="@color/summary_text_secondary"
+        android:textSize="14sp" />
+</LinearLayout>

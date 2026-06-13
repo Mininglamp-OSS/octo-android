@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 新建会话 cell. 1:1 对齐 iOS WKForwardDirectoryVC: 头像 + 名称 + AI 角标(bot) + 右 checkbox.
+ 与 ChooseChatActivity 的左 checkbox 主页是 iOS 不一致行为, 目的让用户区分场景.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/layout_bg"
+    android:gravity="center_vertical"
+    android:minHeight="60dp"
+    android:orientation="horizontal"
+    android:paddingStart="15dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="15dp"
+    android:paddingBottom="8dp">
+
+    <com.chat.base.ui.components.AvatarView
+        android:id="@+id/avatarView"
+        android:layout_width="40dp"
+        android:layout_height="40dp" />
+
+    <TextView
+        android:id="@+id/hashTag"
+        android:layout_width="14dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="#"
+        android:textColor="@color/color999"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/nameTv"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:lines="1"
+        android:textColor="@color/colorDark"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/aiBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/bg_ai_badge"
+        android:paddingHorizontal="5dp"
+        android:paddingVertical="1dp"
+        android:text="AI"
+        android:textColor="@color/white"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <com.chat.base.ui.components.CheckBox
+        android:id="@+id/checkbox"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="12dp" />
+</LinearLayout>

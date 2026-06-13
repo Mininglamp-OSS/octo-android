@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+ 选择会话页. 1:1 对齐 iOS WKForwardSelectVC:
+   titlebar (右侧"确定(N)") → 搜索框 → 右上"新建会话"紫字 → 关注/最近 segmented tab → 列表
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,70 +12,68 @@
     <include layout="@layout/wk_title_bar_layout" />
 
     <LinearLayout
+        android:id="@+id/searchLayout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/homeColor">
+        android:layout_height="40dp"
+        android:layout_marginHorizontal="15dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/radian_normal_layout">
 
-        <LinearLayout
-            android:id="@+id/searchLayout"
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:src="@mipmap/ic_ab_search"
+            android:tint="@color/color999" />
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/searchEt"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:layout_margin="15dp"
-            android:background="@drawable/radian_normal_layout">
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginStart="15dp"
-                android:tint="@color/color999"
-                android:layout_marginTop="10dp"
-                android:layout_marginBottom="10dp"
-                android:src="@mipmap/ic_ab_search" />
-
-
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/searchEt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
-                android:background="@color/transparent"
-                android:drawablePadding="5dp"
-                android:gravity="center|start"
-                android:hint="@string/str_search"
-                android:imeOptions="actionSearch"
-                android:maxLines="1"
-                android:minHeight="40dp"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
-                android:singleLine="true"
-                android:textColor="@color/colorDark"
-                android:textColorHint="@color/color999"
-                android:textSize="14sp" />
-
-        </LinearLayout>
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:background="@color/transparent"
+            android:drawablePadding="5dp"
+            android:gravity="center|start"
+            android:hint="@string/str_search"
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:minHeight="40dp"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:singleLine="true"
+            android:textColor="@color/colorDark"
+            android:textColorHint="@color/color999"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/createTv"
-        style="@style/layoutBg"
-        android:background="@color/white"
-        android:text="@string/create_new_chat"
-        android:textColor="@color/colorDark"
-        android:textSize="16sp" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="0.5dp"
-        android:layout_marginStart="15dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
         android:layout_marginEnd="15dp"
-        android:background="@color/colorE8E7E7" />
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="2dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="4dp"
+        android:text="@string/create_new_chat"
+        android:textColor="@color/summary_purple"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
     <FrameLayout
         android:id="@+id/segmentTabContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/white" />
+        android:layout_marginHorizontal="15dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="8dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"

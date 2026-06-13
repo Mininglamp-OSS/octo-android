@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 智能总结详情页. 1:1 对齐 iOS OctoSummaryDetailVC:
+   - title bar (固定 "智能总结", 右侧 ⋯ 菜单)
+   - body (ScrollView 垂直):
+     - title (大标题)
+     - sources (chip 流式 + 折叠)
+     - createdAt
+     - processingCard / waitingCard / contentCard (按状态显隐)
+   - bottomBar (转发到聊天 + 编辑) — 仅 completed 时显示
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/summary_list_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <include
+            android:id="@+id/titleBar"
+            layout="@layout/wk_title_bar_layout" />
+
+        <com.scwang.smart.refresh.layout.SmartRefreshLayout
+            android:id="@+id/bounceLayout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/scrollView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:overScrollMode="never">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="120dp">
+
+                <TextView
+                    android:id="@+id/titleTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/summary_text_strong"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:lineSpacingExtra="2dp"
+                    tools:text="2026 年 6 月项目周报" />
+
+                <com.chat.uikit.summary.detail.SummaryDetailSourcesView
+                    android:id="@+id/sourcesView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp" />
+
+                <TextView
+                    android:id="@+id/createdAtTv"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/summary_text_50"
+                    android:textSize="12sp"
+                    tools:text="创建于：2026-06-12 10:30" />
+
+                <!-- processing 卡 -->
+                <LinearLayout
+                    android:id="@+id/processingCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="200dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_summary_detail_processing"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <ProgressBar
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:indeterminateTint="@color/summary_purple" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/summary_detail_processing_title"
+                        android:textColor="@color/summary_text_strong"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/summary_detail_processing_desc"
+                        android:textColor="@color/summary_text_60"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- waiting 卡 -->
+                <LinearLayout
+                    android:id="@+id/waitingCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/waitingTitleTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="@string/summary_detail_waiting_title"
+                        android:textColor="@color/summary_text_strong"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/waitingActionBtn"
+                        android:layout_width="match_parent"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_summary_waiting_action"
+                        android:text="@string/summary_detail_view_confirm"
+                        android:textAllCaps="false"
+                        android:textColor="@color/summary_text_strong"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <!-- content 卡 (markdown / 失败 / 取消)。
+                     LinearLayout vertical 让 markdown 拆分后可承载 contentTv + 表格卡 + 后续文本段,
+                     与 ChatActivity 消息气泡 contentTvLayout 同结构, 复用 WKTextProvider 的渲染思路。 -->
+                <LinearLayout
+                    android:id="@+id/contentCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_summary_detail_card"
+                    android:orientation="vertical"
+                    android:padding="14dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/contentTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/summary_text_strong"
+                        android:textSize="14sp"
+                        android:lineSpacingExtra="3dp"
+                        android:textIsSelectable="false" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+        </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+    </LinearLayout>
+
+    <!-- 底部悬浮按钮区 (转发到聊天 + 编辑) -->
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:layout_gravity="bottom"
+        android:background="?android:colorBackground"
+        android:elevation="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/footerForwardBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_summary_footer_secondary"
+            android:gravity="center"
+            android:text="@string/summary_action_forward_to_chat"
+            android:textColor="@color/summary_text_strong"
+            android:textSize="15sp" />
+
+        <View
+            android:layout_width="12dp"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/footerEditBtn"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_summary_footer_primary"
+            android:gravity="center"
+            android:text="@string/summary_action_edit"
+            android:textColor="@color/summary_button_solid_fg"
+            android:textSize="15sp" />
+    </LinearLayout>
+</FrameLayout>

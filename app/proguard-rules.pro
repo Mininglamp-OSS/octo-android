@@ -223,6 +223,27 @@
 #---------Space 模块-------------
 -keep class com.chat.uikit.space.**{*;}
 
+#---------智能总结模块-------------
+# 1. com.chat.base.summary.api.*  —  request body 类用 @field:JSONField + FastJson
+#    JSON.toJSONString(value) 反射写出, 字段名混淆会让序列化产物变成 {"a":..,"b":..}
+#    (注解只控制 JSON key, 控制不了 java field name 被读这一步).
+#    Retrofit interface SummaryApiService 的方法注解走 -keepattributes *Annotation*,
+#    但方法本身得在, 否则代理生成失败.
+# 2. com.chat.base.summary.model.*  —  手写 fromJson(JSONObject) 不靠注解反射, 但
+#    data class 的 copy/componentN 内部对字段引用保留即可; 这里全 keep 防御 R8
+#    某些 case 下把未被外部直读的 val 内联掉影响 toJson 出口字段.
+# 3. SummaryEnums (TaskStatus / SourceType 等)  —  raw: Int 由 fromJson 用,
+#    全局 -keepclassmembers enum * { values; valueOf; } 保不到 raw 字段.
+-keep class com.chat.base.summary.** { *; }
+
+# Markwon HeadingSpan.level 反射 (SmartSummaryDetailActivity.applyTypography 拿 level
+# 决定 H1/H2/H3 字号 patch). 当前 fail 路径有 WKLogUtils + 退化到 markwon 默认字号,
+# 但 keep 字段后能保持 1:1 对齐 iOS 字号梯度.
+-keepclassmembers class io.noties.markwon.core.spans.HeadingSpan {
+    int level;
+}
+-dontwarn io.noties.markwon.**
+
 -keep class org.web3j.**{*;}
 -dontwarn org.web3j.**
 

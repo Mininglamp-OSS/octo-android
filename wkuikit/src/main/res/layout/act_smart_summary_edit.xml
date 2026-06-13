@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 编辑总结. 1:1 对齐 iOS OctoSummaryEditVC: 标题栏 + 全屏 EditText, 标题栏右侧 "保存"。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground"
+    android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <EditText
+        android:id="@+id/contentEt"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@null"
+        android:gravity="top|start"
+        android:padding="12dp"
+        android:textColor="@color/summary_text_strong"
+        android:textColorHint="@color/summary_text_50"
+        android:textCursorDrawable="@null"
+        android:textSize="14sp"
+        android:inputType="textMultiLine"
+        android:hint="@string/summary_edit_title"
+        android:importantForAutofill="no"
+        tools:ignore="Autofill,LabelFor"
+        xmlns:tools="http://schemas.android.com/tools" />
+</LinearLayout>

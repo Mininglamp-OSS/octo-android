@@ -22,6 +22,9 @@
         <activity
             android:name=".chat.ChooseChatActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
+        <activity
+            android:name=".chat.choose.ForwardDirectoryActivity"
+            android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity android:name=".search.SearchUserActivity" />
         <!--  (#176): secondary pane in Activity Embedding split. -->
         <activity

@@ -146,4 +146,8 @@
     <!-- New chat directory page tab -->
     <string name="summary_dir_tab_bot">Bot</string>
 
+    <!-- Choose-chat page tabs (followed / recent) -->
+    <string name="summary_choose_chat_tab_followed">Followed</string>
+    <string name="summary_choose_chat_tab_recent">Recent</string>
+
 </resources>

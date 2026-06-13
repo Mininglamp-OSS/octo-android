@@ -64,13 +64,26 @@ class SmartSummaryDetailViewModel(
         loadDetail()
     }
 
-    fun loadDetail() {
+    /**
+     * 拉详情. [silent]=true 表示后台轮询 tick (8s 自动刷新), 不弹 LoadFailed toast,
+     * 不动 loading 标志位; 失败时仍然按上一次已知的非终态 status 重排下一拍, 让一次瞬时
+     * 网络抖动不至于把整个轮询链整个断掉 (iOS NSTimer fires unconditionally, 这里也对齐)。
+     *
+     * silent=false 是用户主动触发 (init / onResume / cancel-regenerate 收尾 reload),
+     * 失败弹 toast, 同样按 last-known status 继续轮询 (避免 onResume 时一拍失败后再也不刷新)。
+     */
+    fun loadDetail(silent: Boolean = false) {
         viewModelScope.launch {
             val res = repository.getSummaryDetail(taskId)
             if (res.isFailure) {
-                _state.update {
-                    it.copy(loading = false, effect = DetailEffect.Toast(DetailToastKind.LoadFailed))
+                if (!silent) {
+                    _state.update {
+                        it.copy(loading = false, effect = DetailEffect.Toast(DetailToastKind.LoadFailed))
+                    }
                 }
+                // 用上一次已知 status 决定是否继续轮询: 首次 load 失败 lastStatus=null 不重排,
+                // 用户可下拉刷新 / 重进 activity 自然恢复; 已经拿到过 detail 的话保持原节奏。
+                _state.value.detail?.status?.let { schedulePollIfNeeded(it) }
                 return@launch
             }
             val detail = res.getOrThrow()
@@ -126,7 +139,9 @@ class SmartSummaryDetailViewModel(
         if (status != TaskStatus.Processing && status != TaskStatus.Pending) return
         pollJob = viewModelScope.launch {
             delay(POLL_INTERVAL_MS)
-            loadDetail()
+            // 后台 tick 走 silent=true: 失败不弹 toast 不打扰用户, 失败分支自身会重排
+            // 让链路在瞬时抖动后自愈, 保持每 8s 一拍直到状态终态。
+            loadDetail(silent = true)
         }
     }
 

@@ -136,7 +136,16 @@ class SummaryRepositoryImpl(
             originChannelType = originChannelType,
         )
         return callEnvelope({ it.createSummary(body) }) { data ->
-            asObject(data)?.getLongValue("task_id") ?: 0L
+            // task_id 缺失 / 为 0 视为后端契约破裂, 抛 SummaryException 让上层弹 创建失败 toast,
+            // 而不是 success(0L) 让 SmartSummaryCreateActivity 关闭后跳进 detail(taskId=0) 拉空详情。
+            val taskId = asObject(data)?.getLongValue("task_id") ?: 0L
+            if (taskId <= 0L) {
+                throw SummaryException(
+                    httpStatus = 200, apiCode = 0,
+                    message = "createSummary returned no task_id",
+                )
+            }
+            taskId
         }
     }
 
@@ -173,7 +182,15 @@ class SummaryRepositoryImpl(
     override suspend fun regenerateSummary(taskId: Long, topic: String?): Result<Long> {
         val body = RegenerateRequest(topic = topic?.takeIf { it.isNotEmpty() })
         return callEnvelope({ it.regenerateSummary(taskId, body) }) { data ->
-            asObject(data)?.getLongValue("task_id") ?: 0L
+            // 与 createSummary 同口径: task_id 缺失 / 0 视为契约破裂, 不返回假成功。
+            val newId = asObject(data)?.getLongValue("task_id") ?: 0L
+            if (newId <= 0L) {
+                throw SummaryException(
+                    httpStatus = 200, apiCode = 0,
+                    message = "regenerateSummary returned no task_id",
+                )
+            }
+            newId
         }
     }
 

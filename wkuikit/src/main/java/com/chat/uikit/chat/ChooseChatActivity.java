@@ -75,6 +75,8 @@ import java.util.Set;
  */
 public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBinding> {
     private static final int REQ_FORWARD_DIRECTORY = 0x9001;
+    /** 多选最大数量, 与主页 item tap 校验同口径; 老协议消费方按 9 上限消费. */
+    private static final int MAX_SELECT_COUNT = 9;
 
     /**
      * 进入页面时已选中的频道列表 (Parcelable<WKChannel>),用于"二次编辑": 例如发起总结
@@ -215,8 +217,11 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
         wkVBinding.createTv.setOnClickListener(v -> openNewChatDirectory());
 
+        // 关注 tab 走 categoryList 分组 (与原 群聊 tab 同源), 最近 tab 装全量会话(DM+群+子区);
+        // 文案对齐 iOS WKForwardSelectVC 关注/最近, 不再用旧的"群聊/私聊"误导用户。
         segmentTabView = new SegmentTabView(this,
-                new String[]{getString(R.string.str_group_chat), getString(R.string.str_private_chat)});
+                new String[]{getString(R.string.summary_choose_chat_tab_followed),
+                        getString(R.string.summary_choose_chat_tab_recent)});
         wkVBinding.segmentTabContainer.addView(segmentTabView,
                 new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
@@ -251,8 +256,32 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         if (requestCode == REQ_FORWARD_DIRECTORY && resultCode == RESULT_OK && data != null) {
             ArrayList<WKChannel> picked = data.getParcelableArrayListExtra("list");
             if (picked == null || picked.isEmpty()) return;
+
+            // singleSelect 模式: 主页 isCheck + extraSelectedChannels 只允许保留 1 个,
+            // 与 ChooseChatActivity item 点击路径同口径。回传 picked 已经是单条 (新建会话页
+            // 自身已约束), 这里清掉主页所有已选 + 旧 extra, 让新建会话的选项成为唯一一个。
+            if (singleSelect) {
+                clearAllSelections();
+            } else {
+                // 多选: 检查合并后总数是否会超过 9, 是则截断 picked 只保留能容纳的部分,
+                // 与主页 item tap "max 9" 同语义 (showSingleBtnDialog 那条提示)。
+                int currentTotal = getSelectedCount();
+                int remaining = MAX_SELECT_COUNT - currentTotal;
+                if (remaining <= 0) {
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
+                    return;
+                }
+                if (picked.size() > remaining) {
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
+                    picked = new ArrayList<>(picked.subList(0, remaining));
+                }
+            }
+
             for (WKChannel ch : picked) {
                 if (ch == null || TextUtils.isEmpty(ch.channelID)) continue;
+                // 与主页 isCheck 项去重, 已经在主页勾上的 channelID 不重复入 extra
+                // (避免 confirm 时 list 短暂超过 9 才被 dedup, 计数会比真实多)。
+                if (isAlreadyCheckedInMain(ch.channelID)) continue;
                 String key = ch.channelID + "|" + ch.channelType;
                 extraSelectedChannels.put(key, ch);
             }
@@ -335,17 +364,66 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     }
 
     private int getSelectedCount() {
-        int count = 0;
-        for (int i = 0, size = allList.size(); i < size; i++) {
-            if (allList.get(i).isCheck) count++;
+        // 用 set 收集 channelID 去重: extraSelectedChannels 可能与主页 isCheck 项 channelID 重叠
+        // (用户在新建会话页选了主页也存在的群), 直接 size 相加会读高 1。这里与
+        // rightButtonClick 收集逻辑同口径, 显示计数与最终回传一致。
+        Set<String> ids = new HashSet<>();
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                ChooseChatEntity e = allList.get(i);
+                if (!e.isCheck) continue;
+                if (e.uiConveursationMsg != null && e.uiConveursationMsg.getWkChannel() != null) {
+                    ids.add(e.uiConveursationMsg.getWkChannel().channelID);
+                }
+            }
         }
         for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
             for (ChooseChatEntity entity : threadItems) {
-                if (entity.isCheck) count++;
+                if (entity.isCheck && !TextUtils.isEmpty(entity.threadChannelId)) {
+                    ids.add(entity.threadChannelId);
+                }
             }
         }
-        count += extraSelectedChannels.size();
-        return count;
+        for (WKChannel ch : extraSelectedChannels.values()) {
+            if (ch != null && !TextUtils.isEmpty(ch.channelID)) ids.add(ch.channelID);
+        }
+        return ids.size();
+    }
+
+    /** 主页 isCheck=true 的项里是否已包含该 channelID (allList + threadEntityCache). */
+    private boolean isAlreadyCheckedInMain(String channelId) {
+        if (TextUtils.isEmpty(channelId)) return false;
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                ChooseChatEntity e = allList.get(i);
+                if (!e.isCheck) continue;
+                if (e.uiConveursationMsg != null && e.uiConveursationMsg.getWkChannel() != null
+                        && channelId.equals(e.uiConveursationMsg.getWkChannel().channelID)) {
+                    return true;
+                }
+            }
+        }
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) {
+                if (entity.isCheck && channelId.equals(entity.threadChannelId)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** singleSelect 模式下从新建会话页回流前清空所有已选, 让新选项成为唯一 1 个. */
+    private void clearAllSelections() {
+        if (allList != null) {
+            for (int i = 0, size = allList.size(); i < size; i++) {
+                allList.get(i).isCheck = false;
+            }
+        }
+        for (List<ChooseChatEntity> threadItems : threadEntityCache.values()) {
+            for (ChooseChatEntity entity : threadItems) entity.isCheck = false;
+        }
+        extraSelectedChannels.clear();
+        // adapter 当前可见行同步刷新 (隐藏的会在 filterAndDisplay 时按 isCheck 渲染)
+        if (chooseChatAdapter != null) chooseChatAdapter.notifyDataSetChanged();
     }
 
     private void updateRightBtn() {

@@ -140,6 +140,24 @@ class SummaryRepositoryImplTest {
         assertEquals("模板已下线", err.message)
     }
 
+    /**
+     * createSummary 返回 envelope code=0 但 data 里没有 task_id (后端契约破裂):
+     * 旧实现 fallback 到 0L 假装成功 → SmartSummaryCreateActivity 关闭后跳进 detail(taskId=0)
+     * 拉空详情, 用户看到无效页. 修复后视为契约破裂抛 SummaryException, 让 UI 弹"创建失败"。
+     */
+    @Test
+    fun `createSummary missing task_id maps to SummaryException`() = runTest {
+        api.stubSuccess("POST summaries", JSONObject())  // 空 data, 没有 task_id
+
+        val res = repo.createSummary(
+            topic = "Demo",
+            sources = listOf(SourceItem(SourceType.GroupChat, "g1", "组群")),
+        )
+
+        assertTrue(res.isFailure)
+        assertTrue(res.exceptionOrNull() is SummaryException)
+    }
+
     @Test
     fun `editSummary 409 surfaces as conflict exception`() = runTest {
         api.stubFailure("PUT summaries/3/edit", status = 409, code = -1, message = "stale")

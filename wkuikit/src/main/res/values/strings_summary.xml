@@ -158,4 +158,8 @@
     <!-- ===== 新建会话页 tab ===== -->
     <string name="summary_dir_tab_bot">机器人</string>
 
+    <!-- ===== 选择会话页 tab (关注 / 最近) ===== -->
+    <string name="summary_choose_chat_tab_followed">关注</string>
+    <string name="summary_choose_chat_tab_recent">最近</string>
+
 </resources>

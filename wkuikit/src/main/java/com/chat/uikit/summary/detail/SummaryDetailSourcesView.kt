@@ -70,7 +70,7 @@ class SummaryDetailSourcesView @JvmOverloads constructor(
     init {
         toggleBtn = ImageView(context).apply {
             setImageResource(R.drawable.ic_summary_chevron_down)
-            setColorFilter(0x80000000.toInt())
+            setColorFilter(ContextCompat.getColor(context, R.color.summary_text_50))
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             visibility = GONE
             setOnClickListener {
@@ -84,7 +84,7 @@ class SummaryDetailSourcesView @JvmOverloads constructor(
         etcLabel = TextView(context).apply {
             text = context.getString(R.string.summary_detail_more_etc)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0x80000000.toInt())
+            setTextColor(ContextCompat.getColor(context, R.color.summary_text_50))
             gravity = Gravity.CENTER
             visibility = GONE
         }
@@ -126,8 +126,8 @@ class SummaryDetailSourcesView @JvmOverloads constructor(
 
     private fun chipFgFor(t: SourceType): Int = when (t) {
         SourceType.GroupChat -> ContextCompat.getColor(context, R.color.summary_purple)
-        SourceType.Thread -> 0xFF0E9B8C.toInt()
-        else -> 0xFF1F1F1F.toInt()
+        SourceType.Thread -> ContextCompat.getColor(context, R.color.summary_teal_text)
+        else -> ContextCompat.getColor(context, R.color.summary_text_strong)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

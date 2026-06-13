@@ -13,7 +13,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F6F7">
+    android:background="@color/summary_list_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -48,7 +48,7 @@
                     android:id="@+id/titleTv"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="#1F1F1F"
+                    android:textColor="@color/summary_text_strong"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:lineSpacingExtra="2dp"
@@ -65,7 +65,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:textColor="#80000000"
+                    android:textColor="@color/summary_text_50"
                     android:textSize="12sp"
                     tools:text="创建于：2026-06-12 10:30" />
 
@@ -90,7 +90,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:text="@string/summary_detail_processing_title"
-                        android:textColor="#1F1F1F"
+                        android:textColor="@color/summary_text_strong"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -99,7 +99,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="@string/summary_detail_processing_desc"
-                        android:textColor="#99000000"
+                        android:textColor="@color/summary_text_60"
                         android:textSize="13sp" />
                 </LinearLayout>
 
@@ -119,7 +119,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="center"
                         android:text="@string/summary_detail_waiting_title"
-                        android:textColor="#1F1F1F"
+                        android:textColor="@color/summary_text_strong"
                         android:textSize="14sp"
                         android:textStyle="bold" />
 
@@ -131,7 +131,7 @@
                         android:background="@drawable/bg_summary_waiting_action"
                         android:text="@string/summary_detail_view_confirm"
                         android:textAllCaps="false"
-                        android:textColor="#1F1F1F"
+                        android:textColor="@color/summary_text_strong"
                         android:textSize="14sp" />
                 </LinearLayout>
 
@@ -149,7 +149,7 @@
                         android:id="@+id/contentTv"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="#1F1F1F"
+                        android:textColor="@color/summary_text_strong"
                         android:textSize="14sp"
                         android:lineSpacingExtra="3dp"
                         android:textIsSelectable="false" />
@@ -180,7 +180,7 @@
             android:background="@drawable/bg_summary_footer_secondary"
             android:gravity="center"
             android:text="@string/summary_action_forward_to_chat"
-            android:textColor="#1F1F1F"
+            android:textColor="@color/summary_text_strong"
             android:textSize="15sp" />
 
         <View
@@ -195,7 +195,7 @@
             android:background="@drawable/bg_summary_footer_primary"
             android:gravity="center"
             android:text="@string/summary_action_edit"
-            android:textColor="@android:color/white"
+            android:textColor="@color/summary_button_solid_fg"
             android:textSize="15sp" />
     </LinearLayout>
 </FrameLayout>

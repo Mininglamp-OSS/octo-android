@@ -11,8 +11,7 @@
     <FrameLayout
         android:id="@+id/bubble"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="12dp">
+        android:layout_height="wrap_content">
 
         <View
             android:id="@+id/hitBar"
@@ -25,6 +24,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:padding="12dp"
             android:orientation="vertical">
 
             <LinearLayout
@@ -39,7 +39,7 @@
                     android:layout_height="wrap_content"
                     android:singleLine="true"
                     android:ellipsize="end"
-                    android:textColor="#1F1F1F"
+                    android:textColor="@color/summary_text_strong"
                     android:textSize="13sp"
                     tools:text="张乾" />
 
@@ -48,7 +48,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
-                    android:textColor="#66000000"
+                    android:textColor="@color/summary_text_40"
                     android:textSize="11sp"
                     tools:text="2026-06-12 10:30" />
 
@@ -76,7 +76,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:textColor="#1F1F1F"
+                android:textColor="@color/summary_text_strong"
                 android:textSize="14sp"
                 tools:text="任务进度同步: 项目已完成 80%, 准备进入测试阶段。" />
         </LinearLayout>

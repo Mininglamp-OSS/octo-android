@@ -94,7 +94,7 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
             backgroundTintList = null
             stateListAnimator = null
             setBackgroundResource(R.drawable.bg_summary_submit_btn)
-            setTextColor(android.graphics.Color.WHITE)
+            setTextColor(getColor(R.color.summary_button_solid_fg))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             val hPad = dp(14f)
@@ -284,12 +284,12 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
                 if (c is android.widget.ImageView) {
                     c.setColorFilter(
                         if (active) getColor(R.color.summary_purple)
-                        else 0xFF1F1F1F.toInt(),
+                        else getColor(R.color.summary_text_strong),
                     )
                 } else if (c is TextView) {
                     c.setTextColor(
                         if (active) getColor(R.color.summary_purple)
-                        else 0xFF1F1F1F.toInt(),
+                        else getColor(R.color.summary_text_strong),
                     )
                 }
             }

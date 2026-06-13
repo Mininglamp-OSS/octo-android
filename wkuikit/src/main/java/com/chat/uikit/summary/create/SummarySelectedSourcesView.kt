@@ -23,6 +23,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.core.content.ContextCompat
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.chat.base.summary.model.SourceItem
@@ -166,7 +167,7 @@ class SummarySelectedSourcesView @JvmOverloads constructor(
 
             nameTv = TextView(ctx).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setTextColor(0xFF1F1F1F.toInt())
+                setTextColor(ContextCompat.getColor(ctx, R.color.summary_text_strong))
                 setSingleLine(true)
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 text = (item.sourceName ?: item.sourceId).orEmpty()
@@ -184,7 +185,7 @@ class SummarySelectedSourcesView @JvmOverloads constructor(
             closeIv = ImageView(ctx).apply {
                 layoutParams = LayoutParams(closeSize + dp(4f), closeSize + dp(4f))
                 setImageResource(R.drawable.ic_summary_close)
-                setColorFilter(0x80000000.toInt())
+                setColorFilter(ContextCompat.getColor(ctx, R.color.summary_text_50))
                 isClickable = true
                 isFocusable = true
             }

@@ -11,11 +11,11 @@
 package com.chat.uikit.summary
 
 import android.content.Context
-import android.graphics.Color
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.chat.uikit.R
 
 /**
@@ -31,7 +31,7 @@ object SummaryHud {
         if (message.isEmpty()) return
         val view = TextView(context).apply {
             text = message
-            setTextColor(Color.WHITE)
+            setTextColor(ContextCompat.getColor(context, R.color.summary_hud_fg))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             gravity = Gravity.CENTER
             setBackgroundResource(R.drawable.bg_summary_hud)

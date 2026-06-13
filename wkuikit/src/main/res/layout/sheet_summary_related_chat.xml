@@ -35,7 +35,7 @@
             android:padding="10dp"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_summary_close"
-            app:tint="#99000000"
+            app:tint="@color/summary_text_60"
             android:contentDescription="@null"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:clickable="true"
@@ -46,7 +46,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:text="@string/summary_related_chat_title"
-            android:textColor="#1F1F1F"
+            android:textColor="@color/summary_text_strong"
             android:textSize="16sp"
             android:textStyle="bold" />
     </FrameLayout>
@@ -57,7 +57,7 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
         android:layout_marginTop="4dp"
-        android:textColor="#99000000"
+        android:textColor="@color/summary_text_60"
         android:textSize="13sp"
         tools:text="项目群" />
 

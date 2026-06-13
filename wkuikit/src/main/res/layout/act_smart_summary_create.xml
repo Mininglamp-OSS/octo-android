@@ -9,7 +9,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F6F7"
+    android:background="@color/summary_list_bg"
     android:orientation="vertical">
 
     <include layout="@layout/wk_title_bar_layout" />
@@ -45,8 +45,8 @@
                     android:background="@null"
                     android:gravity="top|start"
                     android:hint="@string/summary_create_topic_placeholder"
-                    android:textColor="#1F1F1F"
-                    android:textColorHint="#4D000000"
+                    android:textColor="@color/summary_text_strong"
+                    android:textColorHint="@color/summary_text_30"
                     android:textCursorDrawable="@null"
                     android:textSize="18sp"
                     android:inputType="textMultiLine|textCapSentences"
@@ -92,7 +92,7 @@
                         android:id="@+id/sourceFieldLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="22dp"
-                        android:textColor="#1F1F1F"
+                        android:textColor="@color/summary_text_strong"
                         android:textSize="14sp"
                         android:textStyle="bold"
                         tools:text="选择聊天 *" />
@@ -103,7 +103,7 @@
                         android:layout_height="20dp"
                         android:layout_marginTop="12dp"
                         android:text="@string/summary_create_chat_placeholder"
-                        android:textColor="#4D000000"
+                        android:textColor="@color/summary_text_30"
                         android:textSize="14sp" />
 
                     <com.chat.uikit.summary.create.SummarySelectedSourcesView
@@ -124,7 +124,7 @@
                     android:padding="10dp"
                     android:scaleType="fitCenter"
                     android:src="@drawable/ic_summary_chevron_right"
-                    app:tint="#4D000000"
+                    app:tint="@color/summary_text_30"
                     android:contentDescription="@null"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"

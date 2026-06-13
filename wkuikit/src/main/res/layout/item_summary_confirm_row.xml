@@ -19,7 +19,7 @@
         android:layout_weight="1"
         android:singleLine="true"
         android:ellipsize="end"
-        android:textColor="#1F1F1F"
+        android:textColor="@color/summary_text_strong"
         android:textSize="15sp"
         tools:text="Name" />
 
@@ -27,7 +27,7 @@
         android:id="@+id/statusTv"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#80000000"
+        android:textColor="@color/summary_text_50"
         android:textSize="13sp"
         android:visibility="gone"
         tools:text="Status" />

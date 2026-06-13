@@ -18,24 +18,53 @@
     <color name="summary_red">#FFFF3B30</color>
     <color name="summary_red_10">#1AFF3B30</color>
 
-    <!-- 背景 -->
+    <!-- 表面 / 背景 (浅色态; 深色态在 values-night 翻转) -->
+    <!-- iOS dark systemBackground=黑, light=#F5F6F7 (列表页), 卡片=secondarySystemBackground -->
     <color name="summary_list_bg">#FFF5F6F7</color>
-    <color name="summary_list_bg_dark">#FF1C1C1E</color>
-    <color name="summary_card_bg">#D9FFFFFF</color>
-    <color name="summary_processing_bg">#F2FCF3FF</color>
+    <color name="summary_card_bg">#FFFFFFFF</color>
+    <color name="summary_surface">#FFFFFFFF</color>
+    <color name="summary_surface_alt">#FFFCF3FF</color>
+    <color name="summary_processing_bg">#FFFCF3FF</color>
+    <color name="summary_processing_stroke">#FFFFFFFF</color>
     <color name="summary_pill_bg">#FFF5F6F7</color>
-    <color name="summary_pill_bg_dark">#14FFFFFF</color>
-    <color name="summary_chip_border">#14000000</color>
+    <color name="summary_search_pill_bg">#FFFFFFFF</color>
+    <color name="summary_action_popup_bg">#FFFFFFFF</color>
+    <color name="summary_chip_mute_bg">#0F000000</color>
+    <color name="summary_status_badge_bg">#1A000000</color>
+    <color name="summary_footer_secondary_bg">#0F000000</color>
+    <color name="summary_grabber_bg">#26000000</color>
+    <color name="summary_waiting_action_bg">#0A000000</color>
+    <color name="summary_related_context_bg">#0A000000</color>
+    <color name="summary_related_hit_bg">#FFF7F1FF</color>
 
-    <!-- 文字 -->
+    <!-- 描边 (浅色态用 black alpha; 深色态翻转为 white alpha) -->
+    <color name="summary_chip_border">#14000000</color>
+    <color name="summary_stroke_6">#10000000</color>
+    <color name="summary_stroke_8">#14000000</color>
+    <color name="summary_stroke_12">#1F000000</color>
+    <color name="summary_stroke_20">#33000000</color>
+
+    <!-- 文字 alpha 梯度 (iOS labelColor / 60% / 50% / 40% / 30%) -->
+    <color name="summary_text_strong">#FF1F1F1F</color>
     <color name="summary_text_primary">#FF1C1C23</color>
+    <color name="summary_text_70">#B3000000</color>
+    <color name="summary_text_60">#99000000</color>
     <color name="summary_text_secondary">#996B6B70</color>
+    <color name="summary_text_50">#80000000</color>
+    <color name="summary_text_40">#66000000</color>
     <color name="summary_text_muted">#666B6B70</color>
+    <color name="summary_text_30">#4D000000</color>
     <color name="summary_text_placeholder">#4D6B6B70</color>
 
-    <!-- FAB -->
+    <!-- 按钮 (反色配对: 浅色 = 黑底白字, 深色 = 白底黑字) -->
+    <color name="summary_button_solid_bg">#FF1F1F1F</color>
+    <color name="summary_button_solid_fg">#FFFFFFFF</color>
     <color name="summary_fab_bg">#FF000000</color>
     <color name="summary_fab_fg">#FFFFFFFF</color>
+
+    <!-- HUD (反色) -->
+    <color name="summary_hud_bg">#CC000000</color>
+    <color name="summary_hud_fg">#FFFFFFFF</color>
 
     <!-- citation 徽章背景 -->
     <color name="summary_citation_bg">#287F3BF5</color>

@@ -124,7 +124,7 @@ class SummaryItemActionPopup private constructor(
 
     /** iOS sep: (16, ..., menuWidth-32, 0.5pt) gray alpha 0.15 */
     private fun makeSeparator(): View = View(context).apply {
-        setBackgroundColor(Color.argb(38, 0, 0, 0)) // 灰 ~15%
+        setBackgroundColor(ContextCompat.getColor(context, R.color.summary_stroke_8))
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             (1f).coerceAtLeast(dp(0.5f)).toInt(), // 至少 1px

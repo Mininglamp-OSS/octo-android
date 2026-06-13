@@ -221,7 +221,7 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
         // 防止 status 切换 (Processing → Completed) 时上次 setTextColor / setTextSize 残留:
         // 进入每个分支前先 reset 到 layout 默认 14sp + 主色, 让本次 setText 的 spans 基线干净。
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        tv.setTextColor(0xFF1F1F1F.toInt())
+        tv.setTextColor(getColor(R.color.summary_text_strong))
         when {
             completed -> {
                 val raw = d.result?.content.orEmpty()
@@ -245,7 +245,7 @@ class SmartSummaryDetailActivity : WKBaseActivity<ActSmartSummaryDetailBinding>(
             else -> {
                 // cancelled
                 tv.text = getString(R.string.summary_detail_cancelled_text)
-                tv.setTextColor(0x80000000.toInt())
+                tv.setTextColor(getColor(R.color.summary_text_50))
             }
         }
     }

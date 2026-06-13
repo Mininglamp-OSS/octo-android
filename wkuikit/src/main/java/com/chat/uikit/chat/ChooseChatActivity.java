@@ -314,21 +314,22 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
 
             boolean isSelect = !chooseChatEntity.isBan && !chooseChatEntity.isForbidden;
             if (isSelect) {
-                chooseChatEntity.isCheck = !chooseChatEntity.isCheck;
-                if (singleSelect && chooseChatEntity.isCheck) {
-                    // 单选模式：取消其他已选项
-                    for (int j = 0, s = chooseChatAdapter.getData().size(); j < s; j++) {
-                        ChooseChatEntity other = chooseChatAdapter.getData().get(j);
-                        if (other != chooseChatEntity && other.isCheck) {
-                            other.isCheck = false;
-                            adapter.notifyItemChanged(j + adapter.getHeaderLayoutCount(), other);
-                        }
-                    }
+                boolean wasCheck = chooseChatEntity.isCheck;
+                if (singleSelect && !wasCheck) {
+                    // 单选模式: 主页 tap 也走 clearAllSelections(), 统一清主页所有 isCheck +
+                    // threadEntityCache + extraSelectedChannels, 不要只遍历 visible rows —
+                    // 否则搜索 / 折叠 / 新建会话回流隐藏的已选项会和当前 tap 一起回传, 越界。
+                    // notifyDataSetChanged 已在 helper 内调用, 后面单独 notifyItemChanged 会
+                    // 让本行立即翻成选中态视觉响应。
+                    clearAllSelections();
+                    chooseChatEntity.isCheck = true;
+                } else {
+                    chooseChatEntity.isCheck = !wasCheck;
                 }
                 int selectCount = getSelectedCount();
-                if (!singleSelect && chooseChatEntity.isCheck && selectCount > 9) {
+                if (!singleSelect && chooseChatEntity.isCheck && selectCount > MAX_SELECT_COUNT) {
                     chooseChatEntity.isCheck = false;
-                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), 9));
+                    showSingleBtnDialog(String.format(getString(R.string.max_select_count_chat), MAX_SELECT_COUNT));
                     adapter.notifyItemChanged(position + adapter.getHeaderLayoutCount());
                     return;
                 }

@@ -50,7 +50,6 @@ import com.chat.base.net.HttpResponseCode;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.CounterView;
 import com.chat.base.utils.ActManagerUtils;
-import com.chat.base.utils.DiagnosticLogFile;
 import com.chat.base.utils.LayoutHelper;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKDialogUtils;
@@ -232,24 +231,22 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             // 通知权限引导：带冷却的「软请求」。
             // 背景：部分华为/HarmonyOS 设备 areNotificationsEnabled() 在用户已开通知时仍返回 false，
             // 老逻辑会每次冷启动弹框。改成 7 天冷却 + 已授权时清零，避免循环骚扰，自愈用户后续关闭场景。
-            checkNotificationPermission(notificationManager);
+            checkNotificationPermission();
         });
     }
 
     private static final String KEY_NOTIFY_PROMPT_LAST_TS = "notify_prompt_last_ts";
     private static final long NOTIFY_PROMPT_COOLDOWN_MS = 7L * 24 * 60 * 60 * 1000;
 
-    private void checkNotificationPermission(NotificationManager notificationManager) {
+    private void checkNotificationPermission() {
         boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
-        long lastTs = parsePromptLastTs();
-        long now = System.currentTimeMillis();
-        long cooldownLeftMs = Math.max(0, NOTIFY_PROMPT_COOLDOWN_MS - (now - lastTs));
-        appendNotifyDiagnostic(notificationManager, isEnabled, lastTs, cooldownLeftMs);
         if (isEnabled) {
             // 已授权：清零冷却时间戳，便于用户后续若关闭通知能在下次冷启动重新提示一次。
             WKSharedPreferencesUtil.getInstance().putSP(KEY_NOTIFY_PROMPT_LAST_TS, "0");
             return;
         }
+        long lastTs = parsePromptLastTs();
+        long now = System.currentTimeMillis();
         if (lastTs > 0 && now - lastTs < NOTIFY_PROMPT_COOLDOWN_MS) {
             return;
         }
@@ -280,32 +277,6 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             return Long.parseLong(raw);
         } catch (NumberFormatException e) {
             return 0L;
-        }
-    }
-
-    /**
-     * 每次冷启动写一行，用户「我的→关于→导出诊断日志」回传后即可判读：
-     * - appEnabled=false + channelImp=0 → channel 被关
-     * - appEnabled=false + channelImp>0 → app 级或厂商 ROM 误判
-     * - appEnabled=true  → 已授权，cooldown 已清零
-     */
-    private void appendNotifyDiagnostic(NotificationManager nm, boolean appEnabled, long lastTs, long cooldownLeftMs) {
-        try {
-            int channelImp = -1;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
-                android.app.NotificationChannel ch = nm.getNotificationChannel(WKConstants.newMsgChannelID);
-                channelImp = ch == null ? -2 : ch.getImportance();
-            }
-            String line = String.format(
-                    "[notify] %s mfr=%s model=%s brand=%s sdk=%d appEnabled=%s channelImp=%d lastTs=%d cooldownLeftH=%d%n",
-                    WKTimeUtils.getInstance().getYearTime(System.currentTimeMillis(), "yyyy-MM-dd HH:mm:ss"),
-                    Build.MANUFACTURER, Build.MODEL, Build.BRAND,
-                    Build.VERSION.SDK_INT,
-                    appEnabled, channelImp,
-                    lastTs, cooldownLeftMs / (60L * 60 * 1000)
-            );
-            DiagnosticLogFile.append(this, line);
-        } catch (Throwable ignored) {
         }
     }
 

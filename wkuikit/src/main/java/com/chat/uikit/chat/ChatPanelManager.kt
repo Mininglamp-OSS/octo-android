@@ -70,6 +70,7 @@ import com.chat.base.endpoint.entity.SendTextMenu
 import com.chat.base.entity.BottomSheetItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.IConversationContext
+import com.chat.base.msg.MessageForwardSupport
 import com.chat.base.msg.model.WKGifContent
 import com.chat.base.msg.ChatContentSpanType
 import com.chat.base.msgitem.WKChannelMemberRole
@@ -3239,13 +3240,12 @@ class ChatPanelManager(
                             val itemCount: Int = chatAdapter.itemCount
                             while (i < itemCount) {
                                 if (chatAdapter.getItem(i).isChecked) {
-                                    if ((chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_TEXT
-                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_IMAGE
-                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_GIF)
-                                    ) list.add(chatAdapter.getItem(i).wkMsg.baseContentMsgModel) else {
-                                        val textContent =
-                                            WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.displayContent)
-                                        list.add(textContent)
+                                    val wkMsg = chatAdapter.getItem(i).wkMsg
+                                    val content = wkMsg.baseContentMsgModel
+                                    if (content != null && MessageForwardSupport.allowForward(wkMsg.type)) {
+                                        list.add(content)
+                                    } else {
+                                        list.add(WKTextContent(content?.displayContent.orEmpty()))
                                     }
                                 }
                                 i++

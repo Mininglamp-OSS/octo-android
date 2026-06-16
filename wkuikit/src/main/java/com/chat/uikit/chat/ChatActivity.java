@@ -316,10 +316,12 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     /**
      * 智能总结快速入口: 把当前 channel 转成 WKChannel 直接喂给 SmartSummaryCreateActivity 预填,
      * 用户进去就只需要敲主题/选模板, 提交后 toast 引导式文案"已开始生成总结，可到「智能总结」查看进度"。
-     * 1:1 对齐 iOS commit 333f247 WKConversationVC.openSummaryCreateForCurrentChannel.
+     * 1:1 对齐 iOS commit 333f247 + e504dd0 + 7391c5a 的合并版 WKConversationVC.openSummaryCreateForCurrentChannel.
      *
-     * 注意只填 prefilledSources, 不设 origin_channel; 后端对 origin_channel_type 严格校验,
-     * 传具体 type 会创建失败, iOS sparkle 入口也是默认空。
+     * origin_channel_type 必须用服务端 OctoSourceType (1=群聊 / 2=子区 / 3=私聊),
+     * 不是 SDK WKChannelType (PERSON=1 / GROUP=2 / COMMUNITY=4 / COMMUNITY_TOPIC=5):
+     * 直接灌 byte channelType 子区(5)/社区(4) 会被服务端 "origin_channel_type must be 1, 2, or 3"
+     * 校验拒掉; 群(2)/私聊(1) 数值碰巧合法但按错枚举归类, 都会出现"找不到聊天记录"。
      */
     private void openSummaryCreate() {
         WKChannel ch = new WKChannel(channelId, channelType);
@@ -331,8 +333,25 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         } else {
             ch.channelName = channelId;
         }
+        // SDK byte channelType → OctoSourceType (1/2/3), 与 SmartSummaryCreateActivity.channelToSource
+        // 内部映射同口径: PERSON→DM(3), COMMUNITY_TOPIC→Thread(2), 其它→GroupChat(1)。
+        int originSourceType;
+        if (channelType == WKChannelType.PERSONAL) originSourceType = 3;
+        else if (channelType == WKChannelType.COMMUNITY_TOPIC) originSourceType = 2;
+        else originSourceType = 1;
+        // 调试 (私聊"总结不到内容"链路): 把 chat 入口拼出来的 channel + originSourceType 打出来,
+        // 与 iOS WKConversationVC.openSummaryCreateForCurrentChannel 同口径排查 srcType / channelId 是否对得上。
+        // release 包关掉避免 channelName 等用户内容进 logcat.
+        if (BuildConfig.DEBUG) {
+            android.util.Log.i("SummaryDebug",
+                    "ChatActivity.openSummaryCreate channelId=" + channelId
+                            + " channelType=" + channelType
+                            + " originSourceType=" + originSourceType
+                            + " chName=" + ch.channelName
+                            + " chRemark=" + ch.channelRemark);
+        }
         Intent intent = com.chat.uikit.summary.create.SmartSummaryCreateActivity.newIntentForChat(
-                this, ch, getString(R.string.summary_chat_started_hint));
+                this, ch, originSourceType, getString(R.string.summary_chat_started_hint));
         startActivity(intent);
     }
 

@@ -51,12 +51,25 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
     /** 标志位: 当前 FAB 是否处于显示态, 避免重复动画。 */
     private var fabVisible: Boolean = true
 
-    /** 创建总结页关闭回调: RESULT_OK 时拉一次列表让新任务出现在顶部. */
+    /**
+     * 第一次 onResume 跳过 reload — initView 里已经调过 viewModel.reload(),
+     * 不希望首次启动跑两遍. 后续 onResume (用户从 detail / create 页返回) 才走 reload,
+     * 让 spinner 滞留 / status 滞后这种 5s 轮询 lag 在用户回到列表的瞬间被一次性抹平
+     * (与 iOS NSNotification 全程在线接收 + viewWillAppear 主动重拉同效果).
+     */
+    private var skipFirstResumeReload = true
+
+    /**
+     * 创建总结页关闭回调: RESULT_OK 时走 reloadAndScrollToTop, ViewModel 在新数据落 state
+     * 后把 [SummaryListUiState.pendingScrollToTop] 翻 true, Activity 在 submitList 的 commit
+     * callback 里读到 true 才 scrollToPosition(0) — 这样跳顶发生在 DiffUtil dispatch 已经
+     * 落到 RV 内部状态之后, 不会被后续 layout 重置回原位置.
+     */
     private val createLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.reload()
+            viewModel.reloadAndScrollToTop()
         }
     }
 
@@ -72,6 +85,12 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
             onItemClick { item -> openDetail(item) }
             onMoreClick { item, anchor -> showActionMenu(item, anchor) }
         }
+        // 1:1 对齐 iOS [OctoSummaryListVC resolveCurrentUserName]: 把当前登录用户名喂给
+        // adapter, 让 [SummaryCardBinder.initiatorTextFor] 在 creatorName == 当前用户名时
+        // 走 "你发起" 分支 (用户报"目前 IOS 默认是 你发起了总结, 咱们写的是用户名").
+        // WKConfig 里的名字是登录态本地缓存, 同步可读, 不需要异步拉 channelInfo.
+        listAdapter.currentUserName =
+            com.chat.base.config.WKConfig.getInstance().getUserName()?.takeIf { it.isNotEmpty() }
         wkVBinding.listRv.apply {
             layoutManager = LinearLayoutManager(this@SmartSummaryListActivity)
             adapter = listAdapter
@@ -124,11 +143,39 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
                 viewModel.uiState.collect { state -> render(state) }
             }
         }
+        // 详情页 cancel/regenerate/delete 完成后会推一条事件 (1:1 对齐 iOS NSNotificationCenter
+        // 思路, 见 [SummaryEvents]). 列表收到立刻 reload 让条目状态 / regenerate 后的新 task
+        // 实时翻新, 不依赖 5s 轮询 (用户报"详情页重新生成后返回列表看不到正在总结的状态刷新")。
+        //
+        // 关键: 这条 collect **不能**套 repeatOnLifecycle(STARTED) — 用户进 detail 页时 list
+        // 处于 STOPPED, repeatOnLifecycle 会取消订阅, regenerate 当下 emit 没人接 (SharedFlow
+        // replay=0 直接丢), 用户回 list 时 collect 重启也拿不到旧 emit. 直接挂 lifecycleScope
+        // 让 collect 活到 activity 销毁; reload 只动 ViewModel state, 不碰 UI, STOPPED 状态期间
+        // 也安全 — uiState 那条已经被 repeatOnLifecycle 守门, 用户返回 STARTED 时自然 render
+        // 最新数据 (与 iOS NSNotification 全程在线接收同效果).
+        lifecycleScope.launch {
+            com.chat.base.summary.SummaryEvents.listShouldRefresh.collect { scrollToTop ->
+                if (scrollToTop) viewModel.reloadAndScrollToTop() else viewModel.reload()
+            }
+        }
     }
 
     private fun render(state: SummaryListUiState) {
         listAdapter.keyword = state.keyword.trim().ifEmpty { null }
-        listAdapter.submitList(state.items)
+        // submitList 的 commit callback 在 DiffUtil dispatch 完后回主线程同步触发 —
+        // 此时 RV 内部 ItemAnimator/layout 已感知新数据集, scrollToPosition(0) 才能
+        // 真正落到新 top item. 直接 listRv.post 在 diff 派发前会被后续 layout 重置。
+        //
+        // pendingScrollToTop 烧在 state 里 (不是 SharedFlow): 跨 STOPPED/STARTED 切换不会丢
+        // (StateFlow 始终 replay 最新值给新订阅者). 在 commit 后 consumePendingScrollToTop
+        // 把 flag 翻回 false, 避免下次轻量状态变化 (例如 transient 消费、preview hydrate)
+        // 重新 render 时再次跳顶.
+        listAdapter.submitList(state.items) {
+            if (state.pendingScrollToTop && state.items.isNotEmpty()) {
+                wkVBinding.listRv.scrollToPosition(0)
+                viewModel.consumePendingScrollToTop()
+            }
+        }
         wkVBinding.filterTabs.selected = state.filter
 
         // 下拉刷新 / 上拉加载 状态收尾
@@ -164,6 +211,16 @@ class SmartSummaryListActivity : WKBaseActivity<ActSmartSummaryListBinding>() {
     override fun onResume() {
         super.onResume()
         poller.resume()
+        // 跳过首次 onResume: initView 已经调过 reload(), 不重复跑一遍.
+        // 后续 onResume 走 reload 让从 detail/create 页回来时, server 的最新 status
+        // 立刻覆盖列表 — 用户报"明明已经总结完成了, 但是列表后面那个还在转圈": 根因
+        // 是 list 在 STOPPED 期间 5s poller 被 pause 了, 回到前台第一拍要等几秒, 期间
+        // 看到的是上一次 poll 的旧 status; 主动 reload 把 server-truth 立刻拉过来.
+        if (skipFirstResumeReload) {
+            skipFirstResumeReload = false
+        } else {
+            viewModel.reload()
+        }
     }
 
     override fun onPause() {

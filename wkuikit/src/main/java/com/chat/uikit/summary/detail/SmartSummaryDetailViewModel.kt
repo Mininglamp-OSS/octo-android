@@ -13,6 +13,7 @@ package com.chat.uikit.summary.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chat.base.summary.SummaryDeps
+import com.chat.base.summary.SummaryEvents
 import com.chat.base.summary.model.SummaryDetail
 import com.chat.base.summary.model.TaskStatus
 import com.chat.base.summary.repository.SummaryRepository
@@ -94,6 +95,15 @@ class SmartSummaryDetailViewModel(
                 return@launch
             }
             val detail = res.getOrThrow()
+            // 调试 ("群聊总结好了 spinner 还在转"): 8s 轮询每拍都打 status, 让 detail 页 processingCard
+            // 显隐状态在日志里追得到。release 包关掉, 高频轮询日志不该进 logcat.
+            if (com.chat.uikit.BuildConfig.DEBUG) {
+                android.util.Log.i(
+                    "SummaryDebug",
+                    "loadDetail tid=${detail.taskId} status=${detail.status} silent=$silent" +
+                        " hasContent=${!detail.result?.content.isNullOrEmpty()}",
+                )
+            }
             _state.update { it.copy(loading = false, detail = detail) }
             schedulePollIfNeeded(detail.status)
         }
@@ -112,6 +122,9 @@ class SmartSummaryDetailViewModel(
                 return@launch
             }
             emit(DetailEffect.Toast(DetailToastKind.Cancelled))
+            // 通知列表刷新 (cancel 不产生新条目, scrollToTop=false): 用户返回列表能立刻
+            // 看到 Cancelled 状态翻新, 不必等列表 poller 5s 拍一拍.
+            SummaryEvents.postListShouldRefresh(scrollToTop = false)
             loadDetail()
         }
     }
@@ -133,6 +146,16 @@ class SmartSummaryDetailViewModel(
                 _state.update { it.copy(detail = null, loading = true) }
             }
             emit(DetailEffect.Toast(DetailToastKind.RegenStarted))
+            // 通知列表刷新状态 (scrollToTop=false): server 的 regenerate 不动 created_at,
+            // 列表按 created_at desc 排序时新一轮任务就在原位置, 不需要跳顶 (强行 scroll
+            // 到 0 会把用户视野跳到另一条任务上, 反而看不到正在重生成的那条). 列表只需要
+            // reload 一次让该条目状态从 Completed 翻回 Processing (5s poller 也能做到, 但
+            // 主动 reload 让用户回到列表的瞬间就能看到状态翻新, 不必等 5s 拍一拍).
+            //
+            // 与 iOS [OctoSummaryDetailVC performRegenerate] 同语义 — iOS 没有列表刷新通知,
+            // 但 iOS list 与 detail 共享 OctoSummaryListItem 引用, 状态原地变了就生效;
+            // Android list / detail 是不同 ViewModel, 拷贝语义, 必须靠这条事件桥接.
+            SummaryEvents.postListShouldRefresh(scrollToTop = false)
             loadDetail()
         }
     }
@@ -145,6 +168,9 @@ class SmartSummaryDetailViewModel(
                 emit(DetailEffect.Toast(DetailToastKind.DeleteFailed))
                 return@launch
             }
+            // 删除后通知列表刷新 (delete 不产生新条目, scrollToTop=false), 让目标条目
+            // 立即从列表消失 (与 iOS list 端 NSNotification 同节奏).
+            SummaryEvents.postListShouldRefresh(scrollToTop = false)
             emit(DetailEffect.Close)
         }
     }

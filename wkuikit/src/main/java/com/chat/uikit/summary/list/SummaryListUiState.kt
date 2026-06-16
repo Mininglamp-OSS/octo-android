@@ -31,6 +31,17 @@ data class SummaryListUiState(
     val keyword: String = "",
     /** 仅一次性消费的事件 (toast/网络错误/操作结果), 由 ViewModel 在派发后置 null. */
     val transientMessage: TransientMessage? = null,
+    /**
+     * 下次 render 时列表跳到顶部的标志 — 由 [SmartSummaryListViewModel.reloadAndScrollToTop]
+     * 在新数据落 state 后置 true, Activity 在 submitList commit callback 里滚到 0 后
+     * 调 [SmartSummaryListViewModel.consumePendingScrollToTop] 清掉.
+     *
+     * 烧在 state 里而不是单独走 SharedFlow 的原因: SharedFlow(replay=0) 的 emit 在 list
+     * 处于 STOPPED 状态 (用户进 detail 页) 时会被丢, 等 list 回到 STARTED 重新 collect 拿
+     * 不到这条事件; 而 StateFlow 始终把最新 value replay 给新订阅者, 跨 STOPPED/STARTED
+     * 切换天然不丢. (review 链路: 用户报"详情页重新生成后返回列表刷新了但没浮顶")
+     */
+    val pendingScrollToTop: Boolean = false,
 ) {
     val isInitialEmpty: Boolean get() = items.isEmpty() && !loading && keyword.isEmpty()
     val isSearchEmpty: Boolean get() = items.isEmpty() && !loading && keyword.isNotEmpty()

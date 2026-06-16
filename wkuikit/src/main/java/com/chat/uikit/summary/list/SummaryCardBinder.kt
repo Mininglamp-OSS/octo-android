@@ -102,6 +102,18 @@ internal object SummaryCardBinder {
                 spinner.visibility = View.GONE
             }
         }
+        // 调试 ("群聊总结好了 spinner 还在转"): 每次 bind 都把 taskId+status+spinner 状态打出来。
+        // 如果用户看到 spinner 在转, 但日志里这条 item 的 spinnerVisible=false, 就说明 ViewHolder
+        // 重用 / DIFF 漏掉了状态变更; 反过来日志里 spinnerVisible=true 就说明状态确实还是 Processing,
+        // 是 poller 那边没把 Completed 推过来。release 包关掉, bind 高频调用不该进 logcat.
+        if (com.chat.uikit.BuildConfig.DEBUG) {
+            android.util.Log.d(
+                "SummaryDebug",
+                "card.bind taskId=${item.taskId} status=${item.status}" +
+                    " spinnerVisible=${spinner.visibility == View.VISIBLE}" +
+                    " hasPreview=${!item.summaryPreview.isNullOrEmpty()}",
+            )
+        }
 
         // === title (可能带关键词高亮 + 窗口化前置) ===
         applyTitle(titleTv, item, keyword)
@@ -111,7 +123,10 @@ internal object SummaryCardBinder {
             isCompleted && !item.summaryPreview.isNullOrEmpty() -> {
                 bodyTv.visibility = View.VISIBLE
                 bodyTv.maxLines = 2
-                bodyTv.setTextColor(ContextCompat.getColor(ctx, R.color.summary_text_muted))
+                // 1:1 对齐 iOS [labelColor colorWithAlphaComponent:0.8] — preview 正文偏黑,
+                // 不是浅灰 muted (用户报"预览文字不是黑色"). summary_text_80 = #CC000000 / dark
+                // 模式下 #CCFFFFFF, 与 iOS 80% labelColor 视觉一致.
+                bodyTv.setTextColor(ContextCompat.getColor(ctx, R.color.summary_text_80))
                 bodyTv.text = item.summaryPreview
             }
             isProcessing -> {

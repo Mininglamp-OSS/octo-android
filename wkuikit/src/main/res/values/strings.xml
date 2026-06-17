@@ -414,6 +414,7 @@
     <string name="str_threads">子区</string>
     <string name="str_create_thread">创建子区</string>
     <string name="str_enter_thread">进入子区</string>
+    <string name="str_enter_thread_with_name">进入子区「%1$s」</string>
     <string name="str_thread_name">子区名称</string>
     <string name="str_thread_name_hint">输入子区名称</string>
     <string name="str_rename_thread">修改子区名称</string>

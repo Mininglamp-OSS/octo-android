@@ -377,6 +377,43 @@ public class WKUIKitApplication {
             if (wkMsg.channelType == WKChannelType.GROUP
                     && WKConfig.getInstance().getAppConfig().thread_on == 1
                     && !WKContentType.isSystemMsg(wkMsg.type)) {
+                // 已建过子区的消息: 把"创建子区"换成"进入子区「XX」", 与 iOS WKApp.m:1640-1658 对齐。
+                // 数据来源: 任意一条 threadCreated 系统消息 decode 时把 (source_message_id → this) 写进
+                // WKThreadCreatedContent 的全局 map, 这里用当前消息 id 反查命中即可。
+                // messageID 空守: 本地 pending 消息可能还没拿到服务端 id, 这种消息也不该出现在 map 里
+                // (后端推 threadCreated 系统消息时 source_message_id 必然是已落地的服务端 id), 直接走
+                // "创建子区" 原路径; 同时避免 ConcurrentHashMap.containsKey(null) NPE。
+                String currentMsgId = wkMsg.messageID;
+                if (!TextUtils.isEmpty(currentMsgId)) {
+                    WKThreadCreatedContent existingThread =
+                            WKThreadCreatedContent.getThreadBySourceMessageId(currentMsgId);
+                    if (existingThread != null && !TextUtils.isEmpty(existingThread.channel_id)) {
+                        String threadName = existingThread.thread_name == null ? "" : existingThread.thread_name;
+                        if (threadName.length() > 12) {
+                            threadName = threadName.substring(0, 11) + "…";
+                        }
+                        String enterTitle = String.format(
+                                getContext().getString(R.string.str_enter_thread_with_name), threadName);
+                        final String threadChannelId = existingThread.channel_id;
+                        final byte threadChannelType = (byte) existingThread.channel_type;
+                        return new ChatItemPopupMenu(R.mipmap.msg_forward, enterTitle, (msg, iConversationContext) -> {
+                            // 不能用 ChatReuseNavigator: 它在窄屏下会 REORDER_TO_FRONT 复用唯一
+                            // ChatActivity 实例 (栈里只保留一个), 从子区返回会直接退到消息列表,
+                            // 而不是回父群 — 与"长按消息进入子区"的预期 (back 回父群) 不符。
+                            // 这里跟 WKThreadCreatedProvider 的卡片点击一样, 直接 startActivity
+                            // push 一个新的 ChatActivity 上栈, back 自然回到父群。
+                            Intent intent = new Intent(iConversationContext.getChatActivity(), com.chat.uikit.chat.ChatActivity.class);
+                            intent.putExtra("channelId", threadChannelId);
+                            intent.putExtra("channelType", threadChannelType);
+                            iConversationContext.getChatActivity().startActivity(intent);
+                        });
+                    }
+                    // 兜底: set 命中但 map 没拿到 thread 元信息 (理论上 decode 同步写入二者, 不会出现;
+                    // 极端情况下做防御 — 隐藏菜单避免重复创建, 与 iOS by-design 行为一致)。
+                    if (WKThreadCreatedContent.getSourceMessageIdSet().contains(currentMsgId)) {
+                        return null;
+                    }
+                }
                 return new ChatItemPopupMenu(R.mipmap.msg_forward, getContext().getString(R.string.str_create_thread), (msg, iConversationContext) -> {
                     Intent intent = new Intent(iConversationContext.getChatActivity(), CreateThreadActivity.class);
                     intent.putExtra("groupNo", msg.channelID);

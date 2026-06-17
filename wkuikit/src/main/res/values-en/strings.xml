@@ -336,6 +336,7 @@
     <string name="str_threads">Threads</string>
     <string name="str_create_thread">Create Thread</string>
     <string name="str_enter_thread">Enter Thread</string>
+    <string name="str_enter_thread_with_name">Enter Thread \"%1$s\"</string>
     <string name="str_thread_name">Thread Name</string>
     <string name="str_thread_name_hint">Enter thread name</string>
     <string name="str_join_thread">Join Thread</string>

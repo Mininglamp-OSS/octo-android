@@ -188,10 +188,28 @@ public class CounterView extends View {
             }
             if (countLayout != null) {
                 canvas.save();
-                canvas.translate(countLeft, countTop + AndroidUtilities.dp(4));
+                canvas.translate(countLeft, countTop + getTextTopInPill());
                 countLayout.draw(canvas);
                 canvas.restore();
             }
+        }
+
+        /**
+         * 把单行文字在 dp(20) 胶囊内做"视觉居中": 让字符笔画范围 (ascent line → baseline,
+         * 即数字 / 大写字母实际占位) 的中线对齐胶囊中线。
+         *
+         * 原写死的 dp(4) 是 Telegram rmedium.ttf 字体下的经验值; 项目改用系统字体后
+         * font metrics 不同, 数字会视觉偏下, 改为基于 paint metrics 的动态计算。
+         *
+         * 注: 不能直接按 line box (fm.top → fm.bottom) 居中, 因为系统 sans-serif-medium
+         * 上方 accent 预留 (fm.top → fm.ascent) 比下方 descent 预留 (fm.descent → fm.bottom)
+         * 大得多, line box 居中后字符笔画整体会偏上约 1px (用户实测 "243" 略靠上)。
+         */
+        private float getTextTopInPill() {
+            Paint.FontMetrics fm = textPaint.getFontMetrics();
+            float visualHeight = -fm.ascent;                                  // 字符笔画高度 (cap height 近似)
+            float baselineY = AndroidUtilities.dp(20) / 2f + visualHeight / 2f; // 胶囊内目标 baseline 位置
+            return baselineY - (-fm.top);                                     // StaticLayout line top → baseline 的距离 = -fm.top
         }
 
         public void setCount(int count, boolean animated) {
@@ -372,13 +390,13 @@ public class CounterView extends View {
                     boolean increment = reverseAnimation != countAnimationIncrement;
                     if (countAnimationInLayout != null) {
                         canvas.save();
-                        canvas.translate(countLeft, countTop + AndroidUtilities.dp(4) + (increment ? AndroidUtilities.dp(13) : -AndroidUtilities.dp(13)) * (1f - progressHalf));
+                        canvas.translate(countLeft, countTop + getTextTopInPill() + (increment ? AndroidUtilities.dp(13) : -AndroidUtilities.dp(13)) * (1f - progressHalf));
                         textPaint.setAlpha((int) (255 * progressHalf));
                         countAnimationInLayout.draw(canvas);
                         canvas.restore();
                     } else if (countLayout != null) {
                         canvas.save();
-                        canvas.translate(countLeft, countTop + AndroidUtilities.dp(4) + (increment ? AndroidUtilities.dp(13) : -AndroidUtilities.dp(13)) * (1f - progressHalf));
+                        canvas.translate(countLeft, countTop + getTextTopInPill() + (increment ? AndroidUtilities.dp(13) : -AndroidUtilities.dp(13)) * (1f - progressHalf));
                         textPaint.setAlpha((int) (255 * progressHalf));
                         countLayout.draw(canvas);
                         canvas.restore();
@@ -386,7 +404,7 @@ public class CounterView extends View {
 
                     if (countOldLayout != null) {
                         canvas.save();
-                        canvas.translate(countLeft, countTop + AndroidUtilities.dp(4) + (increment ? -AndroidUtilities.dp(13) : AndroidUtilities.dp(13)) * (progressHalf));
+                        canvas.translate(countLeft, countTop + getTextTopInPill() + (increment ? -AndroidUtilities.dp(13) : AndroidUtilities.dp(13)) * (progressHalf));
                         textPaint.setAlpha((int) (255 * (1f - progressHalf)));
                         countOldLayout.draw(canvas);
                         canvas.restore();
@@ -394,7 +412,7 @@ public class CounterView extends View {
 
                     if (countAnimationStableLayout != null) {
                         canvas.save();
-                        canvas.translate(countLeft, countTop + AndroidUtilities.dp(4));
+                        canvas.translate(countLeft, countTop + getTextTopInPill());
                         textPaint.setAlpha(255);
                         countAnimationStableLayout.draw(canvas);
                         canvas.restore();

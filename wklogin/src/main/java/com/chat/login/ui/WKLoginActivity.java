@@ -283,9 +283,6 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         });
     }
 
-    private static final String TERMS_URL = "https://cdn.example.com/legal-agreement/octo-terms.pdf";
-    private static final String PRIVACY_URL = "https://cdn.example.com/legal-agreement/octo-privacy.pdf";
-
     private void refreshDynamicConfig(WKAPPConfig config) {
         boolean ssoOnly = computeSsoOnly(config);
         if (ssoOnly) {
@@ -322,8 +319,8 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         wkVBinding.privacyTv.setTextColor(Theme.colorAccount);
         wkVBinding.termsTv.setText(getString(R.string.user_agreement));
         wkVBinding.privacyTv.setText(getString(R.string.privacy_policy));
-        wkVBinding.termsTv.setOnClickListener(v -> showWebView(TERMS_URL));
-        wkVBinding.privacyTv.setOnClickListener(v -> showWebView(PRIVACY_URL));
+        wkVBinding.termsTv.setOnClickListener(v -> showWebView(WKApiConfig.termsUrl));
+        wkVBinding.privacyTv.setOnClickListener(v -> showWebView(WKApiConfig.privacyUrl));
     }
 
     private void applyOctoMode(WKAPPConfig config) {

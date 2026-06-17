@@ -384,6 +384,11 @@ public class WKUIKitApplication {
                     if (msg.baseContentMsgModel != null) {
                         intent.putExtra("sourceContent", msg.baseContentMsgModel.getDisplayContent());
                     }
+                    // 透传完整原 payload + 真实 contentType, 与 iOS WKApp.m
+                    // (createThread payload addEntriesFromDictionary contentDict + type 覆写) 对齐。
+                    // 仅传 displayContent 会把合并转发等富类型降级成 "聊天记录" 纯文本, 子区源消息丢失。
+                    intent.putExtra("sourceContentRaw", msg.content);
+                    intent.putExtra("sourceContentType", msg.type);
                     if (msg.getFrom() != null) {
                         intent.putExtra("sourceFromName", msg.getFrom().channelName);
                     }

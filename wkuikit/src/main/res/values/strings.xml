@@ -33,6 +33,11 @@
     <string name="at_all_ais">选择所有AI</string>
     <string name="edit_group_notice">只有群主及管理员可以编辑</string>
     <string name="delete_group_members">删除群成员</string>
+    <string name="str_transfer_owner">转让群主</string>
+    <string name="str_select_new_owner">选择新群主</string>
+    <string name="str_transfer_owner_confirm_tip">确定将群主转让给 %1$s 吗？转让后你将成为普通成员。</string>
+    <string name="str_transfer_owner_success">群主已转让</string>
+    <string name="str_transfer_owner_failed">转让群主失败</string>
     <string name="add_group_members">添加群成员</string>
     <string name="my_in_group_name">我在本群的昵称</string>
     <string name="update_in_gorup_name">设置你在群里的昵称，这个昵称只会在这个群内显示</string>

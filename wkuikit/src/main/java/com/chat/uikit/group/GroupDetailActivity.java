@@ -266,6 +266,15 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
             }
         }));
 
+        // 转让群主入口 - 仅群主 (admin / creator) 可见, 与 iOS isCreatorForMe 对齐。
+        // 普通成员 / 管理员 (manager) 都看不到, 由 setData() 里根据 memberRole 控制 visibility。
+        SingleClickUtil.onSingleClick(wkVBinding.transferOwnerLayout, view1 -> {
+            if (!groupIsEnable()) return;
+            Intent intent = new Intent(this, TransferGroupOwnerActivity.class);
+            intent.putExtra("groupNo", groupNo);
+            startActivity(intent);
+        });
+
         SingleClickUtil.onSingleClick(wkVBinding.groupQrLayout, view1 -> {
             if (groupIsEnable()) {
                 Intent intent = new Intent(this, GroupQrActivity.class);
@@ -499,6 +508,11 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 wkVBinding.inGroupNameTv.setText(name);
             }
         }
+        // 转让群主入口仅对群主 (admin / creator) 可见, 普通成员 / 管理员都看不到。
+        // 与 iOS WKConversationSettingVM#isCreatorForMe 一致 (manager != creator)。
+        boolean showTransferOwner = memberRole == WKChannelMemberRole.admin;
+        wkVBinding.transferOwnerLayout.setVisibility(showTransferOwner ? View.VISIBLE : View.GONE);
+        wkVBinding.transferOwnerLine.setVisibility(showTransferOwner ? View.VISIBLE : View.GONE);
         int maxCount;
         if (memberRole != WKChannelMemberRole.normal) {
             maxCount = 18;

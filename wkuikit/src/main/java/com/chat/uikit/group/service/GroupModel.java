@@ -638,6 +638,26 @@ public class GroupModel extends WKBaseModel {
         });
     }
 
+    /**
+     * 转让群主. 与 iOS WKGroupManager#transferOwner 一一对应:
+     *   POST groups/{groupNo}/transfer/{toUid}
+     * 成功后服务端会把 caller 降级为普通成员, 把 toUid 升级为 admin (creator)。
+     * 调用方负责在成功回调里触发 {@code groupMembersSync} + 频道详情拉取以刷新本地角色。
+     */
+    public void transferGroupOwner(String groupNo, String toUid, final ICommonListener iCommonListener) {
+        request(createService(GroupService.class).transferGroupOwner(groupNo, toUid), new IRequestResultListener<>() {
+            @Override
+            public void onSuccess(CommonResponse result) {
+                iCommonListener.onResult(result.status, result.msg);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                iCommonListener.onResult(code, msg);
+            }
+        });
+    }
+
     // ------------------------------------------------------------------
     //  · Fix B Step 2 · one-time 老用户外部群 extra 字段回填迁移
     // ------------------------------------------------------------------

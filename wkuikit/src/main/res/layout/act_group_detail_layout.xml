@@ -405,6 +405,28 @@
 
                     <View style="@style/view_line_padding" />
 
+                    <LinearLayout
+                        android:id="@+id/transferOwnerLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_width="0dp"
+                            android:layout_gravity="center_vertical"
+                            android:layout_weight="1"
+                            android:text="@string/str_transfer_owner" />
+
+                        <androidx.appcompat.widget.AppCompatImageView
+                            style="@style/arrow_right_iv"
+                            android:layout_gravity="center_vertical" />
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/transferOwnerLine"
+                        style="@style/view_line_padding"
+                        android:visibility="gone" />
+
                     <TextView
                         android:id="@+id/exitBtn"
                         style="@style/layoutBg"

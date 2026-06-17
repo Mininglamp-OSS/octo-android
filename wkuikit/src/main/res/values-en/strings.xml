@@ -32,6 +32,11 @@
     <string name="at_all_ais">Choose All AIs</string>
     <string name="edit_group_notice">Only the owner and manager can edit</string>
     <string name="delete_group_members">Delete Members</string>
+    <string name="str_transfer_owner">Transfer Ownership</string>
+    <string name="str_select_new_owner">Select New Owner</string>
+    <string name="str_transfer_owner_confirm_tip">Are you sure you want to transfer ownership to %1$s? You will become a regular member after the transfer.</string>
+    <string name="str_transfer_owner_success">Ownership transferred</string>
+    <string name="str_transfer_owner_failed">Failed to transfer ownership</string>
     <string name="add_group_members">Add Members</string>
     <string name="my_in_group_name">My Alias in Group</string>
     <string name="update_in_gorup_name">Editing your alias only changers your name displayed in this group. It is visible to all group members.</string>

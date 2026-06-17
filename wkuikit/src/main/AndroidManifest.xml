@@ -9,6 +9,7 @@
     <application>
 
         <activity android:name=".group.DeleteGroupMemberActivity" />
+        <activity android:name=".group.TransferGroupOwnerActivity" />
         <activity
             android:name=".group.GroupNoticeActivity"
             android:windowSoftInputMode="adjustResize" />

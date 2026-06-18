@@ -38,9 +38,6 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
         <activity
-            android:name=".chat.WKRichTextCaptionActivity"
-            android:windowSoftInputMode="adjustResize" />
-        <activity
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity android:name=".contacts.ContactsActivity" />

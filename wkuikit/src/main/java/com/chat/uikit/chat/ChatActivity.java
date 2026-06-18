@@ -3386,31 +3386,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         com.chat.uikit.chat.msgmodel.WKRichTextContent content =
                 new com.chat.uikit.chat.msgmodel.WKRichTextContent();
-        if (pendingCaptionMentionUids != null && !pendingCaptionMentionUids.isEmpty()
-                || pendingCaptionMentionAll || pendingCaptionMentionAis) {
-            com.xinbida.wukongim.entity.WKMentionInfo mInfo = new com.xinbida.wukongim.entity.WKMentionInfo();
-            if (pendingCaptionMentionAll) {
-                content.mentionHumans = 1;
-                mInfo.humans = true;
-            }
-            if (pendingCaptionMentionAis) {
-                content.mentionAis = 1;
-                mInfo.ais = true;
-            }
-            if (pendingCaptionMentionUids != null) {
-                List<String> filteredUids = new ArrayList<>();
-                for (String uid : pendingCaptionMentionUids) {
-                    if (!"-1".equals(uid) && !"-2".equals(uid)) {
-                        filteredUids.add(uid);
-                    }
-                }
-                mInfo.uids = filteredUids;
-            }
-            content.mentionInfo = mInfo;
-            if (pendingCaptionMentionEntities != null && !pendingCaptionMentionEntities.isEmpty()) {
-                content.entities = pendingCaptionMentionEntities;
-            }
-        } else if (chatPanelManager != null) {
+        if (chatPanelManager != null) {
             chatPanelManager.applyInputMentionsTo(content, rawText);
         }
 
@@ -3971,46 +3947,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
 
-    private List<String> pendingCaptionMentionUids;
-    private boolean pendingCaptionMentionAll;
-    private boolean pendingCaptionMentionAis;
-    private List<com.xinbida.wukongim.msgmodel.WKMsgEntity> pendingCaptionMentionEntities;
-
-    ActivityResultLauncher<Intent> richTextCaptionLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-        if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-            List<String> paths = result.getData().getStringArrayListExtra("paths");
-            String caption = result.getData().getStringExtra("caption");
-            pendingCaptionMentionUids = result.getData().getStringArrayListExtra("mentionUids");
-            pendingCaptionMentionAll = result.getData().getBooleanExtra("mentionAll", false);
-            pendingCaptionMentionAis = result.getData().getBooleanExtra("mentionAis", false);
-            pendingCaptionMentionEntities = parseMentionEntitiesFromJson(
-                    result.getData().getStringExtra("mentionEntities"));
-            if (paths != null && !paths.isEmpty()) {
-                String text = caption != null ? caption : "";
-                if (!TextUtils.isEmpty(text) && chatPanelManager != null && chatPanelManager.isTextOverByteLimit(text)) {
-                    pendingCaptionMentionUids = null;
-                    pendingCaptionMentionAll = false;
-                    pendingCaptionMentionAis = false;
-                    pendingCaptionMentionEntities = null;
-                    sendRichTextTray("", paths, null, null);
-                    chatPanelManager.promptTextToFile(text);
-                } else {
-                    sendRichTextTray(text, paths, null, null);
-                }
-            }
-            pendingCaptionMentionUids = null;
-            pendingCaptionMentionAll = false;
-            pendingCaptionMentionAis = false;
-            pendingCaptionMentionEntities = null;
-        } else if (result.getResultCode() == Activity.RESULT_CANCELED && result.getData() != null) {
-            String restored = result.getData().getStringExtra("caption");
-            if (restored != null && !restored.isEmpty() && chatPanelManager != null) {
-                chatPanelManager.getEditText().setText(restored);
-                chatPanelManager.getEditText().setSelection(restored.length());
-            }
-        }
-    });
-
     ActivityResultLauncher<Intent> previewNewImgResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getData() != null && result.getResultCode() == Activity.RESULT_OK) {
             String path = result.getData().getStringExtra("path");
@@ -4045,28 +3981,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             }
         }
     });
-
-    private static List<com.xinbida.wukongim.msgmodel.WKMsgEntity> parseMentionEntitiesFromJson(String json) {
-        if (TextUtils.isEmpty(json)) return null;
-        try {
-            org.json.JSONArray arr = new org.json.JSONArray(json);
-            List<com.xinbida.wukongim.msgmodel.WKMsgEntity> result = new ArrayList<>();
-            for (int i = 0; i < arr.length(); i++) {
-                org.json.JSONObject obj = arr.getJSONObject(i);
-                com.xinbida.wukongim.msgmodel.WKMsgEntity entity = new com.xinbida.wukongim.msgmodel.WKMsgEntity();
-                entity.type = com.chat.base.msg.ChatContentSpanType.getMention();
-                entity.value = obj.optString("uid", "");
-                entity.offset = obj.optInt("offset", -1);
-                entity.length = obj.optInt("length", 0);
-                if (!entity.value.isEmpty() && entity.offset >= 0 && entity.length > 0) {
-                    result.add(entity);
-                }
-            }
-            return result.isEmpty() ? null : result;
-        } catch (org.json.JSONException e) {
-            return null;
-        }
-    }
 
     private void handleFileResult(android.net.Uri uri) {
         try {

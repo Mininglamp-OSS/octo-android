@@ -362,6 +362,11 @@ open class WKTextProvider : WKChatBaseProvider() {
             val trimmed = trimEdgeNewlines(nextSegment)
             if (trimmed.isBlank()) continue
 
+            // extraTv 是表格之后动态生成的文本段, 主 contentTv 上挂的 SelectTextHelper
+            // 不会覆盖到这里。直接复用 selectText(...) 给 extraTv 装一个自己的 helper,
+            // 长按行为与主气泡完全一致: 文本高亮 + 游标 + 全选 → 自定义 popup (复制/转发/反应)。
+            // 重新 bind 时 removeDynamicViews(TABLE_CARD_TAG) 已经把旧 extraTv 整个移走,
+            // 不会有 helper 重复挂在同一 view 上的累积问题。
             val extraTv = EmojiTextView(context).apply {
                 text = trimmed
                 setTextColor(textColor)
@@ -377,6 +382,7 @@ open class WKTextProvider : WKChatBaseProvider() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
             )
+            selectText(extraTv, contentTvLayout, uiChatMsgItemEntity)
         }
     }
 

@@ -162,6 +162,10 @@ public class WKUIChatMsgItemEntity {
             try {
                 // 从 mention.entities 补充 SDK 未解析的 mention entity
                 MentionEntityHelper.mergeMentionEntities(wkMsg);
+                // 跨端兜底: 用 mentionInfo.uids + plain 权威重建 mention entities, 解决 iOS 发的
+                // wire entities offset 是 caption-relative 而 Android 渲染按 plain-relative 过滤
+                // → 跨端 @ 不高亮的问题。详见 MentionEntityHelper.reconstructMentionEntitiesFromPlain。
+                MentionEntityHelper.reconstructMentionEntitiesFromPlain(wkMsg);
                 formatSpans(conversationContext, wkMsg);
             } catch (Exception e) {
                 // 防御日志: formatSpans 里任何异常都会被吞 (Markwon 解析失败 / mention 越界等),

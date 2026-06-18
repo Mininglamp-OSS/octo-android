@@ -99,6 +99,9 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
             ThreadModel.getInstance().getThreadDetail(groupNo, shortId) { code, msg, entity ->
                 if (code == HttpResponseCode.success.toInt() && entity != null) {
                     if (entity.status == 3) {
+                        // 子区已关闭: 把源消息从全局 map / set 里清掉, 让长按菜单回到"创建子区"
+                        // (对齐 iOS WKThreadCreatedCell.onCardTap → markThreadClosedForSourceMessageId)
+                        WKThreadCreatedContent.markThreadClosedForSourceMessageId(content.source_message_id)
                         WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
                     } else {
                         val intent = Intent(context, ChatActivity::class.java)
@@ -107,15 +110,11 @@ class WKThreadCreatedProvider : WKChatBaseProvider() {
                         context.startActivity(intent)
                     }
                 } else {
-                    val errMsg = msg ?: ""
-                    if (errMsg.contains("deleted") || errMsg.contains("已关闭") || errMsg.contains("已删除")) {
-                        WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
-                    } else {
-                        val intent = Intent(context, ChatActivity::class.java)
-                        intent.putExtra("channelId", channelId)
-                        intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC)
-                        context.startActivity(intent)
-                    }
+                    // 与 iOS 对齐: 任何错误都视作"已关闭/不存在", 不再按字符串匹配降级直接打开。
+                    // 历史上靠 errMsg.contains("deleted"|"已关闭"|"已删除") 识别, 但服务端
+                    // 返回 404 或文案变化就不命中, 会回退到"直接打开"路径 → 进入死频道。
+                    WKThreadCreatedContent.markThreadClosedForSourceMessageId(content.source_message_id)
+                    WKToastUtils.getInstance().showToast(context.getString(R.string.str_thread_closed_tip))
                 }
             }
         }

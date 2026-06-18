@@ -99,6 +99,24 @@ public class WKThreadCreatedContent extends WKMessageContent {
         return sourceMessageThreadMap.get(sourceMessageId);
     }
 
+    /**
+     * 子区已关闭/已删除/不存在 → 把源消息从 set / map 里清掉, 让长按菜单从
+     * "进入子区"回退到"创建子区", 允许重新基于同一条源消息再开子区。
+     *
+     * <p>对齐 iOS WKThreadCreatedContent +markThreadClosedForSourceMessageId:
+     * 调用时机:
+     *  - 点子区卡片探测到 status==3 或后端返回错误 (WKThreadCreatedProvider)
+     *  - 创建者在设置页"关闭子区"成功 (ThreadDetailActivity)
+     *  - 列表页"删除子区"成功 (ThreadListActivity)
+     *
+     * <p>sourceMessageId 为空时 no-op。
+     */
+    public static void markThreadClosedForSourceMessageId(@Nullable String sourceMessageId) {
+        if (TextUtils.isEmpty(sourceMessageId)) return;
+        sourceMessageIdSet.remove(sourceMessageId);
+        sourceMessageThreadMap.remove(sourceMessageId);
+    }
+
     public String content;
     public String from_uid;
     public String from_name;

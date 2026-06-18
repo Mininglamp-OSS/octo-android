@@ -35,6 +35,7 @@ import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActThreadDetailLayoutBinding;
 import com.chat.uikit.group.GroupMdActivity;
 import com.chat.base.msgitem.WKChannelMemberRole;
+import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.chat.uikit.thread.service.entity.ThreadMember;
@@ -103,6 +104,11 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
                             if (index == 1) {
                                 ThreadModel.getInstance().deleteThread(groupNo, shortId, (code, msg) -> {
                                     if (code == HttpResponseCode.success) {
+                                        // 关闭成功后清掉源消息映射, 让源消息长按菜单从"进入子区"
+                                        // 切回"创建子区" (对齐 iOS WKThreadSettingVC confirmCloseThread)。
+                                        if (threadEntity != null) {
+                                            WKThreadCreatedContent.markThreadClosedForSourceMessageId(threadEntity.source_message_id);
+                                        }
                                         EndpointManager.getInstance().invokes(EndpointCategory.wkExitChat,
                                                 new WKChannel(channelId, WKChannelType.COMMUNITY_TOPIC));
                                         finish();

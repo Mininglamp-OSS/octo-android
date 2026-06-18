@@ -36,6 +36,7 @@ import com.chat.uikit.sidebar.FollowModel;
 import com.chat.uikit.sidebar.FollowedKeysStore;
 import com.chat.uikit.sidebar.SidebarItemEntity;
 import com.chat.uikit.thread.adapter.ThreadListAdapter;
+import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
 import com.chat.uikit.thread.service.ThreadModel;
 import com.chat.uikit.thread.service.entity.ThreadEntity;
 import com.scwang.smart.refresh.layout.api.RefreshLayout;
@@ -229,8 +230,12 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
             menuItems.add(new PopupMenuItem(
                     getString(R.string.str_delete_thread), R.mipmap.msg_delete,
                     () -> ThreadModel.getInstance().deleteThread(groupNo, entity.short_id, (code, msg) -> {
-                        if (code == HttpResponseCode.success) refreshFromFirstPage();
-                        else WKToastUtils.getInstance().showToast(msg);
+                        if (code == HttpResponseCode.success) {
+                            // 删除成功后清掉源消息映射, 让源消息长按菜单从"进入子区"切回"创建子区"
+                            // (对齐 iOS WKThreadListVC confirmDeleteThread)。
+                            WKThreadCreatedContent.markThreadClosedForSourceMessageId(entity.source_message_id);
+                            refreshFromFirstPage();
+                        } else WKToastUtils.getInstance().showToast(msg);
                     })));
         }
 

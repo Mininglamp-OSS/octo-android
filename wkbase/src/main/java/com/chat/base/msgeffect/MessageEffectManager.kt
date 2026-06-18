@@ -26,7 +26,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import com.chat.base.msgeffect.video.ActionVideoEffectPlayer
+import com.chat.base.msgeffect.video.LumaKeyVideoEffectPlayer
 import com.tencent.bugly.crashreport.CrashReport
 import com.xinbida.wukongim.entity.WKMsg
 import java.lang.ref.WeakReference
@@ -40,7 +40,7 @@ class MessageEffectManager(
     private val handler = Handler(Looper.getMainLooper())
     private val triggeredSet = HashSet<String>()
     private val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private var actionVideoPlayer: ActionVideoEffectPlayer? = null
+    private var videoEffectPlayer: LumaKeyVideoEffectPlayer? = null
 
     // 收集阶段：打开聊天时短暂收集所有可见的未读效果消息，只播放最后一条
     private var collectPhase = true
@@ -105,7 +105,8 @@ class MessageEffectManager(
             bestCandidate = null
             if (activityRef.get()?.isFinishing == true) return
 
-            if (candidate.effectType is MessageEffectType.ActionVideo) {
+            if (candidate.effectType is MessageEffectType.ActionVideo ||
+                candidate.effectType is MessageEffectType.ClassyVideo) {
                 playEffect(candidate.effectType, candidate.bubbleView?.get(), candidate.avatarBitmap)
                 return
             }
@@ -120,17 +121,31 @@ class MessageEffectManager(
     }
 
     private fun playEffect(effectType: MessageEffectType, bubbleView: View?, avatarBitmap: Bitmap?) {
-        if (effectType is MessageEffectType.ActionVideo) {
+        val videoSpec = videoSpecFor(effectType)
+        if (videoSpec != null) {
             val root = contentRoot ?: return
             val activity = activityRef.get() ?: return
-            if (actionVideoPlayer == null) {
-                actionVideoPlayer = ActionVideoEffectPlayer(activity)
+            if (videoEffectPlayer == null) {
+                videoEffectPlayer = LumaKeyVideoEffectPlayer(activity)
             }
-            actionVideoPlayer?.play(root)
+            videoEffectPlayer?.play(root, videoSpec.assetPath, videoSpec.timeoutMs)
             return
         }
         val sourceRect = calculateSourceRect(bubbleView)
         overlayView.playEffect(effectType, sourceRect, avatarBitmap)
+    }
+
+    private data class VideoSpec(val assetPath: String, val timeoutMs: Long)
+
+    /**
+     * 全屏 luma-key 视频特效（[崇尚行动] / [有品位]）的资源 + 兜底超时映射。
+     * 超时与 iOS 的 scheduleRemovalAfterDelay 一致：action ≈ 视频 3.2s + 余量 = 6s，
+     * classy ≈ 视频 5.07s + 余量 = 8s，避免 MediaPlayer 异常导致 view 残留。
+     */
+    private fun videoSpecFor(effectType: MessageEffectType): VideoSpec? = when (effectType) {
+        is MessageEffectType.ActionVideo -> VideoSpec("effects/action_celebrate.mp4", 6000L)
+        is MessageEffectType.ClassyVideo -> VideoSpec("effects/classy_celebrate.mp4", 8000L)
+        else -> null
     }
 
     private fun shouldTrigger(msg: WKMsg): MessageEffectType? {
@@ -204,8 +219,8 @@ class MessageEffectManager(
         collectRunnable?.let { handler.removeCallbacks(it) }
         handler.removeCallbacksAndMessages(null)
         overlayView.cancelAll()
-        actionVideoPlayer?.cancel()
-        actionVideoPlayer = null
+        videoEffectPlayer?.cancel()
+        videoEffectPlayer = null
         bestCandidate = null
     }
 

@@ -24,7 +24,13 @@ import android.os.Looper
 import android.view.ViewGroup
 import android.widget.FrameLayout
 
-class ActionVideoEffectPlayer(private val context: Context) {
+/**
+ * Plays a full-screen luma-keyed mp4 (e.g. action_celebrate / classy_celebrate)
+ * inside the provided container. Mirrors iOS WKActionVideoEffect / WKClassyVideoEffect:
+ * fade-in → play once → fade-out → remove. Watchdog removes the view if the
+ * MediaPlayer never completes.
+ */
+class LumaKeyVideoEffectPlayer(private val context: Context) {
 
     private var videoView: LumaKeyVideoView? = null
     private var container: ViewGroup? = null
@@ -32,7 +38,7 @@ class ActionVideoEffectPlayer(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private val timeoutRunnable = Runnable { cleanup() }
 
-    fun play(container: ViewGroup) {
+    fun play(container: ViewGroup, assetPath: String, timeoutMs: Long) {
         if (isPlaying) return
         isPlaying = true
         this.container = container
@@ -56,10 +62,10 @@ class ActionVideoEffectPlayer(private val context: Context) {
 
         view.onVideoEnd = { fadeOutAndRemove() }
 
-        handler.postDelayed(timeoutRunnable, TIMEOUT_MS)
+        handler.postDelayed(timeoutRunnable, timeoutMs)
 
         try {
-            val afd = context.assets.openFd("effects/action_celebrate.mp4")
+            val afd = context.assets.openFd(assetPath)
             view.startVideo(afd)
         } catch (e: Exception) {
             cleanup()
@@ -106,6 +112,5 @@ class ActionVideoEffectPlayer(private val context: Context) {
     companion object {
         private const val FADE_IN_MS = 450L
         private const val FADE_OUT_MS = 600L
-        private const val TIMEOUT_MS = 6000L
     }
 }

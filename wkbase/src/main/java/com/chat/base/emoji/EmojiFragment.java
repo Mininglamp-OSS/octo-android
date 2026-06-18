@@ -49,6 +49,14 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     // so onConfigurationChanged can push the new pane width into it as well —
     // same show-at-use one-shot-width bug as the main grid, same fix.
     private EmojiAdapter headerAdapter;
+    /**
+     * "常用表情" header view. Cached so we can rebuild headerAdapter data on every
+     * click instead of re-inflating the header every time. iOS 1:1 对齐：iOS 把
+     * recentEmotions 当作 collection view 的第 0 段，点击后会刷新——Android 这边过去
+     * 只在 initData() 时构建一次，后续点击只写 prefs 不刷 UI，所以同一会话里看到的永远是
+     * 进入聊天瞬间的快照。这里把构建逻辑抽出来，每次点击和 onResume 都重跑一次。
+     */
+    private View commonHeaderView;
     private IEmojiClick iEmojiClick;
     int width = 0;
 
@@ -87,8 +95,14 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     @Override
     protected void initListener() {
         emojiAdapter.setOnItemClickListener((adapter, view, position) -> {
-            String index = (String) adapter.getItem(position);
-            emojiClick(index);
+            // 注意：adapter 数据是 EmojiEntry（commit 816793e 加肤色功能时把
+            // BaseQuickAdapter<String, …> 换成了 BaseQuickAdapter<EmojiEntry, …>），
+            // 旧代码这里直接 (String) cast 导致 ClassCastException → 点击 emoji 永远不写 prefs，
+            // "最近发送排序"才不生效。这里走 instanceof 后取 .getText() 取出真正的 emoji tag。
+            Object item = adapter.getItem(position);
+            if (item instanceof EmojiEntry) {
+                emojiClick(((EmojiEntry) item).getText());
+            }
         });
         wkVBinding.deleteLayout.setOnClickListener(v -> {
             if (iEmojiClick != null) {
@@ -108,7 +122,14 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
 
     @Override
     protected void initData() {
-        getCommonEmoji();
+        refreshRecentEmojiHeader();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 进入前台时按 prefs 重排，覆盖"在别处发完表情切回来 header 没刷"的边角场景。
+        refreshRecentEmojiHeader();
     }
 
     /**
@@ -152,48 +173,71 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
     }
 
     private void getCommonEmoji() {
-        //查看最近使用到表情
+        refreshRecentEmojiHeader();
+    }
+
+    /**
+     * Rebuild the "常用表情" header strip from {@code common_used_emojis} prefs.
+     * Idempotent — safe to call on init, after each click, on resume. Three branches:
+     *  - prefs 空 / 全无效条目 → 移除 header（如果之前有）
+     *  - 首次有最近表情 → inflate 一次 header view，attach 到主 adapter
+     *  - 已有 header → 仅 setList + notify，避免每次点击都重建 view 树
+     *
+     * 同时把 prefs 规范化（去掉空串），避免 split(",") 残留 ""。
+     */
+    private void refreshRecentEmojiHeader() {
+        if (emojiAdapter == null) return;
         String ids = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis");
         List<EmojiEntry> list = new ArrayList<>();
-        String tempIds = "";
+        StringBuilder canonicalIds = new StringBuilder();
         if (!TextUtils.isEmpty(ids)) {
-            if (ids.contains(",")) {
-                String[] emojiIds = ids.split(",");
-                for (String emojiId : emojiIds) {
-                    if (list.size() == 32) break;
-                    if (!TextUtils.isEmpty(emojiId)) {
-                        EmojiEntry entry = EmojiManager.getInstance().getEmojiEntry(emojiId);
-                        if (entry != null) {
-                            list.add(entry);
-                        }
-                        if (TextUtils.isEmpty(tempIds)) {
-                            tempIds = emojiId;
-                        } else tempIds = tempIds + "," + emojiId;
-                    }
-
-                }
-            } else {
-                EmojiEntry entry = EmojiManager.getInstance().getEmojiEntry(ids);
+            String[] tokens = ids.contains(",") ? ids.split(",") : new String[]{ids};
+            for (String token : tokens) {
+                if (TextUtils.isEmpty(token)) continue;
+                if (list.size() >= 32) break;
+                EmojiEntry entry = EmojiManager.getInstance().getEmojiEntry(token);
                 if (entry != null) {
                     list.add(entry);
                 }
-                tempIds = ids;
+                if (canonicalIds.length() == 0) {
+                    canonicalIds.append(token);
+                } else {
+                    canonicalIds.append(',').append(token);
+                }
             }
         }
-        if (WKReader.isEmpty(list)) return;
-        emojiAdapter.removeAllHeaderView();
-        View headerView = LayoutInflater.from(getContext()).inflate(R.layout.common_used_emoji_header_layout, null);
-        RecyclerView recyclerView = headerView.findViewById(R.id.recyclerView);
-        headerAdapter = new EmojiAdapter(new ArrayList<>(), width);
-        headerAdapter.addData(list);
-        recyclerView.setLayoutManager(new StaggeredGridLayoutManager(8, StaggeredGridLayoutManager.VERTICAL));
-        recyclerView.setAdapter(headerAdapter);
-        emojiAdapter.addHeaderView(headerView);
-        WKSharedPreferencesUtil.getInstance().putSPWithUID("common_used_emojis", tempIds);
-        headerAdapter.setOnItemClickListener((adapter, view, position) -> {
-            String index = (String) adapter.getItem(position);
-            emojiClick(index);
-        });
+        WKSharedPreferencesUtil.getInstance().putSPWithUID(
+                "common_used_emojis", canonicalIds.toString());
+
+        if (WKReader.isEmpty(list)) {
+            if (commonHeaderView != null) {
+                emojiAdapter.removeHeaderView(commonHeaderView);
+                commonHeaderView = null;
+                headerAdapter = null;
+            }
+            return;
+        }
+
+        if (commonHeaderView == null || headerAdapter == null) {
+            emojiAdapter.removeAllHeaderView();
+            commonHeaderView = LayoutInflater.from(getContext())
+                    .inflate(R.layout.common_used_emoji_header_layout, null);
+            RecyclerView recyclerView = commonHeaderView.findViewById(R.id.recyclerView);
+            headerAdapter = new EmojiAdapter(new ArrayList<>(), width);
+            headerAdapter.setList(list);
+            recyclerView.setLayoutManager(
+                    new StaggeredGridLayoutManager(8, StaggeredGridLayoutManager.VERTICAL));
+            recyclerView.setAdapter(headerAdapter);
+            emojiAdapter.addHeaderView(commonHeaderView);
+            headerAdapter.setOnItemClickListener((adapter, view, position) -> {
+                Object item = adapter.getItem(position);
+                if (item instanceof EmojiEntry) {
+                    emojiClick(((EmojiEntry) item).getText());
+                }
+            });
+        } else {
+            headerAdapter.setList(list);
+        }
     }
 
     private void emojiClick(String name) {
@@ -219,6 +263,9 @@ public class EmojiFragment extends WKBaseFragment<FragEmojiLayoutBinding> {
             }
             tempIndexs = name + "," + tempIndexs;
             WKSharedPreferencesUtil.getInstance().putSPWithUID("common_used_emojis", tempIndexs);
+            // 同步刷新 header strip：iOS 是即时排序，Android 之前漏了这一步导致同一会话内
+            // 排序看不到变化。每次写完 prefs 就回补 UI。
+            refreshRecentEmojiHeader();
         }
     }
 

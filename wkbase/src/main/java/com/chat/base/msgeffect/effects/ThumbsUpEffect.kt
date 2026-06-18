@@ -16,13 +16,29 @@
 
 package com.chat.base.msgeffect.effects
 
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.view.View
+import androidx.recyclerview.widget.RecyclerView
+import com.chat.base.msgeffect.BubblePulseHelper
 import com.chat.base.msgeffect.MessageEffectType
-import com.chat.base.msgeffect.ParticleSystem
-import kotlin.math.cos
-import kotlin.math.sin
+import java.lang.ref.WeakReference
 import kotlin.random.Random
 
+/**
+ * 「点赞上升」对齐 iOS WKStarburstEffect.m：
+ * 直接渲染系统字体的 👍 emoji 字符，多枚不同字号从底部外侧匀速上升到顶部外侧，
+ * X 方向做关键帧式正弦摆动，整体 1s 内做 0.9→1.1→0.95→1.05→1.0 的脉冲缩放，
+ * 末段 30% 淡出。不再叠星星粒子（iOS 原版没有）。
+ *
+ * 参数（与 iOS 保持一致）：
+ *  - 18 枚 thumb，2.0s 内分批生成（stagger ≈ 111ms + 0~120ms 随机抖动）
+ *  - fontSize 22..46sp
+ *  - 单枚生命 2.8..4.3s
+ *  - 总淡出窗口 7.5s（durationMs，与 iOS scheduleRemovalAfterDelay 一致）
+ */
 class ThumbsUpEffect(
     type: MessageEffectType,
     sourceRect: RectF,
@@ -30,168 +46,183 @@ class ThumbsUpEffect(
     viewHeight: Int
 ) : BaseEffect(type, sourceRect, viewWidth, viewHeight) {
 
-    private data class ThumbIcon(
-        var x: Float,
-        var y: Float,
-        var targetX: Float,
-        var scale: Float = 0.5f,
-        var alpha: Float = 0f,
-        var swayPhase: Float = 0f,
-        var swayAmplitude: Float = 0f,
-        var speed: Float = 0f,
-        var delay: Float = 0f
+    private data class Thumb(
+        val fontSizePx: Float,
+        val xStart: Float,
+        val swayAmplitude: Float,
+        val durationMs: Float,
+        val delayMs: Float,
+        val pulsePhaseMs: Float
     )
 
-    private val thumbs = mutableListOf<ThumbIcon>()
-    private val starSys = ParticleSystem()
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val thumbPath = Path()
-    private val thumbSize = viewWidth * 0.06f
+    private val thumbs = mutableListOf<Thumb>()
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.DEFAULT
+        textAlign = Paint.Align.CENTER
+    }
 
-    private val starColors = intArrayOf(
-        0xFFFFD700.toInt(), 0xFFFFA000.toInt(), 0xFFFFECB3.toInt(), 0xFFFFFF00.toInt()
-    )
+    /**
+     * Hit-test targets：overlay 自身 + 聊天 RecyclerView。粒子飘到屏幕上的位置都以
+     * overlay 为参考；命中检测时拿 RV 可见 cell 转换到 overlay 坐标后求相交。
+     * 对应 iOS WKStarburstEffect.onHitCheckTimer。
+     */
+    private var overlayRef: WeakReference<View>? = null
+    private var recyclerRef: WeakReference<RecyclerView>? = null
+    /** 已经命中过的 (thumbIndex, cellViewIdentity) 集合，去重——同一对粒子/气泡只脉冲一次。 */
+    private val hitKeys = HashSet<Long>()
+    private var lastHitCheckMs = -1L
+    private val tmpOverlayLoc = IntArray(2)
+    private val tmpCellLoc = IntArray(2)
+
+    fun attachBubbleTargets(overlay: View?, recycler: RecyclerView?) {
+        overlayRef = overlay?.let { WeakReference(it) }
+        recyclerRef = recycler?.let { WeakReference(it) }
+    }
 
     override fun onStart() {
-        buildThumbPath()
-        generateThumbs()
+        spawnThumbs()
     }
 
-    private fun buildThumbPath() {
-        val s = thumbSize
-        thumbPath.reset()
-        // Simplified thumb shape
-        // Palm
-        thumbPath.addRoundRect(
-            RectF(-s * 0.35f, -s * 0.1f, s * 0.35f, s * 0.45f),
-            s * 0.1f, s * 0.1f, Path.Direction.CW
-        )
-        // Thumb up part
-        thumbPath.addRoundRect(
-            RectF(-s * 0.12f, -s * 0.55f, s * 0.12f, 0f),
-            s * 0.12f, s * 0.12f, Path.Direction.CW
-        )
-    }
+    private fun spawnThumbs() {
+        // iOS WKStarburstEffect 用 fontSize 22..46pt（≈ 5.6%..11.7% × viewW）。
+        // 这里改为按 viewWidth 的比例算字号，密度/折叠屏/分辨率全自适应——
+        // 先前用 sp×3 的硬编码会在 ldpi/xxxhdpi 上偏离 iOS 视觉。
+        val totalCount = 18
+        val spawnDuration = 2000f
+        val fontMinPx = viewWidth * 0.056f
+        val fontMaxPx = viewWidth * 0.117f
 
-    private fun generateThumbs() {
-        val count = 18
-        val stagger = 111f
+        for (i in 0 until totalCount) {
+            val fontPx = fontMinPx + Random.nextFloat() * (fontMaxPx - fontMinPx)
+            val size = fontPx * 1.4f
+            val xMargin = size / 2f
+            val xRange = (viewWidth - size).coerceAtLeast(0f)
+            val xStart = if (xRange > 0f) Random.nextFloat() * xRange + xMargin else viewWidth / 2f
+            val swayAmp = 20f + Random.nextFloat() * 25f
+            val baseDelay = i.toFloat() * (spawnDuration / totalCount)
+            val jitter = Random.nextFloat() * 120f
+            val duration = 2800f + Random.nextFloat() * 1500f
 
-        for (i in 0 until count) {
-            val startX = sourceRect.centerX() + (Random.nextFloat() - 0.5f) * sourceRect.width() * 0.5f
-            thumbs.add(ThumbIcon(
-                x = startX,
-                y = viewHeight + thumbSize,
-                targetX = startX,
-                swayPhase = Random.nextFloat() * 6.28f,
-                swayAmplitude = 20f + Random.nextFloat() * 25f,
-                speed = 150f + Random.nextFloat() * 80f,
-                delay = i * stagger
-            ))
+            thumbs.add(
+                Thumb(
+                    fontSizePx = fontPx,
+                    xStart = xStart,
+                    swayAmplitude = swayAmp,
+                    durationMs = duration,
+                    delayMs = baseDelay + jitter,
+                    pulsePhaseMs = Random.nextFloat() * 1000f
+                )
+            )
         }
     }
 
     override fun onFrame(canvas: Canvas, elapsedMs: Long, deltaMs: Long) {
         val t = elapsedMs.toFloat()
-        val delta = deltaMs.toFloat().coerceAtLeast(1f)
+        // overlay 坐标系下的粒子矩形——按 60ms 节流跑一次气泡命中检测，与 iOS 0.06s timer 对齐。
+        val shouldHitCheck = (elapsedMs - lastHitCheckMs) >= HIT_CHECK_INTERVAL_MS
+        if (shouldHitCheck) lastHitCheckMs = elapsedMs
 
-        // Update thumbs
-        for (thumb in thumbs) {
-            val localT = t - thumb.delay
+        for (i in thumbs.indices) {
+            val thumb = thumbs[i]
+            val localT = t - thumb.delayMs
             if (localT < 0f) continue
+            if (localT > thumb.durationMs) continue
 
-            val riseT = localT / 1000f
-            thumb.y = viewHeight + thumbSize - thumb.speed * riseT
-            thumb.x = thumb.targetX + sin(thumb.swayPhase + riseT * 2.5f) * thumb.swayAmplitude
+            val progress = (localT / thumb.durationMs).coerceIn(0f, 1f)
 
-            // Scale pulse
-            thumb.scale = 0.9f + sin(localT * 0.006f) * 0.1f
+            // Y 匀速上升：yStart = viewH + size, yEnd = -size
+            val size = thumb.fontSizePx * 1.4f
+            val yStart = viewHeight + size
+            val yEnd = -size
+            val y = yStart + (yEnd - yStart) * progress
 
-            // Alpha
-            val totalLife = (viewHeight + thumbSize * 2) / thumb.speed * 1000f
-            val lifeRatio = localT / totalLife
-            thumb.alpha = when {
-                lifeRatio < 0.1f -> lifeRatio / 0.1f
-                lifeRatio > 0.7f -> (1f - (lifeRatio - 0.7f) / 0.3f).coerceAtLeast(0f)
-                else -> 0.95f
+            // X 关键帧摆动 (与 iOS 保持一致的 5 段贝塞尔近似，linear 连接即可)：
+            // [0, +amp, 0, -0.8amp, +0.5amp, 0]
+            val x = thumb.xStart + keyframeSway(progress, thumb.swayAmplitude)
+
+            // Alpha：前 70% 保持 0.95，后 30% 线性淡出到 0
+            val alpha = if (progress < 0.7f) 0.95f
+            else (0.95f * (1f - (progress - 0.7f) / 0.3f)).coerceAtLeast(0f)
+
+            // Scale 脉冲：1s 周期循环 (0.9, 1.1, 0.95, 1.05, 1.0)
+            val pulseT = ((localT + thumb.pulsePhaseMs) % 1000f) / 1000f
+            val scale = pulseScale(pulseT)
+
+            paint.textSize = thumb.fontSizePx * scale
+            paint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
+            // 让"👍"基线大致位于 y（视觉中线）。Paint.Align.CENTER 已对齐 X，
+            // Y 用 textSize/3 近似 emoji 的下沉量做小补偿。
+            canvas.drawText("👍", x, y + thumb.fontSizePx * 0.35f, paint)
+
+            if (shouldHitCheck && alpha > 0.3f) {
+                checkBubbleHits(i, x, y, size)
             }
-        }
-
-        // Emit stars periodically
-        if (t > 500f && t < 5000f && Random.nextFloat() > 0.6f) {
-            val activeThumb = thumbs.firstOrNull { t - it.delay > 0 && it.alpha > 0.3f }
-            if (activeThumb != null) {
-                starSys.emit(
-                    count = 1,
-                    x = activeThumb.x + (Random.nextFloat() - 0.5f) * thumbSize,
-                    y = activeThumb.y,
-                    speedMin = 50f,
-                    speedMax = 150f,
-                    angleMin = 0f,
-                    angleMax = 360f,
-                    sizeMin = 3f,
-                    sizeMax = 7f,
-                    lifeMin = 500f,
-                    lifeMax = 1000f,
-                    color = starColors[Random.nextInt(starColors.size)],
-                    gravity = -30f,
-                    drag = 1f,
-                    fadeStart = 0.4f
-                )
-            }
-        }
-
-        starSys.update(delta)
-
-        // Draw stars behind thumbs
-        starSys.draw(canvas) { c, p, particle ->
-            drawStar(c, p, particle.size)
-        }
-
-        // Draw thumbs
-        for (thumb in thumbs) {
-            if (thumb.alpha <= 0f) continue
-            if (thumb.y < -thumbSize || thumb.y > viewHeight + thumbSize) continue
-
-            canvas.save()
-            canvas.translate(thumb.x, thumb.y)
-            canvas.scale(thumb.scale, thumb.scale)
-
-            paint.color = 0xFFFFCA28.toInt()
-            paint.alpha = (thumb.alpha * 255).toInt()
-            paint.style = Paint.Style.FILL
-            canvas.drawPath(thumbPath, paint)
-
-            // Outline
-            paint.color = 0xFFF57F17.toInt()
-            paint.alpha = (thumb.alpha * 200).toInt()
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 2f
-            canvas.drawPath(thumbPath, paint)
-            paint.style = Paint.Style.FILL
-
-            canvas.restore()
         }
     }
 
-    private fun drawStar(canvas: Canvas, paint: Paint, size: Float) {
-        val path = Path()
-        for (i in 0 until 5) {
-            val outerAngle = Math.toRadians((i * 72 - 90).toDouble())
-            val innerAngle = Math.toRadians((i * 72 + 36 - 90).toDouble())
-            val ox = (cos(outerAngle) * size).toFloat()
-            val oy = (sin(outerAngle) * size).toFloat()
-            val ix = (cos(innerAngle) * size * 0.4f).toFloat()
-            val iy = (sin(innerAngle) * size * 0.4f).toFloat()
-            if (i == 0) path.moveTo(ox, oy) else path.lineTo(ox, oy)
-            path.lineTo(ix, iy)
+    private fun checkBubbleHits(thumbIndex: Int, cx: Float, cy: Float, size: Float) {
+        val overlay = overlayRef?.get() ?: return
+        val rv = recyclerRef?.get() ?: return
+        if (!rv.isAttachedToWindow) return
+
+        overlay.getLocationOnScreen(tmpOverlayLoc)
+        val particleScreenLeft = tmpOverlayLoc[0] + cx - size / 2f
+        val particleScreenTop = tmpOverlayLoc[1] + cy - size / 2f
+        val particleScreenRight = particleScreenLeft + size
+        val particleScreenBottom = particleScreenTop + size
+
+        for (i in 0 until rv.childCount) {
+            val cell = rv.getChildAt(i) ?: continue
+            cell.getLocationOnScreen(tmpCellLoc)
+            val cellLeft = tmpCellLoc[0]
+            val cellTop = tmpCellLoc[1]
+            val cellRight = cellLeft + cell.width
+            val cellBottom = cellTop + cell.height
+            if (cell.width <= 0 || cell.height <= 0) continue
+
+            val intersects = particleScreenRight > cellLeft &&
+                    particleScreenLeft < cellRight &&
+                    particleScreenBottom > cellTop &&
+                    particleScreenTop < cellBottom
+            if (!intersects) continue
+
+            // 用 thumbIndex << 32 | cell.identityHashCode 作为去重 key——同一粒子穿过同一 cell 只脉冲一次。
+            val cellKey = System.identityHashCode(cell).toLong() and 0xFFFFFFFFL
+            val hitKey = (thumbIndex.toLong() shl 32) or cellKey
+            if (hitKeys.add(hitKey)) {
+                BubblePulseHelper.pulse(cell)
+            }
         }
-        path.close()
-        canvas.drawPath(path, paint)
+    }
+
+    private fun keyframeSway(progress: Float, amp: Float): Float {
+        // iOS values: [+0, +amp, 0, -0.8amp, +0.5amp, 0] over duration
+        val keyValues = floatArrayOf(0f, amp, 0f, -amp * 0.8f, amp * 0.5f, 0f)
+        val seg = keyValues.size - 1  // 5 segments
+        val segLen = 1f / seg
+        val idx = (progress / segLen).toInt().coerceIn(0, seg - 1)
+        val local = (progress - idx * segLen) / segLen
+        return keyValues[idx] + (keyValues[idx + 1] - keyValues[idx]) * local
+    }
+
+    private fun pulseScale(t: Float): Float {
+        // 5 keyframes: 0.9, 1.1, 0.95, 1.05, 1.0
+        val keys = floatArrayOf(0.9f, 1.1f, 0.95f, 1.05f, 1.0f)
+        val seg = keys.size - 1
+        val segLen = 1f / seg
+        val idx = (t / segLen).toInt().coerceIn(0, seg - 1)
+        val local = (t - idx * segLen) / segLen
+        return keys[idx] + (keys[idx + 1] - keys[idx]) * local
     }
 
     override fun onEnd() {
         thumbs.clear()
-        starSys.clear()
+        hitKeys.clear()
+        overlayRef = null
+        recyclerRef = null
+    }
+
+    companion object {
+        private const val HIT_CHECK_INTERVAL_MS = 60L
     }
 }

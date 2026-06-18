@@ -25,6 +25,7 @@ import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
+import androidx.recyclerview.widget.RecyclerView
 import com.chat.base.msgeffect.effects.BaseEffect
 import com.chat.base.msgeffect.effects.RocketEffect
 import com.chat.base.msgeffect.effects.BombEffect
@@ -42,6 +43,16 @@ class MessageEffectOverlayView @JvmOverloads constructor(
     private val activeEffects = mutableListOf<BaseEffect>()
     private var isRunning = false
     private var lastFrameTimeMs = 0L
+    /**
+     * 聊天列表的 RecyclerView。仅 [ThumbsUpEffect] 用——粒子飘过气泡时调用
+     * [BubblePulseHelper] 让对应 cell 抖动一下，对齐 iOS WKStarburstEffect 的
+     * onHitCheckTimer。其它特效拿不到也不影响。可空：宿主未注入时安静跳过。
+     */
+    private var messageRecyclerView: RecyclerView? = null
+
+    fun setMessageRecyclerView(rv: RecyclerView?) {
+        messageRecyclerView = rv
+    }
 
     private val frameCallback: Choreographer.FrameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -93,7 +104,9 @@ class MessageEffectOverlayView @JvmOverloads constructor(
             is MessageEffectType.Bomb -> BombEffect(type, sourceRect, w, h)
             is MessageEffectType.Hearts -> HeartsEffect(type, sourceRect, w, h)
             is MessageEffectType.Confetti -> ConfettiEffect(type, sourceRect, w, h)
-            is MessageEffectType.ThumbsUp -> ThumbsUpEffect(type, sourceRect, w, h)
+            is MessageEffectType.ThumbsUp -> ThumbsUpEffect(type, sourceRect, w, h).also {
+                it.attachBubbleTargets(this, messageRecyclerView)
+            }
             is MessageEffectType.ActionVideo -> null
             is MessageEffectType.ClassyVideo -> null
         }

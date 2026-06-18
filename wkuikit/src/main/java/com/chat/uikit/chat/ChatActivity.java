@@ -782,6 +782,9 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         messageEffectOverlay.setVisibility(View.INVISIBLE);
         FrameLayout contentRoot = findViewById(android.R.id.content);
         contentRoot.addView(messageEffectOverlay, effectLP);
+        // 注入消息列表 RV：ThumbsUpEffect 用它做粒子-气泡命中检测，命中时跑 BubblePulseHelper
+        // 让对应 cell 抖动，对齐 iOS WKStarburstEffect.onHitCheckTimer。
+        messageEffectOverlay.setMessageRecyclerView(wkVBinding.recyclerView);
         messageEffectManager = new com.chat.base.msgeffect.MessageEffectManager(this, messageEffectOverlay, contentRoot);
         chatAdapter.setOnMessageDisplayedListener((item, itemView) -> {
             if (messageEffectManager != null) {

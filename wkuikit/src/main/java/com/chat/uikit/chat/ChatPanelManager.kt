@@ -2308,13 +2308,24 @@ class ChatPanelManager(
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
         val naturelList = EmojiManager.getInstance().getEmojiWithType("1_")
         val symbolsList = EmojiManager.getInstance().getEmojiWithType("2_")
-        val list = ArrayList<EmojiEntry>()
-        list.addAll(customList)
-        list.addAll(normalList)
-        list.addAll(naturelList)
-        list.addAll(symbolsList)
-        val emojiLayout = LinearLayout(iConversationContext.chatActivity)
-        val emojiAdapter = EmojiAdapter(list, width)
+        val baseList = ArrayList<EmojiEntry>().apply {
+            addAll(customList)
+            addAll(normalList)
+            addAll(naturelList)
+            addAll(symbolsList)
+        }
+        // 初始就按"最近使用"排序——已点过的冒到前面，剩下按 custom→normal→natural→symbols 原顺序。
+        val emojiAdapter = EmojiAdapter(buildOrderedEmojiList(baseList), width)
+        // 用匿名子类覆盖 onAttachedToWindow：每次面板被 ChatPanelManager.toolBarClick 通过
+        // moreLayout.removeAllViews() + addView() 重新挂上时，按最新 prefs 重排一次。
+        // 这样同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
+        // WeChat / iOS 的体验（iOS WKEmojiContentView 也不在 didSelect 后 reloadData）。
+        val emojiLayout = object : LinearLayout(iConversationContext.chatActivity) {
+            override fun onAttachedToWindow() {
+                super.onAttachedToWindow()
+                emojiAdapter.setList(buildOrderedEmojiList(baseList))
+            }
+        }
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
         val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
         recyclerView.layoutManager = emojiLayoutManager
@@ -2346,8 +2357,45 @@ class ChatPanelManager(
                 MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
                 editText.setSelection(curPosition + emojiEntry.text.length)
             }
+            // 仅写 prefs，不当场 setList——本次面板顺序保持稳定，避免点完一个就跳位的割裂感。
+            recordRecentEmoji(emojiEntry.text)
         }
         return emojiLayout
+    }
+
+    /**
+     * 把 [baseList] 按"最近使用"前置重排：prefs 里 `common_used_emojis` 保存的是用户用过的
+     * emoji text（逗号分隔，最新在前），按该顺序先放，剩下的保持原排序。最小化改动方案——
+     * 不引入 iOS "最近使用 / 所有表情" 两段 section，只是单网格里冒泡，UI 风险面降到最低。
+     */
+    private fun buildOrderedEmojiList(baseList: List<EmojiEntry>): List<EmojiEntry> {
+        val recentTexts = readRecentEmojiTexts()
+        if (recentTexts.isEmpty()) return ArrayList(baseList)
+        val byText = baseList.associateBy { it.text }
+        val ordered = ArrayList<EmojiEntry>(baseList.size)
+        val used = HashSet<String>()
+        for (text in recentTexts) {
+            val entry = byText[text] ?: continue
+            if (used.add(text)) ordered.add(entry)
+        }
+        for (entry in baseList) {
+            if (used.add(entry.text)) ordered.add(entry)
+        }
+        return ordered
+    }
+
+    private fun readRecentEmojiTexts(): List<String> {
+        val raw = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis") ?: ""
+        if (raw.isEmpty()) return emptyList()
+        return raw.split(",").filter { it.isNotEmpty() }
+    }
+
+    private fun recordRecentEmoji(text: String) {
+        if (text.isEmpty()) return
+        val current = readRecentEmojiTexts().filter { it != text }
+        val updated = (listOf(text) + current).take(32)
+        WKSharedPreferencesUtil.getInstance()
+            .putSPWithUID("common_used_emojis", updated.joinToString(","))
     }
 
 

@@ -291,6 +291,19 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 startActivity(intent);
             });
         }
+        // 群消息推送（入站 Webhook）入口 — 全员可见可点；列表内部按权限矩阵控制操作。
+        // 1:1 对齐 iOS WKConversationSettingVM 的「群消息推送」入口。
+        SingleClickUtil.onSingleClick(wkVBinding.incomingWebhookLayout, view1 -> {
+            if (!groupIsEnable()) return;
+            Intent intent = new Intent(this, com.chat.uikit.group.webhook.ChannelWebhookActivity.class);
+            intent.putExtra(com.chat.uikit.group.webhook.ChannelWebhookActivity.EXTRA_GROUP_NO, groupNo);
+            // 与 iOS isCreatorOrManager 对齐：群主 (admin) 或 管理员 (manager) 都算可管理者。
+            boolean isManagerOrCreator = memberRole == WKChannelMemberRole.admin
+                    || memberRole == WKChannelMemberRole.manager;
+            intent.putExtra(com.chat.uikit.group.webhook.ChannelWebhookActivity.EXTRA_IS_MANAGER_OR_CREATOR,
+                    isManagerOrCreator);
+            startActivity(intent);
+        });
         wkVBinding.clearChatMsgLayout.setOnClickListener(v -> {
             String showName = "";
             if (groupChannel != null) {
@@ -655,6 +668,63 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 titleTv.setText(content);
             }
         }
+        refreshIncomingWebhookSubtitle();
+    }
+
+    /**
+     * 副标题策略 (与 iOS WKConversationSettingVM 一致)：
+     * <ul>
+     *   <li>命中 channelInfo.extra 缓存 → 直接显示「已配置 N 个」/「未配置」；</li>
+     *   <li>没有缓存 → 静默后台 fetch 一次写回 channelInfo.extra；副标题暂留空，
+     *     fetch 完触发 channelInfoUpdate → setData → 再跑一次拿到数字。</li>
+     * </ul>
+     * 失败时不写 cache，下次再进群信息页继续重试，避免错误副标题误导用户。
+     */
+    private void refreshIncomingWebhookSubtitle() {
+        TextView subtitleTv = wkVBinding.incomingWebhookSubtitleTv;
+        if (subtitleTv == null) return;
+        Integer cached = readWebhookCountCache();
+        if (cached == null) {
+            subtitleTv.setText("");
+            triggerWebhookCountPrefetchOnce();
+            return;
+        }
+        if (cached <= 0) {
+            subtitleTv.setText(R.string.str_group_incoming_webhooks_unset);
+        } else {
+            subtitleTv.setText(getString(R.string.str_group_incoming_webhooks_count, (int) cached));
+        }
+    }
+
+    private Integer readWebhookCountCache() {
+        WKChannel info = WKIM.getInstance().getChannelManager()
+                .getChannel(groupNo, WKChannelType.GROUP);
+        if (info == null || info.localExtra == null) return null;
+        Object v = info.localExtra.get(com.chat.uikit.group.webhook.WebhookConstants.EXTRA_COUNT_KEY);
+        if (v instanceof Integer) return (Integer) v;
+        if (v instanceof Number) return ((Number) v).intValue();
+        return null;
+    }
+
+    /** 按 group 去重，避免 reloadData 反复触发 (与 iOS inFlightGroups 静态集合策略一致)。 */
+    private static final java.util.Set<String> WEBHOOK_PREFETCH_IN_FLIGHT =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    private void triggerWebhookCountPrefetchOnce() {
+        if (TextUtils.isEmpty(groupNo)) return;
+        if (!WEBHOOK_PREFETCH_IN_FLIGHT.add(groupNo)) return;
+        com.chat.uikit.group.webhook.service.IncomingWebhookManager.getInstance()
+                .list(groupNo, (code, msg, list) -> {
+                    WEBHOOK_PREFETCH_IN_FLIGHT.remove(groupNo);
+                    if (code != com.chat.base.net.HttpResponseCode.success) return;
+                    WKChannel info = WKIM.getInstance().getChannelManager()
+                            .getChannel(groupNo, WKChannelType.GROUP);
+                    if (info == null) return;
+                    if (info.localExtra == null) info.localExtra = new java.util.HashMap<>();
+                    info.localExtra.put(com.chat.uikit.group.webhook.WebhookConstants.EXTRA_COUNT_KEY,
+                            list == null ? 0 : list.size());
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(info);
+                });
     }
 
     private void updateNameInGroupDialog() {

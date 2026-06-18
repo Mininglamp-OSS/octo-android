@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="88dp"
+    android:viewportWidth="80"
+    android:viewportHeight="80">
+
+    <!-- 圆角矩形浅灰底 -->
+    <path
+        android:pathData="M0,17.6 L0,62.4 A17.6,17.6 0 0 0 17.6,80 L62.4,80 A17.6,17.6 0 0 0 80,62.4 L80,17.6 A17.6,17.6 0 0 0 62.4,0 L17.6,0 A17.6,17.6 0 0 0 0,17.6 Z"
+        android:fillColor="#EEF1F6" />
+
+    <!-- 链接图标：两个圆环 + 中间连接段，沿 -45° 倾斜 -->
+    <group
+        android:pivotX="40"
+        android:pivotY="40"
+        android:rotation="-45">
+
+        <!-- 左环（开口朝右）-->
+        <path
+            android:pathData="M 27.34 31.34 a 11 11 0 1 0 7.78 -7.78"
+            android:strokeColor="#7A8299"
+            android:strokeWidth="4.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- 右环（开口朝左）-->
+        <path
+            android:pathData="M 52.66 48.66 a 11 11 0 1 0 -7.78 7.78"
+            android:strokeColor="#7A8299"
+            android:strokeWidth="4.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- 中间连接段 -->
+        <path
+            android:pathData="M 27.9 40 L 52.1 40"
+            android:strokeColor="#7A8299"
+            android:strokeWidth="4.5"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

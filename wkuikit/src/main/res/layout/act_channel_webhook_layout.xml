@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/homeColor"
+    android:orientation="vertical"
+    tools:ignore="MissingDefaultResource">
+
+    <include layout="@layout/wk_title_bar_layout" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- 列表 + 顶部说明 -->
+        <com.scwang.smart.refresh.layout.SmartRefreshLayout
+            android:id="@+id/refreshLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/transparent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/transparent"
+                android:paddingBottom="20dp"
+                android:clipToPadding="false" />
+        </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+
+        <!-- 空态 -->
+        <LinearLayout
+            android:id="@+id/emptyLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="80dp"
+            android:visibility="gone">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/emptyIconView"
+                android:layout_width="88dp"
+                android:layout_height="88dp"
+                android:src="@drawable/ic_webhook_empty" />
+
+            <TextView
+                android:id="@+id/emptyTipTv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="20dp"
+                android:gravity="center"
+                android:text="@string/str_webhook_empty_tip"
+                android:textColor="@color/color999"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/emptyAddBtn"
+                android:layout_width="160dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/bg_webhook_empty_btn"
+                android:gravity="center"
+                android:text="@string/str_webhook_create"
+                android:textColor="@color/white"
+                android:textSize="15sp" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

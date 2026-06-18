@@ -569,5 +569,67 @@
     <string name="copied">已复制</string>
     <string name="storage_space">存储空间</string>
     <string name="privacy">隐私</string>
+
+    <!-- 群入站 Webhook（群消息推送）- 1:1 对齐 iOS WKChannelWebhookVC 等 -->
+    <string name="str_group_incoming_webhooks">群消息推送</string>
+    <string name="str_group_incoming_webhooks_unset">未配置</string>
+    <string name="str_group_incoming_webhooks_count">已配置 %1$d 个</string>
+    <string name="str_webhook_create">新建 Webhook</string>
+    <string name="str_webhook_create_short">新建</string>
+    <string name="str_webhook_header_description">通过 Webhook 把外部系统的消息（CI 通知、监控告警、GitHub 事件等）推送到本群。</string>
+    <string name="str_webhook_empty_tip">暂无 Webhook，新建后可推送外部消息到本群</string>
+    <string name="str_webhook_disabled">已禁用</string>
+    <string name="str_webhook_meta_created_by">由 %1$s 创建 · %2$s</string>
+    <string name="str_webhook_meta_created_at">创建于 %1$s</string>
+    <string name="str_webhook_meta_usage">累计 %1$d 次推送，最近 %2$s</string>
+    <string name="str_webhook_creator_self">我</string>
+    <string name="str_webhook_action_test">测试发送</string>
+    <string name="str_webhook_action_test_cooldown">测试发送（冷却中）</string>
+    <string name="str_webhook_action_test_sent">已发送测试消息</string>
+    <string name="str_webhook_action_test_failed">测试失败</string>
+    <string name="str_webhook_action_wait">请稍候再试</string>
+    <string name="str_webhook_action_regenerate">重置 Token</string>
+    <string name="str_webhook_action_regenerate_failed">重置失败</string>
+    <string name="str_webhook_action_delete">删除</string>
+    <string name="str_webhook_action_delete_failed">删除失败</string>
+    <string name="str_webhook_action_deleted">已删除</string>
+    <string name="str_webhook_action_copy_name">复制名称</string>
+    <string name="str_webhook_regenerate_confirm">重置后旧地址将立即失效，确定要重置「%1$s」的 Token 吗？</string>
+    <string name="str_webhook_delete_confirm">确定要删除「%1$s」吗？删除后该地址将立即失效。</string>
+
+    <string name="str_webhook_title_create">新建 Webhook</string>
+    <string name="str_webhook_title_edit">编辑 Webhook</string>
+    <string name="str_webhook_field_name">名称</string>
+    <string name="str_webhook_field_avatar">头像 URL</string>
+    <string name="str_webhook_name_hint">如「构建通知」「监控告警」（可留空）</string>
+    <string name="str_webhook_avatar_hint">https://example.com/avatar.png</string>
+    <string name="str_webhook_avatar_hint_default">留空使用默认头像。</string>
+    <string name="str_webhook_member_prefix_hint">普通成员创建的 Webhook 服务端会自动加 `Webhook-` 前缀。</string>
+    <string name="str_done">完成</string>
+    <string name="str_save_failed">保存失败</string>
+    <string name="str_saved">已保存</string>
+    <string name="str_webhook_create_failed">创建失败</string>
+    <string name="str_load_failed">加载失败</string>
+    <string name="str_op_failed">操作失败</string>
+
+    <string name="str_webhook_url_title">Webhook 创建成功</string>
+    <string name="str_webhook_url_address">Webhook 地址</string>
+    <string name="str_webhook_url_examples">调用示例</string>
+    <string name="str_webhook_warning">出于安全考虑，以下地址仅此一次完整展示，请立即复制保存；丢失后只能重置。</string>
+    <string name="str_webhook_done_btn">我已复制并保存，关闭</string>
+    <string name="str_webhook_copy">复制</string>
+    <string name="str_webhook_copy_example">复制示例</string>
+    <string name="str_webhook_copy_address">复制地址</string>
+    <string name="str_webhook_curl_native_title">通用 (native)</string>
+    <string name="str_webhook_curl_native_note">content 按 Markdown 渲染。</string>
+    <string name="str_webhook_curl_wecom_title">企业微信机器人兼容</string>
+    <string name="str_webhook_curl_wecom_note">兼容企业微信群机器人格式，可直接迁移现有机器人 URL。</string>
+    <string name="str_webhook_native_sample">**构建成功** ✅ 详情见 [#123](https://example.com/build/123)</string>
+    <string name="str_webhook_wecom_sample">构建成功 ✅</string>
+    <string name="str_webhook_github_title">GitHub 事件</string>
+    <string name="str_webhook_github_intro">GitHub 仓库事件无需 curl，把下面这个 Payload URL 登记到仓库 Webhook 设置：</string>
+    <string name="str_webhook_github_step1">仓库 → Settings → Webhooks → Add webhook</string>
+    <string name="str_webhook_github_step2">Payload URL 粘贴上面地址，Content type 选 application/json</string>
+    <string name="str_webhook_github_step3">勾选需要接收的事件（如 push、pull_request），保存</string>
 </resources>
 

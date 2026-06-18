@@ -40,6 +40,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -283,6 +284,9 @@ open class WKTextProvider : WKChatBaseProvider() {
             // 导致行断点偏右、文字右侧被截断。
             io.noties.markwon.core.spans.OrderedListItemSpan.measure(contentTv, displaySpans)
             contentTv.text = displaySpans
+            // RV 复用: 上一次 bind 是表格消息时, msgTimeView 被移到 bubble 末尾,
+            // 这里搬回 textContentLayout, 不然 ChatTextTimeLayout 找不到时间视图。
+            relocateMsgTimeView(contentTvLayout, hasTable = false)
             return
         }
 
@@ -324,6 +328,8 @@ open class WKTextProvider : WKChatBaseProvider() {
                     )
                 )
             }
+            // 时间视图搬到 bubble 末尾右下角 (与 INTERLEAVED 分支同口径)。
+            relocateMsgTimeView(contentTvLayout, hasTable = true)
             return
         }
 
@@ -384,6 +390,10 @@ open class WKTextProvider : WKChatBaseProvider() {
             )
             selectText(extraTv, contentTvLayout, uiChatMsgItemEntity)
         }
+
+        // 全部表格卡片 + extraTv 都加完之后, 把时间视图搬到 bubble 最末尾的右下角,
+        // 否则它还停在第一段文本之后, 视觉错位 (用户报: 含 markdown 表格消息时间错位)。
+        relocateMsgTimeView(contentTvLayout, hasTable = true)
     }
 
     /** 去除 CharSequence 首尾的换行符，保留中间内容和 Span */
@@ -393,6 +403,55 @@ open class WKTextProvider : WKChatBaseProvider() {
         while (s < e && cs[s] == '\n') s++
         while (e > s && cs[e - 1] == '\n') e--
         return if (s == 0 && e == cs.length) cs else cs.subSequence(s, e)
+    }
+
+    /**
+     * 时间/状态 view 重定位 — 含表格的消息时间错位修复:
+     *
+     * 原本 `msgTimeView` 是 `textContentLayout` (ChatTextTimeLayout, FrameLayout 子类) 的
+     * 子 view, 由 ChatTextTimeLayout 自己算"text + time 同行还是换行"的内联布局, 时间贴
+     * 第一段文本右下角。含 markdown 表格的消息里, 第一段文本之后还有表格卡片 + N 段
+     * extraTv, 时间却挂在第一段下面 → 视觉上时间在 bubble 中部错位。
+     *
+     * 修复: 含表格时把 msgTimeView 摘到 BubbleLayout 末尾, gravity=END 让它落到整条
+     * bubble 的右下角。无表格时 (含 RV 复用从表格态切回) 移回 textContentLayout, 走
+     * ChatTextTimeLayout 原本的内联逻辑, 不影响其它消息类型。
+     *
+     * `setMsgTimeAndStatus` / `resetCellBackground` 都从 baseView 根 findViewById, 移到
+     * 同一个 baseView 子树的另一个 ViewGroup 仍然能找到, 数据绑定不动。
+     */
+    private fun relocateMsgTimeView(contentTvLayout: BubbleLayout, hasTable: Boolean) {
+        val msgTimeView = contentTvLayout.findViewById<View>(R.id.msgTimeView) ?: return
+        val textContentLayout = contentTvLayout.findViewById<View>(R.id.textContentLayout) as? ViewGroup
+            ?: return
+
+        if (hasTable) {
+            // 期望: msgTimeView 是 contentTvLayout 的最后一个子 view。
+            val isLast = msgTimeView.parent === contentTvLayout &&
+                contentTvLayout.indexOfChild(msgTimeView) == contentTvLayout.childCount - 1
+            if (!isLast) {
+                (msgTimeView.parent as? ViewGroup)?.removeView(msgTimeView)
+                contentTvLayout.addView(
+                    msgTimeView,
+                    LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { gravity = Gravity.END }
+                )
+            }
+        } else {
+            // 期望: msgTimeView 在 textContentLayout 里, 走原 ChatTextTimeLayout 内联布局。
+            if (msgTimeView.parent !== textContentLayout) {
+                (msgTimeView.parent as? ViewGroup)?.removeView(msgTimeView)
+                textContentLayout.addView(
+                    msgTimeView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { gravity = Gravity.END or Gravity.BOTTOM }
+                )
+            }
+        }
     }
 
     /** 构建单个表格卡片 View */

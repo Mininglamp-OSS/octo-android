@@ -54,6 +54,12 @@ public class ChatTextTimeLayout extends FrameLayout {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         textView = findViewById(R.id.contentTv);
         containerView = findViewById(R.id.msgTimeView);
+        // 含表格的 markdown 消息会把 msgTimeView 临时移到 BubbleLayout 末尾,
+        // 让时间真的显示在整条气泡的右下角而不是第一段文本之后 (WKTextProvider.relocateMsgTimeView)。
+        // 此时 containerView 在本 layout 内找不到, 退回默认 FrameLayout 行为只测量 contentTv。
+        if (textView == null || containerView == null) {
+            return;
+        }
         LayoutParams viewPartMainLayoutParams = (LayoutParams) textView.getLayoutParams();
         LayoutParams viewPartSlaveLayoutParams = (LayoutParams) containerView.getLayoutParams();
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
@@ -132,6 +138,10 @@ public class ChatTextTimeLayout extends FrameLayout {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        // 与 onMeasure 同口径: msgTimeView 被移走的场景下回退默认 FrameLayout layout, 不再强行定位。
+        if (textView == null || containerView == null) {
+            return;
+        }
 
         textView.layout(
                 getPaddingLeft(),

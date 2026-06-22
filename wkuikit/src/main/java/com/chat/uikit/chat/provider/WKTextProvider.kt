@@ -278,6 +278,10 @@ open class WKTextProvider : WKChatBaseProvider() {
         // 无表格：直接设置全部文本，恢复气泡宽度为 wrap_content（RecyclerView 复用）
         if (tableDataList.isNullOrEmpty()) {
             contentTvLayout.layoutParams.width = ViewGroup.LayoutParams.WRAP_CONTENT
+            // RV 复用: 上一次 bind 是「表格起始的消息且首段空白」时, contentTv.visibility 会被
+            // 设成 GONE (见下面 INTERLEAVED 分支 line 350); 这里必须显式恢复 VISIBLE,
+            // 否则同一 holder 拿来绑普通文本会渲染成空白气泡。
+            contentTv.visibility = View.VISIBLE
             // 修复：Markwon 的 OrderedListItemSpan.margin 初始为 0，
             // 必须在 setText 前调用 measure() 用 textView 的 Paint 预计算列表序号宽度，
             // 否则首次 StaticLayout 创建时 getLeadingMargin() 返回过小的缩进值，
@@ -318,6 +322,9 @@ open class WKTextProvider : WKChatBaseProvider() {
 
         // 占位符数量与表格数量不匹配时回退：全部文本 + 表格追加到末尾
         if (placeholderPositions.size != tableDataList.size) {
+            // RV 复用: 同样恢复 VISIBLE (上一次 bind 可能把它设为 GONE), 与无表格分支同口径,
+            // 防退化场景拿到一个被前次绑定隐藏掉的 contentTv。
+            contentTv.visibility = View.VISIBLE
             contentTv.text = displaySpans
             for (tableData in tableDataList) {
                 contentTvLayout.addView(

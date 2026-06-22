@@ -89,7 +89,7 @@ object MentionEntityHelper {
     }
 
     /**
-     * 跨端兜底：用 `mentionInfo.uids` + `plain` 文本权威重建 mention entities。
+     * 跨端兜底：用 `mentionInfo.uids` + `plain` 文本补齐 / 修正 mention entities。
      *
      * 背景：iOS 发送 RichText 时把 `mention.entities[i].offset` 写成 **caption-relative**
      * （`entity.range.location` 是在 caption 内 match 出来的），而 Android 接收侧
@@ -99,22 +99,31 @@ object MentionEntityHelper {
      *
      * iOS 接收侧自己绕开了这个问题（`WKRichTextCell.appendTextBlock:` 直接走
      * `WKMentionService.parseMention(text, mentionInfo)` re-parse @ 模式，根本不读 wire entities）。
-     * 这里把 Android 接收侧也对齐这个口径：**有 mentionInfo.uids 就权威重建 mention entities**，
-     * 不再信 wire 上的 offset/length（它可能是 caption-relative 的）。
+     * 这里把 Android 接收侧也对齐这个口径——但**只在 wire entity 显式不可信的时候**才介入，
+     * 绝不对已合法的 plain-relative wire entity 做替换（避免多 @ 部分名匹配时把好的也丢掉）。
      *
      * 同时也覆盖 wire 上没写 entities 的旧消息（只有 uids 没 entities 的情况）。
      *
-     * 算法（与发送侧 `scanPlainTextMentions` 镜像）：
-     *  - 跳过哨兵 uid（"-1" / "-2"）, 它们由渲染侧 `applyBroadcastHighlight` 单独处理
-     *  - 子区（COMMUNITY_TOPIC）按父群成员表查询
-     *  - 对每个 real uid: 拿 channelMember (memberName/Remark) 与 PERSONAL channel
-     *    (channelName/Remark) 的 4 个候选名, 在 plain 里逐个 indexOf 找 `@<name>` 首个
-     *    未被占用的位置, 命中即追加 entity (offset/length plain-relative)
-     *  - 命中失败（人退群 / 改名）→ skip, 不构造伪造 entity
+     * 算法（v2，gap-filler 模式）：
+     *  1. 跳过哨兵 uid（"-1" / "-2"）, 它们由渲染侧 `applyBroadcastHighlight` 单独处理
+     *  2. 把现有 type=mention entities 按合法性分桶：
+     *     - **合法** = `offset+length` 在 plain 范围内 且 `plain[offset] == '@'` →
+     *       说明是 plain-relative 真数据（普通群文本消息 / 后端 mention.entities 正确给的）, 保留
+     *     - **不合法** = 越界 / 不指向 `@` → 说明是 iOS RichText 的 caption-relative wire,
+     *       丢弃, 走重建补回来（同时避免把坏数据透传给渲染层 crash）
+     *  3. 计算 uid 的覆盖情况：合法 wire entity 已覆盖的 uid 不需要重建
+     *  4. 对未覆盖的 uid 走原有 indexOf 路径在 plain 里反查 `@<name>` 位置；
+     *     `claimed` 数组先把合法 wire entity 的区间占住, 防新建落到同一处
+     *  5. 命中失败（人退群 / 改名）→ skip, 不构造伪造 entity
+     *
+     * 这个收紧解决一类回归：「自定义群备注 + 多 @」消息里发送端按 `memberRemark` 拼
+     * `@<sender-side-name>`，接收端 `collectMentionNameCandidates` 取的是接收端本地名，
+     * 两边对不上的 uid 旧实现会直接丢掉它正确的 wire entity，导致该 @ 不高亮 / 不可点。
+     * v2 下这种情况 wire entity 是合法的，会被保留。
      *
      * 安全性：
      *  - mentionInfo 来自后端权威，绝不凭空伪造高亮
-     *  - 替换原有 type=mention entities, 但保留其它类型（link 等）不动
+     *  - 只替换不合法的 type=mention entities; 合法的 wire mention + 其它类型 (link 等) 都不动
      *  - 同一 uid 在 uids 里出现 N 次, 在 plain 里按出现顺序消费 N 个 `@<name>` 位置
      */
     @JvmStatic
@@ -131,6 +140,28 @@ object MentionEntityHelper {
         val plain = model.displayContent ?: return
         if (plain.isEmpty()) return
 
+        // 第 2 步：现有 type=mention 按合法性分桶。
+        // 合法 = offset 在 plain 范围内 + 指向 '@' → 信任为 plain-relative 真数据
+        val allEntities = model.entities ?: emptyList()
+        val existingMentions = allEntities.filter { it.type == ChatContentSpanType.mention }
+        val validWireMentions = existingMentions.filter { e ->
+            e.offset >= 0
+                    && e.length > 0
+                    && e.offset + e.length <= plain.length
+                    && plain[e.offset] == '@'
+        }
+
+        // 第 3 步：合法 wire 已覆盖的 uid 不重建
+        val coveredUids = validWireMentions.mapNotNull { it.value }.toHashSet()
+        val needRebuildUids = realUids.filter { it !in coveredUids }
+
+        // 快速路径：所有 uid 都已被合法 wire 覆盖 → 不需要任何重建, 直接返回。
+        // 这是 yujiawei review 反馈修复的关键：原实现总是 wholesale replace, 多 @ 部分名
+        // 匹配场景下会丢掉部分合法 wire entity; v2 在这里直接保留 wire, 零风险。
+        if (needRebuildUids.isEmpty() && existingMentions.size == validWireMentions.size) {
+            return
+        }
+
         // 子区 → 查父群成员; 否则用消息所在 channel
         var lookupChannelId = msg.channelID
         var lookupChannelType = msg.channelType
@@ -144,11 +175,16 @@ object MentionEntityHelper {
             }
         }
 
-        // 占用游标: 同一 plain 中可能出现多次 @<name>, 按 uids 顺序消费, 防同一处理两次
+        // 第 4 步：占用游标先把合法 wire entity 的区间占住 (新建 entity 不能落到同一段);
+        // 再为 needRebuildUids 按候选名 indexOf 找 plain 里第一个未占用位置。
         val claimed = BooleanArray(plain.length)
-        val rebuilt = ArrayList<WKMsgEntity>(realUids.size)
+        for (e in validWireMentions) {
+            val end = minOf(e.offset + e.length, claimed.size)
+            for (i in e.offset until end) claimed[i] = true
+        }
 
-        for (uid in realUids) {
+        val rebuilt = ArrayList<WKMsgEntity>(needRebuildUids.size)
+        for (uid in needRebuildUids) {
             val candidates = collectMentionNameCandidates(uid, lookupChannelId, lookupChannelType)
             if (candidates.isEmpty()) continue
 
@@ -172,12 +208,16 @@ object MentionEntityHelper {
             }
         }
 
-        // 用重建结果替换原 type=mention entities, 其它类型 (link 等) 保留
-        val nonMention = (model.entities ?: emptyList())
-            .filter { it.type != ChatContentSpanType.mention }
-        if (rebuilt.isEmpty() && nonMention.isEmpty()) return  // 没新增也没原有非 mention, 不动
-        model.entities = ArrayList<WKMsgEntity>(nonMention.size + rebuilt.size).apply {
+        // 第 5 步：合并新 entities = 非 mention 类型 + 合法 wire mention + 新重建。
+        // 不合法的 wire mention (caption-relative 越界 / 不指向 '@') 被丢弃, 没命中的 uid 也不补,
+        // 与 v1 行为对齐 (不伪造高亮)。
+        val nonMention = allEntities.filter { it.type != ChatContentSpanType.mention }
+        if (rebuilt.isEmpty() && validWireMentions.isEmpty() && nonMention.isEmpty()) return
+        model.entities = ArrayList<WKMsgEntity>(
+            nonMention.size + validWireMentions.size + rebuilt.size
+        ).apply {
             addAll(nonMention)
+            addAll(validWireMentions)
             addAll(rebuilt)
         }
     }

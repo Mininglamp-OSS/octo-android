@@ -216,23 +216,33 @@ public class IncomingWebhookManager extends WKBaseModel {
             return;
         }
         hasTestInFlight = true;
-        request(createService(IncomingWebhookService.class).test(groupNo, webhookId),
-                new IRequestResultListener<CommonResponse>() {
-                    @Override
-                    public void onSuccess(CommonResponse result) {
-                        hasTestInFlight = false;
-                        markCooldown(webhookId);
-                        // 与 update/delete 同理：onSuccess 直接当成功，不读 body status
-                        if (listener != null) listener.onResult(true, HttpResponseCode.success, "");
-                    }
+        // 兜底 subscribe 之前的<em>同步异常</em>: 常规路径 onSuccess / onFail 都会复位
+        // hasTestInFlight, 框架层 HTTP 错误 (401/429/超时/断网) 走 BaseObserver.onError → onFail.
+        // 但若 createService(...) / .test(...) 表达式本身同步抛 (Retrofit 配置异常 / NPE 等,
+        // 概率低但非零), callback 永远没机会注册, 标志会永久卡 true 致此账号本 session
+        // 内所有 webhook 测试都被前置闸门拒掉。在此 catch 复位 + 立刻上报 listener, 避免静默。
+        try {
+            request(createService(IncomingWebhookService.class).test(groupNo, webhookId),
+                    new IRequestResultListener<CommonResponse>() {
+                        @Override
+                        public void onSuccess(CommonResponse result) {
+                            hasTestInFlight = false;
+                            markCooldown(webhookId);
+                            // 与 update/delete 同理：onSuccess 直接当成功，不读 body status
+                            if (listener != null) listener.onResult(true, HttpResponseCode.success, "");
+                        }
 
-                    @Override
-                    public void onFail(int code, String msg) {
-                        hasTestInFlight = false;
-                        markCooldown(webhookId);
-                        if (listener != null) listener.onResult(true, code, msg);
-                    }
-                });
+                        @Override
+                        public void onFail(int code, String msg) {
+                            hasTestInFlight = false;
+                            markCooldown(webhookId);
+                            if (listener != null) listener.onResult(true, code, msg);
+                        }
+                    });
+        } catch (Throwable t) {
+            hasTestInFlight = false;
+            if (listener != null) listener.onResult(true, HttpResponseCode.error, t.getMessage());
+        }
     }
 
     private void markCooldown(String webhookId) {

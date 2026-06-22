@@ -66,6 +66,13 @@ public class ChannelWebhookActivity extends WKBaseActivity<ActChannelWebhookLayo
     private String groupNo;
     private boolean isManagerOrCreator;
     private WebhookListAdapter adapter;
+    // 标记首次 list 请求是否已返回（成功或失败）。
+    // onResume 用它判断是「首次进入」还是「从子页 / 弹窗回来」：
+    //   - 首次进入：initData() 已发起 loadList(true)，onResume 此时若再 loadList 会重复请求；
+    //   - 从子页回来：用户可能在编辑页改了名字 / 头像 / 启停 / 新建，必须刷一次。
+    // 旧实现用 `!data.isEmpty()` 代理「是否做过首次加载」，会把首条 webhook 创建后空列表
+    // 返回的场景一并挡掉，导致新建后列表不显示（review 反馈 critical）。
+    private boolean initialLoaded;
     private TextView addBtn;
     private final List<IncomingWebhook> data = new ArrayList<>();
 
@@ -160,7 +167,9 @@ public class ChannelWebhookActivity extends WKBaseActivity<ActChannelWebhookLayo
     protected void onResume() {
         super.onResume();
         // 编辑 / 创建 / 弹窗结束后回到列表，强制刷一次：用户可能在编辑页改了名字 / 头像 / 启停。
-        if (adapter != null && !data.isEmpty()) {
+        // 用 initialLoaded 而不是 `!data.isEmpty()` 判断「是否从子页回来」——后者会漏掉「空列表
+        // 创建第一条 webhook 后返回」的场景（首条创建链路 review critical 修复）。
+        if (adapter != null && initialLoaded) {
             loadList(false);
         }
     }
@@ -169,6 +178,9 @@ public class ChannelWebhookActivity extends WKBaseActivity<ActChannelWebhookLayo
         if (showHud) showLoadingHud();
         IncomingWebhookManager.getInstance().list(groupNo, (code, msg, list) -> {
             if (showHud) hideLoadingHud();
+            // 不论成功 / 失败都置位：onResume 后续才会切到「子页返回 → 刷新」语义；
+            // 首次失败的情况下，回到本页用户手动下拉刷新仍可重试，不会卡死。
+            initialLoaded = true;
             if (code != HttpResponseCode.success) {
                 String tip = TextUtils.isEmpty(msg) ? getString(R.string.str_load_failed) : msg;
                 WKToastUtils.getInstance().showToast(tip);

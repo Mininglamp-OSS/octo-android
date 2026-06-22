@@ -243,9 +243,12 @@ public class TransferGroupOwnerActivity extends WKBaseActivity<ActTransferGroupO
             hideTitleRightLoading();
             if (code == HttpResponseCode.success) {
                 WKToastUtils.getInstance().showToastNormal(getString(R.string.str_transfer_owner_success));
-                // 同步成员列表和频道信息, 让设置页 / 详情页角色权限刷新, 与 iOS
+                // 同步成员列表 + 拉一次频道信息, 让设置页 / 详情页角色权限刷新, 与 iOS
                 // [WKGroupManager syncMemebers] + [WKSDK fetchChannelInfo] 对齐。
+                // GroupDetailActivity 已注册 addOnRefreshChannelInfo 监听, fetchChannelInfo
+                // 落库回调到达后会自动重渲染父页角色权限, 不需要 ActivityResult 兜底。
                 GroupModel.getInstance().groupMembersSync(groupNo, null);
+                WKIM.getInstance().getChannelManager().fetchChannelInfo(groupNo, WKChannelType.GROUP);
                 setResult(RESULT_OK);
                 finish();
             } else {

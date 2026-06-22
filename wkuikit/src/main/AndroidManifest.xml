@@ -9,6 +9,12 @@
     <application>
 
         <activity android:name=".group.DeleteGroupMemberActivity" />
+        <activity android:name=".group.TransferGroupOwnerActivity" />
+        <activity android:name=".group.webhook.ChannelWebhookActivity" />
+        <activity
+            android:name=".group.webhook.ChannelWebhookEditActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".group.webhook.ChannelWebhookUrlActivity" />
         <activity
             android:name=".group.GroupNoticeActivity"
             android:windowSoftInputMode="adjustResize" />
@@ -31,9 +37,6 @@
             android:name=".chat.ChatPersonalActivity"
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
-        <activity
-            android:name=".chat.WKRichTextCaptionActivity"
-            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".contacts.ChooseContactsActivity"
             android:windowSoftInputMode="adjustPan|stateHidden" />

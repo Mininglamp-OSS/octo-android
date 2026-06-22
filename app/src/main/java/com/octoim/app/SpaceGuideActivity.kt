@@ -22,8 +22,10 @@ import android.view.WindowInsetsController
 import com.chat.base.base.WKBaseActivity
 import com.chat.base.net.ICommonListener
 import com.chat.base.space.PendingGroupInvite
+import com.chat.base.utils.WKDialogUtils
 import com.chat.scan.ScanJoinGroupActivity
 import com.chat.uikit.TabActivity
+import com.chat.uikit.WKUIKitApplication
 import com.chat.uikit.message.MsgModel
 import com.chat.uikit.space.SpaceCreateDialog
 import com.chat.uikit.space.SpaceEntity
@@ -56,6 +58,25 @@ class SpaceGuideActivity : WKBaseActivity<ActivitySpaceGuideBinding>() {
             val code = wkVBinding.etInviteCode.text.toString().trim()
             if (code.isBlank()) return@setOnClickListener
             doJoinSpace(code)
+        }
+
+        // issue #66：新注册用户在邀请码页没有团队可进，必须给一个出口。
+        // 与设置页"退出登录"行为一致：弹二次确认 → exitLogin(0) 清账号 +
+        // disconnect IM + 关 DB + 跳回登录页。
+        wkVBinding.btnLogout.setOnClickListener {
+            WKDialogUtils.getInstance().showDialog(
+                this,
+                getString(R.string.login_out),
+                getString(R.string.login_out_dialog),
+                true,
+                "",
+                getString(R.string.login_out),
+                0, 0
+            ) { index ->
+                if (index == 1) {
+                    WKUIKitApplication.getInstance().exitLogin(0)
+                }
+            }
         }
     }
 

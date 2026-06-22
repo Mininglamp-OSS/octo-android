@@ -43,6 +43,17 @@ class SmartSummaryListViewModel(
     private val _uiState = MutableStateFlow(SummaryListUiState())
     val uiState = _uiState.asStateFlow()
 
+    /**
+     * 下次 [reload] 完成后是否触发一次跳顶 — [reloadAndScrollToTop] 置 true, [performLoad]
+     * 在新数据落进 state 时把它一次性翻到 [SummaryListUiState.pendingScrollToTop] 让 Activity
+     * 在 submitList commit 里 scrollToPosition(0) 后回头调 [consumePendingScrollToTop] 清掉.
+     *
+     * 用 state-driven 而不是 SharedFlow: 用户进 detail 页时 list 处于 STOPPED, 此时 reload
+     * 触发的"跳顶"信号若走 SharedFlow(replay=0) 在没人订阅时会被丢; StateFlow 始终把最新值
+     * replay 给新订阅者, 用户回到 list 时 render 仍然能看到 pendingScrollToTop=true 触发滚动.
+     */
+    private var pendingScrollToTopAfterReload = false
+
     private var keywordDebounceJob: Job? = null
 
     /**
@@ -70,6 +81,24 @@ class SmartSummaryListViewModel(
         loadJob = viewModelScope.launch {
             performLoad(page = 1, append = false, filter = s.filter, keyword = s.keyword.trim())
         }
+    }
+
+    /**
+     * 列表 FAB 创建总结成功后调用: reload + 在 performLoad 拿到新数据后 emit 一次
+     * scrollToTopEvent, 让 Activity 把列表跳到顶部, 新任务直接可见。
+     *
+     * 与普通 [reload] 拆开: 下拉刷新 / setFilter / setKeyword 都不应该触发跳顶
+     * (用户可能在 list 中段操作, 强制跳顶是 UX 退化)。
+     */
+    fun reloadAndScrollToTop() {
+        pendingScrollToTopAfterReload = true
+        if (current.loading) {
+            // 已经在 in-flight 的 reload 不打断 (避免抢占自身), 让它跑完后 performLoad
+            // 顺手 emit 一次。这条路径在 createLauncher 与 createActivity 同步落地的
+            // race 下偶发命中, 让 flag 不丢即可。
+            return
+        }
+        reload()
     }
 
     fun loadMore() {
@@ -135,6 +164,14 @@ class SmartSummaryListViewModel(
         }
     }
 
+    /** Activity 在 submitList commit callback 里 scrollToPosition(0) 之后清这个 flag,
+     *  防止下一次配置变更 / 状态轻量更新触发 render 时再次跳顶. */
+    fun consumePendingScrollToTop() {
+        if (_uiState.value.pendingScrollToTop) {
+            _uiState.update { it.copy(pendingScrollToTop = false) }
+        }
+    }
+
     // region per-item actions (optimistic)
 
     fun performCancel(item: SummaryListItem) {
@@ -155,6 +192,8 @@ class SmartSummaryListViewModel(
         val origStatus = item.status
         val origCompleted = item.completedAt
         val origTaskId = item.taskId
+        // 乐观更新: 立刻把这一行翻成 Processing, ⋯ 菜单跟着切到 "取消任务/删除".
+        // 失败回滚到原 status / completedAt, 与 iOS performRegenerate 同口径.
         replaceItem(origTaskId) { it.copy(status = TaskStatus.Processing, completedAt = null) }
         viewModelScope.launch {
             val res = repository.regenerateSummary(origTaskId, topic)
@@ -165,9 +204,17 @@ class SmartSummaryListViewModel(
                 emit(TransientMessage.StringRes(R.string.summary_regenerate_failed))
                 return@launch
             }
+            // 后端可能返回新 task_id (重新生成走新任务) 或同 task_id (原地重生成). 给了新 id
+            // 就 swap 让 poller / detail 跟新任务; 没换就保持 origTaskId, summaryPreview
+            // 也清掉让 hydratePreview 下一拍重新拉.
+            //
+            // 不做全量 reload + 跳顶 — server 的 regenerate 不动 created_at, 列表按
+            // created_at desc 排序原位置就是正确位置; 强行 scrollToPosition(0) 会把
+            // 用户视野跳到另一条任务上, 反而看不到正在重生成的那条 (用户报"列表重新生成
+            // 位置不变是因为 taskId/created_at 没变" — 这是 server-side 数据决定的, 客户
+            // 端尊重这个排序). 与 iOS [OctoSummaryListVC performRegenerate:topic:] 同语义.
             val newId = res.getOrThrow()
             if (newId > 0 && newId != origTaskId) {
-                // 后端给了新 task_id, 把 item.taskId 切到新 id, 后续 poller 跟踪新任务
                 replaceItem(origTaskId) {
                     it.copy(
                         taskId = newId,
@@ -176,6 +223,9 @@ class SmartSummaryListViewModel(
                         summaryPreview = null,
                     )
                 }
+            } else {
+                // 同 task_id 原地重生成: 清掉旧 preview, 等下一次 hydratePreview 拉新内容.
+                replaceItem(origTaskId) { it.copy(summaryPreview = null) }
             }
             emit(TransientMessage.StringRes(R.string.summary_regenerate_started))
         }
@@ -197,6 +247,14 @@ class SmartSummaryListViewModel(
     /** poller 5s 轮询变更回填,把变化项 status 同步入 state. */
     fun applyStatusChanges(changes: Map<Long, BatchStatusItem>) {
         if (changes.isEmpty()) return
+        // 调试 ("群聊总结好了 spinner 还在转" 链路): 记录每条 status 翻转, 确认 poller 到底有没有
+        // 把 Processing → Completed 推进 state. release 包关掉, taskId 量大且高频不该进 logcat.
+        if (com.chat.uikit.BuildConfig.DEBUG) {
+            android.util.Log.i(
+                "SummaryDebug",
+                "applyStatusChanges: ${changes.entries.joinToString { "${it.key}->${it.value.status}" }}",
+            )
+        }
         var anyNewlyCompleted = false
         _uiState.update { state ->
             val newItems = state.items.map { it ->
@@ -254,9 +312,21 @@ class SmartSummaryListViewModel(
                     transientMessage = TransientMessage.StringRes(R.string.summary_common_network_error),
                 )
             }
+            // reload 失败时清掉 pending flag, 否则下次普通 pull-to-refresh 成功会
+            // 误触发跳顶, 与用户预期 ("失败=不动") 不符。
+            if (!append) pendingScrollToTopAfterReload = false
             return
         }
         val pageRes = res.getOrThrow()
+        // shouldScrollToTop 必须在 update 外算出来 (而且只在 reload 路径有效, append=true 跳顶毫无意义),
+        // 然后用同一个 _uiState.update 把 items + pendingScrollToTop 一起落, 避免拆成两次 update
+        // 让 Activity render 跑两遍 (第一遍 items 已新但 pendingScrollToTop 还没翻).
+        //
+        // 注意: pendingScrollToTopAfterReload 只能在 state 真正写入 pendingScrollToTop=true
+        // 的分支里消费. 不能提前置 false — 如果 stateStale 分支命中 (用户在 in-flight 时改了
+        // keyword/filter), 数据被丢, 跳顶意图也会跟着丢, 后续真正落地的 reload 不会跳顶.
+        val shouldScrollToTop = !append && pendingScrollToTopAfterReload
+        var consumedScrollToTop = false
         _uiState.update { state ->
             // 二次校验: state.filter / state.keyword 在我们 launch 后被 setFilter/setKeyword
             // 改过, 说明这次响应已 stale, 丢弃 items 不合并 (loading flag 仍清掉避免卡死)。
@@ -266,15 +336,19 @@ class SmartSummaryListViewModel(
                 state.copy(loading = false, refreshing = false, loadingMore = false)
             } else {
                 val merged = if (append) state.items + pageRes.items else pageRes.items
+                consumedScrollToTop = shouldScrollToTop
                 state.copy(
                     items = merged,
                     loading = false,
                     refreshing = false,
                     loadingMore = false,
                     hasMore = pageRes.items.size >= pageSize,
+                    // 跳顶标志只在 reload 命中且非 stale 时翻 true; append / stale 路径都不动.
+                    pendingScrollToTop = state.pendingScrollToTop || shouldScrollToTop,
                 )
             }
         }
+        if (consumedScrollToTop) pendingScrollToTopAfterReload = false
         hydratePreview()
     }
 

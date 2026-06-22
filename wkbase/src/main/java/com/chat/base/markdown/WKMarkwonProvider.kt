@@ -104,14 +104,32 @@ object WKMarkwonProvider {
     }
 
     /**
-     * CommonMark-java 的表格扩展不要求 body 行包含 `|`，
-     * 非空行紧跟表格会被错误地当作表格行。
-     * 在表格最后一个 `|` 行与后续非表格行之间插入空行来正确终止表格。
+     * commonmark-java 的 GFM tables 扩展对边界很敏感, 两端都要有空行才识别:
+     *
+     * - 表格之后: 非空非 `|` 行紧跟最后一行 `|...|` 会被当成 table body 多列, 后续段落被吞;
+     * - 表格之前: header `|...|` 行紧贴上一行非空非 `|` 文字时, 整段被当作多行 paragraph,
+     *   GFM TableBlockParser 要求 header 所在 paragraph 只能是单行, 否则放弃当表格解析,
+     *   header 和 `|---|---|` 都退化成普通文字 (用户实测 msg=AB1E44DE rawHasPipe=true
+     *   rawHasSep=true 但 tables=0, 就是这条路径)。
+     *
+     * 在两端缺空行时补一行, 不动正文。
      */
     private fun ensureTableTermination(text: String): String {
         val lines = text.split('\n')
         val result = StringBuilder()
         for (i in lines.indices) {
+            // 进 |-header 行前: 上一行非空且不是 |-row, 且当前是 header (后跟 |---|---|),
+            // 在 result 末尾插空行让 paragraph 闭合, header 起新块。
+            if (i > 0
+                && lines[i].trimStart().startsWith("|")
+                && i + 1 < lines.size
+                && isTableDelimiterLine(lines[i + 1])
+            ) {
+                val prevTrimmed = lines[i - 1].trim()
+                if (prevTrimmed.isNotEmpty() && !prevTrimmed.startsWith("|")) {
+                    result.append('\n')
+                }
+            }
             result.append(lines[i])
             if (i < lines.size - 1) {
                 result.append('\n')
@@ -124,6 +142,16 @@ object WKMarkwonProvider {
             }
         }
         return result.toString()
+    }
+
+    /**
+     * 判断是否 GFM 表格分隔行: `|---|---|` / `| :---: | ---: |` / `--- | ---` 等。
+     * 只允许 `|`, `-`, `:`, 空白; 必须含 `-` 且 trim 后非空。`|` 可以缺 (开闭 `|` 都是可选的)。
+     */
+    private fun isTableDelimiterLine(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty() || !trimmed.contains('-')) return false
+        return trimmed.all { c -> c == '|' || c == '-' || c == ':' || c == ' ' || c == '\t' }
     }
 
     @JvmStatic

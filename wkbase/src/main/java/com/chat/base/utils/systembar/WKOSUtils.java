@@ -172,21 +172,30 @@ public class WKOSUtils {
         return !TextUtils.isEmpty(s) && s.equalsIgnoreCase("Meizu");
     }
 
+    /**
+     * 「去开启通知」入口：统一落到 app 级通知设置页（顶部即总开关）。
+     *
+     * 原实现跳的是 channel 级页面（ACTION_CHANNEL_NOTIFICATION_SETTINGS），
+     * 用户在该页看不到 app 级总开关，会以为调过 channel 重要性就算授权了，
+     * 回到应用 areNotificationsEnabled() 仍返回 false → 每次冷启动重新弹框。
+     * channelId 保留参数仅作兼容，不再使用。
+     */
     public static void openChannelSetting(Context context, String channelId) {
-        if (isEmui()) {
-            openPermissionSetting(context,channelId);
-        } else {
+        try {
             Intent intent = new Intent();
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                intent.setAction(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
-                intent.putExtra(Settings.EXTRA_CHANNEL_ID, channelId);
+                intent.setAction(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
             } else {
                 intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+                intent.putExtra("app_package", context.getPackageName());
+                intent.putExtra("app_uid", context.getApplicationInfo().uid);
             }
-//            intent.putExtra("app_package", context.getPackageName());
-            intent.putExtra("app_uid", context.getApplicationInfo().uid);
-            intent.putExtra("android.provider.extra.APP_PACKAGE", context.getPackageName());
             context.startActivity(intent);
+        } catch (Throwable e) {
+            // 兜底：跳应用详情页（华为/小米个别 ROM 不支持 APP_NOTIFICATION_SETTINGS）
+            gotoSet(context);
         }
     }
 

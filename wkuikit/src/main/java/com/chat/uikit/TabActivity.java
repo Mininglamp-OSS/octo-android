@@ -228,26 +228,56 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
             NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             notificationManager.cancelAll();
             WKCommonModel.getInstance().getAppConfig(null);
-            // 通知权限检查
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
-                RxPermissions rxPermissions = new RxPermissions(this);
-                rxPermissions.request(Manifest.permission.POST_NOTIFICATIONS).subscribe(aBoolean -> {
-                    if (!aBoolean) {
-                        WKDialogUtils.getInstance().showDialog(this, getString(com.chat.base.R.string.authorization_request), desc, true, getString(R.string.cancel), getString(R.string.to_set), 0, Theme.colorAccount, index -> {
-                            if (index == 1) {
-                                EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
-                            }
-                        });
+            // 通知权限引导：带冷却的「软请求」。
+            // 背景：部分华为/HarmonyOS 设备 areNotificationsEnabled() 在用户已开通知时仍返回 false，
+            // 老逻辑会每次冷启动弹框。改成 7 天冷却 + 已授权时清零，避免循环骚扰，自愈用户后续关闭场景。
+            checkNotificationPermission();
+        });
+    }
+
+    private static final String KEY_NOTIFY_PROMPT_LAST_TS = "notify_prompt_last_ts";
+    private static final long NOTIFY_PROMPT_COOLDOWN_MS = 7L * 24 * 60 * 60 * 1000;
+
+    private void checkNotificationPermission() {
+        boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
+        if (isEnabled) {
+            // 已授权：清零冷却时间戳，便于用户后续若关闭通知能在下次冷启动重新提示一次。
+            WKSharedPreferencesUtil.getInstance().putSP(KEY_NOTIFY_PROMPT_LAST_TS, "0");
+            return;
+        }
+        long lastTs = parsePromptLastTs();
+        long now = System.currentTimeMillis();
+        if (lastTs > 0 && now - lastTs < NOTIFY_PROMPT_COOLDOWN_MS) {
+            return;
+        }
+        WKSharedPreferencesUtil.getInstance().putSP(KEY_NOTIFY_PROMPT_LAST_TS, String.valueOf(now));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            String desc = String.format(getString(R.string.notification_permissions_desc), getString(R.string.app_name));
+            RxPermissions rxPermissions = new RxPermissions(this);
+            rxPermissions.request(Manifest.permission.POST_NOTIFICATIONS).subscribe(aBoolean -> {
+                if (aBoolean) {
+                    WKSharedPreferencesUtil.getInstance().putSP(KEY_NOTIFY_PROMPT_LAST_TS, "0");
+                    return;
+                }
+                WKDialogUtils.getInstance().showDialog(this, getString(com.chat.base.R.string.authorization_request), desc, true, getString(R.string.cancel), getString(R.string.to_set), 0, Theme.colorAccount, index -> {
+                    if (index == 1) {
+                        EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
                     }
                 });
-            } else {
-                boolean isEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
-                if (!isEnabled) {
-                    EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
-                }
-            }
-        });
+            });
+        } else {
+            EndpointManager.getInstance().invoke("show_open_notification_dialog", this);
+        }
+    }
+
+    private long parsePromptLastTs() {
+        String raw = WKSharedPreferencesUtil.getInstance().getSP(KEY_NOTIFY_PROMPT_LAST_TS, "0");
+        if (TextUtils.isEmpty(raw)) return 0L;
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
     }
 
     @Override

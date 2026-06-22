@@ -64,10 +64,15 @@ class SummaryRelatedChatSheet : BottomSheetDialogFragment() {
     }
 
     private fun onJumpOriginal(row: Row) {
-        val cid = row.channelId.orEmpty()
-        if (cid.isEmpty()) return
+        val rawCid = row.channelId.orEmpty()
+        if (rawCid.isEmpty()) return
         val activity = activity as? androidx.activity.ComponentActivity ?: return
         val ctype = row.channelType.toByte()
+        // DM 场景 citation.channel_id 是 "<myUid>@<peerUid>" 复合串, SDK
+        // WKChannel(PERSONAL) 按 peerUid 单值建索引, 直接喂复合串拉消息全 miss。
+        // 1:1 对齐 iOS commit ed2f841 OctoRelatedChatSheet.resolvedChannelIdForJump:
+        // 只在 PERSONAL+含"@" 时拆, 群聊/子区路径原样透传不动。
+        val cid = resolveChannelIdForJump(rawCid, ctype)
         val mseq = row.messageSeq
         // ChatActivity 期待 orderSeq, citation 给的是 message_seq, 必须 getMessageOrderSeq
         // 转换 + DB 查询走 IO 线程, 切回主线程触发跳转 + 关闭 sheet。
@@ -88,6 +93,28 @@ class SummaryRelatedChatSheet : BottomSheetDialogFragment() {
             activity.startActivity(intent)
             dismissAllowingStateLoss()
         }
+    }
+
+    /**
+     * 把 citation.channel_id 归一化成 SDK 期望的 channelId:
+     *   - 非 PERSONAL 或不含 "@" → 原样返回 (群聊 / 子区 / 已经是单值的 DM)
+     *   - PERSONAL + "<myUid>@<peerUid>" 复合串 → 拆 "@" 后取非 myUid 那段作为 peerUid;
+     *     都没有兜底原 cid 不让 jump 触发空白
+     *
+     * 与 iOS commit ed2f841 OctoRelatedChatSheet.resolvedChannelIdForJump: 同口径。
+     */
+    private fun resolveChannelIdForJump(cid: String, ctype: Byte): String {
+        if (cid.isEmpty()) return cid
+        if (ctype != com.xinbida.wukongim.entity.WKChannelType.PERSONAL) return cid
+        if (!cid.contains("@")) return cid
+        val parts = cid.split("@")
+        val myUid = com.chat.base.config.WKConfig.getInstance().uid
+        for (p in parts) {
+            if (p.isEmpty()) continue
+            if (!myUid.isNullOrEmpty() && p == myUid) continue
+            return p
+        }
+        return cid
     }
 
     override fun onDestroyView() {

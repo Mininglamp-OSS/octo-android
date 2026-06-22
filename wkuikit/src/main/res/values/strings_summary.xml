@@ -62,7 +62,8 @@
     <string name="summary_create_success">已创建总结任务</string>
     <string name="summary_create_failed">创建失败</string>
     <string name="summary_thread_placeholder">子区</string>
-    <string name="summary_chat_started_hint">已开始生成总结，可到「智能总结」查看进度</string>
+    <string name="summary_chat_started_hint">已开始生成总结</string>
+    <string name="summary_view_action">查看</string>
     <string name="summary_tpl_weekly_label">团队周报</string>
     <string name="summary_tpl_chat_label">总结聊天</string>
     <string name="summary_tpl_project_label">项目进展</string>

@@ -54,6 +54,7 @@ import com.chat.base.ui.components.NormalClickableContent;
 import com.chat.base.ui.components.NormalClickableSpan;
 import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKToastUtils;
 import com.xinbida.wukongim.WKIM;
@@ -161,8 +162,16 @@ public class WKUIChatMsgItemEntity {
             try {
                 // 从 mention.entities 补充 SDK 未解析的 mention entity
                 MentionEntityHelper.mergeMentionEntities(wkMsg);
+                // 跨端兜底: 用 mentionInfo.uids + plain 权威重建 mention entities, 解决 iOS 发的
+                // wire entities offset 是 caption-relative 而 Android 渲染按 plain-relative 过滤
+                // → 跨端 @ 不高亮的问题。详见 MentionEntityHelper.reconstructMentionEntitiesFromPlain。
+                MentionEntityHelper.reconstructMentionEntitiesFromPlain(wkMsg);
                 formatSpans(conversationContext, wkMsg);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                // 防御日志: formatSpans 里任何异常都会被吞 (Markwon 解析失败 / mention 越界等),
+                // displaySpans 停在 null 时, 气泡渲染会跟着出问题。debug 留 log 便于回溯,
+                // release 走 WKLogUtils.LOGGABLE 守门不进 logcat。
+                WKLogUtils.e("WKUIChatMsg", "formatSpans threw " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
             }
         }
 

@@ -42,6 +42,8 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
     private String groupNo;
     private String sourceMessageId;
     private String sourceContent;
+    private String sourceContentRaw;
+    private int sourceContentType;
     private String sourceFromName;
     private String sourceFromUid;
 
@@ -70,6 +72,8 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
         groupNo = getIntent().getStringExtra("groupNo");
         sourceMessageId = getIntent().getStringExtra("sourceMessageId");
         sourceContent = getIntent().getStringExtra("sourceContent");
+        sourceContentRaw = getIntent().getStringExtra("sourceContentRaw");
+        sourceContentType = getIntent().getIntExtra("sourceContentType", 0);
         sourceFromName = getIntent().getStringExtra("sourceFromName");
         sourceFromUid = getIntent().getStringExtra("sourceFromUid");
 
@@ -128,16 +132,31 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
         }
 
         // 构建源消息 payload，与 iOS 一致
+        // iOS 做法 (WKApp.m): 拷贝原 message.content.contentDict 全量字段, 再用真实 contentType 覆写 type。
+        // 优先用原始 JSON (sourceContentRaw + sourceContentType) — 这样合并转发/图片/文件等富类型
+        // 都能完整透传。仅当 raw 为空时回退到旧的纯文本路径 (避免空指针)。
         JSONObject sourcePayload = null;
-        if (!TextUtils.isEmpty(sourceMessageId) && !TextUtils.isEmpty(sourceContent)) {
-            sourcePayload = new JSONObject();
-            sourcePayload.put("type", 1);
-            sourcePayload.put("content", sourceContent);
-            if (!TextUtils.isEmpty(sourceFromUid)) {
-                sourcePayload.put("from_uid", sourceFromUid);
+        if (!TextUtils.isEmpty(sourceMessageId)) {
+            if (!TextUtils.isEmpty(sourceContentRaw)) {
+                try {
+                    sourcePayload = JSONObject.parseObject(sourceContentRaw);
+                } catch (Exception ignore) {
+                    sourcePayload = null;
+                }
+                if (sourcePayload != null && sourceContentType > 0) {
+                    sourcePayload.put("type", sourceContentType);
+                }
             }
-            if (!TextUtils.isEmpty(sourceFromName)) {
-                sourcePayload.put("from_name", sourceFromName);
+            if (sourcePayload == null && !TextUtils.isEmpty(sourceContent)) {
+                sourcePayload = new JSONObject();
+                sourcePayload.put("type", 1);
+                sourcePayload.put("content", sourceContent);
+                if (!TextUtils.isEmpty(sourceFromUid)) {
+                    sourcePayload.put("from_uid", sourceFromUid);
+                }
+                if (!TextUtils.isEmpty(sourceFromName)) {
+                    sourcePayload.put("from_name", sourceFromName);
+                }
             }
         }
 

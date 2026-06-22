@@ -32,6 +32,11 @@
     <string name="at_all_ais">Choose All AIs</string>
     <string name="edit_group_notice">Only the owner and manager can edit</string>
     <string name="delete_group_members">Delete Members</string>
+    <string name="str_transfer_owner">Transfer Ownership</string>
+    <string name="str_select_new_owner">Select New Owner</string>
+    <string name="str_transfer_owner_confirm_tip">Are you sure you want to transfer ownership to %1$s? You will become a regular member after the transfer.</string>
+    <string name="str_transfer_owner_success">Ownership transferred</string>
+    <string name="str_transfer_owner_failed">Failed to transfer ownership</string>
     <string name="add_group_members">Add Members</string>
     <string name="my_in_group_name">My Alias in Group</string>
     <string name="update_in_gorup_name">Editing your alias only changers your name displayed in this group. It is visible to all group members.</string>
@@ -331,6 +336,7 @@
     <string name="str_threads">Threads</string>
     <string name="str_create_thread">Create Thread</string>
     <string name="str_enter_thread">Enter Thread</string>
+    <string name="str_enter_thread_with_name">Enter Thread \"%1$s\"</string>
     <string name="str_thread_name">Thread Name</string>
     <string name="str_thread_name_hint">Enter thread name</string>
     <string name="str_join_thread">Join Thread</string>
@@ -565,5 +571,67 @@
     <string name="copied">Copied</string>
     <string name="storage_space">Storage</string>
     <string name="privacy">Privacy</string>
+
+    <!-- Group Incoming Webhooks (1:1 aligned with iOS) -->
+    <string name="str_group_incoming_webhooks">Group Webhooks</string>
+    <string name="str_group_incoming_webhooks_unset">Not configured</string>
+    <string name="str_group_incoming_webhooks_count">%1$d configured</string>
+    <string name="str_webhook_create">Create Webhook</string>
+    <string name="str_webhook_create_short">New</string>
+    <string name="str_webhook_header_description">Use webhooks to push messages from external systems (CI, monitoring, GitHub events, etc.) into this group.</string>
+    <string name="str_webhook_empty_tip">No webhooks yet. Create one to push external messages here.</string>
+    <string name="str_webhook_disabled">Disabled</string>
+    <string name="str_webhook_meta_created_by">Created by %1$s · %2$s</string>
+    <string name="str_webhook_meta_created_at">Created on %1$s</string>
+    <string name="str_webhook_meta_usage">%1$d pushes, last %2$s</string>
+    <string name="str_webhook_creator_self">Me</string>
+    <string name="str_webhook_action_test">Send test</string>
+    <string name="str_webhook_action_test_cooldown">Send test (cooling)</string>
+    <string name="str_webhook_action_test_sent">Test message sent</string>
+    <string name="str_webhook_action_test_failed">Test failed</string>
+    <string name="str_webhook_action_wait">Please try again shortly</string>
+    <string name="str_webhook_action_regenerate">Reset token</string>
+    <string name="str_webhook_action_regenerate_failed">Failed to reset</string>
+    <string name="str_webhook_action_delete">Delete</string>
+    <string name="str_webhook_action_delete_failed">Failed to delete</string>
+    <string name="str_webhook_action_deleted">Deleted</string>
+    <string name="str_webhook_action_copy_name">Copy name</string>
+    <string name="str_webhook_regenerate_confirm">Reset will invalidate the old URL immediately. Reset token of “%1$s”?</string>
+    <string name="str_webhook_delete_confirm">Delete “%1$s”? The URL will be invalidated immediately.</string>
+
+    <string name="str_webhook_title_create">New webhook</string>
+    <string name="str_webhook_title_edit">Edit webhook</string>
+    <string name="str_webhook_field_name">Name</string>
+    <string name="str_webhook_field_avatar">Avatar URL</string>
+    <string name="str_webhook_name_hint">e.g. “Build notifier” (optional)</string>
+    <string name="str_webhook_avatar_hint">https://example.com/avatar.png</string>
+    <string name="str_webhook_avatar_hint_default">Leave blank to use the default avatar.</string>
+    <string name="str_webhook_member_prefix_hint">Webhooks created by regular members are automatically prefixed with `Webhook-`.</string>
+    <string name="str_done">Done</string>
+    <string name="str_save_failed">Failed to save</string>
+    <string name="str_saved">Saved</string>
+    <string name="str_webhook_create_failed">Failed to create</string>
+    <string name="str_load_failed">Failed to load</string>
+    <string name="str_op_failed">Operation failed</string>
+
+    <string name="str_webhook_url_title">Webhook created</string>
+    <string name="str_webhook_url_address">Webhook URL</string>
+    <string name="str_webhook_url_examples">Examples</string>
+    <string name="str_webhook_warning">For security, this URL is shown only once. Copy and save it now; if lost it can only be reset.</string>
+    <string name="str_webhook_done_btn">I have copied it, close</string>
+    <string name="str_webhook_copy">Copy</string>
+    <string name="str_webhook_copy_example">Copy example</string>
+    <string name="str_webhook_copy_address">Copy URL</string>
+    <string name="str_webhook_curl_native_title">Native</string>
+    <string name="str_webhook_curl_native_note">content is rendered as Markdown.</string>
+    <string name="str_webhook_curl_wecom_title">WeCom-compatible</string>
+    <string name="str_webhook_curl_wecom_note">WeCom group bot compatible — drop-in replacement for existing bot URLs.</string>
+    <string name="str_webhook_native_sample">**Build succeeded** ✅ details: [#123](https://example.com/build/123)</string>
+    <string name="str_webhook_wecom_sample">Build succeeded ✅</string>
+    <string name="str_webhook_github_title">GitHub events</string>
+    <string name="str_webhook_github_intro">For GitHub repo events you don’t need curl. Register the Payload URL below in your repo’s Webhook settings:</string>
+    <string name="str_webhook_github_step1">Repo → Settings → Webhooks → Add webhook</string>
+    <string name="str_webhook_github_step2">Paste the URL into Payload URL, set Content type to application/json</string>
+    <string name="str_webhook_github_step3">Select events (e.g. push, pull_request) and save</string>
 </resources>
 

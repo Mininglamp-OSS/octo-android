@@ -35,6 +35,7 @@
     <!-- 文字翻转 (white-based) -->
     <color name="summary_text_strong">#FFFFFFFF</color>
     <color name="summary_text_primary">#FFFFFFFF</color>
+    <color name="summary_text_80">#CCFFFFFF</color>
     <color name="summary_text_70">#B3FFFFFF</color>
     <color name="summary_text_60">#99FFFFFF</color>
     <color name="summary_text_secondary">#99FFFFFF</color>

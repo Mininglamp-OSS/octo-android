@@ -152,10 +152,23 @@ class SummaryRepositoryImpl(
             originChannelId = originChannelId,
             originChannelType = originChannelType,
         )
+        // 调试: 序列化整个 body 让排查私聊"总结不到内容"时能直接对照 iOS 抓包看 source/origin 是不是正确。
+        // 走 fastjson 同款序列化 (与实际网络出口同口径), 而不是 toString —— 否则看到的字段名是 camelCase
+        // 而非 snake_case, 会误以为客户端发的就是错的。release 包关掉避免 topic / sourceName 等
+        // 用户内容进 logcat (默认 Log.i 在 release 也会输出).
+        if (com.chat.base.BuildConfig.DEBUG) {
+            runCatching {
+                val json = com.alibaba.fastjson.JSON.toJSONString(body)
+                android.util.Log.i("SummaryDebug", "createSummary req: $json")
+            }
+        }
         return callEnvelope({ it.createSummary(body) }) { data ->
             // task_id 缺失 / 为 0 视为后端契约破裂, 抛 SummaryException 让上层弹 创建失败 toast,
             // 而不是 success(0L) 让 SmartSummaryCreateActivity 关闭后跳进 detail(taskId=0) 拉空详情。
             val taskId = asObject(data)?.getLongValue("task_id") ?: 0L
+            if (com.chat.base.BuildConfig.DEBUG) {
+                android.util.Log.i("SummaryDebug", "createSummary resp: task_id=$taskId raw=$data")
+            }
             if (taskId <= 0L) {
                 throw SummaryException(
                     httpStatus = 200, apiCode = 0,

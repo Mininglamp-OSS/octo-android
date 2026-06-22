@@ -70,6 +70,7 @@ import com.chat.base.endpoint.entity.SendTextMenu
 import com.chat.base.entity.BottomSheetItem
 import com.chat.base.glide.GlideUtils
 import com.chat.base.msg.IConversationContext
+import com.chat.base.msg.MessageForwardSupport
 import com.chat.base.msg.model.WKGifContent
 import com.chat.base.msg.ChatContentSpanType
 import com.chat.base.msgitem.WKChannelMemberRole
@@ -2307,13 +2308,24 @@ class ChatPanelManager(
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
         val naturelList = EmojiManager.getInstance().getEmojiWithType("1_")
         val symbolsList = EmojiManager.getInstance().getEmojiWithType("2_")
-        val list = ArrayList<EmojiEntry>()
-        list.addAll(customList)
-        list.addAll(normalList)
-        list.addAll(naturelList)
-        list.addAll(symbolsList)
-        val emojiLayout = LinearLayout(iConversationContext.chatActivity)
-        val emojiAdapter = EmojiAdapter(list, width)
+        val baseList = ArrayList<EmojiEntry>().apply {
+            addAll(customList)
+            addAll(normalList)
+            addAll(naturelList)
+            addAll(symbolsList)
+        }
+        // 初始就按"最近使用"排序——已点过的冒到前面，剩下按 custom→normal→natural→symbols 原顺序。
+        val emojiAdapter = EmojiAdapter(buildOrderedEmojiList(baseList), width)
+        // 用匿名子类覆盖 onAttachedToWindow：每次面板被 ChatPanelManager.toolBarClick 通过
+        // moreLayout.removeAllViews() + addView() 重新挂上时，按最新 prefs 重排一次。
+        // 这样同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
+        // WeChat / iOS 的体验（iOS WKEmojiContentView 也不在 didSelect 后 reloadData）。
+        val emojiLayout = object : LinearLayout(iConversationContext.chatActivity) {
+            override fun onAttachedToWindow() {
+                super.onAttachedToWindow()
+                emojiAdapter.setList(buildOrderedEmojiList(baseList))
+            }
+        }
         val recyclerView = RecyclerView(iConversationContext.chatActivity)
         val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
         recyclerView.layoutManager = emojiLayoutManager
@@ -2345,8 +2357,45 @@ class ChatPanelManager(
                 MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
                 editText.setSelection(curPosition + emojiEntry.text.length)
             }
+            // 仅写 prefs，不当场 setList——本次面板顺序保持稳定，避免点完一个就跳位的割裂感。
+            recordRecentEmoji(emojiEntry.text)
         }
         return emojiLayout
+    }
+
+    /**
+     * 把 [baseList] 按"最近使用"前置重排：prefs 里 `common_used_emojis` 保存的是用户用过的
+     * emoji text（逗号分隔，最新在前），按该顺序先放，剩下的保持原排序。最小化改动方案——
+     * 不引入 iOS "最近使用 / 所有表情" 两段 section，只是单网格里冒泡，UI 风险面降到最低。
+     */
+    private fun buildOrderedEmojiList(baseList: List<EmojiEntry>): List<EmojiEntry> {
+        val recentTexts = readRecentEmojiTexts()
+        if (recentTexts.isEmpty()) return ArrayList(baseList)
+        val byText = baseList.associateBy { it.text }
+        val ordered = ArrayList<EmojiEntry>(baseList.size)
+        val used = HashSet<String>()
+        for (text in recentTexts) {
+            val entry = byText[text] ?: continue
+            if (used.add(text)) ordered.add(entry)
+        }
+        for (entry in baseList) {
+            if (used.add(entry.text)) ordered.add(entry)
+        }
+        return ordered
+    }
+
+    private fun readRecentEmojiTexts(): List<String> {
+        val raw = WKSharedPreferencesUtil.getInstance().getSPWithUID("common_used_emojis") ?: ""
+        if (raw.isEmpty()) return emptyList()
+        return raw.split(",").filter { it.isNotEmpty() }
+    }
+
+    private fun recordRecentEmoji(text: String) {
+        if (text.isEmpty()) return
+        val current = readRecentEmojiTexts().filter { it != text }
+        val updated = (listOf(text) + current).take(32)
+        WKSharedPreferencesUtil.getInstance()
+            .putSPWithUID("common_used_emojis", updated.joinToString(","))
     }
 
 
@@ -2386,58 +2435,36 @@ class ChatPanelManager(
                 holdToTalkManager = HoldToTalkManager(iConversationContext.chatActivity).apply {
                     listener = object : HoldToTalkManager.Listener {
                         override fun onSendText(text: String) {
-                            val allEntities = mutableListOf<WKMsgEntity>()
-                            val list = mutableListOf<String>()
-
-                            if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
-                                iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
-                                scanPlainTextMentions(text, allEntities, list)
-                            }
-
-                            // 三态 mention：sentinel uid 不能写进 mention.entities
-                            allEntities.removeAll { e ->
-                                e.type == ChatContentSpanType.mention &&
-                                        (e.value == "-1" || e.value == "-2")
-                            }
-
-                            val hasMentions = list.isNotEmpty()
-                            val textMsgModel = if (hasMentions)
-                                WKMentionTextContent(text) else WKTextContent(text)
-                            if (hasMentions) {
-                                val mMentionInfo = WKMentionInfo()
-                                val uidList: MutableList<String> = ArrayList()
-                                for (uid in list) {
-                                    when {
-                                        uid.equals("-1", ignoreCase = true) -> {
-                                            // 三态 mention：@所有人 走新协议 mention.humans=1，
-                                            // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
-                                            // 对齐 iOS dmwork-ios#129 / Web。
-                                            textMsgModel.mentionHumans = 1
-                                            mMentionInfo.humans = true
-                                        }
-                                        uid == "-2" -> {
-                                            textMsgModel.mentionAis = 1
-                                            mMentionInfo.ais = true
-                                        }
-                                        else -> {
-                                            uidList.add(uid)
-                                        }
-                                    }
+                            // 有 pending 图：STT 文本作 caption，与图聚合（或 caption 全空时纯图）。
+                            // 对齐 iOS holdToTalkManager:sendText: → _commitPendingWithCaption。
+                            if (!richTextTray.isEmpty()) {
+                                val previous = editText.text?.toString() ?: ""
+                                editText.setText(text)
+                                if (!flushRichTextTraySend()) {
+                                    // tray 未接管（如 reply/edit 态）— 复原文本并按原文本路径发出。
+                                    editText.setText(previous)
+                                    sendVoiceTextDirect(text)
                                 }
-                                if (textMsgModel.mentionAis == 1) {
-                                    expandRobotMembersIntoUids(uidList)
-                                }
-                                mMentionInfo.uids = uidList
-                                textMsgModel.mentionInfo = mMentionInfo
+                                return
                             }
-                            textMsgModel.entities = allEntities
-                            iConversationContext.sendMessage(textMsgModel)
+                            sendVoiceTextDirect(text)
                         }
 
                         override fun onSendVoice(audioPath: String, seconds: Int, waveform: String) {
                             val voiceContent = com.xinbida.wukongim.msgmodel.WKVoiceContent(audioPath, seconds)
                             voiceContent.waveform = waveform
                             iConversationContext.sendMessage(voiceContent)
+                            // 兼容「语音模式下也可贴图」：语音消息发出后，若图片栏还有图，按纯图路径
+                            // 逐张发出（与 iOS sendVoice: 之后 sendAlbumImageDatas: 顺序一致；
+                            // RichText=14 不承载语音，这里分两条消息送达）。
+                            if (!richTextTray.isEmpty()) {
+                                val snapshot = richTextTray.orderedPaths()
+                                richTextTray.clear()
+                                refreshRichTextTray()
+                                for (p in snapshot) {
+                                    iConversationContext.sendMessage(com.xinbida.wukongim.msgmodel.WKImageContent(p))
+                                }
+                            }
                         }
 
                         override fun onRecordingStarted() {}
@@ -3239,13 +3266,12 @@ class ChatPanelManager(
                             val itemCount: Int = chatAdapter.itemCount
                             while (i < itemCount) {
                                 if (chatAdapter.getItem(i).isChecked) {
-                                    if ((chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_TEXT
-                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_IMAGE
-                                                ) || (chatAdapter.getItem(i).wkMsg.type == WKContentType.WK_GIF)
-                                    ) list.add(chatAdapter.getItem(i).wkMsg.baseContentMsgModel) else {
-                                        val textContent =
-                                            WKTextContent(chatAdapter.getItem(i).wkMsg.baseContentMsgModel.displayContent)
-                                        list.add(textContent)
+                                    val wkMsg = chatAdapter.getItem(i).wkMsg
+                                    val content = wkMsg.baseContentMsgModel
+                                    if (content != null && MessageForwardSupport.allowForward(wkMsg.type)) {
+                                        list.add(content)
+                                    } else {
+                                        list.add(WKTextContent(content?.displayContent.orEmpty()))
                                     }
                                 }
                                 i++
@@ -3849,6 +3875,17 @@ class ChatPanelManager(
             },
             onReorder = {
                 // 顺序已变：发送 payload 会按模型新顺序打包，无需额外动作。
+            },
+            onAddTapped = {
+                // 末尾「+」cell：再次拉相册按 remaining 限张数，不允许选视频，gif 也跳过
+                // （tray 只承载静态图）。对齐 iOS WKMoreItemClickEvent.addMorePendingImagesForContext。
+                if (richTextTraySending) return@WKRichTextTrayAdapter
+                pickMorePendingImages()
+            },
+            onPreview = { index ->
+                // 点缩略图全屏预览：复用项目现有 WKDialogUtils.showImagePopup（XPopup
+                // CustomImageViewerPopup），单图也支持翻页 / 1/N 角标，外观保持 Android 风格。
+                showPendingImagePreview(index)
             }
         )
         recyclerView.adapter = adapter
@@ -3857,6 +3894,15 @@ class ChatPanelManager(
         val touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.START or ItemTouchHelper.END, 0
         ) {
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int {
+                // 末尾 + cell 不可拖动（adapter 自有判定，外部 ItemTouchHelper 同步挡一道）。
+                if (!adapter.isReorderable(viewHolder.bindingAdapterPosition)) return 0
+                return super.getMovementFlags(recyclerView, viewHolder)
+            }
+
             override fun onMove(
                 rv: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder,
@@ -3865,6 +3911,8 @@ class ChatPanelManager(
                 // 发送进行中禁止拖拽调序：同 onRemove，冻结快照已取，
                 // 此时调序不会反映到实际发送 payload，会误导用户（CR P2）。
                 if (richTextTraySending) return false
+                // 拖到 + cell 位置上不允许（onItemMove 内部也会再过滤）。
+                if (!adapter.isReorderable(target.bindingAdapterPosition)) return false
                 return adapter.onItemMove(
                     viewHolder.bindingAdapterPosition,
                     target.bindingAdapterPosition
@@ -3883,17 +3931,40 @@ class ChatPanelManager(
             recyclerView,
             LayoutHelper.createLinear(
                 LayoutHelper.MATCH_PARENT,
-                AndroidUtilities.dp(72f)
+                64  // dp，与 iOS kPendingThumbSize 对齐；外层 padding 6/6 → 总高 76dp 接近 iOS preferredHeight=80。
+                    // 注意 LayoutHelper.createLinear 内部已 resolve(size)→dp 转换，外层不要再包 AndroidUtilities.dp。
             )
         )
-        followScrollLayout.addView(
-            layout,
-            LayoutHelper.createFrame(
-                LayoutHelper.MATCH_PARENT,
-                LayoutHelper.WRAP_CONTENT,
-                Gravity.BOTTOM
-            )
-        )
+        // 把 tray 插入 bottomView（≈ iOS inputPanel.contentView）里 panelView 之上, 与 iOS
+        // 把 bar 嵌在 topView 与 messageToolBar 之间对齐。不要放进 followScrollLayout —— 那
+        // 是 @ / 菜单 / 命令等弹出列表的 stack, 同层会被 tray 不透明背景挡住 (#bug 选图后 @
+        // popup 看不见 root cause)。
+        run {
+            val bottomParent = parentView as? android.widget.LinearLayout
+            val panelChild = parentView.findViewById<View>(R.id.panelView)
+            if (bottomParent != null && panelChild != null) {
+                val insertAt = bottomParent.indexOfChild(panelChild)
+                bottomParent.addView(
+                    layout,
+                    if (insertAt >= 0) insertAt else bottomParent.childCount,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            } else {
+                // 兜底：拿不到 LinearLayout / panelView 时落回 followScrollLayout（旧行为，
+                // 与 @ popup 会冲突，但保证 bar 至少能渲染）。
+                followScrollLayout.addView(
+                    layout,
+                    LayoutHelper.createFrame(
+                        LayoutHelper.MATCH_PARENT,
+                        LayoutHelper.WRAP_CONTENT,
+                        Gravity.BOTTOM
+                    )
+                )
+            }
+        }
 
         trayLayout = layout
         trayRecyclerView = recyclerView
@@ -3901,8 +3972,14 @@ class ChatPanelManager(
     }
 
     /**
-     * 把本次选取的静态图片加入托盘末尾（Phase 2 入口）。加入后刷新缩略图条并更新发送键
-     * 可见性（托盘非空即便没文本也允许发送）。返回 true 表示已接管。
+     * 把本次选取的静态图片加入「待发送图片栏」末尾（对齐 iOS d0ee07d
+     * WKMoreItemClickEvent.onPhotoItemPressed → ctx appendPendingImageDatas:）。
+     * 加入后刷新 bar 并更新发送键可见性（bar 非空即便没文本也允许发送）。
+     * 返回 true 表示已接管。
+     *
+     * <p>iOS 在这一步已经把"全屏 caption 编辑页"删掉了（WKRichTextCaptionViewController），
+     * Android 同步对齐：直接 addAll 到模型并刷新视图，不再启动二级 Activity。textView 草稿
+     * 保持原状不动（用户在主聊天页直接补 caption / @ 人）。
      *
      * <p>in-flight 期间拒绝加入（YUJ-2872 同款防护）：一条托盘发送已捕获 orderedPaths 在异步
      * 上传中，其 onEnqueued 会 clearRichTextTray() 清空整个托盘。若此时把新一批图加进<em>同一个</em>
@@ -3916,34 +3993,28 @@ class ChatPanelManager(
         if (richTextTraySending) {
             return false
         }
-        val limitedPaths = if (imageLocalPaths.size > WKRichTextComposeModel.MAX_IMAGES) {
+        // 还能塞几张：受 9 张硬上限和已有数量约束（与 iOS appendImageDatas: 同口径）。
+        val remaining = WKRichTextComposeModel.MAX_IMAGES - richTextTray.size()
+        if (remaining <= 0) {
             val msg = String.format(
                 iConversationContext.chatActivity.getString(com.chat.base.R.string.richtext_image_limit),
                 WKRichTextComposeModel.MAX_IMAGES
             )
             com.chat.base.utils.WKToastUtils.getInstance().showToastNormal(msg)
-            imageLocalPaths.take(WKRichTextComposeModel.MAX_IMAGES)
+            return true  // 已接管（拒收，提示完返回，避免外层降级逐条发送）
+        }
+        val limited = if (imageLocalPaths.size > remaining) {
+            val msg = String.format(
+                iConversationContext.chatActivity.getString(com.chat.base.R.string.richtext_image_limit),
+                WKRichTextComposeModel.MAX_IMAGES
+            )
+            com.chat.base.utils.WKToastUtils.getInstance().showToastNormal(msg)
+            imageLocalPaths.take(remaining)
         } else {
             imageLocalPaths
         }
-        val intent = android.content.Intent(
-            iConversationContext.chatActivity,
-            WKRichTextCaptionActivity::class.java
-        )
-        intent.putStringArrayListExtra("paths", ArrayList(limitedPaths))
-        intent.putExtra("channelId", iConversationContext.chatChannelInfo.channelID)
-        intent.putExtra("channelType", iConversationContext.chatChannelInfo.channelType)
-        val existingText = editText.text?.toString() ?: ""
-        if (existingText.isNotBlank()) {
-            intent.putExtra("caption", existingText)
-            val existingUids = editText.allUIDs
-            if (existingUids.isNotEmpty()) {
-                intent.putStringArrayListExtra("existingMentionUids", ArrayList(existingUids))
-            }
-            editText.text = null
-        }
-        (iConversationContext.chatActivity as? ChatActivity)
-            ?.richTextCaptionLauncher?.launch(intent)
+        richTextTray.addAll(limited)
+        refreshRichTextTray()
         return true
     }
 
@@ -4032,6 +4103,137 @@ class ChatPanelManager(
         val hasItems = !richTextTray.isEmpty()
         trayLayout?.visibility = if (hasItems) View.VISIBLE else View.GONE
         updateSendBtnForTray()
+    }
+
+    /**
+     * 语音模式 STT 文本直发路径（无 pending 图的情况）。从原 HoldToTalkManager.Listener.onSendText
+     * 提取出来：扫 mention → 三态分流 → 装配 WKMentionTextContent / WKTextContent → 发出。
+     * 与 tray 路径并存：tray 非空时走 flushRichTextTraySend 聚合 RichText；为空 / tray 拒收时走这里。
+     */
+    private fun sendVoiceTextDirect(text: String) {
+        val allEntities = mutableListOf<WKMsgEntity>()
+        val list = mutableListOf<String>()
+
+        if (iConversationContext.chatChannelInfo.channelType == WKChannelType.GROUP ||
+            iConversationContext.chatChannelInfo.channelType == WKChannelType.COMMUNITY_TOPIC) {
+            scanPlainTextMentions(text, allEntities, list)
+        }
+
+        // 三态 mention：sentinel uid 不能写进 mention.entities
+        allEntities.removeAll { e ->
+            e.type == ChatContentSpanType.mention &&
+                    (e.value == "-1" || e.value == "-2")
+        }
+
+        val hasMentions = list.isNotEmpty()
+        val textMsgModel = if (hasMentions)
+            WKMentionTextContent(text) else WKTextContent(text)
+        if (hasMentions) {
+            val mMentionInfo = WKMentionInfo()
+            val uidList: MutableList<String> = ArrayList()
+            for (uid in list) {
+                when {
+                    uid.equals("-1", ignoreCase = true) -> {
+                        // 三态 mention：@所有人 走新协议 mention.humans=1，
+                        // 不再设置 legacy mention.all=1（旧 adapter bot 误唤醒）。
+                        // 对齐 iOS dmwork-ios#129 / Web。
+                        textMsgModel.mentionHumans = 1
+                        mMentionInfo.humans = true
+                    }
+                    uid == "-2" -> {
+                        textMsgModel.mentionAis = 1
+                        mMentionInfo.ais = true
+                    }
+                    else -> {
+                        uidList.add(uid)
+                    }
+                }
+            }
+            if (textMsgModel.mentionAis == 1) {
+                expandRobotMembersIntoUids(uidList)
+            }
+            mMentionInfo.uids = uidList
+            textMsgModel.mentionInfo = mMentionInfo
+        }
+        textMsgModel.entities = allEntities
+        iConversationContext.sendMessage(textMsgModel)
+    }
+
+    /**
+     * 末尾「+」cell 触发：再次拉相册按 remaining 限张数，不允许选视频，gif 也跳过
+     * （tray 只承载静态图）。对齐 iOS WKMoreItemClickEvent.addMorePendingImagesForContext。
+     */
+    private fun pickMorePendingImages() {
+        if (richTextTraySending) return
+        val remaining = WKRichTextComposeModel.MAX_IMAGES - richTextTray.size()
+        if (remaining <= 0) {
+            val msg = String.format(
+                iConversationContext.chatActivity.getString(com.chat.base.R.string.richtext_image_limit),
+                WKRichTextComposeModel.MAX_IMAGES
+            )
+            com.chat.base.utils.WKToastUtils.getInstance().showToastNormal(msg)
+            return
+        }
+        com.chat.base.glide.GlideUtils.getInstance().chooseIMG(
+            iConversationContext.chatActivity, remaining, false,
+            com.chat.base.glide.ChooseMimeType.img, false, false,
+            object : com.chat.base.glide.GlideUtils.ISelectBack {
+                override fun onBack(paths: MutableList<com.chat.base.glide.ChooseResult>?) {
+                    if (paths.isNullOrEmpty()) return
+                    val pathList = mutableListOf<String>()
+                    for (p in paths) {
+                        if (p == null || TextUtils.isEmpty(p.path)) continue
+                        // gif 走 sticker 路径，不入 tray（与 tryAddRichTextTray 同口径）。
+                        if (com.chat.base.utils.WKFileUtils.getInstance().isGif(p.path)) continue
+                        pathList.add(p.path)
+                    }
+                    if (pathList.isEmpty()) return
+                    addImagesToRichTextTray(pathList)
+                }
+
+                override fun onCancel() {}
+            }
+        )
+    }
+
+    /**
+     * 点缩略图：拉起全屏图片预览。复用项目现有 [WKDialogUtils.showImagePopup]
+     * （XPopup CustomImageViewerPopup），单图也支持 1/N 角标 / 翻页，外观保持 Android 风格；
+     * 行为对齐 iOS 在 bar 上点缩略图调起 YBImageBrowser 的 UX。
+     */
+    private fun showPendingImagePreview(index: Int) {
+        val items = richTextTray.items()
+        if (items.isEmpty()) return
+        val safeIndex = index.coerceIn(0, items.size - 1)
+
+        // tempImgList: 路径列表，作为 popup 的数据源；imgList: 缩略图 ImageView 列表，用于
+        // popup 转场动画的源视图。从 RecyclerView 的 holder 拿对应 ThumbViewHolder.thumb。
+        val tempImgList = ArrayList<Any>(items.size)
+        val imgList = ArrayList<android.widget.ImageView>(items.size)
+        var srcView: android.widget.ImageView? = null
+        for (i in items.indices) {
+            tempImgList.add(items[i].localPath)
+            val holder = trayRecyclerView?.findViewHolderForAdapterPosition(i)
+                    as? WKRichTextTrayAdapter.ThumbViewHolder
+            val tv = holder?.thumb
+            if (tv != null) {
+                imgList.add(tv)
+                if (i == safeIndex) srcView = tv
+            } else {
+                // 没复用上的位置，给个占位（XPopup 需要 imgList 数量与 tempImgList 一致）。
+                imgList.add(android.widget.ImageView(iConversationContext.chatActivity))
+            }
+        }
+        com.chat.base.utils.WKDialogUtils.getInstance().showImagePopup(
+            iConversationContext.chatActivity,
+            tempImgList,
+            imgList,
+            srcView,
+            safeIndex,
+            ArrayList(),
+            null,
+            null
+        )
     }
 
     /**

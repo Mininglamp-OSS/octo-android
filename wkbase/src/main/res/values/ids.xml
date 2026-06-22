@@ -18,4 +18,5 @@
     <item name="index_tag" type="id" />
     <item name="parent_tag" type="id" />
     <item name="single_click_tag_last_single_click_millis" type="id" />
+    <item name="bubble_pulse_animator_tag" type="id" />
 </resources>

@@ -149,6 +149,19 @@
 
         </ViewFlipper>
 
+        <!-- 退出登录入口 (issue #66, 对齐 web)：放在 ViewFlipper 之外，
+             欢迎页 / 加入页都能看到；新注册用户在此能切换账号，避免卡死。 -->
+        <TextView
+            android:id="@+id/btnLogout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="20dp"
+            android:padding="8dp"
+            android:text="@string/login_out"
+            android:textColor="#9CA3AF"
+            android:textSize="13sp" />
+
     </LinearLayout>
 
 </FrameLayout>

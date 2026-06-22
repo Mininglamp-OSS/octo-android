@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+     上下文模块运行时 view tag id (避免与 layout 里 id 冲突).
+     用 @id/... 形式给 setTag(R.id.xxx, value) 提供稳定 key, 比 hardcoded int 安全。
+    -->
+    <item name="summary_action_toast_tag" type="id" />
+</resources>

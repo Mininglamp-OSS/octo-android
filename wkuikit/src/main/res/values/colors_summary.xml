@@ -44,9 +44,11 @@
     <color name="summary_stroke_12">#1F000000</color>
     <color name="summary_stroke_20">#33000000</color>
 
-    <!-- 文字 alpha 梯度 (iOS labelColor / 60% / 50% / 40% / 30%) -->
+    <!-- 文字 alpha 梯度 (iOS labelColor / 80% / 60% / 50% / 40% / 30%) -->
     <color name="summary_text_strong">#FF1F1F1F</color>
     <color name="summary_text_primary">#FF1C1C23</color>
+    <!-- iOS preview body 用 [labelColor colorWithAlphaComponent:0.8], 这条对齐到那条线 -->
+    <color name="summary_text_80">#CC000000</color>
     <color name="summary_text_70">#B3000000</color>
     <color name="summary_text_60">#99000000</color>
     <color name="summary_text_secondary">#996B6B70</color>

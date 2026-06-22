@@ -37,6 +37,7 @@ import com.chat.base.summary.model.TopicTemplate
 import com.chat.base.summary.model.TopicTemplatePlaceholder
 import com.chat.uikit.R
 import com.chat.uikit.databinding.ActSmartSummaryCreateBinding
+import com.chat.uikit.summary.SummaryActionToast
 import com.chat.uikit.summary.SummaryHud
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
@@ -207,15 +208,41 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
             when (effect) {
                 is CreateEffect.ToastRes -> SummaryHud.show(this, effect.resId)
                 CreateEffect.Done -> {
-                    // 引导式文案 (聊天页 sparkle 入口) 优先, 否则默认"已创建总结任务"。
-                    // SummaryHud 用 Toast 实现, 不依赖当前 Activity 的 decorView,
-                    // finish 后会挂在 application context 自然漂浮在下一个 top Activity 上,
-                    // 这条规避了 iOS 那条"createVC 销毁带走 HUD"的 timing bug —— Android 这里不需要 dispatch。
-                    val msg = state.submitSuccessHudText
+                    // 入口区分 (1:1 对齐 iOS commit 045f8f0 OctoSummaryCreateVC.onSubmit 末尾):
+                    //   - sparkle 入口 (submitSuccessHudText 非空) → 底部 ActionToast +「查看」按钮
+                    //     点击 push SmartSummaryListActivity, 让用户直接进列表跟进度。
+                    //   - 列表 FAB 入口 (submitSuccessHudText 为空) → 维持中央 SummaryHud
+                    //     ("已创建总结任务"), 因为用户已经在列表页, 没必要再给"查看"。
+                    //
+                    // 关键: ActionToast 不能直接挂在 createActivity 的 contentView ——
+                    // finish() 后 createActivity 还没真正 onPause/onStop, 此刻 ActManagerUtils
+                    // 拿到的 currentActivity 仍是 createActivity, toast view 跟着 window 一起被
+                    // destroy, 用户只看到 "闪一下"。SummaryActionToast.show 内部用
+                    // ActivityLifecycleCallbacks 等下一个非 createActivity 的 activity onResumed,
+                    // 这条路径稳, 不依赖具体 finish→resume 时序窗口。
+                    //
+                    // SmartSummaryListActivity 是 main entry, 直接传 SmartSummaryListActivity::class
+                    // 给 callback; sparkle 入口下的目标 activity 一般是 ChatActivity, 但这里不需要
+                    // 强 typed —— 任何先回到前台的非 self activity 都行, 1:1 对齐 iOS topViewController。
+                    val sparkleEntry = !state.submitSuccessHudText.isNullOrBlank()
+                    val successMsg = state.submitSuccessHudText
                         ?: getString(R.string.summary_create_success)
-                    SummaryHud.show(this, msg)
+                    val viewLabel = getString(R.string.summary_view_action)
+                    val app = application
+                    val self = this
                     setResult(Activity.RESULT_OK)
                     finish()
+                    if (sparkleEntry) {
+                        SummaryActionToast.show(app, self, successMsg, viewLabel) {
+                            val act = com.chat.base.utils.ActManagerUtils.getInstance().currentActivity
+                                ?: return@show
+                            act.startActivity(
+                                Intent(act, com.chat.uikit.summary.list.SmartSummaryListActivity::class.java),
+                            )
+                        }
+                    } else {
+                        SummaryHud.show(app, successMsg)
+                    }
                 }
             }
             viewModel.consumeEffect()
@@ -382,11 +409,23 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         } else {
             raw
         }
-        return SourceItem(
+        val item = SourceItem(
             sourceType = type,
             sourceId = ch.channelID,
             sourceName = displayName,
         )
+        // 调试 (私聊"总结不到内容"): 把 channel→source 映射结果打出来. iOS 上 source.sourceId 就是
+        // peerUid, source_type 取 OctoSourceType (DM=3). 这里先确认 type / sourceId 对得上 iOS,
+        // 不对的话就是源头错, 后端找不到 DM 消息。release 包关掉避免 channelName / sourceName 进 logcat.
+        if (com.chat.uikit.BuildConfig.DEBUG) {
+            android.util.Log.i(
+                "SummaryDebug",
+                "channelToSource in: channelID=${ch.channelID} channelType=${ch.channelType}" +
+                    " channelName=${ch.channelName} channelRemark=${ch.channelRemark}" +
+                    " | out: sourceType=${type.raw} sourceId=${item.sourceId} sourceName=${item.sourceName}",
+            )
+        }
+        return item
     }
 
     /**
@@ -481,13 +520,18 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         }
 
         /**
-         * 聊天页 sparkle 入口: 预填当前 channel + 引导式 HUD 文案。
-         * 1:1 对齐 iOS commit 333f247 WKConversationVC.openSummaryCreateForCurrentChannel.
+         * 聊天页 sparkle 入口: 预填当前 channel + 透传 origin + 引导式 HUD 文案。
+         * 1:1 对齐 iOS commit 333f247 + e504dd0 + 7391c5a 的合并版 WKConversationVC.openSummaryCreateForCurrentChannel。
          *
-         * 注意: 不设置 EXTRA_ORIGIN_CHANNEL_*。iOS sparkle 入口只 setValue prefilledSources,
-         * 不动 originChannelId/Type, 提交时落到默认 ""/0。服务端对 origin_channel_type 有校验,
-         * 传具体值 (group=2 / thread=5 等) 会被拒绝创建失败,跟"上下文 → 选源 → 同一群"
-         * 路径行为不一致 (后者 originChannelType=0)。这里也保持空。
+         * origin 透传两条强约束 (任何一条破了服务端就找不到聊天记录):
+         *   1. originChannelId 必须是当前 channel 的 channelID (与 prefilled source 同 id)
+         *   2. originChannelType 必须是 OctoSourceType (1=群聊 / 2=子区 / 3=私聊),
+         *      不能直接灌 SDK WKChannelType (PERSON=1 / GROUP=2 / COMMUNITY=4 / COMMUNITY_TOPIC=5)。
+         *      服务端校验 "origin_channel_type must be 1, 2, or 3":
+         *        - 子区 (5) / 社区 (4) 直接拒
+         *        - 群 (2) / 私聊 (1) 数值碰巧合法但被按错枚举归类, 拉不到对应消息
+         *      调用方 (ChatActivity.openSummaryCreate) 必须自己把 byte channelType 映射到
+         *      OctoSourceType 再传进来。
          *
          * @JvmStatic 让 Java 端 ChatActivity 直接静态调用, 不用走 .Companion. 链。
          */
@@ -495,9 +539,12 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         fun newIntentForChat(
             ctx: Context,
             channel: WKChannel,
+            originChannelType: Int,
             successHudText: String,
         ): Intent = Intent(ctx, SmartSummaryCreateActivity::class.java).apply {
             putParcelableArrayListExtra(EXTRA_PREFILLED_CHANNELS, arrayListOf(channel))
+            putExtra(EXTRA_ORIGIN_CHANNEL_ID, channel.channelID.orEmpty())
+            putExtra(EXTRA_ORIGIN_CHANNEL_TYPE, originChannelType)
             putExtra(EXTRA_SUCCESS_HUD_TEXT, successHudText)
         }
     }

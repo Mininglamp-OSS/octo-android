@@ -90,4 +90,11 @@ public interface GroupService {
 
     @HTTP(method = "DELETE", path = "groups/{groupNo}/md")
     Observable<CommonResponse> deleteGroupMd(@Path("groupNo") String groupNo);
+
+    /**
+     * 转让群主, 与 iOS WKGroupManagerDelegateImp.m / web 端同 endpoint。
+     * 成功后服务端把当前群主降级为普通成员, 把 toUid 升级为 admin (creator)。
+     */
+    @POST("groups/{groupNo}/transfer/{toUid}")
+    Observable<CommonResponse> transferGroupOwner(@Path("groupNo") String groupNo, @Path("toUid") String toUid);
 }

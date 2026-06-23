@@ -36,6 +36,27 @@ for a modern native Android application:
 A full per-dependency license inventory should be regenerated via
 `./gradlew app:dependencies` before shipping a downstream release.
 
+--------------------------------------------------------------------
+Bundled media assets
+--------------------------------------------------------------------
+
+  - wkbase/src/main/res/raw/confetti_burst.mp3
+      Source: SwiftConfettiView project (https://github.com/ugurethemaydin/SwiftConfettiView)
+      Copyright (c) 2019 Uğur Ethem AYDIN
+      License: MIT
+      Used as the balloon-burst audio cue at the moment the 🎉 / 🎊
+      confetti ball pops (see ConfettiEffect.kt / ConfettiAudio.kt).
+      Verbatim copy of the asset bundled by the iOS sibling app via
+      the same upstream CocoaPod.
+
+  - wkbase/src/main/res/raw/confetti_cheer.m4a
+      Source: Freesound.org #511788 by user "kinoton"
+      License: CC0 1.0 Universal (public domain)
+      Used as the crowd-cheer audio cue accompanying the 🎉 / 🎊
+      message effect (see ConfettiEffect.kt). The clip is the first
+      ~2.1 seconds of the original recording, re-encoded to AAC m4a.
+      The same asset is shipped by the iOS sibling app.
+
 The fork ships with a placeholder applicationId `com.example.octo`. See
 `README-BUNDLE-ID.md` for the full set of changes needed before building
 a signed / distributable APK or AAB.

@@ -21,6 +21,9 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapFactory.Options;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -179,7 +182,7 @@ public class EmojiManager {
         EmojiEntry entry = null;
         for (int i = 0; i < defaultEntries.size(); i++) {
             if (defaultEntries.get(i).id.equals(tag)) {
-                entry = new EmojiEntry(defaultEntries.get(i).id,defaultEntries.get(i).text,defaultEntries.get(i).assetPath);
+                entry = new EmojiEntry(defaultEntries.get(i).id, defaultEntries.get(i).text, safeAssetPath(defaultEntries.get(i).assetPath));
                 break;
             }
         }
@@ -191,7 +194,13 @@ public class EmojiManager {
         if (entry == null) {
             return null;
         }
-        return new EmojiEntry(entry.id, entry.text, entry.assetPath);
+        return new EmojiEntry(entry.id, entry.text, safeAssetPath(entry.assetPath));
+    }
+
+    /** Unicode-only entry 的内部 assetPath 是 null；对外传给 Kotlin 的 EmojiEntry
+     *  时统一替换成空串，避免非空 String 字段 NPE。 */
+    private static String safeAssetPath(String assetPath) {
+        return assetPath == null ? "" : assetPath;
     }
 
     public Drawable getDrawable(Context context, String text) {
@@ -201,11 +210,61 @@ public class EmojiManager {
             return null;
         }
 
+        // Unicode-only emoji（如 🎉 / 🎊）: XML 中 File="" 时 assetPath 为 null，
+        // 用系统字体把字形画到 Bitmap 上当 drawable，避免新增 PNG 资源。
+        if (entry.assetPath == null) {
+            Bitmap unicodeCache = drawableCache.get(unicodeCacheKey(entry.text));
+            if (unicodeCache == null || unicodeCache.isRecycled()) {
+                unicodeCache = renderUnicodeBitmap(context, entry.text);
+            }
+            if (unicodeCache != null) {
+                return new BitmapDrawable(context.getResources(), unicodeCache);
+            }
+            return null;
+        }
+
         Bitmap cache = drawableCache.get(entry.assetPath);
         if (cache == null) {
             cache = loadAssetBitmap(context, entry.assetPath);
         }
         return new BitmapDrawable(context.getResources(), cache);
+    }
+
+    private String unicodeCacheKey(String text) {
+        return "__unicode__/" + text;
+    }
+
+    /**
+     * 把 Unicode emoji 字符渲染到一张 60×60dp 的 Bitmap 上，给 ImageView 用。
+     * 字形来自系统的 emoji 字体（Android Q+ 自带 NotoColorEmoji，旧机型回退到
+     * 厂商字体）。结果按 emoji.xml 字典文本入 LRU 缓存，键带 "__unicode__/" 前缀
+     * 与 PNG 路径冲突。
+     */
+    private Bitmap renderUnicodeBitmap(Context context, String text) {
+        try {
+            DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+            int sizePx = Math.round(60f * metrics.density);
+            if (sizePx <= 0) sizePx = 60;
+
+            Bitmap bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            canvas.drawColor(Color.TRANSPARENT);
+
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setSubpixelText(true);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(sizePx * 0.78f);
+
+            Paint.FontMetrics fm = paint.getFontMetrics();
+            float baseline = sizePx / 2f - (fm.ascent + fm.descent) / 2f;
+            canvas.drawText(text, sizePx / 2f, baseline, paint);
+
+            drawableCache.put(unicodeCacheKey(text), bitmap);
+            return bitmap;
+        } catch (Throwable t) {
+            WKLogUtils.e("渲染 Unicode emoji 失败: " + text);
+            return null;
+        }
     }
 
     //
@@ -298,7 +357,11 @@ public class EmojiManager {
                 String tag = attributes.getValue(uri, "Tag");
                 String id = attributes.getValue(uri, "ID");
                 String fileName = attributes.getValue(uri, "File");
-                Entry entry = new Entry(id, tag, EMOT_DIR + catalog + "/" + fileName);
+                // File="" 表示走系统 Unicode 字体渲染，不绑 PNG 资源。
+                String assetPath = TextUtils.isEmpty(fileName)
+                        ? null
+                        : EMOT_DIR + catalog + "/" + fileName;
+                Entry entry = new Entry(id, tag, assetPath);
                 text2entry.put(entry.text, entry);
                 if (catalog.equals("default")) {
                     defaultEntries.add(entry);
@@ -346,7 +409,7 @@ public class EmojiManager {
             }
             if (isAdd) {
                 if (defaultEntries.get(i).id.startsWith(type)) {
-                    EmojiEntry entry = new EmojiEntry(defaultEntries.get(i).id, defaultEntries.get(i).text, defaultEntries.get(i).assetPath);
+                    EmojiEntry entry = new EmojiEntry(defaultEntries.get(i).id, defaultEntries.get(i).text, safeAssetPath(defaultEntries.get(i).assetPath));
                     list.add(entry);
                 }
             }

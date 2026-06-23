@@ -318,7 +318,9 @@ class ConfettiEffect(
 
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2f * Resources.getSystem().displayMetrics.density
+        // 用 coerced 后的 density 字段（[1.5, 4.5] 区间），跟其它几何参数对齐——
+        // 极端密度设备上线宽不会跟粒子尺寸脱节。
+        strokeWidth = 2f * density
         color = Color.WHITE
     }
 

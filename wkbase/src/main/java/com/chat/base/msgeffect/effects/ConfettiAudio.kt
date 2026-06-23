@@ -94,26 +94,38 @@ internal class ConfettiAudio {
             // create() 内部完成 setDataSource + prepare，比手动一遍少踩坑；
             // 返回 null 表示资源损坏或解码失败——按设计安静吞掉。
             val player = MediaPlayer.create(context, resId) ?: return@runCatching null
-
-            player.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            player.setVolume(volume, volume)
-            player.isLooping = false
-            player.setOnCompletionListener { mp ->
-                mp.safeRelease()
-                if (cheerPlayer === mp) cheerPlayer = null
-                if (burstPlayer === mp) burstPlayer = null
+            // try/catch 守 setup 链：MediaPlayer.create 已经返回了 prepared player，
+            // 之后任意一行抛错都不能让这个 prepared 实例泄露。runCatching 只能保证
+            // 异常被吞，无法 release 已分配的 native MediaPlayer。
+            try {
+                player.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                player.setVolume(volume, volume)
+                player.isLooping = false
+                player.setOnCompletionListener { mp ->
+                    mp.safeRelease()
+                    if (cheerPlayer === mp) cheerPlayer = null
+                    if (burstPlayer === mp) burstPlayer = null
+                }
+                // 与 OnCompletionListener 对称：error 路径也清字段引用，避免后续
+                // release() 操作一个已死的 player（虽然 safeRelease 内部 runCatching
+                // 兜底不会崩，但语义统一更清晰）。
+                player.setOnErrorListener { mp, _, _ ->
+                    mp.safeRelease()
+                    if (cheerPlayer === mp) cheerPlayer = null
+                    if (burstPlayer === mp) burstPlayer = null
+                    true
+                }
+                player.start()
+                player
+            } catch (t: Throwable) {
+                player.safeRelease()
+                throw t
             }
-            player.setOnErrorListener { mp, _, _ ->
-                mp.safeRelease()
-                true
-            }
-            player.start()
-            player
         }.getOrNull()
     }
 

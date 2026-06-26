@@ -465,8 +465,19 @@ public final class SpaceFilter {
      * <p>debug build 打印过滤决策全部关键变量：群 id / 归属 Space / 我自己的
      * source_space_id / 我的 row 是否已缓存 / 最终分支。用来定位「同账号
      * Web 端 2 个外部群全显示，Android 只显示 1 个」的数据缺失路径——
-     * 不猜逻辑，先让日志说话。Release build 自动 no-op（{@code WKLogUtils.d}
-     * 里判 {@code WKBinder.isDebug}）。
+     * 不猜逻辑，先让日志说话。
+     *
+     * <p><b>Space 串消息排查增强(2026-06)</b>: 除 {@code WKLogUtils.d}(仅 debug 进 logcat)
+     * 之外, 命中 {@link com.chat.base.utils.DiagSink#isEnabled()} 时同步写文件,
+     * release 包用户开启诊断模式后也能采到. 关键增量字段:
+     * <ul>
+     *     <li>{@code currentSpaceName / groupSpaceName} — 反查 Space 名, 不用查表</li>
+     *     <li>{@code channelInfo.space_id} 和 {@code convSync.space_id} — 两个原始源都打,
+     *         一眼看出 groupSpaceId 命中的是哪个</li>
+     *     <li>{@code cacheStats.refreshedAt / size / containsThisGroup / authoritative} —
+     *         判断决策时缓存是否 stale, 上次根因就是这类信号缺失</li>
+     *     <li>{@code caller} — 决策点调用栈一行, 区分 channel-list / msg-arrive 路径</li>
+     * </ul>
      *
      * <p>容错：{@code WKLogUtils.d} 依赖 Android framework（{@code Log}、
      * {@code TextUtils}），在 host-side 单元测试里会抛 "Stub!"；用 try/catch
@@ -481,28 +492,91 @@ public final class SpaceFilter {
                                  @Nullable Boolean myCached,
                                  @NonNull String branch,
                                  boolean skip) {
+        // 性能 gate: 二者全关时直接 return, 避免每次过滤决策都 new Throwable + 字符串拼接.
+        // - WKLogUtils.LOGGABLE: 编译时 = isDebug, debug 包恒 true, release 恒 false
+        // - DiagSink.isEnabled(): 运行时, 用户隐藏入口开启后才 true
+        if (!com.chat.base.utils.WKLogUtils.LOGGABLE && !com.chat.base.utils.DiagSink.isEnabled()) {
+            return;
+        }
         try {
             String channelName = "";
-            if (channelType == WKChannelType.GROUP) {
-                WKChannel ch = com.xinbida.wukongim.WKIM.getInstance().getChannelManager()
-                        .getChannel(channelID, channelType);
-                if (ch != null && ch.channelName != null) channelName = ch.channelName;
+            String channelInfoSpaceId = null;
+            if (channelType == WKChannelType.GROUP || channelType == WKChannelType.COMMUNITY_TOPIC) {
+                try {
+                    WKChannel ch = WKIM.getInstance().getChannelManager()
+                            .getChannel(channelID, channelType);
+                    if (ch != null) {
+                        if (ch.channelName != null) channelName = ch.channelName;
+                        if (ch.remoteExtraMap != null) {
+                            Object v = ch.remoteExtraMap.get(CHANNEL_EXTRA_SPACE_ID);
+                            if (v != null) channelInfoSpaceId = v.toString();
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
             }
-            String line = "SpaceFilter#"
-                    + " branch=" + branch
-                    + " skip=" + skip
-                    + " channelID=" + channelID
-                    + " name=" + channelName
-                    + " channelType=" + channelType
-                    + " currentSpaceId=" + currentSpaceId
-                    + " groupSpaceId=" + groupSpaceId
-                    + " prefix=" + prefix
-                    + " mySourceSpaceId=" + mySourceSpaceId
-                    + " myMembershipCached=" + myCached;
-            com.chat.base.utils.WKLogUtils.d(LOG_TAG, line);
+            // 两个原始源单独打: 让 review 时一眼看出 groupSpaceId 命中的是 channelInfo 还是 convSync.
+            String convSyncSpaceId = null;
+            com.xinbida.wukongim.manager.ConversationManager.SpaceCacheStats stats = null;
+            try {
+                convSyncSpaceId = WKIM.getInstance().getConversationManager()
+                        .getConvSyncSpaceId(channelID);
+                stats = WKIM.getInstance().getConversationManager()
+                        .getSpaceCacheStats(channelID);
+            } catch (Throwable ignored) {
+            }
+            String curName = SpaceNameLookup.nameOf(currentSpaceId);
+            String grpName = SpaceNameLookup.nameOf(groupSpaceId);
+            String caller = callerOf();
+
+            StringBuilder sb = new StringBuilder(384);
+            sb.append("branch=").append(branch)
+                    .append(" skip=").append(skip)
+                    .append(" channelID=").append(channelID)
+                    .append(" channelType=").append(channelType)
+                    .append(" name='").append(channelName).append('\'')
+                    .append(" currentSpaceId=").append(currentSpaceId)
+                    .append(" currentSpaceName='").append(curName == null ? "" : curName).append('\'')
+                    .append(" groupSpaceId=").append(groupSpaceId)
+                    .append(" groupSpaceName='").append(grpName == null ? "" : grpName).append('\'')
+                    .append(" channelInfo.space_id=").append(channelInfoSpaceId)
+                    .append(" convSync.space_id=").append(convSyncSpaceId)
+                    .append(" prefix=").append(prefix)
+                    .append(" mySourceSpaceId=").append(mySourceSpaceId)
+                    .append(" myMembershipCached=").append(myCached);
+            if (stats != null) {
+                sb.append(" cache.size=").append(stats.spaceMapSize)
+                        .append('/').append(stats.externalMapSize)
+                        .append(" cache.refreshedAt=").append(stats.refreshedAt)
+                        .append(" cache.containsThisGroup=").append(stats.containsChannelId)
+                        .append(" cache.authoritative=").append(stats.authoritative);
+            }
+            sb.append(" caller=").append(caller);
+            String line = sb.toString();
+            com.chat.base.utils.WKLogUtils.d(LOG_TAG, "SpaceFilter# " + line);
+            com.chat.base.utils.DiagSink.write("SF", line);
         } catch (Throwable ignored) {
             // 忽略日志异常（host-side 单测或 Android stub 环境）
         }
+    }
+
+    /**
+     * 取调用 SpaceFilter 决策的栈帧一行(跳过 SpaceFilter 内部帧). 用于区分
+     * "channel-list 路径" 还是 "msg-arrive 路径" 还是 "filter-and-display" 触发的过滤.
+     */
+    private static String callerOf() {
+        try {
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            for (StackTraceElement el : st) {
+                String cls = el.getClassName();
+                if (cls == null) continue;
+                if (cls.equals(SpaceFilter.class.getName())) continue;
+                if (cls.startsWith("com.chat.base.space.SpaceFilter")) continue;
+                return el.getClassName() + "." + el.getMethodName() + ":" + el.getLineNumber();
+            }
+        } catch (Throwable ignored) {
+        }
+        return "unknown";
     }
 
     private static final String LOG_TAG = "SpaceFilter";
@@ -520,11 +594,67 @@ public final class SpaceFilter {
 
     @VisibleForTesting
     public static boolean shouldSkipMessageForSpace(@Nullable WKMsg msg, @Nullable String currentSpaceId) {
-        if (msg == null) return false;
-        if (isBlank(currentSpaceId)) return false;
+        if (msg == null) {
+            msgDiagLog(null, currentSpaceId, null, "null-msg-pass", false);
+            return false;
+        }
+        if (isBlank(currentSpaceId)) {
+            msgDiagLog(msg, currentSpaceId, null, "space-empty-pass", false);
+            return false;
+        }
         String msgSpaceId = extractSpaceIdFromMsg(msg);
-        if (isBlank(msgSpaceId)) return false; // fail-open
-        return !currentSpaceId.equals(msgSpaceId);
+        if (isBlank(msgSpaceId)) {
+            msgDiagLog(msg, currentSpaceId, msgSpaceId, "fail-open-no-msg-space", false);
+            return false; // fail-open
+        }
+        boolean skip = !currentSpaceId.equals(msgSpaceId);
+        msgDiagLog(msg, currentSpaceId, msgSpaceId, skip ? "msg-space-mismatch" : "msg-space-match", skip);
+        return skip;
+    }
+
+    /**
+     * 私聊消息级 Space 过滤诊断日志. 跨 Space 私聊串消息的决策点必打 — 字段集与
+     * {@link #diagLog} 对齐, 多打消息自身元数据(发件人、内容前 60 字符片段)便于
+     * 用户能告诉我们"是哪条消息"加速定位.
+     */
+    private static void msgDiagLog(@Nullable WKMsg msg,
+                                   @Nullable String currentSpaceId,
+                                   @Nullable String msgSpaceId,
+                                   @NonNull String branch,
+                                   boolean skip) {
+        // 同 diagLog: 二者全关直接退出, 避免每条私聊消息过滤都做拼接.
+        if (!com.chat.base.utils.WKLogUtils.LOGGABLE && !com.chat.base.utils.DiagSink.isEnabled()) {
+            return;
+        }
+        try {
+            String cid = msg == null ? "null" : msg.channelID;
+            byte ct = msg == null ? -1 : msg.channelType;
+            String fromUid = msg == null ? "null" : msg.fromUID;
+            String clientMsgNo = msg == null ? "null" : msg.clientMsgNO;
+            long msgSeq = msg == null ? 0 : msg.messageSeq;
+            String contentSnippet = "";
+            if (msg != null && msg.content != null) {
+                int len = Math.min(msg.content.length(), 60);
+                contentSnippet = msg.content.substring(0, len).replace('\n', ' ').replace('\r', ' ');
+            }
+            String curName = SpaceNameLookup.nameOf(currentSpaceId);
+            String msgSpaceName = SpaceNameLookup.nameOf(msgSpaceId);
+            String line = "branch=" + branch
+                    + " skip=" + skip
+                    + " channelID=" + cid + " channelType=" + ct
+                    + " fromUid=" + fromUid
+                    + " clientMsgNo=" + clientMsgNo
+                    + " msgSeq=" + msgSeq
+                    + " currentSpaceId=" + currentSpaceId
+                    + " currentSpaceName='" + (curName == null ? "" : curName) + '\''
+                    + " msgSpaceId=" + msgSpaceId
+                    + " msgSpaceName='" + (msgSpaceName == null ? "" : msgSpaceName) + '\''
+                    + " content[0..60]='" + contentSnippet + '\''
+                    + " caller=" + callerOf();
+            com.chat.base.utils.WKLogUtils.d(LOG_TAG, "SpaceFilter-Msg# " + line);
+            com.chat.base.utils.DiagSink.write("SF-MSG", line);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 从消息中提取 space_id：优先 content JSON，其次 SDK 解码后的 baseContentMsgModel.spaceId。 */

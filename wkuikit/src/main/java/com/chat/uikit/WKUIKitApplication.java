@@ -206,6 +206,20 @@ public class WKUIKitApplication {
         // 必须在 WKIM 的首次连接成功回调之前完成——放到同步 init 段开头最安全。
         com.chat.uikit.chat.SpaceSyncCoordinator.installSyncGate();
 
+        // Space 串消息诊断日志 — wkbase 不能反向依赖 wkuikit, 用 install 桥让
+        // SpaceFilter 日志能反查 Space 名. SpaceModel 缓存为 null 时返回 null,
+        // 不触发网络请求, 永远安全.
+        com.chat.base.space.SpaceNameLookup.install(spaceId -> {
+            if (spaceId == null || spaceId.isEmpty()) return null;
+            java.util.List<com.chat.uikit.space.SpaceEntity> list =
+                    com.chat.uikit.space.SpaceModel.getInstance().getCachedSpaces();
+            if (list == null) return null;
+            for (com.chat.uikit.space.SpaceEntity s : list) {
+                if (s != null && spaceId.equals(s.space_id)) return s.name;
+            }
+            return null;
+        });
+
         //  (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步，上面已完成）：initKitModuleListener——纯内存映射，必须在
         //       Intent 到达 ChatActivity 之前就绪。

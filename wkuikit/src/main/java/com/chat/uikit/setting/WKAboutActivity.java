@@ -64,7 +64,6 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
 
     @Override
     protected void initView() {
-        android.util.Log.d("DiagSink", "WKAboutActivity.initView() — diag-icon-tap installed");
 
         SingleClickUtil.onSingleClick(wkVBinding.icpTV, view1 -> {
             // 隐私政策
@@ -116,7 +115,6 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
             diagTapCount++;
         }
         diagLastTapAt = now;
-        android.util.Log.d("DiagSink", "icon tap count=" + diagTapCount);
         if (diagTapCount >= DIAG_TAP_THRESHOLD) {
             diagTapCount = 0;
             diagLastTapAt = 0L;

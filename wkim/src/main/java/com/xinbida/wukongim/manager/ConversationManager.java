@@ -417,8 +417,13 @@ public class ConversationManager extends BaseManager {
 
     public void setSyncConversationListener(ISyncConversationChatBack iSyncConversationChatBack) {
         if (iSyncConversationChat == null) {
+            // 上层 listener 还没注册（如 Phase-B postPhaseB 的 WKIMUtils.initIMListener 还在 IO 线程排队）
+            // 仍调一次 onBack(null) 让调用方的回调链能跑——WKConnection.markConnected /
+            // SyncGate.done / SpaceSyncCoordinator.complete 都挂在 onBack 上，
+            // 否则 permit 锁死 10s（STUCK_RESET_MS），冷启动会话列表只剩 SYSTEM_BOTS 兜底。
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
-            if (com.xinbida.wukongim.BuildConfig.DEBUG) android.util.Log.e("MsgDebug", "[SYNC_BUG] iSyncConversationChat is NULL! callback will NOT fire, connectStatus will stay syncMsg forever");
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) android.util.Log.e("MsgDebug", "[SYNC_BUG] iSyncConversationChat is NULL! firing onBack(null) to release upstream permit");
+            if (iSyncConversationChatBack != null) iSyncConversationChatBack.onBack(null);
             return;
         }
         //  C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正

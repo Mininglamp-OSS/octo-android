@@ -221,12 +221,17 @@ public class WKUIKitApplication {
         //
         // initIM() 必须同步执行：ViewPager2 重构后 ChatFragment 布局阶段即触发 DB 查询，
         // 若 initIM 仍在后台异步，重启时 UI 跑在 init 前面导致会话列表空白。
+        //
+        // initIMListener() 也必须同步执行（与 initIM 同帧）：
+        //   addOnSyncConversationListener 在这里注册。如果异步化（如曾经的 postPhaseB），
+        //   WKConnection 连接成功后 SyncGate.allow→setSyncConversationListener 会因
+        //   iSyncConversationChat==null 静默 return，SyncGate.done() 永不调用 →
+        //   permit 锁死 10s（STUCK_RESET_MS），ChatFragment 冷启动会话列表
+        //   只剩 SYSTEM_BOTS 兜底的 3-4 个 Bot。ConversationManager 侧已加
+        //   onBack(null) 兜底，这里再做主防：listener 必须在连接之前就位。
         parseLocalSensitiveWords();
         initIM();
-
-        AppStartup.postPhaseB("wkim", () -> {
-            WKIMUtils.getInstance().initIMListener();
-        });
+        WKIMUtils.getInstance().initIMListener();
 
         // Phase-C — sensitive_words / prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
         AppStartup.postPhaseC("post-wkim-idle", () -> {

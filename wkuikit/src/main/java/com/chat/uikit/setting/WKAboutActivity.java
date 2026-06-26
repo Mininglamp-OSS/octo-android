@@ -87,9 +87,7 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
 
         checkNewVersion(false);
         String v = WKDeviceUtils.getInstance().getVersionName(this);
-        // 临时标记 — 装上新版后版本号会显示 "version 1.3.3-diag"; 旧版仍显示 "version 1.3.3".
-        // 排查结束后这个 -diag 后缀和上面整段诊断采集代码一起删.
-        wkVBinding.versionTv.setText(String.format("version %s-diag", v));
+        wkVBinding.versionTv.setText(String.format("version %s", v));
         wkVBinding.appNameTv.setText(R.string.app_name);
 
         // Debug 模式：连续点击版本号 5 次模拟 ANR（测试 ANRWatchdog 采集）
@@ -119,14 +117,10 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
         }
         diagLastTapAt = now;
         android.util.Log.d("DiagSink", "icon tap count=" + diagTapCount);
-        // 倒数 3 击开始给反馈, 避免用户怀疑没点中
-        int remaining = DIAG_TAP_THRESHOLD - diagTapCount;
         if (diagTapCount >= DIAG_TAP_THRESHOLD) {
             diagTapCount = 0;
             diagLastTapAt = 0L;
             showDiagDialog();
-        } else if (remaining <= 3) {
-            WKToastUtils.getInstance().showToastNormal("还差 " + remaining + " 次");
         }
     }
 
@@ -134,24 +128,44 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
         boolean enabled = com.chat.base.utils.DiagSink.isEnabled();
         androidx.appcompat.app.AlertDialog.Builder builder =
                 new androidx.appcompat.app.AlertDialog.Builder(this);
+        // positive 按钮颜色: 开启用品牌紫(primary), 关闭用提醒红(destructive); negative 一律用灰.
+        // 用项目已有的色值, 不引入新资源, 排查结束后整段代码删干净.
+        final int positiveColor;
         if (enabled) {
             long until = com.chat.base.utils.DiagSink.getEnabledUntilMs();
             long leftMin = Math.max(0L, (until - System.currentTimeMillis()) / 60000L);
             builder.setTitle("诊断采集进行中")
                     .setMessage("剩余约 " + leftMin + " 分钟。\n复现问题后点本页\"导出诊断日志\"分享。")
-                    .setPositiveButton("立即关闭", (d, w) -> com.chat.base.utils.DiagSink.disable(this))
+                    .setPositiveButton("立即关闭", (d, w) -> {
+                        com.chat.base.utils.DiagSink.disable(this);
+                        WKToastUtils.getInstance().showToastSuccess("诊断采集已关闭");
+                    })
                     .setNegativeButton("继续采集", null);
+            positiveColor = androidx.core.content.ContextCompat.getColor(this, com.chat.base.R.color.reminderColor);
         } else {
             builder.setTitle("开启诊断日志采集")
                     .setMessage("将开启 2 小时诊断采集来定位 Space 消息串台问题。\n开启后请复现问题，再点本页\"导出诊断日志\"分享给我们。\n2 小时后自动关闭。")
                     .setPositiveButton("开启", (d, w) -> {
                         com.chat.base.utils.DiagSink.enable(this, com.chat.base.utils.DiagSink.DEFAULT_TTL_MS);
-                        WKToastUtils.getInstance().showToastNormal("诊断采集已开启");
+                        WKToastUtils.getInstance().showToastSuccess("诊断采集已开启");
                     })
                     .setNegativeButton("取消", null);
+            positiveColor = androidx.core.content.ContextCompat.getColor(this, com.chat.base.R.color.colorAccent);
         }
         try {
-            builder.show();
+            androidx.appcompat.app.AlertDialog dialog = builder.create();
+            // 不允许点空白处关闭, 否则用户继续点图标(落在 dialog 外)会把 dialog 误关.
+            // 返回键仍可关(避免完全锁死), 强制走两个按钮做选择.
+            dialog.setCanceledOnTouchOutside(false);
+            // 按钮颜色必须在 show 之后才能拿到 view, 用 OnShowListener 兜底.
+            int negColor = androidx.core.content.ContextCompat.getColor(this, com.chat.base.R.color.color999);
+            dialog.setOnShowListener(d -> {
+                android.widget.Button pos = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE);
+                android.widget.Button neg = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE);
+                if (pos != null) pos.setTextColor(positiveColor);
+                if (neg != null) neg.setTextColor(negColor);
+            });
+            dialog.show();
         } catch (Throwable ignored) {
         }
     }

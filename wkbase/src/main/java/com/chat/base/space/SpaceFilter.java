@@ -483,6 +483,7 @@ public final class SpaceFilter {
      * {@code TextUtils}），在 host-side 单元测试里会抛 "Stub!"；用 try/catch
      * 包住保证测试不被日志破坏（SpaceFilter 的纯函数路径必须保持 JVM-runnable）。
      */
+    @SuppressWarnings("RestrictedApi") // 诊断专用: 跨模块访问 wkim 内部 SpaceCacheStats, 排查结束后整段删除
     private static void diagLog(String channelID,
                                  byte channelType,
                                  @Nullable String currentSpaceId,

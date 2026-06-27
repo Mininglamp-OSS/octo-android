@@ -965,15 +965,21 @@ public class ConversationManager extends BaseManager {
     }
 
     /**
-     * 诊断用: 返回 space cache 当前状态快照. 任意线程可调, 无锁(读 volatile 字段).
+     * <b>内部诊断 API — 请勿在业务代码中调用。</b>
      *
-     * <p>排查 Space 串消息时, 单看 SpaceFilter 决策日志不够 —— 还需要知道决策时缓存数据
-     * 新不新、有没有这条群的记录. 这个 stats 让一行日志就能定位 stale-cache 类问题.
+     * <p>仅供 Space 串消息排查期间 {@code SpaceFilter.diagLog} / {@code DiagSink} 写日志使用。
+     * 待 server PR #154 cross-space 诊断闭环上线、SpaceFilter 决策切换到 realtime msg
+     * payload 中的权威 space_id 后，本方法连同 {@link SpaceCacheStats} 会一并删除——
+     * 任何依赖这个 API 写业务的代码都会在那时编译失败。
+     *
+     * <p>诊断用: 返回 space cache 当前状态快照. 任意线程可调, 无锁(读 volatile 字段).
      *
      * @param channelID 要查询的频道 ID(可空). 非空时 {@link SpaceCacheStats#containsChannelId}
      *                  反映 spaceMap 是否含有该 ID.
+     * @hide
      */
     @androidx.annotation.NonNull
+    @androidx.annotation.RestrictTo(androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
     public SpaceCacheStats getSpaceCacheStats(@androidx.annotation.Nullable String channelID) {
         ensureSpaceCacheLoaded();
         SpaceCacheSnapshot snap = spaceCacheSnapshot;
@@ -987,7 +993,13 @@ public class ConversationManager extends BaseManager {
                 contains);
     }
 
-    /** {@link #getSpaceCacheStats(String)} 的返回值. 不可变快照. */
+    /**
+     * <b>内部诊断 DTO — 请勿在业务代码中引用。</b> 见 {@link #getSpaceCacheStats(String)} 注释,
+     * 与该方法同生命周期, 排查结束后一并删除.
+     *
+     * @hide
+     */
+    @androidx.annotation.RestrictTo(androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
     public static final class SpaceCacheStats {
         /** 当前 spaceMap 条目数(我所在的群数, 含 my_source 关系). */
         public final int spaceMapSize;

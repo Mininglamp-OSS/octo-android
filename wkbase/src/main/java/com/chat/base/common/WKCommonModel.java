@@ -160,11 +160,14 @@ public class WKCommonModel extends WKBaseModel {
         WKChannel localChannel = WKIM.getInstance().getChannelManager().getChannel(entity.channel.channel_id, entity.channel.channel_type);
         boolean isRefreshContacts = false;
         if (localChannel != null && !TextUtils.isEmpty(localChannel.channelID)) {
-            // 复用已有的 avatarCacheKey；若为空则首次生成，作为 MyGlideUrlWithId 的稳定 cache key。
+            // avatarCacheKey 优先级：服务端 > 本地已有 > 新生成兜底。
+            // 服务端在头像变更时翻 avatar_cache_key 版本号，客户端透传即可让 URL 末尾的
+            // ?v=<key> 变化，绕开 Glide 缓存，实现自动刷新。
             // 不能每次都生成新 key：saveChannel 触发 refreshChannelInfo → adapter 重绘 →
             // fetchChannelInfo → saveChannel → 无限循环。只在首次为空时生成一次即可打破。
-            // -P-03: avatarCacheKey 改由服务端头像变更时翻版本号驱动；本地只负责在缺失时兜底生成。
-            if (!TextUtils.isEmpty(localChannel.avatarCacheKey)) {
+            if (!TextUtils.isEmpty(entity.avatar_cache_key)) {
+                wkChannel.avatarCacheKey = entity.avatar_cache_key;
+            } else if (!TextUtils.isEmpty(localChannel.avatarCacheKey)) {
                 wkChannel.avatarCacheKey = localChannel.avatarCacheKey;
             } else {
                 wkChannel.avatarCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
@@ -174,8 +177,12 @@ public class WKCommonModel extends WKBaseModel {
             if (wkChannel.follow != entity.follow || wkChannel.status != entity.status)
                 isRefreshContacts = true;
         } else {
-            // 全新 channel，生成初始 avatarCacheKey
-            wkChannel.avatarCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
+            // 全新 channel，优先用服务端值，缺失时兜底
+            if (!TextUtils.isEmpty(entity.avatar_cache_key)) {
+                wkChannel.avatarCacheKey = entity.avatar_cache_key;
+            } else {
+                wkChannel.avatarCacheKey = UUID.randomUUID().toString().replaceAll("-", "");
+            }
         }
         if (hashMap == null)
             hashMap = new HashMap<>();

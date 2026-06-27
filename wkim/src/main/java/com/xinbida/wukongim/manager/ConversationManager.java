@@ -730,18 +730,27 @@ public class ConversationManager extends BaseManager {
 
     /**
      * 用服务端返回的全量 space_memberships 覆盖内存缓存，彻底消除 Space 消息串问题。
-     * memberships 为 null 时表示老后端未部署此字段，跳过不处理（保持向后兼容）。
+     *
+     * <p>权威性语义（PR #75 review @Jerry-Xin 提出的边界）：
+     * <ul>
+     *   <li>{@code memberships == null}：老后端未部署此字段，跳过不处理（authoritative
+     *       保持原值，向后兼容）。</li>
+     *   <li>{@code memberships.isEmpty()}：新后端权威返回"无 memberships"，应当标记
+     *       {@code authoritative=true} 并持久化，否则 SpaceFilter 的
+     *       {@code my-row-not-cached-fail-open} 路径会继续展示陈旧 / 跨 Space 会话。</li>
+     *   <li>非空 list：新后端权威覆盖，{@code authoritative=true}（已有逻辑）。</li>
+     * </ul>
      */
     public void applySpaceMemberships(List<WKSpaceMembership> memberships) {
         if (memberships == null) return;
         if (memberships.isEmpty()) {
             spaceCacheSnapshot = new SpaceCacheSnapshot(
-                    new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+                    new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true);
             spaceCacheRefreshedAt = System.currentTimeMillis();
             saveSpaceCacheToDisk(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
             try {
                 com.xinbida.wukongim.diag.WKDiagWriter.write("MEMBERSHIP",
-                        "action=apply-empty before=cleared after=0/0 authoritative=false");
+                        "action=apply-empty before=cleared after=0/0 authoritative=true");
             } catch (Throwable ignored) {
             }
             notifySpaceCacheUpdated();

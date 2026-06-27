@@ -17,6 +17,8 @@ jobs:
       pr_url: ${{ github.event.pull_request.html_url }}
       pr_author: ${{ github.event.pull_request.user.login }}
       event_action: ${{ github.event.action }}
+      enable_im_notify: false
       project_group_id: '84667e59ee9544e6b31a2fb6d3a21b23'
     secrets:
       OCTO_BOT_TOKEN: ${{ secrets.OCTO_BOT_TOKEN }}
+      PR_TRIAGE_WEBHOOK_URL: ${{ secrets.PR_TRIAGE_WEBHOOK_URL }}

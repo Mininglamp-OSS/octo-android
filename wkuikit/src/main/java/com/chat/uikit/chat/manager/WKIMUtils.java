@@ -270,6 +270,14 @@ public class WKIMUtils {
                         // 不在订阅列表 → 收不到 1003. 我收到的 1003 永远是别人被踢, 我的
                         // memberships 没变, 不触发 sync.
                         GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
+                        // 防御性兜底: 如果未来 server 改了 IMRemoveSubscriber/发通知的顺序,
+                        // 或出现 race 让我自己也收到了 1003, isMyUidInGroupMemberMsgExtra
+                        // 命中即触发 refresh, 避免 stale group 在 SpaceFilter 缓存里串台.
+                        // 当前 server 实现下这条分支永远不会进, 触发也只会被
+                        // SpaceSyncCoordinator debounce 掉, 零副作用.
+                        if (isMyUidInGroupMemberMsgExtra(msgList.get(i))) {
+                            needsMembershipRefresh = true;
+                        }
                     } else {
                         if (msgList.get(i).type != WKContentType.WK_INSIDE_MSG) {
                             isAlertMsg = true;

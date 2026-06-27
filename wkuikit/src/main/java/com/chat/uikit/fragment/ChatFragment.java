@@ -1478,41 +1478,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void updateGroupMentionBadge() {
+        // 关注 tab 上的橘色 "@" badge 暂时下线: server 端 reminder.version 协议存在
+        // 单调性问题(详见 2026-06-27 reminder sync 根因报告), incremental sync 经常返回空,
+        // tab 级 badge 大部分时间漏报反而误导. 最近 tab 内单条会话行的 "[有人@你]"
+        // 标签独立路径(ChatConversationAdapter), 保留不动. 等 server 修完再恢复本方法.
         if (segmentTabView == null || !isAdded()) return;
-        FollowedKeysStore store = FollowedKeysStore.getInstance();
-        boolean hasMention = false;
-        List<ChatConversationMsg> source = allConversations.isEmpty()
-                ? chatConversationAdapter.getData() : allConversations;
-        for (ChatConversationMsg item : source) {
-            if (item.isSectionHeader || item.uiConversationMsg == null) continue;
-            String channelID = item.uiConversationMsg.channelID;
-            byte channelType = item.uiConversationMsg.channelType;
-            boolean isFollowed = false;
-            if (channelType == WKChannelType.GROUP) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_CHANNEL, channelID);
-            } else if (channelType == WKChannelType.PERSONAL) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_DM, channelID);
-            } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, channelID);
-            }
-            if (!isFollowed) continue;
-
-            List<WKReminder> reminders = item.getReminders();
-            if (WKReader.isNotEmpty(reminders)) {
-                for (WKReminder r : reminders) {
-                    if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
-                        hasMention = true;
-                        break;
-                    }
-                }
-            }
-            if (!hasMention && channelType == WKChannelType.GROUP) {
-                hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
-                        channelID, WKMentionType.WKReminderTypeMentionMe);
-            }
-            if (hasMention) break;
-        }
-        segmentTabView.setMentionBadge(0, hasMention, getString(R.string.last_msg_remind));
+        segmentTabView.setMentionBadge(0, false, null);
     }
 
     @Override

@@ -672,8 +672,12 @@ public final class SpaceFilter {
 
     /**
      * 私聊消息级 Space 过滤诊断日志. 跨 Space 私聊串消息的决策点必打 — 字段集与
-     * {@link #diagLog} 对齐, 多打消息自身元数据(发件人、内容前 60 字符片段)便于
-     * 用户能告诉我们"是哪条消息"加速定位.
+     * {@link #diagLog} 对齐, 多打消息自身元数据 (msgType / contentLen / contentHash /
+     * fromUid / clientMsgNo / messageSeq) 便于跨端比对定位"是哪条消息".
+     *
+     * <p>隐私: 不记录消息正文; 只记 content 长度与 hashCode (32-bit, 单向不可还原),
+     * 用于区分"同 fromUid+seq 但内容不同"的消息. 对齐 PR#75 review 反馈
+     * (redact-by-default), consent 文案无需声明采集消息正文.
      */
     private static void msgDiagLog(@Nullable WKMsg msg,
                                    @Nullable String currentSpaceId,
@@ -687,19 +691,20 @@ public final class SpaceFilter {
         try {
             String cid = msg == null ? "null" : msg.channelID;
             byte ct = msg == null ? -1 : msg.channelType;
+            int msgType = msg == null ? -1 : msg.type;
             String fromUid = msg == null ? "null" : msg.fromUID;
             String clientMsgNo = msg == null ? "null" : msg.clientMsgNO;
             long msgSeq = msg == null ? 0 : msg.messageSeq;
-            String contentSnippet = "";
-            if (msg != null && msg.content != null) {
-                int len = Math.min(msg.content.length(), 60);
-                contentSnippet = msg.content.substring(0, len).replace('\n', ' ').replace('\r', ' ');
-            }
+            int contentLen = (msg == null || msg.content == null) ? 0 : msg.content.length();
+            String contentHash = (msg == null || msg.content == null)
+                    ? "0"
+                    : Integer.toHexString(msg.content.hashCode());
             String curName = SpaceNameLookup.nameOf(currentSpaceId);
             String msgSpaceName = SpaceNameLookup.nameOf(msgSpaceId);
             String line = "branch=" + branch
                     + " skip=" + skip
                     + " channelID=" + cid + " channelType=" + ct
+                    + " msgType=" + msgType
                     + " fromUid=" + fromUid
                     + " clientMsgNo=" + clientMsgNo
                     + " msgSeq=" + msgSeq
@@ -707,7 +712,8 @@ public final class SpaceFilter {
                     + " currentSpaceName='" + (curName == null ? "" : curName) + '\''
                     + " msgSpaceId=" + msgSpaceId
                     + " msgSpaceName='" + (msgSpaceName == null ? "" : msgSpaceName) + '\''
-                    + " content[0..60]='" + contentSnippet + '\''
+                    + " contentLen=" + contentLen
+                    + " contentHash=" + contentHash
                     + " caller=" + callerOf();
             com.chat.base.utils.WKLogUtils.d(LOG_TAG, "SpaceFilter-Msg# " + line);
             com.chat.base.utils.DiagSink.write("SF-MSG", line);

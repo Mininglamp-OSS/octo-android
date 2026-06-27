@@ -1419,13 +1419,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         // 子区未读（allThreadConversations 独立于 allConversations）
-        long threeDaysAgoForBadge = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
                 continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
-            if (ts <= 0 || ts <= threeDaysAgoForBadge) continue;
+            if (ts <= 0) continue;
             recentUnread += threadMsg.uiConversationMsg.unreadCount;
         }
         // 关注 Tab 未读
@@ -2862,10 +2861,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     private static boolean isInactiveGroup(ChatConversationMsg msg) {
         if (msg.uiConversationMsg.channelType != WKChannelType.GROUP) return false;
-        long ts = msg.uiConversationMsg.lastMsgTimestamp;
-        if (ts <= 0) return true;
-        long now = System.currentTimeMillis() / 1000;
-        return (now - ts) >= 3 * 86400;
+        return msg.uiConversationMsg.lastMsgTimestamp <= 0;
     }
 
     private List<ChatConversationMsg> buildRecentDisplayList() {
@@ -2884,13 +2880,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
 
-        long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         Map<String, List<com.chat.uikit.thread.service.entity.ThreadEntity>> threadCache =
                 followAdapter.getThreadDataCache();
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
-            if (ts <= 0 || ts <= threeDaysAgoSec) continue;
+            if (ts <= 0) continue;
 
             if (threadMsg.threadName == null || threadMsg.threadName.isEmpty()) {
                 String channelId = threadMsg.uiConversationMsg.channelID;

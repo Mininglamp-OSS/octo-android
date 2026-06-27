@@ -122,6 +122,22 @@ public final class SpaceFilter {
             return null;
         }
 
+        /**
+         * 读取 channel 最后一条消息的 space_id（仅 PERSONAL 使用）。
+         *
+         * <p>用途：PERSONAL channel（私聊 / AI 机器人）没有自己的 Space 归属，只能靠"最后一条
+         * 消息发自哪个 Space"反推会话归属。{@link #shouldSkipChannelForSpace} 的 person 分支会
+         * 调用本方法，读到 space_id 后跟 currentSpaceId 比较。返回 null 表示读不到（老消息
+         * 没带 space_id / SDK 未就绪 / 消息已删除），上层会 fail-open 等数据补齐。
+         *
+         * <p>对齐 iOS {@code WKConversationListVM shouldShowConversation:} 的"读 lastMessage
+         * content space_id 兜底过滤"路径（WKConversationListVM.m:952-979）。
+         */
+        @Nullable
+        default String getLastMsgSpaceId(String channelID, byte channelType) {
+            return null;
+        }
+
         default boolean isSpaceCacheAuthoritative() {
             return false;
         }
@@ -220,6 +236,30 @@ public final class SpaceFilter {
                 return TextUtils.isEmpty(v) ? null : v;
             } catch (Throwable ignored) {
                 // SDK 未就绪或线程异常时返回 null，让上层走 fail-open / member sync 兜底
+                return null;
+            }
+        }
+
+        /**
+         * PERSONAL channel 的 last-msg space_id 读取实现。
+         *
+         * <p>路径：{@code getUIConversationMsg → getWkMsg → extractSpaceIdFromMsg}。
+         * {@code getWkMsg()} 是 lazy load：首次访问从 MsgDbManager 查 client_msg_no 走索引
+         * （单次 ~ms），结果回缓存到 {@code WKUIConversationMsg.wkMsg}，后续无 DB 命中。
+         *
+         * <p>失败兜底：SDK 未就绪 / 会话不存在 / 消息删除 / content 不是合法 JSON → 返回 null。
+         */
+        @Override
+        public String getLastMsgSpaceId(String channelID, byte channelType) {
+            try {
+                com.xinbida.wukongim.entity.WKUIConversationMsg conv = WKIM.getInstance()
+                        .getConversationManager()
+                        .getUIConversationMsg(channelID, channelType);
+                if (conv == null) return null;
+                com.xinbida.wukongim.entity.WKMsg msg = conv.getWkMsg();
+                if (msg == null) return null;
+                return extractSpaceIdFromMsg(msg);
+            } catch (Throwable ignored) {
                 return null;
             }
         }
@@ -359,11 +399,28 @@ public final class SpaceFilter {
             return false;
         }
 
-        // 3. person-pass（旧兼容：私聊过滤交给 shouldSkipMessageForSpace）
+        // 3. PERSONAL Space 过滤（对齐 iOS WKConversationListVM:952-979）
+        //   a. SystemBot 白名单（botfather / u_10000 / fileHelper + appconfig.system_bot_uids
+        //      动态扩展）跨 Space 共享 conversation entry → 放行（每个 Space 都显示），
+        //      消息内容由 shouldSkipMessageForSpace 在 msg 级隔离。
+        //   b. 真人私聊 + 普通 AI 机器人：读 last-msg.content.space_id 跟 currentSpaceId 比对。
+        //      老消息没带 space_id → fail-open 等数据补齐（避免误杀历史会话）。
         if (channelType == WKChannelType.PERSONAL) {
-            diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
-                    "person-pass", false);
-            return false;
+            if (SystemBotsFallback.isSystemBot(channelID)) {
+                diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                        "person-system-bot-pass", false);
+                return false;
+            }
+            String msgSpaceId = provider.getLastMsgSpaceId(channelID, channelType);
+            if (isBlank(msgSpaceId)) {
+                diagLog(channelID, channelType, currentSpaceId, null, prefix, null, null,
+                        "person-fail-open-no-msg-space", false);
+                return false;
+            }
+            boolean skip = !currentSpaceId.equals(msgSpaceId);
+            diagLog(channelID, channelType, currentSpaceId, null, prefix, msgSpaceId, null,
+                    skip ? "person-space-mismatch" : "person-space-match", skip);
+            return skip;
         }
 
         // 3.5 thread-delegate: 子区（COMMUNITY_TOPIC）委托给父群判断。

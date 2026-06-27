@@ -103,6 +103,14 @@ public class WKBaseApplication {
         // AES256-GCM / KeyStore 握手（50-150ms）搬出主线程。
         WKSharedPreferencesUtil.prewarm();
 
+        // Space 串消息排查诊断器(2026-06): 早初始化, 让后续启动链路上的 SF / BOOT 埋点
+        // 一旦上一次会话开启了诊断模式(SP 持久化), 就能立刻开始采集. 不会触发 IO, 仅起
+        // HandlerThread + 读 SP, 不阻塞主线程.
+        com.chat.base.utils.DiagSink.init(context);
+        // 桥接 wkim SDK 内部诊断埋点 → DiagSink. wkim 不能反向依赖 wkbase, 通过 install-pattern
+        // 让 ConversationManager 等 SDK 内部模块的 MEMBERSHIP 状态变更也能写到统一诊断文件.
+        com.xinbida.wukongim.diag.WKDiagWriter.install(com.chat.base.utils.DiagSink::write);
+
         float density = context.getResources().getDisplayMetrics().density;
         AndroidUtilities.setDensity(density);
 

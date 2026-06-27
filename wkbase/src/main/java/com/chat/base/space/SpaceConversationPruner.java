@@ -38,8 +38,9 @@ import java.util.Set;
  * <ul>
  *     <li>不改 {@link SpaceFilter} 纯函数——本类只调用它做判定，不重新实现 7 分支逻辑。</li>
  *     <li>不写 WKSDK 持久化层——只裁内存 list / 白名单 Set，DB 回放时 SpaceFilter 会自然二次校验。</li>
- *     <li>PERSONAL 频道交给 {@link SpaceFilter#shouldSkipMessageForSpace} 做消息级过滤，
- *         本类不对私聊做 channel 级剔除，避免误杀跨 Space 共享的系统 Bot（如 botfather）。</li>
+ *     <li>PERSONAL 频道也走 prune（与 GROUP 对称）；{@link SpaceFilter} 的 person 分支
+ *         内部已对系统 Bot（botfather / u_10000 / fileHelper）白名单短路放行，
+ *         真人私聊 / 普通 AI 机器人按 last-msg.content.space_id 比对剔除。</li>
  * </ul>
  *
  * <p>Pattern 来源：iOS WKConversationListVM.pruneNonCurrentSpaceGroups（PR#95）扫
@@ -58,7 +59,9 @@ public final class SpaceConversationPruner {
      * <p>规则（与 iOS 对齐）：
      * <ul>
      *     <li>currentSpaceId 为空（非 Space 模式）→ 永不剔除</li>
-     *     <li>{@link WKChannelType#PERSONAL} → 永不剔除（交给消息级过滤 / SYSTEM_BOTS 兜底）</li>
+     *     <li>{@link WKChannelType#PERSONAL} → 调 {@link SpaceFilter#shouldSkipChannelForSpace}；
+     *         person 分支会先用 SystemBotsFallback 白名单短路（botfather / u_10000 / fileHelper
+     *         全 Space 显示），再读 last-msg.content.space_id 跟当前 Space 比对</li>
      *     <li>{@link WKChannelType#GROUP} → 调 {@link SpaceFilter#shouldSkipChannelForSpace}
      *         判定；Skip == true 则剔除</li>
      *     <li>其他 channelType（COMMUNITY_TOPIC 等）不走 prune 路径（上游已过滤）</li>
@@ -71,7 +74,7 @@ public final class SpaceConversationPruner {
                                       @NonNull SpaceFilter.ChannelInfoProvider provider) {
         if (channelID == null || channelID.isEmpty()) return false;
         if (currentSpaceId == null || currentSpaceId.isEmpty()) return false;
-        if (channelType != WKChannelType.GROUP) return false;
+        if (channelType != WKChannelType.GROUP && channelType != WKChannelType.PERSONAL) return false;
         return SpaceFilter.shouldSkipChannelForSpace(channelID, channelType, currentSpaceId, provider);
     }
 

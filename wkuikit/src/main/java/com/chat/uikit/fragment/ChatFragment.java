@@ -1419,13 +1419,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
         // 子区未读（allThreadConversations 独立于 allConversations）
-        long threeDaysAgoForBadge = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
                 continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
-            if (ts <= 0 || ts <= threeDaysAgoForBadge) continue;
+            if (ts <= 0) continue;
             recentUnread += threadMsg.uiConversationMsg.unreadCount;
         }
         // 关注 Tab 未读
@@ -1478,41 +1477,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private void updateGroupMentionBadge() {
+        // 关注 tab 上的橘色 "@" badge 暂时下线: server 端 reminder.version 协议存在
+        // 单调性问题(详见 2026-06-27 reminder sync 根因报告), incremental sync 经常返回空,
+        // tab 级 badge 大部分时间漏报反而误导. 最近 tab 内单条会话行的 "[有人@你]"
+        // 标签独立路径(ChatConversationAdapter), 保留不动. 等 server 修完再恢复本方法.
         if (segmentTabView == null || !isAdded()) return;
-        FollowedKeysStore store = FollowedKeysStore.getInstance();
-        boolean hasMention = false;
-        List<ChatConversationMsg> source = allConversations.isEmpty()
-                ? chatConversationAdapter.getData() : allConversations;
-        for (ChatConversationMsg item : source) {
-            if (item.isSectionHeader || item.uiConversationMsg == null) continue;
-            String channelID = item.uiConversationMsg.channelID;
-            byte channelType = item.uiConversationMsg.channelType;
-            boolean isFollowed = false;
-            if (channelType == WKChannelType.GROUP) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_CHANNEL, channelID);
-            } else if (channelType == WKChannelType.PERSONAL) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_DM, channelID);
-            } else if (channelType == WKChannelType.COMMUNITY_TOPIC) {
-                isFollowed = store.isFollowed(SidebarItemEntity.TARGET_TYPE_THREAD, channelID);
-            }
-            if (!isFollowed) continue;
-
-            List<WKReminder> reminders = item.getReminders();
-            if (WKReader.isNotEmpty(reminders)) {
-                for (WKReminder r : reminders) {
-                    if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0) {
-                        hasMention = true;
-                        break;
-                    }
-                }
-            }
-            if (!hasMention && channelType == WKChannelType.GROUP) {
-                hasMention = ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
-                        channelID, WKMentionType.WKReminderTypeMentionMe);
-            }
-            if (hasMention) break;
-        }
-        segmentTabView.setMentionBadge(0, hasMention, getString(R.string.last_msg_remind));
+        segmentTabView.setMentionBadge(0, false, null);
     }
 
     @Override
@@ -2891,10 +2861,7 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
 
     private static boolean isInactiveGroup(ChatConversationMsg msg) {
         if (msg.uiConversationMsg.channelType != WKChannelType.GROUP) return false;
-        long ts = msg.uiConversationMsg.lastMsgTimestamp;
-        if (ts <= 0) return true;
-        long now = System.currentTimeMillis() / 1000;
-        return (now - ts) >= 3 * 86400;
+        return msg.uiConversationMsg.lastMsgTimestamp <= 0;
     }
 
     private List<ChatConversationMsg> buildRecentDisplayList() {
@@ -2913,13 +2880,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
 
-        long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         Map<String, List<com.chat.uikit.thread.service.entity.ThreadEntity>> threadCache =
                 followAdapter.getThreadDataCache();
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
-            if (ts <= 0 || ts <= threeDaysAgoSec) continue;
+            if (ts <= 0) continue;
 
             if (threadMsg.threadName == null || threadMsg.threadName.isEmpty()) {
                 String channelId = threadMsg.uiConversationMsg.channelID;

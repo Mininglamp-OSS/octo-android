@@ -116,6 +116,7 @@ public final class SpaceSyncCoordinator {
         // 1) per-path debounce
         Long last = lastTriggerAt.get(tag);
         if (last != null && (now - last) < debounceMs) {
+            diagLog(tag, "debounced", now - last);
             return false;
         }
 
@@ -125,17 +126,21 @@ public final class SpaceSyncCoordinator {
             long started = syncStartedAt;
             if (started != 0L && (now - started) > STUCK_RESET_MS) {
                 syncing.compareAndSet(true, false);
+                diagLog(tag, "stuck-reset", now - started);
             } else {
+                diagLog(tag, "rejected-syncing", now - started);
                 return false;
             }
         }
 
         // 3) 抢 permit
         if (!syncing.compareAndSet(false, true)) {
+            diagLog(tag, "lost-race", 0L);
             return false;
         }
         syncStartedAt = now;
         lastTriggerAt.put(tag, now);
+        diagLog(tag, "begin", 0L);
         return true;
     }
 
@@ -145,8 +150,31 @@ public final class SpaceSyncCoordinator {
      */
     @AnyThread
     public void complete() {
+        long started = syncStartedAt;
+        long elapsed = started > 0 ? SystemClock.elapsedRealtime() - started : -1L;
         syncing.compareAndSet(true, false);
         syncStartedAt = 0L;
+        diagLog("*", "complete", elapsed);
+    }
+
+    /**
+     * Space 串消息排查埋点 — 把每条 sync 路径的状态转换记到 DiagSink. 业务零侵入,
+     * 仅在 DiagSink 启用时落盘. tag="performSpaceSwitch" 对应用户主动切换 Space,
+     * 是排查"切 Space 后还在显示旧 Space 消息"的关键时间点.
+     */
+    private static void diagLog(@NonNull String tag, @NonNull String event, long elapsedMs) {
+        try {
+            String currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId();
+            String currentSpaceName = com.chat.base.space.SpaceNameLookup.nameOf(currentSpaceId);
+            com.chat.base.utils.DiagSink.write(
+                    "SPACE-SYNC",
+                    "tag=" + tag + " event=" + event
+                            + " elapsedMs=" + elapsedMs
+                            + " currentSpaceId=" + currentSpaceId
+                            + " currentSpaceName='" + (currentSpaceName == null ? "" : currentSpaceName) + "'"
+            );
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 当前是否有 sync 正在进行。用于 UX overlay 判断是否显示 spinner。 */

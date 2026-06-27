@@ -107,6 +107,21 @@ public class ConversationManager extends BaseManager {
     private volatile SpaceCacheSnapshot spaceCacheSnapshot =
             new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
 
+    /**
+     * 最近一次 {@link #spaceCacheSnapshot} 被刷新/替换/单条预填的 wall-clock 时间(epoch ms).
+     *
+     * <p>诊断用: Space 串消息排查时, 单看 {@code SpaceFilter} 决策日志不够, 还需要知道
+     * "我决策时缓存数据有多新". 这个字段让 review 时能区分:
+     * <ul>
+     *     <li>缓存刚刚刷新(几秒内) → 数据应当权威, 决策错误是逻辑问题</li>
+     *     <li>缓存很久没刷新(几分钟前) → 可能是 stale, 决策错误是 race</li>
+     * </ul>
+     *
+     * <p>0 表示从未刷新(进程刚启动 + 磁盘 cache 也没读到). 用 {@code volatile long} 而非
+     * {@code AtomicLong}: 单次赋值无需 CAS, volatile 保证可见性即可.
+     */
+    private volatile long spaceCacheRefreshedAt = 0L;
+
     private static final String SPACE_PREFS_NAME = "wk_space_memberships";
     private static final String PREF_KEY_SPACE_MAP = "space_map";
     private static final String PREF_KEY_EXTERNAL_MAP = "external_map";
@@ -417,8 +432,13 @@ public class ConversationManager extends BaseManager {
 
     public void setSyncConversationListener(ISyncConversationChatBack iSyncConversationChatBack) {
         if (iSyncConversationChat == null) {
+            // 上层 listener 还没注册（如 Phase-B postPhaseB 的 WKIMUtils.initIMListener 还在 IO 线程排队）
+            // 仍调一次 onBack(null) 让调用方的回调链能跑——WKConnection.markConnected /
+            // SyncGate.done / SpaceSyncCoordinator.complete 都挂在 onBack 上，
+            // 否则 permit 锁死 10s（STUCK_RESET_MS），冷启动会话列表只剩 SYSTEM_BOTS 兜底。
             WKLoggerUtils.getInstance().e("未设置同步最近会话事件");
-            if (com.xinbida.wukongim.BuildConfig.DEBUG) android.util.Log.e("MsgDebug", "[SYNC_BUG] iSyncConversationChat is NULL! callback will NOT fire, connectStatus will stay syncMsg forever");
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) android.util.Log.e("MsgDebug", "[SYNC_BUG] iSyncConversationChat is NULL! firing onBack(null) to release upstream permit");
+            if (iSyncConversationChatBack != null) iSyncConversationChatBack.onBack(null);
             return;
         }
         //  C · sync 去重：CAS 抢 permit。5 条触发路径并发打进来时只有 1 条会真正
@@ -701,6 +721,7 @@ public class ConversationManager extends BaseManager {
             } else {
                 snapshot.externalMap.remove(channelID);
             }
+            spaceCacheRefreshedAt = System.currentTimeMillis();
         } catch (Throwable t) {
             // 单条 conv 的预填失败不应阻断批量落盘；下一次 sync 或 channelInfo 异步路径会补齐。
             WKLoggerUtils.getInstance().e(TAG, "prefillSpaceExtrasFromConvSync failed: " + t.getMessage());
@@ -709,18 +730,35 @@ public class ConversationManager extends BaseManager {
 
     /**
      * 用服务端返回的全量 space_memberships 覆盖内存缓存，彻底消除 Space 消息串问题。
-     * memberships 为 null 时表示老后端未部署此字段，跳过不处理（保持向后兼容）。
+     *
+     * <p>权威性语义（PR #75 review @Jerry-Xin 提出的边界）：
+     * <ul>
+     *   <li>{@code memberships == null}：老后端未部署此字段，跳过不处理（authoritative
+     *       保持原值，向后兼容）。</li>
+     *   <li>{@code memberships.isEmpty()}：新后端权威返回"无 memberships"，应当标记
+     *       {@code authoritative=true} 并持久化，否则 SpaceFilter 的
+     *       {@code my-row-not-cached-fail-open} 路径会继续展示陈旧 / 跨 Space 会话。</li>
+     *   <li>非空 list：新后端权威覆盖，{@code authoritative=true}（已有逻辑）。</li>
+     * </ul>
      */
     public void applySpaceMemberships(List<WKSpaceMembership> memberships) {
         if (memberships == null) return;
         if (memberships.isEmpty()) {
             spaceCacheSnapshot = new SpaceCacheSnapshot(
-                    new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+                    new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true);
+            spaceCacheRefreshedAt = System.currentTimeMillis();
             saveSpaceCacheToDisk(new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+            try {
+                com.xinbida.wukongim.diag.WKDiagWriter.write("MEMBERSHIP",
+                        "action=apply-empty before=cleared after=0/0 authoritative=true");
+            } catch (Throwable ignored) {
+            }
             notifySpaceCacheUpdated();
             return;
         }
         try {
+            int beforeSpace = spaceCacheSnapshot.spaceMap.size();
+            int beforeExt = spaceCacheSnapshot.externalMap.size();
             ConcurrentHashMap<String, String> newSpaceMap = new ConcurrentHashMap<>();
             ConcurrentHashMap<String, String> newExternalMap = new ConcurrentHashMap<>();
             for (WKSpaceMembership m : memberships) {
@@ -733,7 +771,16 @@ public class ConversationManager extends BaseManager {
                 }
             }
             spaceCacheSnapshot = new SpaceCacheSnapshot(newSpaceMap, newExternalMap, true);
+            spaceCacheRefreshedAt = System.currentTimeMillis();
             saveSpaceCacheToDisk(newSpaceMap, newExternalMap);
+            try {
+                com.xinbida.wukongim.diag.WKDiagWriter.write("MEMBERSHIP",
+                        "action=apply-full entries=" + memberships.size()
+                                + " before=" + beforeSpace + "/" + beforeExt
+                                + " after=" + newSpaceMap.size() + "/" + newExternalMap.size()
+                                + " authoritative=true");
+            } catch (Throwable ignored) {
+            }
             if (com.xinbida.wukongim.BuildConfig.DEBUG) {
                 String caller = Thread.currentThread().getStackTrace().length > 3
                         ? Thread.currentThread().getStackTrace()[3].toString() : "unknown";
@@ -771,9 +818,18 @@ public class ConversationManager extends BaseManager {
      */
     public void clearConvSyncSpaceCache() {
         try {
+            int beforeSpace = spaceCacheSnapshot.spaceMap.size();
+            int beforeExt = spaceCacheSnapshot.externalMap.size();
             spaceCacheSnapshot = new SpaceCacheSnapshot(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), false);
+            // 清空视为"没数据", 时间戳归零, 让诊断日志能区分"刚清空"与"从未加载".
+            spaceCacheRefreshedAt = 0L;
             spaceCacheLoadedFromDisk = false;
             coldStartSyncDone = false;
+            try {
+                com.xinbida.wukongim.diag.WKDiagWriter.write("MEMBERSHIP",
+                        "action=clear before=" + beforeSpace + "/" + beforeExt + " after=0/0");
+            } catch (Throwable ignored) {
+            }
         } catch (Throwable t) {
             WKLoggerUtils.getInstance().e(TAG, "clearConvSyncSpaceCache failed: " + t.getMessage());
         }
@@ -813,6 +869,7 @@ public class ConversationManager extends BaseManager {
             }
             spaceCacheSnapshot = new SpaceCacheSnapshot(spaceMap, extMap,
                     prefs.getBoolean(PREF_KEY_AUTHORITATIVE, false));
+            spaceCacheRefreshedAt = System.currentTimeMillis();
             if (com.xinbida.wukongim.BuildConfig.DEBUG) {
                 android.util.Log.d("ConvSync", "[loadSpaceCacheFromDisk] spaceMap=" + spaceMap.size()
                         + " externalMap=" + extMap.size());
@@ -914,5 +971,63 @@ public class ConversationManager extends BaseManager {
     public boolean isSpaceCacheAuthoritative() {
         ensureSpaceCacheLoaded();
         return spaceCacheSnapshot.authoritative;
+    }
+
+    /**
+     * <b>内部诊断 API — 请勿在业务代码中调用。</b>
+     *
+     * <p>仅供 Space 串消息排查期间 {@code SpaceFilter.diagLog} / {@code DiagSink} 写日志使用。
+     * 待 server PR #154 cross-space 诊断闭环上线、SpaceFilter 决策切换到 realtime msg
+     * payload 中的权威 space_id 后，本方法连同 {@link SpaceCacheStats} 会一并删除——
+     * 任何依赖这个 API 写业务的代码都会在那时编译失败。
+     *
+     * <p>诊断用: 返回 space cache 当前状态快照. 任意线程可调, 无锁(读 volatile 字段).
+     *
+     * @param channelID 要查询的频道 ID(可空). 非空时 {@link SpaceCacheStats#containsChannelId}
+     *                  反映 spaceMap 是否含有该 ID.
+     * @hide
+     */
+    @androidx.annotation.NonNull
+    @androidx.annotation.RestrictTo(androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
+    public SpaceCacheStats getSpaceCacheStats(@androidx.annotation.Nullable String channelID) {
+        ensureSpaceCacheLoaded();
+        SpaceCacheSnapshot snap = spaceCacheSnapshot;
+        boolean contains = channelID != null && !channelID.isEmpty()
+                && snap.spaceMap.containsKey(channelID);
+        return new SpaceCacheStats(
+                snap.spaceMap.size(),
+                snap.externalMap.size(),
+                spaceCacheRefreshedAt,
+                snap.authoritative,
+                contains);
+    }
+
+    /**
+     * <b>内部诊断 DTO — 请勿在业务代码中引用。</b> 见 {@link #getSpaceCacheStats(String)} 注释,
+     * 与该方法同生命周期, 排查结束后一并删除.
+     *
+     * @hide
+     */
+    @androidx.annotation.RestrictTo(androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
+    public static final class SpaceCacheStats {
+        /** 当前 spaceMap 条目数(我所在的群数, 含 my_source 关系). */
+        public final int spaceMapSize;
+        /** 当前 externalMap 条目数(我以外部成员身份加入的群数). */
+        public final int externalMapSize;
+        /** 最近一次 cache 替换/单条预填的 epoch ms. 0 = 从未刷新. */
+        public final long refreshedAt;
+        /** 当前 cache 是否是权威源(true 表示来自 space_memberships 全量响应). */
+        public final boolean authoritative;
+        /** 查询的 channelID 是否在 spaceMap 里. 调用时 channelID 为 null 则为 false. */
+        public final boolean containsChannelId;
+
+        SpaceCacheStats(int spaceMapSize, int externalMapSize, long refreshedAt,
+                        boolean authoritative, boolean containsChannelId) {
+            this.spaceMapSize = spaceMapSize;
+            this.externalMapSize = externalMapSize;
+            this.refreshedAt = refreshedAt;
+            this.authoritative = authoritative;
+            this.containsChannelId = containsChannelId;
+        }
     }
 }

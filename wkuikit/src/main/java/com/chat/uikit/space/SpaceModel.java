@@ -50,6 +50,18 @@ public class SpaceModel extends WKBaseModel {
         cachedMembers = null;
     }
 
+    /**
+     * 诊断用: 直接返回当前内存中缓存的 Space 列表(可能为 null, 表示尚未首次加载).
+     * 调用方需自行处理 null. 返回不可变副本以防外部修改污染缓存.
+     *
+     * <p>用途: {@code DiagSink} 写诊断日志时通过 space_id 反查 Space 名字,
+     * 让 review 时不用查表. 不触发网络请求, 拿不到就拿不到.
+     */
+    public java.util.List<SpaceEntity> getCachedSpaces() {
+        if (cachedSpaces == null) return null;
+        return new ArrayList<>(cachedSpaces);
+    }
+
     public interface ISpaceListListener {
         void onResult(List<SpaceEntity> list);
 

@@ -57,6 +57,7 @@ import com.chat.base.views.pwdview.NumPwdDialog;
 import com.chat.uikit.R;
 import com.chat.uikit.WKUIKitApplication;
 import com.chat.uikit.chat.ChatActivity;
+import com.chat.uikit.chat.SpaceSyncCoordinator;
 import com.chat.uikit.contacts.service.FriendModel;
 import com.chat.uikit.db.WKContactsDB;
 import com.chat.uikit.enity.ProhibitWord;
@@ -85,6 +86,7 @@ import com.xinbida.wukongim.msgmodel.WKTextContent;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -233,19 +235,49 @@ public class WKIMUtils {
             byte channelType = WKChannelType.PERSONAL;
             WKMsg sensitiveWordsMsg = null;
             String loginUID = WKConfig.getInstance().getUid();
+            // 方案 B (跨 Space 串台兜底): 本批次内若有任一群成员关系变更事件,
+            // 循环结束后触发一次 conv/sync 增量刷新 space_memberships,
+            // 让 SpaceFilter 在后续 realtime 消息到达时能给出权威判定,
+            // 避免新加入群的首条消息撞 fail-open 串到当前 Space.
+            // 详见 triggerSpaceMembershipsRefresh() javadoc.
+            boolean needsMembershipRefresh = false;
             if (WKReader.isNotEmpty(msgList)) {
                 channelID = msgList.get(msgList.size() - 1).channelID;
                 channelType = msgList.get(msgList.size() - 1).channelType;
                 for (int i = 0, size = msgList.size(); i < size; i++) {
                     inferSpaceIdForBotMessage(msgList.get(i));
                     if (msgList.get(i).type == WKContentType.setNewGroupAdmin) {
+                        // admin 角色变更不影响 my memberships, 不触发 sync
                         GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
                     } else if (msgList.get(i).type == WKContentType.groupSystemInfo) {
+                        // 群属性变更 (名称/公告/禁言); 也可能是 group create 通知
+                        // (server SendGroupCreate 走 octo-lib, 客户端无法区分子类型). 保守触发 sync.
                         WKCommonModel.getInstance().getChannel(msgList.get(i).channelID, WKChannelType.GROUP, null);
                         GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
-                    } else if (msgList.get(i).type == WKContentType.addGroupMembersMsg || msgList.get(i).type == WKContentType.removeGroupMembersMsg) {
-                        //同步信息
+                        needsMembershipRefresh = true;
+                    } else if (msgList.get(i).type == WKContentType.addGroupMembersMsg) {
+                        // 群加人. server 发给所有群成员包括被加者本人 (service.go:1506,
+                        // payload: {type:1002, content, extra:[{uid,name},...]}, iOS 解析参考
+                        // WKSystemMessageCell.m:80-102). 只有 my uid 在 extra 列表里时才触发 sync,
+                        // 否则是其他成员被加, 我的 memberships 没变.
                         GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
+                        if (isMyUidInGroupMemberMsgExtra(msgList.get(i))) {
+                            needsMembershipRefresh = true;
+                        }
+                    } else if (msgList.get(i).type == WKContentType.removeGroupMembersMsg) {
+                        // 群减人. server 先 IMRemoveSubscriber 把被踢用户从频道踢掉
+                        // (service.go:1700-1704), 再发 1003 通知 (1707-1713). 被踢用户已经
+                        // 不在订阅列表 → 收不到 1003. 我收到的 1003 永远是别人被踢, 我的
+                        // memberships 没变, 不触发 sync.
+                        GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
+                        // 防御性兜底: 如果未来 server 改了 IMRemoveSubscriber/发通知的顺序,
+                        // 或出现 race 让我自己也收到了 1003, isMyUidInGroupMemberMsgExtra
+                        // 命中即触发 refresh, 避免 stale group 在 SpaceFilter 缓存里串台.
+                        // 当前 server 实现下这条分支永远不会进, 触发也只会被
+                        // SpaceSyncCoordinator debounce 掉, 零副作用.
+                        if (isMyUidInGroupMemberMsgExtra(msgList.get(i))) {
+                            needsMembershipRefresh = true;
+                        }
                     } else {
                         if (msgList.get(i).type != WKContentType.WK_INSIDE_MSG) {
                             isAlertMsg = true;
@@ -293,6 +325,12 @@ public class WKIMUtils {
                         }
                     }
                 }
+            }
+            // 方案 B: 本批次有任一群成员关系变更 → 触发一次 memberships 增量刷新.
+            // 放在 for 循环外, 多个事件汇聚成一次 sync; SpaceSyncCoordinator 进一步
+            // 做 500ms per-path debounce, 突发场景 (一次拉进多个群) 不会发多次请求.
+            if (needsMembershipRefresh) {
+                triggerSpaceMembershipsRefresh();
             }
             boolean isVibrate = true;
             boolean playNewMsgMedia = true;
@@ -931,6 +969,85 @@ public class WKIMUtils {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    /**
+     * 方案 B · 判定 1002/1003 群成员变更消息中 {@code extra} 字段是否包含登录用户的 uid.
+     *
+     * <p>JSON 结构 (server modules/group/event.go:645-651 构造, iOS WKSystemMessageCell.m:80-102 解析):
+     * <pre>{@code
+     * {
+     *   "type": 1002,
+     *   "content": "...",
+     *   "extra": [{"uid": "u1", "name": "n1"}, ...]
+     * }
+     * }</pre>
+     *
+     * <p>用于判定 "群加人事件是不是把我自己加进去". 命中即说明我的 memberships
+     * 发生变化, 需触发 conv/sync 刷新. 不命中说明是别的成员被加, 跳过 sync.
+     *
+     * <p>容错: msg/content/json 任一环节异常都返回 false, fallback 到不刷新——
+     * 比 fail-open 漏过更糟的是误触发额外 sync, 但 false 路径下一次 1005 / cold-start
+     * sync 也能补齐, 实际影响有限.
+     */
+    private boolean isMyUidInGroupMemberMsgExtra(WKMsg msg) {
+        if (msg == null || TextUtils.isEmpty(msg.content)) return false;
+        String myUid = WKConfig.getInstance().getUid();
+        if (TextUtils.isEmpty(myUid)) return false;
+        try {
+            JSONObject json = new JSONObject(msg.content);
+            JSONArray extra = json.optJSONArray("extra");
+            if (extra == null) return false;
+            for (int i = 0, n = extra.length(); i < n; i++) {
+                JSONObject item = extra.optJSONObject(i);
+                if (item == null) continue;
+                if (myUid.equals(item.optString("uid"))) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+            // JSON 异常: payload 格式与预期不符, 保守返回 false.
+            // 实际生产中 server 格式稳定, 走这条路径的概率近 0.
+        }
+        return false;
+    }
+
+    /**
+     * 方案 B · 群成员关系变更后, 触发一次 conv/sync 增量刷新 space_memberships,
+     * 让 SpaceFilter 在后续 realtime 消息到达时能给出权威空间归属判定,
+     * 避免新加入群的首条消息撞 SpaceFilter fail-open 分支被错挂到当前 Space.
+     *
+     * <p>背景: server PR #154 把 conversation/sync 响应的 {@code space_memberships}
+     * 设为 SpaceFilter 的权威源。客户端现有 3 个 conv/sync 触发点:
+     * <ol>
+     *   <li>冷启动 — WKConnection 连接成功后</li>
+     *   <li>Space 切换 — {@code performSpaceSwitch}</li>
+     *   <li>resync — {@code spaceResyncRunnable}</li>
+     * </ol>
+     * 但 "用户被加入新群" 不在任何一个触发点上 — 服务端发 {@code groupSystemInfo}
+     * 后, 现有逻辑只触发 {@code groupMembersSync} (member 级), 不刷新 memberships
+     * (space 级)。下一条该群消息到达时, SpaceFilter 4 个数据源全空 → fail-open →
+     * 串台。
+     *
+     * <p>本方法补齐第 4 个触发点: "本地已知 membership 发生变化时"。
+     *
+     * <p>线程: 走 IO + SpaceSyncCoordinator (500ms per-path debounce, 与其他
+     * sync 路径共享全局重入守卫), 一次拉多群的突发场景只发 1 次 sync.
+     *
+     * <p>过渡性: 若 server 后续在 realtime msg payload 里直接带 space_id, SDK
+     * 收到消息时同步写 convSyncSpaceMap, SpaceFilter 直接拿到权威值, 本方法
+     * 可整体删除. 在那之前, 这是客户端关闭 race window 的最经济方案.
+     */
+    private void triggerSpaceMembershipsRefresh() {
+        if (!SpaceSyncCoordinator.getInstance().tryBegin("groupMembershipChange")) {
+            // 已有 sync 在路上 / 500ms 内已触发过 → drop, 让前一次 sync 的结果覆盖
+            return;
+        }
+        Schedulers.io().scheduleDirect(() -> {
+            WKIM.getInstance().getConversationManager().setSyncConversationListener(result -> {
+                SpaceSyncCoordinator.getInstance().complete();
+            });
+        });
     }
 
     /**

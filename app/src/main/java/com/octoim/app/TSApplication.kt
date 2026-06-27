@@ -61,6 +61,9 @@ class TSApplication : MultiDexApplication() {
             val defaultProcess = processName == getAppPackageName()
             if (defaultProcess) {
                 initAll()
+                // Space 串消息排查: 启动初始上下文 dump. 仅当用户开启过诊断模式才会真正落盘
+                // (DiagSink.isEnabled() 内部 gate, 未开启即纳秒级 no-op).
+                logBootDiagnostics(processName)
             }
         }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
@@ -266,6 +269,49 @@ class TSApplication : MultiDexApplication() {
                 NotificationManager::class.java
             )
             notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Space 串消息排查: 启动时把决策上下文 dump 到诊断日志, 让我们 review 时不用问
+     * 用户"重启时 currentSpaceId 是什么".
+     *
+     * <p>DiagSink 内部 gate, 未开启诊断模式时这些调用是纳秒级 no-op, 不影响冷启动耗时.
+     */
+    private fun logBootDiagnostics(processName: String) {
+        try {
+            com.chat.base.utils.DiagSink.write(
+                "BOOT",
+                "process=" + processName +
+                    " sdk=" + Build.VERSION.SDK_INT +
+                    " device=" + Build.MANUFACTURER + "/" + Build.MODEL +
+                    " appPkg=" + getAppPackageName()
+            )
+        } catch (t: Throwable) {
+            // 防御性: BOOT 路径不能因诊断日志失败而崩
+        }
+        try {
+            val uid = WKConfig.getInstance().uid ?: ""
+            val currentSpaceId = com.chat.base.space.SpaceFilter.getCurrentSpaceId()
+            val currentSpaceName = com.chat.base.space.SpaceNameLookup.nameOf(currentSpaceId)
+            // appconfig 可能还未加载, 容错读
+            val sysBotsCount = try {
+                WKConfig.getInstance().appConfig?.system_bot_uids?.size ?: -1
+            } catch (t: Throwable) {
+                -1
+            }
+            com.chat.base.utils.DiagSink.write(
+                "BOOT",
+                "uid.len=" + uid.length +
+                    " currentSpaceId='" + currentSpaceId + "'" +
+                    " currentSpaceName='" + (currentSpaceName ?: "") + "'" +
+                    " systemBotsCount=" + sysBotsCount
+            )
+        } catch (t: Throwable) {
+            com.chat.base.utils.DiagSink.write(
+                "BOOT",
+                "read uid/space failed: " + t.javaClass.simpleName + ":" + t.message
+            )
         }
     }
 

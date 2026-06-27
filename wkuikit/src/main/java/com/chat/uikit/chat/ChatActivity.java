@@ -101,6 +101,7 @@ import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.NumberTextView;
 import com.chat.base.ui.components.SystemMsgBackgroundColorSpan;
+import com.chat.base.ui.components.AvatarView;
 import com.chat.base.utils.ActManagerUtils;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.LayoutHelper;
@@ -174,6 +175,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -910,6 +912,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
             if ((member != null && member.isDeleted == 1) || channelType == WKChannelType.CUSTOMER_SERVICE)
                 return;
+            // 对齐 iOS：点击群聊顶部标题/头像区域时主动翻新头像 cacheKey，
+            // 让列表 / 头部 AvatarView 重新加载，绕过服务端不下发 avatar_cache_key 的限制。
+            if (channelType == WKChannelType.GROUP) {
+                WKChannel ch = WKIM.getInstance().getChannelManager().getChannel(channelId, channelType);
+                if (ch != null) {
+                    AvatarView.clearCache(channelId, channelType);
+                    ch.avatarCacheKey = UUID.randomUUID().toString().replace("-", "");
+                    WKIM.getInstance().getChannelManager().setRefreshChannel(ch, true);
+                }
+            }
             Intent intent;
             if (channelType == WKChannelType.COMMUNITY_TOPIC) {
                 intent = new Intent(ChatActivity.this, ThreadDetailActivity.class);

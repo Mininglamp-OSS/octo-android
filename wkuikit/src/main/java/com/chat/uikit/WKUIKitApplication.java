@@ -206,6 +206,20 @@ public class WKUIKitApplication {
         // 必须在 WKIM 的首次连接成功回调之前完成——放到同步 init 段开头最安全。
         com.chat.uikit.chat.SpaceSyncCoordinator.installSyncGate();
 
+        // Space 串消息诊断日志 — wkbase 不能反向依赖 wkuikit, 用 install 桥让
+        // SpaceFilter 日志能反查 Space 名. SpaceModel 缓存为 null 时返回 null,
+        // 不触发网络请求, 永远安全.
+        com.chat.base.space.SpaceNameLookup.install(spaceId -> {
+            if (spaceId == null || spaceId.isEmpty()) return null;
+            java.util.List<com.chat.uikit.space.SpaceEntity> list =
+                    com.chat.uikit.space.SpaceModel.getInstance().getCachedSpaces();
+            if (list == null) return null;
+            for (com.chat.uikit.space.SpaceEntity s : list) {
+                if (s != null && spaceId.equals(s.space_id)) return s.name;
+            }
+            return null;
+        });
+
         //  (P-04) · App Startup Initializer 分阶段化
         //   Phase-A（同步，上面已完成）：initKitModuleListener——纯内存映射，必须在
         //       Intent 到达 ChatActivity 之前就绪。
@@ -221,12 +235,17 @@ public class WKUIKitApplication {
         //
         // initIM() 必须同步执行：ViewPager2 重构后 ChatFragment 布局阶段即触发 DB 查询，
         // 若 initIM 仍在后台异步，重启时 UI 跑在 init 前面导致会话列表空白。
+        //
+        // initIMListener() 也必须同步执行（与 initIM 同帧）：
+        //   addOnSyncConversationListener 在这里注册。如果异步化（如曾经的 postPhaseB），
+        //   WKConnection 连接成功后 SyncGate.allow→setSyncConversationListener 会因
+        //   iSyncConversationChat==null 静默 return，SyncGate.done() 永不调用 →
+        //   permit 锁死 10s（STUCK_RESET_MS），ChatFragment 冷启动会话列表
+        //   只剩 SYSTEM_BOTS 兜底的 3-4 个 Bot。ConversationManager 侧已加
+        //   onBack(null) 兜底，这里再做主防：listener 必须在连接之前就位。
         parseLocalSensitiveWords();
         initIM();
-
-        AppStartup.postPhaseB("wkim", () -> {
-            WKIMUtils.getInstance().initIMListener();
-        });
+        WKIMUtils.getInstance().initIMListener();
 
         // Phase-C — sensitive_words / prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
         AppStartup.postPhaseC("post-wkim-idle", () -> {

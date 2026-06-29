@@ -631,5 +631,17 @@
     <string name="str_webhook_github_step1">仓库 → Settings → Webhooks → Add webhook</string>
     <string name="str_webhook_github_step2">Payload URL 粘贴上面地址，Content type 选 application/json</string>
     <string name="str_webhook_github_step3">勾选需要接收的事件（如 push、pull_request），保存</string>
+    <string name="channel_search_offline_banner">服务端暂不可用，显示本地结果</string>
+    <string name="channel_search_rate_limited">搜索过于频繁，请稍后重试</string>
+    <string name="channel_search_disabled">搜索功能未开启</string>
+    <string name="channel_search_not_found">该频道无法搜索</string>
+    <string name="channel_search_generic_error">搜索失败，请重试</string>
+    <string name="channel_search_tab_all">全部</string>
+    <string name="channel_search_tab_message">消息</string>
+    <string name="channel_search_tab_media">媒体</string>
+    <string name="channel_search_tab_file">文件</string>
+    <string name="channel_search_empty_keyword">输入关键词搜索</string>
+    <string name="channel_search_empty_media_browse">该频道暂无图片或视频</string>
+    <string name="channel_search_empty_file_browse">该频道暂无文件</string>
 </resources>
 

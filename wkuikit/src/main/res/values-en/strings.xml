@@ -633,5 +633,17 @@
     <string name="str_webhook_github_step1">Repo → Settings → Webhooks → Add webhook</string>
     <string name="str_webhook_github_step2">Paste the URL into Payload URL, set Content type to application/json</string>
     <string name="str_webhook_github_step3">Select events (e.g. push, pull_request) and save</string>
+    <string name="channel_search_offline_banner">Server unavailable, showing local results</string>
+    <string name="channel_search_rate_limited">Too many searches, please wait a moment</string>
+    <string name="channel_search_disabled">Search is not enabled</string>
+    <string name="channel_search_not_found">This channel is not searchable</string>
+    <string name="channel_search_generic_error">Search failed, please retry</string>
+    <string name="channel_search_tab_all">All</string>
+    <string name="channel_search_tab_message">Messages</string>
+    <string name="channel_search_tab_media">Media</string>
+    <string name="channel_search_tab_file">Files</string>
+    <string name="channel_search_empty_keyword">Enter a keyword to search</string>
+    <string name="channel_search_empty_media_browse">No images or videos in this channel</string>
+    <string name="channel_search_empty_file_browse">No files in this channel</string>
 </resources>
 

@@ -32,7 +32,7 @@ import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
 import com.chat.uikit.chat.provider.WKFileProvider
-import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKChannelType
 
 /**
  * `/_search_all` 混排结果适配器。message / file 两种 result_type 分别走不同 item 布局。
@@ -70,7 +70,8 @@ class ChannelCombinedHitAdapter(
     private fun bindMessage(holder: BaseViewHolder, hit: MessageHit) {
         val avatar = holder.getView<AvatarView>(R.id.avatarView)
         avatar.setSize(40f)
-        avatar.showAvatar(channelID, channelType)
+        // 与 SearchMessageAdapter 一致：搜索结果展示发送人头像，而非频道头像。
+        avatar.showAvatar(hit.sender_id, WKChannelType.PERSONAL)
         holder.setText(R.id.nameTv, channelName)
 
         val contentTv = holder.getView<TextView>(R.id.contentTv)

@@ -71,6 +71,12 @@ abstract class BaseChannelSearchFragment : Fragment() {
     /** 命中关键词但服务端返回空时的文案。 */
     protected open val emptyResultHintRes: Int = R.string.nodata
 
+    /**
+     * 关键词为空时是否仍然向服务端请求"按时间倒序浏览"。
+     * 媒体 / 文件 tab 覆写为 true，与 web/iOS 行为对齐——清空关键词后展示该频道的全部媒体/文件。
+     */
+    protected open val supportsBrowseWithoutKeyword: Boolean = false
+
     protected abstract fun setupRecyclerView(recyclerView: RecyclerView)
 
     protected abstract fun resetList()
@@ -127,11 +133,9 @@ abstract class BaseChannelSearchFragment : Fragment() {
         nextCursor = null
         hasMore = true
         showOfflineBanner(false)
-        if (keyword.isEmpty()) {
-            // 清空关键词 == 完全重置：列表清空、cursor 归零、loadMore 关闭、回到引导文案。
-            // 与 Activity 顶部"清空回到快捷过滤入口"的语义保持一致；
-            // 即使 [supportsBrowseWithoutKeyword]=true（媒体 / 文件 tab）也不做无关键词浏览，
-            // 避免清空后台仍在拉取造成视觉跳动。
+        if (keyword.isEmpty() && !supportsBrowseWithoutKeyword) {
+            // 仅消息相关 tab 在清空关键词时回到引导文案；媒体 / 文件 tab 通过 supportsBrowseWithoutKeyword
+            // 显式声明无关键词浏览能力，避免出现"清空后台仍在拉取"的视觉跳动。
             resetList()
             showEmpty(getString(emptyKeywordHintRes))
             binding.refreshLayout.setEnableLoadMore(false)

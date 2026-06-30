@@ -42,6 +42,7 @@ class ChannelSearchMediaFragment : BaseChannelSearchFragment() {
     private val allMedia = ArrayList<MediaHit>()
 
     override val emptyResultHintRes = R.string.nodata
+    override val supportsBrowseWithoutKeyword: Boolean = true
 
     override fun setupRecyclerView(recyclerView: RecyclerView) {
         val cellSize = (resources.displayMetrics.widthPixels - AndroidUtilities.dp(4f)) / GRID_SPAN

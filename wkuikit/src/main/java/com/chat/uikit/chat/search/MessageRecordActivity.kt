@@ -152,7 +152,9 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable) {
                 val text = s.toString()
-                if (TextUtils.isEmpty(text)) {
+                // 进入过 4-tab 结果页之后就锁死；清空关键词不要再退回快捷入口，
+                // 让媒体 / 文件 tab 继续按 supportsBrowseWithoutKeyword 浏览全部。
+                if (text.isEmpty() && !resultPagerReady) {
                     showEmptyState()
                 } else {
                     showResultState()

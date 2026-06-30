@@ -17,6 +17,7 @@
 package com.chat.uikit.chat.search.channel.adapter
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -67,12 +68,18 @@ class ChannelMediaHitAdapter(private val cellSize: Int) :
         when (item) {
             is Entry.Header -> holder.setText(R.id.monthHeaderTv, item.monthBucket)
             is Entry.Item -> {
+                // 把单元格 root 撑到 cellSize × cellSize：仅改 ImageView 大小不够，因为 layout 根布局
+                // 以前用 match_parent，会让 GridLayoutManager 把整行拉到 RV 高度，出现"上面一行全是空白"的现象。
+                val root = holder.itemView
+                root.layoutParams = (root.layoutParams ?: ViewGroup.LayoutParams(cellSize, cellSize))
+                    .also { it.width = cellSize; it.height = cellSize }
                 val iv = holder.getView<ImageView>(R.id.thumbIv)
-                iv.layoutParams.width = cellSize
-                iv.layoutParams.height = cellSize
                 GlideUtils.getInstance().showImg(context, item.hit.thumb_url, iv)
+                val playIv = holder.getView<ImageView>(R.id.playIv)
                 val durationTv = holder.getView<TextView>(R.id.durationTv)
-                if (item.hit.isVideo() && item.hit.duration_ms > 0) {
+                val isVideo = item.hit.isVideo()
+                playIv.visibility = if (isVideo) View.VISIBLE else View.GONE
+                if (isVideo && item.hit.duration_ms > 0) {
                     durationTv.text = formatDuration(item.hit.duration_ms)
                     durationTv.visibility = View.VISIBLE
                 } else {

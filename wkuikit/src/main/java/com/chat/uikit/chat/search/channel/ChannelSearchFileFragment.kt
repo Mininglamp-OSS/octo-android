@@ -39,6 +39,7 @@ class ChannelSearchFileFragment : BaseChannelSearchFragment() {
     private lateinit var adapter: ChannelFileHitAdapter
 
     override val emptyResultHintRes = R.string.nodata
+    override val supportsBrowseWithoutKeyword: Boolean = true
 
     override fun setupRecyclerView(recyclerView: RecyclerView) {
         adapter = ChannelFileHitAdapter()

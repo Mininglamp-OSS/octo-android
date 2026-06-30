@@ -99,6 +99,19 @@
                 <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/findContentLayout"
+                style="@style/layoutBg"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/leftTextView"
+                    android:layout_weight="1"
+                    android:text="@string/find_chat_content" />
+
+                <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/archiveBtn"
                 android:layout_width="match_parent"

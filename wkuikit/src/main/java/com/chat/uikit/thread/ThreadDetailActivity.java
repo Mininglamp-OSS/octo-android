@@ -32,6 +32,7 @@ import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.base.utils.singleclick.SingleClickUtil;
 import com.chat.uikit.R;
+import com.chat.uikit.chat.search.MessageRecordActivity;
 import com.chat.uikit.databinding.ActThreadDetailLayoutBinding;
 import com.chat.uikit.group.GroupMdActivity;
 import com.chat.base.msgitem.WKChannelMemberRole;
@@ -148,6 +149,17 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
             intent.putExtra("channelId", channelId);
             intent.putExtra("channelType", WKChannelType.COMMUNITY_TOPIC);
             intent.putExtra("canEdit", isCreator || isGroupAdmin);
+            startActivity(intent);
+        });
+
+        SingleClickUtil.onSingleClick(wkVBinding.findContentLayout, v -> {
+            // 子区"查找聊天记录"入口：直接复用群聊/单聊同一个 Activity，
+            // 传入子区复合 channelId（{groupNo}____{shortId}）+ channel_type=5。
+            // 数据层 ChannelSearchModel 不需要区分 channel_type，服务端在
+            // /v1/messages/_search* 内部识别 thread。
+            Intent intent = new Intent(this, MessageRecordActivity.class);
+            intent.putExtra("channel_id", channelId);
+            intent.putExtra("channel_type", WKChannelType.COMMUNITY_TOPIC);
             startActivity(intent);
         });
 

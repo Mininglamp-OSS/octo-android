@@ -241,6 +241,11 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 if (addType == 1) {
                     GroupModel.getInstance().addGroupMembers(groupId, ids, names, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
+                            // 增量 sync + 校验被邀请 uid 是否落盘, 缺才 v=0 全量.
+                            // 兼两个场景: (1) 服务端 bot invite 分配错误 version 导致增量拉不到;
+                            // (2) 重复邀请已在群成员时 server 静默 success 不 bump version 也不发 1002.
+                            // 正常加真人 (server bump version + 发 1002) 只多一次增量, 不触发全量.
+                            GroupModel.getInstance().groupMembersSyncAndVerify(groupId, ids);
                             setResult(RESULT_OK);
                             finish();
                         } else {
@@ -252,6 +257,8 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
                 } else {
                     GroupModel.getInstance().inviteGroupMembers(groupId, ids, (code, msg) -> {
                         if (code == HttpResponseCode.success) {
+                            // 同 addGroupMembers: 增量 + 校验, 缺才全量.
+                            GroupModel.getInstance().groupMembersSyncAndVerify(groupId, ids);
                             WKToastUtils.getInstance().showToast(getString(R.string.invitation_sent));
                             setResult(RESULT_OK);
                             finish();

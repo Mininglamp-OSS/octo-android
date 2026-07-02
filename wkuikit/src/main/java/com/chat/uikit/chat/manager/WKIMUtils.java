@@ -260,8 +260,23 @@ public class WKIMUtils {
                         // payload: {type:1002, content, extra:[{uid,name},...]}, iOS 解析参考
                         // WKSystemMessageCell.m:80-102). 只有 my uid 在 extra 列表里时才触发 sync,
                         // 否则是其他成员被加, 我的 memberships 没变.
-                        GroupModel.getInstance().groupMembersSync(msgList.get(i).channelID, null);
-                        if (isMyUidInGroupMemberMsgExtra(msgList.get(i))) {
+                        //
+                        // C+ 兜底 (bot invite 服务端 version 分配 bug):
+                        // 服务端给 bot invite 分配的 channel_member.version 会低于群内真人
+                        // 当前 max (实测 low ~1000, 稳定复现于多个群), 走
+                        // `WHERE version > local_max` 的增量 sync 永远拉不到该 row.
+                        // iOS 通过打开群设置时调 `/groups/xx/members` (无 version 过滤)
+                        // upsert 自愈, Android SDK 只对 super group 走这条路径 (
+                        // ChannelMembersManager.getWithPageOrSearch 里 `if (groupType==1)`).
+                        // 兜底: 走 groupMembersSyncAndVerify — 增量拉完后校验 1002 extra
+                        // 里被邀请的 uid 是否落盘, 缺任何一个即触发 v=0 全量 upsert.
+                        // extra 解析失败传 null, 保守走全量 (对齐 iOS 群设置页自愈语义).
+                        final com.xinbida.wukongim.entity.WKMsg addMsg = msgList.get(i);
+                        final java.util.List<String> invitedUids = parseGroupMemberAddExtraUids(addMsg);
+                        GroupModel.getInstance().groupMembersSyncAndVerify(
+                                addMsg.channelID,
+                                invitedUids.isEmpty() ? null : invitedUids);
+                        if (isMyUidInGroupMemberMsgExtra(addMsg)) {
                             needsMembershipRefresh = true;
                         }
                     } else if (msgList.get(i).type == WKContentType.removeGroupMembersMsg) {
@@ -1010,6 +1025,32 @@ public class WKIMUtils {
             // 实际生产中 server 格式稳定, 走这条路径的概率近 0.
         }
         return false;
+    }
+
+    /**
+     * 解析 1002 群加人消息 {@code content.extra[].uid} 列表.
+     * 用于 C+ 兜底: 增量 sync 完成后校验这些 uid 是否落盘, 缺失即触发 v=0 全量.
+     *
+     * <p>返回空列表 (而不是 null) 便于调用方直接 {@code isEmpty()} 判定.
+     * JSON 解析异常时同样返回空列表, 调用方应当把 "空" 视作 "无法确认已落盘"
+     * 从而保守触发全量 (对齐 iOS 群设置页自愈的语义, 宁可多拉一次).
+     */
+    private java.util.List<String> parseGroupMemberAddExtraUids(WKMsg msg) {
+        java.util.List<String> uids = new java.util.ArrayList<>();
+        if (msg == null || TextUtils.isEmpty(msg.content)) return uids;
+        try {
+            JSONObject json = new JSONObject(msg.content);
+            JSONArray extra = json.optJSONArray("extra");
+            if (extra == null) return uids;
+            for (int i = 0, n = extra.length(); i < n; i++) {
+                JSONObject item = extra.optJSONObject(i);
+                if (item == null) continue;
+                String uid = item.optString("uid");
+                if (!TextUtils.isEmpty(uid)) uids.add(uid);
+            }
+        } catch (Throwable ignored) {
+        }
+        return uids;
     }
 
     /**

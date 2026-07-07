@@ -23,39 +23,50 @@ import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 import com.chad.library.adapter.base.BaseQuickAdapter
+import com.chat.base.adapter.WKFragmentStateAdapter
 import com.chat.base.base.WKBaseActivity
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
-import com.chat.base.endpoint.EndpointSID
-import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.endpoint.entity.SearchChatContentMenu
-import com.chat.base.entity.GlobalMessage
-import com.chat.base.entity.GlobalSearchReq
-import com.chat.base.msgitem.WKContentType
-import com.chat.base.net.HttpResponseCode
-import com.chat.base.search.GlobalSearchModel
 import com.chat.base.ui.Theme
 import com.chat.base.utils.SoftKeyboardUtils
-import com.chat.base.utils.WKReader
 import com.chat.base.views.FullyGridLayoutManager
 import com.chat.uikit.R
+import com.chat.uikit.chat.search.channel.ChannelSearchAllFragment
+import com.chat.uikit.chat.search.channel.ChannelSearchFileFragment
+import com.chat.uikit.chat.search.channel.ChannelSearchMediaFragment
+import com.chat.uikit.chat.search.channel.ChannelSearchMessageFragment
+import com.chat.uikit.chat.search.channel.ChannelSearchViewModel
 import com.chat.uikit.databinding.ActMessageRecordLayoutBinding
-import com.scwang.smart.refresh.layout.api.RefreshLayout
-import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
-import com.xinbida.wukongim.WKIM
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
-import com.xinbida.wukongim.entity.WKMsg
 
+/**
+ * 频道内搜索（聊天页"查找聊天记录"入口）。
+ *
+ * Phase 2.1 与微信对齐：
+ *  - 空态：显示原有「按成员 / 日期 / 图片 / 文件」快捷过滤入口（[searchTypeLayout]）；
+ *  - 用户输入关键词后：隐藏快捷入口，切换到 4-tab 结果页（[searchResultLayout]：全部 / 消息 / 媒体 / 文件）。
+ *
+ * 内部仍走 [ChannelSearchViewModel]：keyword 经 300ms debounce 后通过 SharedFlow 通知 Fragment 重置查询。
+ * Intent 协议与 Phase 1 完全兼容：`channel_id` + `channel_type` (+ 可选 `keyword`)。
+ */
 class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
     private lateinit var channelID: String
     private var channelType: Byte = WKChannelType.PERSONAL
+    private var initialKeyword: String = ""
+
     private lateinit var searchTypeAdapter: SearchTypeAdapter
-    private lateinit var messageAdapter: SearchMessageAdapter
-    private var keyword = ""
-    private var page = 1
+    private var resultPagerReady = false
+
+    private val viewModel: ChannelSearchViewModel by viewModels()
+
     override fun getViewBinding(): ActMessageRecordLayoutBinding {
         return ActMessageRecordLayoutBinding.inflate(layoutInflater)
     }
@@ -63,49 +74,69 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
     override fun initPresenter() {
         channelID = intent.getStringExtra("channel_id")!!
         channelType = intent.getByteExtra("channel_type", WKChannelType.PERSONAL)
-        keyword = intent.getStringExtra("keyword") ?: ""
+        initialKeyword = intent.getStringExtra("keyword") ?: ""
     }
 
     override fun initView() {
         Theme.setPressedBackground(wkVBinding.cancelTv)
-        wkVBinding.refreshLayout.setEnableRefresh(false)
-        wkVBinding.refreshLayout.setEnableLoadMore(true)
         wkVBinding.searchIv.colorFilter = PorterDuffColorFilter(
-            ContextCompat.getColor(
-                this, R.color.popupTextColor
-            ), PorterDuff.Mode.MULTIPLY
+            ContextCompat.getColor(this, R.color.popupTextColor), PorterDuff.Mode.MULTIPLY
         )
-        messageAdapter = SearchMessageAdapter()
-        initAdapter(wkVBinding.recyclerView, messageAdapter)
-        val channel = WKChannel()
-        channel.channelID = channelID
-        channel.channelType = channelType
+
+        setupTypeFilterRow()
+        // 4-tab 容器懒装配：只在用户首次输入关键词时才 attach，避免空态加载 Fragment 浪费。
+    }
+
+    private fun setupTypeFilterRow() {
+        val channel = WKChannel().apply {
+            channelID = this@MessageRecordActivity.channelID
+            channelType = this@MessageRecordActivity.channelType
+        }
         val list = EndpointManager.getInstance()
             .invokes<SearchChatContentMenu>(EndpointCategory.wkSearchChatContent, channel)
         var i = 0
-        val size: Int = list.size
-        while (i < size) {
+        while (i < list.size) {
             if (list[i] == null || TextUtils.isEmpty(list[i].text)) {
                 list.removeAt(i)
-                i--
+                continue
             }
             i++
         }
         searchTypeAdapter = SearchTypeAdapter(list)
-        val layoutManager = FullyGridLayoutManager(this, 3)
-        wkVBinding.typeRecyclerView.layoutManager = layoutManager
+        wkVBinding.typeRecyclerView.layoutManager = FullyGridLayoutManager(this, 3)
         wkVBinding.typeRecyclerView.adapter = searchTypeAdapter
     }
 
-    override fun initListener() {
-        wkVBinding.refreshLayout.setOnRefreshLoadMoreListener(object : OnRefreshLoadMoreListener {
-            override fun onLoadMore(refreshLayout: RefreshLayout) {
-                page++
-                searchMessage()
+    private fun ensureResultPagerAttached() {
+        if (resultPagerReady) return
+        val fragments = listOf<Fragment>(
+            ChannelSearchAllFragment.newInstance(channelID, channelType),
+            ChannelSearchMessageFragment.newInstance(channelID, channelType),
+            ChannelSearchMediaFragment.newInstance(channelID, channelType),
+            ChannelSearchFileFragment.newInstance(channelID, channelType),
+        )
+        val titles = listOf(
+            getString(R.string.channel_search_tab_all),
+            getString(R.string.channel_search_tab_message),
+            getString(R.string.channel_search_tab_media),
+            getString(R.string.channel_search_tab_file),
+        )
+        wkVBinding.searchPager.adapter = WKFragmentStateAdapter(this, fragments)
+        wkVBinding.searchPager.offscreenPageLimit = fragments.size
+        TabLayoutMediator(wkVBinding.searchTabLayout, wkVBinding.searchPager) { tab, pos ->
+            tab.text = titles[pos]
+        }.attach()
+        wkVBinding.searchTabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                viewModel.setTabIndex(tab.position)
             }
-
-            override fun onRefresh(refreshLayout: RefreshLayout) {}
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {}
         })
+        resultPagerReady = true
+    }
+
+    override fun initListener() {
         wkVBinding.searchEt.imeOptions = EditorInfo.IME_ACTION_SEARCH
         wkVBinding.searchEt.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
@@ -114,30 +145,25 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
             }
             false
         }
+        wkVBinding.cancelTv.setOnClickListener { finish() }
 
-        wkVBinding.cancelTv.setOnClickListener { _ -> finish() }
         wkVBinding.searchEt.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
-            }
-
-            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-            }
-
+            override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable) {
-                keyword = s.toString()
-                if (TextUtils.isEmpty(keyword)) {
-                    wkVBinding.resultView.visibility = View.GONE
-                    wkVBinding.searchTypeLayout.visibility = View.VISIBLE
+                val text = s.toString()
+                // 进入过 4-tab 结果页之后就锁死；清空关键词不要再退回快捷入口，
+                // 让媒体 / 文件 tab 继续按 supportsBrowseWithoutKeyword 浏览全部。
+                if (text.isEmpty() && !resultPagerReady) {
+                    showEmptyState()
                 } else {
-                    page = 1
-                    searchMessage()
-                    wkVBinding.resultView.visibility = View.VISIBLE
-                    wkVBinding.searchTypeLayout.visibility = View.GONE
+                    showResultState()
                 }
+                viewModel.setKeyword(text)
             }
         })
 
-        searchTypeAdapter.setOnItemClickListener { adapter1: BaseQuickAdapter<*, *>, _: View?, position: Int ->
+        searchTypeAdapter.setOnItemClickListener { adapter1: BaseQuickAdapter<*, *>, _, position ->
             val menu = adapter1.data[position] as SearchChatContentMenu?
             if (menu?.iClick != null) {
                 SoftKeyboardUtils.getInstance().hideSoftKeyboard(this)
@@ -145,104 +171,23 @@ class MessageRecordActivity : WKBaseActivity<ActMessageRecordLayoutBinding>() {
             }
         }
 
-        messageAdapter.setOnItemClickListener { adapter1: BaseQuickAdapter<*, *>, _: View?, position: Int ->
-            val item = adapter1.getItem(position) as GlobalMessage?
-            if (item != null) {
-                val orderSeq = WKIM.getInstance().msgManager.getMessageOrderSeq(
-                    item.message_seq,
-                    item.channel.channel_id,
-                    item.channel.channel_type
-                )
-                SoftKeyboardUtils.getInstance().hideSoftKeyboard(this)
-                EndpointManager.getInstance().invoke(
-                    EndpointSID.chatView,
-                    ChatViewMenu(
-                        this,
-                        item.channel.channel_id,
-                        item.channel.channel_type,
-                        orderSeq,
-                        false
-                    )
-                )
-            }
-        }
-
-        if (keyword.isNotEmpty()) {
-            wkVBinding.searchEt.setText(keyword)
-            wkVBinding.searchEt.setSelection(keyword.length)
+        if (!TextUtils.isEmpty(initialKeyword)) {
+            wkVBinding.searchEt.setText(initialKeyword)
+            wkVBinding.searchEt.setSelection(initialKeyword.length)
+            // setText 已触发 TextWatcher，会走 showResultState + setKeyword
+        } else {
+            showEmptyState()
         }
     }
 
-    fun searchMessage() {
-        messageAdapter.keyword = keyword
-        // 本地搜索
-        val localMsgs = WKIM.getInstance().msgManager.searchWithChannel(keyword, channelID, channelType)
-        val localMessages = ArrayList<GlobalMessage>()
-        if (WKReader.isNotEmpty(localMsgs)) {
-            for (msg in localMsgs) {
-                val gm = GlobalMessage()
-                gm.message_seq = msg.messageSeq.toLong()
-                gm.from_uid = msg.fromUID ?: ""
-                gm.timestamp = msg.timestamp
-                val payloadMap = HashMap<String, Any>()
-                payloadMap["type"] = msg.type
-                payloadMap["content"] = msg.searchableWord?.takeIf { it.isNotEmpty() }
-                    ?: msg.baseContentMsgModel?.getSearchableWord()
-                    ?: ""
-                gm.payload = payloadMap
-                val gc = com.chat.base.entity.GlobalChannel()
-                gc.channel_id = channelID
-                gc.channel_type = channelType
-                val ch = WKIM.getInstance().channelManager.getChannel(channelID, channelType)
-                gc.channel_name = ch?.channelRemark?.takeIf { it.isNotEmpty() }
-                    ?: ch?.channelName ?: ""
-                gm.channel = gc
-                localMessages.add(gm)
-            }
-        }
+    private fun showEmptyState() {
+        wkVBinding.searchTypeLayout.visibility = View.VISIBLE
+        wkVBinding.searchResultLayout.visibility = View.GONE
+    }
 
-        // 远程 API 搜索
-        val contentType = ArrayList<Int>()
-        contentType.add(WKContentType.WK_TEXT)
-        contentType.add(WKContentType.WK_FILE)
-        val req =
-            GlobalSearchReq(1, keyword, channelID, channelType, "", "", contentType, page, 20, 0, 0)
-
-        GlobalSearchModel.search(req) { code, _, resp ->
-            wkVBinding.refreshLayout.finishRefresh()
-            wkVBinding.refreshLayout.finishLoadMore()
-
-            val merged = ArrayList<GlobalMessage>()
-            val seenSeqs = HashSet<Long>()
-
-            // 本地结果优先
-            if (page == 1) {
-                for (m in localMessages) {
-                    if (seenSeqs.add(m.message_seq)) merged.add(m)
-                }
-            }
-
-            // API 结果去重合并
-            if (code == HttpResponseCode.success && resp != null && WKReader.isNotEmpty(resp.messages)) {
-                for (m in resp.messages) {
-                    if (seenSeqs.add(m.message_seq)) merged.add(m)
-                }
-            }
-
-            if (merged.isEmpty()) {
-                wkVBinding.refreshLayout.setEnableLoadMore(false)
-                if (page == 1) {
-                    messageAdapter.setList(ArrayList())
-                    wkVBinding.noDataTv.visibility = View.VISIBLE
-                }
-                return@search
-            }
-            wkVBinding.noDataTv.visibility = View.GONE
-            if (page == 1) {
-                messageAdapter.setList(merged)
-            } else {
-                messageAdapter.addData(merged)
-            }
-        }
+    private fun showResultState() {
+        wkVBinding.searchTypeLayout.visibility = View.GONE
+        ensureResultPagerAttached()
+        wkVBinding.searchResultLayout.visibility = View.VISIBLE
     }
 }

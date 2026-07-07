@@ -88,42 +88,30 @@
     </LinearLayout>
 
     <LinearLayout
-        android:id="@+id/resultView"
+        android:id="@+id/searchResultLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginTop="20dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="vertical"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/noDataTv"
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/searchTabLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="30dp"
-            android:gravity="center"
-            android:visibility="gone"
-            android:text="@string/nodata" />
+            android:layout_marginTop="6dp"
+            android:background="@color/homeColor"
+            app:tabIndicatorColor="@color/popupTextColor"
+            app:tabIndicatorFullWidth="false"
+            app:tabMode="fixed"
+            app:tabSelectedTextColor="@color/popupTextColor"
+            app:tabTextColor="@color/color999" />
 
-        <com.scwang.smart.refresh.layout.SmartRefreshLayout
-            android:id="@+id/refreshLayout"
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/searchPager"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/transparent"
-            app:srlEnableFooterFollowWhenLoadFinished="true"
-            app:srlEnableScrollContentWhenLoaded="true">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/transparent"
-                android:visibility="visible" />
-
-            <com.scwang.smart.refresh.footer.ClassicsFooter
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@color/homeColor"
-                app:srlTextNothing="@string/refresh_footer" />
-        </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@color/homeColor" />
     </LinearLayout>
 </LinearLayout>

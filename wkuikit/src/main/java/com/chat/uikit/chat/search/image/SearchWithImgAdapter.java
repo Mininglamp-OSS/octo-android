@@ -16,6 +16,7 @@
 
 package com.chat.uikit.chat.search.image;
 
+import android.view.View;
 import android.widget.ImageView;
 
 import androidx.recyclerview.widget.RecyclerView;
@@ -27,6 +28,7 @@ import com.chat.base.glide.GlideUtils;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.views.pinnedsectionitemdecoration.utils.FullSpanUtil;
 import com.chat.uikit.R;
+import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -70,6 +72,8 @@ class SearchWithImgAdapter extends BaseMultiItemQuickAdapter<SearchImgEntity, Ba
                 imageView.getLayoutParams().width = wH;
                 imageView.getLayoutParams().height = wH;
                 GlideUtils.getInstance().showImg(getContext(), chatImgEntity.url, imageView);
+                ImageView playIv = baseViewHolder.getView(R.id.playIv);
+                playIv.setVisibility(chatImgEntity.originalContent instanceof WKVideoContent ? View.VISIBLE : View.GONE);
                 List<PopupMenuItem> list = new ArrayList<>();
                 list.add(new PopupMenuItem(getContext().getString(R.string.forward), R.mipmap.msg_forward, () -> iLick.onForward(chatImgEntity)));
                 list.add(new PopupMenuItem(getContext().getString(R.string.uikit_go_to_chat_item), R.mipmap.msg_message, () -> iLick.onClick(chatImgEntity)));

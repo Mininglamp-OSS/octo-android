@@ -30,6 +30,8 @@ public class SearchImgEntity implements MultiItemEntity {
     public WKMessageContent originalContent;
     public String url;
     public String date;
+    /** API 切换后 sender_name 不再来自本地 channel，存一份给收藏等回调使用。 */
+    public String senderName;
 //    public String clientMsgNo;
 //    public long oldestOrderSeq;
 //    public WKMessageContent messageContent;

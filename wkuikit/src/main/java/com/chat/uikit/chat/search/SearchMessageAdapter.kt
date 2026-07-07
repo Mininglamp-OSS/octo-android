@@ -30,6 +30,7 @@ import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
 import com.chat.uikit.chat.provider.WKFileProvider
 import com.chat.uikit.search.remote.GlobalAdapter
+import com.xinbida.wukongim.entity.WKChannelType
 
 class SearchMessageAdapter :
     BaseQuickAdapter<GlobalMessage, BaseViewHolder>(R.layout.item_global_message_layout) {
@@ -39,7 +40,10 @@ class SearchMessageAdapter :
     override fun convert(holder: BaseViewHolder, item: GlobalMessage) {
         val avatarView = holder.getView<AvatarView>(R.id.avatarView)
         avatarView.setSize(40f)
-        avatarView.showAvatar(item.channel.channel_id, item.channel.channel_type)
+        // 频道内搜索结果每行展示发送人头像（与 web / iOS 对齐）。
+        // 原本展示 channel 头像在群里是群头像、在子区里无头像，所有行视觉一致但信息量低；
+        // 改为发送人头像后每行明确"谁发的"，子区也不会再出现空头像。
+        avatarView.showAvatar(item.from_uid, WKChannelType.PERSONAL)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             holder.setText(
                 R.id.nameTv,

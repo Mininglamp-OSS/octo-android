@@ -32,18 +32,19 @@ import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.ChatChooseContacts;
 import com.chat.base.endpoint.entity.ChatViewMenu;
 import com.chat.base.endpoint.entity.ChooseChatMenu;
+import com.chat.base.entity.GlobalChannel;
 import com.chat.base.entity.GlobalMessage;
-import com.chat.base.entity.GlobalSearchReq;
 import com.chat.base.entity.ImagePopupBottomSheetItem;
 import com.chat.base.foldable.PaneMetrics;
 import com.chat.base.msgitem.WKContentType;
-import com.chat.base.net.HttpResponseCode;
-import com.chat.base.search.GlobalSearchModel;
-import com.chat.base.ui.Theme;
+import com.chat.base.search.channel.ChannelSearchModel;
+import com.chat.base.search.channel.Rfc3339;
+import com.chat.base.search.channel.dto.ChannelSearchReq;
+import com.chat.base.search.channel.dto.MediaHit;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.utils.WKDialogUtils;
 import com.chat.base.utils.WKReader;
-import com.chat.base.utils.WKTimeUtils;
+import com.chat.base.utils.WKToastUtils;
 import com.chat.base.views.CustomImageViewerPopup;
 import com.chat.base.views.FullyGridLayoutManager;
 import com.chat.base.views.pinnedsectionitemdecoration.PinnedHeaderItemDecoration;
@@ -57,16 +58,12 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
-import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
 import com.xinbida.wukongim.msgmodel.WKMessageContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 3/23/21 10:07 AM
@@ -76,8 +73,9 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     private String channelID;
     private byte channelType;
     private SearchWithImgAdapter adapter;
-    private int page = 1;
-    private final Set<Long> seenSeqs = new HashSet<>();
+    private String nextCursor = null;
+    private boolean hasMore = true;
+    private boolean loading = false;
 
     @Override
     protected ActSearchMsgImgLayoutBinding getViewBinding() {
@@ -120,13 +118,11 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     @Override
     protected void initListener() {
         getData();
-        
+
         wkVBinding.refreshLayout.setEnableRefresh(false);
         wkVBinding.refreshLayout.setOnRefreshLoadMoreListener(new OnRefreshLoadMoreListener() {
             @Override
             public void onLoadMore(@NonNull RefreshLayout refreshLayout) {
-                //  oldestOrderSeq = adapter.getData().get(adapter.getData().size() - 1).oldestOrderSeq;
-                page++;
                 getData();
             }
 
@@ -138,7 +134,12 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
         adapter.addChildClickViewIds(R.id.imageView);
         adapter.setOnItemChildClickListener((adapter1, view1, position) -> {
             SearchImgEntity entity = (SearchImgEntity) adapter1.getData().get(position);
-            if (entity != null && entity.getItemType() == 0) {
+            if (entity == null || entity.getItemType() != 0) return;
+            // 视频跳过大图浏览器（图片专用），直接跳到聊天页查看原视频；
+            // 没有 server 封面时大图也只是空白，体验更差。
+            if (entity.originalContent instanceof WKVideoContent) {
+                showInChat(entity.message);
+            } else {
                 showImg(entity.url, (ImageView) view1);
             }
         });
@@ -150,12 +151,13 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
         List<Object> urlList = new ArrayList<>();
         List<ImageView> imgList = new ArrayList<>();
         for (int i = 0, size = adapter.getData().size(); i < size; i++) {
-            if (adapter.getData().get(i).getItemType() == 0) {
-                tempImgList.add(adapter.getData().get(i));
-                urlList.add(adapter.getData().get(i).url);
-                ImageView imageView1 = (ImageView) adapter.getViewByPosition(i, R.id.imageView);
-                imgList.add(imageView1);
-            }
+            SearchImgEntity item = adapter.getData().get(i);
+            // 大图浏览器只承载图片；视频跳过（视频走 jump-to-chat 路径）。
+            if (item.getItemType() != 0 || !(item.originalContent instanceof WKImageContent)) continue;
+            tempImgList.add(item);
+            urlList.add(item.url);
+            ImageView imageView1 = (ImageView) adapter.getViewByPosition(i, R.id.imageView);
+            imgList.add(imageView1);
         }
         int index = 0;
         for (int i = 0; i < tempImgList.size(); i++) {
@@ -169,7 +171,7 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
         List<ImagePopupBottomSheetItem> bottomEntityArrayList = new ArrayList<>();
         bottomEntityArrayList.add(new ImagePopupBottomSheetItem(getString(R.string.forward), R.mipmap.msg_forward, position -> {
             SearchImgEntity entity = (SearchImgEntity) tempImgList.get(position);
-            if (entity == null || entity.message.getMessageModel() == null) return;
+            if (entity == null || entity.originalContent == null) return;
             forward(entity);
         }));
         bottomEntityArrayList.add(new ImagePopupBottomSheetItem(getString(R.string.uikit_go_to_chat_item), R.mipmap.msg_message, position -> {
@@ -184,9 +186,15 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
             @Override
             public void onFavorite(int position) {
                 SearchImgEntity entity = (SearchImgEntity) tempImgList.get(position);
-                WKMsg msg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(entity.message.client_msg_no);
-                if (msg != null) {
-                    collect(msg);
+                if (entity == null) return;
+                // 切到 API 后本地 DB 可能没有这条消息（这正是本页换接口的初衷）：
+                //  - 先按 server message_id 查本地，命中则走原 WKMsg 路径（带 from channel 完整信息）；
+                //  - 未命中时由 MediaHit 重建的 WKImageContent + entity.message 元数据兜底，仅图片支持。
+                WKMsg localMsg = WKIM.getInstance().getMsgManager().getWithMessageID(entity.message.message_idstr);
+                if (localMsg != null && localMsg.baseContentMsgModel instanceof WKImageContent) {
+                    collect(localMsg);
+                } else if (entity.originalContent instanceof WKImageContent) {
+                    collectFromEntity(entity, (WKImageContent) entity.originalContent);
                 }
             }
 
@@ -202,8 +210,8 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
     private void showInChat(GlobalMessage msg) {
         long orderSeq = WKIM.getInstance().getMsgManager().getMessageOrderSeq(
                 msg.getMessage_seq(),
-                msg.getChannel().getChannel_id(),
-                msg.getChannel().getChannel_type()
+                channelID,
+                channelType
         );
         EndpointManager.getInstance().invoke(EndpointSID.chatView, new ChatViewMenu(SearchWithImgActivity.this, channelID, channelType, orderSeq, false));
     }
@@ -230,17 +238,47 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
         EndpointManager.getInstance().invoke("favorite_add", hashMap);
     }
 
+    /** 本地 DB 没这条 msg 时，直接用 MediaHit 重建的 [entity] 凑出 favorite_add 需要的字段。 */
+    private void collectFromEntity(SearchImgEntity entity, WKImageContent img) {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("content", WKApiConfig.getShowUrl(img.url));
+        jsonObject.put("width", img.width);
+        jsonObject.put("height", img.height);
+        HashMap<String, Object> hashMap = new HashMap<>();
+        hashMap.put("type", WKContentType.WK_IMAGE);
+        String uniqueKey = !TextUtils.isEmpty(entity.message.message_idstr)
+                ? entity.message.message_idstr
+                : "";
+        hashMap.put("unique_key", uniqueKey);
+        hashMap.put("author_uid", entity.message.from_uid != null ? entity.message.from_uid : "");
+        hashMap.put("author_name", entity.senderName != null ? entity.senderName : "");
+        hashMap.put("payload", jsonObject);
+        hashMap.put("activity", this);
+        EndpointManager.getInstance().invoke("favorite_add", hashMap);
+    }
+
     private void forward(SearchImgEntity entity) {
-        WKMessageContent finalWKMessageContent = entity.originalContent != null
-                ? entity.originalContent
-                : entity.message.getMessageModel();
+        WKMessageContent finalWKMessageContent = entity.originalContent;
         if (finalWKMessageContent == null) {
             return;
         }
+        // 视频特别处理：MediaHit 只有 thumb_url（封面），没有真视频 URL；如果直接把合成的
+        // WKVideoContent（url=封面）转发出去，对方收到的"视频"会无法播放。
+        // 兜底：先按 server message_id 查本地 WKMsg，命中就用本地完整内容；查不到提示用户去聊天页操作。
+        if (finalWKMessageContent instanceof WKVideoContent) {
+            WKMsg localMsg = WKIM.getInstance().getMsgManager().getWithMessageID(entity.message.message_idstr);
+            if (localMsg != null && localMsg.baseContentMsgModel instanceof WKVideoContent) {
+                finalWKMessageContent = localMsg.baseContentMsgModel;
+            } else {
+                WKToastUtils.getInstance().showToast(getString(R.string.uikit_video_forward_unavailable));
+                return;
+            }
+        }
+        final WKMessageContent contentToSend = finalWKMessageContent;
         EndpointManager.getInstance().invoke(EndpointSID.showChooseChatView, new ChooseChatMenu(new ChatChooseContacts(list1 -> {
             if (WKReader.isNotEmpty(list1)) {
                 for (WKChannel channel : list1) {
-                    WKIM.getInstance().getMsgManager().send(finalWKMessageContent, channel);
+                    WKIM.getInstance().getMsgManager().send(contentToSend, channel);
                 }
                 ViewGroup viewGroup = (ViewGroup) findViewById(android.R.id.content).getRootView();
                 Snackbar.make(viewGroup, getString(R.string.is_forward), 1000)
@@ -248,137 +286,127 @@ public class SearchWithImgActivity extends WKBaseActivity<ActSearchMsgImgLayoutB
                         })
                         .show();
             }
-        }), finalWKMessageContent));
+        }), contentToSend));
     }
 
     private void getData() {
-        // 本地搜索
-        List<SearchImgEntity> localEntities = new ArrayList<>();
-
-        if (page == 1) {
-            seenSeqs.clear();
-            List<WKMsg> localMsgs = WKIM.getInstance().getMsgManager()
-                    .searchMsgWithChannelAndContentTypes(channelID, channelType, 0, 200,
-                            new int[]{WKContentType.WK_IMAGE, WKContentType.WK_VIDEO});
-            if (WKReader.isNotEmpty(localMsgs)) {
-                for (WKMsg msg : localMsgs) {
-                    if (com.chat.base.space.SpaceFilter.shouldSkipMessageForSpace(msg)) continue;
-                    if (msg.baseContentMsgModel == null) continue;
-                    if (!seenSeqs.add((long) msg.messageSeq)) continue;
-
-                    String showUrl = "";
-                    if (msg.baseContentMsgModel instanceof WKImageContent imgContent) {
-                        if (!TextUtils.isEmpty(imgContent.localPath) && new File(imgContent.localPath).exists()) {
-                            showUrl = imgContent.localPath;
-                        }
-                        if (TextUtils.isEmpty(showUrl)) {
-                            showUrl = WKApiConfig.getShowUrl(imgContent.url);
-                        }
-                    } else if (msg.baseContentMsgModel instanceof WKVideoContent videoContent) {
-                        if (!TextUtils.isEmpty(videoContent.coverLocalPath) && new File(videoContent.coverLocalPath).exists()) {
-                            showUrl = videoContent.coverLocalPath;
-                        }
-                        if (TextUtils.isEmpty(showUrl) && !TextUtils.isEmpty(videoContent.cover)) {
-                            showUrl = WKApiConfig.getShowUrl(videoContent.cover);
-                        }
-                    }
-                    if (TextUtils.isEmpty(showUrl)) continue;
-
-                    String date = WKTimeUtils.getInstance().time2YearMonth(msg.timestamp * 1000);
-                    addDateHeaderIfNeeded(localEntities, date);
-
-                    SearchImgEntity entity = new SearchImgEntity();
-                    entity.date = date;
-                    entity.url = showUrl;
-                    entity.originalContent = msg.baseContentMsgModel;
-
-                    GlobalMessage gm = new GlobalMessage();
-                    gm.setMessage_seq((long) msg.messageSeq);
-                    gm.setFrom_uid(msg.fromUID != null ? msg.fromUID : "");
-                    gm.setTimestamp(msg.timestamp);
-                    gm.setClient_msg_no(msg.clientMsgNO != null ? msg.clientMsgNO : "");
-                    com.chat.base.entity.GlobalChannel gc = new com.chat.base.entity.GlobalChannel();
-                    gc.setChannel_id(channelID);
-                    gc.setChannel_type(channelType);
-                    gm.setChannel(gc);
-                    HashMap<String, Object> payloadMap = new HashMap<>();
-                    payloadMap.put("type", msg.type);
-                    gm.setPayload(payloadMap);
-                    entity.message = gm;
-
-                    localEntities.add(entity);
-                }
+        if (loading || !hasMore) {
+            wkVBinding.refreshLayout.finishLoadMore();
+            if (!hasMore) {
+                wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
             }
+            return;
         }
-
-        // API 搜索
-        ArrayList<Integer> contentType = new ArrayList<>();
-        contentType.add(WKContentType.WK_IMAGE);
-        contentType.add(WKContentType.WK_VIDEO);
-        GlobalSearchReq req = new GlobalSearchReq(1, "", channelID, channelType, "", "", contentType, page, 20, 0, 0);
-        GlobalSearchModel.INSTANCE.search(req, (code, s, globalSearch) -> {
+        loading = true;
+        // 频道内媒体走 /_search_media。keyword 必须为空（Model 内部强制），cursor 由服务端签发。
+        // 子区直接复用：传入 channelID 即对应子区频道，无需额外逻辑。
+        ChannelSearchReq req = new ChannelSearchReq(
+                channelType,
+                channelID,
+                null,
+                null,
+                ChannelSearchReq.SORT_TIME_DESC,
+                ChannelSearchReq.DEFAULT_PAGE_SIZE,
+                nextCursor
+        );
+        final boolean isReset = (nextCursor == null);
+        ChannelSearchModel.INSTANCE.searchMedia(req, outcome -> {
+            loading = false;
             wkVBinding.refreshLayout.finishLoadMore();
             wkVBinding.refreshLayout.finishRefresh();
 
-            List<SearchImgEntity> merged = new ArrayList<>(localEntities);
-
-            if (code == HttpResponseCode.success && globalSearch != null && WKReader.isNotEmpty(globalSearch.messages)) {
-                for (GlobalMessage msg : globalSearch.messages) {
-                    if (!seenSeqs.add(msg.getMessage_seq())) continue;
-
-                    WKMessageContent content = msg.getMessageModel();
-                    if (content == null) continue;
-
-                    String showUrl = "";
-                    if (content instanceof WKImageContent imgModel) {
-                        if (!TextUtils.isEmpty(imgModel.localPath) && new File(imgModel.localPath).exists()) {
-                            showUrl = imgModel.localPath;
-                        }
-                        if (TextUtils.isEmpty(showUrl)) {
-                            showUrl = WKApiConfig.getShowUrl(imgModel.url);
-                        }
-                    } else if (content instanceof WKVideoContent videoModel) {
-                        if (!TextUtils.isEmpty(videoModel.coverLocalPath) && new File(videoModel.coverLocalPath).exists()) {
-                            showUrl = videoModel.coverLocalPath;
-                        }
-                        if (TextUtils.isEmpty(showUrl) && !TextUtils.isEmpty(videoModel.cover)) {
-                            showUrl = WKApiConfig.getShowUrl(videoModel.cover);
-                        }
-                    } else {
-                        continue;
-                    }
-                    if (TextUtils.isEmpty(showUrl)) continue;
-
-                    String date = WKTimeUtils.getInstance().time2YearMonth(msg.getTimestamp() * 1000);
-                    addDateHeaderIfNeeded(merged, date);
-
-                    SearchImgEntity entity = new SearchImgEntity();
-                    entity.date = date;
-                    entity.message = msg;
-                    entity.url = showUrl;
-                    merged.add(entity);
-                }
-            }
-
-            if (merged.isEmpty()) {
-                wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
-                if (page == 1) {
+            if (!outcome.getOk() || outcome.getData() == null) {
+                if (isReset && adapter.getData().isEmpty()) {
                     wkVBinding.refreshLayout.setEnableLoadMore(false);
                     wkVBinding.nodataTv.setVisibility(View.VISIBLE);
                 }
-            } else {
-                wkVBinding.nodataTv.setVisibility(View.GONE);
-                if (page == 1) {
-                    adapter.setList(merged);
-                } else {
-                    adapter.addData(merged);
+                return null;
+            }
+
+            List<MediaHit> hits = outcome.getData().getData();
+            List<SearchImgEntity> page = new ArrayList<>();
+            if (WKReader.isNotEmpty(hits)) {
+                for (MediaHit hit : hits) {
+                    SearchImgEntity entity = toEntity(hit);
+                    if (entity == null) continue;
+                    addDateHeaderIfNeeded(page, entity.date);
+                    page.add(entity);
                 }
+            }
+
+            hasMore = outcome.getData().getPagination().getHas_more();
+            nextCursor = hasMore ? outcome.getData().getPagination().getNext_cursor() : null;
+
+            if (isReset) {
+                if (page.isEmpty()) {
+                    wkVBinding.refreshLayout.setEnableLoadMore(false);
+                    wkVBinding.nodataTv.setVisibility(View.VISIBLE);
+                } else {
+                    wkVBinding.nodataTv.setVisibility(View.GONE);
+                    adapter.setList(page);
+                }
+            } else if (!page.isEmpty()) {
+                wkVBinding.nodataTv.setVisibility(View.GONE);
+                adapter.addData(page);
+            }
+
+            if (!hasMore) {
+                wkVBinding.refreshLayout.finishLoadMoreWithNoMoreData();
             }
             return null;
         });
     }
 
+    private SearchImgEntity toEntity(MediaHit hit) {
+        String thumb = hit.getThumb_url();
+        // 视频可能没有 server 端生成的封面（thumb_url 缺失），此时仍要保留条目：
+        // 列表里会显示 play 角标 + 灰底占位，点击跳到聊天页查看原视频，与 4-tab 媒体页对齐。
+        String showUrl = !TextUtils.isEmpty(thumb) ? WKApiConfig.getShowUrl(thumb) : "";
+
+        SearchImgEntity entity = new SearchImgEntity();
+        entity.url = showUrl;
+        entity.date = !TextUtils.isEmpty(hit.getMonth_bucket()) ? hit.getMonth_bucket() : "";
+        entity.originalContent = buildContent(hit);
+        entity.senderName = hit.getSender_name() != null ? hit.getSender_name() : "";
+
+        GlobalMessage gm = new GlobalMessage();
+        gm.setMessage_seq(hit.getMessage_seq());
+        gm.setFrom_uid(hit.getSender_id() != null ? hit.getSender_id() : "");
+        gm.setTimestamp(Rfc3339.INSTANCE.toEpochSeconds(hit.getSent_at()));
+        gm.setClient_msg_no("");
+        gm.setMessage_idstr(hit.getMessage_id() != null ? hit.getMessage_id() : "");
+        GlobalChannel gc = new GlobalChannel();
+        gc.setChannel_id(channelID);
+        gc.setChannel_type(channelType);
+        gm.setChannel(gc);
+        HashMap<String, Object> payloadMap = new HashMap<>();
+        payloadMap.put("type", hit.isVideo() ? 5 : 2);
+        gm.setPayload(payloadMap);
+        entity.message = gm;
+        return entity;
+    }
+
+    private WKMessageContent buildContent(MediaHit hit) {
+        if (hit.isVideo()) {
+            WKVideoContent video = new WKVideoContent();
+            video.cover = hit.getThumb_url();
+            video.width = hit.getWidth();
+            video.height = hit.getHeight();
+            video.second = hit.getDuration_ms() / 1000;
+            // url 字段对视频指向视频文件本身；MediaHit 仅返回封面缩略图，转发时若需要原视频
+            // 需调用方进一步通过 messageID 拉取——这里先放封面，保证基础展示不崩。
+            video.url = hit.getThumb_url();
+            return video;
+        }
+        WKImageContent img = new WKImageContent();
+        img.url = hit.getThumb_url();
+        img.width = hit.getWidth();
+        img.height = hit.getHeight();
+        return img;
+    }
+
     private void addDateHeaderIfNeeded(List<SearchImgEntity> list, String date) {
+        if (TextUtils.isEmpty(date)) return;
         String lastDate = null;
         if (WKReader.isNotEmpty(list)) {
             lastDate = list.get(list.size() - 1).date;

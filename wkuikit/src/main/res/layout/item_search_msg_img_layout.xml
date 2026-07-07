@@ -5,13 +5,26 @@
     android:background="@color/homeColor"
     android:orientation="vertical">
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/imageView"
-        android:layout_width="100dp"
-        android:layout_height="100dp"
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginStart="3dp"
-        android:layout_marginEnd="3dp"
-        android:scaleType="centerCrop"
         android:layout_marginTop="3dp"
-        android:src="@drawable/default_view_bg" />
+        android:layout_marginEnd="3dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/imageView"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/default_view_bg" />
+
+        <ImageView
+            android:id="@+id/playIv"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center"
+            android:src="@mipmap/icon_play"
+            android:visibility="gone" />
+    </FrameLayout>
 </LinearLayout>

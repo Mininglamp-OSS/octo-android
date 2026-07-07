@@ -237,6 +237,77 @@ public class GroupModel extends WKBaseModel {
      */
     public synchronized void groupMembersSync(String groupNo, final ICommonListener iCommonListener) {
         long version = resolveSyncVersion(groupNo);
+        doMembersSyncWithVersion(groupNo, version, iCommonListener);
+    }
+
+    /**
+     * 强制以 {@code version=0} 全量拉一次群成员, 用于绕过服务端给 bot 邀请分配
+     * 错误 version (低于群内其它成员当前 max) 导致的增量 sync 拉不到 bot 的问题.
+     *
+     * <p>不建议直接调用. 推荐用 {@link #groupMembersSyncAndVerify(String, List)},
+     * 只在增量 sync 完成后校验出缺人时才走这条路径, 避免每次加人都多花一次全量流量.
+     *
+     * <p>成本: 一次群成员全量拉取 (limit=1000, 通常一个请求覆盖全部). 保存走
+     * CONFLICT_REPLACE upsert, 不会污染 DB. 成功后 recursion 走回 {@link
+     * #groupMembersSync(String, ICommonListener)}, 用 {@link #resolveSyncVersion(String)}
+     * 拿正确的 maxVersion 继续增量.
+     */
+    public void forceFullMembersSync(String groupNo) {
+        doMembersSyncWithVersion(groupNo, 0L, null);
+    }
+
+    /**
+     * 增量 sync + 校验: 增量拉完后检查 {@code expectedUids} 是否都落盘,
+     * 只要缺任何一个 (含 isDeleted=1) 就自动兜底一次 {@link #forceFullMembersSync(String)}.
+     *
+     * <p>用于两个 caller 场景, 语义完全一致:
+     * <ul>
+     *   <li>{@link com.chat.uikit.chat.manager.WKIMUtils} 收到 1002 加人消息 →
+     *       {@code expectedUids} 来自 {@code content.extra[].uid} 解析结果.
+     *       解析失败传 null, 视作"不确定谁被邀请, 保守走全量".</li>
+     *   <li>{@link com.chat.uikit.contacts.ChooseContactsActivity} 用户主动
+     *       addGroupMembers / inviteGroupMembers 成功回调 → {@code expectedUids}
+     *       就是本次操作里选中的 uid 列表. 兜底 server 对"重复邀请已在群成员"
+     *       静默 success 不发 1002 的场景.</li>
+     * </ul>
+     *
+     * <p>设计原则: 只有确实缺人才触发全量, 正常加真人 (server 正常 bump version + 发 1002)
+     * 走这里只多一次增量 sync (通常返 [] 直接结束), 不会额外触发全量.
+     *
+     * @param groupNo      群 ID
+     * @param expectedUids 期望存在的 uid 列表. {@code null} = 未知, 保守全量;
+     *                     空列表 = 无需校验, 只做增量 sync.
+     */
+    public void groupMembersSyncAndVerify(String groupNo, List<String> expectedUids) {
+        groupMembersSync(groupNo, (code, msg) -> {
+            if (code != HttpResponseCode.success) return;
+            boolean anyMissing;
+            if (expectedUids == null) {
+                anyMissing = true; // 未知邀请对象, 保守走全量
+            } else {
+                anyMissing = false;
+                for (String uid : expectedUids) {
+                    if (TextUtils.isEmpty(uid)) continue;
+                    WKChannelMember m = WKIM.getInstance().getChannelMembersManager()
+                            .getMember(groupNo, WKChannelType.GROUP, uid);
+                    if (m == null || m.isDeleted == 1) {
+                        anyMissing = true;
+                        break;
+                    }
+                }
+            }
+            if (anyMissing) {
+                forceFullMembersSync(groupNo);
+            }
+        });
+    }
+
+    /**
+     * groupMembersSync 与 forceFullMembersSync 共享的内部实现. 拆出来避免代码重复,
+     * 并让 recursion 只有一处入口 (recursion 内部走 groupMembersSync 让 resolveSyncVersion
+     * 决定后续起点).
+     */
+    private void doMembersSyncWithVersion(String groupNo, long version, final ICommonListener iCommonListener) {
         request(createService(GroupService.class).syncGroupMembers(groupNo, 1000, version), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<GroupMember> list) {
@@ -255,7 +326,6 @@ public class GroupModel extends WKBaseModel {
                 if (iCommonListener != null) iCommonListener.onResult(code, msg);
             }
         });
-
     }
 
     /**

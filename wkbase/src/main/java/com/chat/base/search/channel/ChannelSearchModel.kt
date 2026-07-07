@@ -104,12 +104,14 @@ object ChannelSearchModel : WKBaseModel() {
             )
         }
         // 无结构化 error body：按 HTTP 状态码兜底分类。
-        val fallbackCode = when (httpStatus) {
-            in 500..599 -> SearchErrorCode.UPSTREAM_UNAVAILABLE
-            429 -> SearchErrorCode.RATE_LIMITED
-            404 -> SearchErrorCode.NOT_FOUND
-            400 -> SearchErrorCode.VALIDATION_FAILED
-            0 -> ChannelSearchOutcome.LOCAL_ERROR_NETWORK   // ResponseExceptionHandle 对网络异常通常给非 HTTP code
+        // 注意：ResponseExceptionHandle 对非 HttpException（连接失败、超时、DNS 等传输层异常）分配 code = -1；
+        // 任何非正数都视作传输层错误，走 LOCAL_ERROR_NETWORK → FALLBACK_TO_LOCAL，触发本地 IMSDK 兜底搜索。
+        val fallbackCode = when {
+            httpStatus in 500..599 -> SearchErrorCode.UPSTREAM_UNAVAILABLE
+            httpStatus == 429 -> SearchErrorCode.RATE_LIMITED
+            httpStatus == 404 -> SearchErrorCode.NOT_FOUND
+            httpStatus == 400 -> SearchErrorCode.VALIDATION_FAILED
+            httpStatus <= 0 -> ChannelSearchOutcome.LOCAL_ERROR_NETWORK
             else -> SearchErrorCode.INTERNAL
         }
         return ChannelSearchOutcome.failure(httpStatus = httpStatus, errorCode = fallbackCode, errorMessage = msg)

@@ -56,4 +56,27 @@ class Rfc3339Test {
         assertEquals(0L, Rfc3339.toEpochSeconds("not-a-date"))
         assertEquals(0L, Rfc3339.toEpochSeconds("2026/06/29 10:30:00"))
     }
+
+    @Test
+    fun parses_millisecond_fraction_utc() {
+        // 服务端常见形态 sent_at="2026-06-29T10:30:00.123Z"，亚秒精度直接截断。
+        assertEquals(1782729000L, Rfc3339.toEpochSeconds("2026-06-29T10:30:00.123Z"))
+    }
+
+    @Test
+    fun parses_microsecond_fraction_utc() {
+        // RFC3339 允许任意精度分数秒（6 位、9 位都常见）。
+        assertEquals(1782729000L, Rfc3339.toEpochSeconds("2026-06-29T10:30:00.123456Z"))
+        assertEquals(1782729000L, Rfc3339.toEpochSeconds("2026-06-29T10:30:00.123456789Z"))
+    }
+
+    @Test
+    fun parses_millisecond_fraction_with_offset() {
+        assertEquals(1782729000L, Rfc3339.toEpochSeconds("2026-06-29T18:30:00.500+08:00"))
+    }
+
+    @Test
+    fun parses_millisecond_fraction_naive_as_utc() {
+        assertEquals(1782729000L, Rfc3339.toEpochSeconds("2026-06-29T10:30:00.999"))
+    }
 }

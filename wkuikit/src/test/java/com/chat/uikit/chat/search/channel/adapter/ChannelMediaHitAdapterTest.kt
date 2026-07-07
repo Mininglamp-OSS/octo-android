@@ -61,4 +61,45 @@ class ChannelMediaHitAdapterTest {
         assertEquals(1, entries.count { it is ChannelMediaHitAdapter.Entry.Header })
         assertEquals(3, entries.count { it is ChannelMediaHitAdapter.Entry.Item })
     }
+
+    @Test
+    fun toEntries_with_previous_bucket_skips_duplicate_header_when_same_month() {
+        // 上一页最后一个是 2026-06，本页首个也是 2026-06 → 不应插重复 header。
+        val hits = listOf(hit("2026-06", 4), hit("2026-06", 5))
+        val entries = ChannelMediaHitAdapter.toEntries(hits, previousBucket = "2026-06")
+        assertEquals(2, entries.size)
+        assertTrue(entries.all { it is ChannelMediaHitAdapter.Entry.Item })
+    }
+
+    @Test
+    fun toEntries_with_previous_bucket_inserts_header_when_month_changes() {
+        // 上一页停在 2026-06，本页跨到 2026-05 → 应插一个 05 header。
+        val hits = listOf(hit("2026-05", 6), hit("2026-05", 7))
+        val entries = ChannelMediaHitAdapter.toEntries(hits, previousBucket = "2026-06")
+        assertEquals(3, entries.size)
+        assertTrue(entries[0] is ChannelMediaHitAdapter.Entry.Header)
+        assertEquals("2026-05", (entries[0] as ChannelMediaHitAdapter.Entry.Header).monthBucket)
+    }
+
+    @Test
+    fun toEntries_with_previous_bucket_and_mixed_page_boundary() {
+        // 上一页停在 2026-06；本页前 2 条仍是 06（不插 header），第 3 条切到 05（插一个 header）。
+        val hits = listOf(hit("2026-06", 8), hit("2026-06", 9), hit("2026-05", 10))
+        val entries = ChannelMediaHitAdapter.toEntries(hits, previousBucket = "2026-06")
+        assertEquals(4, entries.size)
+        assertTrue(entries[0] is ChannelMediaHitAdapter.Entry.Item)
+        assertTrue(entries[1] is ChannelMediaHitAdapter.Entry.Item)
+        assertTrue(entries[2] is ChannelMediaHitAdapter.Entry.Header)
+        assertEquals("2026-05", (entries[2] as ChannelMediaHitAdapter.Entry.Header).monthBucket)
+        assertTrue(entries[3] is ChannelMediaHitAdapter.Entry.Item)
+    }
+
+    @Test
+    fun toEntries_null_previous_bucket_matches_legacy_behavior() {
+        // 默认参数 previousBucket=null 与旧签名等价：首个 hit 一定插 header。
+        val hits = listOf(hit("2026-06", 11))
+        val entries = ChannelMediaHitAdapter.toEntries(hits)
+        assertEquals(2, entries.size)
+        assertTrue(entries[0] is ChannelMediaHitAdapter.Entry.Header)
+    }
 }

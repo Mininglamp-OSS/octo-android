@@ -85,12 +85,13 @@ abstract class BaseChannelSearchFragment : Fragment() {
 
     /** 默认不兜底；消息相关 tab 覆写。 */
     protected open fun executeLocalFallback(keyword: String) {
+        val b = _binding ?: return
         showOfflineBanner(true)
         resetList()
         showEmpty(getString(emptyResultHintRes))
         hasMore = false
         nextCursor = null
-        binding.refreshLayout.setEnableLoadMore(false)
+        b.refreshLayout.setEnableLoadMore(false)
     }
 
     override fun onCreateView(
@@ -158,21 +159,27 @@ abstract class BaseChannelSearchFragment : Fragment() {
         executeSearch(keyword, nextCursor, isReset = false)
     }
 
-    /** 子类在拿到 outcome 时调用，处理通用错误 + 本地兜底；返回 true 表示已处理。 */
+    /**
+     * 子类在拿到 outcome 时调用，处理通用错误 + 本地兜底；返回 true 表示已处理。
+     *
+     * view 已销毁（`_binding == null`）时静默返回 true——异步回调完成后 UI 已不存在，
+     * 任何 toast / binding 访问都是无意义的且会 NPE。
+     */
     protected fun handleNonSuccess(
         outcome: ChannelSearchOutcome<*>,
         isReset: Boolean,
         keyword: String,
     ): Boolean {
-        binding.refreshLayout.finishRefresh()
-        binding.refreshLayout.finishLoadMore()
+        val b = _binding ?: return true
+        b.refreshLayout.finishRefresh()
+        b.refreshLayout.finishLoadMore()
         return when (outcome.uiAction()) {
             ChannelSearchUiAction.FALLBACK_TO_LOCAL -> {
                 if (isReset) {
                     executeLocalFallback(keyword)
                 } else {
                     hasMore = false
-                    binding.refreshLayout.setEnableLoadMore(false)
+                    b.refreshLayout.setEnableLoadMore(false)
                 }
                 true
             }
@@ -196,13 +203,17 @@ abstract class BaseChannelSearchFragment : Fragment() {
         }
     }
 
-    /** 子类拿到 success 后调用，统一处理 cursor + loadMore 开关 + 空态。 */
+    /**
+     * 子类拿到 success 后调用，统一处理 cursor + loadMore 开关 + 空态。
+     * view 已销毁时静默返回，避免 NPE。
+     */
     protected fun updatePaginationState(hasMore: Boolean, nextCursor: String, isEmpty: Boolean, isReset: Boolean) {
-        binding.refreshLayout.finishRefresh()
-        binding.refreshLayout.finishLoadMore()
+        val b = _binding ?: return
+        b.refreshLayout.finishRefresh()
+        b.refreshLayout.finishLoadMore()
         this.hasMore = hasMore
         this.nextCursor = nextCursor.takeIf { it.isNotEmpty() }
-        binding.refreshLayout.setEnableLoadMore(hasMore && !this.nextCursor.isNullOrEmpty())
+        b.refreshLayout.setEnableLoadMore(hasMore && !this.nextCursor.isNullOrEmpty())
         if (isReset && isEmpty) {
             showEmpty(getString(emptyResultHintRes))
         } else if (isReset) {
@@ -211,15 +222,16 @@ abstract class BaseChannelSearchFragment : Fragment() {
     }
 
     protected fun showOfflineBanner(visible: Boolean) {
-        binding.offlineBannerTv.visibility = if (visible) View.VISIBLE else View.GONE
+        _binding?.offlineBannerTv?.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     protected fun showEmpty(text: String?) {
+        val b = _binding ?: return
         if (text.isNullOrEmpty()) {
-            binding.emptyTv.visibility = View.GONE
+            b.emptyTv.visibility = View.GONE
         } else {
-            binding.emptyTv.text = text
-            binding.emptyTv.visibility = View.VISIBLE
+            b.emptyTv.text = text
+            b.emptyTv.visibility = View.VISIBLE
         }
     }
 

@@ -100,10 +100,15 @@ class ChannelMediaHitAdapter(private val cellSize: Int) :
         const val ITEM_TYPE_HEADER = 1
         const val ITEM_TYPE_MEDIA = 0
 
-        /** 给定一段已按 [MediaHit.sent_at] 倒序的命中，按 month_bucket 切分插入 header。 */
-        fun toEntries(hits: List<MediaHit>): List<Entry> {
+        /**
+         * 给定一段已按 [MediaHit.sent_at] 倒序的命中，按 month_bucket 切分插入 header。
+         *
+         * @param previousBucket 上一页最后一个 hit 的 month_bucket；分页 append 时传入，
+         *        避免本页首个 hit 与上一页同月时插入重复 header。首页/reset 传 null。
+         */
+        fun toEntries(hits: List<MediaHit>, previousBucket: String? = null): List<Entry> {
             val out = ArrayList<Entry>(hits.size + 8)
-            var lastBucket: String? = null
+            var lastBucket: String? = previousBucket
             for (hit in hits) {
                 if (hit.month_bucket != lastBucket) {
                     out.add(Entry.Header(hit.month_bucket))

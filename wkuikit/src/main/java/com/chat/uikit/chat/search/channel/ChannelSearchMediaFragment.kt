@@ -35,11 +35,17 @@ import com.xinbida.wukongim.WKIM
 /**
  * 媒体 tab：调 `/_search_media`（keyword 必须为空）。3 列网格 + 月份 sticky header。
  * 服务端按 sent_at 倒序返回；adapter 按 month_bucket 切段插入 header。
+ *
+ * 分页策略：每页只 append 新 tail，跨页维护 [lastMonthBucket] 让 [ChannelMediaHitAdapter.toEntries]
+ * 知道"上一页最后一个月份"，避免同月跨页时插重复 header。避免早期实现的每页 setList 全量重建
+ * （O(n²) 主线程 rebind + Glide 重载 + 滚动位置丢失）。
  */
 class ChannelSearchMediaFragment : BaseChannelSearchFragment() {
 
     private lateinit var adapter: ChannelMediaHitAdapter
-    private val allMedia = ArrayList<MediaHit>()
+
+    /** 已展示媒体的最后一个 month_bucket，供下一页 append 判断是否需要新 header。 */
+    private var lastMonthBucket: String? = null
 
     override val emptyResultHintRes = R.string.nodata
     override val supportsBrowseWithoutKeyword: Boolean = true
@@ -61,7 +67,7 @@ class ChannelSearchMediaFragment : BaseChannelSearchFragment() {
     }
 
     override fun resetList() {
-        allMedia.clear()
+        lastMonthBucket = null
         adapter.setList(emptyList())
     }
 
@@ -82,13 +88,19 @@ class ChannelSearchMediaFragment : BaseChannelSearchFragment() {
                 return@searchMedia
             }
             val list = outcome.data!!
-            if (isReset) allMedia.clear()
-            allMedia.addAll(list.data)
-            adapter.setList(ChannelMediaHitAdapter.toEntries(allMedia))
+            if (isReset) lastMonthBucket = null
+            val newEntries = ChannelMediaHitAdapter.toEntries(list.data, previousBucket = lastMonthBucket)
+            if (isReset) {
+                adapter.setList(newEntries)
+            } else if (newEntries.isNotEmpty()) {
+                adapter.addData(newEntries)
+            }
+            // 用本页最后一个 hit 的 month_bucket 更新游标，供下一页判断跨月边界。
+            list.data.lastOrNull()?.let { lastMonthBucket = it.month_bucket }
             updatePaginationState(
                 hasMore = list.pagination.has_more,
                 nextCursor = list.pagination.next_cursor,
-                isEmpty = allMedia.isEmpty(),
+                isEmpty = adapter.data.isEmpty(),
                 isReset = isReset,
             )
         }

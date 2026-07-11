@@ -1210,6 +1210,11 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 }
             }
         }
+        // 一对一未读消息本地判定为高优先级：与群聊“有人@我”走同一深红提示
+        WKUIConversationMsg uiMsg = conversationMsg.uiConversationMsg;
+        if (!hasMention && uiMsg != null && uiMsg.channelType == WKChannelType.PERSONAL && uiMsg.unreadCount > 0) {
+            hasMention = true;
+        }
         if (!hasMention) {
             contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
             contentTv.setTypeface(null, Typeface.NORMAL);
@@ -1275,6 +1280,12 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         }
         if (item.uiConversationMsg.getRemoteMsgExtra() != null) {
             draft = item.uiConversationMsg.getRemoteMsgExtra().draft;
+        }
+        // 一对一未读消息本地判定为高优先级：与群聊“有人@我”走同一深红提示
+        if (!mention && item.uiConversationMsg != null
+                && item.uiConversationMsg.channelType == WKChannelType.PERSONAL
+                && item.uiConversationMsg.unreadCount > 0) {
+            mention = true;
         }
         boolean isSetChatPwd = isSetChatPwd(item.uiConversationMsg.getWkChannel());
         if (isSetChatPwd) {

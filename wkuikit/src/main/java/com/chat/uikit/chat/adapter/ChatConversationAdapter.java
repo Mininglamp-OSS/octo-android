@@ -1210,11 +1210,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 }
             }
         }
-        // 一对一未读消息本地判定为高优先级：与群聊“有人@我”走同一深红提示
-        WKUIConversationMsg uiMsg = conversationMsg.uiConversationMsg;
-        if (!hasMention && uiMsg != null && uiMsg.channelType == WKChannelType.PERSONAL && uiMsg.unreadCount > 0) {
-            hasMention = true;
-        }
         if (!hasMention) {
             contentTv.setTextColor(ContextCompat.getColor(getContext(), R.color.color999));
             contentTv.setTypeface(null, Typeface.NORMAL);
@@ -1281,11 +1276,21 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (item.uiConversationMsg.getRemoteMsgExtra() != null) {
             draft = item.uiConversationMsg.getRemoteMsgExtra().draft;
         }
-        // 一对一未读消息本地判定为高优先级：与群聊“有人@我”走同一深红提示
+        // 一对一未读消息本地判定为高优先级：与群聊“有人@我”走同一深红提示。
+        // 三个前提：
+        //  1）走 getRenderUnreadCount 过滤路径，避免跨 Space 污染的未读（badge 已归零、预览已 null）又点亮深红；
+        //  2）排除系统账号（系统团队/文件助手），它们不是“有人在等回复”；
+        //  3）排除免打扰的 1v1。
+        boolean isMuted1v1 = item.uiConversationMsg.getWkChannel() != null
+                && item.uiConversationMsg.getWkChannel().mute == 1;
+        boolean is1v1Priority = false;
         if (!mention && item.uiConversationMsg != null
                 && item.uiConversationMsg.channelType == WKChannelType.PERSONAL
-                && item.uiConversationMsg.unreadCount > 0) {
+                && !WKSystemAccount.isSystemAccount(item.uiConversationMsg.channelID)
+                && !isMuted1v1
+                && getRenderUnreadCount(item) > 0) {
             mention = true;
+            is1v1Priority = true;
         }
         boolean isSetChatPwd = isSetChatPwd(item.uiConversationMsg.getWkChannel());
         if (isSetChatPwd) {
@@ -1299,7 +1304,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         TextView approveTv = helper.getView(R.id.approveTv);
 
         if (mention) {
-            mentionTv.setText(R.string.last_msg_remind);
+            mentionTv.setText(is1v1Priority ? R.string.last_msg_unread_priority : R.string.last_msg_remind);
             mentionTv.setVisibility(View.VISIBLE);
         } else {
             mentionTv.setVisibility(View.GONE);

@@ -178,6 +178,7 @@
     <string name="group_members">群成员(%s)</string>
     <string name="last_msg_draft">[草稿]</string>
     <string name="last_msg_remind">[有人@我]</string>
+    <string name="last_msg_unread_priority">[未读]</string>
     <string name="last_msg_card">[名片]</string>
     <string name="nickname">昵称：</string>
     <string name="other_is_typing">对方正在输入</string>

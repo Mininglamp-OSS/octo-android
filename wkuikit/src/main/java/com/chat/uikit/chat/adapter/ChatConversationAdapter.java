@@ -735,6 +735,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (chatConversationMsg.isRefreshChannelInfo) {
             showChannel(baseViewHolder, item);
             showThreadPreviews(baseViewHolder, item);
+            // 频道信息（包括 mute）变化会影响 1v1 高优先级提示的判定（!isMuted1v1），
+            // 故同步重跑 showReminders，避免 mute/取消 mute 后深红 [未读] 标签残留/滞后。
+            showReminders(baseViewHolder, chatConversationMsg);
             chatConversationMsg.isRefreshChannelInfo = false;
         }
         if (chatConversationMsg.isRefreshStatus) {

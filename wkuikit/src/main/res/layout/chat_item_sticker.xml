@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  贴图消息 (contentType=12/13) 的 chat cell layout。
+  与 chat_item_img 的差异：
+    - 无 blurView / progressView / progressTv / otherLayout（贴图不需要焚阅/上传进度）
+    - imageView 固定 160dp x 160dp，纯透明容器（不带气泡背景，与 iOS hiddenBubble 对齐）
+    - 保留 msg_status（时间戳 + 已读态）与图片消息一致
+
+  贴图 URL 由 WKVectorStickerProvider 分类加载：
+    静态图后缀 → Glide 直接加载
+    .lim/.json (Lottie) → 显示 default_view_bg 占位
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/contentLayout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="end"
+    android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/imageLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <com.chat.base.ui.components.FilterImageView
+            android:id="@+id/imageView"
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/default_view_bg" />
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="5dp"
+            android:layout_marginBottom="5dp"
+            android:background="@drawable/msg_time_status_bg">
+
+            <include layout="@layout/wk_msg_status_layout" />
+        </FrameLayout>
+
+    </FrameLayout>
+
+</LinearLayout>

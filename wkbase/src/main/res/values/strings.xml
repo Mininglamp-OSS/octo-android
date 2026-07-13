@@ -236,6 +236,14 @@
     <string name="richtext_caption_title">添加描述</string>
     <string name="richtext_caption_hint">说点什么…</string>
 
+    <!-- i18n: Sticker collect -->
+    <string name="str_add_to_my_stickers">添加到我的表情</string>
+    <string name="str_sticker_add_success">已添加到我的表情</string>
+    <string name="str_sticker_add_failed">添加失败，请稍后重试</string>
+    <string name="str_no_collect_stickers">暂无收藏表情，长按聊天中的贴图可添加</string>
+    <string name="str_my_stickers_tab">自定义表情</string>
+    <string name="str_emoji_tab">表情</string>
+
     <!-- i18n: 输入长度上限提示（EditText 超长时节流 toast） -->
     <string name="str_input_length_limit">最多 %1$d 个字符</string>
 </resources>

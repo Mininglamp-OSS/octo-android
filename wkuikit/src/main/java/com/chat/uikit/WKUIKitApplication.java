@@ -79,7 +79,9 @@ import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.ChooseResultModel;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.msg.IConversationContext;
+import com.chat.base.msg.model.WKEmojiStickerContent;
 import com.chat.base.msg.model.WKGifContent;
+import com.chat.base.msg.model.WKVectorStickerContent;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.net.HttpResponseCode;
@@ -107,6 +109,7 @@ import com.chat.uikit.chat.provider.WKVideoProvider;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
+import com.chat.uikit.chat.provider.WKEmojiStickerProvider;
 import com.chat.uikit.chat.provider.WKEmptyProvider;
 import com.chat.uikit.chat.provider.WKImageProvider;
 import com.chat.uikit.chat.provider.WKMultiForwardProvider;
@@ -116,6 +119,7 @@ import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKRichTextProvider;
+import com.chat.uikit.chat.provider.WKVectorStickerProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
 import com.chat.uikit.thread.CreateThreadActivity;
 import com.chat.uikit.thread.msgmodel.WKThreadCreatedContent;
@@ -329,6 +333,11 @@ public class WKUIKitApplication {
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKThreadCreatedContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKRichTextContent.class);
+        // 贴图 (与 iOS 对齐)：lottie 矢量贴图 (12) + emoji 贴图 (13)。
+        // 未注册时收发消息会被 ChatAdapter 强制降级为 unknown_msg(-3)
+        // 显示"未知消息，请先升级客户端后查看" —— 已在生产观测到。
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKVectorStickerContent.class);
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKEmojiStickerContent.class);
         //添加消息item
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider());
@@ -343,6 +352,12 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_MULTIPLE_FORWARD, new WKMultiForwardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_FILE, new WKFileProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VIDEO, new WKVideoProvider());
+        // 贴图 provider (12/13)：独立 layout + 无气泡 + Glide 静态图直显 / Lottie 走占位。
+        // 详见 WKVectorStickerProvider 说明 —— 不继承 WKImageProvider 是刻意为之
+        // （图片路径的大图预览 / 保存到相册 / 上传进度 / 圆角气泡都不适用于贴图，
+        // 且 .lim URL 走 Glide 会崩）。emoji sticker 只覆写 itemViewType。
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_VECTOR_STICKER, new WKVectorStickerProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_EMOJI_STICKER, new WKEmojiStickerProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.loading, new LoadingProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.threadCreated, new WKThreadCreatedProvider());
         // 设置消息长按选项
@@ -355,6 +370,12 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_MULTIPLE_FORWARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_FILE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VIDEO, object -> new MsgConfig(true));
+        // 贴图 (12/13) 长按菜单：全功能启用 —— 让 回复/删除/多选/撤回/转发/reaction/pin 都出现。
+        // 未注册时 WKChatBaseProvider.getMsgConfig 默认返回 MsgConfig(false) 全禁用，
+        // 长按贴图会看不到任何选项（用户实测 defect）。
+        // 撤回/删除内部还会按 canWithdraw / role 二次判断，别人的贴图不会误出撤回。
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VECTOR_STICKER, object -> new MsgConfig(true));
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_EMOJI_STICKER, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod("uikit_sql", EndpointCategory.wkDBMenus, object -> new DBMenu("uikit_sql"));
         //注册消息长按菜单配置
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(false, true, true, false, false, false));
@@ -389,13 +410,23 @@ public class WKUIKitApplication {
             }
             return null;
         });
+        // 贴图消息长按菜单："添加到我的表情" —— 服务端走 /v1/sticker/user/collect
+        // （iOS 走的 /sticker/user 是"上传自己贴纸"接口，收藏他人贴图时会 400，
+        // 用户实测无反应即此原因），详见 AddToMyStickersMenuProvider 说明。
+        com.chat.uikit.chat.sticker.AddToMyStickersMenuProvider.INSTANCE.register();
+        // 预拉一次收藏列表：让 isCollected() 判断在首次长按贴图时就命中，
+        // 避免"点两次才隐藏菜单"的短暂窗口。未登录时静默失败无副作用。
+        com.chat.uikit.chat.sticker.WKStickerManager.INSTANCE.load();
         // 创建子区长按菜单
         EndpointManager.getInstance().setMethod("create_thread", EndpointCategory.wkChatPopupItem, 10, object -> {
             WKMsg wkMsg = (WKMsg) object;
-            // 仅在群聊中、thread_on开启、非系统消息时显示
+            // 仅在群聊中、thread_on开启、非系统消息、非贴图消息时显示。
+            // 贴图 (12/13) 排除：语义上"给一张贴图开子区"不合理 —— iOS 也不出。
             if (wkMsg.channelType == WKChannelType.GROUP
                     && WKConfig.getInstance().getAppConfig().thread_on == 1
-                    && !WKContentType.isSystemMsg(wkMsg.type)) {
+                    && !WKContentType.isSystemMsg(wkMsg.type)
+                    && wkMsg.type != WKContentType.WK_VECTOR_STICKER
+                    && wkMsg.type != WKContentType.WK_EMOJI_STICKER) {
                 // 已建过子区的消息: 把"创建子区"换成"进入子区「XX」", 与 iOS WKApp.m:1640-1658 对齐。
                 // 数据来源: 任意一条 threadCreated 系统消息 decode 时把 (source_message_id → this) 写进
                 // WKThreadCreatedContent 的全局 map, 这里用当前消息 id 反查命中即可。

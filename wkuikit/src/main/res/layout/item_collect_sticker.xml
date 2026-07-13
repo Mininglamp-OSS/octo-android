@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  表情面板 "我的贴图" tab 的单个 grid item。
+  纯 image 展示，点击由 CollectStickerAdapter setOnItemClickListener 发送贴图。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="6dp">
+
+    <com.chat.base.ui.components.FilterImageView
+        android:id="@+id/stickerImageView"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:src="@drawable/default_view_bg" />
+
+</FrameLayout>

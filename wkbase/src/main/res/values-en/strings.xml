@@ -240,6 +240,14 @@
     <string name="richtext_caption_title">Add Caption</string>
     <string name="richtext_caption_hint">Say something…</string>
 
+    <!-- i18n: Sticker collect -->
+    <string name="str_add_to_my_stickers">Add to My Stickers</string>
+    <string name="str_sticker_add_success">Added to My Stickers</string>
+    <string name="str_sticker_add_failed">Failed to add, please try again</string>
+    <string name="str_no_collect_stickers">No collected stickers. Long-press a sticker in chat to add.</string>
+    <string name="str_my_stickers_tab">Custom Stickers</string>
+    <string name="str_emoji_tab">Emoji</string>
+
     <!-- i18n: length-limit hint for EditText (throttled toast) -->
     <string name="str_input_length_limit">Up to %1$d characters</string>
 </resources>

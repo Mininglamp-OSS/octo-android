@@ -103,6 +103,11 @@ import com.chat.uikit.chat.manager.WKRichTextSender
 import com.chat.uikit.chat.manager.WKSendMsgUtils
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent
 import com.chat.uikit.contacts.service.FriendModel
+import com.chat.uikit.chat.sticker.CollectStickerAdapter
+import com.chat.uikit.chat.sticker.StickerUrlUtils
+import com.chat.uikit.chat.sticker.WKSticker
+import com.chat.uikit.chat.sticker.WKStickerManager
+import com.chat.base.msg.model.WKVectorStickerContent
 import com.chat.uikit.group.GroupMemberEntity
 import com.chat.uikit.group.RemindMemberAdapter
 import com.chat.uikit.group.service.GroupModel
@@ -2303,6 +2308,94 @@ class ChatPanelManager(
     }
 
     private fun getEmojiLayout(): View {
+        val activity = iConversationContext.chatActivity
+
+        // 两个内容 View：emoji grid + 我的贴图 grid。
+        // 复用原 emoji 行为不变，另建 sticker 视图与之切换。
+        val emojiContent = buildEmojiContentView()
+        val stickerContent = buildStickerContentView()
+
+        val contentContainer = FrameLayout(activity)
+
+        // 顶部 tab bar：两个按钮 emoji / 我的贴图。
+        val tabBar = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(
+                AndroidUtilities.dp(8f), AndroidUtilities.dp(4f),
+                AndroidUtilities.dp(8f), AndroidUtilities.dp(4f)
+            )
+        }
+        val emojiTabBtn = buildEmojiPanelTabButton(activity.getString(R.string.str_emoji_tab))
+        val stickerTabBtn = buildEmojiPanelTabButton(activity.getString(R.string.str_my_stickers_tab))
+        tabBar.addView(
+            emojiTabBtn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+        )
+        tabBar.addView(
+            stickerTabBtn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+        )
+
+        fun selectTab(index: Int) {
+            val selColor = Theme.colorAccount
+            val normalColor = ContextCompat.getColor(activity, R.color.color999)
+            emojiTabBtn.setTextColor(if (index == 0) selColor else normalColor)
+            stickerTabBtn.setTextColor(if (index == 1) selColor else normalColor)
+            contentContainer.removeAllViews()
+            if (index == 0) {
+                contentContainer.addView(emojiContent)
+            } else {
+                contentContainer.addView(stickerContent)
+                // 每次切到贴图 tab 都 refresh 一次收藏列表（含首次进入拉数据）。
+                WKStickerManager.load()
+            }
+        }
+        emojiTabBtn.setOnClickListener { selectTab(0) }
+        stickerTabBtn.setOnClickListener { selectTab(1) }
+
+        var height = WKConstants.getKeyboardHeight()
+        if (height == 0) {
+            height = AndroidUtilities.getScreenHeight() / 3
+        }
+        val tabBarHeightDp = 36
+        val contentHeightPx = height - AndroidUtilities.dp(tabBarHeightDp.toFloat())
+
+        val root = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(
+            tabBar,
+            LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, tabBarHeightDp)
+        )
+        root.addView(
+            contentContainer,
+            LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT,
+                (contentHeightPx / AndroidUtilities.density).toInt()
+            )
+        )
+
+        selectTab(0)  // 默认 emoji tab
+        return root
+    }
+
+    private fun buildEmojiPanelTabButton(label: String): AppCompatTextView {
+        val activity = iConversationContext.chatActivity
+        return AppCompatTextView(activity).apply {
+            text = label
+            gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(activity, R.color.color999))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(0, AndroidUtilities.dp(6f), 0, AndroidUtilities.dp(6f))
+            Theme.setPressedBackground(this)
+        }
+    }
+
+    /**
+     * 抽取自旧 [getEmojiLayout]：emoji grid 视图，行为完全不变。
+     * onAttachedToWindow 在 tab 切换 / 面板重开时重新走"最近使用"排序。
+     */
+    private fun buildEmojiContentView(): View {
+        val activity = iConversationContext.chatActivity
         val width = AndroidUtilities.getScreenWidth() - AndroidUtilities.dp(30f) * 8
         val customList = EmojiManager.getInstance().getEmojiWithType("custom_")
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
@@ -2314,38 +2407,27 @@ class ChatPanelManager(
             addAll(naturelList)
             addAll(symbolsList)
         }
-        // 初始就按"最近使用"排序——已点过的冒到前面，剩下按 custom→normal→natural→symbols 原顺序。
         val emojiAdapter = EmojiAdapter(buildOrderedEmojiList(baseList), width)
-        // 用匿名子类覆盖 onAttachedToWindow：每次面板被 ChatPanelManager.toolBarClick 通过
-        // moreLayout.removeAllViews() + addView() 重新挂上时，按最新 prefs 重排一次。
-        // 这样同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
+        // onAttachedToWindow：tab 切回来或面板重开时按最新 prefs 重排。
+        // 同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
         // WeChat / iOS 的体验（iOS WKEmojiContentView 也不在 didSelect 后 reloadData）。
-        val emojiLayout = object : LinearLayout(iConversationContext.chatActivity) {
+        val emojiLayout = object : LinearLayout(activity) {
             override fun onAttachedToWindow() {
                 super.onAttachedToWindow()
                 emojiAdapter.setList(buildOrderedEmojiList(baseList))
             }
         }
-        val recyclerView = RecyclerView(iConversationContext.chatActivity)
-        val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
-        recyclerView.layoutManager = emojiLayoutManager
+        val recyclerView = RecyclerView(activity)
+        recyclerView.layoutManager = GridLayoutManager(activity, 8)
         recyclerView.adapter = emojiAdapter
-        var height = WKConstants.getKeyboardHeight()
-        if (height == 0) {
-            height = AndroidUtilities.getScreenHeight() / 3
-        }
         emojiLayout.addView(
             recyclerView,
-            LayoutHelper.createLinear(
-                LayoutHelper.MATCH_PARENT,
-                (height / AndroidUtilities.density).toInt()
-            )
+            LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT)
         )
 
         emojiAdapter.setOnItemClickListener { adapter, _, position ->
             val emojiEntry = adapter.getItem(position) as EmojiEntry
             if (emojiEntry.tag.startsWith("custom_")) {
-                // 自定义表情直接作为独立消息发送
                 val textContent = WKTextContent(emojiEntry.text)
                 iConversationContext.sendMessage(textContent)
             } else {
@@ -2357,10 +2439,76 @@ class ChatPanelManager(
                 MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
                 editText.setSelection(curPosition + emojiEntry.text.length)
             }
-            // 仅写 prefs，不当场 setList——本次面板顺序保持稳定，避免点完一个就跳位的割裂感。
             recordRecentEmoji(emojiEntry.text)
         }
         return emojiLayout
+    }
+
+    /**
+     * 我的贴图 tab：GridLayoutManager(4)，点击构造 [WKVectorStickerContent] 发送。
+     * 无收藏时显示引导文案。数据源 [WKStickerManager.stickersLiveData]。
+     */
+    private fun buildStickerContentView(): View {
+        val activity = iConversationContext.chatActivity
+        val container = FrameLayout(activity)
+
+        val recyclerView = RecyclerView(activity).apply {
+            layoutManager = GridLayoutManager(activity, 4)
+        }
+        val stickerAdapter = CollectStickerAdapter()
+        recyclerView.adapter = stickerAdapter
+        container.addView(
+            recyclerView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val emptyTv = AppCompatTextView(activity).apply {
+            text = activity.getString(R.string.str_no_collect_stickers)
+            gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(activity, R.color.color999))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            visibility = View.GONE
+            setPadding(
+                AndroidUtilities.dp(24f), 0,
+                AndroidUtilities.dp(24f), 0
+            )
+        }
+        container.addView(
+            emptyTv,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        WKStickerManager.stickersLiveData.observe(activity) { list ->
+            val safeList = list ?: emptyList()
+            stickerAdapter.setList(safeList)
+            val empty = safeList.isEmpty()
+            emptyTv.visibility = if (empty) View.VISIBLE else View.GONE
+            recyclerView.visibility = if (empty) View.GONE else View.VISIBLE
+        }
+
+        stickerAdapter.setOnItemClickListener { adapter, _, position ->
+            val sticker = adapter.getItem(position) as? WKSticker ?: return@setOnItemClickListener
+            val content = WKVectorStickerContent().apply {
+                url = sticker.path
+                category = if (sticker.category.isNullOrEmpty()) "user" else sticker.category
+                placeholder = sticker.placeholder ?: ""
+                // format 优先用服务端字段，缺失则从 URL 后缀识别，再兜底 png。
+                // 避免 .gif URL 被硬贴上 format="png" 让对端渲染分支走错。
+                format = when {
+                    !sticker.format.isNullOrEmpty() -> sticker.format
+                    else -> StickerUrlUtils.extractExt(sticker.path) ?: "png"
+                }
+            }
+            iConversationContext.sendMessage(content)
+        }
+
+        return container
     }
 
     /**

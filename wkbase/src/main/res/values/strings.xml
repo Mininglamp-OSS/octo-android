@@ -235,4 +235,7 @@
     <string name="richtext_image_limit">最多只能选择 %d 张图片</string>
     <string name="richtext_caption_title">添加描述</string>
     <string name="richtext_caption_hint">说点什么…</string>
+
+    <!-- i18n: 输入长度上限提示（EditText 超长时节流 toast） -->
+    <string name="str_input_length_limit">最多 %1$d 个字符</string>
 </resources>

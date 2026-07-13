@@ -239,4 +239,7 @@
     <string name="richtext_image_limit">You can select up to %d images</string>
     <string name="richtext_caption_title">Add Caption</string>
     <string name="richtext_caption_hint">Say something…</string>
+
+    <!-- i18n: length-limit hint for EditText (throttled toast) -->
+    <string name="str_input_length_limit">Up to %1$d characters</string>
 </resources>

@@ -585,8 +585,17 @@ public class WKUIKitApplication {
                 MsgModel.getInstance().revokeMsg(withdrawMsgMenu.message_id, withdrawMsgMenu.channel_id, withdrawMsgMenu.channel_type, withdrawMsgMenu.client_msg_no, (code, msg) -> {
                     if (code != HttpResponseCode.success) {
                         WKToastUtils.getInstance().showToastNormal(msg);
-                        //  WKIM.getInstance().getMsgManager().updateMsgRevokeWithMessageID(withdrawMsgMenu.message_id, 1);
-//                        WKIM.getInstance().getMessageManager().deleteMsgByClientMsgNo(client_msg_no);
+                    } else {
+                        // 对齐 iOS 自己撤回架构：HTTP 200 后立即本地 mark 撤回状态，
+                        // 不依赖 syncExtraMsg（该接口服务端 cache bug 常返回 resultSize=0，
+                        // 客户端永久卡住）。CMD 到达后走 syncExtraMsg 兜底路径，
+                        // 因本地已 mark, WKIMUtils.revokeMsg 里 alreadyRevoked 检查会短路。
+                        // 详见 WKIMUtils#markMsgRevokedLocallyByClientMsgNO。
+                        com.chat.uikit.chat.manager.WKIMUtils.getInstance()
+                                .markMsgRevokedLocallyByClientMsgNO(
+                                        withdrawMsgMenu.client_msg_no,
+                                        WKConfig.getInstance().getUid()
+                                );
                     }
                 });
             }

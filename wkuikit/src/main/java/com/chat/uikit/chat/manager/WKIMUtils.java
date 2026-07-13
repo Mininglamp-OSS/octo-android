@@ -75,6 +75,7 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelExtras;
 import com.xinbida.wukongim.entity.WKChannelMember;
 import com.xinbida.wukongim.entity.WKChannelStatus;
+import com.xinbida.wukongim.entity.WKSyncExtraMsg;
 import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.entity.WKConversationMsg;
 import com.xinbida.wukongim.entity.WKMsg;
@@ -658,6 +659,14 @@ public class WKIMUtils {
                     if (revokeRemind == 1) {
                         if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[revokeMsg] calling syncExtraMsg for channelID=" + channelID);
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
+                        // 竞态修复：服务端撤回操作 + 写 extra 增量 + 推 CMD 三步不是严格原子的，
+                        // CMD 常常先于 extra 增量写入到达客户端。此时立即调 syncExtraMsg 会拿到
+                        // resultSize=0（服务端还没有增量可给），本地永远不知道消息已撤回 →
+                        // 表现为"撤回没反应 / 要撤好几次才成功"（碰运气：偶尔 extra 已就绪则成功）。
+                        // 分别在 500ms / 1500ms 再拉一次，每次先查本地 msg.remoteExtra.revoke
+                        // 是否已 = 1（前一次拉已生效），已生效则跳过（幂等，避免多余请求）。
+                        scheduleRevokeRetry(messageId, channelID, channelType, 1, 500);
+                        scheduleRevokeRetry(messageId, channelID, channelType, 2, 1500);
                     } else {
                         WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);
                         if (wkMsg != null) {
@@ -679,6 +688,87 @@ public class WKIMUtils {
                 });
             }
         }
+    }
+
+    /**
+     * 撤回 CMD 时序竞态兜底：延迟 {@code delayMs} 后如果本地目标 msg 尚未 mark 撤回，
+     * 再调一次 {@link MsgModel#syncExtraMsg}。查本地状态确保幂等，避免无谓请求。
+     */
+    private void scheduleRevokeRetry(String messageId, String channelID, byte channelType, int attempt, long delayMs) {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+                WKMsg local = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);
+                boolean alreadyRevoked = local != null && local.remoteExtra != null && local.remoteExtra.revoke == 1;
+                if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug",
+                        "[revokeMsg] retry attempt=" + attempt + " messageId=" + messageId
+                                + " alreadyRevoked=" + alreadyRevoked);
+                if (!alreadyRevoked) {
+                    MsgModel.getInstance().syncExtraMsg(channelID, channelType);
+                }
+            });
+        }, delayMs);
+    }
+
+    /**
+     * 对齐 iOS 自己撤回架构：{@code POST /message/revoke} HTTP 200 后立即本地 mark
+     * 目标消息 {@code remoteExtra.revoke=1, revoker=self.uid}，然后触发 UI 刷新。
+     *
+     * <p>为什么不"欺骗自己"：服务端 HTTP 200 已确认撤回成功，服务端也会推 CMD
+     * 给其它设备 / 其它用户，全局状态一致。本地 mark 只是**同步这个已知事实**到
+     * 当前设备 UI —— 对齐 iOS WKMessageManagerDelegateImp.m:137-138 的做法。
+     *
+     * <p>为什么必须做：服务端 syncMessageExtra 的 cache 逻辑（api.go:1258-1268）
+     * 可能返回 resultSize=0（用户实测 6 次撤回 4 次踩坑），只依赖 CMD → sync 路径
+     * 会永久卡住。iOS 通过"HTTP 200 立即本地 mark"绕过整个 sync 依赖。
+     *
+     * <p>用 clientMsgNo 查本地 msg（比传入 messageId 更稳，处理 messageID 尚未
+     * 从 IM ack 回填的场景）。若本地 msgID 仍为空则跳过（此消息扩展表按 messageID
+     * 索引，无法写入）—— 交给后续 IM ack + CMD 兜底。
+     *
+     * <p>他人撤回场景仍走 CMD → syncExtraMsg 路径（保留 [scheduleRevokeRetry] 兜底）。
+     */
+    public void markMsgRevokedLocallyByClientMsgNO(String clientMsgNo, String revoker) {
+        if (android.text.TextUtils.isEmpty(clientMsgNo)) return;
+        com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+            WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
+            if (wkMsg == null) {
+                if (BuildConfig.DEBUG) android.util.Log.w("RevokeDebug",
+                        "[markLocal] msg not found for clientMsgNo=" + clientMsgNo);
+                return;
+            }
+            String messageId = wkMsg.messageID;
+            if (android.text.TextUtils.isEmpty(messageId) || "0".equals(messageId)) {
+                if (BuildConfig.DEBUG) android.util.Log.w("RevokeDebug",
+                        "[markLocal] messageID not yet filled (=" + messageId + ") for clientMsgNo=" + clientMsgNo
+                                + " — skip local mark, rely on CMD retry");
+                return;
+            }
+
+            WKSyncExtraMsg syncExtra = new WKSyncExtraMsg();
+            syncExtra.message_id = messageId;
+            syncExtra.revoke = 1;
+            syncExtra.revoker = revoker;
+            // 保留其它 remoteExtra 字段避免 insertOrReplace 覆盖丢失 (readed/pinned/editedAt 等)。
+            if (wkMsg.remoteExtra != null) {
+                syncExtra.readed = wkMsg.remoteExtra.readed;
+                syncExtra.readed_count = wkMsg.remoteExtra.readedCount;
+                syncExtra.unread_count = wkMsg.remoteExtra.unreadCount;
+                syncExtra.is_mutual_deleted = wkMsg.remoteExtra.isMutualDeleted;
+                syncExtra.is_pinned = wkMsg.remoteExtra.isPinned;
+                syncExtra.extra_version = wkMsg.remoteExtra.extraVersion;
+                syncExtra.edited_at = wkMsg.remoteExtra.editedAt;
+            }
+            List<WKSyncExtraMsg> list = new ArrayList<>();
+            list.add(syncExtra);
+            WKChannel channel = new WKChannel();
+            channel.channelID = wkMsg.channelID;
+            channel.channelType = wkMsg.channelType;
+            WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(channel, list);
+
+            if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug",
+                    "[markLocal] revoke=1 marked messageID=" + messageId
+                            + " clientMsgNo=" + clientMsgNo + " revoker=" + revoker);
+        });
     }
 
 

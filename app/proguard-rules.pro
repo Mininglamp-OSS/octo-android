@@ -160,6 +160,9 @@
 -keep class com.chat.base.net.entity.** { *; }
 -keep class com.chat.base.msg.model.** { *; }
 -keep class com.chat.base.msgcontent.** { *; }
+# 频道内搜索 DTO：CursorList/FileHit/MediaHit/MessageHit/CombinedHit/AroundResult/Pagination
+# 走 FastJson 反射按字段名映射 JSON，不 keep 会被 R8 重命名字段导致反序列化产物类型错乱 → checkcast CCE
+-keep class com.chat.base.search.channel.dto.** { *; }
 #----------登录模块---------------
 -keep class com.chat.login.entity.** { *; }
 #----------uikit模块--------------

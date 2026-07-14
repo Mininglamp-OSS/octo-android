@@ -35,8 +35,12 @@ class TextPreviewActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val title = intent.getStringExtra("title") ?: "文件预览"
-        val content = intent.getStringExtra("content") ?: ""
         filePath = intent.getStringExtra("filePath") ?: ""
+
+        // 优先取 caller 预读的 content（避免重复 IO）；缺失则从 filePath 兜底读取，
+        // 这样"预览"按钮不用重复实现"读文件 + 截断"逻辑就能复用本 Activity。
+        val extraContent = intent.getStringExtra("content")
+        val content = extraContent ?: readFromFilePath(filePath)
 
         supportActionBar?.apply {
             setDisplayHomeAsUpEnabled(true)
@@ -117,5 +121,20 @@ class TextPreviewActivity : AppCompatActivity() {
     companion object {
         private const val MENU_SAVE = 1001
         private const val MENU_SHARE = 1002
+
+        /** 与 WKFileProvider.TEXT_PREVIEW_EXTS 对齐的截断阈值（字符数）。 */
+        private const val MAX_CHARS = 50_000
+
+        private fun readFromFilePath(filePath: String): String {
+            if (filePath.isEmpty()) return ""
+            return try {
+                val text = File(filePath).readText(Charsets.UTF_8)
+                if (text.length > MAX_CHARS) {
+                    text.substring(0, MAX_CHARS) + "\n\n... (文件过大，仅显示前${MAX_CHARS}字符)"
+                } else text
+            } catch (_: Exception) {
+                ""
+            }
+        }
     }
 }

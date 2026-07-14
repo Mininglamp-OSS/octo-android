@@ -28,6 +28,17 @@
         android:background="@color/colorLine" />
 
     <TextView
+        android:id="@+id/actionPreview"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:gravity="center"
+        android:text="@string/str_file_preview"
+        android:textColor="@color/colorDark"
+        android:textSize="16sp"
+        android:visibility="gone"
+        android:background="?android:attr/selectableItemBackground" />
+
+    <TextView
         android:id="@+id/actionOpen"
         android:layout_width="match_parent"
         android:layout_height="52dp"

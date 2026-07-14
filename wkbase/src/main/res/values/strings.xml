@@ -129,6 +129,7 @@
     <string name="str_file">文件</string>
     <string name="str_file_download">下载</string>
     <string name="str_file_open">打开</string>
+    <string name="str_file_preview">预览</string>
     <string name="str_file_download_fail">文件下载失败</string>
     <string name="str_file_not_exist">文件不存在</string>
     <string name="str_file_too_large">文件大小超过100MB，无法发送</string>

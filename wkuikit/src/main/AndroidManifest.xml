@@ -127,6 +127,16 @@
             android:label="文件预览" />
 
         <activity
+            android:name="com.chat.uikit.chat.provider.PdfPreviewActivity"
+            android:theme="@style/Theme.AppCompat.Light"
+            android:label="PDF" />
+
+        <activity
+            android:name="com.chat.uikit.chat.provider.XlsxPreviewActivity"
+            android:theme="@style/Theme.AppCompat.Light"
+            android:label="Excel" />
+
+        <activity
             android:name="com.chat.uikit.chat.provider.FileSaveActivity"
             android:theme="@style/Theme.AppCompat.Translucent" />
 

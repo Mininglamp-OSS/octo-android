@@ -199,6 +199,11 @@
 -keep class com.chat.label.entity.** { *; }
 #----------表情模块------------------
 -keep class com.chat.sticker.entity.** { *; }
+# 自定义贴纸 (uikit) DTO：WKSticker / ListStickerResp / StickerService
+# 走 FastJson 反射按字段名映射 JSON ({"list":[...]})，不 keep 会被 R8 重命名字段
+# 导致 collect / list 反序列化失败 → release 包"添加到我的表情"回调走 onFail
+-keep class com.chat.uikit.chat.sticker.** { *; }
+-keep interface com.chat.uikit.chat.sticker.StickerService { *; }
 #----------客服------------------
 -keep class com.chat.customerservice.entity.** { *; }
 #----------隐私安全------------------

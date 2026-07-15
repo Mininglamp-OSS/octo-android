@@ -103,6 +103,14 @@ import com.chat.uikit.chat.manager.WKRichTextSender
 import com.chat.uikit.chat.manager.WKSendMsgUtils
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent
 import com.chat.uikit.contacts.service.FriendModel
+import com.chat.uikit.chat.sticker.CollectStickerAdapter
+import com.chat.uikit.chat.sticker.StickerUrlUtils
+import com.chat.uikit.chat.sticker.WKSticker
+import com.chat.uikit.chat.sticker.WKStickerManager
+import com.chat.uikit.chat.sticker.WKStickerUploader
+import com.chat.base.glide.ChooseMimeType
+import com.chat.base.glide.ChooseResult
+import com.chat.base.msg.model.WKVectorStickerContent
 import com.chat.uikit.group.GroupMemberEntity
 import com.chat.uikit.group.RemindMemberAdapter
 import com.chat.uikit.group.service.GroupModel
@@ -204,6 +212,11 @@ class ChatPanelManager(
     private var trayLayout: LinearLayout? = null
     private var trayRecyclerView: RecyclerView? = null
     private var trayAdapter: WKRichTextTrayAdapter? = null
+
+    // Sticker panel adapter：仅在 buildStickerContentView 内使用，字段保留是为了未来加
+    // "重排 / 管理"等入口时不用改签名。当前长按走 StickerDetailPopup 预览，不再持有
+    // 编辑态。
+    private var stickerAdapter: CollectStickerAdapter? = null
     // 托盘发送 in-flight 防重入（对齐 Phase 1 YUJ-2872 defect b / web#227 sendingRef）：
     // 一条托盘发送在等图片异步上传期间，托盘 + 文本仍留在 UI（仅内存，进程死会丢失托盘图片，
     // 文本草稿另有持久化）。若此时用户再点发送键，会把同一批 tray + text 再打一条 → 重复
@@ -2303,6 +2316,96 @@ class ChatPanelManager(
     }
 
     private fun getEmojiLayout(): View {
+        val activity = iConversationContext.chatActivity
+
+        // 两个内容 View：emoji grid + 我的贴图 grid。
+        // 复用原 emoji 行为不变，另建 sticker 视图与之切换。
+        val emojiContent = buildEmojiContentView()
+        val stickerContent = buildStickerContentView()
+
+        val contentContainer = FrameLayout(activity)
+
+        // 顶部 tab bar：两个按钮 emoji / 我的贴图。
+        val tabBar = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(
+                AndroidUtilities.dp(8f), AndroidUtilities.dp(4f),
+                AndroidUtilities.dp(8f), AndroidUtilities.dp(4f)
+            )
+        }
+        val emojiTabBtn = buildEmojiPanelTabButton(activity.getString(R.string.str_emoji_tab))
+        val stickerTabBtn = buildEmojiPanelTabButton(activity.getString(R.string.str_my_stickers_tab))
+        tabBar.addView(
+            emojiTabBtn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+        )
+        tabBar.addView(
+            stickerTabBtn,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+        )
+
+        fun selectTab(index: Int) {
+            val selColor = Theme.colorAccount
+            val normalColor = ContextCompat.getColor(activity, R.color.color999)
+            emojiTabBtn.setTextColor(if (index == 0) selColor else normalColor)
+            stickerTabBtn.setTextColor(if (index == 1) selColor else normalColor)
+            contentContainer.removeAllViews()
+            if (index == 0) {
+                contentContainer.addView(emojiContent)
+                // 离开贴图 tab 时退出编辑态
+                stickerAdapter?.setEditMode(false)
+            } else {
+                contentContainer.addView(stickerContent)
+                // 每次切到贴图 tab 都 refresh 一次收藏列表（含首次进入拉数据）。
+                WKStickerManager.load()
+            }
+        }
+        emojiTabBtn.setOnClickListener { selectTab(0) }
+        stickerTabBtn.setOnClickListener { selectTab(1) }
+
+        var height = WKConstants.getKeyboardHeight()
+        if (height == 0) {
+            height = AndroidUtilities.getScreenHeight() / 3
+        }
+        val tabBarHeightDp = 36
+        val contentHeightPx = height - AndroidUtilities.dp(tabBarHeightDp.toFloat())
+
+        val root = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(
+            tabBar,
+            LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, tabBarHeightDp)
+        )
+        root.addView(
+            contentContainer,
+            LayoutHelper.createLinear(
+                LayoutHelper.MATCH_PARENT,
+                (contentHeightPx / AndroidUtilities.density).toInt()
+            )
+        )
+
+        selectTab(0)  // 默认 emoji tab
+        return root
+    }
+
+    private fun buildEmojiPanelTabButton(label: String): AppCompatTextView {
+        val activity = iConversationContext.chatActivity
+        return AppCompatTextView(activity).apply {
+            text = label
+            gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(activity, R.color.color999))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(0, AndroidUtilities.dp(6f), 0, AndroidUtilities.dp(6f))
+            Theme.setPressedBackground(this)
+        }
+    }
+
+    /**
+     * 抽取自旧 [getEmojiLayout]：emoji grid 视图，行为完全不变。
+     * onAttachedToWindow 在 tab 切换 / 面板重开时重新走"最近使用"排序。
+     */
+    private fun buildEmojiContentView(): View {
+        val activity = iConversationContext.chatActivity
         val width = AndroidUtilities.getScreenWidth() - AndroidUtilities.dp(30f) * 8
         val customList = EmojiManager.getInstance().getEmojiWithType("custom_")
         val normalList = EmojiManager.getInstance().getEmojiWithType("0_")
@@ -2314,38 +2417,27 @@ class ChatPanelManager(
             addAll(naturelList)
             addAll(symbolsList)
         }
-        // 初始就按"最近使用"排序——已点过的冒到前面，剩下按 custom→normal→natural→symbols 原顺序。
         val emojiAdapter = EmojiAdapter(buildOrderedEmojiList(baseList), width)
-        // 用匿名子类覆盖 onAttachedToWindow：每次面板被 ChatPanelManager.toolBarClick 通过
-        // moreLayout.removeAllViews() + addView() 重新挂上时，按最新 prefs 重排一次。
-        // 这样同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
+        // onAttachedToWindow：tab 切回来或面板重开时按最新 prefs 重排。
+        // 同一次面板期间顺序保持稳定（点击不当场跳位），下次打开才生效——对齐
         // WeChat / iOS 的体验（iOS WKEmojiContentView 也不在 didSelect 后 reloadData）。
-        val emojiLayout = object : LinearLayout(iConversationContext.chatActivity) {
+        val emojiLayout = object : LinearLayout(activity) {
             override fun onAttachedToWindow() {
                 super.onAttachedToWindow()
                 emojiAdapter.setList(buildOrderedEmojiList(baseList))
             }
         }
-        val recyclerView = RecyclerView(iConversationContext.chatActivity)
-        val emojiLayoutManager = GridLayoutManager(iConversationContext.chatActivity, 8)
-        recyclerView.layoutManager = emojiLayoutManager
+        val recyclerView = RecyclerView(activity)
+        recyclerView.layoutManager = GridLayoutManager(activity, 8)
         recyclerView.adapter = emojiAdapter
-        var height = WKConstants.getKeyboardHeight()
-        if (height == 0) {
-            height = AndroidUtilities.getScreenHeight() / 3
-        }
         emojiLayout.addView(
             recyclerView,
-            LayoutHelper.createLinear(
-                LayoutHelper.MATCH_PARENT,
-                (height / AndroidUtilities.density).toInt()
-            )
+            LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT)
         )
 
         emojiAdapter.setOnItemClickListener { adapter, _, position ->
             val emojiEntry = adapter.getItem(position) as EmojiEntry
             if (emojiEntry.tag.startsWith("custom_")) {
-                // 自定义表情直接作为独立消息发送
                 val textContent = WKTextContent(emojiEntry.text)
                 iConversationContext.sendMessage(textContent)
             } else {
@@ -2357,10 +2449,210 @@ class ChatPanelManager(
                 MoonUtil.addEmojiSpan(editText, emojiEntry.text, iConversationContext.chatActivity)
                 editText.setSelection(curPosition + emojiEntry.text.length)
             }
-            // 仅写 prefs，不当场 setList——本次面板顺序保持稳定，避免点完一个就跳位的割裂感。
             recordRecentEmoji(emojiEntry.text)
         }
         return emojiLayout
+    }
+
+    /**
+     * 我的贴图 tab —— 1:1 复刻 iOS `WKMyStickerContentView` 两段式交互：
+     * - 5 列 [GridLayoutManager]，首格永远是 "+"（触发相册选图上传）
+     * - 非编辑态：tap 发送 / 长按进入编辑态（haptic 中等震感）
+     * - 编辑态：cells 抖动 + × 徽章；tap 退出编辑态；tap × 二次确认删除；
+     *   长按 hold-still 500ms 弹预览；长按+移动由 [ItemTouchHelper] 接管拖拽重排
+     * - 退出编辑态：tap 空白 / 切 tab / tap sticker / tap "+"
+     * - 数据源 [WKStickerManager.stickersLiveData]，本地顺序 [com.chat.uikit.chat.sticker.StickerLocalOrderStore]
+     *
+     * [ItemTouchHelper.isLongPressDragEnabled] 置为 false —— drag 由 Adapter 内部
+     * [com.chat.uikit.chat.sticker.CollectStickerAdapter.Callbacks.startDrag] 手动
+     * 触发，因为需要区分"长按 hold-still 出预览" vs "长按+移动出 drag"。
+     */
+    private fun buildStickerContentView(): View {
+        val activity = iConversationContext.chatActivity
+        val container = FrameLayout(activity)
+
+        // 拖拽重排：编辑态启用，"+" 首格禁止移动。
+        // isLongPressDragEnabled=false —— 由 Adapter 的 EditModeTouchListener 手动决定
+        // 何时 startDrag（区分"长按 hold-still 出预览"vs"长按+移动出 drag"）。
+        val touchCallback = object : ItemTouchHelper.Callback() {
+            override fun isLongPressDragEnabled(): Boolean = false
+            override fun isItemViewSwipeEnabled(): Boolean = false
+
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int {
+                if (stickerAdapter?.isEditMode() != true) return 0
+                if (viewHolder.bindingAdapterPosition == 0) return 0 // "+" 不可拖
+                val dragFlags = ItemTouchHelper.UP or ItemTouchHelper.DOWN or
+                    ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+                return makeMovementFlags(dragFlags, 0)
+            }
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                if (target.bindingAdapterPosition == 0) return false
+                return stickerAdapter?.moveItem(
+                    viewHolder.bindingAdapterPosition,
+                    target.bindingAdapterPosition
+                ) ?: false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                stickerAdapter?.currentOrderIds()?.let { WKStickerManager.reorder(it) }
+            }
+        }
+        val itemTouchHelper = ItemTouchHelper(touchCallback)
+
+        val adapter = CollectStickerAdapter(object : CollectStickerAdapter.Callbacks {
+            override fun onAddClick() {
+                // 编辑态点 "+"：iOS 上会先退出编辑态。Android 保持一致 —— 先退出再打开选图
+                stickerAdapter?.takeIf { it.isEditMode() }?.setEditMode(false)
+                pickAndUploadSticker(activity)
+            }
+
+            override fun onStickerClick(sticker: WKSticker, position: Int) {
+                sendCollectedSticker(sticker)
+            }
+
+            override fun onEnterEditMode() {
+                stickerAdapter?.setEditMode(true)
+                // Haptic 中等震感，对齐 iOS UIImpactFeedbackStyleMedium
+                container.performHapticFeedback(
+                    android.view.HapticFeedbackConstants.LONG_PRESS
+                )
+            }
+
+            override fun onPreviewSticker(sticker: WKSticker, position: Int) {
+                com.chat.uikit.chat.sticker.StickerDetailPopup.showForPanel(activity, sticker) {
+                    sendCollectedSticker(it)
+                }
+            }
+
+            override fun onDeleteSticker(sticker: WKSticker, position: Int) {
+                confirmDeleteSticker(activity, sticker)
+            }
+
+            override fun startDrag(viewHolder: RecyclerView.ViewHolder) {
+                itemTouchHelper.startDrag(viewHolder)
+            }
+        })
+        stickerAdapter = adapter
+
+        val recyclerView = RecyclerView(activity).apply {
+            layoutManager = GridLayoutManager(activity, 5)
+            this.adapter = adapter
+            itemAnimator = DefaultItemAnimator()
+            // tap 空白（非任何 cell）退出编辑态
+            addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+                override fun onInterceptTouchEvent(rv: RecyclerView, e: android.view.MotionEvent): Boolean {
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_UP &&
+                        stickerAdapter?.isEditMode() == true &&
+                        rv.findChildViewUnder(e.x, e.y) == null
+                    ) {
+                        stickerAdapter?.setEditMode(false)
+                    }
+                    return false
+                }
+            })
+        }
+        itemTouchHelper.attachToRecyclerView(recyclerView)
+
+        container.addView(
+            recyclerView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        val emptyTv = AppCompatTextView(activity).apply {
+            text = activity.getString(R.string.str_no_collect_stickers)
+            gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(activity, R.color.color999))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            visibility = View.GONE
+            setPadding(
+                AndroidUtilities.dp(24f), AndroidUtilities.dp(80f),
+                AndroidUtilities.dp(24f), 0
+            )
+        }
+        container.addView(
+            emptyTv,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP
+            )
+        )
+
+        WKStickerManager.stickersLiveData.observe(activity) { list ->
+            val safeList = list ?: emptyList()
+            adapter.submitList(safeList)
+            emptyTv.visibility = if (safeList.isEmpty()) View.VISIBLE else View.GONE
+        }
+
+        return container
+    }
+
+    /** 拉起相册选一张图 → 客户端校验 → 上传。UI 层不关心细节，交给 [WKStickerUploader]。 */
+    private fun pickAndUploadSticker(activity: android.app.Activity) {
+        GlideUtils.getInstance().chooseIMG(
+            activity, 1, false, ChooseMimeType.img, false, false,
+            object : GlideUtils.ISelectBack {
+                override fun onBack(paths: MutableList<ChooseResult>?) {
+                    val first = paths?.firstOrNull { it.path?.isNotEmpty() == true } ?: return
+                    val file = java.io.File(first.path)
+                    WKStickerUploader.upload(file, object : WKStickerUploader.Callback {
+                        override fun onSuccess(sticker: WKSticker) {
+                            // WKStickerUploader 内部已 toast 成功，此处不重复
+                        }
+                        override fun onError(messageResId: Int) {
+                            if (messageResId != 0) {
+                                com.chat.base.utils.WKToastUtils.getInstance()
+                                    .showToastNormal(activity.getString(messageResId))
+                            }
+                        }
+                    })
+                }
+                override fun onCancel() {}
+            }
+        )
+    }
+
+    /** 点击已收藏的贴纸 → 构造 [WKVectorStickerContent] 发送。 */
+    private fun sendCollectedSticker(sticker: WKSticker) {
+        val content = WKVectorStickerContent().apply {
+            url = sticker.path
+            category = if (sticker.category.isNullOrEmpty()) "user" else sticker.category
+            placeholder = sticker.placeholder ?: ""
+            format = when {
+                !sticker.format.isNullOrEmpty() -> sticker.format
+                else -> StickerUrlUtils.extractExt(sticker.path) ?: "png"
+            }
+        }
+        iConversationContext.sendMessage(content)
+    }
+
+    /** 编辑态点 × → 二次确认 → 走 API 删除。 */
+    private fun confirmDeleteSticker(activity: android.app.Activity, sticker: WKSticker) {
+        WKDialogUtils.getInstance().showDialog(
+            activity,
+            null,
+            activity.getString(R.string.str_sticker_delete_confirm),
+            true,
+            activity.getString(R.string.cancel),
+            activity.getString(R.string.sure),
+            0, 0
+        ) { which ->
+            if (which == 1) WKStickerManager.delete(sticker.sticker_id, null)
+        }
     }
 
     /**

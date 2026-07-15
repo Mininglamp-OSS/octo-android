@@ -46,7 +46,7 @@
                 android:focusable="true"
                 android:focusableInTouchMode="true"
                 android:hint="@string/str_thread_name_hint"
-                android:maxLength="50"
+                android:maxLength="100"
                 android:maxLines="1"
                 android:minHeight="44dp"
                 android:paddingHorizontal="12dp"

@@ -129,6 +129,7 @@
     <string name="str_file">文件</string>
     <string name="str_file_download">下载</string>
     <string name="str_file_open">打开</string>
+    <string name="str_file_preview">预览</string>
     <string name="str_file_download_fail">文件下载失败</string>
     <string name="str_file_not_exist">文件不存在</string>
     <string name="str_file_too_large">文件大小超过100MB，无法发送</string>
@@ -235,4 +236,26 @@
     <string name="richtext_image_limit">最多只能选择 %d 张图片</string>
     <string name="richtext_caption_title">添加描述</string>
     <string name="richtext_caption_hint">说点什么…</string>
+
+    <!-- i18n: Sticker collect -->
+    <string name="str_add_to_my_stickers">添加到我的表情</string>
+    <string name="str_sticker_add_success">已添加到我的表情</string>
+    <string name="str_sticker_add_failed">添加失败，请稍后重试</string>
+    <string name="str_no_collect_stickers">还没有表情，点 + 添加</string>
+    <string name="str_my_stickers_tab">自定义表情</string>
+    <string name="str_emoji_tab">表情</string>
+    <string name="str_sticker_delete_confirm">删除这个表情？</string>
+    <string name="str_sticker_delete_success">已删除</string>
+    <string name="str_sticker_delete_failed">删除失败</string>
+    <string name="str_sticker_upload_success">已添加到我的表情</string>
+    <string name="str_sticker_upload_failed">上传失败</string>
+    <string name="str_sticker_quota_exceeded">我的表情已达上限</string>
+    <string name="str_sticker_format_unsupported">仅支持 gif/png/jpg/webp</string>
+    <string name="str_sticker_too_large">图片不能超过 1MB</string>
+    <string name="str_sticker_dim_too_large">图片尺寸不能超过 512×512</string>
+    <string name="str_sticker_send">发送</string>
+    <string name="str_sticker_add_button">添加</string>
+
+    <!-- i18n: 输入长度上限提示（EditText 超长时节流 toast） -->
+    <string name="str_input_length_limit">最多 %1$d 个字符</string>
 </resources>

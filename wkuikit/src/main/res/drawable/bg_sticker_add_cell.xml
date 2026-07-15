@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- 首格 + 的背景：浅灰圆角，与 sticker 视觉平衡（点击态 selector 由代码控制 alpha） -->
+    <solid android:color="#F5F5F5" />
+    <corners android:radius="8dp" />
+</shape>

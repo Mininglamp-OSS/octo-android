@@ -127,6 +127,7 @@
     <string name="str_file">File</string>
     <string name="str_file_download">Download</string>
     <string name="str_file_open">Open</string>
+    <string name="str_file_preview">Preview</string>
     <string name="str_file_download_fail">File download failed</string>
     <string name="str_file_not_exist">File does not exist</string>
     <string name="str_file_too_large">File exceeds 100MB size limit</string>
@@ -239,4 +240,26 @@
     <string name="richtext_image_limit">You can select up to %d images</string>
     <string name="richtext_caption_title">Add Caption</string>
     <string name="richtext_caption_hint">Say something…</string>
+
+    <!-- i18n: Sticker collect -->
+    <string name="str_add_to_my_stickers">Add to My Stickers</string>
+    <string name="str_sticker_add_success">Added to My Stickers</string>
+    <string name="str_sticker_add_failed">Failed to add, please try again</string>
+    <string name="str_no_collect_stickers">No stickers yet. Tap + to add.</string>
+    <string name="str_my_stickers_tab">Custom Stickers</string>
+    <string name="str_emoji_tab">Emoji</string>
+    <string name="str_sticker_delete_confirm">Delete this sticker?</string>
+    <string name="str_sticker_delete_success">Deleted</string>
+    <string name="str_sticker_delete_failed">Failed to delete</string>
+    <string name="str_sticker_upload_success">Added to My Stickers</string>
+    <string name="str_sticker_upload_failed">Upload failed</string>
+    <string name="str_sticker_quota_exceeded">Sticker limit reached</string>
+    <string name="str_sticker_format_unsupported">Only gif/png/jpg/webp supported</string>
+    <string name="str_sticker_too_large">Image must be under 1MB</string>
+    <string name="str_sticker_dim_too_large">Image cannot exceed 512×512</string>
+    <string name="str_sticker_send">Send</string>
+    <string name="str_sticker_add_button">Add</string>
+
+    <!-- i18n: length-limit hint for EditText (throttled toast) -->
+    <string name="str_input_length_limit">Up to %1$d characters</string>
 </resources>

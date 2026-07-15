@@ -34,7 +34,7 @@
             android:paddingBottom="10dp"
             android:layout_marginBottom="10dp"
             android:hint="@string/group_name"
-            android:maxLength="30"
+            android:maxLength="50"
             android:textColor="@color/colorDark"
             android:textColorHint="@color/color999" />
     </LinearLayout>

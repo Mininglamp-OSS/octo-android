@@ -27,6 +27,7 @@ import android.widget.TextView;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.utils.StringUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.chat.ChatActivity;
@@ -37,6 +38,8 @@ import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBinding> {
+
+    private static final int THREAD_NAME_MAX_LEN = 100;
 
 
     private String groupNo;
@@ -76,6 +79,8 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
         sourceContentType = getIntent().getIntExtra("sourceContentType", 0);
         sourceFromName = getIntent().getStringExtra("sourceFromName");
         sourceFromUid = getIntent().getStringExtra("sourceFromUid");
+
+        StringUtils.attachLengthLimit(wkVBinding.threadNameEt, THREAD_NAME_MAX_LEN);
 
         if (!TextUtils.isEmpty(sourceMessageId) && !TextUtils.isEmpty(sourceContent)) {
             wkVBinding.divider.setVisibility(View.VISIBLE);
@@ -123,8 +128,8 @@ public class CreateThreadActivity extends WKBaseActivity<ActCreateThreadLayoutBi
         String name = wkVBinding.threadNameEt.getText().toString().trim();
         if (TextUtils.isEmpty(name)) {
             if (!TextUtils.isEmpty(sourceContent)) {
-                name = sourceContent.length() > 50
-                        ? sourceContent.substring(0, 50)
+                name = sourceContent.length() > THREAD_NAME_MAX_LEN
+                        ? sourceContent.substring(0, THREAD_NAME_MAX_LEN)
                         : sourceContent;
             } else {
                 name = getString(R.string.str_new_thread);

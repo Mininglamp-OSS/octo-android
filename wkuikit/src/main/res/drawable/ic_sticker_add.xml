@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <!-- "我的表情" 面板首格 + 按钮：细线 "+" 灰色 -->
+    <path
+        android:pathData="M16,8 L16,24 M8,16 L24,16"
+        android:strokeColor="#999999"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+</vector>

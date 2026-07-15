@@ -1284,23 +1284,28 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
                 PopupMenuItem(context.getString(R.string.base_withdraw), R.mipmap.msg_withdraw,
                     object : PopupMenuItem.IClick {
                         override fun onClick() {
-                            var msgId = mMsg.messageID
-                            if (TextUtils.isEmpty(msgId) || msgId == "0") {
-                                msgId = mMsg.clientMsgNO
-                            }
-                            //撤回消息
-                            if (!TextUtils.isEmpty(msgId)) {
+                            // 撤回消息：以 clientMsgNO 为准（服务端 message/revoke 强制要求）。
+                            // messageID 空或 "0"（刚发送尚未 IM ack 回填）时传空字符串——
+                            // 老代码把 clientMsgNO 塞给 message_id 会触发服务端 TOCTOU
+                            // 校验 verifyRevokeMessageID：strconv.ParseInt(clientMsgNo=UUID) 必失败
+                            // → ErrMessageIDSeqMismatch → 用户端表现"刚发的贴图/消息撤回无反应"
+                            // 或"要撤好几次才成功"（等 messageID 回填后才能过校验）。
+                            // 空 message_id 服务端会跳过校验并用 client_msg_no 自行反查。
+                            val realMsgId = mMsg.messageID
+                            val safeMsgId =
+                                if (TextUtils.isEmpty(realMsgId) || realMsgId == "0") ""
+                                else realMsgId
+                            if (!TextUtils.isEmpty(mMsg.clientMsgNO)) {
                                 EndpointManager.getInstance().invoke(
                                     "chat_withdraw_msg",
                                     WithdrawMsgMenu(
-                                        msgId,
+                                        safeMsgId,
                                         mMsg.channelID,
                                         mMsg.clientMsgNO,
                                         mMsg.channelType
                                     )
                                 )
                             }
-
                         }
                     })
             )

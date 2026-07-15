@@ -22,6 +22,7 @@ import android.widget.TextView;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.utils.SoftKeyboardUtils;
+import com.chat.base.utils.StringUtils;
 import com.chat.uikit.R;
 import com.chat.uikit.databinding.ActUpdateGroupNameLayoutBinding;
 import com.chat.uikit.group.service.GroupModel;
@@ -36,6 +37,8 @@ import java.util.Objects;
  * 修改群名称
  */
 public class UpdateGroupNameActivity extends WKBaseActivity<ActUpdateGroupNameLayoutBinding> {
+
+    private static final int GROUP_NAME_MAX_LEN = 50;
 
     String groupNo;
     WKChannel channel;
@@ -93,6 +96,7 @@ public class UpdateGroupNameActivity extends WKBaseActivity<ActUpdateGroupNameLa
             wkVBinding.nameEt.setText(channel.channelName);
             wkVBinding.nameEt.setSelection(channel.channelName.length());
         }
+        StringUtils.attachLengthLimit(wkVBinding.nameEt, GROUP_NAME_MAX_LEN);
         SoftKeyboardUtils.getInstance().showSoftKeyBoard(UpdateGroupNameActivity.this, wkVBinding.nameEt);
     }
 

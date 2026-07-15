@@ -62,3 +62,16 @@ google-services.json
 
 # Internal scripts (not part of open source)
 scripts/
+
+# Local dev / agent tooling workspace files (personal, not project-wide)
+/AGENTS.md
+/HEARTBEAT.md
+/IDENTITY.md
+/SOUL.md
+/TOOLS.md
+/USER.md
+/openclaw-workspace-state.json
+/.claude/
+/.kotlin/
+/.octospec/
+/app/prod/

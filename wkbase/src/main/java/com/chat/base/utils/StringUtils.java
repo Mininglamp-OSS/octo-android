@@ -529,13 +529,31 @@ public class StringUtils {
     }
 
     public static InputFilter getInputFilter(int mMax) {
+        return getInputFilter(mMax, null);
+    }
+
+    /**
+     * Attach a length limit to {@code editText} that also surfaces a throttled toast when the
+     * user tries to type past {@code maxLength}. Replaces any existing filters on the field.
+     */
+    public static void attachLengthLimit(EditText editText, int maxLength) {
+        Runnable toast = new ThrottledRunnable(2000L, () ->
+                WKToastUtils.getInstance().showToastNormal(
+                        editText.getContext().getString(R.string.str_input_length_limit, maxLength)));
+        editText.setFilters(new InputFilter[]{getInputFilter(maxLength, toast)});
+    }
+
+    /**
+     * Length-limiting {@link InputFilter} that additionally invokes {@code onTruncate} whenever
+     * the incoming edit had to be shortened or fully rejected to fit within {@code mMax}. Wrap
+     * the callback in {@link ThrottledRunnable} to avoid firing on every keystroke of a
+     * long-press or paste that overflows.
+     */
+    public static InputFilter getInputFilter(int mMax, Runnable onTruncate) {
         return (source, start, end, dest, dstart, dend) -> {
             int keep = mMax - (dest.length() - (dend - dstart));
             if (keep <= 0) {
-                //这里，用来给用户提示,当然可以替换成 更加优雅的形式
-//                    if (null != lengthListener) {
-//                        lengthListener.pass();
-//                    }
+                if (end > start && onTruncate != null) onTruncate.run();
                 return "";
             } else if (keep >= end - start) {
                 return null;
@@ -544,9 +562,11 @@ public class StringUtils {
                 if (Character.isHighSurrogate(source.charAt(keep - 1))) {
                     --keep;
                     if (keep == start) {
+                        if (onTruncate != null) onTruncate.run();
                         return "";
                     }
                 }
+                if (onTruncate != null) onTruncate.run();
                 return source.subSequence(start, keep);
             }
         };

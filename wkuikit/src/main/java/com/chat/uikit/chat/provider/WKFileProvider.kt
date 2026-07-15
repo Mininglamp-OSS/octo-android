@@ -152,7 +152,37 @@ class WKFileProvider : WKChatBaseProvider() {
         // Extract basename to prevent path traversal (../ or /)
         val basename = File(name).name
         // Remove any remaining dangerous characters
-        return basename.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val cleaned = basename.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        // Linux 文件系统 NAME_MAX = 255 字节 (UTF-8, 不是字符)。
+        // 长中文/emoji 文件名（3~4 字节/字符）很容易越界，导致 FileOutputStream 抛
+        // ENAMETOOLONG 静默失败，用户观感是"点了没反应"。留 55 字节余量。
+        return truncateToByteLength(cleaned, MAX_FILENAME_BYTES)
+    }
+
+    /** 按 UTF-8 字节长度截断文件名，保留扩展名，按 code point 边界截取避免破坏字符。 */
+    private fun truncateToByteLength(name: String, maxBytes: Int): String {
+        if (name.toByteArray(Charsets.UTF_8).size <= maxBytes) return name
+        val dot = name.lastIndexOf('.')
+        val ext = if (dot > 0) name.substring(dot) else ""
+        val base = if (dot > 0) name.substring(0, dot) else name
+        val extBytes = ext.toByteArray(Charsets.UTF_8).size
+        val baseBudget = (maxBytes - extBytes).coerceAtLeast(1)
+
+        val sb = StringBuilder()
+        var used = 0
+        var i = 0
+        while (i < base.length) {
+            val cp = base.codePointAt(i)
+            val charCount = Character.charCount(cp)
+            val cpStr = base.substring(i, i + charCount)
+            val chBytes = cpStr.toByteArray(Charsets.UTF_8).size
+            if (used + chBytes > baseBudget) break
+            sb.append(cpStr)
+            used += chBytes
+            i += charCount
+        }
+        if (sb.isEmpty()) sb.append("file")
+        return sb.toString() + ext
     }
 
     private fun handleFileClick(
@@ -221,12 +251,53 @@ class WKFileProvider : WKChatBaseProvider() {
 
     companion object {
 
+        /** 文件名 UTF-8 字节长度上限（Linux NAME_MAX=255，留 55 字节余量给临时后缀/挂载点差异）。 */
+        private const val MAX_FILENAME_BYTES = 200
+
+        /** 文本预览截断阈值（字符数），与 [TextPreviewActivity] 内部常量对齐。 */
+        private const val TEXT_PREVIEW_MAX_CHARS = 50_000
+
+        /** App 内以纯文本形式展示（走 [TextPreviewActivity]）的扩展名白名单。
+         *  同时驱动"打开"路径的 dispatch 与 BottomSheet "预览"按钮的显隐。 */
+        private val TEXT_PREVIEW_EXTS = setOf(
+            "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
+            "conf", "cfg", "ini", "properties", "toml",
+            "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
+            "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
+            "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore",
+        )
+
         @JvmStatic
         fun openFileWithOptions(context: Context, file: File) {
             val activity = context as? Activity ?: return
             if (activity.isFinishing || activity.isDestroyed) return
             val dialog = BottomSheetDialog(activity)
             val sheetView = LayoutInflater.from(activity).inflate(R.layout.bottom_sheet_file_actions, null)
+
+            // 预览按钮：pdf / xlsx / 纯文本 显示，走 App 内预览；与"打开"（系统 Intent）分开走两条路
+            // 避免影响原有"打开"逻辑。对齐 iOS WKSafeFilePreviewVC。xls / doc / ppt 老格式暂不支持。
+            val ext = file.extension.lowercase(Locale.getDefault())
+            val previewClass: Class<*>? = when {
+                ext == "pdf" -> PdfPreviewActivity::class.java
+                ext == "xlsx" -> XlsxPreviewActivity::class.java
+                ext in TEXT_PREVIEW_EXTS -> TextPreviewActivity::class.java
+                else -> null
+            }
+            val previewView = sheetView.findViewById<View>(R.id.actionPreview)
+            if (previewClass != null) {
+                previewView.visibility = View.VISIBLE
+                previewView.setOnClickListener {
+                    dialog.dismiss()
+                    val intent = Intent(context, previewClass).apply {
+                        putExtra("title", file.name)
+                        putExtra("filePath", file.absolutePath)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+            } else {
+                previewView.visibility = View.GONE
+            }
 
             sheetView.findViewById<View>(R.id.actionOpen).setOnClickListener {
                 dialog.dismiss()
@@ -267,26 +338,16 @@ class WKFileProvider : WKChatBaseProvider() {
 
         private fun openFileDirectlyStatic(context: Context, file: File) {
             val ext = file.extension.lowercase(Locale.getDefault())
-            if (ext in listOf(
-                    "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
-                    "conf", "cfg", "ini", "properties", "toml",
-                    "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
-                    "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
-                    "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore"
-                )) {
-                try {
-                    val content = file.readText(Charsets.UTF_8).let {
-                        if (it.length > 50000) it.substring(0, 50000) + "\n\n... (文件过大，仅显示前50000字符)" else it
-                    }
-                    val intent = Intent(context, TextPreviewActivity::class.java)
-                    intent.putExtra("title", file.name)
-                    intent.putExtra("content", content)
-                    intent.putExtra("filePath", file.absolutePath)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-                    WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_not_exist))
-                }
+            if (ext in TEXT_PREVIEW_EXTS) {
+                // bounded 后主线程读上限 50k 字符 (≈200KB UTF-8) 通常 <10ms，避免旧
+                // `readText()` 全文加载导致 100MB `.log` OOM/ANR (#92 review B5)。
+                val content = TextPreviewLoader.readBounded(file, TEXT_PREVIEW_MAX_CHARS)
+                val intent = Intent(context, TextPreviewActivity::class.java)
+                intent.putExtra("title", file.name)
+                intent.putExtra("content", content)
+                intent.putExtra("filePath", file.absolutePath)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
                 return
             }
             try {

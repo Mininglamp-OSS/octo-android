@@ -26,7 +26,6 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
-import android.text.InputFilter;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.GestureDetector;
@@ -374,7 +373,7 @@ public class WKDialogUtils {
             editText.setText(oldStr);
             editText.setSelection(oldStr.length());
         }
-        editText.setFilters(new InputFilter[]{StringUtils.getInputFilter(maxLength)});
+        StringUtils.attachLengthLimit(editText, maxLength);
         SoftKeyboardUtils.getInstance().showSoftKeyBoard(context, editText);
         linearLayout.addView(editText, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.START, 24, 0, 24, 0));
         builder.setView(linearLayout);

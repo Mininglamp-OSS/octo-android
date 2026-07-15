@@ -209,7 +209,7 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
         WKDialogUtils.getInstance().showInputDialog(this,
                 getString(R.string.str_rename_thread),
                 getString(R.string.str_rename_thread_hint),
-                currentName, "", 50, text -> {
+                currentName, "", 100, text -> {
                     String trimmed = text.trim();
                     if (TextUtils.isEmpty(trimmed)) {
                         WKToastUtils.getInstance().showToastNormal(getString(R.string.str_thread_name_empty));

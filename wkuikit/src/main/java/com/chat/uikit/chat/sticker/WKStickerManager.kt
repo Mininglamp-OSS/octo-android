@@ -166,13 +166,26 @@ object WKStickerManager : WKBaseModel() {
      * ⚠️ [StickerLocalOrderStore.write] 走 `apply()` 异步落盘，同一 tick 立刻 `read()`
      * 可能拿到旧值 → applyOrder 用旧顺序重排 → LiveData 发出旧顺序 →
      * 观察者 submitList(旧序) → notifyDataSetChanged → 视觉反弹回旧序。
-     * 所以这里必须用参数 [orderedIds] 直接排序，不走 SP 读回路径。
+     * 所以这里必须用参数 [orderedIds] 直接排序，不走 SP 读回路径——契约测试见
+     * `WKStickerManagerReorderTest`。
      */
     fun reorder(orderedIds: List<String>) {
         StickerLocalOrderStore.write(orderedIds)
-        cache = StickerLocalOrderStore.applyOrder(orderedIds, cache)
+        cache = reorderCache(orderedIds, cache)
         stickersLiveData.value = cache
     }
+
+    /**
+     * 纯函数版本：拿参数 [orderedIds] 直接排 [current]，不读任何持久化状态。
+     *
+     * 抽出成 `internal` 可见的原因：`reorder()` 会写 SP、发 LiveData——JVM 单测
+     * 测不到；但"结果只由参数决定，不从 SP 回读"这个 race-free 契约必须锁死，
+     * 否则回退成 `applyOrder(read(), cache)` 会让所有现有 [StickerLocalOrderStoreTest]
+     * 依然通过。见 `WKStickerManagerReorderTest.reorderCache_uses_only_params_no_persisted_read`。
+     */
+    @JvmStatic
+    internal fun reorderCache(orderedIds: List<String>, current: List<WKSticker>): List<WKSticker> =
+        StickerLocalOrderStore.applyOrder(orderedIds, current)
 
     /** 长按菜单判断：已收藏则不出 "添加到我的表情"（对齐 iOS 的行为）。
      *

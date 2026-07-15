@@ -738,6 +738,13 @@ public class WKIMUtils {
             }
             String messageId = wkMsg.messageID;
             if (android.text.TextUtils.isEmpty(messageId) || "0".equals(messageId)) {
+                // 已知边界（非主 66% miss 场景）：仅"消息刚发出、IM ack 还没回填 messageID"
+                // 的极小窗口才会命中。此分支跳过本地 mark（extra 表按 messageID 索引，
+                // 没有 messageID 就没法写），实际结果 = 只走服务端 CMD → syncExtraMsg
+                // 兜底。因为 HTTP revoke 本身已用 clientMsgNO 成功（服务端反查），全局
+                // 撤回一致；只是当前设备的 UI 会退回到"等 CMD"这条老路径。
+                // 需要覆盖到这个窗口，需要引入"按 clientMsgNO 索引的 pending revoke 表"，
+                // 待后续独立优化。
                 if (BuildConfig.DEBUG) android.util.Log.w("RevokeDebug",
                         "[markLocal] messageID not yet filled (=" + messageId + ") for clientMsgNo=" + clientMsgNo
                                 + " — skip local mark, rely on CMD retry");

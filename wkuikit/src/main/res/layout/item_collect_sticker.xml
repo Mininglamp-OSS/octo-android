@@ -1,19 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  表情面板 "我的贴图" tab 的单个 grid item。
-  纯 image 展示，点击由 CollectStickerAdapter setOnItemClickListener 发送贴图。
+  表情面板 "我的贴图" tab 的 sticker 单元。
+  - 默认态：只显示 stickerImageView，点击发送
+  - 编辑态（stickerRoot 由 Adapter 播抖动、deleteBadge 显示）：点 badge 触发删除，
+    单指拖动触发 ItemTouchHelper 重排
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/stickerRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="6dp">
 
     <com.chat.base.ui.components.FilterImageView
         android:id="@+id/stickerImageView"
-        android:layout_width="72dp"
-        android:layout_height="72dp"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
         android:layout_gravity="center"
         android:scaleType="fitCenter"
         android:src="@drawable/default_view_bg" />
 
+    <!-- 删除徽章：编辑态可见，位于 sticker 左上角外沿（-2dp offset 让 × 半盖在图上） -->
+    <ImageView
+        android:id="@+id/stickerDeleteBadge"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_gravity="start|top"
+        android:layout_marginStart="-2dp"
+        android:layout_marginTop="-2dp"
+        android:contentDescription="@string/str_sticker_delete_confirm"
+        android:src="@drawable/ic_sticker_delete_badge"
+        android:visibility="gone" />
+
 </FrameLayout>
+

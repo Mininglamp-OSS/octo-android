@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  贴纸详情弹窗（消息内点击贴图弹出）：中央预览 + 底部动作条。
+  尺寸：卡片 220dp 宽 × wrap_content 高，预览 180dp，按钮 44dp 高。
+-->
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    app:cardBackgroundColor="#FFFFFF"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="4dp">
+
+    <LinearLayout
+        android:layout_width="220dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="20dp">
+
+            <com.chat.base.ui.components.FilterImageView
+                android:id="@+id/stickerDetailImage"
+                android:layout_width="180dp"
+                android:layout_height="180dp"
+                android:layout_gravity="center"
+                android:scaleType="fitCenter"
+                android:src="@drawable/default_view_bg" />
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="#F0F0F0" />
+
+        <LinearLayout
+            android:id="@+id/stickerDetailButtonRow"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/stickerDetailSend"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:gravity="center"
+                android:text="@string/str_sticker_send"
+                android:textColor="@color/colorAccent"
+                android:textSize="15sp" />
+
+            <View
+                android:id="@+id/stickerDetailDivider"
+                android:layout_width="0.5dp"
+                android:layout_height="match_parent"
+                android:background="#F0F0F0" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/stickerDetailAdd"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?attr/selectableItemBackground"
+                android:gravity="center"
+                android:text="@string/str_add_to_my_stickers"
+                android:textColor="@color/colorAccent"
+                android:textSize="15sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

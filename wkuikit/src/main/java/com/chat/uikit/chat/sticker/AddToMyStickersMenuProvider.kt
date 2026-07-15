@@ -10,9 +10,7 @@
 
 package com.chat.uikit.chat.sticker
 
-import android.text.TextUtils
 import com.chat.base.WKBaseApplication
-import com.chat.base.config.WKConfig
 import com.chat.base.endpoint.EndpointCategory
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.entity.ChatItemPopupMenu
@@ -29,11 +27,14 @@ import com.xinbida.wukongim.message.type.WKMsgContentType
  * 通过 EndpointCategory.wkChatPopupItem 注册，与其他长按项（copy / create_thread /
  * forward / withdraw）平级 —— 不侵入 WKChatBaseProvider.getPopupList()。
  *
- * 过滤逻辑：
- *   msg.type 必须是 12 或 13 —— 其它消息返回 null，菜单不加。
- *   msg.fromUID == self.uid → 自己发的贴图不出菜单（iOS 未做此过滤，Android 主动优化：
- *     自己刚发出的贴图本就该在收藏里，或即将成为，再让用户"添加"逻辑上冗余）。
- *   URL 已在缓存里 → 视为已收藏，返回 null（对齐 iOS collectStickers 检查）。
+ * 过滤逻辑（对齐 iOS）：
+ *   - msg.type 必须是 12 或 13
+ *   - URL 已在缓存里视为已收藏，返回 null
+ *
+ * 早期版本还额外过滤 "msg.fromUID == self.uid"（自己发的贴图不弹菜单），
+ * 但这会误伤"用户删了自定义表情后想重新添加"的场景：删除后 isCollected=false，
+ * 本应弹菜单，但如果这条消息恰好是删除前自己用过发出去的，fromUID==self 直接被
+ * 拦掉。iOS 未做此过滤 —— 已移除，回归 iOS 行为。
  */
 object AddToMyStickersMenuProvider {
 
@@ -51,12 +52,6 @@ object AddToMyStickersMenuProvider {
             ) {
                 return@setMethod null
             }
-            // 自己发的贴图不弹菜单。selfUid 空（未登录 / 冷启动竞态）保守不过滤，
-            // 交给下面已收藏判断兜底。
-            val selfUid = WKConfig.getInstance().uid
-            if (!TextUtils.isEmpty(selfUid) && selfUid == msg.fromUID) {
-                return@setMethod null
-            }
             val content = msg.baseContentMsgModel as? WKVectorStickerContent ?: return@setMethod null
             val url = content.url
             if (url.isNullOrEmpty()) return@setMethod null
@@ -65,7 +60,10 @@ object AddToMyStickersMenuProvider {
             val label = WKBaseApplication.getInstance().context
                 .getString(BaseR.string.str_add_to_my_stickers)
             ChatItemPopupMenu(
-                R.mipmap.icon_chat_toolbar_emoji,
+                // 用矢量图 ic_menu_add_to_stickers（贴纸框 + "+" 徽章），与 msg_copy /
+                // msg_forward 同为 24dp 灰度线条风格。之前用 icon_chat_toolbar_emoji
+                // （输入面板的黄脸大图标）在长按菜单里颜色/尺寸都突兀。
+                R.drawable.ic_menu_add_to_stickers,
                 label,
                 object : ChatItemPopupMenu.IPopupItemClick {
                     override fun onClick(mMsg: WKMsg, iConversationContext: IConversationContext) {

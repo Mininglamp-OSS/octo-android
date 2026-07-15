@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  表情面板 "我的贴图" tab 的首格 "+" 上传按钮。
+  尺寸与 item_collect_sticker.xml 保持一致（padding 6dp + 60dp inner），Adapter 侧点击
+  触发相册选图 → WKStickerUploader。编辑态下半透明表示禁用。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/stickerAddRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="6dp">
+
+    <FrameLayout
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_sticker_add_cell">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/str_sticker_add_button"
+            android:src="@drawable/ic_sticker_add" />
+
+    </FrameLayout>
+
+</FrameLayout>

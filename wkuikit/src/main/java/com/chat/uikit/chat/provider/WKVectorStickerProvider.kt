@@ -21,6 +21,7 @@ import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.ui.components.FilterImageView
 import com.chat.uikit.R
+import com.chat.uikit.chat.sticker.StickerDetailPopup
 import com.chat.uikit.chat.sticker.StickerUrlUtils
 import com.xinbida.wukongim.message.type.WKMsgContentType
 
@@ -37,7 +38,8 @@ import com.xinbida.wukongim.message.type.WKMsgContentType
  * "添加到我的表情"通过 EndpointCategory.wkChatPopupItem 扩展点由
  * AddToMyStickersMenuProvider 注入，按 msg.type 过滤。
  *
- * 无单击行为（对齐 iOS：贴图 cell 除长按/双击表情反应外无点击回响）。
+ * 单击行为：弹出 [StickerDetailPopup]（180dp 预览 + 发送 / 添加到我的表情）。
+ * 对齐 iOS `WKPOINT_TO_STICKER_INFO` 的最简版本。
  */
 open class WKVectorStickerProvider : WKChatBaseProvider() {
 
@@ -77,6 +79,9 @@ open class WKVectorStickerProvider : WKChatBaseProvider() {
         }
 
         addLongClick(imageView, uiChatMsgItemEntity)
+        imageView.setOnClickListener {
+            StickerDetailPopup.showForChatMessage(imageView.context, uiChatMsgItemEntity.wkMsg)
+        }
     }
 
     override fun resetCellListener(
@@ -88,5 +93,8 @@ open class WKVectorStickerProvider : WKChatBaseProvider() {
         super.resetCellListener(position, parentView, uiChatMsgItemEntity, from)
         val imageView = parentView.findViewById<FilterImageView>(R.id.imageView) ?: return
         addLongClick(imageView, uiChatMsgItemEntity)
+        imageView.setOnClickListener {
+            StickerDetailPopup.showForChatMessage(imageView.context, uiChatMsgItemEntity.wkMsg)
+        }
     }
 }

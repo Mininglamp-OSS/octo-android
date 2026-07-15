@@ -182,7 +182,13 @@ public class WKBaseApplication {
         //   EmojiManager 现在是 idempotent 的：文本 hot path（WKTextProvider / MoonUtil /
         //   SelectTextHelper / WKUIChatMsgItemEntity）里 getPattern() 等入口都会
         //   ensureInitialized()，真撞上 Phase-C 之前的访问也能同步补齐。
-        AppStartup.postPhaseC("emoji", () -> EmojiManager.getInstance().init());
+        AppStartup.postPhaseC("emoji", () -> {
+            EmojiManager.getInstance().init();
+            // 冷启动后同一 Phase-C 里追加一次服务端 manifest 拉取（fire-and-forget）：
+            // 成功后合并进 text2entry + 重建 pattern，未来服务端新增内置表情 Android 无需发版即可显示。
+            // 失败保留 xml + 上次 SP 缓存，静默 log。
+            EmojiManager.getInstance().refreshFromServer();
+        });
 
         // Glide + cacheDir 不依赖 SP，先执行，给 EncryptedSP 后台线程更多时间
         Glide.get(context).getRegistry().replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory());

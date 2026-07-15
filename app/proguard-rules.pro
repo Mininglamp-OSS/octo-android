@@ -204,6 +204,12 @@
 # 导致 collect / list 反序列化失败 → release 包"添加到我的表情"回调走 onFail
 -keep class com.chat.uikit.chat.sticker.** { *; }
 -keep interface com.chat.uikit.chat.sticker.StickerService { *; }
+# 内置表情 manifest DTO (wkbase)：EmojiManifestResp / EmojiManifestItem
+# GET /v1/common/emojis 走 FastJson 反射按字段名映射 {version, list:[{key,name,url}]}，
+# 不 keep 会被 R8 重命名字段 → 反序列化出空对象 → refreshFromServer 静默失败
+# → 无法应用服务端新增 emoji（同 sticker/search 类型问题的第 3 次踩坑）
+-keep class com.chat.base.emoji.EmojiManifestResp { *; }
+-keep class com.chat.base.emoji.EmojiManifestItem { *; }
 #----------客服------------------
 -keep class com.chat.customerservice.entity.** { *; }
 #----------隐私安全------------------

@@ -254,6 +254,9 @@ class WKFileProvider : WKChatBaseProvider() {
         /** 文件名 UTF-8 字节长度上限（Linux NAME_MAX=255，留 55 字节余量给临时后缀/挂载点差异）。 */
         private const val MAX_FILENAME_BYTES = 200
 
+        /** 文本预览截断阈值（字符数），与 [TextPreviewActivity] 内部常量对齐。 */
+        private const val TEXT_PREVIEW_MAX_CHARS = 50_000
+
         /** App 内以纯文本形式展示（走 [TextPreviewActivity]）的扩展名白名单。
          *  同时驱动"打开"路径的 dispatch 与 BottomSheet "预览"按钮的显隐。 */
         private val TEXT_PREVIEW_EXTS = setOf(
@@ -336,19 +339,15 @@ class WKFileProvider : WKChatBaseProvider() {
         private fun openFileDirectlyStatic(context: Context, file: File) {
             val ext = file.extension.lowercase(Locale.getDefault())
             if (ext in TEXT_PREVIEW_EXTS) {
-                try {
-                    val content = file.readText(Charsets.UTF_8).let {
-                        if (it.length > 50000) it.substring(0, 50000) + "\n\n... (文件过大，仅显示前50000字符)" else it
-                    }
-                    val intent = Intent(context, TextPreviewActivity::class.java)
-                    intent.putExtra("title", file.name)
-                    intent.putExtra("content", content)
-                    intent.putExtra("filePath", file.absolutePath)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-                    WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_not_exist))
-                }
+                // bounded 后主线程读上限 50k 字符 (≈200KB UTF-8) 通常 <10ms，避免旧
+                // `readText()` 全文加载导致 100MB `.log` OOM/ANR (#92 review B5)。
+                val content = TextPreviewLoader.readBounded(file, TEXT_PREVIEW_MAX_CHARS)
+                val intent = Intent(context, TextPreviewActivity::class.java)
+                intent.putExtra("title", file.name)
+                intent.putExtra("content", content)
+                intent.putExtra("filePath", file.absolutePath)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
                 return
             }
             try {

@@ -18,6 +18,8 @@ package com.chat.uikit.chat.provider
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.ScrollView
@@ -26,10 +28,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import com.chat.base.R
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class TextPreviewActivity : AppCompatActivity() {
 
     private var filePath: String = ""
+    private val loadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +46,6 @@ class TextPreviewActivity : AppCompatActivity() {
         // 优先取 caller 预读的 content（避免重复 IO）；缺失则从 filePath 兜底读取，
         // 这样"预览"按钮不用重复实现"读文件 + 截断"逻辑就能复用本 Activity。
         val extraContent = intent.getStringExtra("content")
-        val content = extraContent ?: readFromFilePath(filePath)
 
         supportActionBar?.apply {
             setDisplayHomeAsUpEnabled(true)
@@ -52,7 +57,7 @@ class TextPreviewActivity : AppCompatActivity() {
             textSize = 13f
             setTextIsSelectable(true)
             typeface = android.graphics.Typeface.MONOSPACE
-            text = content
+            text = extraContent ?: ""
         }
 
         val scrollView = ScrollView(this).apply {
@@ -60,6 +65,22 @@ class TextPreviewActivity : AppCompatActivity() {
         }
 
         setContentView(scrollView)
+
+        // 没有预读 content 时后台线程 bounded read，避免 100MB 文件卡死主线程 (#92 review B5)。
+        if (extraContent == null && filePath.isNotEmpty()) {
+            loadExecutor.execute {
+                val content = TextPreviewLoader.readBounded(File(filePath), MAX_CHARS)
+                mainHandler.post {
+                    if (isFinishing || isDestroyed) return@post
+                    textView.text = content
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        loadExecutor.shutdownNow()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -124,17 +145,5 @@ class TextPreviewActivity : AppCompatActivity() {
 
         /** 与 WKFileProvider.TEXT_PREVIEW_EXTS 对齐的截断阈值（字符数）。 */
         private const val MAX_CHARS = 50_000
-
-        private fun readFromFilePath(filePath: String): String {
-            if (filePath.isEmpty()) return ""
-            return try {
-                val text = File(filePath).readText(Charsets.UTF_8)
-                if (text.length > MAX_CHARS) {
-                    text.substring(0, MAX_CHARS) + "\n\n... (文件过大，仅显示前${MAX_CHARS}字符)"
-                } else text
-            } catch (_: Exception) {
-                ""
-            }
-        }
     }
 }

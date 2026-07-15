@@ -19,6 +19,7 @@ package com.chat.uikit.chat.provider
 import android.util.Xml
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -35,12 +36,19 @@ import java.util.zip.ZipFile
  *   xl/sharedStrings.xml                 -> 字符串池（可选）
  *   xl/worksheets/sheet1.xml             -> 单元格
  *
- * 内存保护：单 sheet 超过 [MAX_ROWS] 行截断，超过 [MAX_COLS] 列截断，[truncated] 标注。
+ * 输入是不可信的聊天附件，因此对 zip entry 解压量、共享字符串条目数、单 sheet 行/列
+ * 都做硬上限，避免 zip-bomb / 恶意坐标 / 缺字段 触发 OOM 或 IOOBE。
  */
 object XlsxParser {
 
     const val MAX_ROWS = 500
     const val MAX_COLS = 50
+
+    /** 单个 zip entry 解压后允许的最大字节数（防 zip-bomb）。50 MB 足够任何常规办公文档。 */
+    private const val MAX_ENTRY_BYTES: Long = 50L * 1024L * 1024L
+
+    /** sharedStrings 表最大条目数（防 KB 级 xml 展开为百 MB 字符串数组）。10 万条覆盖常规文档。 */
+    private const val MAX_SHARED_STRINGS = 100_000
 
     data class Sheet(
         val name: String,
@@ -73,7 +81,7 @@ object XlsxParser {
     // ---- sharedStrings.xml ----
     private fun readSharedStrings(zip: ZipFile, entry: ZipEntry): List<String> {
         val out = ArrayList<String>()
-        zip.getInputStream(entry).use { input ->
+        boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             var buf = StringBuilder()
             var inSi = false
@@ -84,7 +92,10 @@ object XlsxParser {
                         "t" -> if (inSi) buf.append(readText(parser))
                     }
                     XmlPullParser.END_TAG -> if (parser.name == "si" && inSi) {
-                        out.add(buf.toString()); inSi = false
+                        // 达到条目上限后继续解析（避免 parser 状态不定），但丢弃后续字符串。
+                        // 索引超出的 shared[i] 读到会返回 ""（见 resolveCellText 的 in-bounds 判断）。
+                        if (out.size < MAX_SHARED_STRINGS) out.add(buf.toString())
+                        inSi = false
                     }
                 }
             }
@@ -95,7 +106,7 @@ object XlsxParser {
     // ---- _rels/workbook.xml.rels ----
     private fun readRels(zip: ZipFile, entry: ZipEntry): Map<String, String> {
         val out = HashMap<String, String>()
-        zip.getInputStream(entry).use { input ->
+        boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "Relationship") {
@@ -111,7 +122,7 @@ object XlsxParser {
     // ---- workbook.xml -> List<(name, rId)> ----
     private fun readWorkbook(zip: ZipFile, entry: ZipEntry): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
-        zip.getInputStream(entry).use { input ->
+        boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "sheet") {
@@ -135,7 +146,7 @@ object XlsxParser {
     private fun readSheet(zip: ZipFile, entry: ZipEntry, shared: List<String>, name: String): Sheet {
         val rows = ArrayList<List<String>>()
         var truncated = false
-        zip.getInputStream(entry).use { input ->
+        boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             var currentRow: ArrayList<String>? = null
             var cellType: String? = null
@@ -143,7 +154,6 @@ object XlsxParser {
             var cellValue: String? = null
             var inlineText: StringBuilder? = null
             var inV = false
-            var inIsT = false // <c t="inlineStr"><is><t>...</t></is></c>
 
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 when (parser.eventType) {
@@ -170,15 +180,25 @@ object XlsxParser {
                     XmlPullParser.END_TAG -> when (parser.name) {
                         "v" -> inV = false
                         "c" -> {
-                            if (currentRow != null && rows.size < MAX_ROWS) {
+                            val row = currentRow
+                            if (row != null && rows.size < MAX_ROWS) {
                                 val col = columnIndex(cellRef)
-                                val text = resolveCellText(cellType, cellValue, inlineText, shared)
-                                fillTo(currentRow!!, col)
-                                if (col < MAX_COLS) currentRow!![col] = text else truncated = true
+                                // 三种情况：
+                                //  col in 0 until MAX_COLS → 正常写入（此时 fillTo 最多补 MAX_COLS-1 项，安全）
+                                //  col >= MAX_COLS         → 攻击性/超宽表，标 truncated 但不 fillTo（否则可 OOM）
+                                //  col < 0                 → 缺 `r` 属性或非法值，OOXML 允许省略 `r`，跳过该 cell
+                                if (col in 0 until MAX_COLS) {
+                                    val text = resolveCellText(cellType, cellValue, inlineText, shared)
+                                    fillTo(row, col)
+                                    row[col] = text
+                                } else if (col >= MAX_COLS) {
+                                    truncated = true
+                                }
                             }
                         }
                         "row" -> {
-                            if (rows.size < MAX_ROWS && currentRow != null) rows.add(currentRow!!)
+                            val row = currentRow
+                            if (rows.size < MAX_ROWS && row != null) rows.add(row)
                             currentRow = null
                         }
                     }
@@ -204,14 +224,15 @@ object XlsxParser {
         }
     }
 
-    /** "A1" -> 0, "B1" -> 1, "AA1" -> 26。ref 为空时用 -1（呼叫方需忽略）。 */
+    /** "A1" -> 0, "B1" -> 1, "AA1" -> 26。ref 为空或不含字母时返回 -1（呼叫方需忽略）。 */
     private fun columnIndex(ref: String?): Int {
         if (ref.isNullOrEmpty()) return -1
         var idx = 0
+        var seen = false
         for (ch in ref) {
-            if (ch in 'A'..'Z') idx = idx * 26 + (ch - 'A' + 1) else break
+            if (ch in 'A'..'Z') { idx = idx * 26 + (ch - 'A' + 1); seen = true } else break
         }
-        return idx - 1
+        return if (seen) idx - 1 else -1
     }
 
     private fun fillTo(list: ArrayList<String>, index: Int) {
@@ -236,5 +257,34 @@ object XlsxParser {
             if (ev == XmlPullParser.TEXT) buf.append(parser.text)
         }
         return buf.toString()
+    }
+
+    /** 给 [ZipFile.getInputStream] 套一层 [MAX_ENTRY_BYTES] 字节上限，防 zip-bomb。 */
+    private fun boundedStream(zip: ZipFile, entry: ZipEntry): InputStream =
+        BoundedInputStream(zip.getInputStream(entry), MAX_ENTRY_BYTES)
+
+    /** 只在超过上限时抛 [IOException]，让 parse() 整体失败上抛给 UI 展示"预览失败"。 */
+    private class BoundedInputStream(
+        private val delegate: InputStream,
+        private val maxBytes: Long,
+    ) : InputStream() {
+        private var consumed: Long = 0L
+        override fun read(): Int {
+            val b = delegate.read()
+            if (b >= 0) {
+                consumed++
+                if (consumed > maxBytes) throw IOException("xlsx entry exceeds $maxBytes bytes")
+            }
+            return b
+        }
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val n = delegate.read(b, off, len)
+            if (n > 0) {
+                consumed += n
+                if (consumed > maxBytes) throw IOException("xlsx entry exceeds $maxBytes bytes")
+            }
+            return n
+        }
+        override fun close() = delegate.close()
     }
 }

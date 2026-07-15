@@ -47,13 +47,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 public class EmojiManager {
@@ -77,11 +78,23 @@ public class EmojiManager {
     private volatile boolean initialized = false;
 
     // 内置 xml 加载的一份原始副本（applyManifest 的 base），init 后不再改。
-    private Map<String, Entry> xmlText2entry = Collections.emptyMap();
-    private List<Entry> xmlDefaultEntries = Collections.emptyList();
+    // 用 volatile 引用替换保证可见性——虽然当前实现下 initialized 屏障+同步 init() 已经足够，
+    // 但 volatile 让这个不变量在代码上强制表达（避免未来加新入口时忘了走 ensureInitialized）。
+    private volatile Map<String, Entry> xmlText2entry = Collections.emptyMap();
+    private volatile List<Entry> xmlDefaultEntries = Collections.emptyList();
 
     // asset bitmap cache, key: asset path
-    private LruCache<String, Bitmap> drawableCache;
+    // volatile 保证 init() 里赋值对其它线程 read 可见（同上）。
+    private volatile LruCache<String, Bitmap> drawableCache;
+
+    // 后台单线程执行 applyManifest + cache.save——避免在 UI 线程做正则编译 + SP 同步序列化。
+    // WKBaseModel.request 用的是 observeOn(mainThread())，回调本身在主线程，所以要显式 hop 出去。
+    // 静态 lazy——只有真正拉到 manifest 时才启动线程，冷启动无网络场景零开销。
+    private static final ExecutorService applyExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "emoji-apply");
+        t.setPriority(Thread.NORM_PRIORITY - 1);
+        return t;
+    });
 
     private EmojiManager() {
 
@@ -174,16 +187,20 @@ public class EmojiManager {
                     // 网络失败 / 反序列化失败——保留当前状态。呼叫方无 UI 需要通知。
                     return;
                 }
-                List<EmojiManifestItem> clean = EmojiManifestSanitizer.sanitize(manifest.list);
-                if (clean.isEmpty()) {
-                    // 服务端理论上不会下发空 list（parseEmojiManifest 会 reject），
-                    // 走到这里意味着 sanitize 把所有条目都 drop 了——保留当前状态更安全。
-                    return;
-                }
-                boolean changed = applyManifestInternal(clean);
-                if (changed) {
-                    EmojiManifestCache.save(manifest);
-                }
+                // WKBaseModel.request 用 observeOn(mainThread())，回调本身在主线程。
+                // sanitize + build maps + Pattern.compile + SP.save 都不轻——hop 到后台线程
+                // 避免冷启动 Phase-C 期间的主线程 jank（Phase-C 存在的意义就是 off main）。
+                // volatile swap 从任何线程 publish 都对读者可见，安全。
+                applyExecutor.execute(() -> {
+                    List<EmojiManifestItem> clean = EmojiManifestSanitizer.sanitize(manifest.list);
+                    if (clean.isEmpty()) {
+                        return;
+                    }
+                    boolean changed = applyManifestInternal(clean);
+                    if (changed) {
+                        EmojiManifestCache.save(manifest);
+                    }
+                });
             }
         });
     }
@@ -195,11 +212,17 @@ public class EmojiManager {
      * <p>合并策略（merge, 不删）：
      * <ol>
      *   <li>base = 内置 xml 全部条目</li>
-     *   <li>manifest 中的 key：若 xml 里已有同 key，用 xml 的 id + assetPath；若无（未来新增），
-     *       id 走 {@link #deriveIdFromKey(String)}，assetPath = null，remoteUrl = item.url</li>
+     *   <li>manifest item 若 xml 里已有同 key：用 xml 的 id + assetPath，同时刷新 name/url
+     *       (name 只做元数据；url 存进 remoteUrl 供未来 Layer 3 使用)</li>
+     *   <li>manifest item 若 xml 里没有（即"服务端新增未打包"）：<b>整个跳过</b>——
+     *       当前 MVP 不支持远程加载（Layer 3 独立 PR），加进 defaultEntries 会显示为**空白格子**
+     *       （PR #94 review B1 明确要求排除）；进入 text2entry 也会让消息 pattern 匹配到但
+     *       getDrawable 返 null，无用</li>
      *   <li>defaultEntries 排序：manifest customs 按 manifest 顺序在前 → xml customs 未在
      *       manifest 的（保留兜底）→ 全部非 custom（Unicode）按 xml 顺序在后</li>
      * </ol>
+     *
+     * <p><b>可能被后台 executor 或 init() 主线程调用</b>——{@code synchronized} 保证互斥。
      */
     synchronized boolean applyManifestInternal(List<EmojiManifestItem> sanitizedItems) {
         String newSig = signatureOf(sanitizedItems);
@@ -207,56 +230,24 @@ public class EmojiManager {
             return false;
         }
 
-        // 1) 起点是 xml 的完整副本（可变）
-        Map<String, Entry> newMap = new LinkedHashMap<>(xmlText2entry);
+        // core 合并逻辑抽到纯函数——JVM 单测覆盖"manifest-only key 是否会污染 panel"契约
+        MergeResult merged = mergeXmlAndManifest(xmlText2entry, xmlDefaultEntries, sanitizedItems);
 
-        // 2) manifest 覆盖同 key（url 空则退化成 xml 已有 asset；url 非空则记 remoteUrl）
-        //    manifest 新 key 直接加进 map（xml 里没有）
-        List<Entry> manifestCustoms = new ArrayList<>(sanitizedItems.size());
-        Set<String> seenManifestKeys = new HashSet<>();
-        for (EmojiManifestItem item : sanitizedItems) {
-            Entry existing = xmlText2entry.get(item.key);
-            String id = existing != null ? existing.id : deriveIdFromKey(item.key);
-            String assetPath = existing != null ? existing.assetPath : null;
-            String remoteUrl = item.url == null ? "" : item.url;
-            String name = item.name;
-            Entry merged = new Entry(id, item.key, assetPath, remoteUrl, name);
-            newMap.put(item.key, merged);
-            manifestCustoms.add(merged);
-            seenManifestKeys.add(item.key);
-        }
+        // 重建 pattern（用新的 defaults）
+        Pattern newPattern = buildPattern(merged.defaultEntries);
 
-        // 3) defaultEntries 排序：manifest customs 在前 → xml-only customs → Unicode
-        List<Entry> newDefaults = new ArrayList<>(manifestCustoms.size() + xmlDefaultEntries.size());
-        newDefaults.addAll(manifestCustoms);
-        for (Entry e : xmlDefaultEntries) {
-            boolean isCustom = e.id != null && e.id.startsWith("custom_");
-            if (isCustom && !seenManifestKeys.contains(e.text)) {
-                // xml 里有但 manifest 没下发——保留（"merge 不删"语义）
-                newDefaults.add(e);
-            }
-        }
-        for (Entry e : xmlDefaultEntries) {
-            boolean isCustom = e.id != null && e.id.startsWith("custom_");
-            if (!isCustom) {
-                newDefaults.add(e);
-            }
-        }
-
-        // 4) 重建 pattern（用新的 defaults）
-        Pattern newPattern = buildPattern(newDefaults);
-
-        // 5) volatile swap（唯一"发布"点，happens-before 保证消费端看到一致状态）
-        this.text2entry = Collections.unmodifiableMap(newMap);
-        this.defaultEntries = Collections.unmodifiableList(newDefaults);
+        // volatile swap（唯一"发布"点，happens-before 保证消费端看到一致状态）
+        this.text2entry = merged.text2entry;
+        this.defaultEntries = merged.defaultEntries;
         this.pattern = newPattern;
         this.currentSig = newSig;
 
+        // B6：full sig 可能很长（500 items × 2KB URL 可达 MB 级），release 日志不适合直接打。
+        // hash + count 足以做冷启动排查（"服务端返 4 item 匹配上次 hash"）；full 内容 debug 才打。
         Log.i(TAG, "applyManifest: manifestItems=" + sanitizedItems.size()
-                + " panelEntries=" + newDefaults.size() + " sig=" + newSig);
-        // 每 item 逐行 log 只在 debug 打——release 场景没必要每次冷启动灌 N 行；
-        // 顶层那条汇总日志（manifestItems + panelEntries）保留 release 也有，
-        // 出问题时能立刻看出 manifest 拉没拉到、数量对不对。
+                + " panelEntries=" + merged.defaultEntries.size()
+                + " skippedNoAsset=" + merged.skippedNoAsset
+                + " sigHash=" + Integer.toHexString(newSig.hashCode()));
         if (BuildConfig.DEBUG) {
             for (EmojiManifestItem item : sanitizedItems) {
                 Log.d(TAG, "  item key=" + item.key + " name=" + item.name
@@ -266,13 +257,75 @@ public class EmojiManager {
         return true;
     }
 
-    /** manifest 里新增的 key（xml 无兜底）派生一个稳定 id：{@code custom_<hex>}。
-     *  必须以 {@code custom_} 开头以满足 {@link #isCustomEmoji(String)} 的判定。 */
-    private static String deriveIdFromKey(String key) {
-        // 简单稳定哈希——冲突概率极低（几个新增 emoji），无需 MD5 复杂度
-        long h = 1125899906842597L;
-        for (int i = 0; i < key.length(); i++) h = 31 * h + key.charAt(i);
-        return "custom_" + Long.toHexString(h & 0x7fffffffffffffffL);
+    /** {@link #mergeXmlAndManifest} 的产物三元组：新 text2entry + 新 defaultEntries + skip 计数。
+     *  package-private 便于同包单测断言。 */
+    static final class MergeResult {
+        final Map<String, Entry> text2entry;
+        final List<Entry> defaultEntries;
+        final int skippedNoAsset;
+
+        MergeResult(Map<String, Entry> text2entry, List<Entry> defaultEntries, int skippedNoAsset) {
+            this.text2entry = text2entry;
+            this.defaultEntries = defaultEntries;
+            this.skippedNoAsset = skippedNoAsset;
+        }
+    }
+
+    /**
+     * 纯函数版合并——无 Android 依赖，供 JVM 单测覆盖"manifest-only key 不污染 panel"契约。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>manifest 中 xml 已有的 key：合并（id/assetPath 沿用 xml，name/url 用 manifest）</li>
+     *   <li>manifest 中 xml 未打包的 key：<b>整条跳过</b>——MVP 阶段无远程加载，
+     *       进面板会显示空白格子（PR #94 review B1）；进 text2entry 也只会让消息 pattern 匹配但 render 为空</li>
+     *   <li>defaultEntries 排序：manifest customs → xml-only customs → Unicode</li>
+     * </ul>
+     */
+    static MergeResult mergeXmlAndManifest(
+            Map<String, Entry> xmlText2entry,
+            List<Entry> xmlDefaultEntries,
+            List<EmojiManifestItem> sanitizedItems) {
+        Map<String, Entry> newMap = new LinkedHashMap<>(xmlText2entry);
+        List<Entry> manifestCustoms = new ArrayList<>(sanitizedItems.size());
+        Set<String> seenManifestKeys = new HashSet<>();
+        int skippedNoAsset = 0;
+        for (EmojiManifestItem item : sanitizedItems) {
+            Entry existing = xmlText2entry.get(item.key);
+            if (existing == null) {
+                // manifest 有但 xml 无——MVP 阶段跳过（Layer 3 上线后再解锁）
+                skippedNoAsset++;
+                continue;
+            }
+            String remoteUrl = item.url == null ? "" : item.url;
+            Entry mergedEntry = new Entry(existing.id, item.key, existing.assetPath, remoteUrl, item.name);
+            newMap.put(item.key, mergedEntry);
+            manifestCustoms.add(mergedEntry);
+            seenManifestKeys.add(item.key);
+        }
+
+        // defaultEntries 排序：manifest customs 在前 → xml-only customs → 其它
+        // B5 defensive：Unicode 分支也加 seenManifestKeys 判断，防未来 xml catalog 混入
+        // [xxx]-shape 非 custom entry 与 manifest key collision 造成重复
+        List<Entry> newDefaults = new ArrayList<>(manifestCustoms.size() + xmlDefaultEntries.size());
+        newDefaults.addAll(manifestCustoms);
+        for (Entry e : xmlDefaultEntries) {
+            boolean isCustom = e.id != null && e.id.startsWith("custom_");
+            if (isCustom && !seenManifestKeys.contains(e.text)) {
+                newDefaults.add(e);
+            }
+        }
+        for (Entry e : xmlDefaultEntries) {
+            boolean isCustom = e.id != null && e.id.startsWith("custom_");
+            if (!isCustom && !seenManifestKeys.contains(e.text)) {
+                newDefaults.add(e);
+            }
+        }
+
+        return new MergeResult(
+                Collections.unmodifiableMap(newMap),
+                Collections.unmodifiableList(newDefaults),
+                skippedNoAsset);
     }
 
     /** 内容签名：manifest items 完全一致 → 相同 sig，短路 apply。 */

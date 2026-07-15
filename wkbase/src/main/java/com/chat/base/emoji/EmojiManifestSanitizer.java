@@ -51,6 +51,10 @@ public final class EmojiManifestSanitizer {
     /** 单个 name 允许的最大长度。宽松些——name 只用作显示，不进正则。 */
     static final int MAX_NAME_LEN = 64;
 
+    /** 单个 url 允许的最大长度。整体 SP 落盘要一次序列化整份 manifest，单 url 太长会撑爆存储；
+     *  2048 覆盖任何合理 CDN URL（含 query），且远小于典型 SP 单值上限。 */
+    static final int MAX_URL_LEN = 2048;
+
     /** 整份清单最多接受的条目数（防 OOM / 拼出巨大正则）。500 远超任何合理内置表情量。 */
     static final int MAX_ITEMS = 500;
 
@@ -107,16 +111,44 @@ public final class EmojiManifestSanitizer {
     }
 
     /**
-     * URL 白名单：只放行 {@code https://}（明文 http 拒），或相对路径（呼叫方负责拼到 baseUrl）。
-     * 相对路径不能是 {@code //}（协议相对，安全语义不明）也不能有 scheme（不能含 {@code :}）。
+     * URL 白名单：只放行 {@code https://} 或**严格相对路径**。
+     *
+     * <p>为**允许列表 (allow-list) 而非拒绝列表 (deny-list)**：不匹配任何允许模式一律拒绝，
+     * 防止将来 URL parser 差异漏掉的奇葩 scheme（{@code file:} {@code javascript:}
+     * {@code intent:} {@code content:} {@code data:} 等），以及 backslash / 嵌入凭证等灰色区域。
+     *
+     * <p>{@code https://} 分支额外拒绝**嵌入凭证** ({@code https://user:pass@host/...})——
+     * 攻击者可以借此把凭证泄漏给日志、代理或 phishing 到攻击者控制的 host（RFC 3986 允许但不安全）。
+     *
+     * <p>相对路径分支要求：首字符必须 {@code /} 或 ASCII 字母数字；全串不能含 {@code \}
+     * （Windows 风格路径/URL 转义灰色）；不能含 {@code @}；不能有 scheme
+     * （{@code xxx:} 出现在首个 {@code /} 前视为 scheme）。
+     *
+     * <p>{@link #MAX_URL_LEN} 上限统一在此处收——超长 URL 一并拒绝。
      */
     public static boolean isSafeUrl(String url) {
         if (url == null || url.isEmpty()) return true; // 空 = 用本地打包 asset，允许
+        if (url.length() > MAX_URL_LEN) return false;
+        if (url.indexOf('\\') >= 0) return false; // backslash 一律拒
         String lower = url.toLowerCase();
-        if (lower.startsWith("https://")) return true;
-        // 相对路径：不能是绝对 URL 也不能是协议相对
-        if (url.startsWith("//")) return false;
-        // 简易 scheme 检测：`xxx:` 出现在首个 `/` 之前视为 scheme
+        if (lower.startsWith("https://")) {
+            // 拒绝嵌入凭证 user:pass@host —— @ 出现在 authority 段（第一个 / 之前，或无 /）时拒
+            int schemeEnd = 8; // "https://".length()
+            int pathSlash = url.indexOf('/', schemeEnd);
+            int at = url.indexOf('@', schemeEnd);
+            if (at >= 0 && (pathSlash < 0 || at < pathSlash)) return false;
+            return true;
+        }
+        // 相对路径 allow-list
+        if (url.startsWith("//")) return false; // 协议相对拒
+        char first = url.charAt(0);
+        boolean okFirst = first == '/'
+                || (first >= 'A' && first <= 'Z')
+                || (first >= 'a' && first <= 'z')
+                || (first >= '0' && first <= '9');
+        if (!okFirst) return false;
+        if (url.indexOf('@') >= 0) return false; // 相对路径不该有 @
+        // scheme 检测：`xxx:` 出现在首个 `/` 之前视为 scheme
         int colon = url.indexOf(':');
         int slash = url.indexOf('/');
         if (colon >= 0 && (slash < 0 || colon < slash)) return false;

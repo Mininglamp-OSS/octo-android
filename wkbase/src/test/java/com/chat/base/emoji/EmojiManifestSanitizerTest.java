@@ -192,6 +192,63 @@ public class EmojiManifestSanitizerTest {
         assertFalse(EmojiManifestSanitizer.isSafeUrl("data:image/png;base64,aaa"));
     }
 
+    // ---- B4：URL allow-list 加固 ----
+
+    @Test
+    public void isSafeUrl_backslash_rejected() {
+        // Windows-style path / URL 转义灰色区域，一律拒
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("\\evil.com/x"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("https://cdn.example.com/e\\bad.png"));
+    }
+
+    @Test
+    public void isSafeUrl_https_embedded_credentials_rejected() {
+        // RFC 3986 允许 user:pass@host 但不安全（可能被日志/代理泄漏）
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("https://user:pass@evil.com/e.png"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("https://user@evil.com/e.png"));
+    }
+
+    @Test
+    public void isSafeUrl_https_at_in_path_ok() {
+        // @ 出现在 path 部分（第一个 / 之后）是合法的，不该被拒
+        assertTrue(EmojiManifestSanitizer.isSafeUrl("https://cdn.example.com/path@version/e.png"));
+    }
+
+    @Test
+    public void isSafeUrl_relative_at_rejected() {
+        // 相对路径不该含 @——防被误解析成 user:pass@host
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("emojis@evil.com/e.png"));
+    }
+
+    @Test
+    public void isSafeUrl_relative_non_alnum_first_rejected() {
+        // allow-list：首字符必须 / 或 ASCII 字母数字
+        assertFalse(EmojiManifestSanitizer.isSafeUrl(".hidden/e.png"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("-dash/e.png"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl(" emojis/e.png"));
+    }
+
+    // ---- B2：MAX_URL_LEN 上限 ----
+
+    @Test
+    public void isSafeUrl_overlong_rejected() {
+        StringBuilder sb = new StringBuilder("https://cdn.example.com/");
+        while (sb.length() < EmojiManifestSanitizer.MAX_URL_LEN + 10) sb.append('a');
+        assertFalse(EmojiManifestSanitizer.isSafeUrl(sb.toString()));
+    }
+
+    @Test
+    public void sanitize_drops_item_with_overlong_url() {
+        StringBuilder sb = new StringBuilder("https://cdn.example.com/");
+        while (sb.length() < EmojiManifestSanitizer.MAX_URL_LEN + 10) sb.append('a');
+        List<EmojiManifestItem> out = EmojiManifestSanitizer.sanitize(
+                Arrays.asList(
+                        item("[a]", "A", sb.toString()),
+                        item("[b]", "B", "https://cdn.example.com/short.png")));
+        assertEquals(1, out.size());
+        assertEquals("[b]", out.get(0).key);
+    }
+
     @Test
     public void sanitize_drops_item_with_unsafe_url_but_keeps_others() {
         List<EmojiManifestItem> out = EmojiManifestSanitizer.sanitize(

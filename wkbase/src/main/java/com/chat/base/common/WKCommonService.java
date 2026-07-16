@@ -16,6 +16,7 @@
 
 package com.chat.base.common;
 
+import com.chat.base.emoji.EmojiManifestResp;
 import com.chat.base.entity.AppModule;
 import com.chat.base.entity.ChannelInfoEntity;
 import com.chat.base.entity.WKAPPConfig;
@@ -47,4 +48,9 @@ interface WKCommonService {
 
     @GET("common/appmodule")
     Observable<List<AppModule>> getAppModule();
+
+    /** 服务端 GET /v1/common/emojis：公开无鉴权，返回内置自定义表情清单。响应体
+     *  是顶层 {version, list}，无 {status, data, msg} 信封，故 T 直接是 {@link EmojiManifestResp}。 */
+    @GET("common/emojis")
+    Observable<EmojiManifestResp> getEmojis();
 }

@@ -25,6 +25,7 @@ import com.chat.base.base.WKBaseModel;
 import com.chat.base.config.WKConfig;
 import com.chat.base.config.WKConstants;
 import com.chat.base.config.WKSharedPreferencesUtil;
+import com.chat.base.emoji.EmojiManifestResp;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.entity.AppModule;
 import com.chat.base.entity.AppVersion;
@@ -309,5 +310,28 @@ public class WKCommonModel extends WKBaseModel {
 
     public interface IAppModule {
         void onResult(int code, String msg, List<AppModule> list);
+    }
+
+    /**
+     * 拉取服务端内置自定义表情清单 {@code GET /v1/common/emojis}（公开无鉴权）。
+     * 失败时 callback 收到 null，呼叫方保留本地 fallback（内置 xml + 上次缓存）。
+     */
+    public void getEmojis(final IEmojiManifest callback) {
+        request(createService(WKCommonService.class).getEmojis(), new IRequestResultListener<EmojiManifestResp>() {
+            @Override
+            public void onSuccess(EmojiManifestResp result) {
+                if (callback != null) callback.onResult(result);
+            }
+
+            @Override
+            public void onFail(int code, String msg) {
+                if (callback != null) callback.onResult(null);
+            }
+        });
+    }
+
+    public interface IEmojiManifest {
+        /** @param manifest 拉取成功给非 null；网络失败或反序列化失败给 null，呼叫方走本地兜底 */
+        void onResult(EmojiManifestResp manifest);
     }
 }

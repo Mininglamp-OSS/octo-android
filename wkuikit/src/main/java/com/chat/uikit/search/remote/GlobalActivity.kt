@@ -21,13 +21,19 @@ import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.inputmethod.EditorInfo
+import androidx.activity.viewModels
 import androidx.core.view.ViewCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.chat.base.base.WKBaseActivity
 import com.chat.base.endpoint.EndpointManager
 import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.net.HttpResponseCode
+import com.chat.base.search.channel.ChannelSearchUiAction
+import com.chat.base.search.global.dto.GroupBucket
 import com.chat.base.ui.Theme
 import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.base.utils.WKReader
@@ -42,13 +48,22 @@ import com.scwang.smart.refresh.layout.api.RefreshLayout
 import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannelType
-import com.xinbida.wukongim.entity.WKMessageSearchResult
 import java.util.Objects
+import kotlinx.coroutines.launch
 
 class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     lateinit var adapter: GlobalAdapter
     private var keyword: String = ""
-    private var page = 1
+
+    private val viewModel: GlobalSearchViewModel by viewModels()
+
+    // 三段结果缓存。任一段变化时 [rebuildList] 组合成最终列表提交给 adapter，
+    // 避免联系人/群段（老 /search/global 异步）和聊天记录段（新 L1 异步）之间的顺序竞态。
+    private var friendsList: List<GlobalChannel> = emptyList()
+    private var groupsList: List<GlobalChannel> = emptyList()
+    private var searchShortcut: DataVO? = null
+    private var chatRecords: List<DataVO> = emptyList()
+
     override fun getViewBinding(): ActGlobalLayoutBinding {
         return ActGlobalLayoutBinding.inflate(layoutInflater)
     }
@@ -61,9 +76,12 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
             .showSoftKeyBoard(this@GlobalActivity, wkVBinding.searchEt)
 
         wkVBinding.refreshLayout.setEnableRefresh(false)
-        wkVBinding.refreshLayout.setEnableLoadMore(true)
+        // L1 聚合端点无逐条翻页（服务端契约 §2.2 next_cursor 恒空），关闭 loadMore。
+        // 命中群 > maxGroups 时通过 state.hasMore 由 [rebuildList] 追加"缩小范围"提示项。
+        wkVBinding.refreshLayout.setEnableLoadMore(false)
         adapter = GlobalAdapter()
         initAdapter(wkVBinding.recyclerView, adapter)
+        observeChatRecordsState()
     }
 
     override fun initListener() {
@@ -72,6 +90,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 SoftKeyboardUtils.getInstance()
                     .hideSoftKeyboard(this@GlobalActivity)
+                viewModel.triggerNow()
                 return@setOnEditorActionListener true
             }
             false
@@ -86,20 +105,26 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
             override fun afterTextChanged(s: Editable?) {
                 val content = s.toString()
+                keyword = content
+                // 聊天记录段：服务端 L1 + 竞态防护（debounce/sequence/cancel）由 ViewModel 统管。
+                viewModel.setKeyword(content)
                 if (TextUtils.isEmpty(content)) {
+                    friendsList = emptyList()
+                    groupsList = emptyList()
+                    searchShortcut = null
+                    chatRecords = emptyList()
                     adapter.setList(ArrayList())
                 } else {
-                    keyword = content
-                    page = 1
-                    getData(0)
+                    // 联系人/群段仍走本地 + 老 /search/global；见 [loadContactsAndGroups]。
+                    loadContactsAndGroups()
                 }
             }
 
         })
         wkVBinding.refreshLayout.setOnRefreshLoadMoreListener(object : OnRefreshLoadMoreListener {
             override fun onLoadMore(refreshLayout: RefreshLayout) {
-                page++
-                getData(1)
+                // L1 无翻页；enableLoadMore=false 后此回调不会被触发，保留仅为 API 完整性。
+                refreshLayout.finishLoadMore()
             }
 
             override fun onRefresh(refreshLayout: RefreshLayout) {}
@@ -179,97 +204,166 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         }
     }
 
-    private fun getData(onlyMessage: Int) {
+    /**
+     * 拉联系人 + 群段：本地会话搜索合并老 /search/global（保留原来的 friends/groups 逻辑）。
+     * 老接口的 messages 段不再消费（服务端 L1 已覆盖），避免同一条消息被展示两次。
+     */
+    private fun loadContactsAndGroups() {
         val contentType = ArrayList<Int>()
         contentType.add(WKContentType.WK_TEXT)
         contentType.add(WKContentType.WK_FILE)
-        val req = GlobalSearchReq(onlyMessage, keyword, "", 0, "", "", contentType, page, 20, 0, 0)
+        val req = GlobalSearchReq(0, keyword, "", 0, "", "", contentType, 1, 20, 0, 0)
+        val requestKeyword = keyword
         GlobalSearchModel.search(req) { code, msg, resp ->
             wkVBinding.refreshLayout.finishRefresh()
             wkVBinding.refreshLayout.finishLoadMore()
-            if (code == HttpResponseCode.success) {
-                if (resp == null) {
-                    return@search
-                }
-                if (page == 1) {
-                    // 合并本地会话搜索结果（群组和联系人），弥补服务端 space_id 过滤不完整
-                    val localResult = searchLocalConversations(keyword)
-                    val allFriends = mergeChannels(resp.friends, localResult.first)
-                    val allGroups = mergeChannels(resp.groups, localResult.second)
-
-                    val list = ArrayList<DataVO>()
-                    if (WKReader.isNotEmpty(allFriends)) {
-                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.contacts)))
-                        for (channel in allFriends) {
-                            list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
-                        }
-                        list.add(DataVO(DataVO.SPAN, null, null, ""))
-                    }
-                    if (WKReader.isNotEmpty(allGroups)) {
-                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.group_chat)))
-                        for (channel in allGroups) {
-                            list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
-                        }
-                        list.add(DataVO(DataVO.SPAN, null, null, ""))
-                    }
-
-                    list.add(DataVO(DataVO.SEARCH, null, null, keyword))
-                    list.add(DataVO(DataVO.SPAN, null, null, ""))
-
-                    // 本地消息内容搜索
-                    val localMsgResults = WKIM.getInstance().msgManager.search(keyword)
-                    if (WKReader.isNotEmpty(localMsgResults)) {
-                        list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
-                        for (result in localMsgResults) {
-                            val ch = result.wkChannel
-                            val fullChannel = if (ch != null) {
-                                WKIM.getInstance().channelManager.getChannel(ch.channelID, ch.channelType) ?: ch
-                            } else null
-                            val displayName = fullChannel?.channelRemark?.takeIf { it.isNotEmpty() }
-                                ?: fullChannel?.channelName?.takeIf { it.isNotEmpty() }
-                                ?: fullChannel?.channelID ?: ""
-                            val gc = GlobalChannel().apply {
-                                channel_id = fullChannel?.channelID ?: ""
-                                channel_type = fullChannel?.channelType ?: 0
-                                channel_name = displayName
-                            }
-                            val snippet = if (result.messageCount == 1 && !result.searchableWord.isNullOrEmpty()) {
-                                snippetFromText(result.searchableWord, keyword, 40)
-                            } else {
-                                "${result.messageCount} 条相关聊天记录"
-                            }
-                            list.add(DataVO(DataVO.LOCAL_MSG, gc, null, snippet, keyword, result.messageCount, result.orderSeq))
-                        }
-                        list.add(DataVO(DataVO.SPAN, null, null, ""))
-                    }
-
-                    // API 远程消息搜索
-                    if (WKReader.isNotEmpty(resp.messages)) {
-                        if (!WKReader.isNotEmpty(localMsgResults)) {
-                            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
-                        }
-                        for (message in resp.messages) {
-                            list.add(DataVO(DataVO.MESSAGE, message.channel, message, ""))
-                        }
-                    }
-                    adapter.setList(list)
-                } else {
-                    if (WKReader.isNotEmpty(resp.messages)) {
-                        val list = ArrayList<DataVO>()
-                        for (message in resp.messages) {
-                            val messageVO =
-                                DataVO(DataVO.MESSAGE, message.channel, message, "")
-                            list.add(messageVO)
-                        }
-                        adapter.addData(list)
-                    } else {
-                        wkVBinding.refreshLayout.setEnableLoadMore(false)
-                    }
-                }
-            } else {
-                showToast(msg)
+            // 关键词已变或已清空时丢弃这次响应，避免过期结果覆盖当前段
+            if (requestKeyword != keyword || TextUtils.isEmpty(keyword)) return@search
+            if (code == HttpResponseCode.success && resp != null) {
+                // 合并本地会话搜索，弥补服务端 space_id 对群组过滤不完整
+                val localResult = searchLocalConversations(keyword)
+                friendsList = mergeChannels(resp.friends, localResult.first)
+                groupsList = mergeChannels(resp.groups, localResult.second)
+                searchShortcut = DataVO(DataVO.SEARCH, null, null, keyword)
+                rebuildList()
+            } else if (code != HttpResponseCode.success) {
+                // 老接口失败也要退化：仅用本地会话结果，保证联系人/群段不因服务端问题空掉
+                val localResult = searchLocalConversations(keyword)
+                friendsList = localResult.first
+                groupsList = localResult.second
+                searchShortcut = DataVO(DataVO.SEARCH, null, null, keyword)
+                rebuildList()
+                if (!msg.isNullOrEmpty()) showToast(msg)
             }
         }
+    }
+
+    /** 订阅 [GlobalSearchViewModel.state]：把 L1 [GroupBucket] 映射为 [DataVO.LOCAL_MSG]，
+     * 失败/离线时自动回退到 IMSDK 本地聚合（与频道内搜索 FALLBACK_TO_LOCAL 语义一致）。 */
+    private fun observeChatRecordsState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.state.collect { state ->
+                    // 关键词已被用户清空 → 强制清聊天记录段
+                    if (state.keyword.isEmpty()) {
+                        if (chatRecords.isNotEmpty()) {
+                            chatRecords = emptyList()
+                            rebuildList()
+                        }
+                        return@collect
+                    }
+                    chatRecords = when (state.uiAction()) {
+                        null -> state.groups.map { bucketToDataVO(it, state.keyword) }
+                        ChannelSearchUiAction.FALLBACK_TO_LOCAL -> localMessagesAsDataVO(state.keyword)
+                        // 其他错误（限流 / 未启用 / 权限 / 校验 / 通用错误）：清空聊天记录段
+                        // 让用户明确知道服务端没有返回结果；对应 toast 由 [showErrorToast] 处理
+                        else -> {
+                            showErrorToast(state)
+                            emptyList()
+                        }
+                    }
+                    rebuildList()
+                }
+            }
+        }
+    }
+
+    private fun bucketToDataVO(bucket: GroupBucket, keyword: String): DataVO {
+        val displayName = when {
+            bucket.channel_type == WKChannelType.COMMUNITY_TOPIC && !bucket.thread_name.isNullOrEmpty() ->
+                bucket.thread_name!!
+            bucket.group_name.isNotEmpty() -> bucket.group_name
+            else -> bucket.channel_id
+        }
+        val gc = GlobalChannel().apply {
+            channel_id = bucket.channel_id
+            channel_type = bucket.channel_type
+            channel_name = displayName
+        }
+        // 单条命中直接展示 snippet；多条则展示"约 N 条"折叠。
+        // 服务端 snippet 带 <mark>...</mark>，客户端 Adapter 走 keyword 高亮，先剥掉 mark 标签。
+        val text = if (bucket.match_count <= 1L && bucket.preview.isNotEmpty()) {
+            stripMarkTags(bucket.preview[0].snippet)
+        } else {
+            val prefix = if (bucket.match_count_approx) "约 " else ""
+            "$prefix${bucket.match_count} 条相关聊天记录"
+        }
+        // messageCount>1 且 orderSeq=0 → 点击落到 MessageRecordActivity（GlobalActivity.kt:170 分支）
+        val count = bucket.match_count.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        return DataVO(DataVO.LOCAL_MSG, gc, null, text, keyword, count, 0L)
+    }
+
+    /** 服务端失败/离线兜底：本地 IMSDK 消息聚合，输出 shape 与 L1 结果一致。 */
+    private fun localMessagesAsDataVO(keyword: String): List<DataVO> {
+        val local = WKIM.getInstance().msgManager.search(keyword) ?: return emptyList()
+        return local.mapNotNull { result ->
+            val ch = result.wkChannel ?: return@mapNotNull null
+            val fullChannel = WKIM.getInstance().channelManager.getChannel(ch.channelID, ch.channelType) ?: ch
+            val displayName = fullChannel.channelRemark?.takeIf { it.isNotEmpty() }
+                ?: fullChannel.channelName?.takeIf { it.isNotEmpty() }
+                ?: fullChannel.channelID
+                ?: ""
+            val gc = GlobalChannel().apply {
+                channel_id = fullChannel.channelID ?: ""
+                channel_type = fullChannel.channelType
+                channel_name = displayName
+            }
+            val snippet = if (result.messageCount == 1 && !result.searchableWord.isNullOrEmpty()) {
+                snippetFromText(result.searchableWord, keyword, 40)
+            } else {
+                "${result.messageCount} 条相关聊天记录"
+            }
+            DataVO(DataVO.LOCAL_MSG, gc, null, snippet, keyword, result.messageCount, result.orderSeq)
+        }
+    }
+
+    private fun stripMarkTags(text: String): String =
+        text.replace("<mark>", "").replace("</mark>", "")
+
+    private fun showErrorToast(state: GlobalSearchViewModel.State) {
+        val msg = when (state.uiAction()) {
+            ChannelSearchUiAction.RATE_LIMITED ->
+                if (state.retryAfterSec > 0) "请求过于频繁，${state.retryAfterSec}s 后重试"
+                else "请求过于频繁，请稍后重试"
+            ChannelSearchUiAction.FEATURE_DISABLED -> "搜索功能未启用"
+            ChannelSearchUiAction.BLOCK_NOT_FOUND -> null   // 不打扰
+            ChannelSearchUiAction.VALIDATION_ERROR -> null  // 触发条件不满足是常态
+            else -> state.errorMessage?.takeIf { it.isNotEmpty() } ?: "搜索失败，请重试"
+        }
+        msg?.let { showToast(it) }
+    }
+
+    /** 组合三段 + 分隔符，一次提交给 adapter。空字符串场景由 [afterTextChanged] 直接 setList(空) 处理。 */
+    private fun rebuildList() {
+        if (TextUtils.isEmpty(keyword)) {
+            adapter.setList(ArrayList())
+            return
+        }
+        val list = ArrayList<DataVO>()
+        if (WKReader.isNotEmpty(friendsList)) {
+            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.contacts)))
+            for (channel in friendsList) {
+                list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
+            }
+            list.add(DataVO(DataVO.SPAN, null, null, ""))
+        }
+        if (WKReader.isNotEmpty(groupsList)) {
+            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.group_chat)))
+            for (channel in groupsList) {
+                list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
+            }
+            list.add(DataVO(DataVO.SPAN, null, null, ""))
+        }
+        searchShortcut?.let {
+            list.add(it)
+            list.add(DataVO(DataVO.SPAN, null, null, ""))
+        }
+        if (chatRecords.isNotEmpty()) {
+            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
+            list.addAll(chatRecords)
+            list.add(DataVO(DataVO.SPAN, null, null, ""))
+        }
+        adapter.setList(list)
     }
 
     private fun snippetFromText(text: String, keyword: String, maxLength: Int): String {

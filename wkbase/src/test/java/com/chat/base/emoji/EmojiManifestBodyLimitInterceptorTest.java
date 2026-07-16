@@ -173,4 +173,33 @@ public class EmojiManifestBodyLimitInterceptorTest {
         // 不该被拦截
         assertEquals(payload.length, out.body().contentLength());
     }
+
+    // ---- 组合契约（Jerry-Xin round-3 B2）：模拟 LogInterceptor 作为外层调 body().string()
+    //      时，BodyLimit 作为内层要能在外层读 body 之前 short-circuit（否则外层 OOM）。 ----
+
+    @Test
+    public void oversized_body_short_circuits_before_outer_reads_body() {
+        // 模拟：LogInterceptor 是 outer（外层，先被调用），它 chain.proceed() 后
+        // 会 response.body().string() 读全 body。BodyLimit 是 inner（内层，后被调用），
+        // 它先拿到 network response，检查 size 超限 → 抛 IOException →
+        // IOException 沿 chain 传给 outer 的 chain.proceed() 调用点 → 外层永远走不到
+        // body().string()，OOM 被避免。
+        byte[] oversized = new byte[(int) EmojiManifestBodyLimitInterceptor.MAX_MANIFEST_BODY_BYTES + 10];
+        Request request = req("https://example.com/v1/common/emojis");
+        Response networkResp = ok(request, bodyWith(oversized, oversized.length));
+        Interceptor bodyLimit = new EmojiManifestBodyLimitInterceptor();
+
+        boolean outerReachedBodyRead = false;
+        try {
+            // 模拟 outer(LogInterceptor 风格) 的 chain.proceed() —— 内部就是 bodyLimit.intercept
+            Response fromInner = bodyLimit.intercept(new FakeChain(request, networkResp));
+            // 若 bodyLimit 没抛，outer 会来这一步做 body().string()——OOM 高危
+            fromInner.body().string();
+            outerReachedBodyRead = true;
+        } catch (IOException e) {
+            // 期望：bodyLimit 抛，outer 走不到 body 读——OOM 已被避免
+        }
+        assertEquals("outer 不该走到 body 读取（应被 bodyLimit 抛异常 short-circuit）",
+                false, outerReachedBodyRead);
+    }
 }

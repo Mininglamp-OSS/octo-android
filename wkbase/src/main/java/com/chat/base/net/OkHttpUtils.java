@@ -84,12 +84,19 @@ public class OkHttpUtils {
                             .hostnameVerifier(SSLSocketClient.getHostnameVerifier())
                             .addInterceptor(mRewriteCacheControlInterceptor)
                             .addInterceptor(new CommonRequestParamInterceptor())
+                            .addNetworkInterceptor(mRewriteCacheControlInterceptor)
+                            .addInterceptor(new LogInterceptor())
                             // Emoji manifest 端点公开无鉴权，parse 前先做 raw body 字节上限
                             // 检查，防 hostile / MITM 推巨大 body → FastJson buffer 后 OOM。
                             // 只对 URL 路径末尾 common/emojis 生效，不影响其它接口。
-                            .addInterceptor(new EmojiManifestBodyLimitInterceptor())
-                            .addNetworkInterceptor(mRewriteCacheControlInterceptor)
-                            .addInterceptor(new LogInterceptor()).build();
+                            //
+                            // ⚠️ 必须放在 LogInterceptor 之后（即 list 末尾，最内层）：
+                            // application interceptor 按 list order 由外到内包装，list 末尾的
+                            // interceptor 最先看到 response。LogInterceptor 会 body().string()
+                            // 全量读 body 后再打日志，若 BodyLimit 在 Log 之前（更外层），
+                            // Log 已经 OOM 了 BodyLimit 才拿到 response——检查太晚。
+                            // 参考 PR #94 Jerry-Xin round-3 review B2。
+                            .addInterceptor(new EmojiManifestBodyLimitInterceptor()).build();
                 }
             }
         }

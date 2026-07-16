@@ -152,6 +152,22 @@ public final class EmojiManifestSanitizer {
         int colon = url.indexOf(':');
         int slash = url.indexOf('/');
         if (colon >= 0 && (slash < 0 || colon < slash)) return false;
+        // 路径穿越拒：`..` 组件（防将来 Layer 3 拼到 baseUrl 后被服务端错误解析出目录穿越）。
+        // 严格匹配 `../` `..\` 首尾 `..`，不匹配文件名里含 `..` 的普通字符（如 `file..v2.png`）。
+        if (containsPathTraversal(url)) return false;
         return true;
+    }
+
+    /** URL 里是否存在 {@code ..} 路径组件（不是简单子串——{@code file..v2.png} 不算）。 */
+    private static boolean containsPathTraversal(String url) {
+        int len = url.length();
+        for (int i = 0; i <= len - 2; i++) {
+            if (url.charAt(i) != '.' || url.charAt(i + 1) != '.') continue;
+            boolean leftBoundary = (i == 0) || url.charAt(i - 1) == '/' || url.charAt(i - 1) == '\\';
+            boolean rightEnd = (i + 2 == len);
+            boolean rightSlash = !rightEnd && (url.charAt(i + 2) == '/' || url.charAt(i + 2) == '\\');
+            if (leftBoundary && (rightEnd || rightSlash)) return true;
+        }
+        return false;
     }
 }

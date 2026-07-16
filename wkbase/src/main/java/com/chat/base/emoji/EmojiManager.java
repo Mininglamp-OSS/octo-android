@@ -338,7 +338,8 @@ public class EmojiManager {
         return sb.toString();
     }
 
-    private static Pattern buildPattern(List<Entry> entries) {
+    /** package-private 便于单测 buildPattern 空 list 兜底行为。 */
+    static Pattern buildPattern(List<Entry> entries) {
         StringBuilder sb = new StringBuilder(entries.size() * 8);
         sb.append("(");
         boolean first = true;
@@ -349,6 +350,10 @@ public class EmojiManager {
             first = false;
         }
         sb.append(")");
+        // Defensive：空 entry 会得到 "()" 一直零宽匹配——理论上不可达（xml + manifest 至少一层），
+        // 但 asset 缺失 + 无缓存时可能命中。返回**永不匹配**的 (?!) 而不是零宽 ()，
+        // 避免消费端在渲染循环里遇到零宽 span 的边界情况。
+        if (first) return Pattern.compile("(?!)");
         return Pattern.compile(sb.toString());
     }
 

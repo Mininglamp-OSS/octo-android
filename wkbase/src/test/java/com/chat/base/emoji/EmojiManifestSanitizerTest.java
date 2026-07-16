@@ -249,6 +249,23 @@ public class EmojiManifestSanitizerTest {
         assertEquals("[b]", out.get(0).key);
     }
 
+    // ---- P2-1：`..` 路径穿越拒绝（防未来 Layer 3 拼到 baseUrl 后被误解析） ----
+
+    @Test
+    public void isSafeUrl_relative_path_traversal_rejected() {
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("../secret/e.png"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("emojis/../../secret/e.png"));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("emojis/.."));
+        assertFalse(EmojiManifestSanitizer.isSafeUrl("/emojis/../etc"));
+    }
+
+    @Test
+    public void isSafeUrl_dot_dot_in_filename_ok() {
+        // `.` `..` 只在作为完整路径组件时才拒，文件名里含 `..` 的普通字符不拒
+        assertTrue(EmojiManifestSanitizer.isSafeUrl("emojis/file..v2.png"));
+        assertTrue(EmojiManifestSanitizer.isSafeUrl("emojis/..hidden.png")); // 首字符是 `.` 但整段不是 `..`
+    }
+
     @Test
     public void sanitize_drops_item_with_unsafe_url_but_keeps_others() {
         List<EmojiManifestItem> out = EmojiManifestSanitizer.sanitize(

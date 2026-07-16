@@ -19,6 +19,7 @@ package com.chat.base.net;
 import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
+import com.chat.base.emoji.EmojiManifestBodyLimitInterceptor;
 import com.chat.base.utils.WKNetUtil;
 
 import java.io.File;
@@ -83,6 +84,10 @@ public class OkHttpUtils {
                             .hostnameVerifier(SSLSocketClient.getHostnameVerifier())
                             .addInterceptor(mRewriteCacheControlInterceptor)
                             .addInterceptor(new CommonRequestParamInterceptor())
+                            // Emoji manifest 端点公开无鉴权，parse 前先做 raw body 字节上限
+                            // 检查，防 hostile / MITM 推巨大 body → FastJson buffer 后 OOM。
+                            // 只对 URL 路径末尾 common/emojis 生效，不影响其它接口。
+                            .addInterceptor(new EmojiManifestBodyLimitInterceptor())
                             .addNetworkInterceptor(mRewriteCacheControlInterceptor)
                             .addInterceptor(new LogInterceptor()).build();
                 }

@@ -219,4 +219,27 @@ public class EmojiManagerMergeTest {
         assertFalse(r.text2entry.containsKey("[新表情B]"));
         assertFalse(r.text2entry.containsKey("[新表情C]"));
     }
+
+    // ---- buildPattern 空 list 兜底（P2-2）：无 entry 时返回永不匹配的 (?!) 而不是零宽 () ----
+
+    @Test
+    public void buildPattern_empty_list_returns_never_matching_pattern() {
+        java.util.regex.Pattern p = EmojiManager.buildPattern(Collections.<EmojiManager.Entry>emptyList());
+        // 空 pattern 不该匹配任何字符串——包括空串
+        assertFalse(p.matcher("").find());
+        assertFalse(p.matcher("hello [使命必达] world").find());
+        assertFalse(p.matcher("[a]").find());
+    }
+
+    @Test
+    public void buildPattern_non_empty_matches_registered_tokens() {
+        List<EmojiManager.Entry> entries = new ArrayList<>();
+        entries.add(xmlEntry("custom_a", "[a]", "emoji/a.png"));
+        entries.add(xmlEntry("custom_b", "[b]", "emoji/b.png"));
+        java.util.regex.Pattern p = EmojiManager.buildPattern(entries);
+        assertTrue(p.matcher("hello [a] world").find());
+        assertTrue(p.matcher("[b]").find());
+        assertFalse(p.matcher("[c]").find());
+        assertFalse(p.matcher("plain text").find());
+    }
 }

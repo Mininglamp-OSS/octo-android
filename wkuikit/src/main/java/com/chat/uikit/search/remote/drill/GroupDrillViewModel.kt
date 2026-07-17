@@ -170,11 +170,12 @@ class GroupDrillViewModel(
             cursor = cursor,
             sequence = seq,
         )
-        searchCaller.call(req) { outcome -> handleResponse(seq, isReset, outcome) }
+        searchCaller.call(req) { outcome -> handleResponse(seq, keyword, isReset, outcome) }
     }
 
     private fun handleResponse(
         reqSeq: Long,
+        requestKeyword: String,
         isReset: Boolean,
         outcome: ChannelSearchOutcome<CursorList<CombinedHit>>,
     ) {
@@ -182,6 +183,8 @@ class GroupDrillViewModel(
         if (reqSeq != nextSequence) return
         // keyword 已被清空 → 丢弃迟到响应
         if (_state.value.keyword.isEmpty()) return
+        // keyword 已变（debounce 窗口 / loadMore 在飞时用户改词）→ 丢弃，避免用旧词结果污染新词状态
+        if (_state.value.keyword != requestKeyword) return
 
         if (outcome.ok) {
             val body = outcome.data ?: return

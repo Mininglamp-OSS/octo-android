@@ -147,17 +147,23 @@ class GlobalSearchViewModel(
             sequence = mySeq,
         )
         val req = SearchGlobalGroupsReq(keyword = keyword, sequence = mySeq)
-        searchCaller.call(req) { outcome -> handleResponse(mySeq, outcome) }
+        searchCaller.call(req) { outcome -> handleResponse(mySeq, keyword, outcome) }
     }
 
     private fun handleResponse(
         reqSeq: Long,
+        requestKeyword: String,
         outcome: ChannelSearchOutcome<SearchGlobalGroupsResp>,
     ) {
         // 乱序防护 1：本地已发出更新的请求 → 丢弃此响应
         if (reqSeq != nextSequence) return
         // 乱序防护 2：keyword 已被用户清空 → 丢弃
         if (_state.value.keyword.isEmpty()) return
+        // 乱序防护 3：keyword 已变（debounce 窗口内响应到达但用户已改词）→ 丢弃
+        // 场景：setKeyword("foo") → seq=1 在飞；用户改 "bar" → state.keyword 立即更新但
+        // ++nextSequence 要等 debounce 300ms 后 triggerSearch。foo 响应在此窗口回来时，
+        // reqSeq(1)==nextSequence(1) 通过，此处 requestKeyword("foo")!=state.keyword("bar") → 丢弃。
+        if (_state.value.keyword != requestKeyword) return
 
         if (outcome.ok) {
             val body = outcome.data ?: return

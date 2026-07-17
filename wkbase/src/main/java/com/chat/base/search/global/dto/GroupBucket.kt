@@ -29,7 +29,10 @@ import com.chat.base.search.channel.dto.MessageHit
  *  - 子区桶：channel_type=5，parent_group_no + thread_id + thread_name 均非空
  */
 class GroupBucket {
-    lateinit var channel_id: String
+    // 服务端契约保证非空，但客户端不用 lateinit：漏字段场景 lateinit 会抛
+    // UninitializedPropertyAccessException 崩 UI 层；给默认空串让下游 `bucketToDataVO`
+    // 走 fallback 分支（`channel_id.ifEmpty { ... }` / adapter 校验），可控降级。
+    var channel_id: String = ""
     var channel_type: Byte = 0
     /** 群/子区共父群号；DM 桶为空。 */
     var parent_group_no: String? = null

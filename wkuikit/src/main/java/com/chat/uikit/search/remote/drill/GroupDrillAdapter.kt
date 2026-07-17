@@ -24,6 +24,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
+import com.chat.base.search.channel.Rfc3339
 import com.chat.base.search.channel.dto.CombinedHit
 import com.chat.base.space.SpaceFilter
 import com.chat.base.ui.components.AvatarView
@@ -82,14 +83,10 @@ class GroupDrillAdapter :
     }
 
     private fun formatTime(rfc3339: String): String {
-        // sorted_at 与 sent_at 都是 RFC3339；WKTimeUtils 需要 ms。这里做简单解析，
-        // 失败则回退到原字符串（不影响功能，仅显示形式）。
-        return try {
-            val ts = java.time.OffsetDateTime.parse(rfc3339).toInstant().toEpochMilli()
-            WKTimeUtils.getInstance().getTimeString(ts)
-        } catch (t: Throwable) {
-            rfc3339
-        }
+        // 项目 minSdk=23 未开 coreLibraryDesugaring，禁用 java.time；用现有 Rfc3339 helper。
+        // 解析失败返回 0，此时显示为空串，UI 上表现为无时间（可接受）。
+        val seconds = Rfc3339.toEpochSeconds(rfc3339)
+        return if (seconds > 0L) WKTimeUtils.getInstance().getTimeString(seconds * 1000L) else ""
     }
 
     private fun formatFileSize(bytes: Long): String = when {

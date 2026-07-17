@@ -64,6 +64,11 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     private var searchShortcut: DataVO? = null
     private var chatRecords: List<DataVO> = emptyList()
 
+    // Toast 去重：state.collect 每次 emission 都触发（含 repeatOnLifecycle 从 STOPPED 恢复时重放
+    // 上一次 state），无去重会让同一 errorCode 重复弹 toast 打扰用户。
+    // 新一轮请求发起时 errorCode 被清 null，允许下次错误再次弹。
+    private var lastToastedErrorCode: String? = null
+
     override fun getViewBinding(): ActGlobalLayoutBinding {
         return ActGlobalLayoutBinding.inflate(layoutInflater)
     }
@@ -258,12 +263,19 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                         return@collect
                     }
                     chatRecords = when (state.uiAction()) {
-                        null -> state.groups.map { bucketToDataVO(it, state.keyword) }
+                        null -> {
+                            // 新请求成功或刚发起时 errorCode 被清空 → 允许下次 toast
+                            lastToastedErrorCode = null
+                            state.groups.map { bucketToDataVO(it, state.keyword) }
+                        }
                         ChannelSearchUiAction.FALLBACK_TO_LOCAL -> localMessagesAsDataVO(state.keyword)
                         // 其他错误（限流 / 未启用 / 权限 / 校验 / 通用错误）：清空聊天记录段
                         // 让用户明确知道服务端没有返回结果；对应 toast 由 [showErrorToast] 处理
                         else -> {
-                            showErrorToast(state)
+                            if (state.errorCode != lastToastedErrorCode) {
+                                lastToastedErrorCode = state.errorCode
+                                showErrorToast(state)
+                            }
                             emptyList()
                         }
                     }

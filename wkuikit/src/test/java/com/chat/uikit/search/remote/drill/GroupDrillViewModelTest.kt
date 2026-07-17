@@ -328,4 +328,44 @@ class GroupDrillViewModelTest {
         assertEquals(7, vm.state.value.retryAfterSec)
         assertEquals(ChannelSearchUiAction.RATE_LIMITED, vm.state.value.uiAction())
     }
+
+    @Test
+    fun `response arriving in debounce window with mismatched keyword is discarded`() = runTest {
+        // 回归测试 PR #95 review 阻塞级 (Jerry-Xin)：debounce 窗口 stale response。
+        // GroupDrillViewModel 同样问题：setKeyword("foo") tick 300 → seq=1 pending；
+        // setKeyword("bar") state 立即改但 nextSequence 未递增；foo 响应到达时 requestKeyword
+        // 检查是唯一防线。同时验证 loadMore 在飞时用户改词的场景：loadMore 复用当前 sequence，
+        // reqSeq==nextSequence 会通过，此时也必须靠 requestKeyword 检查丢弃 stale loadMore 结果。
+        val caller = RecordingCaller()
+        val vm = GroupDrillViewModel(caller, debounceMillis = 300L)
+        vm.init("g_xxx", 2, "foo")
+        caller.completeAt(0, resp(listOf(messageHit("m_foo")), hasMore = true, nextCursor = "cur1"))
+        advanceUntilIdle()
+
+        // 场景 1: loadMore (seq=1) 在飞时用户改词
+        vm.loadMore()
+        assertEquals(2, caller.pending.size)
+        assertEquals(1L, caller.pending[1].req.sequence)
+
+        vm.setKeyword("bar")   // state.keyword=bar; nextSequence 仍是 1
+        assertEquals("bar", vm.state.value.keyword)
+
+        // loadMore 的 foo 响应到达 → 应被 requestKeyword 检查丢弃
+        caller.completeAt(1, resp(listOf(messageHit("m_foo_stale"))))
+        advanceUntilIdle()
+        assertFalse(
+            "stale loadMore 响应不能污染新 keyword state",
+            vm.state.value.hits.any { it.message?.message_id == "m_foo_stale" },
+        )
+        // 场景 2: debounce 触发 bar 的新请求
+        tick(300L)
+        assertEquals(3, caller.pending.size)
+        assertEquals("bar", caller.pending[2].req.keyword)
+        assertEquals(2L, caller.pending[2].req.sequence)
+
+        caller.completeAt(2, resp(listOf(messageHit("m_bar"))))
+        advanceUntilIdle()
+        assertEquals(1, vm.state.value.hits.size)
+        assertEquals("m_bar", vm.state.value.hits[0].message?.message_id)
+    }
 }

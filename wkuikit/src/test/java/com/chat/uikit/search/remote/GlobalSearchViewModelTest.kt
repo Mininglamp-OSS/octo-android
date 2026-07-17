@@ -362,4 +362,42 @@ class GlobalSearchViewModelTest {
         advanceUntilIdle()
         assertTrue("keyword 已清空时迟到响应应丢弃", vm.state.value.groups.isEmpty())
     }
+
+    @Test
+    fun `response arriving in debounce window with mismatched keyword is discarded`() = runTest {
+        // 回归测试 PR #95 review 阻塞级 (Jerry-Xin)：debounce 窗口 stale response。
+        // 场景：seq=1 (foo) 已发出 → 用户改 "bar" (state.keyword 立即更新但 nextSequence
+        // 还没递增，要等 debounce 触发) → foo 响应此刻回来 → reqSeq(1)==nextSequence(1)
+        // 通过 + keyword("bar") 非空 → 旧 requestKeyword 检查是唯一防线，否则 foo 结果
+        // 会被渲染成 bar 的结果，用户点桶还会带 bar 打开 L2。
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        vm.setKeyword("foo"); tick(300L)       // seq=1 pending (foo)
+        assertEquals(1, caller.pending.size)
+
+        vm.setKeyword("bar")                    // state.keyword 立即变 bar；debounce 未触发
+        assertEquals("nextSequence 未递增，仍是 1", 1, caller.pending.size)
+        assertEquals("bar", vm.state.value.keyword)
+
+        // foo 响应在此窗口到达 —— 应该被 requestKeyword 检查丢弃
+        caller.completeAt(0, resp(seq = 1L, groups = listOf(bucket("g_foo_stale"))))
+        advanceUntilIdle()
+        assertTrue(
+            "debounce 窗口内旧 keyword 的响应必须丢弃，不能污染新 keyword state",
+            vm.state.value.groups.isEmpty(),
+        )
+        assertEquals("bar", vm.state.value.keyword)
+
+        // debounce 触发 bar 的新请求
+        tick(300L)
+        assertEquals(2, caller.pending.size)
+        assertEquals("bar", caller.pending[1].req.keyword)
+        assertEquals(2L, caller.pending[1].req.sequence)
+
+        caller.completeAt(1, resp(seq = 2L, groups = listOf(bucket("g_bar"))))
+        advanceUntilIdle()
+        assertEquals(1, vm.state.value.groups.size)
+        assertEquals("g_bar", vm.state.value.groups[0].channel_id)
+    }
 }

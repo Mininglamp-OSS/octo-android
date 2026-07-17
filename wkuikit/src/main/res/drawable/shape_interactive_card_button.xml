@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 交互式卡片按钮胶囊：accent 12% tint 底 + 999dp 圆角，pressed 加深到 24% tint。
+     对齐 web .ac-pushButton 的 wk-bg-selected 底 + 圆角胶囊样式。
+     取消 elevation/stateListAnimator 需要在代码里设置（无法通过 drawable 完成）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#3D7761F4" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1F7761F4" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</selector>

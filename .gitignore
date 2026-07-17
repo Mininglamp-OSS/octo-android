@@ -48,6 +48,9 @@ captures/
 
 # AAR libraries (should use Maven/Gradle dependencies)
 *.aar
+# 例外：AdaptiveCards SDK 自编 AAR（源码 MIT，来自 Teams-AdaptiveCards-Mobile）
+# 因 Microsoft 官方 Maven 二进制走 EULA 禁分发，我们必须自编并入库
+!wkuikit/libs/adaptivecards-*.aar
 
 # OS files
 .DS_Store

@@ -10,6 +10,12 @@
     <string name="saved_album">已保存在相册</string>
     <string name="loading">正在加载中</string>
     <string name="base_unknow_msg">[未知消息，请先升级客户端后查看]</string>
+    <string name="base_open_url_failed">无法打开链接</string>
+    <string name="base_card_action_failed">操作失败，请稍后再试</string>
+    <string name="base_card_action_retry">操作繁忙，请稍后再试</string>
+    <string name="base_card_action_timeout">操作已提交，机器人稍后响应</string>
+    <string name="base_card_need_update">此消息需要更新客户端后查看</string>
+    <string name="base_card_copy_success">已复制</string>
     <string name="refresh_footer">- 到底了 -</string>
     <string name="base_withdraw">撤回</string>
     <string name="base_forward">转发</string>

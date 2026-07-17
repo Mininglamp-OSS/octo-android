@@ -50,6 +50,18 @@ android {
 }
 dependencies {
     api project(':wkbase')
+
+    // AdaptiveCards SDK (Teams-AdaptiveCards-Mobile, MIT, 自编 AAR)
+    // 源码位置：../adaptivecards-src (Octo 父目录，非 submodule)
+    // 重建 AAR：cd ../adaptivecards-src/source/android && ./gradlew :adaptivecards:assembleRelease
+    // AAR 通过 flatDir 声明（settings.gradle），library 模块合规
+    api name: 'adaptivecards-3.7.0-teams', ext: 'aar'
+    // AAR 不携带传递依赖，手动补齐 SDK 运行时所需
+    api 'androidx.gridlayout:gridlayout:1.0.0'
+    api 'com.google.android.flexbox:flexbox:3.0.0'
+    api 'com.caverock:androidsvg-aar:1.3'
+    api 'androidx.viewpager2:viewpager2:1.0.0'
+    api 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3'
 //    implementation "androidx.work:work-runtime:2.8.1"
 
     // Unit tests ( EP1 数据层透传强制单元测试 +  external-source field-passthrough

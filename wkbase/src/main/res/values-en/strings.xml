@@ -11,6 +11,12 @@
     <string name="saved_album">Saved</string>
     <string name="loading">Loading</string>
     <string name="base_unknow_msg">[Unknown message, please check after upgrading the client]</string>
+    <string name="base_open_url_failed">Cannot open link</string>
+    <string name="base_card_action_failed">Action failed, please try again later</string>
+    <string name="base_card_action_retry">Server busy, please try again later</string>
+    <string name="base_card_action_timeout">Submitted, waiting for bot response</string>
+    <string name="base_card_need_update">This message requires client update to view</string>
+    <string name="base_card_copy_success">Copied</string>
     <string name="refresh_footer">- End -</string>
     <string name="base_withdraw">Withdraw</string>
     <string name="base_forward">Forward</string>

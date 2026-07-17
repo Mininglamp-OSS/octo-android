@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 交互式卡片（ContentType 17）自绘气泡：白底 + 8dp 圆角 + 1dp hairline，无阴影无尾巴。
+     对齐 web (.wk-interactive-card-sdk)：hairline stroke, no shadow, no left rail。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/white" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/dividerColor" />
+    <corners android:radius="8dp" />
+</shape>

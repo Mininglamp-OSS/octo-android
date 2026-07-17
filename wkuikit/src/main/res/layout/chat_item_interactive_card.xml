@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 交互式卡片消息布局（ContentType 17）—— Option A：卡片即气泡。
+     · BubbleLayout 保留（提供长按/选中/reaction/时间戳 等骨架），但视觉外壳淡化：
+       padding=0、shadowRadius=0、气泡底色透明（由 Provider 侧 setBubbleNormalColor 完成）。
+     · cardBoxLayout 是真正的"视觉气泡"：白底 + 1dp hairline + 8dp 圆角（shape_interactive_card_bg），
+       clipToOutline 让 AdaptiveCard 子 View 圆角裁切。
+     · wk_msg_status_layout 挪到卡片盒外（气泡下方），避免撑变卡片形状。
+     · 对齐 web wk-interactive-card-sdk：hairline stroke, no shadow, no left rail. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardView"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:baselineAligned="false"
+    android:orientation="horizontal">
+
+    <com.chat.base.views.BubbleLayout
+        android:id="@+id/contentLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="0dp"
+        app:shadowRadius="0dp">
+
+        <FrameLayout
+            android:id="@+id/interactiveCardBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/shape_interactive_card_bg"
+            android:clipChildren="true"
+            android:clipToOutline="true">
+
+            <FrameLayout
+                android:id="@+id/interactiveCardContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/interactiveCardFallbackTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:textColor="@color/colorDark"
+                android:textSize="15sp"
+                android:visibility="gone" />
+
+            <!-- Action.Submit 提交中的透明覆盖层：视觉上父容器 alpha=0.6 已置灰所有子 View；
+                 这里 clickable=true 吸收所有点击，防止用户在等 bot 回帧时重复点击按钮。
+                 提交完成 / 10s 超时 / bot 改卡新帧到达时，Provider 会把 visibility 设回 gone。 -->
+            <View
+                android:id="@+id/interactiveCardSubmitOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                android:clickable="true"
+                android:focusable="true"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <include layout="@layout/wk_msg_status_layout" />
+    </com.chat.base.views.BubbleLayout>
+
+</LinearLayout>

@@ -33,6 +33,9 @@ class MessageHit {
     var outer_preview: OuterPreview? = null
     var inner_messages: List<InnerMessage>? = null
     var channel_id: String = ""
+    // 全局搜索 preview 场景由服务端回填（`_search_global_groups`/`_search_global_messages`）。
+    // 频道内 `_search`/`_search_all` 响应中不携带，保留默认 0。
+    var channel_type: Byte = 0
 
     /** 服务端 snippet 内 <mark> 标签替换为客户端紫色 font，与 GlobalMessage.getHtmlText 同色规则。 */
     fun getHighlightedHtml(): String {

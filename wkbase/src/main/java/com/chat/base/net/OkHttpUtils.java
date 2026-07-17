@@ -20,6 +20,7 @@ import android.util.Log;
 
 import com.chat.base.WKBaseApplication;
 import com.chat.base.emoji.EmojiManifestBodyLimitInterceptor;
+import com.chat.base.search.global.SearchGlobalBodyLimitInterceptor;
 import com.chat.base.utils.WKNetUtil;
 
 import java.io.File;
@@ -96,7 +97,11 @@ public class OkHttpUtils {
                             // 全量读 body 后再打日志，若 BodyLimit 在 Log 之前（更外层），
                             // Log 已经 OOM 了 BodyLimit 才拿到 response——检查太晚。
                             // 参考 PR #94 Jerry-Xin round-3 review B2。
-                            .addInterceptor(new EmojiManifestBodyLimitInterceptor()).build();
+                            .addInterceptor(new EmojiManifestBodyLimitInterceptor())
+                            // 全局搜索 L1/L2 端点也做 body 大小上限（同 Emoji 拦截器语义），
+                            // 挂在 LogInterceptor 之后避免 Log 先 body().string() OOM。
+                            // PR #95 review 主要级 - OctoBoooot: 新聚合端点缺 body cap。
+                            .addInterceptor(new SearchGlobalBodyLimitInterceptor()).build();
                 }
             }
         }

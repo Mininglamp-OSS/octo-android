@@ -26,9 +26,11 @@ import android.widget.TextView
 import com.chad.library.adapter.base.BaseMultiItemQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.msgitem.WKContentType
+import com.chat.base.space.SpaceFilter
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
+import com.xinbida.wukongim.entity.WKChannelType
 
 class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
     init {
@@ -80,8 +82,16 @@ class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
         } else if (item.itemType == 4) {
             val avatarView = holder.getView<AvatarView>(R.id.avatarView)
             avatarView.setSize(40f)
-            avatarView.showAvatar(item.channel?.channel_id, item.channel!!.channel_type)
-            holder.setText(R.id.nameTv, item.channel.channel_name ?: "")
+            // 子区（channel_type=5）的 channel_id 是 "{parent}____{thread}" 复合结构，
+            // AvatarView 无法直接加载；子区在产品上没有独立头像，沿用父群头像。
+            val ch = item.channel!!
+            if (ch.channel_type == WKChannelType.COMMUNITY_TOPIC) {
+                val parent = SpaceFilter.extractParentGroupId(ch.channel_id) ?: ch.channel_id
+                avatarView.showAvatar(parent, WKChannelType.GROUP)
+            } else {
+                avatarView.showAvatar(ch.channel_id, ch.channel_type)
+            }
+            holder.setText(R.id.nameTv, ch.channel_name ?: "")
             val contentTv = holder.getView<TextView>(R.id.contentTv)
             contentTv.text = highlightKeyword(item.text, item.keyword)
             holder.setText(R.id.timeTv, "")

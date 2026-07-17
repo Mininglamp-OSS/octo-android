@@ -163,6 +163,9 @@
 # 频道内搜索 DTO：CursorList/FileHit/MediaHit/MessageHit/CombinedHit/AroundResult/Pagination
 # 走 FastJson 反射按字段名映射 JSON，不 keep 会被 R8 重命名字段导致反序列化产物类型错乱 → checkcast CCE
 -keep class com.chat.base.search.channel.dto.** { *; }
+# 全局聚合搜索 DTO (L1 _search_global_groups / L2 _search_global_messages)：同上 FastJson 反射映射，
+# release 构建 R8 rename 会导致 L1 groups[] 解析为空/lateinit 崩，PR #95 review 阻塞级。
+-keep class com.chat.base.search.global.dto.** { *; }
 #----------登录模块---------------
 -keep class com.chat.login.entity.** { *; }
 #----------uikit模块--------------

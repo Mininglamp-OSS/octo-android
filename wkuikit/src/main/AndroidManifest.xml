@@ -112,6 +112,9 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden" />
         <activity android:name="com.chat.uikit.chat.search.MessageRecordActivity" />
+        <activity android:name="com.chat.uikit.search.remote.drill.GroupDrillActivity"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
         <activity android:name="com.chat.uikit.chat.search.member.SearchWithMemberActivity" />
         <activity android:name="com.chat.uikit.chat.search.date.SearchWithDateActivity" />
         <activity android:name="com.chat.uikit.chat.search.image.SearchWithImgActivity" />

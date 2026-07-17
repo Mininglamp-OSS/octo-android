@@ -42,8 +42,8 @@ import com.chat.uikit.databinding.ActGlobalLayoutBinding
 import com.chat.base.entity.GlobalChannel
 import com.chat.base.entity.GlobalSearchReq
 import com.chat.base.search.GlobalSearchModel
-import com.chat.uikit.chat.search.MessageRecordActivity
 import com.chat.uikit.search.SearchUserActivity
+import com.chat.uikit.search.remote.drill.GroupDrillActivity
 import com.scwang.smart.refresh.layout.api.RefreshLayout
 import com.scwang.smart.refresh.layout.listener.OnRefreshLoadMoreListener
 import com.xinbida.wukongim.WKIM
@@ -192,7 +192,12 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                                 )
                             )
                         } else {
-                            val intent = Intent(this@GlobalActivity, MessageRecordActivity::class.java)
+                            // 服务端 L1 桶 (item.orderSeq=0 硬编码): 跳 GroupDrillActivity
+                            // 走 L2 (_search_global_messages)，传群 id 自动展开群+子区，
+                            // 让用户一次看到该会话下所有关键词命中 (对齐服务端契约 §3)。
+                            // 老 IMSDK 本地聚合桶 (orderSeq>0 只走定位分支; orderSeq=0 且
+                            // messageCount>1 也走这里) 也跳 GroupDrill，服务端 L2 补齐历史。
+                            val intent = Intent(this@GlobalActivity, GroupDrillActivity::class.java)
                             intent.putExtra("channel_id", item.channel!!.channel_id)
                             intent.putExtra("channel_type", item.channel.channel_type)
                             intent.putExtra("keyword", item.keyword)
@@ -269,9 +274,13 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     }
 
     private fun bucketToDataVO(bucket: GroupBucket, keyword: String): DataVO {
+        val isThread = bucket.channel_type == WKChannelType.COMMUNITY_TOPIC
+        // 子区展示 "父群名 · 子区名"，方便用户识别归属；纯群/DM 直接展 group_name
         val displayName = when {
-            bucket.channel_type == WKChannelType.COMMUNITY_TOPIC && !bucket.thread_name.isNullOrEmpty() ->
-                bucket.thread_name!!
+            isThread && !bucket.thread_name.isNullOrEmpty() -> {
+                if (bucket.group_name.isNotEmpty()) "${bucket.group_name} · ${bucket.thread_name}"
+                else bucket.thread_name!!
+            }
             bucket.group_name.isNotEmpty() -> bucket.group_name
             else -> bucket.channel_id
         }
@@ -288,7 +297,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
             val prefix = if (bucket.match_count_approx) "约 " else ""
             "$prefix${bucket.match_count} 条相关聊天记录"
         }
-        // messageCount>1 且 orderSeq=0 → 点击落到 MessageRecordActivity（GlobalActivity.kt:170 分支）
+        // messageCount>1 且 orderSeq=0 → 点击落到 GroupDrillActivity 走 L2
         val count = bucket.match_count.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
         return DataVO(DataVO.LOCAL_MSG, gc, null, text, keyword, count, 0L)
     }

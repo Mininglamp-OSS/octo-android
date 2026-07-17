@@ -29,4 +29,8 @@ class FileHit {
     var sender_name: String? = null
     var sender_avatar_url: String? = null
     lateinit var sent_at: String               // RFC3339
+    // 全局搜索场景（`_search_global_messages` / `_search_global_files`）由服务端回填。
+    // 频道内 `_search_files` / `_search_all` 响应中不带，保留默认空/0，向后兼容。
+    var channel_id: String = ""
+    var channel_type: Byte = 0
 }

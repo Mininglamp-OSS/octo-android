@@ -78,10 +78,9 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
     @Override
     protected void initListener() {
         SingleClickUtil.onSingleClick(wkVBinding.threadNameLayout, v -> {
-            if (!isCreator && !isGroupAdmin) {
-                WKToastUtils.getInstance().showToastNormal(getString(R.string.str_rename_thread_no_permission));
-                return;
-            }
+            // 放开：父群活跃成员即可改名（能进入本页即已是父群活跃成员）。
+            // 龙虾做粗过滤，服务端 fail-closed 最终裁决龙虾/外部/黑名单。
+            if (isCurrentUserRobot()) return;
             showRenameDialog();
         });
 
@@ -201,6 +200,13 @@ public class ThreadDetailActivity extends WKBaseActivity<ActThreadDetailLayoutBi
     protected void onDestroy() {
         super.onDestroy();
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("thread_detail_channel");
+    }
+
+    // 当前登录用户是否为龙虾（机器人）。改名入口只做粗过滤，服务端 fail-closed 兜底。
+    private boolean isCurrentUserRobot() {
+        WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
+                .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        return me != null && me.robot == 1;
     }
 
     private void showRenameDialog() {

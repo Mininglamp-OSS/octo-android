@@ -368,9 +368,15 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
         // 图文混排：全功能启用（转发/撤回/多选/回复/reaction/pin）。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(true));
-        // 交互式卡片：P1 只展示，不支持转发/引用/收藏/多选（避免早期卡片契约不稳时出错）
+        // 交互式卡片长按菜单：对齐 iOS（WKApp.m:1602-1609 + WKInteractiveCardContent.m:72-75 isForwardable=NO）：
+        // 转发禁（v2 卡含 Input/Submit，转发后 action 上下文失效且有伪造面；v1/v2 统一处理避免误伤），
+        // 其它（撤回/多选/回复/reaction/pin/删除）全开，跟其他消息类型待遇一致 —— 用户能删掉不想看的卡、
+        // 引用回复、加 reaction 回应机器人。撤回/删除内部还会走 canWithdraw / role 二次判断，别人发的卡
+        // 不会误出撤回项。
+        // 6-arg 构造函数依次是：isCanForward / isCanWithdraw / isCanMultipleChoice / isCanReply /
+        // isCanShowReaction / isCanShowPinMenu；isCanDelete 硬编码 true。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.interactiveCard,
-            object -> new MsgConfig(false));
+            object -> new MsgConfig(false, true, true, true, true, true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));

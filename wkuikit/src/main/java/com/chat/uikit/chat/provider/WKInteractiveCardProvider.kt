@@ -44,6 +44,7 @@ import com.chat.uikit.chat.msgmodel.CardSenderClassifier
 import com.chat.uikit.chat.msgmodel.CardSenderTrust
 import com.chat.uikit.chat.msgmodel.InteractiveCardActionService
 import com.chat.uikit.chat.msgmodel.InteractiveCardDecision
+import com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer
 import com.chat.uikit.chat.msgmodel.OctoHostConfig
 import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent
 import com.xinbida.wukongim.entity.WKChannelType
@@ -91,6 +92,9 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
     /** 上次渲染该 messageID 时的 cardJson 指纹，用于识别"bot 改卡新帧"→ 自动解除 loading 态。 */
     private val lastRenderedFingerprint = mutableMapOf<String, Int>()
+
+    /** 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。 */
+    private val parseFailLoggedSigs = mutableSetOf<Int>()
 
     /** 主线程 Handler，用于 postDelayed 超时。 */
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -181,7 +185,13 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         val cardDecision = decision as InteractiveCardDecision.Decision.Card
 
         try {
-            val parseResult = AdaptiveCard.DeserializeFromString(cardJson, model.cardVersion)
+            // 渲染前 sanitize —— 对齐 iOS `WKACardRenderer.wk_sanitizeNode`：
+            //  · Input.Toggle 缺 title 补上（AC C++ ObjectModel schema 严格，不 sanitize 整卡挂）
+            //  · Input.ChoiceSet 一律 style=expanded（绕开 SDK compact 下拉的样式 & 生命周期问题）
+            // 保留原 cardJson 字符串给日志去重签名用（sanitize 后 hash 会变，签名基线不稳）。
+            val sanitizedCard = InteractiveCardSanitizer.sanitize(cardObj)
+            val cardJsonForSdk = sanitizedCard?.toString() ?: cardJson
+            val parseResult = AdaptiveCard.DeserializeFromString(cardJsonForSdk, model.cardVersion)
             val adaptiveCard = parseResult.GetAdaptiveCard()
             val fragmentManager = (context as? FragmentActivity)?.supportFragmentManager
                 ?: throw IllegalStateException("context is not a FragmentActivity")
@@ -212,7 +222,14 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             container.visibility = View.VISIBLE
             fallback.visibility = View.GONE
         } catch (t: Throwable) {
-            Log.w(TAG, "AdaptiveCard 渲染失败，降级到 plain: ${t.message}", t)
+            // 解析失败按原始 cardJson 的 hash 去重打印，避免同一张挂卡在 RecyclerView 复用/滚动时刷屏。
+            // 用未 sanitize 的 cardJson 做签名，服务端 payload 不变 → hash 稳定 → 全 App 生命周期只打一次。
+            val sig = cardJson.hashCode()
+            if (parseFailLoggedSigs.add(sig)) {
+                Log.w(TAG, "AdaptiveCard 渲染失败(首打)：${t.message} payload=$cardJson", t)
+            } else {
+                Log.d(TAG, "AdaptiveCard 渲染失败(已记录 sig=$sig)：${t.message}")
+            }
             showFallback(container, fallback, plain)
         }
 
@@ -477,9 +494,27 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                         cardActionService.submitCardAction(body),
                         object : IRequestResultListener<JSONObject> {
                             override fun onSuccess(result: JSONObject?) {
-                                // HTTP 受理成功：不清 submitting——等 bot 改卡新帧到达时 setData 内自动清。
-                                // 若 bot 迟迟不响应，10s 超时会兜底恢复可点。
-                                Log.d(TAG, "Submit 成功: accepted=${result?.getBoolean("accepted")} replay=${result?.getBoolean("replay")}")
+                                // HTTP 受理成功。原策略"不清 submitting、等 bot 改卡新帧自动清"
+                                // 在服务端 syncMessageExtra 有 cache miss bug 时会永久卡住 UI —— 撤回
+                                // 功能已经踩过并修好（[WKIMUtils.markMsgRevokedLocallyByClientMsgNO]
+                                // + [scheduleRevokeRetry]）。这里照搬同一模式：
+                                //  1. 立即清 loading，UI 恢复可交互（即便 bot 慢也不视觉卡死）
+                                //  2. 主动 syncExtraMsg 强拉一次（不等 CMD）
+                                //  3. 500ms/1500ms 兜底 retry（对齐撤回节奏）—— 兜服务端 CMD/extra 写入的时序竞态
+                                // bot 秒回时：sync 拉到新 contentEdit → refreshMsg → notifyData → setData
+                                // 里指纹变化不影响（已经清过 submitting），新帧内容自然渲染出完成态。
+                                Log.d(TAG, "Submit 成功: accepted=${result?.getBoolean("accepted")} replay=${result?.getBoolean("replay")}, 主动 sync 拉新帧")
+                                clearSubmittingState(messageId)
+                                if (cardBox != null && overlay != null) {
+                                    restoreCardBoxByMessageId(cardBox, overlay, messageId)
+                                }
+                                val ch = wkMsg.channelID
+                                val ct = wkMsg.channelType
+                                if (!ch.isNullOrBlank()) {
+                                    com.chat.uikit.message.MsgModel.getInstance().syncExtraMsg(ch, ct)
+                                    scheduleCardEditSyncRetry(ch, ct, 500L)
+                                    scheduleCardEditSyncRetry(ch, ct, 1500L)
+                                }
                             }
 
                             override fun onFail(code: Int, msg: String?) {
@@ -561,6 +596,18 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     private fun clearSubmittingState(messageId: String) {
         submittingIds.remove(messageId)
         pendingTimeouts.remove(messageId)?.let { mainHandler.removeCallbacks(it) }
+    }
+
+    /**
+     * 服务端 syncMessageExtra 有 cache/时序 bug —— submit 200 后立即 sync 一次很可能拿到
+     * resultSize=0（bot 改卡的 message_extra 增量还没落库）。照搬 [WKIMUtils.scheduleRevokeRetry]
+     * 的节奏：延迟再拉一次强制刷新。幂等由 sync 本身保证（extra_version 递增，无副作用重复调）。
+     * 无需查本地状态：sync 只读接口，多调几次是 no-op（拉不到新 extra 就啥都不做）。
+     */
+    private fun scheduleCardEditSyncRetry(channelID: String, channelType: Byte, delayMs: Long) {
+        mainHandler.postDelayed({
+            com.chat.uikit.message.MsgModel.getInstance().syncExtraMsg(channelID, channelType)
+        }, delayMs)
     }
 
     private companion object {

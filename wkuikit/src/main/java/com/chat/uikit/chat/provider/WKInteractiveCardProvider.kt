@@ -18,6 +18,7 @@ import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -92,19 +93,34 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      */
     override val hasDynamicHeight: Boolean = true
 
-    /** 上次渲染该 messageID 时的 cardJson 指纹，用于识别"bot 改卡新帧"→ 自动解除 loading 态。 */
-    private val lastRenderedFingerprint = mutableMapOf<String, Int>()
+    /**
+     * 上次渲染该 messageID 时的 cardJson 指纹，用于识别"bot 改卡新帧"→ 自动解除 loading 态。
+     *
+     * 用 [LruCache] 而非 `mutableMapOf` 是为了给存活周期 = Activity 生命周期的 Provider
+     * 一个有界上限：会话越滑越长时，unique messageId 数量线性增长，无界 map 累计的
+     * `String → Integer` boxed 条目在长时间会话里会攒到几万条。128 条覆盖近期活跃消息
+     * 足够（超出的老消息即便 fingerprint 丢了，最坏是下次 bind 时把 submitting 态多保留
+     * 一次——反正它 10s 也会因超时自动清）。
+     */
+    private val lastRenderedFingerprint = LruCache<String, Int>(FINGERPRINT_CACHE_SIZE)
 
-    /** 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。 */
-    private val parseFailLoggedSigs = mutableSetOf<Int>()
+    /**
+     * 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。
+     * [LruCache] 有界（64）；被淘汰后极小概率会重复打印，可接受。
+     */
+    private val parseFailLoggedSigs = LruCache<Int, Boolean>(PARSE_FAIL_CACHE_SIZE)
 
     /**
      * messageID → 当前绑定的 cardBox 弱引用。dispatcher 通过 [SubmitUiListener] 回调
      * 通知需要更新哪条消息的视觉时，Provider 从这里查表拿到 view。用弱引用避免 view
      * 被 RecyclerView 回收后阻碍 GC；查表拿到 view 后再对 [View.getTag] 做 messageID
      * 比对，防止 view 已被复用给别条消息导致误改。
+     *
+     * 值是 WeakReference 所以 view 会被 GC 回收，但 key（String messageID）在无界 map
+     * 里会积累。用 [LruCache] 上界 64 —— dispatcher 回调的目标永远是"最近提交过"的消息，
+     * 淘汰更老的映射不影响正确性。
      */
-    private val cardBoxByMsgId = mutableMapOf<String, WeakReference<FrameLayout>>()
+    private val cardBoxByMsgId = LruCache<String, WeakReference<FrameLayout>>(CARD_BOX_CACHE_SIZE)
 
     /** 业务分派器——所有副作用（HTTP / WebView / clipboard / toast / timeout）由 Provider 注入。 */
     private val dispatcher: CardActionDispatcher by lazy { createDispatcher() }
@@ -229,18 +245,18 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         // 记入 messageID → cardBox 弱引用表，dispatcher 通过 SubmitUiListener 回调
         // 时按 messageID 反查（比原来沿父链 walkUp 更稳，也为 C3 缓存 view 场景铺路）。
         if (messageId.isNotEmpty()) {
-            cardBoxByMsgId[messageId] = WeakReference(cardBox)
+            cardBoxByMsgId.put(messageId, WeakReference(cardBox))
         }
 
         // 识别"bot 改卡新帧到达" —— cardJson 指纹变化即视为新帧，自动解除 submitting 态。
         // 契约对齐 web：新帧到达 = 提交闭环完成，无需保留 loading 遮罩。
         if (messageId.isNotEmpty()) {
             val newFp = cardJson?.hashCode() ?: 0
-            val oldFp = lastRenderedFingerprint[messageId]
+            val oldFp = lastRenderedFingerprint.get(messageId)
             if (oldFp != null && oldFp != newFp) {
                 dispatcher.clearSubmitting(messageId)
             }
-            lastRenderedFingerprint[messageId] = newFp
+            lastRenderedFingerprint.put(messageId, newFp)
         }
 
         if (model == null || cardJson.isNullOrBlank()) {
@@ -285,8 +301,10 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             }
             is InteractiveCardRenderer.Result.Fallback -> {
                 // 解析失败按 cardJson.hashCode 去重打印，避免同一张挂卡在 RecyclerView 复用 /
-                // 滚动时刷屏。sig 稳定 → 全 App 生命周期只打一次完整 payload。
-                if (parseFailLoggedSigs.add(r.cardJsonHash)) {
+                // 滚动时刷屏。sig 稳定 → 常态下全 App 生命周期只打一次完整 payload
+                // （LruCache 淘汰后极小概率会再打一次，可接受）。
+                if (parseFailLoggedSigs.get(r.cardJsonHash) == null) {
+                    parseFailLoggedSigs.put(r.cardJsonHash, true)
                     Log.w(TAG, "AdaptiveCard 渲染失败(首打)：${r.reason} payload=$cardJson")
                 } else {
                     Log.d(TAG, "AdaptiveCard 渲染失败(已记录 sig=${r.cardJsonHash})：${r.reason}")
@@ -423,7 +441,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      */
     private fun applySubmittingUiFor(messageId: String) {
         if (messageId.isEmpty()) return
-        val box = cardBoxByMsgId[messageId]?.get() ?: return
+        val box = cardBoxByMsgId.get(messageId)?.get() ?: return
         // tag 比对防误改：view 可能已被 RecyclerView 复用给别条消息。
         if (box.tag != messageId) return
         val overlay = box.findViewById<View>(R.id.interactiveCardSubmitOverlay) ?: return
@@ -436,7 +454,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      */
     private fun restoreCardBoxFor(messageId: String) {
         if (messageId.isEmpty()) return
-        val box = cardBoxByMsgId[messageId]?.get() ?: return
+        val box = cardBoxByMsgId.get(messageId)?.get() ?: return
         if (box.tag != messageId) return
         val overlay = box.findViewById<View>(R.id.interactiveCardSubmitOverlay) ?: return
         box.alpha = 1f
@@ -445,5 +463,14 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
     private companion object {
         const val TAG = "InteractiveCard"
+
+        /** 见 [lastRenderedFingerprint]。128 覆盖近期活跃消息，超出老消息会被 LRU 淘汰。 */
+        const val FINGERPRINT_CACHE_SIZE = 128
+
+        /** 见 [parseFailLoggedSigs]。64 已足够收纳当前会话见到的所有坏 payload。 */
+        const val PARSE_FAIL_CACHE_SIZE = 64
+
+        /** 见 [cardBoxByMsgId]。dispatcher 回调仅针对"最近提交过"的消息，64 够用。 */
+        const val CARD_BOX_CACHE_SIZE = 64
     }
 }

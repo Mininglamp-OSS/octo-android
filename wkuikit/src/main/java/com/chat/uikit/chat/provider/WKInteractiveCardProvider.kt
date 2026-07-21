@@ -12,7 +12,6 @@ package com.chat.uikit.chat.provider
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -30,6 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.alibaba.fastjson.JSONObject
 import com.chat.base.WKBaseApplication
+import com.chat.base.act.WKWebViewActivity
 import com.chat.base.base.WKBaseModel
 import com.chat.base.config.WKConfig
 import com.chat.base.msgitem.WKChatBaseProvider
@@ -76,7 +76,8 @@ import java.util.UUID
  * 交互闭环（对齐 web `InteractiveCardCell.handleCardAction`）：
  *  - **Action.Submit**：收集 [RenderedAdaptiveCard.getInputs] → POST `/v1/message/card/action`
  *    （no-data，D11 契约）→ 受理成功后等 bot 改卡新帧（走 CMDSyncMessageExtra → contentEditMsgModel 重渲）。
- *  - **Action.OpenUrl**：`Intent.ACTION_VIEW` 打开系统浏览器。
+ *  - **Action.OpenUrl**：拉起 App 内 [WKWebViewActivity]（与 markdown 链接 / URL 预览卡 /
+ *    @文本链接一致），不跳系统浏览器 —— 保留登录态和返回栈，用户回到会话不用重新打开。
  *  - **Action.ToggleVisibility**：SDK 内部处理（展开/收起推理），Provider 不介入。
  *
  * 后续 M1/M2 迭代补齐：白名单裁剪、profile 协商、senderTrust gate、submitting loading 覆盖、
@@ -388,7 +389,12 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 return
             }
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                // 走 App 内 WebView（对齐 WKTextProvider.kt:250 链接预览卡、WKMarkwonProvider linkResolver
+                // 的处理路径）。用户诉求："通知助手推送里的『查看详情』不要跳出 App"。
+                // FLAG_ACTIVITY_NEW_TASK：context 可能是 application context（Provider 由 adapter 持有，
+                // 而 adapter 可能在非 Activity context 下 bind），保守带 flag 兜底。
+                val intent = Intent(context, WKWebViewActivity::class.java).apply {
+                    putExtra("url", url)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)

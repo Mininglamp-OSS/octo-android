@@ -194,7 +194,111 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         }
 
         Log.e("加载的URL", url);
-        wkVBinding.webView.loadUrl(url);
+        loadUrlWithHandoff(url);
+    }
+
+    /**
+     * 自家域名下的 URL：注入 App 端 token/uid/name 到 WebView localStorage，实现免登。
+     * Web 端登录数据存 localStorage 的 keys（见 web 的 App.tsx save()）：
+     *   token{sid}, uid{sid}, name{sid}, short_no{sid}, role{sid}, is_work{sid}, sex{sid}
+     * sid 从 URL ?sid=xxx 参数或 sessionStorage 或 localStorage 取；不给的话 web 会随机生成
+     * → 我们注入的 key 就命中不上。所以强制拼 ?sid=android 让 web 用固定 bucket。
+     * <p>
+     * 通过 loadDataWithBaseURL 加载一个 bootstrap 页（baseURL = 自家 origin，保证 localStorage
+     * 写在正确的 origin），bootstrap 里 <script> 先 setItem 再 location.replace 真 URL。
+     * 这比 WebViewClient.onPageStarted + evaluateJavascript 时序更可控（避免 web app 的 boot
+     * 代码抢跑到 localStorage 读取前）。
+     * <p>
+     * 外链（非自家域名）不动，保持原 loadUrl。
+     */
+    private void loadUrlWithHandoff(String url) {
+        String webOrigin = getOctoWebOrigin();
+        if (webOrigin == null || !url.startsWith(webOrigin)) {
+            // 外链 / origin 解析失败：走原有 loadUrl，不注入任何 App 状态（防 token 泄露给第三方）。
+            wkVBinding.webView.loadUrl(url);
+            return;
+        }
+        // report.html 已经走 ?uid=&token= URL 参数握手（见上面 line 174-176），不需要再走 localStorage 注入。
+        if (url.contains("report.html")) {
+            wkVBinding.webView.loadUrl(url);
+            return;
+        }
+        String token = WKConfig.getInstance().getToken();
+        String uid = WKConfig.getInstance().getUid();
+        String name = WKConfig.getInstance().getUserInfo() != null ? WKConfig.getInstance().getUserInfo().name : "";
+        if (TextUtils.isEmpty(token) || TextUtils.isEmpty(uid)) {
+            // 未登录或缺关键身份：不做注入，走原路径（web 端会自己跳登录）。
+            wkVBinding.webView.loadUrl(url);
+            return;
+        }
+        String urlWithSid = appendSidParam(url, "android");
+        String bootstrap = buildHandoffBootstrapHtml(urlWithSid, token, uid, name);
+        // baseURL 用自家 origin：localStorage 写入的是这个 origin 的存储，跳转到 origin 内任意页面都能读到。
+        wkVBinding.webView.loadDataWithBaseURL(webOrigin + "/", bootstrap, "text/html", "UTF-8", null);
+    }
+
+    /**
+     * 从 {@link WKApiConfig#baseUrl}（e.g. https://im-test.deepminer.com.cn/api/v1/）
+     * 抽出 web origin（e.g. https://im-test.deepminer.com.cn）。
+     */
+    private static String getOctoWebOrigin() {
+        String base = WKApiConfig.baseUrl;
+        if (TextUtils.isEmpty(base)) return null;
+        try {
+            Uri u = Uri.parse(base);
+            String scheme = u.getScheme();
+            String authority = u.getAuthority();
+            if (TextUtils.isEmpty(scheme) || TextUtils.isEmpty(authority)) return null;
+            return scheme + "://" + authority;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * URL 已有 ?sid=xxx 时保留原值；否则追加 ?sid={sid}。保留其它已有 query 参数（如 ?sp=xxx）。
+     */
+    private static String appendSidParam(String url, String sid) {
+        try {
+            Uri parsed = Uri.parse(url);
+            if (!TextUtils.isEmpty(parsed.getQueryParameter("sid"))) {
+                return url;
+            }
+            return parsed.buildUpon().appendQueryParameter("sid", sid).build().toString();
+        } catch (Exception ignored) {
+            return url;
+        }
+    }
+
+    /**
+     * 生成 bootstrap HTML：内联 script 里 localStorage.setItem 全 web 端约定的 keys（带 {sid} 后缀），
+     * 然后 window.location.replace 到真 URL。所有 JS 值走 JSON.stringify 转义，避免 token 含特殊字符时 XSS。
+     * <p>
+     * Web 端 App.tsx save() 的完整 key 集合：app_id / short_no / uid / token / name / role /
+     * is_work / sex / login_provider / realname_verified / real_name / realname_verified_at。
+     * 我们只有 uid / token / name（App 端存的字段），其它由 web 自己后续 API 拉取补齐。
+     */
+    private static String buildHandoffBootstrapHtml(String realUrl, String token, String uid, String name) {
+        String sid = "android";
+        // JSONObject.quote 会返回带引号的 JSON 字符串字面量（e.g. "abc\"def" → "\"abc\\\"def\""），
+        // 直接嵌 <script> 里安全。
+        String jToken = org.json.JSONObject.quote(token);
+        String jUid = org.json.JSONObject.quote(uid);
+        String jName = org.json.JSONObject.quote(name);
+        String jUrl = org.json.JSONObject.quote(realUrl);
+        String jSid = org.json.JSONObject.quote(sid);
+        return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title></title></head><body>" +
+                "<script>(function(){try{" +
+                "var s=" + jSid + ";" +
+                "localStorage.setItem('token'+s, " + jToken + ");" +
+                "localStorage.setItem('uid'+s, " + jUid + ");" +
+                "localStorage.setItem('name'+s, " + jName + ");" +
+                "console.log('[HandoffBoot] injected sid='+s+' tokenLen='+(" + jToken + ").length+' uid='+" + jUid + "+' name='+" + jName + ");" +
+                "console.log('[HandoffBoot] verify token=' + (localStorage.getItem('token'+s)||'').substring(0,4) + '****');" +
+                "}catch(e){console.log('[HandoffBoot] ERR '+(e&&e.message?e.message:e));}" +
+                "console.log('[HandoffBoot] redirect to '+" + jUrl + ");" +
+                "window.location.replace(" + jUrl + ");" +
+                "})();</script></body></html>";
     }
 
     @SuppressLint("SetJavaScriptEnabled")

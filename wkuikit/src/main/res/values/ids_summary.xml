@@ -5,4 +5,9 @@
      用 @id/... 形式给 setTag(R.id.xxx, value) 提供稳定 key, 比 hardcoded int 安全。
     -->
     <item name="summary_action_toast_tag" type="id" />
+
+    <!-- 交互卡 (ContentType 17) 缓存 view 的 messageContext tag key。
+         Renderer 缓存 rendered.view 后跨消息复用，每次 bind 更新 tag 指向当前 MessageContext；
+         ProxyHandler 触发 action 时从这里读动态 ctx，Submit 才能打到正确 messageId。 -->
+    <item name="card_message_context" type="id" />
 </resources>

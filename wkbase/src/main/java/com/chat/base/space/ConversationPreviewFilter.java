@@ -47,8 +47,11 @@ import com.xinbida.wukongim.entity.WKUIConversationMsg;
  *         <ul>
  *             <li>{@code msg.space_id == currentSpaceId} → 原消息</li>
  *             <li>{@code msg.space_id != currentSpaceId && != null} → null（跨 Space 污染）</li>
- *             <li>{@code msg.space_id == null} + SystemBot → null（隐藏 SystemBot 无 space 标记的老消息）</li>
- *             <li>{@code msg.space_id == null} + 非 SystemBot → 原消息（普通 DM 向前兼容）</li>
+ *             <li>{@code msg.space_id == null} + BotFather → null（对齐 iOS/web:
+ *                 只 BotFather 参与消息级 Space 过滤）</li>
+ *             <li>{@code msg.space_id == null} + 其它 SystemBot / 普通 DM → 原消息
+ *                 （对齐 iOS "非 BotFather：视为属于当前空间"；这是通知助手 AI /
+ *                 u_10000 / fileHelper 能在多 space 下正常显示预览的关键）</li>
  *         </ul>
  *     </li>
  *     <li>GROUP / COMMUNITY_TOPIC（Android 独有的防御性扩展，iOS/Web 靠 conversation
@@ -130,8 +133,14 @@ public final class ConversationPreviewFilter {
         if (msgSpaceId != null && !msgSpaceId.isEmpty()) {
             return !currentSpaceId.equals(msgSpaceId);
         }
-        // msg 无 space_id：SystemBot 视为污染隐藏；普通 DM 向前兼容
-        return SystemBotsFallback.isSystemBot(uc.channelID);
+        // msg 无 space_id: 只有 BotFather 视为跨 Space 污染需隐藏预览。
+        // 对齐 iOS WKConversationWrapModel.spaceFilteredLastMessage (line 289-306)
+        // 与 web SpaceService.tsx :: SYSTEM_BOTS = new Set(["botfather"])：只有 BotFather
+        // 参与消息级 space 过滤；其它 SystemBot（通知助手 u_10000/notification/fileHelper 等）
+        // 无 space_id 视为 "AI 回复默认属于当前 space" 放行 (iOS 注释原文："非 BotFather：
+        // 视为属于当前空间")。之前 Android 走 SystemBotsFallback.isSystemBot 过严，把通知
+        // 助手 AI 一并过滤，导致用户报 "没预览、不按时间排序、有时看不到新通知"。
+        return ConversationPreviewSelector.BOTFATHER_ID.equals(uc.channelID);
     }
 
     /**

@@ -16,6 +16,8 @@ dependencyResolutionManagement {
         maven {
             url "https://maven.google.com"
         }
+        // AdaptiveCards SDK 自编 AAR（Teams-AdaptiveCards-Mobile / MIT）
+        flatDir { dirs "$rootDir/wkuikit/libs" }
     }
 }
 rootProject.name = "OctoIM"

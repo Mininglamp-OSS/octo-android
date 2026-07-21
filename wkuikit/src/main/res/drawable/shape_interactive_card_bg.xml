@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 交互式卡片（ContentType 17）自绘气泡：surface 底 + 8dp 圆角 + 1dp hairline，无阴影无尾巴。
+     对齐 web (.wk-interactive-card-sdk)：hairline stroke, no shadow, no left rail。
+     bg 走 @color/interactive_card_bg（有夜间覆盖，白 ↔ 深灰）；stroke 沿用全局
+     @color/dividerColor（也有夜间覆盖），避免为 stroke 单独造 token。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/interactive_card_bg" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/dividerColor" />
+    <corners android:radius="8dp" />
+</shape>

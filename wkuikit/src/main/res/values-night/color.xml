@@ -17,4 +17,18 @@
     <color name="tab_bg">#08090B</color>
     <color name="tab_text_normal">#8CFFFFFF</color>
     <color name="tab_text_selected">#FFFFFF</color>
+
+    <!-- ── Interactive Card (ContentType 17) 语义色（夜间）────────────────────
+         对齐 iOS `WKACardHostConfig.m:40-71` 深色分支：
+          - surface 走 #1C1C1E / emphasis 走 #2C2C2E（差 16 灰阶，克制而不喧宾夺主）
+          - good/warning/attention **不给专有背景**，全部沿用 default（跟 iOS 一致），
+            仅靠前景色（绿/橙/红文字与图标）表达语义，避免深色下低饱和暗底色显脏
+          - subtle 文字用 #B0B0B0（对齐 iOS fgSub） -->
+    <color name="interactive_card_bg">#1C1C1E</color>
+    <color name="interactive_card_bg_emphasis">#2C2C2E</color>
+    <color name="interactive_card_bg_accent">#2E2547</color>
+    <color name="interactive_card_bg_good">#1C1C1E</color>
+    <color name="interactive_card_bg_warning">#1C1C1E</color>
+    <color name="interactive_card_bg_attention">#1C1C1E</color>
+    <color name="interactive_card_text_subtle">#B0B0B0</color>
 </resources>

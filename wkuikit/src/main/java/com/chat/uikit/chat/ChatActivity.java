@@ -3873,6 +3873,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             messageEffectOverlay = null;
         }
         chatPanelManager.onDestroy();
+        // 释放 provider 内的重资源：Interactive Card 的 renderer LRU 缓存 32 张 SDK
+        // 视图（隐含 Activity context）、dispatcher 的 pending Handler 回调（10s
+        // 超时 + 500/1500ms extraSync 兜底）。RecyclerView.setAdapter(null) 会自动
+        // 调用 onDetachedFromRecyclerView 转发到此；正常 onDestroy 路径不走那条，
+        // 必须显式调一次。幂等，重复调用无副作用。
+        if (chatAdapter != null) {
+            chatAdapter.disposeProviders();
+        }
         //  · 移除 WKIM 各 Manager 的监听（channel-keyed），防止单例持有 Activity
         // 引用导致泄漏。抽到 detachChannelListeners() 与 onNewIntent 复用路径共用，
         // 避免两条路径清理矩阵漂移。

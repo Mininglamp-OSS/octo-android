@@ -213,6 +213,20 @@
 # → 无法应用服务端新增 emoji（同 sticker/search 类型问题的第 3 次踩坑）
 -keep class com.chat.base.emoji.EmojiManifestResp { *; }
 -keep class com.chat.base.emoji.EmojiManifestItem { *; }
+
+#---------AdaptiveCards SDK (SWIG native binding) — 交互式卡片 type=17---------
+# wkuikit/libs/adaptivecards-3.7.0-teams.aar 是 Microsoft 编译的 SWIG C++ 绑定，
+# 1079 个 Java 类 + libadaptivecards-native-lib.so (arm64/armv7/x86)。JNI 侧按类名 /
+# 字段名 (swigCPtr / swigCMemOwn) / 枚举 SwigNext 反查 Java 侧，任何 R8 rename 都会让
+# SDK 崩在：
+#   · SWIG director 回调（C++ 触发 Java 的 ICardActionHandler.onAction 时找不到方法名）
+#   · dynamic_cast 走 SDK 内部反射（OpenUrlAction.dynamic_cast 等）
+#   · enum SwigNext 表被 optimize 后 swigToEnum(int) 返回 null
+# AAR 内**没有** consumer-proguard-rules.txt，必须在这里显式 keep 整包，否则 release
+# 交互式卡片按钮点无反应 / 卡片渲染为空 / native crash SIGSEGV。
+-keep class io.adaptivecards.** { *; }
+-keepclassmembers class io.adaptivecards.** { *; }
+-dontwarn io.adaptivecards.**
 #----------客服------------------
 -keep class com.chat.customerservice.entity.** { *; }
 #----------隐私安全------------------

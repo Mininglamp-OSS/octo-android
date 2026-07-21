@@ -2197,6 +2197,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         if (missing.isEmpty()) return;
         for (String botId : missing) {
             WKUIConversationMsg placeholder = com.chat.base.space.SystemBotsFallback.buildPlaceholder(botId);
+            // placeholder 的 wkMsg / lastMsgTimestamp / clientMsgNo 全空，但下游排序 /
+            // 显示都走 ConversationPreviewSelector（wrap 计算 getter），selector 会兜底
+            // 从本地消息表拿最新一条。这里不做数据 mutation —— 对齐 iOS
+            // WKConversationWrapModel 的计算属性 pattern，避免 SDK 后续刷新覆盖 hydrate 值。
             list.add(new ChatConversationMsg(placeholder));
             // 白名单同步：让后续新消息路径不再重复判定（botfather 是 SYSTEM_BOTS，本身
             // 也会被 Fix B 的 isSystemBot 分支放行，这里主要是保持状态一致）
@@ -2553,7 +2557,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 拷贝一份，避免对 adapter data list 并发修改
         List<ChatConversationMsg> snapshot = new ArrayList<>(list);
         groupMsg(snapshot);
-        Collections.sort(snapshot, (conversationMsg, t1) -> Long.compare(t1.uiConversationMsg.lastMsgTimestamp, conversationMsg.uiConversationMsg.lastMsgTimestamp));
+        // 排序键走 ConversationPreviewSelector.selectDisplayTimestamp: SystemBot 场景下
+        // 用 spaceFilteredLastMessage 的 timestamp (对齐 iOS -[WKConversationWrapModel
+        // lastMsgTimestamp])，避免 SDK entry 的 lastMsgTimestamp=0 / stale 导致沉底。
+        // 普通频道 selector 直接返回 uc.lastMsgTimestamp，行为不变。
+        Collections.sort(snapshot, (a, b) -> Long.compare(
+                com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(b.uiConversationMsg),
+                com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(a.uiConversationMsg)));
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
         for (int i = 0, size = snapshot.size(); i < size; i++) {
@@ -2918,7 +2928,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
             int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
             if (topA != topB) return topB - topA;
-            return Long.compare(b.uiConversationMsg.lastMsgTimestamp, a.uiConversationMsg.lastMsgTimestamp);
+            // 排序键走 selector，与 sortMsg 保持一致（SystemBot 用 spaceFilteredLastMessage
+            // 的 timestamp，避免 SDK entry 空/stale 沉底）。
+            return Long.compare(
+                    com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(b.uiConversationMsg),
+                    com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(a.uiConversationMsg));
         });
         return filtered;
     }

@@ -6,6 +6,9 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- AdaptiveCards SDK officially requires minSdk=26, we override to project's 23. -->
+    <uses-sdk tools:overrideLibrary="io.adaptivecards" />
+
     <application>
 
         <activity android:name=".group.DeleteGroupMemberActivity" />

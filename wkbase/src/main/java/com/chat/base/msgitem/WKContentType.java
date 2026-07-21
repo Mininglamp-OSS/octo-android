@@ -49,6 +49,8 @@ public class WKContentType extends WKMsgContentType {
 
     // 富文本
     public final static int richText = 14;
+    // 交互式卡片（Microsoft AdaptiveCards / InteractiveCard，与 iOS/web 对齐 type=17）
+    public final static int interactiveCard = 17;
     //群聊加人
     public final static int addGroupMembersMsg = 1002;
     //群聊减人

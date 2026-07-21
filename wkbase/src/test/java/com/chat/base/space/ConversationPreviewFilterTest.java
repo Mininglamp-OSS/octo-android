@@ -39,9 +39,11 @@ import java.util.LinkedHashSet;
  * <p>覆盖 Layer B render-time filter 的 PERSONAL 频道 payload.space_id 语义
  * （对齐 iOS {@code spaceFilteredLastMessage} + Web {@code getSpaceFilteredLastMessage}）：
  * <ul>
- *     <li>SystemBot + msg.space_id == currentSpace → 不过滤</li>
- *     <li>SystemBot + msg.space_id != currentSpace → 过滤（跨 Space 污染）</li>
- *     <li>SystemBot + 无 space_id → 过滤（对齐 Web 隐藏口径）</li>
+ *     <li>BotFather + msg.space_id == currentSpace → 不过滤</li>
+ *     <li>BotFather + msg.space_id != currentSpace → 过滤（跨 Space 污染）</li>
+ *     <li>BotFather + 无 space_id → 过滤（对齐 iOS/web 只 BotFather 严格过滤）</li>
+ *     <li>其它 SystemBot (u_10000/notification/fileHelper) + 无 space_id → <b>不过滤</b>
+ *         （对齐 iOS "非 BotFather：视为属于当前空间"，AI 回复默认属于当前 space）</li>
  *     <li>SystemBot + wkMsg = null（占位 entry） → 不过滤</li>
  *     <li>非 SystemBot + msg.space_id != current → 过滤</li>
  *     <li>非 SystemBot + 无 space_id → 不过滤（向前兼容老消息）</li>
@@ -96,7 +98,8 @@ public class ConversationPreviewFilterTest {
 
     @Test
     public void personal_systemBot_msgNoSpaceId_isCross() {
-        // 对齐 Web SpaceService.getSpaceFilteredLastMessage：SYSTEM_BOTS + 无 space_id → hide
+        // 对齐 iOS spaceFilteredLastMessage + web SYSTEM_BOTS = {"botfather"}:
+        // 只 BotFather + 无 space_id 才视为跨 Space 污染需隐藏预览。
         WKUIConversationMsg uc = makeUc("botfather", WKChannelType.PERSONAL, wkMsgWithSpaceId(null));
         assertTrue(ConversationPreviewFilter.isMessageCrossSpace(uc, SPACE_A));
     }
@@ -110,16 +113,36 @@ public class ConversationPreviewFilterTest {
     }
 
     @Test
-    public void personal_u10000_sameRules() {
+    public void personal_u10000_msgOtherSpace_isCross() {
         assertTrue(ConversationPreviewFilter.isMessageCrossSpace(
                 makeUc("u_10000", WKChannelType.PERSONAL, wkMsgWithSpaceId(SPACE_B)), SPACE_A));
+    }
+
+    @Test
+    public void personal_u10000_msgMatchesCurrentSpace_notCross() {
         assertFalse(ConversationPreviewFilter.isMessageCrossSpace(
                 makeUc("u_10000", WKChannelType.PERSONAL, wkMsgWithSpaceId(SPACE_A)), SPACE_A));
     }
 
     @Test
-    public void personal_fileHelper_sameRules() {
-        assertTrue(ConversationPreviewFilter.isMessageCrossSpace(
+    public void personal_u10000_msgNoSpaceId_notCross_globalBotException() {
+        // 通知助手 u_10000 无 space_id → 不视为污染（对齐 iOS "非 BotFather：视为属于
+        // 当前空间"）。这是用户报"通知助手 AI 没预览"修复的关键分支。
+        assertFalse(ConversationPreviewFilter.isMessageCrossSpace(
+                makeUc("u_10000", WKChannelType.PERSONAL, wkMsgWithSpaceId(null)), SPACE_A));
+    }
+
+    @Test
+    public void personal_notification_msgNoSpaceId_notCross() {
+        // 通知助手 AI (channelID = "notification")：同上，无 space_id 放行。
+        assertFalse(ConversationPreviewFilter.isMessageCrossSpace(
+                makeUc("notification", WKChannelType.PERSONAL, wkMsgWithSpaceId(null)), SPACE_A));
+    }
+
+    @Test
+    public void personal_fileHelper_msgNoSpaceId_notCross() {
+        // 文件助手：同上，无 space_id 放行。
+        assertFalse(ConversationPreviewFilter.isMessageCrossSpace(
                 makeUc("fileHelper", WKChannelType.PERSONAL, wkMsgWithSpaceId(null)), SPACE_A));
     }
 

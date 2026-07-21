@@ -16,11 +16,16 @@
 
 package com.chat.base.markdown
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.text.Spanned
+import com.chat.base.act.WKWebViewActivity
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
+import io.noties.markwon.MarkwonConfiguration
 import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
@@ -80,9 +85,47 @@ object WKMarkwonProvider {
             }
         }
 
+        // URL 点击：http/https 走 App 内 WebView 保留登录态；其它 scheme (tel/mailto/geo/
+        // 自定义 deeplink 等) 走系统 Intent.ACTION_VIEW 交对应 App 处理。
+        //
+        // 对齐 WKTextProvider.kt:250 链接预览卡：http/https 都进 App 内 WebView, 用户回到
+        // 会话不用重新打开; 非 http scheme (WebView 打不开, 会 loadUrl 失败或被
+        // WKWebViewActivity 强制补 https:// 前缀变成一个必然 404 的 URL) 走系统 handler
+        // 是这些 scheme 的正确落地方式 (拨号 App / 邮件 App / 地图 App / deeplink 目标 App)。
+        //
+        // FLAG_ACTIVITY_NEW_TASK: view.context 通常是 Activity context, 但 Markwon 也可能
+        // 在 application/service context 里调, 保守加 flag 避免 crash。
+        // startActivity 失败 (非 http scheme 且系统无 App 能处理) 静默兜住, 与 Markwon
+        // 原始 LinkResolverDef 的用户体验一致 (不弹 toast 避免打断消息阅读)。
+        val linkResolverPlugin = object : AbstractMarkwonPlugin() {
+            override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
+                builder.linkResolver { view, link ->
+                    val ctx = view.context ?: return@linkResolver
+                    val lowered = link.trim().lowercase()
+                    val isHttp = lowered.startsWith("http://") || lowered.startsWith("https://")
+                    val intent = if (isHttp) {
+                        Intent(ctx, WKWebViewActivity::class.java).apply {
+                            putExtra("url", link)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    } else {
+                        Intent(Intent.ACTION_VIEW, Uri.parse(link)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    }
+                    try {
+                        ctx.startActivity(intent)
+                    } catch (_: ActivityNotFoundException) {
+                        // 非 http scheme 且设备无 App 能处理 → 静默失败
+                    }
+                }
+            }
+        }
+
         return Markwon.builder(context)
             .usePlugin(codeBlockPlugin)
             .usePlugin(softBreakPlugin)
+            .usePlugin(linkResolverPlugin)
             .usePlugin(StrikethroughPlugin.create())
             .usePlugin(WKTablePlugin.create())
             .usePlugin(TaskListPlugin.create(context))

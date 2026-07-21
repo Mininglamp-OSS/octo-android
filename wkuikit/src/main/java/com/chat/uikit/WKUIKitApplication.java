@@ -103,6 +103,7 @@ import com.chat.uikit.chat.manager.FaceManger;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
 import com.chat.uikit.chat.msgmodel.WKRichTextContent;
+import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent;
 import com.chat.base.msgcontent.WKFileContent;
 import com.chat.uikit.chat.provider.WKFileProvider;
 import com.chat.uikit.chat.provider.WKVideoProvider;
@@ -119,6 +120,7 @@ import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKRichTextProvider;
+import com.chat.uikit.chat.provider.WKInteractiveCardProvider;
 import com.chat.uikit.chat.provider.WKVectorStickerProvider;
 import com.chat.uikit.chat.provider.WKVoiceProvider;
 import com.chat.uikit.thread.CreateThreadActivity;
@@ -333,6 +335,7 @@ public class WKUIKitApplication {
         WKIM.getInstance().getMsgManager().registerContentMsg(WKMultiForwardContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKThreadCreatedContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKRichTextContent.class);
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKInteractiveCardContent.class);
         // 贴图 (与 iOS 对齐)：lottie 矢量贴图 (12) + emoji 贴图 (13)。
         // 未注册时收发消息会被 ChatAdapter 强制降级为 unknown_msg(-3)
         // 显示"未知消息，请先升级客户端后查看" —— 已在生产观测到。
@@ -344,6 +347,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.msgPromptNewMsg, new WKPromptNewMsgProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.richText, new WKRichTextProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.interactiveCard, new WKInteractiveCardProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.spanEmptyView, new WKSpanEmptyProvider());
@@ -364,6 +368,15 @@ public class WKUIKitApplication {
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_TEXT, object -> new MsgConfig(true));
         // 图文混排：全功能启用（转发/撤回/多选/回复/reaction/pin）。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.richText, object -> new MsgConfig(true));
+        // 交互式卡片长按菜单：对齐 iOS（WKApp.m:1602-1609 + WKInteractiveCardContent.m:72-75 isForwardable=NO）：
+        // 转发禁（v2 卡含 Input/Submit，转发后 action 上下文失效且有伪造面；v1/v2 统一处理避免误伤），
+        // 其它（撤回/多选/回复/reaction/pin/删除）全开，跟其他消息类型待遇一致 —— 用户能删掉不想看的卡、
+        // 引用回复、加 reaction 回应机器人。撤回/删除内部还会走 canWithdraw / role 二次判断，别人发的卡
+        // 不会误出撤回项。
+        // 6-arg 构造函数依次是：isCanForward / isCanWithdraw / isCanMultipleChoice / isCanReply /
+        // isCanShowReaction / isCanShowPinMenu；isCanDelete 硬编码 true。
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.interactiveCard,
+            object -> new MsgConfig(false, true, true, true, true, true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));

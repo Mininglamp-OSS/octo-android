@@ -88,6 +88,39 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         FullSpanUtil.onAttachedToRecyclerView(recyclerView, this, WKContentType.msgPromptTime);
     }
 
+    /**
+     * RecyclerView 主动断开本 adapter 时（{@code setAdapter(newAdapter)} / {@code swapAdapter}
+     * / {@code setAdapter(null)}）触发。转发到 {@link #disposeProviders()} 做统一清理——
+     * 注意本 hook <b>不</b>会在 Activity/Fragment onDestroy 自然结束时触发，宿主须自行
+     * 显式调 {@link #disposeProviders()}（见 ChatActivity.onDestroy）。
+     */
+    @Override
+    public void onDetachedFromRecyclerView(@NotNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        disposeProviders();
+    }
+
+    /**
+     * 统一释放所有 provider 内的重资源（LRU 缓存的 SDK 视图、pending Handler 回调
+     * 等）。宿主 Activity/Fragment 的 onDestroy 必须调本方法，否则 provider 可能短时
+     * 持有 Activity 引用直到 pending 回调 fire 或 GC 收走。
+     *
+     * <p>幂等：同一 adapter 反复调用不会崩，只是重复 no-op。
+     */
+    public void disposeProviders() {
+        if (localProviderList == null) return;
+        for (BaseItemProvider<WKUIChatMsgItemEntity> provider : localProviderList.values()) {
+            if (provider instanceof WKChatBaseProvider) {
+                try {
+                    ((WKChatBaseProvider) provider).dispose();
+                } catch (Throwable t) {
+                    // 单个 provider 抛异常不应影响其它 provider 的清理
+                    android.util.Log.w("ChatAdapter", "provider dispose failed", t);
+                }
+            }
+        }
+    }
+
     public interface OnMessageDisplayedListener {
         void onMessageDisplayed(WKUIChatMsgItemEntity item, View itemView);
     }
@@ -439,7 +472,25 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     public void notifyData(int position) {
+        // Provider 声明 hasDynamicHeight=true（如 Interactive Card 的 contentEdit 帧带来
+        // 更多控件）时，必须走标准 notifyItemChanged 让 RecyclerView 重新测量本 item 并
+        // reflow 相邻 item——否则 in-place 更新完，相邻消息会沿用旧高度定位而重叠错位。
+        // 固定高度类型（文本 / 图片 / 语音 / 贴纸等，默认 hasDynamicHeight=false）走原
+        // 轻量 in-place 更新路径，跳过 RecyclerView rebind + 动画，性能更优。
+        if (isDynamicHeightAt(position)) {
+            notifyItemChanged(position);
+            return;
+        }
         notify(position, RefreshType.data, null);
+    }
+
+    private boolean isDynamicHeightAt(int position) {
+        if (position < 0 || position >= getData().size()) return false;
+        WKUIChatMsgItemEntity entity = getData().get(position);
+        if (entity == null || entity.wkMsg == null) return false;
+        WKChatBaseProvider provider =
+                (WKChatBaseProvider) getItemProviderList().get(entity.wkMsg.type);
+        return provider != null && provider.getHasDynamicHeight();
     }
 
     public void notifyListener(int position) {

@@ -249,6 +249,24 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         setData(adapterPosition, parentView, content, from)
     }
 
+    /**
+     * 该 provider 渲染出的 item 在 refresh 时是否可能改变高度。
+     *
+     * 默认 **false**：绝大多数消息类型（文本 / 图片 / 语音 / 贴纸 / 系统消息等）
+     * 内容变化不改变已布局的高度，走 [ChatAdapter.notifyData] 的轻量 in-place
+     * 更新（跳过 RecyclerView 的 rebind + 动画），性能更优。
+     *
+     * 覆盖为 **true**：内容变化可能改变高度的类型（例如 Interactive Card 的
+     * `contentEdit` 帧带来更多 markdown/按钮/输入控件；Reply 里嵌套的 wkMsg 被
+     * 编辑等）。此时 [ChatAdapter.notifyData] 会自动路由到 `notifyItemChanged`，
+     * 由 RecyclerView LayoutManager 重新测量并 reflow 相邻 item——否则相邻 item
+     * 会沿用旧高度而重叠错位。
+     *
+     * 判定标准：*同一 messageId 的两次 `setData` 是否可能算出不同的
+     * `measuredHeight`*。
+     */
+    open val hasDynamicHeight: Boolean = false
+
     open fun resetCellBackground(
         parentView: View,
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,

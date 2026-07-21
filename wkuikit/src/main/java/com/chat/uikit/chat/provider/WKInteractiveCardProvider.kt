@@ -90,6 +90,17 @@ import java.lang.ref.WeakReference
  */
 class WKInteractiveCardProvider : WKChatBaseProvider() {
 
+    /**
+     * 交互卡的高度会随 bot 编辑帧（`remoteExtra.contentEdit`）变化——首帧可能只有
+     * "推理中"一小段，次帧到达后长出多个 Container / Input / 按钮。基类默认走
+     * [com.chat.base.msg.ChatAdapter.notifyData] 的 in-place 更新在这类场景下会
+     * 让 RecyclerView 沿用旧高度定位相邻 item → 相邻消息重叠错位。
+     *
+     * 覆盖为 true 后，`notifyData` 会自动路由到 `notifyItemChanged`，RecyclerView
+     * 会重新测量本 item 并 reflow 相邻 item。
+     */
+    override val hasDynamicHeight: Boolean = true
+
     /** 上次渲染该 messageID 时的 cardJson 指纹，用于识别"bot 改卡新帧"→ 自动解除 loading 态。 */
     private val lastRenderedFingerprint = mutableMapOf<String, Int>()
 

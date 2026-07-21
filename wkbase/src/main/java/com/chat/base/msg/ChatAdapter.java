@@ -439,7 +439,25 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
     }
 
     public void notifyData(int position) {
+        // Provider 声明 hasDynamicHeight=true（如 Interactive Card 的 contentEdit 帧带来
+        // 更多控件）时，必须走标准 notifyItemChanged 让 RecyclerView 重新测量本 item 并
+        // reflow 相邻 item——否则 in-place 更新完，相邻消息会沿用旧高度定位而重叠错位。
+        // 固定高度类型（文本 / 图片 / 语音 / 贴纸等，默认 hasDynamicHeight=false）走原
+        // 轻量 in-place 更新路径，跳过 RecyclerView rebind + 动画，性能更优。
+        if (isDynamicHeightAt(position)) {
+            notifyItemChanged(position);
+            return;
+        }
         notify(position, RefreshType.data, null);
+    }
+
+    private boolean isDynamicHeightAt(int position) {
+        if (position < 0 || position >= getData().size()) return false;
+        WKUIChatMsgItemEntity entity = getData().get(position);
+        if (entity == null || entity.wkMsg == null) return false;
+        WKChatBaseProvider provider =
+                (WKChatBaseProvider) getItemProviderList().get(entity.wkMsg.type);
+        return provider != null && provider.getHasDynamicHeight();
     }
 
     public void notifyListener(int position) {

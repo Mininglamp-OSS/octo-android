@@ -23,7 +23,10 @@ import java.util.UUID
  *  - [CardAction.OpenUrl] → 拉起 App 内 WebView（[WebViewLauncher]）
  *  - [CardAction.Submit] → POST /v1/message/card/action（[CardSubmitter]），
  *    含防重复点击、10s 超时兜底、成功后 syncExtraMsg + 500/1500ms 兜底 retry
- *  - [CardAction.Copy] → 剪贴板写入 + toast（[ClipboardWriter] + [Toaster]）
+ *
+ * `Action.CopyToClipboard` 未支持 —— AC 3.7.0 Android SDK 无内置
+ * `CopyToClipboardActionParser`，白名单已在 [com.chat.uikit.chat.msgmodel.InteractiveCardDecision]
+ * 移除该 action 类型，服务端下发含 Copy 的卡整卡降级 plain。
  *
  * ## 状态归属
  *
@@ -44,7 +47,6 @@ import java.util.UUID
 class CardActionDispatcher(
     private val submitter: CardSubmitter,
     private val webView: WebViewLauncher,
-    private val clipboard: ClipboardWriter,
     private val toaster: Toaster,
     private val timeoutScheduler: TimeoutScheduler,
     private val extraSync: ExtraMsgSyncer,
@@ -66,10 +68,6 @@ class CardActionDispatcher(
     /** Action.OpenUrl 打开 App 内 WebView。返回 false = ActivityNotFound 之类兜底失败。 */
     fun interface WebViewLauncher {
         fun open(url: String): Boolean
-    }
-
-    fun interface ClipboardWriter {
-        fun copy(label: String, text: String)
     }
 
     fun interface Toaster {
@@ -101,7 +99,6 @@ class CardActionDispatcher(
      */
     data class Strings(
         val openUrlFailed: String,
-        val copySuccess: String,
         /** 409 / 5xx 可重试类错误 toast */
         val actionRetry: String,
         /** 400 / 403 / 其它 4xx 终态错误 toast */
@@ -122,7 +119,6 @@ class CardActionDispatcher(
         Log.d(TAG, "dispatch: id=${action.actionId} type=${action::class.simpleName} allowSubmit=${ctx.allowSubmit}")
         when (action) {
             is CardAction.OpenUrl -> handleOpenUrl(action)
-            is CardAction.Copy -> handleCopy(action)
             is CardAction.Submit -> {
                 if (!ctx.allowSubmit) {
                     Log.d(TAG, "Submit 被 trust gate 阻拦（webhook 卡展示-only）")
@@ -167,18 +163,6 @@ class CardActionDispatcher(
         if (!ok) {
             Log.w(TAG, "无法打开 URL: ${action.url}")
             toaster.show(strings.openUrlFailed)
-        }
-    }
-
-    // ─────────────────────────────── Copy ───────────────────────────────
-
-    private fun handleCopy(action: CardAction.Copy) {
-        if (action.text.isEmpty()) return
-        try {
-            clipboard.copy(CLIPBOARD_LABEL, action.text)
-            toaster.show(strings.copySuccess)
-        } catch (t: Throwable) {
-            Log.w(TAG, "CopyToClipboard 失败: ${t.message}", t)
         }
     }
 
@@ -282,6 +266,5 @@ class CardActionDispatcher(
 
     private companion object {
         const val TAG = "InteractiveCard"
-        const val CLIPBOARD_LABEL = "interactive-card-copy"
     }
 }

@@ -52,12 +52,16 @@ object InteractiveCardDecision {
     )
 
     private val ACTIONS_ALL = setOf(
-        "Action.OpenUrl", "Action.ToggleVisibility", "Action.CopyToClipboard"
+        "Action.OpenUrl", "Action.ToggleVisibility"
     )
     private val ACTIONS_V2_INTERACTIVE = setOf("Action.Submit")
 
     // Action.Execute / ShowCard / 模板绑定 永不支持
     private val ACTIONS_FORBIDDEN = setOf("Action.Execute", "Action.ShowCard")
+
+    // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser，
+    // 白名单中不列出 → 服务端下发含 Copy 的卡整卡降级 plain（未知 action 走
+    // "unknown action" 分支拒绝）。
 
     /** 渲染决策结果。 */
     sealed class Decision {

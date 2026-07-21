@@ -281,28 +281,11 @@ class InteractiveCardRenderer(
                         ?: emptyMap()
                     CardAction.Submit(actionId = actionId, inputs = inputs)
                 }
-                "Action.CopyToClipboard" -> {
-                    // AC SDK 的 BaseActionElement 没有内建 text 字段，需要通过 AdditionalProperties 拿
-                    // （对齐 SDK 自定义 action 的通用取值路径）。
-                    // AC 3.7.0 Android SDK 默认不认 Action.CopyToClipboard，需要通过 CardActionParserRegistrar
-                    // 注册（见 WKUIKitApplication.onCreate）后按钮才会出现，否则此分支永远不触发。
-                    CardAction.Copy(actionId = actionId, text = extractCopyText(action))
-                }
                 // Action.ToggleVisibility 由 SDK 内部处理（自动翻转 isVisible），我们不介入。
                 // Action.ShowCard / ExecuteAction 走 SDK 内部展开，此处不特殊处理。
+                // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser，
+                // 白名单已在 InteractiveCardDecision 拒绝，含 Copy 的卡整卡降级 plain。
                 else -> null
-            }
-        }
-
-        /** 从 BaseActionElement 的 AdditionalProperties 里取 text 字段。 */
-        private fun extractCopyText(action: BaseActionElement): String {
-            return try {
-                val props = action.GetAdditionalProperties()?.toString().orEmpty()
-                if (props.isBlank()) return ""
-                org.json.JSONObject(props).optString("text", "")
-            } catch (t: Throwable) {
-                Log.w(TAG, "解析 CopyToClipboard.text 失败: ${t.message}")
-                ""
             }
         }
     }

@@ -15,7 +15,7 @@ import com.xinbida.wukongim.entity.WKMsg
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,7 +29,6 @@ class CardActionDispatcherTest {
 
     private lateinit var submitter: FakeCardSubmitter
     private lateinit var webView: RecordingWebViewLauncher
-    private lateinit var clipboard: RecordingClipboard
     private lateinit var toaster: RecordingToaster
     private lateinit var scheduler: FakeTimeoutScheduler
     private lateinit var extraSync: RecordingExtraSync
@@ -38,7 +37,6 @@ class CardActionDispatcherTest {
 
     private val strings = CardActionDispatcher.Strings(
         openUrlFailed = "open_failed",
-        copySuccess = "copy_ok",
         actionRetry = "retry",
         actionFailed = "failed",
         actionTimeout = "timeout",
@@ -50,7 +48,6 @@ class CardActionDispatcherTest {
     fun setUp() {
         submitter = FakeCardSubmitter()
         webView = RecordingWebViewLauncher(returns = true)
-        clipboard = RecordingClipboard()
         toaster = RecordingToaster()
         scheduler = FakeTimeoutScheduler()
         extraSync = RecordingExtraSync()
@@ -58,7 +55,6 @@ class CardActionDispatcherTest {
         dispatcher = CardActionDispatcher(
             submitter = submitter,
             webView = webView,
-            clipboard = clipboard,
             toaster = toaster,
             timeoutScheduler = scheduler,
             extraSync = extraSync,
@@ -88,22 +84,6 @@ class CardActionDispatcherTest {
         webView.returns = false
         dispatcher.dispatch(ctx(), CardAction.OpenUrl(actionId = "a1", url = "https://x"))
         assertEquals(listOf("open_failed"), toaster.messages)
-    }
-
-    // ─────────────────────────────── Copy ───────────────────────────────
-
-    @Test
-    fun `dispatch Copy writes to clipboard and shows toast`() {
-        dispatcher.dispatch(ctx(), CardAction.Copy(actionId = "a1", text = "hello"))
-        assertEquals("hello", clipboard.lastText)
-        assertEquals(listOf("copy_ok"), toaster.messages)
-    }
-
-    @Test
-    fun `dispatch Copy empty text is no-op`() {
-        dispatcher.dispatch(ctx(), CardAction.Copy(actionId = "a1", text = ""))
-        assertNull(clipboard.lastText)
-        assertTrue(toaster.messages.isEmpty())
     }
 
     // ─────────────────────────────── Submit trust gate ───────────────────────────────
@@ -314,15 +294,6 @@ class CardActionDispatcherTest {
         override fun open(url: String): Boolean {
             calls += url
             return returns
-        }
-    }
-
-    private class RecordingClipboard : CardActionDispatcher.ClipboardWriter {
-        var lastLabel: String? = null
-        var lastText: String? = null
-        override fun copy(label: String, text: String) {
-            lastLabel = label
-            lastText = text
         }
     }
 

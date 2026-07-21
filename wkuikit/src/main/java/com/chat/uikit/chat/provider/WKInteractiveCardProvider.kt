@@ -10,8 +10,6 @@
 package com.chat.uikit.chat.provider
 
 import android.content.ActivityNotFoundException
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -171,10 +169,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                     false
                 }
             },
-            clipboard = CardActionDispatcher.ClipboardWriter { label, text ->
-                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                cm?.setPrimaryClip(ClipData.newPlainText(label, text))
-            },
             toaster = CardActionDispatcher.Toaster { text ->
                 WKToastUtils.getInstance().showToastNormal(text)
             },
@@ -201,7 +195,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             },
             strings = CardActionDispatcher.Strings(
                 openUrlFailed = appCtx.getString(R.string.base_open_url_failed),
-                copySuccess = appCtx.getString(R.string.base_card_copy_success),
                 actionRetry = appCtx.getString(R.string.base_card_action_retry),
                 actionFailed = appCtx.getString(R.string.base_card_action_failed),
                 actionTimeout = appCtx.getString(R.string.base_card_action_timeout),

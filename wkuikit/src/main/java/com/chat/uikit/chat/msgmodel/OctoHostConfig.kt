@@ -73,17 +73,22 @@ object OctoHostConfig {
      * 同一实例。Activity 因主题切换 recreate 后，context 是新的但结果仍从 cache 命中
      * （cache key 是 isDark 布尔，与 context 实例无关）。
      *
-     * 内部用 [applicationContext] 而不是传入的 context——避免 singleton 意外持有
-     * Activity；也确保 `configuration.uiMode` 从 App 全局配置读，跟系统主题一致。
+     * **必须传 Activity context**（不能替换为 applicationContext）：App 通过
+     * `AppCompatDelegate.setDefaultNightMode` 强制深/浅色时，只覆盖 Activity 的
+     * `Configuration.uiMode`；Application 的 Configuration 仍跟随系统。传
+     * applicationContext 会在「App 强制深色 + 系统浅色」场景下读到错的模式，卡片渲染
+     * 与聊天窗口主题不一致。
+     *
+     * 此 singleton 只在 [get] 期间瞬时读取 [context] 的 config / resources，不缓存
+     * context 引用，也不 leak Activity。
      */
     fun get(context: Context): HostConfig {
-        val appCtx = context.applicationContext
-        val isDark = (appCtx.resources.configuration.uiMode and
+        val isDark = (context.resources.configuration.uiMode and
                 Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         // computeIfAbsent 在 ConcurrentHashMap 上是原子的 + 保证 compute 只跑一次，
         // 避免并发 miss 时重复走昂贵的 SWIG 反序列化。
         return cached.computeIfAbsent(isDark) {
-            HostConfig.DeserializeFromString(buildJson(paletteFromResources(appCtx)))
+            HostConfig.DeserializeFromString(buildJson(paletteFromResources(context)))
         }
     }
 

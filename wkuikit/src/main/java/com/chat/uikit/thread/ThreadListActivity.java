@@ -166,12 +166,15 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         final String requestedStatus = currentStatusParam();
 
         ThreadModel.getInstance().listThreads(groupNo, requestedStatus, page, PAGE_LIMIT, (code, msg, list) -> {
+            // finishRefresh / finishLoadMore 必须在 stale-guard 之前调用: 否则
+            // 用户下拉刷新 → 快速切 tab → 首次请求作废 → spinner 永远不停。
+            // 幂等, 多次调用无副作用。
+            wkVBinding.refreshLayout.finishRefresh();
+            wkVBinding.refreshLayout.finishLoadMore();
             if (gen != loadGeneration) {
                 // stale: 用户已经切了 tab / 触发了新一次 loadData，本次回包作废
                 return;
             }
-            wkVBinding.refreshLayout.finishRefresh();
-            wkVBinding.refreshLayout.finishLoadMore();
             if (code == HttpResponseCode.success && list != null) {
                 if (page == 1) {
                     allLoadedList.clear();
@@ -187,6 +190,9 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
                     currentPage++;
                 }
             } else {
+                // error 分支也需要更新空态: refreshFromFirstPage 已清空 adapter,
+                // 若不 updateEmptyState 用户只能看到白屏无提示。
+                updateEmptyState();
                 WKToastUtils.getInstance().showToast(msg);
             }
         });
@@ -211,7 +217,12 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         // - 已加入子区: 跳过 join, 直接进入。
         if (entity.is_joined == 0) {
             ThreadModel.getInstance().joinThread(groupNo, entity.short_id, (code, msg) -> {
-                // fire-and-forget: navigate 已提前触发, join 结果无需处理。
+                // fire-and-forget: navigate 已提前触发; 归档拒/超时属预期, 只 warn log
+                // 非预期失败(如权限撤销 / 子区已删), 便于后续排查。
+                if (code != HttpResponseCode.success) {
+                    android.util.Log.w("ThreadList", "join failed shortId=" + entity.short_id
+                            + " code=" + code + " msg=" + msg);
+                }
             });
         }
         navigateToChat(channelId);
@@ -233,6 +244,9 @@ public class ThreadListActivity extends WKBaseActivity<ActThreadListLayoutBindin
         allLoadedList.clear();
         adapter.setList(new ArrayList<>());
         wkVBinding.refreshLayout.setNoMoreData(false);
+        // 清空 adapter 后立即刷空态: loadData 若被 stale 丢弃或失败, 用户至少能看到
+        // "暂无..." 提示而不是白屏。成功时 loadData 内部会再 updateEmptyState 覆盖。
+        updateEmptyState();
         loadData();
     }
 

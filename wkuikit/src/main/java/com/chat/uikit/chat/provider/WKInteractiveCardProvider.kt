@@ -10,6 +10,9 @@
 package com.chat.uikit.chat.provider
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Handler
@@ -47,8 +50,10 @@ import com.chat.uikit.chat.msgmodel.InteractiveCardDecision
 import com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer
 import com.chat.uikit.chat.msgmodel.OctoHostConfig
 import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent
-import com.xinbida.wukongim.entity.WKChannelType
-import com.xinbida.wukongim.entity.WKMsg
+import com.chat.uikit.chat.provider.card.CardAction
+import com.chat.uikit.chat.provider.card.CardActionDispatcher
+import com.chat.uikit.chat.provider.card.MessageContext
+import com.chat.uikit.message.MsgModel
 import io.adaptivecards.objectmodel.AdaptiveCard
 import io.adaptivecards.objectmodel.BaseActionElement
 import io.adaptivecards.objectmodel.BaseCardElement
@@ -56,7 +61,7 @@ import io.adaptivecards.objectmodel.OpenUrlAction
 import io.adaptivecards.renderer.AdaptiveCardRenderer
 import io.adaptivecards.renderer.RenderedAdaptiveCard
 import io.adaptivecards.renderer.actionhandler.ICardActionHandler
-import java.util.UUID
+import java.lang.ref.WeakReference
 
 /**
  * 交互式卡片消息 Provider（ContentType 17）。
@@ -85,29 +90,97 @@ import java.util.UUID
  */
 class WKInteractiveCardProvider : WKChatBaseProvider() {
 
-    /** 提交中的 messageID 集合，防重复点击（幂等仍由服务端保证）。 */
-    private val submittingIds = mutableSetOf<String>()
-
-    /** 各 messageID 的 10s 超时 Runnable，key = messageID。 */
-    private val pendingTimeouts = mutableMapOf<String, Runnable>()
-
     /** 上次渲染该 messageID 时的 cardJson 指纹，用于识别"bot 改卡新帧"→ 自动解除 loading 态。 */
     private val lastRenderedFingerprint = mutableMapOf<String, Int>()
 
     /** 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。 */
     private val parseFailLoggedSigs = mutableSetOf<Int>()
 
-    /** 主线程 Handler，用于 postDelayed 超时。 */
-    private val mainHandler = Handler(Looper.getMainLooper())
+    /**
+     * messageID → 当前绑定的 cardBox 弱引用。dispatcher 通过 [SubmitUiListener] 回调
+     * 通知需要更新哪条消息的视觉时，Provider 从这里查表拿到 view。用弱引用避免 view
+     * 被 RecyclerView 回收后阻碍 GC；查表拿到 view 后再对 [View.getTag] 做 messageID
+     * 比对，防止 view 已被复用给别条消息导致误改。
+     */
+    private val cardBoxByMsgId = mutableMapOf<String, WeakReference<FrameLayout>>()
 
-    /** 提交超时（对齐 web SUBMIT_TIMEOUT_MS = 10000ms）：bot 迟迟不改卡则恢复可点 + 提示。 */
-    private val submitTimeoutMs: Long = 10_000L
+    /** 业务分派器——所有副作用（HTTP / WebView / clipboard / toast / timeout）由 Provider 注入。 */
+    private val dispatcher: CardActionDispatcher by lazy { createDispatcher() }
 
-    /** Retrofit 服务懒加载。 */
-    private val cardActionService by lazy {
-        object : WKBaseModel() {
-            fun get() = createService(InteractiveCardActionService::class.java)
+    private fun createDispatcher(): CardActionDispatcher {
+        val appCtx: Context = WKBaseApplication.getInstance().context
+        val submitService = object : WKBaseModel() {
+            fun get(): InteractiveCardActionService = createService(InteractiveCardActionService::class.java)
         }.get()
+        return CardActionDispatcher(
+            submitter = CardActionDispatcher.CardSubmitter { body, success, failure ->
+                // 借用一次 WKBaseModel.request 的 io/main 线程调度 + BaseObserver 错误分发。
+                // 参数名 success/failure 避免与 IRequestResultListener.onSuccess/onFail 覆写方法同名
+                // 导致的意外自调（Kotlin 里 override fun onSuccess(r) = onSuccess(r) 会递归）。
+                object : WKBaseModel() {
+                    fun run() {
+                        request(
+                            submitService.submitCardAction(body),
+                            object : IRequestResultListener<JSONObject> {
+                                override fun onSuccess(result: JSONObject?) = success(result)
+                                override fun onFail(code: Int, msg: String?) = failure(code, msg)
+                            }
+                        )
+                    }
+                }.run()
+            },
+            webView = CardActionDispatcher.WebViewLauncher { url ->
+                // 走 App 内 WebView（对齐 WKTextProvider 链接预览卡、WKMarkwonProvider linkResolver
+                // 的处理路径）。FLAG_ACTIVITY_NEW_TASK：context 可能是 application context（Provider 由
+                // adapter 持有，而 adapter 可能在非 Activity context 下 bind），保守带 flag 兜底。
+                try {
+                    val intent = Intent(context, WKWebViewActivity::class.java).apply {
+                        putExtra("url", url)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    true
+                } catch (e: ActivityNotFoundException) {
+                    Log.w(TAG, "无法打开 URL: $url", e)
+                    false
+                }
+            },
+            clipboard = CardActionDispatcher.ClipboardWriter { label, text ->
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                cm?.setPrimaryClip(ClipData.newPlainText(label, text))
+            },
+            toaster = CardActionDispatcher.Toaster { text ->
+                WKToastUtils.getInstance().showToastNormal(text)
+            },
+            timeoutScheduler = object : CardActionDispatcher.TimeoutScheduler {
+                private val handler = Handler(Looper.getMainLooper())
+                override fun postDelayed(
+                    delayMs: Long,
+                    task: () -> Unit,
+                ): CardActionDispatcher.TimeoutScheduler.Handle {
+                    val runnable = Runnable { task() }
+                    handler.postDelayed(runnable, delayMs)
+                    return CardActionDispatcher.TimeoutScheduler.Handle {
+                        handler.removeCallbacks(runnable)
+                    }
+                }
+            },
+            extraSync = CardActionDispatcher.ExtraMsgSyncer { ch, ct ->
+                MsgModel.getInstance().syncExtraMsg(ch, ct)
+            },
+            selfUidProvider = { WKConfig.getInstance().uid },
+            uiListener = object : CardActionDispatcher.SubmitUiListener {
+                override fun onSubmitStart(messageId: String) = applySubmittingUiFor(messageId)
+                override fun onSubmitEnd(messageId: String) = restoreCardBoxFor(messageId)
+            },
+            strings = CardActionDispatcher.Strings(
+                openUrlFailed = appCtx.getString(R.string.base_open_url_failed),
+                copySuccess = appCtx.getString(R.string.base_card_copy_success),
+                actionRetry = appCtx.getString(R.string.base_card_action_retry),
+                actionFailed = appCtx.getString(R.string.base_card_action_failed),
+                actionTimeout = appCtx.getString(R.string.base_card_action_timeout),
+            ),
+        )
     }
 
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? =
@@ -140,9 +213,14 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         val plain = model?.plain.orEmpty().ifBlank { context.getString(R.string.base_unknow_msg) }
         val messageId = wkMsg.messageID.orEmpty()
 
-        // 用 tag 记住当前 box 绑定的 messageID —— 10s 超时 Runnable 靠这个判断
-        // 视图有没有被 RecyclerView 回收给别的消息，避免误改错卡片的态。
+        // 用 tag 记住当前 box 绑定的 messageID —— UI 恢复回调靠这个判断视图有没有被
+        // RecyclerView 回收给别的消息，避免误改错卡片的态。
         cardBox.tag = messageId
+        // 记入 messageID → cardBox 弱引用表，dispatcher 通过 SubmitUiListener 回调
+        // 时按 messageID 反查（比原来沿父链 walkUp 更稳，也为 C3 缓存 view 场景铺路）。
+        if (messageId.isNotEmpty()) {
+            cardBoxByMsgId[messageId] = WeakReference(cardBox)
+        }
 
         // 识别"bot 改卡新帧到达" —— cardJson 指纹变化即视为新帧，自动解除 submitting 态。
         // 契约对齐 web：新帧到达 = 提交闭环完成，无需保留 loading 遮罩。
@@ -150,7 +228,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             val newFp = cardJson?.hashCode() ?: 0
             val oldFp = lastRenderedFingerprint[messageId]
             if (oldFp != null && oldFp != newFp) {
-                clearSubmittingState(messageId)
+                dispatcher.clearSubmitting(messageId)
             }
             lastRenderedFingerprint[messageId] = newFp
         }
@@ -200,7 +278,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 context,
                 fragmentManager,
                 adaptiveCard,
-                CardActionHandler(wkMsg, allowSubmit = cardDecision.interactive),
+                SdkActionAdapter(MessageContext(wkMsg = wkMsg, allowSubmit = cardDecision.interactive)),
                 OctoHostConfig.get()
             )
             // SDK 输出的 rendered.view 是 wrap_content 宽度（表现为不铺满盒子，正文被挤换行）。
@@ -235,7 +313,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         }
 
         // 若消息仍在 submitting（view 被回收后重新 bind 回同一条消息），把 loading 遮罩加回。
-        if (messageId.isNotEmpty() && messageId in submittingIds) {
+        if (dispatcher.isSubmitting(messageId)) {
             applySubmittingUI(cardBox, submitOverlay)
         }
 
@@ -345,13 +423,15 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     }
 
     /**
-     * SDK action 回调。绑定当前 [wkMsg] 以便 Submit 时提取 messageID/channel/fromUID。
-     * [allowSubmit] 只在 sender trust=bot 且 profile=octo/v2 时为 true；webhook 卡展示-only。
-     * 每次 [setData] 都是新实例（rendered.view 也是新的），无生命周期泄漏问题。
+     * SDK ↔ dispatcher 边界适配器：把 [BaseActionElement] 展平成纯 Kotlin [CardAction]
+     * 再交给 [CardActionDispatcher]。SDK 类型（BaseActionElement / RenderedAdaptiveCard /
+     * OpenUrlAction 等 SWIG C++ binding）**只出现在这里**，dispatcher 与其单测都不依赖。
+     *
+     * 每次 [setData] 都是新实例（rendered.view 也是新的），无生命周期泄漏问题。C3 引入
+     * view 缓存后，这里会改成读 view.tag 拿动态 [MessageContext]（当前先把 ctx 直接捕获）。
      */
-    private inner class CardActionHandler(
-        private val wkMsg: WKMsg,
-        private val allowSubmit: Boolean
+    private inner class SdkActionAdapter(
+        private val ctx: MessageContext,
     ) : ICardActionHandler {
 
         override fun onAction(
@@ -360,79 +440,44 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         ) {
             val action = actionElement ?: return
             val type = action.GetElementTypeString().orEmpty()
-            Log.d(TAG, "onAction: id=${action.GetId()} type=$type allowSubmit=$allowSubmit")
-            when (type) {
-                "Action.OpenUrl" -> handleOpenUrl(action)
-                "Action.Submit" -> {
-                    if (!allowSubmit) {
-                        Log.d(TAG, "Submit 被 trust gate 阻拦（webhook 卡展示-only）")
+            val actionId = action.GetId().orEmpty()
+            Log.d(TAG, "onAction: id=$actionId type=$type allowSubmit=${ctx.allowSubmit}")
+            val cardAction: CardAction = when (type) {
+                "Action.OpenUrl" -> {
+                    // OpenUrlAction.dynamic_cast 是 SDK SWIG 提供的向下转型入口。
+                    val url = OpenUrlAction.dynamic_cast(action)?.GetUrl().orEmpty()
+                    // 二次 isSafeUrl 校验（防 javascript:/file:/intent: 等）。validateOcto 已在 render 前
+                    // 拒绝含非法 URL 的整卡，这里是最后一道防线（含未来某天放宽 profile 后的 hedge）。
+                    if (!InteractiveCardDecision.isSafeUrl(url)) {
+                        Log.w(TAG, "Action.OpenUrl url 不合法，忽略: $url")
                         return
                     }
-                    handleSubmit(action, renderedAdaptiveCard)
+                    CardAction.OpenUrl(actionId = actionId, url = url)
                 }
-                "Action.CopyToClipboard" -> handleCopyToClipboard(action)
+                "Action.Submit" -> {
+                    // 收集用户输入。SDK 已在渲染层做过 required/validation，未通过时对应 key 缺失。
+                    // 平台类型的 String? 值统一 coerce 成 ""，保持 CardAction.Submit 契约的非空 Map。
+                    val inputs: Map<String, String> = renderedAdaptiveCard?.inputs
+                        ?.mapValues { (_, v) -> v ?: "" }
+                        ?: emptyMap()
+                    CardAction.Submit(actionId = actionId, inputs = inputs)
+                }
+                "Action.CopyToClipboard" -> {
+                    // AC SDK 的 BaseActionElement 没有内建 text 字段，需要通过 AdditionalProperties 拿
+                    // （对齐 SDK 自定义 action 的通用取值路径）。
+                    // AC 3.7.0 Android SDK 默认不认 Action.CopyToClipboard，需要通过 CardActionParserRegistrar
+                    // 注册（见 WKUIKitApplication.onCreate）后按钮才会出现，否则此分支永远不触发。
+                    CardAction.Copy(actionId = actionId, text = extractCopyText(action))
+                }
                 // Action.ToggleVisibility 由 SDK 内部处理（自动翻转 isVisible），Provider 不介入。
-                // Action.ShowCard / ExecuteAction 走同样的 Submit 分支或 SDK 内部展开，此处不特殊处理。
+                // Action.ShowCard / ExecuteAction 走 SDK 内部展开，此处不特殊处理。
+                else -> return
             }
+            dispatcher.dispatch(ctx, cardAction)
         }
 
         override fun onMediaPlay(m: BaseCardElement?, r: RenderedAdaptiveCard?) {}
         override fun onMediaStop(m: BaseCardElement?, r: RenderedAdaptiveCard?) {}
-
-        private fun handleOpenUrl(action: BaseActionElement) {
-            // OpenUrlAction.dynamic_cast 是 SDK SWIG 提供的向下转型入口。
-            val url = OpenUrlAction.dynamic_cast(action)?.GetUrl().orEmpty()
-            // 二次 isSafeUrl 校验（防 javascript:/file:/intent: 等）。validateOcto 已在 render 前
-            // 拒绝含非法 URL 的整卡，这里是最后一道防线（含未来某天放宽 profile 后的 hedge）。
-            if (!InteractiveCardDecision.isSafeUrl(url)) {
-                Log.w(TAG, "Action.OpenUrl url 不合法，忽略: $url")
-                return
-            }
-            try {
-                // 走 App 内 WebView（对齐 WKTextProvider.kt:250 链接预览卡、WKMarkwonProvider linkResolver
-                // 的处理路径）。用户诉求："通知助手推送里的『查看详情』不要跳出 App"。
-                // FLAG_ACTIVITY_NEW_TASK：context 可能是 application context（Provider 由 adapter 持有，
-                // 而 adapter 可能在非 Activity context 下 bind），保守带 flag 兜底。
-                val intent = Intent(context, WKWebViewActivity::class.java).apply {
-                    putExtra("url", url)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (e: ActivityNotFoundException) {
-                Log.w(TAG, "无法打开 URL: $url", e)
-                WKToastUtils.getInstance().showToastNormal(
-                    WKBaseApplication.getInstance().context.getString(R.string.base_open_url_failed)
-                )
-            }
-        }
-
-        /**
-         * Action.CopyToClipboard 处理：把 action.text 复制到剪贴板 + 弹 toast。
-         * 对齐 web `CopyToClipboardAction` 自定义 action。
-         *
-         * 注意：AC 3.7.0 Android SDK 默认不认 Action.CopyToClipboard，需要注册自定义 parser 才会
-         * 渲染出按钮。当前实现假定服务端确实下发这类 action、且 SDK 已通过 [CardActionParserRegistrar]
-         * 注册（见 [WKUIKitApplication.onCreate]）。若 SDK 未注册，此分支永远不会触发（按钮不会出现），
-         * 也不影响其它 action 正常工作。
-         */
-        private fun handleCopyToClipboard(action: BaseActionElement) {
-            // AC SDK 的 BaseActionElement 没有内建 text 字段，需要通过 AdditionalProperties 拿
-            // （对齐 SDK 自定义 action 的通用取值路径）。
-            val text = extractCopyText(action)
-            if (text.isEmpty()) return
-            try {
-                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                    as? android.content.ClipboardManager
-                clipboard?.setPrimaryClip(
-                    android.content.ClipData.newPlainText("interactive-card-copy", text)
-                )
-                WKToastUtils.getInstance().showToastNormal(
-                    WKBaseApplication.getInstance().context.getString(R.string.base_card_copy_success)
-                )
-            } catch (t: Throwable) {
-                Log.w(TAG, "CopyToClipboard 失败: ${t.message}", t)
-            }
-        }
 
         /** 从 BaseActionElement 的 AdditionalProperties 里取 text 字段（自定义 action 的通用取值路径）。 */
         private fun extractCopyText(action: BaseActionElement): String {
@@ -445,121 +490,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 ""
             }
         }
-
-        private fun handleSubmit(action: BaseActionElement, rendered: RenderedAdaptiveCard?) {
-            val actionId = action.GetId()?.takeIf { it.isNotBlank() } ?: run {
-                Log.w(TAG, "Action.Submit 无 id，忽略")
-                return
-            }
-            val messageId = wkMsg.messageID?.takeIf { it.isNotBlank() } ?: return
-            // 防重复点击（幂等仍由服务端 D4 保证，这里只是 UX 层保护）。
-            if (!submittingIds.add(messageId)) {
-                Log.d(TAG, "$messageId 已在提交中，忽略重复点击")
-                return
-            }
-
-            // 应用 loading UX：cardBox alpha=0.6 + overlay 拦截触摸，防止用户重复点或误点。
-            // 视图引用可能会被 RecyclerView 回收，所以从 renderedCard.view 反推最近的 cardBox 父容器。
-            val cardBox = findCardBoxFromRenderedView(rendered)
-            val overlay = cardBox?.findViewById<View>(R.id.interactiveCardSubmitOverlay)
-            if (cardBox != null && overlay != null) {
-                applySubmittingUI(cardBox, overlay)
-                armSubmitTimeout(messageId)
-            }
-
-            // 收集用户输入（SDK 已做输入验证，未通过时 map 可能为 null）。
-            val inputs = rendered?.inputs ?: emptyMap<String, String>()
-
-            // person DM 且 channelID == 自己 uid（系统 bot 塌缩场景）→ 回退到 fromUID。
-            // 对齐 web resolveCardActionChannelId。group/topic 或普通 DM 原样保留。
-            val selfUid = WKConfig.getInstance().uid
-            val channelId = wkMsg.channelID
-            val fixedChannelId =
-                if (wkMsg.channelType == WKChannelType.PERSONAL &&
-                    !selfUid.isNullOrBlank() &&
-                    channelId == selfUid &&
-                    !wkMsg.fromUID.isNullOrBlank()
-                ) wkMsg.fromUID else channelId
-
-            val body = JSONObject().apply {
-                put("message_id", messageId)
-                put("channel_id", fixedChannelId)
-                put("channel_type", wkMsg.channelType.toInt())
-                put("action_id", actionId)
-                put("inputs", JSONObject(inputs.toMap<String, String>()))
-                put("client_token", UUID.randomUUID().toString())
-                // 刻意不传 data —— 服务端从存储帧提取（D11 防伪造）。
-            }
-
-            Log.d(TAG, "Submit: msgId=$messageId actionId=$actionId inputs=${inputs.size} chan=$fixedChannelId")
-
-            // 走 WKBaseModel.request 的 io/main 线程调度 + BaseObserver 错误分发。
-            object : WKBaseModel() {
-                fun submit() {
-                    request(
-                        cardActionService.submitCardAction(body),
-                        object : IRequestResultListener<JSONObject> {
-                            override fun onSuccess(result: JSONObject?) {
-                                // HTTP 受理成功。原策略"不清 submitting、等 bot 改卡新帧自动清"
-                                // 在服务端 syncMessageExtra 有 cache miss bug 时会永久卡住 UI —— 撤回
-                                // 功能已经踩过并修好（[WKIMUtils.markMsgRevokedLocallyByClientMsgNO]
-                                // + [scheduleRevokeRetry]）。这里照搬同一模式：
-                                //  1. 立即清 loading，UI 恢复可交互（即便 bot 慢也不视觉卡死）
-                                //  2. 主动 syncExtraMsg 强拉一次（不等 CMD）
-                                //  3. 500ms/1500ms 兜底 retry（对齐撤回节奏）—— 兜服务端 CMD/extra 写入的时序竞态
-                                // bot 秒回时：sync 拉到新 contentEdit → refreshMsg → notifyData → setData
-                                // 里指纹变化不影响（已经清过 submitting），新帧内容自然渲染出完成态。
-                                Log.d(TAG, "Submit 成功: accepted=${result?.getBoolean("accepted")} replay=${result?.getBoolean("replay")}, 主动 sync 拉新帧")
-                                clearSubmittingState(messageId)
-                                if (cardBox != null && overlay != null) {
-                                    restoreCardBoxByMessageId(cardBox, overlay, messageId)
-                                }
-                                val ch = wkMsg.channelID
-                                val ct = wkMsg.channelType
-                                if (!ch.isNullOrBlank()) {
-                                    com.chat.uikit.message.MsgModel.getInstance().syncExtraMsg(ch, ct)
-                                    scheduleCardEditSyncRetry(ch, ct, 500L)
-                                    scheduleCardEditSyncRetry(ch, ct, 1500L)
-                                }
-                            }
-
-                            override fun onFail(code: Int, msg: String?) {
-                                // HTTP 失败：立即清 submitting + 恢复 UI + toast。
-                                clearSubmittingState(messageId)
-                                Log.w(TAG, "Submit 失败: code=$code msg=$msg")
-                                val toast = when {
-                                    code == 409 || code >= 500 ->
-                                        WKBaseApplication.getInstance().context.getString(R.string.base_card_action_retry)
-                                    else ->
-                                        WKBaseApplication.getInstance().context.getString(R.string.base_card_action_failed)
-                                }
-                                WKToastUtils.getInstance().showToastNormal(toast)
-                                // 触发一次 UI 刷新以恢复 alpha（走 tag 判断避免影响到其他消息）。
-                                if (cardBox != null && overlay != null) {
-                                    restoreCardBoxByMessageId(cardBox, overlay, messageId)
-                                }
-                            }
-                        }
-                    )
-                }
-            }.submit()
-        }
-    }
-
-    /**
-     * 找到 SDK 渲染 view 所在的 [R.id.interactiveCardBox]（Provider layout 里的白底卡片容器）。
-     * SDK 的 rendered.view 会 addView 进 `interactiveCardContainer`，其父即 `interactiveCardBox`。
-     * 用 view.rootView.findViewById 有风险（可能拿到别条消息的 box），故沿父链回溯。
-     */
-    private fun findCardBoxFromRenderedView(rendered: RenderedAdaptiveCard?): FrameLayout? {
-        var v: View? = rendered?.view?.parent as? View
-        var depth = 0
-        while (v != null && depth < 6) {
-            if (v.id == R.id.interactiveCardBox && v is FrameLayout) return v
-            v = v.parent as? View
-            depth++
-        }
-        return null
     }
 
     /** 应用 submitting UI：cardBox alpha=0.6 + overlay 拦截触摸。 */
@@ -568,52 +498,30 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         overlay.visibility = View.VISIBLE
     }
 
-    /** 恢复 cardBox 视觉态 —— 走 tag 判断避免 view 被回收给其他消息后误改。 */
-    private fun restoreCardBoxByMessageId(cardBox: View, overlay: View, messageId: String) {
-        if (cardBox.tag == messageId) {
-            cardBox.alpha = 1f
-            overlay.visibility = View.GONE
-        }
+    /**
+     * 通过 messageID 反查 cardBox 并应用 submitting UI。dispatcher 通过
+     * [CardActionDispatcher.SubmitUiListener.onSubmitStart] 回调进来。
+     */
+    private fun applySubmittingUiFor(messageId: String) {
+        if (messageId.isEmpty()) return
+        val box = cardBoxByMsgId[messageId]?.get() ?: return
+        // tag 比对防误改：view 可能已被 RecyclerView 复用给别条消息。
+        if (box.tag != messageId) return
+        val overlay = box.findViewById<View>(R.id.interactiveCardSubmitOverlay) ?: return
+        applySubmittingUI(box, overlay)
     }
 
     /**
-     * 布置 10s 超时兜底：bot 迟迟不改卡时恢复可点 + 提示"操作已提交，机器人稍后响应"。
-     * 对齐 web SUBMIT_TIMEOUT_MS = 10000ms。
+     * 通过 messageID 反查 cardBox 并恢复视觉态。dispatcher 通过
+     * [CardActionDispatcher.SubmitUiListener.onSubmitEnd] 回调进来。
      */
-    private fun armSubmitTimeout(messageId: String) {
-        // 先清掉上一次的（幂等）
-        pendingTimeouts.remove(messageId)?.let { mainHandler.removeCallbacks(it) }
-        val runnable = Runnable {
-            pendingTimeouts.remove(messageId)
-            // 只有当仍在 submitting 时才动 UI（bot 已回帧的话 setData 里已经清过）
-            if (submittingIds.remove(messageId)) {
-                Log.d(TAG, "Submit 10s 超时，恢复可点: $messageId")
-                WKToastUtils.getInstance().showToastNormal(
-                    WKBaseApplication.getInstance().context.getString(R.string.base_card_action_timeout)
-                )
-                // 视图状态在下次 setData 会自动复位；本次超时不主动 findView 更新，避免访问陈旧引用。
-            }
-        }
-        pendingTimeouts[messageId] = runnable
-        mainHandler.postDelayed(runnable, submitTimeoutMs)
-    }
-
-    /** 清 submitting 全套状态（HTTP 失败 / bot 新帧到达都走这个）。 */
-    private fun clearSubmittingState(messageId: String) {
-        submittingIds.remove(messageId)
-        pendingTimeouts.remove(messageId)?.let { mainHandler.removeCallbacks(it) }
-    }
-
-    /**
-     * 服务端 syncMessageExtra 有 cache/时序 bug —— submit 200 后立即 sync 一次很可能拿到
-     * resultSize=0（bot 改卡的 message_extra 增量还没落库）。照搬 [WKIMUtils.scheduleRevokeRetry]
-     * 的节奏：延迟再拉一次强制刷新。幂等由 sync 本身保证（extra_version 递增，无副作用重复调）。
-     * 无需查本地状态：sync 只读接口，多调几次是 no-op（拉不到新 extra 就啥都不做）。
-     */
-    private fun scheduleCardEditSyncRetry(channelID: String, channelType: Byte, delayMs: Long) {
-        mainHandler.postDelayed({
-            com.chat.uikit.message.MsgModel.getInstance().syncExtraMsg(channelID, channelType)
-        }, delayMs)
+    private fun restoreCardBoxFor(messageId: String) {
+        if (messageId.isEmpty()) return
+        val box = cardBoxByMsgId[messageId]?.get() ?: return
+        if (box.tag != messageId) return
+        val overlay = box.findViewById<View>(R.id.interactiveCardSubmitOverlay) ?: return
+        box.alpha = 1f
+        overlay.visibility = View.GONE
     }
 
     private companion object {

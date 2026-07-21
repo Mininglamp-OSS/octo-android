@@ -2557,13 +2557,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 拷贝一份，避免对 adapter data list 并发修改
         List<ChatConversationMsg> snapshot = new ArrayList<>(list);
         groupMsg(snapshot);
-        // 排序键走 ConversationPreviewSelector.selectDisplayTimestamp: SystemBot 场景下
-        // 用 spaceFilteredLastMessage 的 timestamp (对齐 iOS -[WKConversationWrapModel
-        // lastMsgTimestamp])，避免 SDK entry 的 lastMsgTimestamp=0 / stale 导致沉底。
-        // 普通频道 selector 直接返回 uc.lastMsgTimestamp，行为不变。
+        // 排序键退回 uc.lastMsgTimestamp 直读 (O(1))。原本走
+        // ConversationPreviewSelector.selectDisplayTimestamp 是为了对齐 iOS
+        // spaceFilteredLastMessage 让 SystemBot/BotFather 场景排序与 preview 同源, 但
+        // selector 在 PERSONAL+多 Space+BotFather 分支会走 DB 分页 (最多 5×200=1000 条),
+        // sort N 项 = O(N log N) 次 DB 查询 = 主线程阻塞 → 从聊天页返回 onResume 触发一次
+        // 大列表 sort 就整列表卡死. render 层 showTime 仍走 selector (per-bind 缓存兜底);
+        // 极端场景下 SystemBot 的"位置"和"预览"可能短暂不一致, 相比 UI 卡死可接受.
+        // 待 selector 落地作者预留的 channel-scoped LRU cache + conversation listener
+        // invalidate 后可恢复走 selector.
         Collections.sort(snapshot, (a, b) -> Long.compare(
-                com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(b.uiConversationMsg),
-                com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(a.uiConversationMsg)));
+                b.uiConversationMsg.lastMsgTimestamp,
+                a.uiConversationMsg.lastMsgTimestamp));
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
         for (int i = 0, size = snapshot.size(); i < size; i++) {
@@ -2928,11 +2933,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
             int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
             if (topA != topB) return topB - topA;
-            // 排序键走 selector，与 sortMsg 保持一致（SystemBot 用 spaceFilteredLastMessage
-            // 的 timestamp，避免 SDK entry 空/stale 沉底）。
+            // 排序键退回 uc.lastMsgTimestamp 直读 (与 sortMsg 保持一致, 见那边的注释)。
             return Long.compare(
-                    com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(b.uiConversationMsg),
-                    com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(a.uiConversationMsg));
+                    b.uiConversationMsg.lastMsgTimestamp,
+                    a.uiConversationMsg.lastMsgTimestamp);
         });
         return filtered;
     }

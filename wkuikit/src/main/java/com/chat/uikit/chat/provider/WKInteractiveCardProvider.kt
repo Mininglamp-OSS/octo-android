@@ -13,6 +13,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -258,6 +259,21 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             return
         }
 
+        // ── 设备 API gate ──
+        // AC 3.7.0 AAR 声明 minSdk=26，App 用 tools:overrideLibrary 压掉 merger 报错。
+        // Class 加载失败 / 符号未解析走 renderer.build() 的 catch(Throwable) → fallback plain
+        // 是安全的；但 SDK native lib 若在运行时调用 API 26+ 才有的 libc / libandroid 符号，
+        // SIGSEGV 无法被 JVM try/catch 兜住 → 直接 crash 进程。
+        //
+        // 在这里 fail-closed：API < 26 一律降级 plain，永不进 SDK 路径。绝大多数用户设备
+        // 都 >= API 26 不受影响；老设备用户看到的是普通消息文本，不会 crash。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            logApiGateFallbackOnce()
+            showFallback(container, fallback, plain)
+            resetCellBackground(parentView, uiChatMsgItemEntity, from)
+            return
+        }
+
         // ── 三段决策（对齐 web decideCardBody）：sender trust → profile/version 协商 → octo 白名单 ──
         // 任一未通过整卡降级为 plain（fail-closed），避免恶意 direct-socket 塞的 type=17 骗过 UI。
         val trust = CardSenderClassifier.classify(wkMsg.fromUID)
@@ -465,6 +481,19 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
         /** 见 [cardBoxByMsgId]。dispatcher 回调仅针对"最近提交过"的消息，64 够用。 */
         const val CARD_BOX_CACHE_SIZE = 64
+    }
+
+    /**
+     * API < 26 上首次遇到 InteractiveCard 时打一次日志方便定位；此后同 App 生命周期
+     * 内不再重复打（避免会话滚动时刷屏）。用 Provider 实例字段而不是 companion，
+     * 是为了 Provider 被 dispose 后下次重开会话仍会 log 一次（便于观察问题分布）。
+     */
+    private var apiGateFallbackLogged = false
+
+    private fun logApiGateFallbackOnce() {
+        if (apiGateFallbackLogged) return
+        apiGateFallbackLogged = true
+        Log.i(TAG, "API gate: SDK_INT=${Build.VERSION.SDK_INT} < 26 → InteractiveCard 一律降级 plain")
     }
 
     /**

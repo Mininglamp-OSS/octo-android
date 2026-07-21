@@ -215,6 +215,17 @@ class CardActionDispatcherTest {
     }
 
     @Test
+    fun `dispatch Submit timeout calls onSubmitEnd to restore card visual`() {
+        dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
+        assertEquals(listOf("m1"), uiListener.starts)
+        val timeout = scheduler.entries.single { it.delayMs == 10_000L }
+        timeout.fire()
+        // 关键回归：超时必须触发 onSubmitEnd，否则 Provider 侧 cardBox 会持续 alpha=0.6
+        // + overlay 拦点，直到用户滚动触发 rebind
+        assertEquals(listOf("m1"), uiListener.ends)
+    }
+
+    @Test
     fun `dispatch Submit timeout after success is no-op (already cleared)`() {
         dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
         submitter.calls.single().onSuccess(null)

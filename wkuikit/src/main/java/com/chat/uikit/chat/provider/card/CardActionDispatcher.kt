@@ -258,7 +258,10 @@ class CardActionDispatcher(
             if (submittingIds.remove(messageId)) {
                 Log.d(TAG, "Submit 10s 超时，恢复可点: $messageId")
                 toaster.show(strings.actionTimeout)
-                // 视图状态在下次 setData 会自动复位；本次超时不主动更新，避免访问陈旧引用。
+                // 主动通知 UI 层复位视觉（alpha + overlay），否则卡片会持续置灰 + 拦点
+                // 直到别的原因触发 rebind。Provider 侧回调按 WeakReference + tag 校验
+                // 拿视图，view 已回收就 no-op，不会访问陈旧引用。
+                uiListener.onSubmitEnd(messageId)
             }
         }
         pendingTimeouts[messageId] = handle

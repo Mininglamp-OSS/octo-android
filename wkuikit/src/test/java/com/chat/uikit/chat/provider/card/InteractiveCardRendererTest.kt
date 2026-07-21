@@ -20,41 +20,13 @@ import org.junit.Test
  *
  * 真正的渲染路径依赖 AdaptiveCards SWIG native lib + Android View + FragmentActivity，
  * JVM 单测无法覆盖——那部分靠**手动验证**（滚动性能、Input 状态保留、bot 编辑帧刷新、
- * 深色切换、Action 全路径回归）。
+ * 深色切换、Action 全路径回归、以及"两条同 payload 消息同屏"不再互抢 view 的回归）。
  *
- * 这里只覆盖**纯 Kotlin 语义**：缓存键的等值语义（保证同 payload 命中缓存、不同 payload
- * 一定 miss、深色/亮色不混用）+ Result sealed 结构。
+ * 这里只覆盖**纯 Kotlin 语义**：Result sealed 结构 + CardRenderSpec 值对象。
+ * 缓存键换成 messageId 后不再是纯值对象（内含 View 和 RenderedAdaptiveCard），无法在
+ * JVM 层直接构造校验；命中/失效路径靠仪器化测试或手动回归覆盖。
  */
 class InteractiveCardRendererTest {
-
-    @Test
-    fun `CacheKey with same content-version-mode equals`() {
-        val a = InteractiveCardRenderer.CacheKey(cardJsonHash = 123, cardVersion = "1.5", isDark = false)
-        val b = InteractiveCardRenderer.CacheKey(cardJsonHash = 123, cardVersion = "1.5", isDark = false)
-        assertEquals(a, b)
-        assertEquals(a.hashCode(), b.hashCode())
-    }
-
-    @Test
-    fun `CacheKey differs when cardJsonHash differs (bot edit frame → miss → re-render)`() {
-        val before = InteractiveCardRenderer.CacheKey(cardJsonHash = 111, cardVersion = "1.5", isDark = false)
-        val after = InteractiveCardRenderer.CacheKey(cardJsonHash = 222, cardVersion = "1.5", isDark = false)
-        assertNotEquals(before, after)
-    }
-
-    @Test
-    fun `CacheKey differs when cardVersion differs (server schema upgrade)`() {
-        val v15 = InteractiveCardRenderer.CacheKey(cardJsonHash = 111, cardVersion = "1.5", isDark = false)
-        val v16 = InteractiveCardRenderer.CacheKey(cardJsonHash = 111, cardVersion = "1.6", isDark = false)
-        assertNotEquals(v15, v16)
-    }
-
-    @Test
-    fun `CacheKey differs when isDark differs (theme switch)`() {
-        val light = InteractiveCardRenderer.CacheKey(cardJsonHash = 111, cardVersion = "1.5", isDark = false)
-        val dark = InteractiveCardRenderer.CacheKey(cardJsonHash = 111, cardVersion = "1.5", isDark = true)
-        assertNotEquals(light, dark)
-    }
 
     @Test
     fun `Success is a singleton object`() {
@@ -75,6 +47,13 @@ class InteractiveCardRendererTest {
         val a = InteractiveCardRenderer.Result.Fallback(reason = "boom", cardJsonHash = 1)
         val b = InteractiveCardRenderer.Result.Fallback(reason = "boom", cardJsonHash = 1)
         assertEquals(a, b)
+    }
+
+    @Test
+    fun `Fallback differs when hash differs (bot edit frame → new fallback log)`() {
+        val a = InteractiveCardRenderer.Result.Fallback(reason = "boom", cardJsonHash = 1)
+        val b = InteractiveCardRenderer.Result.Fallback(reason = "boom", cardJsonHash = 2)
+        assertNotEquals(a, b)
     }
 
     @Test

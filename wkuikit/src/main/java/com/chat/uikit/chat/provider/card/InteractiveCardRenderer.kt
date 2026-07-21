@@ -32,24 +32,30 @@ import io.adaptivecards.renderer.actionhandler.ICardActionHandler
 
 /**
  * 交互卡的**渲染层**——把 SDK 渲染（sanitize + parse + render + stylize）从 Provider 里
- * 抽出来，加一层按内容缓存的 [LruCache]，让 RecyclerView 滚动时**同 payload 卡片**能
+ * 抽出来，加一层按 messageId 缓存的 [LruCache]，让 RecyclerView 滚动时**同一条消息**能
  * 直接复用已有 View，避开 SWIG C++ 反射的开销。
  *
  * ## 三个设计要点
  *
- * ### 1. 缓存键是内容，不是消息 ID
- * `(cardJson.hashCode, cardVersion, isDark)` 三维穷举。同一张 bot 群发通知卡挂在 N 条
- * 消息上只渲染 1 次；bot 编辑帧到达时 hash 变 → 天然 miss → 重渲；系统切主题
+ * ### 1. 缓存键是 messageId，不是内容 hash
+ * 每条消息拥有**独立的 rendered View 实例**。Entry 内额外保存
+ * `(cardJsonHash, isDark)` 用于命中校验：命中要求 messageId 匹配**且** hash / 主题都
+ * 未变；否则 rebuild。
+ *
+ * 之所以放弃"按内容 hash 缓存"是因为 View 是**单父节点**对象：当两条消息 payload 完全
+ * 相同（bot 群发通知卡挂在多条消息上）且**同屏可见**时，后一条 bind 会把 View 从前一条
+ * container 上摘走 → 前一条视觉空白。以 messageId 为键彻底消除这种"抢 view"竞争。
+ *
+ * bot 编辑帧（contentEdit）到达时 hash 变 → Entry 校验失败 → 天然 rebuild；系统切主题
  * Activity recreate 时 renderer 被 GC 缓存丢失。**无需手动 invalidate**。
  *
  * ### 2. Handler 分成静态 proxy + 动态 context
  * SDK render 时注入的 [ICardActionHandler] 会被 SDK 内部长期持有到 view tree 里。若
- * handler 捕获了当前 [MessageContext]，缓存 view 复用给别条消息时会导致 Submit 打到
- * 旧 messageId。
+ * handler 捕获了当前 [MessageContext]，缓存 view 复用时会导致 Submit 打到旧 messageId。
  *
  * 解决方案：[ProxyHandler] **不捕获 ctx**，每次 dispatch 从 `view.tag` 读动态 ctx。
- * [renderInto] 每次调用都会更新 tag。这样一份 view 可以服务 N 条消息，Submit 永远
- * 找到正确的当前消息。
+ * [renderInto] 每次调用都会更新 tag。这样 messageId 复用同一 view 时（同 msg 再次 bind）
+ * ctx 保持最新；不同 msg 拿到各自的 view，也不会串。
  *
  * ### 3. View 复用生命周期
  * 缓存 view 复用前**必须先脱离旧父**，否则会崩：
@@ -60,12 +66,12 @@ import io.adaptivecards.renderer.actionhandler.ICardActionHandler
  *
  * ## 顺带修复的 UX bug
  * 交互卡里用户填一半 Input，滚出屏再滚回来——之前每次 rebind 都是新 view，输入丢失。
- * 缓存后同 payload view 复用，SDK Input widget 的内部状态天然保留。
+ * 缓存后同一 messageId 的 view 复用，SDK Input widget 的内部状态天然保留。
  *
  * @param dispatcher 复用 C1 抽出的业务分派器
  * @param stylize Provider 注入的 post-render 视觉改造（按钮胶囊、CompoundButton 间距），
  *   不下沉到 renderer 是因为它引用 Provider 层的 R.drawable/R.color，跟消息层更近
- * @param cacheSize LRU 上限；默认 32 项（估 200-500KB/项 → 最坏 6-16MB）
+ * @param cacheSize LRU 上限；默认 32 条消息（估 200-500KB/条 → 最坏 6-16MB）
  */
 class InteractiveCardRenderer(
     private val dispatcher: CardActionDispatcher,
@@ -85,9 +91,8 @@ class InteractiveCardRenderer(
         data class Fallback(val reason: String, val cardJsonHash: Int) : Result
     }
 
-    /** LRU 缓存：key = 内容+主题三维穷举；value 包含 rendered.view 以及 SDK 原生 rendered
-     *  对象（后者用于 SDK 内部 input 收集）。 */
-    private val cache = LruCache<CacheKey, Entry>(cacheSize)
+    /** LRU 缓存：key = messageId；Entry 内含 hash + isDark 用于命中校验（不匹配则 rebuild）。 */
+    private val cache = LruCache<String, Entry>(cacheSize)
 
     /** 长寿命 proxy handler：SDK render 时绑一次，之后每张 view 复用都靠 tag 传 ctx。 */
     private val proxyHandler = ProxyHandler(dispatcher)
@@ -101,22 +106,20 @@ class InteractiveCardRenderer(
         context: Context,
     ): Result {
         val isDark = isDarkMode(context)
-        val key = CacheKey(spec.cardJson.hashCode(), spec.cardVersion, isDark)
+        val hash = spec.cardJson.hashCode()
+        val messageId = ctx.wkMsg.messageID.orEmpty()
 
-        val entry = cache.get(key) ?: run {
-            val fresh = build(context, spec) ?: return@run null
-            cache.put(key, fresh)
-            fresh
-        } ?: return Result.Fallback(
-            reason = "sdk parse/render failed",
-            cardJsonHash = spec.cardJson.hashCode(),
-        )
+        val entry = obtainEntry(messageId, hash, isDark, context, spec)
+            ?: return Result.Fallback(
+                reason = "sdk parse/render failed",
+                cardJsonHash = hash,
+            )
 
         // 更新 view.tag 让 proxy handler 能读到本次 bind 的动态 ctx。
         // 用 id 资源做 key 而不是 hardcoded int，避免跟别处冲突。
         entry.view.setTag(R.id.card_message_context, ctx)
 
-        // 复用前先脱离旧父容器 —— cache 命中时 view 上次是挂在别的 container 上的。
+        // 复用前先脱离旧父容器 —— cache 命中时 view 上次可能挂在别处（同 msg 复用 holder）。
         (entry.view.parent as? ViewGroup)?.removeView(entry.view)
         container.addView(entry.view)
         entry.view.layoutParams = entry.view.layoutParams?.apply {
@@ -133,9 +136,39 @@ class InteractiveCardRenderer(
         cache.evictAll()
     }
 
+    /** Provider 检测到某条消息不再需要（例如被删除）时调，主动释放缓存。可选。 */
+    fun invalidate(messageId: String) {
+        if (messageId.isBlank()) return
+        cache.remove(messageId)
+    }
+
     // ─────────────────────────────── Internal build ───────────────────────────────
 
-    private fun build(context: Context, spec: CardRenderSpec): Entry? {
+    /**
+     * 命中缓存则返回既有 Entry；未命中或校验失败（hash/isDark 变了）则重建。
+     * messageId 为空（消息未 ack 回填）时**不进缓存**——每次 rebuild，避免拿空串当 key
+     * 让多条待 ack 消息互相污染。
+     */
+    private fun obtainEntry(
+        messageId: String,
+        hash: Int,
+        isDark: Boolean,
+        context: Context,
+        spec: CardRenderSpec,
+    ): Entry? {
+        if (messageId.isEmpty()) {
+            return build(context, spec, hash, isDark)
+        }
+        val cached = cache.get(messageId)
+        if (cached != null && cached.cardJsonHash == hash && cached.isDark == isDark) {
+            return cached
+        }
+        val fresh = build(context, spec, hash, isDark) ?: return null
+        cache.put(messageId, fresh)
+        return fresh
+    }
+
+    private fun build(context: Context, spec: CardRenderSpec, hash: Int, isDark: Boolean): Entry? {
         return try {
             // 渲染前 sanitize —— 对齐 iOS `WKACardRenderer.wk_sanitizeNode`：
             //  · Input.Toggle 缺 title 补上（AC C++ ObjectModel schema 严格）
@@ -158,7 +191,7 @@ class InteractiveCardRenderer(
             // post-render 视觉改造（按钮胶囊化等）—— 只在**首次构建**时执行一次，
             // 缓存 view 复用不再重复 walk 整棵树。这是缓存带来的额外性能收益。
             stylize(rendered.view)
-            Entry(view = rendered.view, rendered = rendered)
+            Entry(view = rendered.view, rendered = rendered, cardJsonHash = hash, isDark = isDark)
         } catch (t: Throwable) {
             Log.w(TAG, "SDK render 失败: ${t.message}", t)
             null
@@ -172,22 +205,18 @@ class InteractiveCardRenderer(
     // ─────────────────────────────── Types ───────────────────────────────
 
     /**
-     * 缓存键：内容 + 版本 + 主题。任一维变化都需重渲。
+     * 缓存条目：view + rendered（SDK 内部输入收集用）+ 用于命中校验的 hash / isDark。
      *
-     * cardJson 用 [hashCode] 而不是全字符串——降低 key 内存，冲突概率对 32 项 LRU 可
-     * 忽略；即便偶发碰撞，结果是拿到另一张卡的 view，SDK 后续 dispatch 会因 view.tag
-     * 里的 ctx 不匹配而降级，无数据一致性风险。
+     * cardJsonHash 用 [String.hashCode]（不是全 JSON 字符串）—— 降低占用；即便偶发碰撞，
+     * 表现是拿到旧 view 但内容其实变了。为覆盖这种极小概率，Provider 侧的
+     * `lastRenderedFingerprint` 与本 Entry 校验独立记录 hash 变化并触发新帧处理，双路
+     * 兜底；此处即便未 invalidate，最坏结果是等下次 bind 才刷新，不影响正确性。
      */
-    internal data class CacheKey(
-        val cardJsonHash: Int,
-        val cardVersion: String,
-        val isDark: Boolean,
-    )
-
-    /** 缓存条目：view 是复用主体，rendered 保留是给 SDK 内部输入收集用。 */
-    private data class Entry(
+    internal data class Entry(
         val view: View,
         val rendered: RenderedAdaptiveCard,
+        val cardJsonHash: Int,
+        val isDark: Boolean,
     )
 
     /**

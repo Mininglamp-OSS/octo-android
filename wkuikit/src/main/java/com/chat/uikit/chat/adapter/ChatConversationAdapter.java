@@ -1073,17 +1073,18 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     private void showTime(@NotNull BaseViewHolder helper, WKUIConversationMsg item) {
-        // -B · Layer B · 渲染层时间戳 Space 过滤。跨 Space 消息污染时返回 0
-        // （即不显示最近时间），避免列表因被跨 Space push bump 而冒顶排序。
-        long msgTimestamp;
-        if (com.chat.base.space.ConversationPreviewFilter.isMessageCrossSpace(item)) {
-            msgTimestamp = 0;
-        } else {
-            msgTimestamp = item.lastMsgTimestamp;
-            if (item.getWkMsg() != null) {
-                if (item.getWkMsg().remoteExtra.editedAt != 0) {
-                    msgTimestamp = item.getWkMsg().remoteExtra.editedAt;
-                }
+        // -B · Layer B · 渲染层时间戳：走 ConversationPreviewSelector.selectDisplayTimestamp，
+        // 与会话列表排序 comparator 保持同源（SystemBot 用 spaceFilteredLastMessage 的
+        // timestamp，普通频道走 uc.lastMsgTimestamp 原生）。这样"排序位置"和"时间字符串"
+        // 永远一致，避免位置和显示打架。
+        // 跨 Space 污染判定由 selector 内部封装（对齐 iOS spaceFilteredLastMessage 返回 nil
+        // 时 timestamp=0 → 不显示时间）。
+        long msgTimestamp = com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(item);
+        // editedAt 修正：selector 返回的 msg 若有 editedAt 则用之（保留原有 "已编辑" 时间语义）
+        if (msgTimestamp > 0) {
+            WKMsg displayMsg = com.chat.base.space.ConversationPreviewSelector.selectDisplayMessage(item);
+            if (displayMsg != null && displayMsg.remoteExtra != null && displayMsg.remoteExtra.editedAt != 0) {
+                msgTimestamp = displayMsg.remoteExtra.editedAt;
             }
         }
         String chatTime = msgTimestamp > 0
@@ -1099,23 +1100,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     /**
      * 从消息中提取 space_id
      */
-    private String getSpaceIdFromMsg(WKMsg msg) {
-        if (msg == null) return null;
-        // 1. 从 content 原始 JSON 解析
-        if (!TextUtils.isEmpty(msg.content)) {
-            try {
-                JSONObject json = new JSONObject(msg.content);
-                String sid = json.optString("space_id", "");
-                if (!sid.isEmpty()) return sid;
-            } catch (Exception ignored) {
-            }
-        }
-        // 2. 从 SDK 解码后的 spaceId 字段读取
-        if (msg.baseContentMsgModel != null && !TextUtils.isEmpty(msg.baseContentMsgModel.spaceId)) {
-            return msg.baseContentMsgModel.spaceId;
-        }
-        return null;
-    }
+    // getSpaceIdFromMsg 已收敛到 SpaceFilter.extractSpaceIdFromMsg（单例 helper）。
 
     /**
      * 为系统 Bot 查找当前 Space 下的最后一条消息。
@@ -1125,35 +1110,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      * 搜索范围 500 条：服务端 BotFather 跨 Space 共享，sync 返回的 recents 不按 space_id 过滤，
      * 近期大量其他 Space 消息可能将当前 Space 消息挤出默认搜索范围。
      */
-    private String findSystemBotSpaceContent(WKUIConversationMsg item) {
-        if (!com.chat.base.space.SystemBotsFallback.isSystemBot(item.channelID)) return null;
-        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
-        if (TextUtils.isEmpty(currentSpaceId)) return null;
-
-        // 最后一条消息已匹配当前 Space，无需特殊处理
-        String lastMsgSpaceId = getSpaceIdFromMsg(item.getWkMsg());
-        if (lastMsgSpaceId != null && lastMsgSpaceId.equals(currentSpaceId)) return null;
-        if (lastMsgSpaceId == null) return null; // 无 space_id 的历史消息，向前兼容
-
-        // 最后一条消息不属于当前 Space，查本地 DB 找当前 Space 的最后一条（扩大搜索范围）
-        try {
-            List<WKMsg> recentMsgs = WKIM.getInstance().getMsgManager()
-                    .searchMsgWithChannelAndContentTypes(
-                            item.channelID, item.channelType,
-                            0, 500,
-                            new int[]{WKContentType.WK_TEXT});
-            if (recentMsgs != null) {
-                for (WKMsg msg : recentMsgs) {
-                    String sid = getSpaceIdFromMsg(msg);
-                    if (sid == null || currentSpaceId.equals(sid)) {
-                        return getContent(msg);
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return ""; // 当前 Space 确实无消息
-    }
+    // findSystemBotSpaceContent 已收敛到
+    // ConversationPreviewSelector.selectDisplayMessage（对齐 iOS
+    // -[WKConversationWrapModel spaceFilteredLastMessage] 分页 + 兜底逻辑，
+    // 且不限 WK_TEXT，覆盖交互式卡片 type=17 等 SystemBot 消息类型）。
 
     /**
      * 返回 Space 感知的未读数。
@@ -1186,13 +1146,21 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     }
 
     /**
-     * -B · Layer B · 渲染层 wkMsg 获取：跨 Space 污染时返回 null，避免
-     * {@link #getContent(WKMsg)} 直接渲染出另一 Space 的原文。
-     * 对齐 iOS {@code spaceFilteredLastMessage} / Web {@code getSpaceFilteredLastMessage}。
+     * -B · Layer B · 渲染层 wkMsg 获取：走 ConversationPreviewSelector（对齐 iOS
+     * -[WKConversationWrapModel spaceFilteredLastMessage]）。语义:
+     * <ul>
+     *     <li>非 PERSONAL / 非多 space → uc 的原生 wkMsg</li>
+     *     <li>PERSONAL 多 space + rawMsg 有 space_id 匹配 → rawMsg</li>
+     *     <li>PERSONAL 多 space + rawMsg 无 space_id + 非 BotFather → rawMsg
+     *         （AI 回复默认属于当前 space）</li>
+     *     <li>PERSONAL 多 space + rawMsg 无 space_id + BotFather → DB 分页找当前 space 消息</li>
+     *     <li>SystemBot 且 wkMsg=null (placeholder / stale) → 从消息表拿最新一条</li>
+     * </ul>
+     * 返回 null 时上游 getContent(null) 显示空。
      */
     @Nullable
     private WKMsg getRenderWkMsg(@Nullable WKUIConversationMsg item) {
-        return com.chat.base.space.ConversationPreviewFilter.getSpaceFilteredWkMsg(item);
+        return com.chat.base.space.ConversationPreviewSelector.selectDisplayMessage(item);
     }
 
     /**
@@ -1235,18 +1203,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         androidx.emoji2.widget.EmojiTextView contentTv = helper.getView(R.id.contentTv);
         boolean isSetChatPwd = isSetChatPwd(item.getWkChannel());
 
-        // 系统 Bot：显示当前 Space 的最后一条消息
-        String spaceContent = findSystemBotSpaceContent(item);
-        if (spaceContent != null) {
-            content = spaceContent;
-        } else if (isSetChatPwd) {
+        if (isSetChatPwd) {
             // 聊天密码
             content = "❊❊❊❊❊❊❊❊❊❊❊❊❊";
         } else {
-            // -B · Layer B · 非 SystemBot 分支也过 render-time Space 过滤兜底。
-            // SystemBot 走 findSystemBotSpaceContent（含 DB 回查当前 Space 历史）；
-            // 其它频道类型若判定为跨 Space 污染（冷启动 race / DB 回放），
-            // getRenderWkMsg 返回 null 后 getContent 返回空串 → preview 为空。
+            // 走 ConversationPreviewSelector（对齐 iOS spaceFilteredLastMessage）：
+            //   - SystemBot 且 wkMsg 未 hydrate → 从消息表拿最新一条
+            //   - PERSONAL 多 space + BotFather → DB 分页找当前 space 的消息
+            //   - 其它场景 → uc 原生 wkMsg（可能被 space 过滤为 null → getContent 显示空）
             WKMsg renderMsg = getRenderWkMsg(item);
             content = getContent(renderMsg);
             String fromName = getFromName(item.channelType, renderMsg);

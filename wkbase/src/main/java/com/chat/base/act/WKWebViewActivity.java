@@ -233,7 +233,12 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             return;
         }
         String urlWithSid = appendSidParam(url, "android");
-        String bootstrap = buildHandoffBootstrapHtml(urlWithSid, token, uid, name);
+        // sid 必须从 effective URL 反读，而不是硬编码 "android" —— appendSidParam 遇到
+        // 已有 ?sid=xxx 时会保留原值不覆盖。若这里仍用 "android" 写 localStorage，
+        // URL 带 ?sid=web 时 web 端会读 tokenweb / uidweb / nameweb（都不存在），
+        // 但我们只写了 tokenandroid → 免登失效。
+        String effectiveSid = extractSid(urlWithSid, "android");
+        String bootstrap = buildHandoffBootstrapHtml(urlWithSid, effectiveSid, token, uid, name);
         // baseURL 用自家 origin：localStorage 写入的是这个 origin 的存储，跳转到 origin 内任意页面都能读到。
         wkVBinding.webView.loadDataWithBaseURL(webOrigin.toString() + "/", bootstrap, "text/html", "UTF-8", null);
     }
@@ -311,15 +316,36 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
     }
 
     /**
+     * 从 URL 的 {@code ?sid=xxx} 提取实际生效的 sid，缺失或解析失败回退到 {@code fallback}。
+     * bootstrap 必须用此值写 localStorage，才能与 web 端 App.tsx 从 URL 读的 sid 对齐。
+     */
+    @VisibleForTesting
+    static String extractSid(String url, String fallback) {
+        try {
+            String sid = Uri.parse(url).getQueryParameter("sid");
+            return TextUtils.isEmpty(sid) ? fallback : sid;
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    /**
      * 生成 bootstrap HTML：内联 script 里 localStorage.setItem 全 web 端约定的 keys（带 {sid} 后缀），
      * 然后 window.location.replace 到真 URL。所有 JS 值走 JSON.stringify 转义，避免 token 含特殊字符时 XSS。
+     * <p>
+     * {@code sid} 必须与 realUrl 内 {@code ?sid=xxx} 参数一致 —— web 端 App.tsx 从 URL 读 sid 后
+     * 到 localStorage 找 {@code token{sid}} 等 key，两侧不一致就免登失效。见调用点的
+     * {@link #extractSid(String, String)}。
      * <p>
      * Web 端 App.tsx save() 的完整 key 集合：app_id / short_no / uid / token / name / role /
      * is_work / sex / login_provider / realname_verified / real_name / realname_verified_at。
      * 我们只有 uid / token / name（App 端存的字段），其它由 web 自己后续 API 拉取补齐。
+     * <p>
+     * 刻意不加 console.log：uid / name / token 前缀等身份信息不应写进 WebView console
+     * （release 里 remote debugging 通常关但仍是不良实践）。boot 失败时依赖 web 自身
+     * 的登录跳转来暴露问题，不靠自打日志。
      */
-    private static String buildHandoffBootstrapHtml(String realUrl, String token, String uid, String name) {
-        String sid = "android";
+    private static String buildHandoffBootstrapHtml(String realUrl, String sid, String token, String uid, String name) {
         // JSONObject.quote 会返回带引号的 JSON 字符串字面量（e.g. "abc\"def" → "\"abc\\\"def\""），
         // 直接嵌 <script> 里安全。
         String jToken = org.json.JSONObject.quote(token);
@@ -333,10 +359,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
                 "localStorage.setItem('token'+s, " + jToken + ");" +
                 "localStorage.setItem('uid'+s, " + jUid + ");" +
                 "localStorage.setItem('name'+s, " + jName + ");" +
-                "console.log('[HandoffBoot] injected sid='+s+' tokenLen='+(" + jToken + ").length+' uid='+" + jUid + "+' name='+" + jName + ");" +
-                "console.log('[HandoffBoot] verify token=' + (localStorage.getItem('token'+s)||'').substring(0,4) + '****');" +
-                "}catch(e){console.log('[HandoffBoot] ERR '+(e&&e.message?e.message:e));}" +
-                "console.log('[HandoffBoot] redirect to '+" + jUrl + ");" +
+                "}catch(e){}" +
                 "window.location.replace(" + jUrl + ");" +
                 "})();</script></body></html>";
     }

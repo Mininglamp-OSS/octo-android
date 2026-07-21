@@ -29,7 +29,6 @@ import android.widget.CompoundButton
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import com.alibaba.fastjson.JSONObject
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
@@ -47,20 +46,12 @@ import com.chat.uikit.chat.msgmodel.CardSenderClassifier
 import com.chat.uikit.chat.msgmodel.CardSenderTrust
 import com.chat.uikit.chat.msgmodel.InteractiveCardActionService
 import com.chat.uikit.chat.msgmodel.InteractiveCardDecision
-import com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer
-import com.chat.uikit.chat.msgmodel.OctoHostConfig
 import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent
-import com.chat.uikit.chat.provider.card.CardAction
 import com.chat.uikit.chat.provider.card.CardActionDispatcher
+import com.chat.uikit.chat.provider.card.CardRenderSpec
+import com.chat.uikit.chat.provider.card.InteractiveCardRenderer
 import com.chat.uikit.chat.provider.card.MessageContext
 import com.chat.uikit.message.MsgModel
-import io.adaptivecards.objectmodel.AdaptiveCard
-import io.adaptivecards.objectmodel.BaseActionElement
-import io.adaptivecards.objectmodel.BaseCardElement
-import io.adaptivecards.objectmodel.OpenUrlAction
-import io.adaptivecards.renderer.AdaptiveCardRenderer
-import io.adaptivecards.renderer.RenderedAdaptiveCard
-import io.adaptivecards.renderer.actionhandler.ICardActionHandler
 import java.lang.ref.WeakReference
 
 /**
@@ -117,6 +108,14 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
     /** 业务分派器——所有副作用（HTTP / WebView / clipboard / toast / timeout）由 Provider 注入。 */
     private val dispatcher: CardActionDispatcher by lazy { createDispatcher() }
+
+    /** 按内容缓存 rendered view 的渲染层，避开滚动时反复走 SWIG 反射。 */
+    private val renderer: InteractiveCardRenderer by lazy {
+        InteractiveCardRenderer(
+            dispatcher = dispatcher,
+            stylize = ::stylizeInteractiveElements,
+        )
+    }
 
     private fun createDispatcher(): CardActionDispatcher {
         val appCtx: Context = WKBaseApplication.getInstance().context
@@ -274,53 +273,26 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         }
         val cardDecision = decision as InteractiveCardDecision.Decision.Card
 
-        try {
-            // 渲染前 sanitize —— 对齐 iOS `WKACardRenderer.wk_sanitizeNode`：
-            //  · Input.Toggle 缺 title 补上（AC C++ ObjectModel schema 严格，不 sanitize 整卡挂）
-            //  · Input.ChoiceSet 一律 style=expanded（绕开 SDK compact 下拉的样式 & 生命周期问题）
-            // 保留原 cardJson 字符串给日志去重签名用（sanitize 后 hash 会变，签名基线不稳）。
-            val sanitizedCard = InteractiveCardSanitizer.sanitize(cardObj)
-            val cardJsonForSdk = sanitizedCard?.toString() ?: cardJson
-            val parseResult = AdaptiveCard.DeserializeFromString(cardJsonForSdk, model.cardVersion)
-            val adaptiveCard = parseResult.GetAdaptiveCard()
-            val fragmentManager = (context as? FragmentActivity)?.supportFragmentManager
-                ?: throw IllegalStateException("context is not a FragmentActivity")
-            val rendered: RenderedAdaptiveCard = AdaptiveCardRenderer.getInstance().render(
-                context,
-                fragmentManager,
-                adaptiveCard,
-                SdkActionAdapter(MessageContext(wkMsg = wkMsg, allowSubmit = cardDecision.interactive)),
-                OctoHostConfig.get(context)
-            )
-            // SDK 输出的 rendered.view 是 wrap_content 宽度（表现为不铺满盒子，正文被挤换行）。
-            // 对齐 web `.wk-interactive-card-sdk > .ac-adaptiveCard { width: 100% }`：强制 match_parent。
-            container.addView(rendered.view)
-            rendered.view.layoutParams = rendered.view.layoutParams?.apply {
-                width = LayoutParams.MATCH_PARENT
-            } ?: FrameLayout.LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.WRAP_CONTENT
-            )
-            // SDK 用 android.widget.Button（Material 默认 minWidth=88dp、minHeight=48dp、有阴影），
-            // 在窄气泡里的表现是：按钮把 ColumnSet 的 auto 列撑到 264px，反过来把左侧正文列压到只剩
-            // 170px 换行严重。移动端也不需要桌面级点击目标（44dp 也够）。post-walk 后置改造，让所有
-            // Action 按钮变成"胶囊"样式：min-height 28dp、去 minWidth、textSize 13sp、无阴影、
-            // 胶囊 drawable、accent 文字色。对齐 web `.ac-pushButton` 视觉。
-            // 同时：ChoiceSet 的 RadioButton 默认 0px 间距，4 个选项贴在一起像"连体胶囊"，
-            // 需要给每个 CompoundButton 加 4dp bottom margin 分开。
-            stylizeInteractiveElements(rendered.view)
-            container.visibility = View.VISIBLE
-            fallback.visibility = View.GONE
-        } catch (t: Throwable) {
-            // 解析失败按原始 cardJson 的 hash 去重打印，避免同一张挂卡在 RecyclerView 复用/滚动时刷屏。
-            // 用未 sanitize 的 cardJson 做签名，服务端 payload 不变 → hash 稳定 → 全 App 生命周期只打一次。
-            val sig = cardJson.hashCode()
-            if (parseFailLoggedSigs.add(sig)) {
-                Log.w(TAG, "AdaptiveCard 渲染失败(首打)：${t.message} payload=$cardJson", t)
-            } else {
-                Log.d(TAG, "AdaptiveCard 渲染失败(已记录 sig=$sig)：${t.message}")
+        // 渲染委托给 InteractiveCardRenderer：内部按 (cardJsonHash, cardVersion, isDark)
+        // 缓存 rendered view，滚动/多消息同 payload 时复用避开 SDK 重渲。sanitize / parse /
+        // SDK render / stylize 全部封装在 renderer 里，Provider 只关心业务态和视觉复位。
+        val spec = CardRenderSpec(cardJson = cardJson, cardVersion = model.cardVersion)
+        val ctx = MessageContext(wkMsg = wkMsg, allowSubmit = cardDecision.interactive)
+        when (val r = renderer.renderInto(container, spec, ctx, context)) {
+            is InteractiveCardRenderer.Result.Success -> {
+                container.visibility = View.VISIBLE
+                fallback.visibility = View.GONE
             }
-            showFallback(container, fallback, plain)
+            is InteractiveCardRenderer.Result.Fallback -> {
+                // 解析失败按 cardJson.hashCode 去重打印，避免同一张挂卡在 RecyclerView 复用 /
+                // 滚动时刷屏。sig 稳定 → 全 App 生命周期只打一次完整 payload。
+                if (parseFailLoggedSigs.add(r.cardJsonHash)) {
+                    Log.w(TAG, "AdaptiveCard 渲染失败(首打)：${r.reason} payload=$cardJson")
+                } else {
+                    Log.d(TAG, "AdaptiveCard 渲染失败(已记录 sig=${r.cardJsonHash})：${r.reason}")
+                }
+                showFallback(container, fallback, plain)
+            }
         }
 
         // 若消息仍在 submitting（view 被回收后重新 bind 回同一条消息），把 loading 遮罩加回。
@@ -434,74 +406,10 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     }
 
     /**
-     * SDK ↔ dispatcher 边界适配器：把 [BaseActionElement] 展平成纯 Kotlin [CardAction]
-     * 再交给 [CardActionDispatcher]。SDK 类型（BaseActionElement / RenderedAdaptiveCard /
-     * OpenUrlAction 等 SWIG C++ binding）**只出现在这里**，dispatcher 与其单测都不依赖。
-     *
-     * 每次 [setData] 都是新实例（rendered.view 也是新的），无生命周期泄漏问题。C3 引入
-     * view 缓存后，这里会改成读 view.tag 拿动态 [MessageContext]（当前先把 ctx 直接捕获）。
+     * SDK ↔ dispatcher 边界适配器已经下沉到
+     * [com.chat.uikit.chat.provider.card.InteractiveCardRenderer]（作为 ProxyHandler +
+     * adaptSdkAction 静态方法），此处不再持有 SDK 类型。
      */
-    private inner class SdkActionAdapter(
-        private val ctx: MessageContext,
-    ) : ICardActionHandler {
-
-        override fun onAction(
-            actionElement: BaseActionElement?,
-            renderedAdaptiveCard: RenderedAdaptiveCard?
-        ) {
-            val action = actionElement ?: return
-            val type = action.GetElementTypeString().orEmpty()
-            val actionId = action.GetId().orEmpty()
-            Log.d(TAG, "onAction: id=$actionId type=$type allowSubmit=${ctx.allowSubmit}")
-            val cardAction: CardAction = when (type) {
-                "Action.OpenUrl" -> {
-                    // OpenUrlAction.dynamic_cast 是 SDK SWIG 提供的向下转型入口。
-                    val url = OpenUrlAction.dynamic_cast(action)?.GetUrl().orEmpty()
-                    // 二次 isSafeUrl 校验（防 javascript:/file:/intent: 等）。validateOcto 已在 render 前
-                    // 拒绝含非法 URL 的整卡，这里是最后一道防线（含未来某天放宽 profile 后的 hedge）。
-                    if (!InteractiveCardDecision.isSafeUrl(url)) {
-                        Log.w(TAG, "Action.OpenUrl url 不合法，忽略: $url")
-                        return
-                    }
-                    CardAction.OpenUrl(actionId = actionId, url = url)
-                }
-                "Action.Submit" -> {
-                    // 收集用户输入。SDK 已在渲染层做过 required/validation，未通过时对应 key 缺失。
-                    // 平台类型的 String? 值统一 coerce 成 ""，保持 CardAction.Submit 契约的非空 Map。
-                    val inputs: Map<String, String> = renderedAdaptiveCard?.inputs
-                        ?.mapValues { (_, v) -> v ?: "" }
-                        ?: emptyMap()
-                    CardAction.Submit(actionId = actionId, inputs = inputs)
-                }
-                "Action.CopyToClipboard" -> {
-                    // AC SDK 的 BaseActionElement 没有内建 text 字段，需要通过 AdditionalProperties 拿
-                    // （对齐 SDK 自定义 action 的通用取值路径）。
-                    // AC 3.7.0 Android SDK 默认不认 Action.CopyToClipboard，需要通过 CardActionParserRegistrar
-                    // 注册（见 WKUIKitApplication.onCreate）后按钮才会出现，否则此分支永远不触发。
-                    CardAction.Copy(actionId = actionId, text = extractCopyText(action))
-                }
-                // Action.ToggleVisibility 由 SDK 内部处理（自动翻转 isVisible），Provider 不介入。
-                // Action.ShowCard / ExecuteAction 走 SDK 内部展开，此处不特殊处理。
-                else -> return
-            }
-            dispatcher.dispatch(ctx, cardAction)
-        }
-
-        override fun onMediaPlay(m: BaseCardElement?, r: RenderedAdaptiveCard?) {}
-        override fun onMediaStop(m: BaseCardElement?, r: RenderedAdaptiveCard?) {}
-
-        /** 从 BaseActionElement 的 AdditionalProperties 里取 text 字段（自定义 action 的通用取值路径）。 */
-        private fun extractCopyText(action: BaseActionElement): String {
-            return try {
-                val props = action.GetAdditionalProperties()?.toString().orEmpty()
-                if (props.isBlank()) return ""
-                org.json.JSONObject(props).optString("text", "")
-            } catch (t: Throwable) {
-                Log.w(TAG, "解析 CopyToClipboard.text 失败: ${t.message}")
-                ""
-            }
-        }
-    }
 
     /** 应用 submitting UI：cardBox alpha=0.6 + overlay 拦截触摸。 */
     private fun applySubmittingUI(cardBox: View, overlay: View) {

@@ -25,7 +25,7 @@ public class ThreadEntity implements Parcelable {
     public String name;
     public String creator_uid;
     public String creator_name;
-    public int status; // 0=active, 1=archived, 2=deleted
+    public int status; // 1=active, 2=archived, 3=deleted
     public int member_count;
     public int message_count;
     public String source_message_id;

@@ -48,22 +48,36 @@
                 <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
             </LinearLayout>
 
-            <!-- 分组标题 -->
-            <TextView
-                android:id="@+id/sectionTitleTv"
+            <!-- Segment tab: 活跃 / 已归档 -->
+            <FrameLayout
+                android:id="@+id/segmentTabContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingHorizontal="15dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
-                android:textColor="@color/color999"
-                android:textSize="13sp" />
+                android:layout_marginHorizontal="15dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="8dp" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerView"
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/transparent" />
+                android:layout_height="match_parent">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/transparent" />
+
+                <TextView
+                    android:id="@+id/emptyTv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal|top"
+                    android:layout_marginTop="80dp"
+                    android:paddingHorizontal="15dp"
+                    android:textColor="@color/color999"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
     </com.scwang.smart.refresh.layout.SmartRefreshLayout>

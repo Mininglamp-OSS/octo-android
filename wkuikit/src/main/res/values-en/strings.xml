@@ -402,6 +402,10 @@
 
     <!-- i18n: Thread list -->
     <string name="joined_threads_count">Joined Threads - %d</string>
+    <string name="str_thread_tab_active">Active</string>
+    <string name="str_thread_tab_archived">Archived</string>
+    <string name="str_no_active_threads">No active threads</string>
+    <string name="str_no_archived_threads">No archived threads</string>
 
     <!-- i18n: My fragment -->
     <string name="short_no_format">%1$s ID: %2$s</string>

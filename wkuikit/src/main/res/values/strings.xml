@@ -427,6 +427,10 @@
     <string name="str_archive_thread">归档子区</string>
     <string name="str_unarchive_thread">取消归档</string>
     <string name="str_delete_thread">删除子区</string>
+    <string name="str_thread_tab_active">活跃</string>
+    <string name="str_thread_tab_archived">已归档</string>
+    <string name="str_no_active_threads">暂无活跃子区</string>
+    <string name="str_no_archived_threads">暂无已归档子区</string>
     <string name="str_thread_members">子区成员</string>
     <string name="str_thread_archived_tip">该子区已归档</string>
     <string name="str_thread_deleted_tip">该子区已删除</string>

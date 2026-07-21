@@ -466,4 +466,25 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         /** 见 [cardBoxByMsgId]。dispatcher 回调仅针对"最近提交过"的消息，64 够用。 */
         const val CARD_BOX_CACHE_SIZE = 64
     }
+
+    /**
+     * ChatActivity 销毁时通过 [com.chat.base.msg.ChatAdapter.disposeProviders] 触发，释放：
+     *
+     *  - **renderer** LRU 里缓存的 SDK rendered View（每张 View 都隐含持有构造它时
+     *    的 Activity context，是本 Provider 最大的 Activity retention 面）
+     *  - **dispatcher** 的 pending Handler 回调（10s submit 超时 + 500 / 1500ms
+     *    extraSync 兜底），未 cancel 时 lambda 捕获链 Handler → runnable → dispatcher
+     *    → uiListener（anonymous inner）→ Provider → context 会短时持有 Activity
+     *  - 三个内部 LruCache（用 [LruCache.evictAll] 而不是 `.trimToSize(0)` 是因为
+     *    前者会调 entryRemoved 让 SDK view GC 更快）
+     *
+     * 幂等：同一 Provider 实例被 dispose 多次不会崩，只是重复 no-op。
+     */
+    override fun dispose() {
+        renderer.clear()
+        dispatcher.onDestroy()
+        lastRenderedFingerprint.evictAll()
+        parseFailLoggedSigs.evictAll()
+        cardBoxByMsgId.evictAll()
+    }
 }

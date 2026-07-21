@@ -214,7 +214,7 @@
 -keep class com.chat.base.emoji.EmojiManifestResp { *; }
 -keep class com.chat.base.emoji.EmojiManifestItem { *; }
 
-#---------AdaptiveCards SDK (SWIG native binding) — v1.3.6 交互式卡片 (type=17)---------
+#---------AdaptiveCards SDK (SWIG native binding) — 交互式卡片 type=17---------
 # wkuikit/libs/adaptivecards-3.7.0-teams.aar 是 Microsoft 编译的 SWIG C++ 绑定，
 # 1079 个 Java 类 + libadaptivecards-native-lib.so (arm64/armv7/x86)。JNI 侧按类名 /
 # 字段名 (swigCPtr / swigCMemOwn) / 枚举 SwigNext 反查 Java 侧，任何 R8 rename 都会让

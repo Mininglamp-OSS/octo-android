@@ -20,4 +20,16 @@
     <color name="tab_text_normal">#BBBBBD</color>
     <color name="tab_text_selected">#1C1C23</color>
     <color name="tab_bg">#f6f6f6</color>
+
+    <!-- ── Interactive Card (ContentType 17) 语义色 ────────────────────────────
+         AC HostConfig 的 containerStyles 六种风格独立底色 + subtle 文字（全局 color999
+         无夜间值，这里独立）。主文本 / stroke 复用 @color/colorDark / @color/dividerColor，
+         它们已有夜间覆盖。深色值见 values-night/color.xml。 -->
+    <color name="interactive_card_bg">#FFFFFF</color>
+    <color name="interactive_card_bg_emphasis">#EEEEF2</color>
+    <color name="interactive_card_bg_accent">#EBE8FE</color>
+    <color name="interactive_card_bg_good">#E7FBE9</color>
+    <color name="interactive_card_bg_warning">#FFF8E5</color>
+    <color name="interactive_card_bg_attention">#FFEBEB</color>
+    <color name="interactive_card_text_subtle">#999999</color>
 </resources>

@@ -290,7 +290,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 fragmentManager,
                 adaptiveCard,
                 SdkActionAdapter(MessageContext(wkMsg = wkMsg, allowSubmit = cardDecision.interactive)),
-                OctoHostConfig.get()
+                OctoHostConfig.get(context)
             )
             // SDK 输出的 rendered.view 是 wrap_content 宽度（表现为不铺满盒子，正文被挤换行）。
             // 对齐 web `.wk-interactive-card-sdk > .ac-adaptiveCard { width: 100% }`：强制 match_parent。

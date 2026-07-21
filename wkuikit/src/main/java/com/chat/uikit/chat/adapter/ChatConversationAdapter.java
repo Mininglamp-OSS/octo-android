@@ -214,6 +214,15 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     // 仅在 splitMode=true（sw >= 600dp 且 Activity Embedding 激活）时渲染选中背景。
     // 手机形态 splitMode=false → 维持无选中态行为。
     private boolean splitMode;
+
+    /**
+     * Per-bind selector 缓存：{@link #getRenderWkMsg} 命中同一 {@code WKUIConversationMsg}
+     * 引用时直接返回 {@link #_bindCacheDisplayMsg}，否则重算 + 存进来。两个 {@code convert()}
+     * 入口在方法首行清空，作用域限于单次 bind。RecyclerView bind 在主线程串行化，无需
+     * 加锁。命名以 `_` 前缀提示这是内部瞬态字段，不参与业务逻辑。
+     */
+    private WKUIConversationMsg _bindCacheItem;
+    private WKMsg _bindCacheDisplayMsg;
     private String selectedChannelId;
     private byte selectedChannelType;
     private String selectedThreadChannelId;
@@ -376,6 +385,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     @Override
     protected void convert(@NonNull final BaseViewHolder helper, ChatConversationMsg conversationMsg) {
+        // 单次 bind 内 selectDisplayMessage 复用缓存：一次 convert 会分别在 showTime /
+        // showContent / showCompactReminders 里各调一次 getRenderWkMsg，未缓存时
+        // BotFather 行每次触发 DB 分页 (5×200)。RecyclerView bind 在主线程串行化，
+        // 缓存作用域限于本次 convert 已足够；进 convert 先 clear，天然避免跨 bind
+        // 污染。
+        _bindCacheItem = null;
+        _bindCacheDisplayMsg = null;
         if (helper.getItemViewType() == TYPE_SECTION_HEADER) {
             convertSectionHeader(helper, conversationMsg);
             return;
@@ -632,6 +648,9 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
 
     @Override
     protected void convert(@NotNull BaseViewHolder baseViewHolder, ChatConversationMsg uiConversationMsg, @NotNull List<?> payloads) {
+        // 见 convert(helper, conversationMsg) 的注释：per-bind 缓存重置。
+        _bindCacheItem = null;
+        _bindCacheDisplayMsg = null;
         // Section header payload: 只刷新 badge/count，不重建整个 header
         if (baseViewHolder.getItemViewType() == TYPE_SECTION_HEADER) {
             for (Object p : payloads) {
@@ -1079,13 +1098,16 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         // 永远一致，避免位置和显示打架。
         // 跨 Space 污染判定由 selector 内部封装（对齐 iOS spaceFilteredLastMessage 返回 nil
         // 时 timestamp=0 → 不显示时间）。
-        long msgTimestamp = com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(item);
+        //
+        // Perf：先 getRenderWkMsg 拿 displayMsg 走 per-bind 缓存，再传给
+        // selectDisplayTimestamp 的 2-arg overload；SystemBot 分支复用 displayMsg 不
+        // 再重复 DB 分页（老实现 SystemBot 一次 bind 走 2 次 selectDisplayMessage）。
+        WKMsg displayMsg = getRenderWkMsg(item);
+        long msgTimestamp = com.chat.base.space.ConversationPreviewSelector.selectDisplayTimestamp(item, displayMsg);
         // editedAt 修正：selector 返回的 msg 若有 editedAt 则用之（保留原有 "已编辑" 时间语义）
-        if (msgTimestamp > 0) {
-            WKMsg displayMsg = com.chat.base.space.ConversationPreviewSelector.selectDisplayMessage(item);
-            if (displayMsg != null && displayMsg.remoteExtra != null && displayMsg.remoteExtra.editedAt != 0) {
-                msgTimestamp = displayMsg.remoteExtra.editedAt;
-            }
+        if (msgTimestamp > 0 && displayMsg != null
+                && displayMsg.remoteExtra != null && displayMsg.remoteExtra.editedAt != 0) {
+            msgTimestamp = displayMsg.remoteExtra.editedAt;
         }
         String chatTime = msgTimestamp > 0
                 ? WKTimeUtils.getInstance().getNewChatTime(msgTimestamp * 1000)
@@ -1160,7 +1182,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
      */
     @Nullable
     private WKMsg getRenderWkMsg(@Nullable WKUIConversationMsg item) {
-        return com.chat.base.space.ConversationPreviewSelector.selectDisplayMessage(item);
+        if (item == null) return null;
+        // == 是有意的引用比较：RecyclerView bind 串行且 convert() 入口已重置 cache，
+        // 同一 bind 内 uc 引用一定不变，跨 bind 一定不同实例（即便 clientMsgNo 相同）。
+        if (item == _bindCacheItem) return _bindCacheDisplayMsg;
+        WKMsg m = com.chat.base.space.ConversationPreviewSelector.selectDisplayMessage(item);
+        _bindCacheItem = item;
+        _bindCacheDisplayMsg = m;
+        return m;
     }
 
     /**

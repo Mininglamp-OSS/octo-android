@@ -137,7 +137,7 @@ public class ConversationPreviewSelectorTest {
     public void timestamp_nonSystemBot_nonSpaceMode_returnsRaw() {
         WKUIConversationMsg uc = makeUc("friend_uid", null);
         uc.lastMsgTimestamp = 3000L;
-        assertEquals(3000L, ConversationPreviewSelector.selectDisplayTimestamp(uc, null));
+        assertEquals(3000L, ConversationPreviewSelector.selectDisplayTimestamp(uc, (String) null));
     }
 
     @Test

@@ -170,18 +170,41 @@ public final class ConversationPreviewSelector {
      * 不会出现 "位置排到最新但显示旧时间" 或反之。
      */
     public static long selectDisplayTimestamp(@Nullable WKUIConversationMsg uc) {
-        return selectDisplayTimestamp(uc, SpaceFilter.getCurrentSpaceId());
+        return selectDisplayTimestamp(uc, SpaceFilter.getCurrentSpaceId(), null);
+    }
+
+    /**
+     * 复用外部已算好的 displayMsg —— 会话列表 bind 时 {@code showTime} 之外
+     * ({@code showContent} / {@code showCompactReminders}) 通常也需要 displayMsg，
+     * 传入这里就能避免 SystemBot 分支重复一次 DB 分页 (5×200)。
+     *
+     * @param cachedDisplayMsg 传 null 走默认 {@link #selectDisplayMessage} 内部计算；
+     *                         传非 null 时必须是同一 {@code uc} 与同一 currentSpaceId
+     *                         下的结果，否则语义漂移
+     */
+    public static long selectDisplayTimestamp(@Nullable WKUIConversationMsg uc,
+                                              @Nullable WKMsg cachedDisplayMsg) {
+        return selectDisplayTimestamp(uc, SpaceFilter.getCurrentSpaceId(), cachedDisplayMsg);
     }
 
     @VisibleForTesting
     static long selectDisplayTimestamp(@Nullable WKUIConversationMsg uc,
                                        @Nullable String currentSpaceId) {
+        return selectDisplayTimestamp(uc, currentSpaceId, null);
+    }
+
+    @VisibleForTesting
+    static long selectDisplayTimestamp(@Nullable WKUIConversationMsg uc,
+                                       @Nullable String currentSpaceId,
+                                       @Nullable WKMsg cachedDisplayMsg) {
         if (uc == null) return 0L;
         boolean inSpace = currentSpaceId != null && !currentSpaceId.isEmpty();
         boolean isPersonal = uc.channelType == WKChannelType.PERSONAL;
         boolean isSystemBot = SystemBotsFallback.isSystemBot(uc.channelID);
         if (inSpace && isPersonal && isSystemBot) {
-            WKMsg displayMsg = selectDisplayMessage(uc, currentSpaceId);
+            WKMsg displayMsg = cachedDisplayMsg != null
+                    ? cachedDisplayMsg
+                    : selectDisplayMessage(uc, currentSpaceId);
             return displayMsg != null ? displayMsg.timestamp : 0L;
         }
         return uc.lastMsgTimestamp;

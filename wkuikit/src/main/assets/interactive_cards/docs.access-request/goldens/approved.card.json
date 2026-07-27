@@ -1,0 +1,446 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "ColumnSet",
+      "spacing": "None",
+      "minHeight": "28px",
+      "verticalContentAlignment": "Center",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "ColumnSet",
+              "spacing": "None",
+              "columns": [
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "items": [
+                    {
+                      "type": "Image",
+                      "url": "https://api.iconify.design/lucide/file-text.svg?color=%236b7075",
+                      "altText": "文档",
+                      "width": "16px",
+                      "height": "16px",
+                      "spacing": "None"
+                    }
+                  ]
+                },
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "spacing": "Default",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "text": "文档申请",
+                      "size": "Small",
+                      "weight": "Bolder",
+                      "spacing": "None"
+                    }
+                  ]
+                },
+                {
+                  "type": "Column",
+                  "width": "stretch",
+                  "spacing": "Small",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "text": "·  Q3 产品规划",
+                      "size": "Small",
+                      "isSubtle": true,
+                      "spacing": "None"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "auto",
+          "items": [
+            {
+              "type": "ColumnSet",
+              "spacing": "None",
+              "columns": [
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "id": "octo-badge-result-request-state",
+                      "text": "已允许",
+                      "size": "Small",
+                      "weight": "Bolder",
+                      "color": "Good",
+                      "spacing": "None"
+                    }
+                  ]
+                },
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "spacing": "Default",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "id": "octo-badge-neutral-permission",
+                      "text": "协作权限",
+                      "size": "Small",
+                      "isSubtle": true,
+                      "spacing": "None"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Container",
+      "style": "accent",
+      "bleed": true,
+      "separator": true,
+      "spacing": "None",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "spacing": "None",
+          "selectAction": {
+            "type": "Action.OpenUrl",
+            "title": "打开文档",
+            "url": "https://example.com/documents/2026-q3-okr"
+          },
+          "columns": [
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "2026 Q3 OKR",
+                  "size": "ExtraLarge",
+                  "weight": "Bolder",
+                  "spacing": "None",
+                  "wrap": true
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "auto",
+              "spacing": "Small",
+              "items": [
+                {
+                  "type": "Image",
+                  "url": "https://api.iconify.design/lucide/external-link.svg?color=%236b7075",
+                  "altText": "在新窗口打开",
+                  "width": "13px",
+                  "height": "13px",
+                  "spacing": "None"
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "stretch",
+              "items": []
+            }
+          ]
+        },
+        {
+          "type": "RichTextBlock",
+          "spacing": "Small",
+          "inlines": [
+            {
+              "type": "TextRun",
+              "text": "张三 ",
+              "weight": "Bolder",
+              "size": "Medium"
+            },
+            {
+              "type": "TextRun",
+              "text": "申请成为此文档的协作者。",
+              "isSubtle": true,
+              "size": "Medium"
+            }
+          ]
+        },
+        {
+          "type": "ColumnSet",
+          "spacing": "Medium",
+          "verticalContentAlignment": "Center",
+          "columns": [
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "Image",
+                  "url": "https://api.dicebear.com/9.x/initials/svg?seed=Zhang%20San&backgroundColor=f2f3f4&fontSize=40",
+                  "altText": "张三",
+                  "style": "Person",
+                  "width": "28px",
+                  "height": "28px",
+                  "spacing": "None"
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "stretch",
+              "spacing": "Default",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "张三",
+                  "weight": "Bolder",
+                  "size": "Small",
+                  "spacing": "None"
+                },
+                {
+                  "type": "ColumnSet",
+                  "spacing": "None",
+                  "columns": [
+                    {
+                      "type": "Column",
+                      "width": "auto",
+                      "items": [
+                        {
+                          "type": "Image",
+                          "url": "https://api.iconify.design/lucide/user-round.svg?color=%236b7075",
+                          "altText": "",
+                          "width": "12px",
+                          "height": "12px",
+                          "spacing": "None"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Column",
+                      "width": "auto",
+                      "spacing": "Small",
+                      "items": [
+                        {
+                          "type": "TextBlock",
+                          "text": "申请人",
+                          "size": "Small",
+                          "isSubtle": true,
+                          "spacing": "None"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "auto",
+              "verticalContentAlignment": "Bottom",
+              "items": [
+                {
+                  "type": "ColumnSet",
+                  "spacing": "None",
+                  "columns": [
+                    {
+                      "type": "Column",
+                      "width": "auto",
+                      "items": [
+                        {
+                          "type": "Image",
+                          "url": "https://api.iconify.design/lucide/clock-3.svg?color=%236b7075",
+                          "altText": "",
+                          "width": "13px",
+                          "height": "13px",
+                          "spacing": "None"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Column",
+                      "width": "auto",
+                      "spacing": "Small",
+                      "items": [
+                        {
+                          "type": "TextBlock",
+                          "text": "2026-07-16 11:00",
+                          "size": "Small",
+                          "isSubtle": true,
+                          "spacing": "None"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Container",
+          "style": "emphasis",
+          "spacing": "Large",
+          "items": [
+            {
+              "type": "ColumnSet",
+              "spacing": "None",
+              "columns": [
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "items": [
+                    {
+                      "type": "Image",
+                      "url": "https://api.iconify.design/lucide/message-square.svg?color=%23555b61",
+                      "altText": "",
+                      "width": "18px",
+                      "height": "18px",
+                      "spacing": "None"
+                    }
+                  ]
+                },
+                {
+                  "type": "Column",
+                  "width": "stretch",
+                  "spacing": "Default",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "text": "申请原因",
+                      "size": "Small",
+                      "weight": "Bolder",
+                      "spacing": "None"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "希望加入协作，以补充 KR3 数据。",
+                      "size": "Small",
+                      "isSubtle": true,
+                      "spacing": "Small",
+                      "wrap": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "Container",
+          "style": "good",
+          "spacing": "Large",
+          "items": [
+            {
+              "type": "ColumnSet",
+              "spacing": "None",
+              "columns": [
+                {
+                  "type": "Column",
+                  "width": "auto",
+                  "items": [
+                    {
+                      "type": "Container",
+                      "style": "default",
+                      "spacing": "None",
+                      "items": [
+                        {
+                          "type": "Image",
+                          "url": "https://api.iconify.design/lucide/check.svg?color=%2341cd59",
+                          "altText": "已允许",
+                          "width": "16px",
+                          "height": "16px",
+                          "spacing": "None"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Column",
+                  "width": "stretch",
+                  "spacing": "Default",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "text": "申请人已获得所申请的文档权限。",
+                      "size": "Small",
+                      "weight": "Bolder",
+                      "spacing": "None",
+                      "wrap": true
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "李四 · 2026-07-16 11:08",
+                      "size": "Small",
+                      "isSubtle": true,
+                      "spacing": "Small"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Container",
+      "style": "emphasis",
+      "bleed": true,
+      "separator": true,
+      "spacing": "None",
+      "items": [
+        {
+          "type": "ColumnSet",
+          "spacing": "None",
+          "columns": [
+            {
+              "type": "Column",
+              "width": "stretch",
+              "items": [
+                {
+                  "type": "TextBlock",
+                  "text": "处理于 11:08",
+                  "size": "Small",
+                  "isSubtle": true,
+                  "spacing": "None"
+                }
+              ]
+            },
+            {
+              "type": "Column",
+              "width": "auto",
+              "items": [
+                {
+                  "type": "ActionSet",
+                  "spacing": "None",
+                  "actions": [
+                    {
+                      "type": "Action.OpenUrl",
+                      "id": "view_document",
+                      "title": "查看详情",
+                      "url": "https://example.com/documents/2026-q3-okr",
+                      "iconUrl": "https://api.iconify.design/lucide/eye.svg?color=%23555b61"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

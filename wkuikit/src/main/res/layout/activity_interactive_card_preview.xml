@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 交互式卡片预览页布局。DayNight 主题下 android:background 自动跟随明暗。
+     背景是 colorF5F5F5（浅色）/ colorMain (夜间) —— 复用现成 token，跟 ChatActivity 感觉靠近。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/previewRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
+    android:orientation="vertical">
+
+    <!-- Toolbar：明暗切换 + 气泡侧切换（RECV = 群接收 / SEND = 发送 / PERSONAL = 私聊接收）+ 宽度显示 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?android:attr/windowBackground"
+        android:elevation="2dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+        <Button
+            android:id="@+id/toggleThemeBtn"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="切换深色"
+            android:textSize="13sp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="10dp" />
+
+        <Button
+            android:id="@+id/toggleSideBtn"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RECV 群接收"
+            android:textSize="13sp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="10dp" />
+
+        <TextView
+            android:id="@+id/widthLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/previewList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingVertical="12dp" />
+</LinearLayout>

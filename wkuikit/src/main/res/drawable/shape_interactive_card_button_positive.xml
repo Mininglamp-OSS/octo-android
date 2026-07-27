@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Action.style="positive" 按钮：深色底 (colorDark = #313131) + 999dp 圆角胶囊。
+     文字/图标在 code 里设成白色（图标 URL 已内嵌 white #FFFFFF）。pressed 略变深 (#1E1E1E)。
+     对齐 web .ac-pushButton.ac-positive 视觉 —— 主 CTA。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#1E1E1E" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#313131" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</selector>

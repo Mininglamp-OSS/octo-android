@@ -12,23 +12,16 @@ package com.chat.uikit.chat.provider
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.LruCache
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroup.LayoutParams
-import android.view.ViewGroup.MarginLayoutParams
-import android.widget.Button
-import android.widget.CompoundButton
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.alibaba.fastjson.JSONObject
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
@@ -50,6 +43,7 @@ import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent
 import com.chat.uikit.chat.provider.card.CardActionDispatcher
 import com.chat.uikit.chat.provider.card.CardRenderSpec
 import com.chat.uikit.chat.provider.card.InteractiveCardRenderer
+import com.chat.uikit.chat.provider.card.InteractiveCardStylizer
 import com.chat.uikit.chat.provider.card.MessageContext
 import com.chat.uikit.message.MsgModel
 import java.lang.ref.WeakReference
@@ -126,10 +120,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
     /** 按内容缓存 rendered view 的渲染层，避开滚动时反复走 SWIG 反射。 */
     private val renderer: InteractiveCardRenderer by lazy {
-        InteractiveCardRenderer(
-            dispatcher = dispatcher,
-            stylize = ::stylizeInteractiveElements,
-        )
+        InteractiveCardRenderer(dispatcher = dispatcher)
     }
 
     private fun createDispatcher(): CardActionDispatcher {
@@ -368,69 +359,9 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     }
 
     /**
-     * 后置改造 AC SDK 渲染出的交互控件，让窄气泡内视觉协调：
-     *
-     * 1. **Action 按钮**（Submit/OpenUrl/ToggleVisibility/ShowCard 都是 android.widget.Button）：
-     *    Material 默认 minWidth=88dp、minHeight=48dp、有阴影，桌面级尺寸。改成胶囊：
-     *    min-height 28dp、去 minWidth、textSize 13sp、wrap_content 宽、无阴影、accent 文字色。
-     * 2. **ChoiceSet RadioButton/CheckBox**：SDK 默认 0px 垂直间距，多选项贴一起像"连体胶囊"，
-     *    每个加 4dp bottom margin 分开。
-     *
-     * 不注册自定义 ActionElementRenderer 的原因：Submit / OpenUrl / ToggleVisibility / ShowCard
-     * 有各自的默认 renderer 分支，逐一覆盖工作量大且易漏。post-walk 一次覆盖全部类型，
-     * 副作用可控（rendered.view 每次 setData 都是新对象，不需要撤销）。
+     * 后置视觉改造已抽到 [com.chat.uikit.chat.provider.card.InteractiveCardStylizer]，
+     * Provider 与预览页共用。此处 renderer 构造时通过 method reference 挂上。
      */
-    private fun stylizeInteractiveElements(root: View) {
-        val ctx = context ?: return
-        val accent = ContextCompat.getColor(ctx, com.chat.base.R.color.colorAccent)
-        val btnPadH = dp(12f)
-        val btnPadV = dp(4f)
-        val btnMinH = dp(28f)
-        val choiceGap = dp(4f)
-        walkTree(root) { v ->
-            when {
-                // RadioButton / CheckBox 归 CompoundButton，先判 Button 会被覆盖（Button 是 TextView 子类，
-                // 但 RadioButton 不是 Button）。CompoundButton 优先判定，避免落到 Button 分支。
-                v is CompoundButton -> {
-                    val lp = v.layoutParams
-                    if (lp is MarginLayoutParams) {
-                        lp.bottomMargin = choiceGap
-                        v.layoutParams = lp
-                    }
-                }
-                v is Button -> {
-                    v.minWidth = 0
-                    v.minimumWidth = 0
-                    v.minHeight = btnMinH
-                    v.minimumHeight = btnMinH
-                    v.setPadding(btnPadH, btnPadV, btnPadH, btnPadV)
-                    v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    v.setTextColor(accent)
-                    v.setAllCaps(false)
-                    v.setBackgroundResource(R.drawable.shape_interactive_card_button)
-                    v.elevation = 0f
-                    v.stateListAnimator = null
-                    v.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-                    v.layoutParams?.apply {
-                        height = LayoutParams.WRAP_CONTENT
-                        width = LayoutParams.WRAP_CONTENT
-                    }
-                }
-            }
-        }
-    }
-
-    private fun walkTree(view: View, visit: (View) -> Unit) {
-        visit(view)
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) walkTree(view.getChildAt(i), visit)
-        }
-    }
-
-    private fun dp(value: Float): Int {
-        val density = context.resources.displayMetrics.density
-        return (value * density + 0.5f).toInt()
-    }
 
     /**
      * SDK ↔ dispatcher 边界适配器已经下沉到

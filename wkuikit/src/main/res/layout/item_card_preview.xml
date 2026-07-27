@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 预览页单行布局：模板/状态标签 + 一比一复用聊天气泡骨架（chat_item_interactive_card）。
+     · 外层 FrameLayout 提供 gravity 支持（左/右侧对齐模拟发/收）。
+     · include chat_item_interactive_card：Activity 在 bind 时按 getViewWidth() 公式把 cardView.width 设成
+       真实气泡宽度，保证预览效果 = 聊天窗口效果。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="8dp">
+
+    <TextView
+        android:id="@+id/previewRowLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="2dp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="11sp"
+        tools:ignore="MissingDefaultResource" xmlns:tools="http://schemas.android.com/tools" />
+
+    <FrameLayout
+        android:id="@+id/previewBubbleSlot"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <include layout="@layout/chat_item_interactive_card" />
+    </FrameLayout>
+</LinearLayout>

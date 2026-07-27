@@ -275,6 +275,112 @@ class InteractiveCardSanitizerTest {
         assertEquals("订阅", toggle.getString("label"))
     }
 
+    // ─────────────────────────────── P1-C: ColumnSet 拆行 ───────────────────────────────
+    // 覆盖 stackColumnSetForMobileActions 的三条路径：正例拆行 / 单 button 不拆 / 无 ActionSet 不拆。
+    // 关键动机：SDK 3.7.0 在 auto column 装 >=2 button 的 ActionSet 时，若 ColumnSet 宽度不
+    // 够会**整体 skip auto column 的渲染**（观测：216dp 群接收下 pending 卡 3 按钮消失）。
+    // Sanitizer 主动把这类 ColumnSet 转成 Container(vertical stack)，让 ActionSet 独占一行。
+
+    @Test
+    fun `stackColumnSet transforms to Container when ActionSet has multiple actions`() {
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "查看详情") })
+                put(JSONObject().apply { put("type", "Action.ToggleVisibility"); put("title", "拒绝") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "允许") })
+            })
+        }
+        val textBlock = JSONObject().apply {
+            put("type", "TextBlock"); put("text", "申请于 11:03")
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("verticalContentAlignment", "Center")
+            put("spacing", "None")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply { put(textBlock) })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("命中拆行：type 应改成 Container", "Container", out.getString("type"))
+        assertFalse("columns 字段应删除", out.has("columns"))
+        assertFalse("verticalContentAlignment 应删除（Container 无此属性）", out.has("verticalContentAlignment"))
+        assertEquals("spacing 应保留", "None", out.getString("spacing"))
+
+        val items = out.getJSONArray("items")
+        assertEquals("两个 column 各一个 item 平铺 → 2 项", 2, items.length())
+        assertEquals("第一项应为 TextBlock", "TextBlock", items.getJSONObject(0).getString("type"))
+        assertEquals("申请于 11:03", items.getJSONObject(0).getString("text"))
+        assertEquals("第二项应为 ActionSet", "ActionSet", items.getJSONObject(1).getString("type"))
+        assertEquals("ActionSet 的 3 个 actions 保留", 3, items.getJSONObject(1).getJSONArray("actions").length())
+    }
+
+    @Test
+    fun `stackColumnSet preserves ColumnSet when ActionSet has only one action`() {
+        // approved/rejected 卡的底部只有 1 个 "查看详情"，SDK 装得下不需要拆
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "查看详情") })
+            })
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "处理于 11:08") })
+                    })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("未命中拆行：type 应保持 ColumnSet", "ColumnSet", out.getString("type"))
+        assertTrue("columns 字段应保留", out.has("columns"))
+        assertFalse("items 字段应不存在", out.has("items"))
+    }
+
+    @Test
+    fun `stackColumnSet preserves ColumnSet when no ActionSet inside`() {
+        // 头部 header ColumnSet：无 ActionSet，纯 TextBlock，不该拆
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "文档申请") })
+                    })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "待你处理") })
+                    })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("无 ActionSet：type 应保持 ColumnSet", "ColumnSet", out.getString("type"))
+        assertTrue(out.has("columns"))
+    }
+
     // ─────────────────────────────── 辅助 ───────────────────────────────
 
     /** 便捷：包一层 AdaptiveCard body，返回 sanitize 后的第一个 element。 */

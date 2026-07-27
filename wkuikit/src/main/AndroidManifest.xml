@@ -173,5 +173,23 @@
             android:name="com.chat.uikit.summary.confirm.SmartSummaryConfirmActivity"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!--
+          AdaptiveCard 模板预览页（debug 专用；生产 App 不暴露入口）。
+          · 用 DayNight 主题：AppCompatDelegate.setDefaultNightMode 才能触发 recreate 让 OctoHostConfig 换色板。
+          · exported=false：Activity 只允许 App 内启动（长按 About 页版本号入口触发）；
+            release 包里 Activity onCreate 首行还有 BuildConfig.DEBUG gate 二次拦截，双重保险。
+          · intent-filter 保留 MAIN/DEFAULT：为未来加 debug 桌面入口 / adb 拉起（debug 变体经临时配置）备用。
+        -->
+        <activity
+            android:name="com.chat.uikit.chat.preview.InteractiveCardPreviewActivity"
+            android:exported="false"
+            android:label="AdaptiveCard 预览"
+            android:theme="@style/Theme.AppCompat.DayNight">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>

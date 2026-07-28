@@ -42,9 +42,10 @@ import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMsg
 
 /**
- * AdaptiveCard 模板可视化预览页（**debug-only**，通过 `adb shell am start` 拉起）：
+ * AdaptiveCard 模板可视化预览页（**debug-only**）。入口：debug 包在「关于」页长按版本号拉起。
+ * 也可用 adb 直接启动（applicationId 见 local.properties 的 `applicationId`，默认 `com.example.app.octo`）：
  * ```
- * adb shell am start -n com.chat.demo/com.chat.uikit.chat.preview.InteractiveCardPreviewActivity
+ * adb shell am start -n <applicationId>/com.chat.uikit.chat.preview.InteractiveCardPreviewActivity
  * ```
  *
  * ## 设计目标

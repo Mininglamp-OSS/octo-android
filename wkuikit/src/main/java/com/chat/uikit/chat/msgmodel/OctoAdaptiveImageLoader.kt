@@ -58,6 +58,19 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
     /** SVG 无 viewBox / documentSize 时的目标像素。128 覆盖窄气泡内出现的 16-40dp icon 全场景。 */
     private const val FALLBACK_SIZE_PX = 128
 
+    /**
+     * SVG 目标位图单边像素上限。卡片里都是图标级素材（≤40dp），512 已远超实际需求；
+     * clamp 是为了挡住畸形 SVG（如 `documentWidth="100000"`）——否则 [Bitmap.createBitmap]
+     * 会申请超大内存直接 OOM crash 掉整个会话页。
+     */
+    private const val MAX_SIZE_PX = 512
+
+    /**
+     * 单张图允许读入内存的字节上限（2MB）。图标 / 头像正常都是几 KB，加上限是防某个 URL
+     * 返回超大响应时 [readBytesCapped] 把整个 body 读进内存 OOM。超限即当加载失败降级空白。
+     */
+    private const val MAX_BYTES = 2 * 1024 * 1024
+
     /** 单元素判 SVG 时的头部读取字节数——够识别 `<?xml ...?><svg ...>` prelude。 */
     private const val SVG_SNIFF_HEAD_BYTES = 200
 
@@ -97,10 +110,30 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
             if (code !in 200..299) {
                 throw java.io.IOException("HTTP $code for $url")
             }
-            conn.inputStream.use { it.readBytes() }
+            conn.inputStream.use { readBytesCapped(it) }
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * 读到 [MAX_BYTES] 就抛 [java.io.IOException]，避免超大响应把整个 body 读进内存 OOM。
+     * 正常图标 / 头像几 KB，不会触到上限。
+     */
+    private fun readBytesCapped(input: java.io.InputStream): ByteArray {
+        val buffer = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read < 0) break
+            total += read
+            if (total > MAX_BYTES) {
+                throw java.io.IOException("响应超过 ${MAX_BYTES} 字节上限")
+            }
+            buffer.write(chunk, 0, read)
+        }
+        return buffer.toByteArray()
     }
 
     // ─────────────────────────────── SVG sniff & decode ───────────────────────────────
@@ -135,13 +168,14 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
 
     private fun pickSvgTargetSize(svg: SVG): Pair<Int, Int> {
         // documentWidth / Height 单位是 px 或依赖 SVG 声明；-1 表示没设。
+        // 一律 coerceIn(1, MAX_SIZE_PX)：下界防 0/负导致 createBitmap 抛异常，上界防畸形 SVG OOM。
         val dw = svg.documentWidth
         val dh = svg.documentHeight
         return when {
-            dw > 0f && dh > 0f -> Pair(dw.toInt().coerceAtLeast(1), dh.toInt().coerceAtLeast(1))
+            dw > 0f && dh > 0f -> Pair(dw.toInt().coerceIn(1, MAX_SIZE_PX), dh.toInt().coerceIn(1, MAX_SIZE_PX))
             svg.documentViewBox != null -> {
                 val vb = svg.documentViewBox
-                Pair(vb.width().toInt().coerceAtLeast(1), vb.height().toInt().coerceAtLeast(1))
+                Pair(vb.width().toInt().coerceIn(1, MAX_SIZE_PX), vb.height().toInt().coerceIn(1, MAX_SIZE_PX))
             }
             else -> Pair(FALLBACK_SIZE_PX, FALLBACK_SIZE_PX)
         }

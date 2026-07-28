@@ -30,9 +30,6 @@
     <!-- accent 曾用淡紫色 #EBE8FE 强调主区，跟 web 效果图比对后决定回归白底 —— web 视觉是
          「白底 + 分隔线区隔」而不是「主区色块」，Android 侧对齐后头部 / 主区 / 表单三段在
          视觉上通过 spacing + hairline 分层，不靠背景色。深色模式同理跟 default 一致。 -->
-    <!-- accent 曾用淡紫色 #EBE8FE 强调主区，跟 web 效果图比对后决定回归白底 —— web 视觉是
-         「白底 + 分隔线区隔」而不是「主区色块」，Android 侧对齐后头部 / 主区 / 表单三段在
-         视觉上通过 spacing + hairline 分层，不靠背景色。深色模式同理跟 default 一致。 -->
     <color name="interactive_card_bg_accent">#FFFFFF</color>
     <color name="interactive_card_bg_good">#E7FBE9</color>
     <color name="interactive_card_bg_warning">#FFF8E5</color>

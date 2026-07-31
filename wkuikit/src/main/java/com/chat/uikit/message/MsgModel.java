@@ -591,6 +591,28 @@ public class MsgModel extends WKBaseModel {
     }
 
     /**
+     * 补偿拉取一条交互卡消息的最新内容（含 content_edit / 终态帧）。
+     *
+     * <p>背景：{@code message/extra/sync} 是频道级增量游标（extra_version），客户端一旦漏接某条
+     * 消息的终态帧，游标又被其它更新的消息顶过去后，该帧就永久落在游标下方、再也拉不回来，
+     * 推理卡因此永久卡在"正在处理"。web/iOS 是从消息本身拿到权威 content_edit（全新拉取 / 实时接住）。
+     *
+     * <p>这里按 messageSeq 单条重拉 {@code message/channel/sync} —— 它内联返回该消息**当前**的
+     * message_extra（含最新 content_edit），绕开坏掉的增量游标，落库后自动重渲成终态。
+     */
+    public void refreshCardMessage(String channelID, byte channelType, long messageSeq) {
+        if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
+        // 只取目标 seq 这一条（start 作为独占锚点向上取第一条 = messageSeq），limit=1 把影响面
+        // 收到最小，不波及相邻消息。
+        syncChannelMsg(channelID, channelType, messageSeq - 1, messageSeq + 1, 1, 1, result -> {
+            if (result != null && WKReader.isNotEmpty(result.messages)) {
+                WKDbScheduler.get().scheduleDirect(() ->
+                        WKIM.getInstance().getMsgManager().saveSyncChannelMSGs(result.messages));
+            }
+        });
+    }
+
+    /**
      * 同步cmd消息
      *
      * @param max_message_seq 最大消息编号

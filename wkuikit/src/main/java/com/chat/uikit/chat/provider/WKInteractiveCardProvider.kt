@@ -98,6 +98,15 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     private val lastRenderedFingerprint = LruCache<String, Int>(FINGERPRINT_CACHE_SIZE)
 
     /**
+     * messageID → 已触发过"处理中卡片补偿重拉"，避免每次 bind/滚动重复请求。
+     *
+     * 处理中的推理卡可能是 [MsgModel.refreshCardMessage] 注释里说的"频道级 extra 游标永久
+     * 跳过终态帧"导致卡住的。首次进入视图补偿拉一次即可；终态帧落库后卡片不再是处理中，
+     * 自然不会再触发。[LruCache] 有界，淘汰老消息最坏是多补拉一次，可接受。
+     */
+    private val cardRefreshRequested = LruCache<String, Boolean>(CARD_BOX_CACHE_SIZE)
+
+    /**
      * 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。
      * [LruCache] 有界（64）；被淘汰后极小概率会重复打印，可接受。
      */
@@ -248,6 +257,18 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             showFallback(container, fallback, plain)
             resetCellBackground(parentView, uiChatMsgItemEntity, from)
             return
+        }
+
+        // ── 补偿漏接的终态帧 ──
+        // 处理中的推理卡可能是 message/extra/sync 频道级增量游标永久跳过终态帧导致卡住的
+        // （web/iOS 从消息本身拿权威内容，不受影响）。按 messageSeq 单条重拉 message/channel/sync
+        // 补回最新 content_edit（详见 MsgModel.refreshCardMessage）。每条消息一个 Provider
+        // 生命周期内最多触发一次，避免刷接口；终态帧落库后不再是处理中，自然不再触发。
+        if (messageId.isNotEmpty() && cardRefreshRequested.get(messageId) == null &&
+            (cardJson.contains("正在处理") || cardJson.contains("处理中"))
+        ) {
+            cardRefreshRequested.put(messageId, true)
+            MsgModel.getInstance().refreshCardMessage(wkMsg.channelID, wkMsg.channelType, wkMsg.messageSeq.toLong())
         }
 
         // ── 设备 API gate ──
@@ -444,6 +465,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         renderer.clear()
         dispatcher.onDestroy()
         lastRenderedFingerprint.evictAll()
+        cardRefreshRequested.evictAll()
         parseFailLoggedSigs.evictAll()
         cardBoxByMsgId.evictAll()
     }

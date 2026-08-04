@@ -215,6 +215,17 @@ class CardActionDispatcherTest {
     }
 
     @Test
+    fun `dispatch Submit timeout suppresses toast when card scrolled off screen (aligns iOS)`() {
+        uiListener.cardOnScreen = false
+        dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
+        val timeout = scheduler.entries.single { it.delayMs == 10_000L }
+        timeout.fire()
+        assertEquals("卡片滑出屏幕时不应弹超时提示", emptyList<String>(), toaster.messages)
+        assertEquals("但仍复位视觉，滑回来卡片正常", listOf("m1"), uiListener.ends)
+        assertFalse(dispatcher.isSubmitting("m1"))
+    }
+
+    @Test
     fun `dispatch Submit timeout calls onSubmitEnd to restore card visual`() {
         dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
         assertEquals(listOf("m1"), uiListener.starts)
@@ -341,6 +352,7 @@ class CardActionDispatcherTest {
     private class RecordingUiListener : CardActionDispatcher.SubmitUiListener {
         val starts = mutableListOf<String>()
         val ends = mutableListOf<String>()
+        var cardOnScreen = true
         override fun onSubmitStart(messageId: String) {
             starts += messageId
         }
@@ -348,6 +360,8 @@ class CardActionDispatcherTest {
         override fun onSubmitEnd(messageId: String) {
             ends += messageId
         }
+
+        override fun isCardOnScreen(messageId: String): Boolean = cardOnScreen
     }
 
     /**

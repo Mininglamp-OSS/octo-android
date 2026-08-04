@@ -1054,7 +1054,9 @@ public class MsgManager extends BaseManager {
             if (r == null) continue;
             // 仅用于拿归一化后的 channelID/channelType + messageID，不落 message 行。
             WKMsg wkMsg = WKSyncRecent2WKMsg(r);
-            if (wkMsg.type == WKMsgContentType.WK_INSIDE_MSG) continue;
+            // 仅补交互卡(type=17)的 extra。定向补拉的目标 seq 若已不存在于服务端，[seq,seq+1] 窗口
+            // 可能返回另一条非 type=17 消息，加此守卫避免误替换它的 message_extra 行（P2-5）。
+            if (wkMsg.type != 17) continue;
             if (!TextUtils.isEmpty(wkMsg.messageID)) msgIds.add(wkMsg.messageID);
             if (r.message_extra != null) {
                 msgExtraList.add(WKSyncExtraMsg2WKMsgExtra(wkMsg.channelID, wkMsg.channelType, r.message_extra));

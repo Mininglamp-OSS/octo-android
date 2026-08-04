@@ -59,9 +59,9 @@ object InteractiveCardDecision {
     // Action.Execute / ShowCard / 模板绑定 永不支持
     private val ACTIONS_FORBIDDEN = setOf("Action.Execute", "Action.ShowCard")
 
-    // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser，
-    // 白名单中不列出 → 服务端下发含 Copy 的卡整卡降级 plain（未知 action 走
-    // "unknown action" 分支拒绝）。
+    // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser。不列入白名单，但
+    // **不再毙整卡**——walkAction 对未知/不支持 action 容忍（对齐 iOS），由 InteractiveCardSanitizer
+    // 在喂 SDK 前剥掉该按钮，含 Copy 的卡正常渲染、仅复制按钮不出现。
 
     /** 渲染决策结果。 */
     sealed class Decision {

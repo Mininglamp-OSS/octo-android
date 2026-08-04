@@ -94,6 +94,8 @@ import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.msgitem.WKMsgItemViewManager;
+import com.chat.uikit.chat.provider.WKInteractiveCardProvider;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.space.SpaceChangedBroadcaster;
@@ -4479,6 +4481,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private synchronized void refreshMsg(WKMsg wkMsg) {
         if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq + " revoke=" + wkMsg.remoteExtra.revoke + " revoker=" + wkMsg.remoteExtra.revoker);
+        // type=17 交互卡：帧落库触发的消息刷新 = 提交闭环完成的 **bind-无关** 信号 → 清 submit
+        // 转圈态。避免卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 指纹比对漏清、导致提交明明成功却
+        // 误报"操作超时"（P2-3）。provider 是 content-type 单例，与渲染用的是同一实例。
+        if (wkMsg.type == WKContentType.interactiveCard && !TextUtils.isEmpty(wkMsg.messageID)) {
+            Object p = WKMsgItemViewManager.getInstance().getChatItemProviderList().get(WKContentType.interactiveCard);
+            if (p instanceof WKInteractiveCardProvider) {
+                ((WKInteractiveCardProvider) p).onCardMessageRefreshed(wkMsg.messageID);
+            }
+        }
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
         List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
         chatAdapter.refreshReplyMsg(wkMsg);

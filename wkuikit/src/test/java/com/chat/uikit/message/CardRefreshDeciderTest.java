@@ -53,36 +53,43 @@ public class CardRefreshDeciderTest {
 
     @Test
     public void progressAlwaysResets() {
-        assertEquals(Decision.PROGRESS_RESET, CardRefreshDecider.decide(true, 0, MAX));
+        assertEquals(Decision.PROGRESS_RESET, CardRefreshDecider.decide(true, false, 0, MAX));
         assertEquals("有进展时哪怕之前无进展次数很高也应 reset 而非注销",
-                Decision.PROGRESS_RESET, CardRefreshDecider.decide(true, MAX + 100, MAX));
+                Decision.PROGRESS_RESET, CardRefreshDecider.decide(true, false, MAX + 100, MAX));
+    }
+
+    @Test
+    public void midStreamFrameResetsInsteadOfConverging() {
+        // transient 中间帧（无进展但仍在流式）→ 不计入收敛，无论之前无进展次数多高都不注销。
+        assertEquals(Decision.MIDSTREAM_RESET, CardRefreshDecider.decide(false, true, 0, MAX));
+        assertEquals(Decision.MIDSTREAM_RESET, CardRefreshDecider.decide(false, true, MAX + 100, MAX));
     }
 
     @Test
     public void unproductiveBelowMaxContinues() {
-        assertEquals(Decision.UNPRODUCTIVE_CONTINUE, CardRefreshDecider.decide(false, 0, MAX));
-        assertEquals(Decision.UNPRODUCTIVE_CONTINUE, CardRefreshDecider.decide(false, MAX - 2, MAX));
+        assertEquals(Decision.UNPRODUCTIVE_CONTINUE, CardRefreshDecider.decide(false, false, 0, MAX));
+        assertEquals(Decision.UNPRODUCTIVE_CONTINUE, CardRefreshDecider.decide(false, false, MAX - 2, MAX));
     }
 
     @Test
     public void unproductiveReachingMaxDeregisters() {
-        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, CardRefreshDecider.decide(false, MAX - 1, MAX));
-        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, CardRefreshDecider.decide(false, MAX, MAX));
+        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, CardRefreshDecider.decide(false, false, MAX - 1, MAX));
+        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, CardRefreshDecider.decide(false, false, MAX, MAX));
     }
 
-    // ───────────────────────── 场景回放（守住 P1-2 / P1-3）─────────────────────────
+    // ───────────────────────── 场景回放（守住 P1-2 / P1-3 / P1-B）─────────────────────────
 
-    /** P1-2：长推理卡流式 30 个不同 transient 帧，每帧都有进展 → 永不注销，额度不会被烧光。 */
+    /** P1-2：长推理卡流式 30 个不同帧，每帧都有进展 → 永不注销，额度不会被烧光。 */
     @Test
     public void longStreamOfDistinctFramesNeverDeregisters() {
         Sim sim = new Sim(MAX);
         for (int i = 0; i < 30; i++) {
-            Decision d = sim.pull("transient-frame-" + i);
+            Decision d = sim.pull("transient-frame-" + i, true);
             assertEquals("第 " + i + " 个不同帧应判有进展", Decision.PROGRESS_RESET, d);
             assertFalse("有进展不该注销", sim.deregistered);
         }
         // 终态帧（内容再次变化，哪怕它的 version 更低）→ 仍判进展、落库，不漏。
-        assertEquals(Decision.PROGRESS_RESET, sim.pull("✅ 已完成"));
+        assertEquals(Decision.PROGRESS_RESET, sim.pull("✅ 已完成", false));
         assertFalse(sim.deregistered);
     }
 
@@ -91,22 +98,33 @@ public class CardRefreshDeciderTest {
     public void displayOnlyCardDeregistersAfterMaxUnproductive() {
         Sim sim = new Sim(MAX);
         for (int i = 0; i < MAX - 1; i++) {
-            assertEquals(Decision.UNPRODUCTIVE_CONTINUE, sim.pull(null));
+            assertEquals(Decision.UNPRODUCTIVE_CONTINUE, sim.pull(null, false));
             assertFalse(sim.deregistered);
         }
-        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, sim.pull(null));
+        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, sim.pull(null, false));
         assertTrue("连续 MAX 次无 content_edit 应注销", sim.deregistered);
     }
 
-    /** bot 崩在某帧：先来一帧（进展），之后一直重复同一帧 → 连续无进展，最终注销。 */
+    /** P1-B：流式中重复同一 transient 帧（bot 未产新帧）→ midStream 重置，不因次数提前注销。 */
     @Test
-    public void botStuckOnSameFrameDeregisters() {
+    public void repeatedTransientFrameNeverDeregistersViaCount() {
         Sim sim = new Sim(MAX);
-        assertEquals(Decision.PROGRESS_RESET, sim.pull("frame-stuck"));   // 首帧有进展
-        for (int i = 0; i < MAX - 1; i++) {
-            assertEquals(Decision.UNPRODUCTIVE_CONTINUE, sim.pull("frame-stuck"));
+        assertEquals(Decision.PROGRESS_RESET, sim.pull("thinking...", true));   // 首帧有进展
+        for (int i = 0; i < MAX * 3; i++) {
+            assertEquals(Decision.MIDSTREAM_RESET, sim.pull("thinking...", true));
+            assertFalse("transient 中间帧不该按次数注销", sim.deregistered);
         }
-        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, sim.pull("frame-stuck"));
+    }
+
+    /** bot 崩在**非 transient** 帧：先来一帧，之后重复同一非 transient 帧 → 连续无进展，最终注销。 */
+    @Test
+    public void botStuckOnSameNonTransientFrameDeregisters() {
+        Sim sim = new Sim(MAX);
+        assertEquals(Decision.PROGRESS_RESET, sim.pull("frame-stuck", false));   // 首帧有进展
+        for (int i = 0; i < MAX - 1; i++) {
+            assertEquals(Decision.UNPRODUCTIVE_CONTINUE, sim.pull("frame-stuck", false));
+        }
+        assertEquals(Decision.UNPRODUCTIVE_DEREGISTER, sim.pull("frame-stuck", false));
         assertTrue(sim.deregistered);
     }
 
@@ -124,13 +142,15 @@ public class CardRefreshDeciderTest {
             this.max = max;
         }
 
-        Decision pull(String contentEdit) {
+        Decision pull(String contentEdit, boolean isTransient) {
             if (deregistered) throw new IllegalStateException("注销后不应再补拉");
             boolean progressed = CardRefreshDecider.isProgress(contentEdit, lastHash);
             if (progressed) lastHash = contentEdit.hashCode();
-            Decision d = CardRefreshDecider.decide(progressed, unproductive, max);
+            boolean midStream = contentEdit != null && isTransient;
+            Decision d = CardRefreshDecider.decide(progressed, midStream, unproductive, max);
             switch (d) {
                 case PROGRESS_RESET:
+                case MIDSTREAM_RESET:
                     unproductive = 0;
                     break;
                 case UNPRODUCTIVE_CONTINUE:

@@ -34,6 +34,8 @@ public final class CardRefreshDecider {
     public enum Decision {
         /** content_edit 内容相对上次有变化 → 落库刷新 + 无进展计数清零。 */
         PROGRESS_RESET,
+        /** 拉回的是 transient 中间流式帧（内容没变但卡片仍在活跃流式）→ 重置计数、继续等终态。 */
+        MIDSTREAM_RESET,
         /** 本次无进展，但还没到上限 → 无进展计数 +1，继续等下次触发。 */
         UNPRODUCTIVE_CONTINUE,
         /** 连续无进展已达上限 → 注销这张卡，停止补偿。 */
@@ -53,11 +55,13 @@ public final class CardRefreshDecider {
 
     /**
      * @param progressed        本次是否有进展（{@link #isProgress}）
+     * @param midStream         本次拉回的是否为 transient 中间流式帧（仍在活跃流式，不该计入收敛）
      * @param priorUnproductive 本次之前的连续无进展次数
      * @param maxUnproductive   连续无进展上限（达到即注销）
      */
-    public static Decision decide(boolean progressed, int priorUnproductive, int maxUnproductive) {
+    public static Decision decide(boolean progressed, boolean midStream, int priorUnproductive, int maxUnproductive) {
         if (progressed) return Decision.PROGRESS_RESET;
+        if (midStream) return Decision.MIDSTREAM_RESET;
         return (priorUnproductive + 1 >= maxUnproductive)
                 ? Decision.UNPRODUCTIVE_DEREGISTER
                 : Decision.UNPRODUCTIVE_CONTINUE;

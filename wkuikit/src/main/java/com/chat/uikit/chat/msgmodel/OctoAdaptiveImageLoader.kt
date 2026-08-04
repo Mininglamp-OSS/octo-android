@@ -30,7 +30,9 @@ import java.net.URL
  * 本 loader 注册到 [io.adaptivecards.renderer.registration.CardRendererRegistration]
  * 后，SDK 每次要取远端图前先问我们：
  *  1. HttpURLConnection 拉 bytes（一次，不做磁盘缓存 —— [InteractiveCardRenderer] 层
- *     的 view LRU 天然覆盖 bind 内的重复请求；跨 bind 的复用交给 OS/网络层缓存即可）
+ *     的 view LRU 天然覆盖 bind 内的重复请求）。**注意**：Android 默认不装 HttpURLConnection
+ *     响应缓存（需显式 HttpResponseCache.install），且 finally 里 disconnect 会断 keep-alive，
+ *     故跨 bind / LRU 淘汰 / 夜间切换后同一图标会重新拉取。图标小、量少可接受；若成瓶颈再装缓存。
  *  2. 判 SVG（前若干字节里含 `<svg` 或 `<?xml`——URL 后缀不可靠，Iconify 用
  *     `.svg`，DiceBear 是 `/svg` 没后缀，都要认）
  *  3. SVG 走 AndroidSVG → 画到指定 target Bitmap；非 SVG 走 BitmapFactory

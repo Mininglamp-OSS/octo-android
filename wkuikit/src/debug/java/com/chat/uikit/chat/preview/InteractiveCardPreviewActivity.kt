@@ -224,6 +224,7 @@ class InteractiveCardPreviewActivity : AppCompatActivity() {
             uiListener = object : CardActionDispatcher.SubmitUiListener {
                 override fun onSubmitStart(messageId: String) { /* 预览不做遮罩 */ }
                 override fun onSubmitEnd(messageId: String) { /* 预览不做遮罩 */ }
+                override fun isCardOnScreen(messageId: String): Boolean = true
             },
             strings = CardActionDispatcher.Strings(
                 openUrlFailed = "打开 URL 失败",

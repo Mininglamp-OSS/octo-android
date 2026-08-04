@@ -124,6 +124,15 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         InteractiveCardRenderer(dispatcher = dispatcher)
     }
 
+    /**
+     * bot 改卡新帧落库触发消息刷新时调用（bind 无关：ChatActivity.refreshMsg → 这里）。
+     * 清 submit 转圈态 —— 解决卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 的指纹比对漏掉、
+     * 导致提交明明成功却误报"操作超时"的回归（P2-3）。
+     */
+    fun onCardMessageRefreshed(messageId: String) {
+        if (messageId.isNotEmpty()) dispatcher.clearSubmitting(messageId)
+    }
+
     private fun createDispatcher(): CardActionDispatcher {
         val appCtx: Context = WKBaseApplication.getInstance().context
         val submitService = object : WKBaseModel() {
@@ -186,6 +195,13 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             uiListener = object : CardActionDispatcher.SubmitUiListener {
                 override fun onSubmitStart(messageId: String) = applySubmittingUiFor(messageId)
                 override fun onSubmitEnd(messageId: String) = restoreCardBoxFor(messageId)
+
+                // 卡片当前是否在屏幕上可见：cardBox 弱引用还在、tag 未被 RecyclerView 复用给别条、
+                // 且 isShown（attached + 可见）。滚出屏幕 / 回收 → false → 超时提示不弹（对齐 iOS）。
+                override fun isCardOnScreen(messageId: String): Boolean {
+                    val box = cardBoxByMsgId.get(messageId)?.get() ?: return false
+                    return box.tag == messageId && box.isShown
+                }
             },
             strings = CardActionDispatcher.Strings(
                 openUrlFailed = appCtx.getString(R.string.base_open_url_failed),
@@ -252,31 +268,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             return
         }
 
-        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）──
-        // message/extra/sync 频道级增量游标对非单调 version 会永久跳过低版本终态帧
-        //（服务端多副本 HiLo 发号，version 非单调，已实测 + 服务端注释坐实），导致卡片卡在
-        // "处理中"。这里按**结构化信号**登记待补偿：只有收到**非 transient 的权威帧**
-        //（editedContent != null && !transient）才算终态到达。中间流式帧 transient=true 也有
-        // content_edit，绝不能当终态注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
-        // MsgModel 用游标免疫的 message/channel/sync 按 seq 补拉：渲染时补 re-entry 存量帧、
-        // 收到 wk_sync_message_extra CMD 时补实时帧。仅 type=17，不判中文子串、只认结构状态。
-        if (messageId.isNotEmpty()) {
-            val hasTerminalFrame = editedContent != null && !editedContent.transient
-            if (BuildConfig.DEBUG) {
-                Log.d(
-                    "CardFrameDebug",
-                    "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
-                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
-                )
-            }
-            MsgModel.getInstance().onCardRendered(
-                wkMsg.channelID,
-                wkMsg.channelType,
-                wkMsg.messageSeq.toLong(),
-                hasTerminalFrame,
-            )
-        }
-
         // ── 设备 API gate ──
         // AC 3.7.0 AAR 声明 minSdk=26，App 用 tools:overrideLibrary 压掉 merger 报错。
         // Class 加载失败 / 符号未解析走 renderer.build() 的 catch(Throwable) → fallback plain
@@ -315,6 +306,28 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             return
         }
         val cardDecision = decision as InteractiveCardDecision.Decision.Card
+
+        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）——放在 API/trust gate 之后（P2-1）──
+        // 只给"真正渲染成卡"的消息登记待补偿；API<26 / 未信任发送者会在上面降级 plain 返回、
+        // 不到这里，避免无谓的定向补拉请求（含被无关发送者放大）。判据：只有非 transient 的权威帧
+        //（editedContent != null && !transient）算终态；中间流式帧 transient=true 也有 content_edit，
+        // 绝不能当终态注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
+        if (messageId.isNotEmpty()) {
+            val hasTerminalFrame = editedContent != null && !editedContent.transient
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    "CardFrameDebug",
+                    "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
+                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
+                )
+            }
+            MsgModel.getInstance().onCardRendered(
+                wkMsg.channelID,
+                wkMsg.channelType,
+                wkMsg.messageSeq.toLong(),
+                hasTerminalFrame,
+            )
+        }
 
         // 渲染委托给 InteractiveCardRenderer：内部按 (cardJsonHash, cardVersion, isDark)
         // 缓存 rendered view，滚动/多消息同 payload 时复用避开 SDK 重渲。sanitize / parse /

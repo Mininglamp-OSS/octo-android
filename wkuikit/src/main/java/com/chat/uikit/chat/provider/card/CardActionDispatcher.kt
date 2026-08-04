@@ -25,8 +25,9 @@ import java.util.UUID
  *    含防重复点击、10s 超时兜底、成功后 syncExtraMsg + 500/1500ms 兜底 retry
  *
  * `Action.CopyToClipboard` 未支持 —— AC 3.7.0 Android SDK 无内置
- * `CopyToClipboardActionParser`，白名单已在 [com.chat.uikit.chat.msgmodel.InteractiveCardDecision]
- * 移除该 action 类型，服务端下发含 Copy 的卡整卡降级 plain。
+ * `CopyToClipboardActionParser`。[com.chat.uikit.chat.msgmodel.InteractiveCardDecision] 对未知
+ * action **容忍不毙整卡**（对齐 iOS），由 InteractiveCardSanitizer 在喂 SDK 前剥掉该按钮 ——
+ * 含 Copy 的卡正常渲染、仅复制按钮不出现，dispatcher 侧不会收到 CopyToClipboard 分派。
  *
  * ## 状态归属
  *
@@ -91,6 +92,13 @@ class CardActionDispatcher(
     interface SubmitUiListener {
         fun onSubmitStart(messageId: String)
         fun onSubmitEnd(messageId: String)
+
+        /**
+         * 该 messageId 的卡片当前是否在屏幕上可见。超时提示只在可见时弹（对齐 iOS：卡片滑出
+         * 当前屏幕就不弹"操作超时"，滑回来仍在当前屏幕才弹）。Provider 按 cardBox 弱引用 + tag +
+         * isShown 判定；view 已回收 / 滚出 → false。
+         */
+        fun isCardOnScreen(messageId: String): Boolean
     }
 
     /**
@@ -256,11 +264,11 @@ class CardActionDispatcher(
             pendingTimeouts.remove(messageId)
             // 只有当仍在 submitting 时才动 UI（bot 已回帧的话 setData / clearSubmitting 已经清过）
             if (submittingIds.remove(messageId)) {
-                Log.d(TAG, "Submit 10s 超时，恢复可点: $messageId")
-                toaster.show(strings.actionTimeout)
-                // 主动通知 UI 层复位视觉（alpha + overlay），否则卡片会持续置灰 + 拦点
-                // 直到别的原因触发 rebind。Provider 侧回调按 WeakReference + tag 校验
-                // 拿视图，view 已回收就 no-op，不会访问陈旧引用。
+                val onScreen = uiListener.isCardOnScreen(messageId)
+                Log.d(TAG, "Submit 10s 超时: $messageId onScreen=$onScreen")
+                // 提示只在卡片当前可见时弹（对齐 iOS：卡片滑出当前屏幕就不弹"操作超时"）。
+                if (onScreen) toaster.show(strings.actionTimeout)
+                // 无论可见与否都复位视觉（alpha + overlay），否则卡片滑回来会持续置灰 + 拦点。
                 uiListener.onSubmitEnd(messageId)
             }
         }

@@ -105,9 +105,21 @@ object InteractiveCardSanitizer {
     private fun sanitizeArray(arr: JSONArray): JSONArray {
         val out = JSONArray()
         for (i in 0 until arr.length()) {
-            out.put(sanitizeNode(arr.opt(i)))
+            val sanitized = sanitizeNode(arr.opt(i))
+            // 剥空的 ActionSet 直接丢弃：如仅含 Action.CopyToClipboard 的展示卡，stripUnsupportedActions
+            // 剥掉唯一 action 后剩一个 actions=[] 的空壳 ActionSet；留着会让 SDK 渲染出一个空按钮区
+            // （或占位空行），对齐 iOS 净效果——整张卡照常渲染、那个复制按钮所在的行整体消失。
+            if (sanitized is JSONObject && isEmptyActionSet(sanitized)) continue
+            out.put(sanitized)
         }
         return out
+    }
+
+    /** type=ActionSet 且 actions 为空/缺失 → 空壳，应从父容器剔除。 */
+    private fun isEmptyActionSet(obj: JSONObject): Boolean {
+        if (obj.optString("type") != "ActionSet") return false
+        val actions = obj.optJSONArray("actions")
+        return actions == null || actions.length() == 0
     }
 
     /**

@@ -150,6 +150,15 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         return localProviderList;
     }
 
+    /**
+     * 取本 adapter 实际用于渲染的 provider 实例（构造时反射 clone 的那份，非 WKMsgItemViewManager 单例原型）。
+     * 需要向"正在渲染的" provider 投递 bind 无关信号（如交互卡提交完成后清 submit 态）时用；
+     * 打到单例原型上会因 provider 内部状态 per-instance 而成为 no-op。返回基类，由 wkuikit 侧按需 cast。
+     */
+    public BaseItemProvider<WKUIChatMsgItemEntity> getRenderingProvider(int type) {
+        return localProviderList == null ? null : localProviderList.get(type);
+    }
+
     public ChatAdapter(@NonNull IConversationContext iConversationContext, AdapterType adapterType) {
         super();
         this.adapterType = adapterType;

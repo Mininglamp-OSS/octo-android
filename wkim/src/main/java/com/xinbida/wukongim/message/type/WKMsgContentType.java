@@ -27,6 +27,8 @@ public class WKMsgContentType {
     public static final int WK_VECTOR_STICKER = 12;
     //emoji 贴图
     public static final int WK_EMOJI_STICKER = 13;
+    //交互式卡片（AdaptiveCard，type=17，对齐 octo-web / iOS）
+    public static final int WK_INTERACTIVE_CARD = 17;
     // content 格式错误
     public static final int WK_CONTENT_FORMAT_ERROR = 97;
     // signal 解密失败

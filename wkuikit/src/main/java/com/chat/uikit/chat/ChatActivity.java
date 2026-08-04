@@ -87,6 +87,7 @@ import com.chat.base.endpoint.entity.ReadMsgMenu;
 import com.chat.base.endpoint.entity.SetChatBgMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.entity.UserOnlineStatus;
+import com.chad.library.adapter.base.provider.BaseItemProvider;
 import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.msg.ChatAdapter;
@@ -94,7 +95,6 @@ import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.msgitem.WKContentType;
-import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.uikit.chat.provider.WKInteractiveCardProvider;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.HttpResponseCode;
@@ -4483,11 +4483,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq + " revoke=" + wkMsg.remoteExtra.revoke + " revoker=" + wkMsg.remoteExtra.revoker);
         // type=17 交互卡：帧落库触发的消息刷新 = 提交闭环完成的 **bind-无关** 信号 → 清 submit
         // 转圈态。避免卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 指纹比对漏清、导致提交明明成功却
-        // 误报"操作超时"（P2-3）。provider 是 content-type 单例，与渲染用的是同一实例。
+        // 误报"操作超时"（P2-3）。必须打到 **本 adapter 实际渲染的 provider 实例**（反射 clone 的那份），
+        // 而非 WKMsgItemViewManager（注册表）单例原型——原型的 dispatcher 是另一份、submittingIds 为空，
+        // clearSubmitting 会成 no-op（P1-2）。是否清由 provider 内按"新非 transient 终态帧"再 gate。
         if (wkMsg.type == WKContentType.interactiveCard && !TextUtils.isEmpty(wkMsg.messageID)) {
-            Object p = WKMsgItemViewManager.getInstance().getChatItemProviderList().get(WKContentType.interactiveCard);
+            BaseItemProvider<WKUIChatMsgItemEntity> p =
+                    chatAdapter.getRenderingProvider(WKContentType.interactiveCard);
             if (p instanceof WKInteractiveCardProvider) {
-                ((WKInteractiveCardProvider) p).onCardMessageRefreshed(wkMsg.messageID);
+                ((WKInteractiveCardProvider) p).onCardMessageRefreshed(wkMsg);
             }
         }
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);

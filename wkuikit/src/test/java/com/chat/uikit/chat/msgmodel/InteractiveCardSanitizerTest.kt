@@ -458,6 +458,71 @@ class InteractiveCardSanitizerTest {
         assertEquals("容器其余内容保留", "TextBlock", out.getJSONArray("items").getJSONObject(0).getString("type"))
     }
 
+    // ───────────────────── 剥空的 ActionSet（CopyToClipboard-only 展示卡）─────────────────────
+    // stripUnsupportedActions 剥掉唯一的 CopyToClipboard 后，ActionSet 剩 actions=[] 的空壳。
+    // 留着会让 SDK 渲染出空按钮区/占位行；应从父容器整体剔除（对齐 iOS：那一行整体消失）。
+
+    @Test
+    fun `ActionSet with only CopyToClipboard is dropped after stripping`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply {
+                put(JSONObject().apply { put("type", "TextBlock"); put("text", "结果已生成") })
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val body = out.getJSONArray("body")
+        assertEquals("空壳 ActionSet 应被丢弃，仅剩 TextBlock", 1, body.length())
+        assertEquals("TextBlock", body.getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `ActionSet keeps renderable action and is not dropped`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "打开"); put("url", "https://x.com") })
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val body = out.getJSONArray("body")
+        assertEquals("含可渲染 action → ActionSet 保留", 1, body.length())
+        assertEquals("ActionSet", body.getJSONObject(0).getString("type"))
+        assertEquals("仅剥掉 CopyToClipboard，OpenUrl 保留", 1, body.getJSONObject(0).getJSONArray("actions").length())
+    }
+
+    @Test
+    fun `nested empty ActionSet inside Container is dropped`() {
+        val inner = JSONObject().apply {
+            put("type", "Container")
+            put("items", JSONArray().apply {
+                put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") })
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(inner)
+        val items = out.getJSONArray("items")
+        assertEquals("嵌套空壳 ActionSet 也应被剔除", 1, items.length())
+        assertEquals("TextBlock", items.getJSONObject(0).getString("type"))
+    }
+
     // ─────────────────────────────── 辅助 ───────────────────────────────
 
     /** 便捷：包一层 AdaptiveCard body，返回 sanitize 后的第一个 element。 */

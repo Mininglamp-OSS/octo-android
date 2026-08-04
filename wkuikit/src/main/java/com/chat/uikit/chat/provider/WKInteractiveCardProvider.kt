@@ -45,6 +45,7 @@ import com.chat.uikit.chat.provider.card.CardActionDispatcher
 import com.chat.uikit.chat.provider.card.CardRenderSpec
 import com.chat.uikit.chat.provider.card.InteractiveCardRenderer
 import com.chat.uikit.chat.provider.card.InteractiveCardStylizer
+import com.xinbida.wukongim.entity.WKMsg
 import com.chat.uikit.chat.provider.card.MessageContext
 import com.chat.uikit.message.MsgModel
 import java.lang.ref.WeakReference
@@ -128,9 +129,19 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      * bot 改卡新帧落库触发消息刷新时调用（bind 无关：ChatActivity.refreshMsg → 这里）。
      * 清 submit 转圈态 —— 解决卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 的指纹比对漏掉、
      * 导致提交明明成功却误报"操作超时"的回归（P2-3）。
+     *
+     * 必须由 ChatActivity 从 **本 adapter 实际渲染的 provider 实例**（ChatAdapter.getRenderingProvider）
+     * 投递到这里；打到 WKMsgItemViewManager 单例原型上 [dispatcher] 是另一份、submittingIds 为空，
+     * clearSubmitting 成 no-op、超时照样误报（P1-2）。
+     *
+     * 只在收到**真正新的非 transient 终态帧**时清（判据与 [onCardRendered] 的 hasTerminalFrame 一致）：
+     * transient 中间流式帧 / 无 content_edit 的无关刷新不清，避免提交在途时被无关 refresh 提前重启按钮。
      */
-    fun onCardMessageRefreshed(messageId: String) {
-        if (messageId.isNotEmpty()) dispatcher.clearSubmitting(messageId)
+    fun onCardMessageRefreshed(wkMsg: WKMsg) {
+        val messageId = wkMsg.messageID
+        if (messageId.isNullOrEmpty()) return
+        val edited = wkMsg.remoteExtra?.contentEditMsgModel as? WKInteractiveCardContent
+        if (edited != null && !edited.transient) dispatcher.clearSubmitting(messageId)
     }
 
     private fun createDispatcher(): CardActionDispatcher {
@@ -290,28 +301,20 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             // channelInfo 未命中：主动拉取，等 SDK 广播回来后 RecyclerView 会重新 bind → 重新决策。
             CardSenderClassifier.fetchSenderChannelInfo(wkMsg.fromUID.orEmpty())
         }
-        val cardObj = model.cardJson
-        val decision = InteractiveCardDecision.decide(trust, model.profile, model.cardVersion, cardObj)
-        if (decision is InteractiveCardDecision.Decision.Plain) {
-            Log.d(TAG, "trust=$trust profile=${model.profile} → 整卡降级 plain")
+        // trust gate 独立前置：未信任发送者直接降级 plain 且**不登记补偿**（避免被无关发送者放大补拉）。
+        if (!CardSenderClassifier.isTrusted(trust)) {
+            Log.d(TAG, "trust=$trust → 整卡降级 plain(未信任,不登记补偿)")
             showFallback(container, fallback, plain)
             resetCellBackground(parentView, uiChatMsgItemEntity, from)
             return
         }
-        if (decision is InteractiveCardDecision.Decision.Hint) {
-            Log.d(TAG, "profile/version 不支持 → plain + 更新提示")
-            val hint = context.getString(R.string.base_card_need_update)
-            showFallback(container, fallback, "$plain\n\n$hint")
-            resetCellBackground(parentView, uiChatMsgItemEntity, from)
-            return
-        }
-        val cardDecision = decision as InteractiveCardDecision.Decision.Card
 
-        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）——放在 API/trust gate 之后（P2-1）──
-        // 只给"真正渲染成卡"的消息登记待补偿；API<26 / 未信任发送者会在上面降级 plain 返回、
-        // 不到这里，避免无谓的定向补拉请求（含被无关发送者放大）。判据：只有非 transient 的权威帧
-        //（editedContent != null && !transient）算终态；中间流式帧 transient=true 也有 content_edit，
-        // 绝不能当终态注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
+        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）——放在 API + trust gate 之后、profile/version/白名单
+        // 校验之前（#8）。这样即便一帧因 profile 不支持 / 白名单外被降级 plain，只要它是权威终态帧
+        //（editedContent != null && !transient）也能凭 hasTerminalFrame 注销、不会永久留在 pending 被无限补拉；
+        // 而 API<26 / 未信任发送者已在上面 return、不到这里，不会被无谓补拉（含被无关发送者放大）。
+        // 判据：只有非 transient 的权威帧算终态；中间流式帧 transient=true 也有 content_edit，绝不能当终态
+        // 注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
         if (messageId.isNotEmpty()) {
             val hasTerminalFrame = editedContent != null && !editedContent.transient
             if (BuildConfig.DEBUG) {
@@ -328,6 +331,23 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 hasTerminalFrame,
             )
         }
+
+        val cardObj = model.cardJson
+        val decision = InteractiveCardDecision.decide(trust, model.profile, model.cardVersion, cardObj)
+        if (decision is InteractiveCardDecision.Decision.Plain) {
+            Log.d(TAG, "profile=${model.profile} 白名单校验未过 → 整卡降级 plain")
+            showFallback(container, fallback, plain)
+            resetCellBackground(parentView, uiChatMsgItemEntity, from)
+            return
+        }
+        if (decision is InteractiveCardDecision.Decision.Hint) {
+            Log.d(TAG, "profile/version 不支持 → plain + 更新提示")
+            val hint = context.getString(R.string.base_card_need_update)
+            showFallback(container, fallback, "$plain\n\n$hint")
+            resetCellBackground(parentView, uiChatMsgItemEntity, from)
+            return
+        }
+        val cardDecision = decision as InteractiveCardDecision.Decision.Card
 
         // 渲染委托给 InteractiveCardRenderer：内部按 (cardJsonHash, cardVersion, isDark)
         // 缓存 rendered view，滚动/多消息同 payload 时复用避开 SDK 重渲。sanitize / parse /

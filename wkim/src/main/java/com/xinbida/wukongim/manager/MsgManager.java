@@ -68,8 +68,10 @@ import org.json.JSONObject;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -1048,7 +1050,9 @@ public class MsgManager extends BaseManager {
     public void saveCardMsgExtra(List<WKSyncRecent> list) {
         if (WKCommonUtils.isEmpty(list)) return;
         List<WKMsgExtra> msgExtraList = new ArrayList<>();
-        List<String> msgIds = new ArrayList<>();
+        // 去重：定向补拉的 [seq,seq+1] 窗口理论上只 1 条，但接口契约未保证唯一，用 Set 防重复
+        // queryWithMsgIds + 刷新（P2-6）。
+        Set<String> msgIds = new LinkedHashSet<>();
         for (int j = 0, len = list.size(); j < len; j++) {
             WKSyncRecent r = list.get(j);
             if (r == null) continue;
@@ -1056,18 +1060,26 @@ public class MsgManager extends BaseManager {
             WKMsg wkMsg = WKSyncRecent2WKMsg(r);
             // 仅补交互卡(type=17)的 extra。定向补拉的目标 seq 若已不存在于服务端，[seq,seq+1] 窗口
             // 可能返回另一条非 type=17 消息，加此守卫避免误替换它的 message_extra 行（P2-5）。
-            if (wkMsg.type != 17) continue;
-            if (!TextUtils.isEmpty(wkMsg.messageID)) msgIds.add(wkMsg.messageID);
+            if (wkMsg.type != WKMsgContentType.WK_INTERACTIVE_CARD) {
+                if (BuildConfig.DEBUG) {
+                    Log.d("CardFrameDebug", "[saveCardMsgExtra] 跳过非交互卡 seq=" + r.message_seq + " type=" + wkMsg.type);
+                }
+                continue;
+            }
+            // 只有真写了 extra 的消息才登记刷新——没有 message_extra 就没有 content_edit 可落，
+            // 记 msgId 只会白白多一次 queryWithMsgIds + UI 刷新（P2-6）。
             if (r.message_extra != null) {
                 msgExtraList.add(WKSyncExtraMsg2WKMsgExtra(wkMsg.channelID, wkMsg.channelType, r.message_extra));
+                if (!TextUtils.isEmpty(wkMsg.messageID)) msgIds.add(wkMsg.messageID);
             }
         }
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
             MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
         }
-        if (WKCommonUtils.isNotEmpty(msgIds)) {
-            List<WKMsg> saveList = MsgDbManager.getInstance().queryWithMsgIds(msgIds);
-            getMsgReactionsAndRefreshMsg(msgIds, saveList);
+        if (!msgIds.isEmpty()) {
+            List<String> ids = new ArrayList<>(msgIds);
+            List<WKMsg> saveList = MsgDbManager.getInstance().queryWithMsgIds(ids);
+            getMsgReactionsAndRefreshMsg(ids, saveList);
         }
     }
 

@@ -83,8 +83,7 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
             val bitmap = if (looksLikeSvg(bytes)) {
                 decodeSvg(bytes)
             } else {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    ?: throw IllegalStateException("BitmapFactory decode 返回 null")
+                decodeRasterDownsampled(bytes)
             }
             HttpRequestResult(bitmap)
         } catch (t: Throwable) {
@@ -134,6 +133,40 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
             buffer.write(chunk, 0, read)
         }
         return buffer.toByteArray()
+    }
+
+    // ─────────────────────────────── Raster decode ───────────────────────────────
+
+    /**
+     * raster（PNG/JPEG/WebP…）降采样解码。**动机**：[MAX_BYTES] 只挡住"压缩后"体积，
+     * 但高压缩比大图（如 2MB 内的 8000×8000 PNG）全尺寸解码成 ARGB_8888 可达数百 MB → OOM，
+     * 靠 `catch(OutOfMemoryError)` 兜底并不可靠（真正触顶的可能是其它线程的并发分配）。
+     * 故先 [BitmapFactory.Options.inJustDecodeBounds] 只读尺寸（不分配像素），据此算 2 的幂
+     * [BitmapFactory.Options.inSampleSize] 把单边降到 [MAX_SIZE_PX] 以内再真正解码，与 SVG 路径
+     * 的 clamp 对齐。卡片里都是图标 / 头像级素材，降采样对观感无影响。
+     */
+    private fun decodeRasterDownsampled(bytes: ByteArray): Bitmap {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        if (w <= 0 || h <= 0) throw IllegalStateException("raster 尺寸非法 ${w}x$h")
+        val opts = BitmapFactory.Options().apply { inSampleSize = computeInSampleSize(w, h, MAX_SIZE_PX) }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            ?: throw IllegalStateException("BitmapFactory decode 返回 null")
+    }
+
+    /** 返回最小的 2 的幂，使 [width]/[height] 降采样后单边 ≤ [maxPx]。上限内直接返回 1。 */
+    internal fun computeInSampleSize(width: Int, height: Int, maxPx: Int): Int {
+        var sample = 1
+        var w = width
+        var h = height
+        while (w > maxPx || h > maxPx) {
+            sample *= 2
+            w /= 2
+            h /= 2
+        }
+        return sample
     }
 
     // ─────────────────────────────── SVG sniff & decode ───────────────────────────────

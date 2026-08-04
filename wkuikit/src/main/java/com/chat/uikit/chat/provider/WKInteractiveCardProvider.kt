@@ -163,7 +163,8 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 }
             },
             toaster = CardActionDispatcher.Toaster { text ->
-                WKToastUtils.getInstance().showToastNormal(text)
+                // 居中显示（对齐 iOS）——卡片操作的 loading/超时/失败提示都走屏幕中央。
+                WKToastUtils.getInstance().showToastCenter(text)
             },
             timeoutScheduler = object : CardActionDispatcher.TimeoutScheduler {
                 private val handler = Handler(Looper.getMainLooper())
@@ -395,9 +396,10 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      * adaptSdkAction 静态方法），此处不再持有 SDK 类型。
      */
 
-    /** 应用 submitting UI：cardBox alpha=0.6 + overlay 拦截触摸。 */
+    /** 应用 submitting UI：显示 scrim + 转圈 overlay。压暗由 overlay 的半透明 scrim 负责，
+     *  不再改 cardBox alpha（否则会把 overlay 里的 ProgressBar 一起调淡）。alpha 复位到 1 防遗留。 */
     private fun applySubmittingUI(cardBox: View, overlay: View) {
-        cardBox.alpha = 0.6f
+        cardBox.alpha = 1f
         overlay.visibility = View.VISIBLE
     }
 

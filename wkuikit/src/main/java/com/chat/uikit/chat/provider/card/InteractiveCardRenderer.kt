@@ -177,6 +177,20 @@ class InteractiveCardRenderer(
         return fresh
     }
 
+    /** DEBUG：分块打全量卡片 JSON（logcat 单行 ~4KB 会截断）。tag=CardJsonDump。 */
+    private fun dumpCardJson(label: String, json: org.json.JSONObject?) {
+        val s = json?.toString() ?: "null"
+        val chunk = 3000
+        var i = 0
+        var idx = 0
+        while (i < s.length) {
+            val end = minOf(i + chunk, s.length)
+            Log.d("CardJsonDump", "$label[$idx] ${s.substring(i, end)}")
+            i = end
+            idx++
+        }
+    }
+
     private fun build(context: Context, spec: CardRenderSpec, hash: Int, isDark: Boolean): Entry? {
         return try {
             // 渲染前 sanitize —— 对齐 iOS `WKACardRenderer.wk_sanitizeNode`：
@@ -184,7 +198,9 @@ class InteractiveCardRenderer(
             //  · Input.ChoiceSet 一律 style=expanded（绕开 SDK compact 下拉的样式 & 生命周期问题）
             // Sanitizer 用 org.json（不是 fastjson），parse 前先转过来。
             val cardObj = org.json.JSONObject(spec.cardJson)
+            if (com.chat.uikit.BuildConfig.DEBUG) dumpCardJson("RAW", cardObj)
             val sanitized = InteractiveCardSanitizer.sanitize(cardObj)
+            if (com.chat.uikit.BuildConfig.DEBUG) dumpCardJson("SANITIZED", sanitized)
             val cardJsonForSdk = sanitized?.toString() ?: spec.cardJson
             // 预扫 (title → Action.style) 映射，供 stylize 时按 button.text 反查语义色。
             // 用 sanitized（若 non-null）作为源，跟真正传给 SDK 的 JSON 一致；null 时 fallback 到 cardObj。

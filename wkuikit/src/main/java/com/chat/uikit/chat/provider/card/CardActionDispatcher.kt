@@ -190,17 +190,17 @@ class CardActionDispatcher(
         submitter.submit(
             body,
             onSuccess = { result ->
-                // HTTP 受理成功。照搬撤回同款模式：
-                //  1. 立即清 submitting，UI 恢复交互（即便 bot 慢也不视觉卡死）
-                //  2. 主动 syncExtraMsg（不等 CMD）
-                //  3. 500/1500ms 兜底 retry（对齐撤回节奏，兜服务端 CMD/extra 写入时序竞态）
+                // HTTP 受理成功 ≠ 操作完成：真正的结果是 bot 改卡新帧。对齐 iOS —— **保持
+                // submitting/转圈**，不在 HTTP 200 就清态。主动 syncExtraMsg（+500/1500ms 兜底）
+                // 尽快把新帧拉回；新帧到达时由 Provider 侧 [clearSubmitting]（cardJson 指纹变化）
+                // 收尾；若 bot 一直不回帧，则由 [armSubmitTimeout] 的超时弹"操作超时"并复位
+                //（与 iOS 转圈 → 超时提示一致）。此前在此处立即 clearSubmitting + onSubmitEnd
+                // 会让转圈"闪一下"就消失、且取消了超时 → 永不提示，故移除。
                 Log.d(
                     TAG,
-                    "Submit 成功: accepted=${result?.getBoolean("accepted")} " +
-                        "replay=${result?.getBoolean("replay")}, 主动 sync 拉新帧"
+                    "Submit 受理: accepted=${result?.getBoolean("accepted")} " +
+                        "replay=${result?.getBoolean("replay")}，保持转圈等 bot 新帧"
                 )
-                clearSubmitting(messageId)
-                uiListener.onSubmitEnd(messageId)
                 val ch = ctx.wkMsg.channelID
                 val ct = ctx.wkMsg.channelType
                 if (!ch.isNullOrBlank()) {

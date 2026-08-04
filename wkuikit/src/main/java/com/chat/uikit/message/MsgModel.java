@@ -571,6 +571,16 @@ public class MsgModel extends WKBaseModel {
      * @param iSyncChannelMsgBack 返回
      */
     public void syncChannelMsg(String channelID, byte channelType, long startMessageSeq, long endMessageSeq, int limit, int pullMode, final ISyncChannelMsgBack iSyncChannelMsgBack) {
+        syncChannelMsg(channelID, channelType, startMessageSeq, endMessageSeq, limit, pullMode, true, iSyncChannelMsgBack);
+    }
+
+    /**
+     * @param ackCover 成功后是否顺带 {@link #ackDeviceUUID()}（推进设备 cover-message ack）。
+     *                 常规拉取传 true；type=17 卡片终态帧的**定向补拉**传 false —— 那是一次与
+     *                 cover-message 无关的单条重拉，不应把 ack 状态往前推、更不该在一个 CMD 里
+     *                 对 N 张待补偿卡各打一次 ackCoverMsg。
+     */
+    public void syncChannelMsg(String channelID, byte channelType, long startMessageSeq, long endMessageSeq, int limit, int pullMode, boolean ackCover, final ISyncChannelMsgBack iSyncChannelMsgBack) {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("channel_id", channelID);
         jsonObject.put("channel_type", channelType);
@@ -583,7 +593,7 @@ public class MsgModel extends WKBaseModel {
             @Override
             public void onSuccess(WKSyncChannelMsg result) {
                 iSyncChannelMsgBack.onBack(result);
-                ackDeviceUUID();
+                if (ackCover) ackDeviceUUID();
             }
 
             @Override
@@ -613,12 +623,10 @@ public class MsgModel extends WKBaseModel {
         // messageSeq 本身，limit=1 上拉命中的第一条即目标；end 给 messageSeq+1 收窄窗口，
         // 不波及相邻消息。
         //（早期误当成"排他锚点"传了 messageSeq-1，导致只拉回相邻的 seq-1、目标卡终态帧永远拉不到。）
-        syncChannelMsg(channelID, channelType, messageSeq, messageSeq + 1, 1, 1, result -> {
+        // ackCover=false：定向补拉是一次与 cover-message 无关的单条重拉，不推进 ack（见重载注释）。
+        syncChannelMsg(channelID, channelType, messageSeq, messageSeq + 1, 1, 1, false, result -> {
             if (BuildConfig.DEBUG) logRefreshCardResult(messageSeq, result);
-            if (result != null && WKReader.isNotEmpty(result.messages)) {
-                WKDbScheduler.get().scheduleDirect(() ->
-                        WKIM.getInstance().getMsgManager().saveSyncChannelMSGs(result.messages));
-            }
+            onCardRefreshResult(channelID, channelType, messageSeq, result);
         });
     }
 
@@ -666,11 +674,18 @@ public class MsgModel extends WKBaseModel {
     //（叠加服务端 Redis per-user 游标 floor，客户端连退回游标都做不到）→ 卡片卡在"处理中"。
     // 这里对"尚无**非 transient 权威终态帧**"的 type=17 卡片登记待补偿，用**游标免疫**的
     // message/channel/sync 按 seq 精确补拉（见 refreshCardMessage）。触发点：卡片渲染(re-entry 存量)
-    // + wk_sync_message_extra CMD（实时）+ 重连 syncCompleted（对齐 iOS）。节流 + 次数上限，
-    // 避免刷接口；收到非 transient 权威帧即注销。
+    // + wk_sync_message_extra CMD（实时）+ 重连 syncCompleted（对齐 iOS）。
+    //
+    // 退出机制（关键）：计数是**连续无进展补拉次数**，不是总次数——
+    //  · 补拉回来 content_edit 内容有变化(进展) → 计数清零、继续补（长推理卡不会被 transient 帧饿死）；
+    //  · 无进展（纯展示卡永远无 content_edit / bot 停在同一帧）→ 计数 +1，连续 MAX_UNPRODUCTIVE 次即注销
+    //    （纯展示卡几次就退出、不再 fan-out；bot 崩了也有界收敛）。
+    // 用 content_edit **内容哈希**判进展（不用 extra_version：多副本下 version 非单调，终态帧 version
+    // 可能反而更低，用它判会把终态帧误当"无进展"漏掉）。收到非 transient 权威帧渲染时也会立即注销。
     private final Map<String, Map<Long, Integer>> pendingCardSeqs = new ConcurrentHashMap<>();
     private final Map<String, Long> lastCardRefreshAt = new ConcurrentHashMap<>();
-    private static final int MAX_CARD_REFRESH_PER_SEQ = 20;
+    private final Map<String, Integer> lastCardContentHash = new ConcurrentHashMap<>();
+    private static final int MAX_UNPRODUCTIVE_CARD_REFRESH = 5;
     private static final long CARD_REFRESH_MIN_INTERVAL_MS = 2000L;
 
     private String cardKey(String channelID, byte channelType) {
@@ -690,13 +705,7 @@ public class MsgModel extends WKBaseModel {
         if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
         String k = cardKey(channelID, channelType);
         if (hasTerminalFrame) {
-            // 这张卡完成 → 立刻自清：待补偿登记 + 节流时间戳一起删，不留死条目到退出频道。
-            Map<Long, Integer> m = pendingCardSeqs.get(k);
-            boolean removed = m != null && m.remove(messageSeq) != null;
-            lastCardRefreshAt.remove(k + "#" + messageSeq);
-            if (removed && BuildConfig.DEBUG) {
-                Log.d("CardFrameDebug", "[pending] 注销(收到权威终态帧) seq=" + messageSeq + " channelID=" + channelID);
-            }
+            deregisterCard(channelID, channelType, messageSeq, "收到权威终态帧");
             return;
         }
         Map<Long, Integer> m = pendingCardSeqs.computeIfAbsent(k, x -> new ConcurrentHashMap<>());
@@ -711,7 +720,7 @@ public class MsgModel extends WKBaseModel {
     }
 
     /**
-     * 收到 wk_sync_message_extra CMD 时调用：对该频道所有待补偿卡片各补拉一次（节流 + 上限）。
+     * 收到 wk_sync_message_extra CMD 时调用：对该频道所有待补偿卡片各补拉一次（节流）。
      * CMD 投递可靠，用它做实时触发；补拉走游标免疫路径，因此能捞回游标下方的低版本终态帧。
      */
     public void refreshPendingCards(String channelID, byte channelType) {
@@ -723,30 +732,37 @@ public class MsgModel extends WKBaseModel {
     }
 
     /**
-     * 退出频道时调用：清掉该频道的待补偿登记与节流时间戳。避免"永不终态"的卡片登记项
-     * 在单例上长期留存 + 限制单个 CMD 的 fan-out 规模。仅清本频道，不动其它频道。
+     * 退出频道时调用：清掉该频道的待补偿登记、节流时间戳与内容哈希。避免登记项在单例上长期留存
+     * + 限制单个 CMD 的 fan-out 规模。仅清本频道，不动其它频道。
      */
     public void clearPendingCards(String channelID, byte channelType) {
         String k = cardKey(channelID, channelType);
         Map<Long, Integer> removed = pendingCardSeqs.remove(k);
         String prefix = k + "#";
         lastCardRefreshAt.keySet().removeIf(tk -> tk.startsWith(prefix));
+        lastCardContentHash.keySet().removeIf(tk -> tk.startsWith(prefix));
         if (BuildConfig.DEBUG && removed != null && !removed.isEmpty()) {
             Log.d("CardFrameDebug", "[pending] 清理频道待补偿 channelID=" + channelID + " 清掉=" + removed.size() + " 张");
+        }
+    }
+
+    /** 注销一张待补偿卡：登记 + 节流 + 内容哈希一并清除。 */
+    private void deregisterCard(String channelID, byte channelType, long messageSeq, String reason) {
+        String k = cardKey(channelID, channelType);
+        Map<Long, Integer> m = pendingCardSeqs.get(k);
+        boolean removed = m != null && m.remove(messageSeq) != null;
+        String tk = k + "#" + messageSeq;
+        lastCardRefreshAt.remove(tk);
+        lastCardContentHash.remove(tk);
+        if (removed && BuildConfig.DEBUG) {
+            Log.d("CardFrameDebug", "[pending] 注销(" + reason + ") seq=" + messageSeq + " channelID=" + channelID);
         }
     }
 
     private void maybeRefreshCard(String channelID, byte channelType, long messageSeq) {
         String k = cardKey(channelID, channelType);
         Map<Long, Integer> m = pendingCardSeqs.get(k);
-        if (m == null) return;
-        Integer cnt = m.get(messageSeq);
-        if (cnt == null || cnt >= MAX_CARD_REFRESH_PER_SEQ) {
-            if (cnt != null && BuildConfig.DEBUG) {
-                Log.d("CardFrameDebug", "[pending] 跳过(已达上限 " + MAX_CARD_REFRESH_PER_SEQ + ") seq=" + messageSeq);
-            }
-            return;
-        }
+        if (m == null || !m.containsKey(messageSeq)) return;   // 未登记 / 已注销
         String tk = k + "#" + messageSeq;
         long now = SystemClock.elapsedRealtime();
         Long last = lastCardRefreshAt.get(tk);
@@ -755,9 +771,58 @@ public class MsgModel extends WKBaseModel {
             return;
         }
         lastCardRefreshAt.put(tk, now);
-        m.put(messageSeq, cnt + 1);
-        if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 补拉#" + (cnt + 1) + " seq=" + messageSeq + " channelID=" + channelID);
+        if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 补拉 seq=" + messageSeq + " channelID=" + channelID);
         refreshCardMessage(channelID, channelType, messageSeq);
+    }
+
+    /**
+     * 补拉回调：按"content_edit 内容是否有进展"更新连续无进展计数。
+     * <ul>
+     *   <li>有进展（content_edit 哈希变化）→ 计数清零 + 只落 extra（{@code saveCardMsgExtra}，不插
+     *       message 行）+ 刷新 UI。</li>
+     *   <li>无进展（展示卡永远 null / bot 停在同一帧）→ 计数 +1，连续 {@link #MAX_UNPRODUCTIVE_CARD_REFRESH}
+     *       次即注销。</li>
+     * </ul>
+     * 用内容哈希而非 extra_version 判进展：多副本下 version 非单调，终态帧 version 可能更低，
+     * 用它判会把终态帧误当"无进展"漏保存。计数更新用 {@code computeIfPresent} 原子化（修 P2-5
+     * 竞争），且卡已注销时返回 null 直接跳过，避免复活已注销的卡。
+     */
+    private void onCardRefreshResult(String channelID, byte channelType, long messageSeq, WKSyncChannelMsg result) {
+        String k = cardKey(channelID, channelType);
+        Map<Long, Integer> m = pendingCardSeqs.get(k);
+        if (m == null || !m.containsKey(messageSeq)) return;   // 已注销（如终态渲染）
+        String tk = k + "#" + messageSeq;
+        String contentEdit = extractContentEdit(result, messageSeq);
+        boolean progressed = CardRefreshDecider.isProgress(contentEdit, lastCardContentHash.get(tk));
+        if (progressed) lastCardContentHash.put(tk, contentEdit.hashCode());
+        Integer prior = m.get(messageSeq);
+        if (prior == null) return;   // 并发注销
+        switch (CardRefreshDecider.decide(progressed, prior, MAX_UNPRODUCTIVE_CARD_REFRESH)) {
+            case PROGRESS_RESET:
+                m.computeIfPresent(messageSeq, (kk, v) -> 0);   // 有进展→重置无进展计数
+                if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 有进展→落 extra 刷新 seq=" + messageSeq);
+                WKDbScheduler.get().scheduleDirect(() ->
+                        WKIM.getInstance().getMsgManager().saveCardMsgExtra(result.messages));
+                break;
+            case UNPRODUCTIVE_CONTINUE:
+                Integer n = m.computeIfPresent(messageSeq, (kk, v) -> v + 1);
+                if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 无进展 #" + n + "/" + MAX_UNPRODUCTIVE_CARD_REFRESH + " seq=" + messageSeq);
+                break;
+            case UNPRODUCTIVE_DEREGISTER:
+                deregisterCard(channelID, channelType, messageSeq, "连续" + MAX_UNPRODUCTIVE_CARD_REFRESH + "次无进展");
+                break;
+        }
+    }
+
+    /** 从补拉结果里取目标 seq 的 content_edit 字符串；无则返回 null。 */
+    private String extractContentEdit(WKSyncChannelMsg result, long targetSeq) {
+        if (result == null || WKReader.isEmpty(result.messages)) return null;
+        for (WKSyncRecent msg : result.messages) {
+            if (msg.message_seq == targetSeq && msg.message_extra != null && msg.message_extra.content_edit != null) {
+                return msg.message_extra.content_edit.toString();
+            }
+        }
+        return null;
     }
 
     /**

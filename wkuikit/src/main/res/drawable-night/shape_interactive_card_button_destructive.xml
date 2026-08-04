@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 夜间 destructive 按钮：day 版 12%/24% alpha 红底贴深色卡片底几乎看不见。提高到 ~28%/40%
+     让浅红胶囊在 #1C1C1E 上可辨；文字仍是 reminderColor（红），Stylizer 不变。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#66FF5353" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#47FF5353" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</selector>

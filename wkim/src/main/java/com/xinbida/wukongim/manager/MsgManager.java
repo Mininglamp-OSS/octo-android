@@ -1037,6 +1037,38 @@ public class MsgManager extends BaseManager {
         getMsgReactionsAndRefreshMsg(msgIds, saveList);
     }
 
+    /**
+     * 交互卡(type=17)终态帧补偿专用：只把拉回的 message_extra(content_edit) upsert 落库并刷新 UI，
+     * <b>不走 {@link MsgDbManager#insertMsgs}</b>——避免其 size==1 短路把"已存在的消息"当新消息
+     * 插成 is_deleted=1 墓碑行（WKSyncRecent2WKMsg 不设 clientSeq → clientSeq=0 跳过 update，
+     * isExist 命中已存 clientMsgNO → 换新 clientMsgNO 后 INSERT），导致 message 表无上界堆积。
+     * 真正修好卡片的就是 message_extra 的 content_edit + 一次刷新，与 message 行无关。
+     * 仅 {@link com.chat.uikit.message.MsgModel#refreshCardMessage} 调用。
+     */
+    public void saveCardMsgExtra(List<WKSyncRecent> list) {
+        if (WKCommonUtils.isEmpty(list)) return;
+        List<WKMsgExtra> msgExtraList = new ArrayList<>();
+        List<String> msgIds = new ArrayList<>();
+        for (int j = 0, len = list.size(); j < len; j++) {
+            WKSyncRecent r = list.get(j);
+            if (r == null) continue;
+            // 仅用于拿归一化后的 channelID/channelType + messageID，不落 message 行。
+            WKMsg wkMsg = WKSyncRecent2WKMsg(r);
+            if (wkMsg.type == WKMsgContentType.WK_INSIDE_MSG) continue;
+            if (!TextUtils.isEmpty(wkMsg.messageID)) msgIds.add(wkMsg.messageID);
+            if (r.message_extra != null) {
+                msgExtraList.add(WKSyncExtraMsg2WKMsgExtra(wkMsg.channelID, wkMsg.channelType, r.message_extra));
+            }
+        }
+        if (WKCommonUtils.isNotEmpty(msgExtraList)) {
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
+        }
+        if (WKCommonUtils.isNotEmpty(msgIds)) {
+            List<WKMsg> saveList = MsgDbManager.getInstance().queryWithMsgIds(msgIds);
+            getMsgReactionsAndRefreshMsg(msgIds, saveList);
+        }
+    }
+
     public void addOnSendMsgAckListener(String key, ISendACK iSendACKListener) {
         if (iSendACKListener == null || TextUtils.isEmpty(key)) return;
         if (sendAckListenerMap == null) sendAckListenerMap = new ConcurrentHashMap<>();

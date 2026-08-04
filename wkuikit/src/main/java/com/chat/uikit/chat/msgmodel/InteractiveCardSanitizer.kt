@@ -54,6 +54,21 @@ object InteractiveCardSanitizer {
     private const val MOBILE_STACK_MIN_ACTIONS = 2
 
     /**
+     * Column 上需要在 ColumnSet→Container 堆叠时保留的语义属性（Container 也支持这些）。
+     * 丢了它们会导致 `isVisible:false` 的列内容被漏显、`Action.ToggleVisibility` 目标 id 失效等。
+     * 不含 `width`——它是 Column 专属的横向布局属性，竖直堆叠后无意义，按原行为丢弃。
+     */
+    private val COLUMN_CARRY_PROPS = arrayOf("isVisible", "id", "selectAction", "style", "bleed", "backgroundImage")
+
+    /**
+     * AC 3.7.0 Android SDK 能渲染的 action 类型。其余（Action.CopyToClipboard / 未知）在喂 SDK
+     * 前剥掉——SDK 无对应 parser，留着会导致该按钮渲染异常甚至整卡失败。对齐 iOS 的净效果
+     * （未知 action 静默丢按钮、卡片其余照常渲染）。Action.Execute / ShowCard 在
+     * [InteractiveCardDecision] 已 fail-closed 拒卡，正常到不了这里。
+     */
+    private val RENDERABLE_ACTIONS = setOf("Action.OpenUrl", "Action.Submit", "Action.ToggleVisibility")
+
+    /**
      * 返回 sanitize 过的卡片 JSON 深拷贝；原对象不动。
      * 若入参为 null 直接返回 null（调用方走原有 fallback 路径）。
      */
@@ -83,6 +98,7 @@ object InteractiveCardSanitizer {
             "Input.Toggle" -> ensureToggleTitle(out)
             "ColumnSet" -> stackColumnSetForMobileActions(out)
         }
+        stripUnsupportedActions(out)
         return out
     }
 
@@ -92,6 +108,28 @@ object InteractiveCardSanitizer {
             out.put(sanitizeNode(arr.opt(i)))
         }
         return out
+    }
+
+    /**
+     * 剥掉 SDK 无法渲染的 action：`actions[]` 里非 [RENDERABLE_ACTIONS] 的项删除，
+     * `selectAction` / `inlineAction` 若不可渲染则整个删掉。这样含 Action.CopyToClipboard 的
+     * 展示卡不会整卡降级 plain，而是正常渲染、仅那个复制按钮不出现（与 iOS 净效果一致）。
+     * 递归由 [sanitizeObject] 对每个对象调用保证：顶层 card.actions、嵌套 ActionSet.actions、
+     * 各容器的 selectAction 都会被覆盖到。
+     */
+    private fun stripUnsupportedActions(out: JSONObject) {
+        out.optJSONArray("actions")?.let { actions ->
+            val kept = JSONArray()
+            for (i in 0 until actions.length()) {
+                val a = actions.optJSONObject(i) ?: continue
+                if (RENDERABLE_ACTIONS.contains(a.optString("type"))) kept.put(a)
+            }
+            out.put("actions", kept)
+        }
+        for (key in arrayOf("selectAction", "inlineAction")) {
+            val a = out.optJSONObject(key) ?: continue
+            if (!RENDERABLE_ACTIONS.contains(a.optString("type"))) out.remove(key)
+        }
     }
 
     /** 一律强制 expanded，绕开 SDK compact 下拉浮层的样式 & 生命周期问题。 */
@@ -125,10 +163,13 @@ object InteractiveCardSanitizer {
      *
      * 改写方式：
      *  - `type` 从 `ColumnSet` 改为 `Container`
-     *  - 各 column 的 items 依次平铺成 Container.items（保序，先左后右）
+     *  - 各 column 依次成为 Container.items：**带语义属性**（[COLUMN_CARRY_PROPS]：isVisible / id /
+     *    selectAction / style / bleed / backgroundImage）的列包一层 Container 保留这些属性，避免
+     *    `isVisible:false` 的列内容被漏显、`Action.ToggleVisibility` 目标 id 失效；普通列（只有
+     *    width + items）直接平铺，输出与既有行为一致
      *  - `columns` 字段删除
      *  - `verticalContentAlignment` 属于 ColumnSet 专属，删除避免 SDK 疑惑
-     *  - `style` / `spacing` / `bleed` / `separator` / `isVisible` / `id` 保留（Container 一样吃）
+     *  - `style` / `spacing` / `bleed` / `separator` / `isVisible` / `id` 在 ColumnSet 自身上保留（Container 一样吃）
      */
     private fun stackColumnSetForMobileActions(el: JSONObject) {
         val columns = el.optJSONArray("columns") ?: return
@@ -153,17 +194,28 @@ object InteractiveCardSanitizer {
         }
         if (!shouldStack) return
 
-        // 平铺各 column.items 到新的 Container.items 数组。
-        val flatItems = JSONArray()
+        // 各 column.items 依次落到新的 Container.items。带语义属性的列包一层 Container 保留，
+        // 否则平铺（视觉等价、不改既有 goldens）。
+        val newItems = JSONArray()
         for (i in 0 until columns.length()) {
             val col = columns.optJSONObject(i) ?: continue
             val items = col.optJSONArray("items") ?: continue
-            for (j in 0 until items.length()) {
-                flatItems.put(items.opt(j))
+            if (COLUMN_CARRY_PROPS.any { col.has(it) }) {
+                val container = JSONObject()
+                container.put("type", "Container")
+                container.put("items", items)
+                for (p in COLUMN_CARRY_PROPS) {
+                    if (col.has(p)) container.put(p, col.get(p))
+                }
+                newItems.put(container)
+            } else {
+                for (j in 0 until items.length()) {
+                    newItems.put(items.opt(j))
+                }
             }
         }
         el.put("type", "Container")
-        el.put("items", flatItems)
+        el.put("items", newItems)
         el.remove("columns")
         el.remove("verticalContentAlignment")
     }

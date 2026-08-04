@@ -381,6 +381,83 @@ class InteractiveCardSanitizerTest {
         assertTrue(out.has("columns"))
     }
 
+    @Test
+    fun `stackColumnSet wraps column with isVisible or id in a Container to preserve them`() {
+        // 带 isVisible:false 的列在拆行后必须仍隐藏、id 必须仍在（否则漏显隐藏内容、
+        // Action.ToggleVisibility 目标失效）。命中拆行（ActionSet 有 3 个 action）。
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "详情") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "允许") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "拒绝") })
+            })
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                // 列 0：带 isVisible=false + id → 应被包进 Container 保留
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("isVisible", false)
+                    put("id", "secret_col")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "隐藏内容") })
+                    })
+                })
+                // 列 1：普通列（仅 width + items）→ 平铺，输出与旧行为一致
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("命中拆行：type 应改成 Container", "Container", out.getString("type"))
+        assertFalse("columns 字段应删除", out.has("columns"))
+        val items = out.getJSONArray("items")
+        assertEquals("列0 包 Container、列1 平铺 ActionSet → 2 项", 2, items.length())
+
+        val wrapped = items.getJSONObject(0)
+        assertEquals("带属性的列应包成 Container", "Container", wrapped.getString("type"))
+        assertFalse("isVisible=false 必须保留（否则隐藏内容被漏显）", wrapped.getBoolean("isVisible"))
+        assertEquals("id 必须保留（否则 ToggleVisibility 目标失效）", "secret_col", wrapped.getString("id"))
+        assertEquals("列内 items 应挂在包裹 Container 下", "TextBlock",
+            wrapped.getJSONArray("items").getJSONObject(0).getString("type"))
+        assertFalse("width 是 Column 专属、竖直堆叠无意义，不应带入 Container", wrapped.has("width"))
+
+        assertEquals("普通列直接平铺 ActionSet", "ActionSet", items.getJSONObject(1).getString("type"))
+    }
+
+    @Test
+    fun `strips Action_CopyToClipboard from actions but keeps renderable ones`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray())
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "打开"); put("url", "https://x.com") })
+                put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val actions = out.getJSONArray("actions")
+        assertEquals("CopyToClipboard 应被剥离，只剩可渲染的 OpenUrl", 1, actions.length())
+        assertEquals("Action.OpenUrl", actions.getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `strips unsupported selectAction so container still renders`() {
+        val el = JSONObject().apply {
+            put("type", "Container")
+            put("selectAction", JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            put("items", JSONArray().apply { put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") }) })
+        }
+        val out = sanitizeSingleElement(el)
+        assertFalse("不可渲染的 selectAction 应删除（否则 SDK 渲染异常）", out.has("selectAction"))
+        assertEquals("容器其余内容保留", "TextBlock", out.getJSONArray("items").getJSONObject(0).getString("type"))
+    }
+
     // ─────────────────────────────── 辅助 ───────────────────────────────
 
     /** 便捷：包一层 AdaptiveCard body，返回 sanitize 后的第一个 element。 */

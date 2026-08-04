@@ -44,17 +44,24 @@
                 android:textSize="15sp"
                 android:visibility="gone" />
 
-            <!-- Action.Submit 提交中的透明覆盖层：视觉上父容器 alpha=0.6 已置灰所有子 View；
-                 这里 clickable=true 吸收所有点击，防止用户在等 bot 回帧时重复点击按钮。
-                 提交完成 / 10s 超时 / bot 改卡新帧到达时，Provider 会把 visibility 设回 gone。 -->
-            <View
+            <!-- Action.Submit 提交中的覆盖层：半透明 scrim 把卡片压暗 + 居中 ProgressBar 转圈
+                 （对齐 iOS 的 loading 态）；clickable=true 吸收点击，防止等 bot 回帧时重复点。
+                 提交完成 / 10s 超时 / bot 改卡新帧到达时，Provider 把 visibility 设回 gone。 -->
+            <FrameLayout
                 android:id="@+id/interactiveCardSubmitOverlay"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@android:color/transparent"
+                android:background="#33000000"
                 android:clickable="true"
                 android:focusable="true"
-                android:visibility="gone" />
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center"
+                    android:indeterminate="true" />
+            </FrameLayout>
         </FrameLayout>
 
         <include layout="@layout/wk_msg_status_layout" />

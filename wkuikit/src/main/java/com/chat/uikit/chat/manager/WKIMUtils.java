@@ -508,6 +508,8 @@ public class WKIMUtils {
                         }
                     }
                     case WKCMDKeys.wk_sync_message_extra -> {
+                        if (BuildConfig.DEBUG) android.util.Log.d("CardFrameDebug",
+                                "[CMD recv] wk_sync_message_extra param=" + (cmd.paramJsonObject == null ? "null" : cmd.paramJsonObject.toString()));
                         if (cmd.paramJsonObject == null) {
                             return;
                         }
@@ -517,6 +519,10 @@ public class WKIMUtils {
                             return;
                         }
                         MsgModel.getInstance().syncExtraMsg(channelID, channelType);
+                        // type=17 交互卡终态帧补偿：extra/sync 增量游标对非单调 version 会永久跳过
+                        // 低版本终态帧（已实测），故对待补偿卡片额外走游标免疫的 message/channel/sync
+                        // 精确补拉。仅作用于已登记的处理中卡片，不波及其它消息；节流 + 上限见 MsgModel。
+                        MsgModel.getInstance().refreshPendingCards(channelID, channelType);
                     }
                     case WKCMDKeys.wk_memberUpdate -> {
                         if (cmd.paramJsonObject == null) {

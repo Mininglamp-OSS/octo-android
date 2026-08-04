@@ -52,6 +52,16 @@ class WKInteractiveCardContent : WKMessageContent() {
     /** Space 隔离标识。 */
     var cardSpaceId: String = ""
 
+    /**
+     * 是否为中间流式帧（对齐服务端 [cardmsg.Transient]，content_edit 信封顶层 `transient`）。
+     *
+     * `true` = thinking / tool-state 等中间进度帧，实时应用但不入修订历史；
+     * 缺失 / `false` = 权威（终态）帧。交互卡"处理中卡死"补偿逻辑靠它判定：
+     * 只有收到**非 transient 的权威帧**才认为终态到达、停止按 seq 补拉
+     * （详见 [com.chat.uikit.message.MsgModel.onCardRendered]）。
+     */
+    var transient: Boolean = false
+
     override fun encodeMsg(): JSONObject {
         val json = JSONObject()
         cardJson?.let { json.put("card", it) }
@@ -69,6 +79,7 @@ class WKInteractiveCardContent : WKMessageContent() {
         cardVersion = json.optString("card_version", "1.5")
         profile = json.optString("profile", "")
         cardSpaceId = json.optString("space_id", "")
+        transient = json.optBoolean("transient", false)
         return this
     }
 

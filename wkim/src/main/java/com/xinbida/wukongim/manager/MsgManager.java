@@ -1011,6 +1011,14 @@ public class MsgManager extends BaseManager {
             if (list.get(j).message_extra != null) {
                 WKMsgExtra extra = WKSyncExtraMsg2WKMsgExtra(wkMsg.channelID, wkMsg.channelType, list.get(j).message_extra);
                 msgExtraList.add(extra);
+                if (BuildConfig.DEBUG && wkMsg.type == 17) {
+                    Log.d("CardFrameDebug", "[save] type=17 seq=" + wkMsg.messageSeq + " msgID=" + wkMsg.messageID
+                            + " extraVersion=" + extra.extraVersion
+                            + " contentEditLen=" + (extra.contentEdit == null ? 0 : extra.contentEdit.length()));
+                }
+            } else if (BuildConfig.DEBUG && wkMsg.type == 17) {
+                Log.d("CardFrameDebug", "[save] type=17 seq=" + wkMsg.messageSeq + " msgID=" + wkMsg.messageID
+                        + " message_extra=null (无终态帧可落库)");
             }
             if (WKCommonUtils.isNotEmpty(wkMsg.reactionList)) {
                 reactionList.addAll(wkMsg.reactionList);

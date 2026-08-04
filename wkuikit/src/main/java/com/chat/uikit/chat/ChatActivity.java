@@ -1243,6 +1243,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         // 先持久化旧 channel 编辑态（此时 editText / readMsgIds / redDot 还是旧值）。
         persistOldChannelEditState(oldChannelId, oldChannelType);
+        // 清掉旧频道的 type=17 卡片待补偿登记，避免单例上长期留存 + 限制 fan-out。
+        MsgModel.getInstance().clearPendingCards(oldChannelId, oldChannelType);
 
         setIntent(intent);
         initParam();
@@ -1791,6 +1793,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return null;
         });
         WKIM.getInstance().getConnectionManager().addOnConnectionStatusListener(channelId, (i, s) -> {
+            if (i == WKConnectStatus.syncCompleted) {
+                // type=17 交互卡终态帧补偿（对齐 iOS 重连无条件按 seq 补拉）：
+                // 重连 sync 完成时，对已登记的"处理中"卡片走游标免疫的 message/channel/sync
+                // 各补拉一次，**不受下方 maxOrderSeq gate 限制**——卡住的卡常是最后一条、
+                // gate（maxOrderSeq > 本地尾）不成立就不会走 getData 刷新，卡片永远补不回来。
+                // refreshPendingCards 无待补偿卡时是 no-op，仅 type=17，节流 + 上限见 MsgModel。
+                if (BuildConfig.DEBUG) android.util.Log.d("CardFrameDebug",
+                        "[reconnect] syncCompleted → refreshPendingCards channelID=" + channelId + " type=" + channelType);
+                MsgModel.getInstance().refreshPendingCards(channelId, channelType);
+            }
             if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
                 WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
                 int maxOrderSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
@@ -3861,6 +3873,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // 退出会话，清掉本频道 type=17 卡片待补偿登记（内存归零 + 停止后续 CMD 触发的 fan-out）。
+        MsgModel.getInstance().clearPendingCards(channelId, channelType);
         if (messageEffectManager != null) {
             messageEffectManager.destroy();
             messageEffectManager = null;

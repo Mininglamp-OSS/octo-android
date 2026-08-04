@@ -34,6 +34,7 @@ import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.net.IRequestResultListener
 import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
+import com.chat.uikit.BuildConfig
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.CardSenderClassifier
 import com.chat.uikit.chat.msgmodel.CardSenderTrust
@@ -96,15 +97,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      * 一次——反正它 10s 也会因超时自动清）。
      */
     private val lastRenderedFingerprint = LruCache<String, Int>(FINGERPRINT_CACHE_SIZE)
-
-    /**
-     * messageID → 已触发过"处理中卡片补偿重拉"，避免每次 bind/滚动重复请求。
-     *
-     * 处理中的推理卡可能是 [MsgModel.refreshCardMessage] 注释里说的"频道级 extra 游标永久
-     * 跳过终态帧"导致卡住的。首次进入视图补偿拉一次即可；终态帧落库后卡片不再是处理中，
-     * 自然不会再触发。[LruCache] 有界，淘汰老消息最坏是多补拉一次，可接受。
-     */
-    private val cardRefreshRequested = LruCache<String, Boolean>(CARD_BOX_CACHE_SIZE)
 
     /**
      * 已打印过 payload 的解析失败签名（cardJson.hashCode），一张挂卡只打一次完整 payload。
@@ -259,16 +251,29 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             return
         }
 
-        // ── 补偿漏接的终态帧 ──
-        // 处理中的推理卡可能是 message/extra/sync 频道级增量游标永久跳过终态帧导致卡住的
-        // （web/iOS 从消息本身拿权威内容，不受影响）。按 messageSeq 单条重拉 message/channel/sync
-        // 补回最新 content_edit（详见 MsgModel.refreshCardMessage）。每条消息一个 Provider
-        // 生命周期内最多触发一次，避免刷接口；终态帧落库后不再是处理中，自然不再触发。
-        if (messageId.isNotEmpty() && cardRefreshRequested.get(messageId) == null &&
-            (cardJson.contains("正在处理") || cardJson.contains("处理中"))
-        ) {
-            cardRefreshRequested.put(messageId, true)
-            MsgModel.getInstance().refreshCardMessage(wkMsg.channelID, wkMsg.channelType, wkMsg.messageSeq.toLong())
+        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）──
+        // message/extra/sync 频道级增量游标对非单调 version 会永久跳过低版本终态帧
+        //（服务端多副本 HiLo 发号，version 非单调，已实测 + 服务端注释坐实），导致卡片卡在
+        // "处理中"。这里按**结构化信号**登记待补偿：只有收到**非 transient 的权威帧**
+        //（editedContent != null && !transient）才算终态到达。中间流式帧 transient=true 也有
+        // content_edit，绝不能当终态注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
+        // MsgModel 用游标免疫的 message/channel/sync 按 seq 补拉：渲染时补 re-entry 存量帧、
+        // 收到 wk_sync_message_extra CMD 时补实时帧。仅 type=17，不判中文子串、只认结构状态。
+        if (messageId.isNotEmpty()) {
+            val hasTerminalFrame = editedContent != null && !editedContent.transient
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    "CardFrameDebug",
+                    "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
+                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
+                )
+            }
+            MsgModel.getInstance().onCardRendered(
+                wkMsg.channelID,
+                wkMsg.channelType,
+                wkMsg.messageSeq.toLong(),
+                hasTerminalFrame,
+            )
         }
 
         // ── 设备 API gate ──
@@ -465,7 +470,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         renderer.clear()
         dispatcher.onDestroy()
         lastRenderedFingerprint.evictAll()
-        cardRefreshRequested.evictAll()
         parseFailLoggedSigs.evictAll()
         cardBoxByMsgId.evictAll()
     }

@@ -20,7 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
-
+import android.util.Log;
 import androidx.annotation.Nullable;
 
 import com.alibaba.fastjson.JSON;
@@ -68,6 +68,7 @@ import com.xinbida.wukongim.entity.WKSyncChat;
 import com.xinbida.wukongim.entity.WKSyncConvMsgExtra;
 import com.xinbida.wukongim.entity.WKSyncExtraMsg;
 import com.xinbida.wukongim.entity.WKSyncMsg;
+import com.xinbida.wukongim.entity.WKSyncRecent;
 import com.xinbida.wukongim.interfaces.ISyncChannelMsgBack;
 import com.xinbida.wukongim.interfaces.ISyncConversationChatBack;
 import com.xinbida.wukongim.message.type.WKMsgContentType;
@@ -78,8 +79,10 @@ import org.json.JSONException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 2019-11-24 14:18
@@ -602,14 +605,159 @@ public class MsgModel extends WKBaseModel {
      */
     public void refreshCardMessage(String channelID, byte channelType, long messageSeq) {
         if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
-        // 只取目标 seq 这一条（start 作为独占锚点向上取第一条 = messageSeq），limit=1 把影响面
-        // 收到最小，不波及相邻消息。
-        syncChannelMsg(channelID, channelType, messageSeq - 1, messageSeq + 1, 1, 1, result -> {
+        if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[req] channelID=" + channelID
+                + " type=" + channelType + " targetSeq=" + messageSeq
+                + " start=" + messageSeq + " end=" + (messageSeq + 1) + " limit=1 pullMode=1");
+        // start_message_seq 服务端语义是**包含**（pullMode=1 上拉：从 start 起含 start 向上取，
+        // 参见 SDK MsgDbManager#queryOrSyncHistoryMessages 的 contain 分支）。因此锚点直接取
+        // messageSeq 本身，limit=1 上拉命中的第一条即目标；end 给 messageSeq+1 收窄窗口，
+        // 不波及相邻消息。
+        //（早期误当成"排他锚点"传了 messageSeq-1，导致只拉回相邻的 seq-1、目标卡终态帧永远拉不到。）
+        syncChannelMsg(channelID, channelType, messageSeq, messageSeq + 1, 1, 1, result -> {
+            if (BuildConfig.DEBUG) logRefreshCardResult(messageSeq, result);
             if (result != null && WKReader.isNotEmpty(result.messages)) {
                 WKDbScheduler.get().scheduleDirect(() ->
                         WKIM.getInstance().getMsgManager().saveSyncChannelMSGs(result.messages));
             }
         });
+    }
+
+    /**
+     * 补拉响应的诊断日志。用 {@code CardFrameDebug} tag 一次性区分三种卡住根因：
+     * (a) 命中目标 seq 但 message_extra=null → 服务端没内联终态帧；
+     * (b) 命中且有 content_edit 但内容仍是"处理中" → 拉的时候终态帧还没到服务端；
+     * (c) returnedSeqs 不含目标 seq → 分页参数拉错了消息，目标卡 extra 根本没刷新。
+     */
+    private void logRefreshCardResult(long targetSeq, WKSyncChannelMsg result) {
+        if (!BuildConfig.DEBUG) return;
+        if (result == null) {
+            Log.d("CardFrameDebug", "[resp] targetSeq=" + targetSeq + " result=null (onFail/空返回)");
+            return;
+        }
+        StringBuilder seqs = new StringBuilder();
+        boolean hitTarget = false;
+        if (WKReader.isNotEmpty(result.messages)) {
+            for (WKSyncRecent m : result.messages) {
+                seqs.append(m.message_seq).append(",");
+                if (m.message_seq == targetSeq) {
+                    hitTarget = true;
+                    WKSyncExtraMsg ex = m.message_extra;
+                    String ce = (ex != null && ex.content_edit != null) ? ex.content_edit.toString() : null;
+                    Log.d("CardFrameDebug", "[resp] HIT targetSeq=" + targetSeq
+                            + " hasExtra=" + (ex != null)
+                            + " extraVersion=" + (ex != null ? ex.extra_version : -1)
+                            + " hasContentEdit=" + (ce != null)
+                            + " contentEditLen=" + (ce != null ? ce.length() : 0)
+                            + " contentEdit=" + (ce == null ? "null" : (ce.length() > 400 ? ce.substring(0, 400) : ce)));
+                }
+            }
+        }
+        Log.d("CardFrameDebug", "[resp] targetSeq=" + targetSeq
+                + " min=" + result.min_message_seq + " max=" + result.max_message_seq
+                + " count=" + (result.messages == null ? 0 : result.messages.size())
+                + " returnedSeqs=[" + seqs + "] hitTarget=" + hitTarget);
+    }
+
+    // ── 交互卡(type=17)终态帧补偿：游标免疫 + CMD 驱动 ──
+    // message/extra/sync 是频道级增量游标（version > 游标），而服务端改卡的 version 由进程内
+    // HiLo 分配器发号（bot_api/send.go GenSeq），**多副本部署下跨副本非单调**：低号段副本可能
+    // 在高 version 提交后才写入更低的 version（服务端注释坐实），于是终态帧的 version 反而更低。
+    // 一旦游标被同频道其它高 version extra 顶上去，低版本终态帧就永久落在游标下方、拉不回来
+    //（叠加服务端 Redis per-user 游标 floor，客户端连退回游标都做不到）→ 卡片卡在"处理中"。
+    // 这里对"尚无**非 transient 权威终态帧**"的 type=17 卡片登记待补偿，用**游标免疫**的
+    // message/channel/sync 按 seq 精确补拉（见 refreshCardMessage）。触发点：卡片渲染(re-entry 存量)
+    // + wk_sync_message_extra CMD（实时）+ 重连 syncCompleted（对齐 iOS）。节流 + 次数上限，
+    // 避免刷接口；收到非 transient 权威帧即注销。
+    private final Map<String, Map<Long, Integer>> pendingCardSeqs = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastCardRefreshAt = new ConcurrentHashMap<>();
+    private static final int MAX_CARD_REFRESH_PER_SEQ = 20;
+    private static final long CARD_REFRESH_MIN_INTERVAL_MS = 2000L;
+
+    private String cardKey(String channelID, byte channelType) {
+        return channelID + "#" + channelType;
+    }
+
+    /**
+     * 卡片渲染时调用。{@code hasTerminalFrame} = 已收到**非 transient 的权威终态帧**
+     * （由 Provider 判 {@code editedContent != null && !editedContent.transient}）→ 注销；
+     * 否则（尚无终态帧，或当前只是 transient 中间流式帧）登记待补偿。type=17 专用，不波及其它消息。
+     *
+     * <p>补拉只在**首次登记时触发一次**（覆盖 re-entry 存量帧——服务端已有终态的情况）；
+     * 后续 re-bind / 滚动不再补拉，实时更新交给 wk_sync_message_extra CMD 与重连驱动。
+     * 这样纯展示卡（profile=octo/v1，永无 content_edit）不会在每次 re-bind 时被无谓补拉。
+     */
+    public void onCardRendered(String channelID, byte channelType, long messageSeq, boolean hasTerminalFrame) {
+        if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
+        String k = cardKey(channelID, channelType);
+        if (hasTerminalFrame) {
+            // 这张卡完成 → 立刻自清：待补偿登记 + 节流时间戳一起删，不留死条目到退出频道。
+            Map<Long, Integer> m = pendingCardSeqs.get(k);
+            boolean removed = m != null && m.remove(messageSeq) != null;
+            lastCardRefreshAt.remove(k + "#" + messageSeq);
+            if (removed && BuildConfig.DEBUG) {
+                Log.d("CardFrameDebug", "[pending] 注销(收到权威终态帧) seq=" + messageSeq + " channelID=" + channelID);
+            }
+            return;
+        }
+        Map<Long, Integer> m = pendingCardSeqs.computeIfAbsent(k, x -> new ConcurrentHashMap<>());
+        boolean firstSeen = m.putIfAbsent(messageSeq, 0) == null;
+        if (firstSeen) {
+            if (BuildConfig.DEBUG) {
+                Log.d("CardFrameDebug", "[pending] 登记(尚无终态帧) seq=" + messageSeq + " channelID=" + channelID);
+            }
+            // 仅首次登记补一次，覆盖 re-entry 存量帧；后续靠 CMD / 重连驱动。
+            maybeRefreshCard(channelID, channelType, messageSeq);
+        }
+    }
+
+    /**
+     * 收到 wk_sync_message_extra CMD 时调用：对该频道所有待补偿卡片各补拉一次（节流 + 上限）。
+     * CMD 投递可靠，用它做实时触发；补拉走游标免疫路径，因此能捞回游标下方的低版本终态帧。
+     */
+    public void refreshPendingCards(String channelID, byte channelType) {
+        Map<Long, Integer> m = pendingCardSeqs.get(cardKey(channelID, channelType));
+        if (m == null || m.isEmpty()) return;
+        for (Long seq : m.keySet()) {
+            maybeRefreshCard(channelID, channelType, seq);
+        }
+    }
+
+    /**
+     * 退出频道时调用：清掉该频道的待补偿登记与节流时间戳。避免"永不终态"的卡片登记项
+     * 在单例上长期留存 + 限制单个 CMD 的 fan-out 规模。仅清本频道，不动其它频道。
+     */
+    public void clearPendingCards(String channelID, byte channelType) {
+        String k = cardKey(channelID, channelType);
+        Map<Long, Integer> removed = pendingCardSeqs.remove(k);
+        String prefix = k + "#";
+        lastCardRefreshAt.keySet().removeIf(tk -> tk.startsWith(prefix));
+        if (BuildConfig.DEBUG && removed != null && !removed.isEmpty()) {
+            Log.d("CardFrameDebug", "[pending] 清理频道待补偿 channelID=" + channelID + " 清掉=" + removed.size() + " 张");
+        }
+    }
+
+    private void maybeRefreshCard(String channelID, byte channelType, long messageSeq) {
+        String k = cardKey(channelID, channelType);
+        Map<Long, Integer> m = pendingCardSeqs.get(k);
+        if (m == null) return;
+        Integer cnt = m.get(messageSeq);
+        if (cnt == null || cnt >= MAX_CARD_REFRESH_PER_SEQ) {
+            if (cnt != null && BuildConfig.DEBUG) {
+                Log.d("CardFrameDebug", "[pending] 跳过(已达上限 " + MAX_CARD_REFRESH_PER_SEQ + ") seq=" + messageSeq);
+            }
+            return;
+        }
+        String tk = k + "#" + messageSeq;
+        long now = SystemClock.elapsedRealtime();
+        Long last = lastCardRefreshAt.get(tk);
+        if (last != null && now - last < CARD_REFRESH_MIN_INTERVAL_MS) {
+            if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 跳过(节流 <" + CARD_REFRESH_MIN_INTERVAL_MS + "ms) seq=" + messageSeq);
+            return;
+        }
+        lastCardRefreshAt.put(tk, now);
+        m.put(messageSeq, cnt + 1);
+        if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 补拉#" + (cnt + 1) + " seq=" + messageSeq + " channelID=" + channelID);
+        refreshCardMessage(channelID, channelType, messageSeq);
     }
 
     /**
@@ -710,9 +858,24 @@ public class MsgModel extends WKBaseModel {
             jsonObject.put("limit", 100);
             String deviceUUID = WKConstants.getDeviceUUID();
             jsonObject.put("source", deviceUUID);
+            if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[extraSync req] channelID=" + channelID
+                    + " sentVersion=" + maxExtraVersion + " limit=100");
             request(createService(MsgService.class).syncExtraMsg(jsonObject), new IRequestResultListener<>() {
             @Override
             public void onSuccess(List<WKSyncExtraMsg> result) {
+                if (BuildConfig.DEBUG) {
+                    StringBuilder sb = new StringBuilder();
+                    if (WKReader.isNotEmpty(result)) {
+                        for (WKSyncExtraMsg e : result) {
+                            sb.append(e.message_id).append("@v").append(e.extra_version)
+                                    .append(e.content_edit != null ? "(edit)" : "").append(" ");
+                        }
+                    }
+                    Log.d("CardFrameDebug", "[extraSync resp] channelID=" + channelID
+                            + " sentVersion=" + maxExtraVersion
+                            + " count=" + (result == null ? 0 : result.size())
+                            + " items=[" + sb + "]");
+                }
                 if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[syncExtraMsg] onSuccess: channelID=" + channelID + " resultSize=" + (result == null ? "null" : result.size()) + " extraVersion=" + maxExtraVersion);
                 if (WKReader.isNotEmpty(result)) {
                     for (WKSyncExtraMsg extra : result) {

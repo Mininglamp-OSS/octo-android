@@ -323,17 +323,11 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         // 注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
         if (messageId.isNotEmpty()) {
             val hasTerminalFrame = editedContent != null && !editedContent.transient
-            // 纯展示卡（profile=octo/v1 且当前帧无任何 content_edit）**永不**会有终态帧 → 不登记待补偿，
-            // 否则它每次同频道 CMD 都被 fan-out 补拉、5min 墙钟才退，白烧网络（P1-1）。注意判据要带
-            // editedContent==null：octo/v1 也可能是 octo/v2 卡的**终态 result 帧**（如访问申请 pending(v2)→
-            // result(v1)），那种 editedContent!=null 会走 hasTerminalFrame=true 的注销分支，不受此拦截。
-            val displayOnlyNeverFrame =
-                editedContent == null && model.profile == InteractiveCardDecision.PROFILE_OCTO_V1
             if (BuildConfig.DEBUG) {
                 Log.d(
                     "CardFrameDebug",
                     "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
-                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame displayOnly=$displayOnlyNeverFrame",
+                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
                 )
             }
             MsgModel.getInstance().onCardRendered(
@@ -341,7 +335,6 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 wkMsg.channelType,
                 wkMsg.messageSeq.toLong(),
                 hasTerminalFrame,
-                displayOnlyNeverFrame,
             )
         }
 

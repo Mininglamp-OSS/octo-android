@@ -713,22 +713,16 @@ public class MsgModel extends WKBaseModel {
      * （由 Provider 判 {@code editedContent != null && !editedContent.transient}）→ 注销；
      * 否则（尚无终态帧，或当前只是 transient 中间流式帧）登记待补偿。type=17 专用，不波及其它消息。
      *
-     * <p>{@code displayOnlyNeverFrame} = 纯展示卡（profile=octo/v1 且当前帧无任何 content_edit）→ 它**永不**
-     * 会有终态帧，不登记待补偿。否则会被同频道每个 CMD fan-out 补拉、直到 5min 墙钟才退，白烧网络（P1-1）。
-     * 反之：可交互/流式卡（octo/v2，含推理卡）与"已带 content_edit 的终态 result 帧"照常登记 / 注销。
-     *
      * <p>补拉只在**首次登记时触发一次**（覆盖 re-entry 存量帧——服务端已有终态的情况）；
      * 后续 re-bind / 滚动不再补拉，实时更新交给 wk_sync_message_extra CMD 与重连驱动。
      */
-    public void onCardRendered(String channelID, byte channelType, long messageSeq,
-                               boolean hasTerminalFrame, boolean displayOnlyNeverFrame) {
+    public void onCardRendered(String channelID, byte channelType, long messageSeq, boolean hasTerminalFrame) {
         if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
         String k = cardKey(channelID, channelType);
         if (hasTerminalFrame) {
             deregisterCard(channelID, channelType, messageSeq, "收到权威终态帧");
             return;
         }
-        if (displayOnlyNeverFrame) return;   // 纯展示卡永无终态帧，不登记（P1-1）
         // 用 get+put 而非 putIfAbsent/computeIfAbsent：后者在静态类型 Map 上是 API24 方法，minSdk=23 未开
         // desugar 会被 lint 判 NewApi（P0-1）。onCardRendered 只在主线程 bind 调用，无并发建 map 之虞。
         Map<Long, Integer> m = pendingCardSeqs.get(k);

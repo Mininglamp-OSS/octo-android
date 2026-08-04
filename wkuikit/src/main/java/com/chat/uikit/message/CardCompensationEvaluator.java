@@ -43,19 +43,23 @@ public final class CardCompensationEvaluator {
         public final CardRefreshDecider.Decision decision;
         /** 有进展时的新内容哈希（调用方写入 lastCardContentHash）；否则 null。 */
         public final Integer newContentHash;
+        /** 本次是否应用了**非 transient 终态帧**（调用方据此锁存 tk，拦后续陈 transient 覆盖；P1-2）。 */
+        public final boolean appliedTerminal;
 
-        private Outcome(boolean nonSignal, CardRefreshDecider.Decision decision, Integer newContentHash) {
+        private Outcome(boolean nonSignal, CardRefreshDecider.Decision decision,
+                        Integer newContentHash, boolean appliedTerminal) {
             this.nonSignal = nonSignal;
             this.decision = decision;
             this.newContentHash = newContentHash;
+            this.appliedTerminal = appliedTerminal;
         }
 
         static Outcome nonSignal() {
-            return new Outcome(true, null, null);
+            return new Outcome(true, null, null, false);
         }
 
-        static Outcome decided(CardRefreshDecider.Decision d, Integer newHash) {
-            return new Outcome(false, d, newHash);
+        static Outcome decided(CardRefreshDecider.Decision d, Integer newHash, boolean appliedTerminal) {
+            return new Outcome(false, d, newHash, appliedTerminal);
         }
     }
 
@@ -67,18 +71,24 @@ public final class CardCompensationEvaluator {
      * @param priorHash         上次记录的 content_edit 哈希（null=从未拿到）
      * @param priorUnproductive 本次之前的连续无进展次数
      * @param maxUnproductive   连续无进展上限
+     * @param terminalApplied   本卡此前是否已落库过非 transient 终态帧（P1-2 乱序守卫）
      */
     public static Outcome evaluate(WKSyncChannelMsg result, long targetSeq,
-                                   Integer priorHash, int priorUnproductive, int maxUnproductive) {
+                                   Integer priorHash, int priorUnproductive, int maxUnproductive,
+                                   boolean terminalApplied) {
         Map contentEditMap = extractContentEditMap(result, targetSeq);
         if (contentEditMap == null) return Outcome.nonSignal();
+        boolean midStream = isTransient(contentEditMap);
+        // P1-2 乱序守卫：已落库过非 transient 终态帧后，再来的 transient 帧（多为滞后/乱序的中间帧）绝不能
+        // 覆盖终态（insertOrReplaceExtra 是 CONFLICT_REPLACE）→ 当非信号丢弃。非 transient 的新帧仍放行。
+        if (terminalApplied && midStream) return Outcome.nonSignal();
         // 内容哈希判进展：键集固定 → HashMap.toString() 稳定，String.hashCode 可靠。
         String contentEdit = contentEditMap.toString();
         boolean progressed = CardRefreshDecider.isProgress(contentEdit, priorHash);
-        boolean midStream = isTransient(contentEditMap);
         CardRefreshDecider.Decision d =
                 CardRefreshDecider.decide(progressed, midStream, priorUnproductive, maxUnproductive);
-        return Outcome.decided(d, progressed ? contentEdit.hashCode() : null);
+        boolean appliedTerminal = d == CardRefreshDecider.Decision.PROGRESS_RESET && !midStream;
+        return Outcome.decided(d, progressed ? contentEdit.hashCode() : null, appliedTerminal);
     }
 
     /** 取目标 seq 的 content_edit 原始 Map；目标不在返回 / 有消息但无 content_edit 均返回 null。 */

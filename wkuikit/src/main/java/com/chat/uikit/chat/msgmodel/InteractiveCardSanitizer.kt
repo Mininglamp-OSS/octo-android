@@ -136,7 +136,10 @@ object InteractiveCardSanitizer {
                 val a = actions.optJSONObject(i) ?: continue
                 if (RENDERABLE_ACTIONS.contains(a.optString("type"))) kept.put(a)
             }
-            out.put("actions", kept)
+            // 剥空后整个删掉 actions 键（不是留 []）：这样根 AdaptiveCard 只含 CopyToClipboard 的动作条不会
+            // 残留一个空动作区（P2-3）；嵌套 ActionSet 被剥空后也因缺 actions 被 [isEmptyActionSet] 判空、
+            // 由父数组整体剔除。
+            if (kept.length() == 0) out.remove("actions") else out.put("actions", kept)
         }
         for (key in arrayOf("selectAction", "inlineAction")) {
             val a = out.optJSONObject(key) ?: continue

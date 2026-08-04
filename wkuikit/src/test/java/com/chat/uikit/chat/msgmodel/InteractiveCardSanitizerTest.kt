@@ -523,6 +523,20 @@ class InteractiveCardSanitizerTest {
         assertEquals("TextBlock", items.getJSONObject(0).getString("type"))
     }
 
+    @Test
+    fun `root-level actions emptied by stripping is removed not left empty`() {
+        // 根 AdaptiveCard 动作条只含 CopyToClipboard：剥空后不该残留 actions:[]（P2-3）。
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply { put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") }) })
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        assertFalse("剥空的根 actions 应整体删除，不留空数组", out.has("actions"))
+    }
+
     // ─────────────────────────────── 辅助 ───────────────────────────────
 
     /** 便捷：包一层 AdaptiveCard body，返回 sanitize 后的第一个 element。 */

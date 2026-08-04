@@ -134,14 +134,20 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      * 投递到这里；打到 WKMsgItemViewManager 单例原型上 [dispatcher] 是另一份、submittingIds 为空，
      * clearSubmitting 成 no-op、超时照样误报（P1-2）。
      *
-     * 只在收到**真正新的非 transient 终态帧**时清（判据与 [onCardRendered] 的 hasTerminalFrame 一致）：
-     * transient 中间流式帧 / 无 content_edit 的无关刷新不清，避免提交在途时被无关 refresh 提前重启按钮。
+     * 只在收到**真正新的非 transient 终态帧**时清（"新" = cardJson 指纹相对上次渲染有变化，复用 bind 路径
+     * 的 [lastRenderedFingerprint]）：终态帧本身也可能带 Action.Submit（见 goldens），若不校验"新帧"，
+     * 一次无关 refresh（reaction / 已读态 / 同帧补写）会在 10s 窗口内误清 submit、放开按钮致重复提交（P2-1）。
      */
     fun onCardMessageRefreshed(wkMsg: WKMsg) {
         val messageId = wkMsg.messageID
         if (messageId.isNullOrEmpty()) return
-        val edited = wkMsg.remoteExtra?.contentEditMsgModel as? WKInteractiveCardContent
-        if (edited != null && !edited.transient) dispatcher.clearSubmitting(messageId)
+        val edited = wkMsg.remoteExtra?.contentEditMsgModel as? WKInteractiveCardContent ?: return
+        if (edited.transient) return                       // transient 中间帧不算提交回帧
+        val newFp = edited.cardJson?.toString()?.hashCode() ?: 0
+        val oldFp = lastRenderedFingerprint.get(messageId)
+        // 指纹变化 = 真正新帧 → 清；指纹未变 = 同一终态帧的无关刷新 → 不动 submit（避免误清）。
+        // oldFp==null（从未渲染 / 已被 LRU 淘汰）时按新帧处理：宁可清，避免离屏卡片误报超时。
+        if (oldFp == null || oldFp != newFp) dispatcher.clearSubmitting(messageId)
     }
 
     private fun createDispatcher(): CardActionDispatcher {
@@ -317,11 +323,17 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
         // 注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
         if (messageId.isNotEmpty()) {
             val hasTerminalFrame = editedContent != null && !editedContent.transient
+            // 纯展示卡（profile=octo/v1 且当前帧无任何 content_edit）**永不**会有终态帧 → 不登记待补偿，
+            // 否则它每次同频道 CMD 都被 fan-out 补拉、5min 墙钟才退，白烧网络（P1-1）。注意判据要带
+            // editedContent==null：octo/v1 也可能是 octo/v2 卡的**终态 result 帧**（如访问申请 pending(v2)→
+            // result(v1)），那种 editedContent!=null 会走 hasTerminalFrame=true 的注销分支，不受此拦截。
+            val displayOnlyNeverFrame =
+                editedContent == null && model.profile == InteractiveCardDecision.PROFILE_OCTO_V1
             if (BuildConfig.DEBUG) {
                 Log.d(
                     "CardFrameDebug",
                     "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
-                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
+                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame displayOnly=$displayOnlyNeverFrame",
                 )
             }
             MsgModel.getInstance().onCardRendered(
@@ -329,6 +341,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 wkMsg.channelType,
                 wkMsg.messageSeq.toLong(),
                 hasTerminalFrame,
+                displayOnlyNeverFrame,
             )
         }
 

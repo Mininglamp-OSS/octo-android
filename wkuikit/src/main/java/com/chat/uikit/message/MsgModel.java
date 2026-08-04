@@ -690,7 +690,14 @@ public class MsgModel extends WKBaseModel {
     private final Map<String, Long> lastCardRefreshAt = new ConcurrentHashMap<>();
     private final Map<String, Integer> lastCardContentHash = new ConcurrentHashMap<>();
     private final Map<String, Long> cardRegisteredAt = new ConcurrentHashMap<>();
-    private final java.util.Set<String> cardTrailingScheduled = ConcurrentHashMap.newKeySet();
+    // 注意：不能用 ConcurrentHashMap.newKeySet() —— 它是 Java8/API24 API，本工程 minSdk=23 且未开
+    // coreLibraryDesugaring，而 MsgModel 是静态单例、getInstance 被大量非卡片路径调用，放这里会让
+    // API23 设备核心消息路径 class-init 崩溃（sticky）。用 newSetFromMap 全 API 可用、语义一致（P0-1）。
+    private final java.util.Set<String> cardTrailingScheduled =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    // 已落库过非 transient 终态帧的卡（tk）。用于拦截乱序补拉里"陈 transient 帧覆盖已应用终态帧"（P1-2）。
+    private final java.util.Set<String> cardTerminalApplied =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private final Handler cardMainHandler = new Handler(Looper.getMainLooper());
     private static final int MAX_UNPRODUCTIVE_CARD_REFRESH = 5;
     private static final long CARD_REFRESH_MIN_INTERVAL_MS = 2000L;
@@ -706,20 +713,32 @@ public class MsgModel extends WKBaseModel {
      * （由 Provider 判 {@code editedContent != null && !editedContent.transient}）→ 注销；
      * 否则（尚无终态帧，或当前只是 transient 中间流式帧）登记待补偿。type=17 专用，不波及其它消息。
      *
+     * <p>{@code displayOnlyNeverFrame} = 纯展示卡（profile=octo/v1 且当前帧无任何 content_edit）→ 它**永不**
+     * 会有终态帧，不登记待补偿。否则会被同频道每个 CMD fan-out 补拉、直到 5min 墙钟才退，白烧网络（P1-1）。
+     * 反之：可交互/流式卡（octo/v2，含推理卡）与"已带 content_edit 的终态 result 帧"照常登记 / 注销。
+     *
      * <p>补拉只在**首次登记时触发一次**（覆盖 re-entry 存量帧——服务端已有终态的情况）；
      * 后续 re-bind / 滚动不再补拉，实时更新交给 wk_sync_message_extra CMD 与重连驱动。
-     * 这样纯展示卡（profile=octo/v1，永无 content_edit）不会在每次 re-bind 时被无谓补拉。
      */
-    public void onCardRendered(String channelID, byte channelType, long messageSeq, boolean hasTerminalFrame) {
+    public void onCardRendered(String channelID, byte channelType, long messageSeq,
+                               boolean hasTerminalFrame, boolean displayOnlyNeverFrame) {
         if (TextUtils.isEmpty(channelID) || messageSeq <= 0) return;
         String k = cardKey(channelID, channelType);
         if (hasTerminalFrame) {
             deregisterCard(channelID, channelType, messageSeq, "收到权威终态帧");
             return;
         }
-        Map<Long, Integer> m = pendingCardSeqs.computeIfAbsent(k, x -> new ConcurrentHashMap<>());
-        boolean firstSeen = m.putIfAbsent(messageSeq, 0) == null;
+        if (displayOnlyNeverFrame) return;   // 纯展示卡永无终态帧，不登记（P1-1）
+        // 用 get+put 而非 putIfAbsent/computeIfAbsent：后者在静态类型 Map 上是 API24 方法，minSdk=23 未开
+        // desugar 会被 lint 判 NewApi（P0-1）。onCardRendered 只在主线程 bind 调用，无并发建 map 之虞。
+        Map<Long, Integer> m = pendingCardSeqs.get(k);
+        if (m == null) {
+            m = new ConcurrentHashMap<>();
+            pendingCardSeqs.put(k, m);
+        }
+        boolean firstSeen = m.get(messageSeq) == null;
         if (firstSeen) {
+            m.put(messageSeq, 0);
             cardRegisteredAt.put(k + "#" + messageSeq, SystemClock.elapsedRealtime());
             if (BuildConfig.DEBUG) {
                 Log.d("CardFrameDebug", "[pending] 登记(尚无终态帧) seq=" + messageSeq + " channelID=" + channelID);
@@ -749,12 +768,31 @@ public class MsgModel extends WKBaseModel {
         String k = cardKey(channelID, channelType);
         Map<Long, Integer> removed = pendingCardSeqs.remove(k);
         String prefix = k + "#";
-        lastCardRefreshAt.keySet().removeIf(tk -> tk.startsWith(prefix));
-        lastCardContentHash.keySet().removeIf(tk -> tk.startsWith(prefix));
-        cardRegisteredAt.keySet().removeIf(tk -> tk.startsWith(prefix));
-        cardTrailingScheduled.removeIf(tk -> tk.startsWith(prefix));
+        // 显式 Iterator 而非 keySet().removeIf(...)：removeIf 是 API24 default 方法，本方法在频道切换/退出
+        // 时无条件调用（不受卡片 API-26 门控），minSdk=23 未开 desugar 时会崩（P0-1）。
+        removeKeysByPrefix(lastCardRefreshAt, prefix);
+        removeKeysByPrefix(lastCardContentHash, prefix);
+        removeKeysByPrefix(cardRegisteredAt, prefix);
+        removeByPrefix(cardTrailingScheduled, prefix);
+        removeByPrefix(cardTerminalApplied, prefix);
         if (BuildConfig.DEBUG && removed != null && !removed.isEmpty()) {
             Log.d("CardFrameDebug", "[pending] 清理频道待补偿 channelID=" + channelID + " 清掉=" + removed.size() + " 张");
+        }
+    }
+
+    /** 删除 map 里所有以 prefix 开头的 key（不用 API24 的 removeIf，兼容 minSdk 23；P0-1）。 */
+    private static void removeKeysByPrefix(Map<String, ?> map, String prefix) {
+        java.util.Iterator<String> it = map.keySet().iterator();
+        while (it.hasNext()) {
+            if (it.next().startsWith(prefix)) it.remove();
+        }
+    }
+
+    /** 删除 set 里所有以 prefix 开头的元素（不用 API24 的 removeIf，兼容 minSdk 23；P0-1）。 */
+    private static void removeByPrefix(java.util.Set<String> set, String prefix) {
+        java.util.Iterator<String> it = set.iterator();
+        while (it.hasNext()) {
+            if (it.next().startsWith(prefix)) it.remove();
         }
     }
 
@@ -768,6 +806,7 @@ public class MsgModel extends WKBaseModel {
         lastCardContentHash.remove(tk);
         cardRegisteredAt.remove(tk);
         cardTrailingScheduled.remove(tk);
+        cardTerminalApplied.remove(tk);
         if (removed && BuildConfig.DEBUG) {
             Log.d("CardFrameDebug", "[pending] 注销(" + reason + ") seq=" + messageSeq + " channelID=" + channelID);
         }
@@ -812,52 +851,57 @@ public class MsgModel extends WKBaseModel {
      * 补拉回调：按"content_edit 内容是否有进展"更新连续无进展计数。
      * <ul>
      *   <li>取不到目标 seq 的 content_edit（不在返回 / 在但还没 content_edit）→ 与空返回同属
-     *       "非信号"，直接返回、不计入收敛预算（P1-3）。</li>
+     *       "非信号"，直接返回、不计入收敛预算（P1-3）。纯展示卡在 {@link #onCardRendered} 已不登记，
+     *       不会走到这里；此路径服务的是 octo/v2 流式/交互卡首帧到达前的补拉。</li>
+     *   <li>已落库终态帧后又来 transient 帧 → 非信号丢弃，防陈帧覆盖终态（P1-2，见 evaluator）。</li>
      *   <li>有进展（content_edit 哈希变化）→ 计数清零 + 只落 extra（{@code saveCardMsgExtra}，不插
-     *       message 行）+ 刷新 UI。</li>
+     *       message 行）+ 刷新 UI；若是非 transient 终态帧则锁存 tk。</li>
      *   <li>拿回真实 content_edit 却无进展且非 transient（bot 停在同一非流式帧）→ 计数 +1，连续
      *       {@link #MAX_UNPRODUCTIVE_CARD_REFRESH} 次即注销。</li>
      * </ul>
      * 用内容哈希而非 extra_version 判进展：多副本下 version 非单调，终态帧 version 可能更低，
-     * 用它判会把终态帧误当"无进展"漏保存。计数更新用 {@code computeIfPresent} 原子化（修 P2-5
-     * 竞争），且卡已注销时返回 null 直接跳过，避免复活已注销的卡。
+     * 用它判会把终态帧误当"无进展"漏保存。卡已注销时（顶部 containsKey / prior==null）直接跳过，避免复活。
      */
     private void onCardRefreshResult(String channelID, byte channelType, long messageSeq, WKSyncChannelMsg result) {
         String k = cardKey(channelID, channelType);
         Map<Long, Integer> m = pendingCardSeqs.get(k);
         if (m == null || !m.containsKey(messageSeq)) return;   // 已注销（如终态渲染）
         String tk = k + "#" + messageSeq;
-        // 派生逻辑（content_edit 提取 / transient 判定 / 进展 / 决策）抽到纯类 CardCompensationEvaluator，
-        // 以便用真 fastjson DTO 做 JVM 覆盖——P1-1/P1-3 的根因都在这一步。此处只负责 map 状态与副作用。
+        Integer priorCount = m.get(messageSeq);
+        // 派生逻辑（content_edit 提取 / transient 判定 / 进展 / 乱序守卫 / 决策）抽到纯类
+        // CardCompensationEvaluator，以便用真 fastjson DTO 做 JVM 覆盖——P1-1/P1-2/P1-3 的根因都在这一步。
         CardCompensationEvaluator.Outcome outcome = CardCompensationEvaluator.evaluate(
-                result, messageSeq, lastCardContentHash.get(tk), m.getOrDefault(messageSeq, 0),
-                MAX_UNPRODUCTIVE_CARD_REFRESH);
-        // 空返回（onFail，P1-B①）/ 目标 seq 不在返回 / 在但还没 content_edit（P1-3）→ 非信号：不计入收敛
-        // 预算。否则同频道另一张流式卡的每个 wk_sync_message_extra CMD 都会 fan-out 补拉本卡、在其首帧到达
-        // 前榨干预算，把无辜卡片误注销回"处理中"。永无 content_edit 的纯展示卡靠 maybeRefreshCard 的墙钟窗口兜底注销。
+                result, messageSeq, lastCardContentHash.get(tk), priorCount == null ? 0 : priorCount,
+                MAX_UNPRODUCTIVE_CARD_REFRESH, cardTerminalApplied.contains(tk));
+        // 空返回（onFail，P1-B①）/ 目标 seq 不在返回 / 在但还没 content_edit（P1-3）/ 终态后又来 transient
+        //（P1-2）→ 非信号：不计入收敛预算、不写库。
         if (outcome.nonSignal) {
-            if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 非信号(空/无 content_edit)不计数 seq=" + messageSeq);
+            if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 非信号(空/无 content_edit/陈 transient)不计数 seq=" + messageSeq);
             return;
         }
-        if (outcome.newContentHash != null) lastCardContentHash.put(tk, outcome.newContentHash);
-        // 顶部 containsKey 之后、决策之前这段里卡可能被并发注销（如 refreshPendingCards 在 CMD 投递线程
-        // 触发的墙钟注销）。此时 prior==null 直接返回，别让陈帧再走 PROGRESS_RESET 调度 saveCardMsgExtra——
-        // insertOrReplaceExtra 的 CONFLICT_REPLACE 可能拿陈 transient 帧覆盖已落库的终态帧（P2-1）。
+        // prior==null 检查必须在 lastCardContentHash.put 之前（P2-2）：顶部 containsKey 之后卡可能被并发注销
+        //（refreshPendingCards 在 CMD 投递线程触发墙钟注销），此时 deregisterCard 已清 tk 的哈希；若先 put
+        // 会复活一条陈哈希，让重登记后同 payload 被误判"无进展"漏落库。
         Integer prior = m.get(messageSeq);
         if (prior == null) return;
+        if (outcome.newContentHash != null) lastCardContentHash.put(tk, outcome.newContentHash);
+        // 计数用 get+put 而非 computeIfPresent（API24；P0-1）。onCardRefreshResult 跑在 RxJava 主线程 observer，
+        // 唯一可能的并发注销是 CMD 线程的墙钟分支，那时卡已是 5min 死流、写入无害（上面 prior 守卫已挡多数）。
         switch (outcome.decision) {
             case PROGRESS_RESET:
-                m.computeIfPresent(messageSeq, (kk, v) -> 0);   // 有进展→重置无进展计数
-                if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 有进展→落 extra 刷新 seq=" + messageSeq);
+                m.put(messageSeq, 0);   // 有进展→重置无进展计数
+                if (outcome.appliedTerminal) cardTerminalApplied.add(tk);   // 锁存终态帧,拦后续陈 transient(P1-2)
+                if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 有进展→落 extra 刷新 seq=" + messageSeq + " terminal=" + outcome.appliedTerminal);
                 WKDbScheduler.get().scheduleDirect(() ->
                         WKIM.getInstance().getMsgManager().saveCardMsgExtra(result.messages));
                 break;
             case MIDSTREAM_RESET:
-                m.computeIfPresent(messageSeq, (kk, v) -> 0);   // 仍在流式→重置,继续等终态
+                m.put(messageSeq, 0);   // 仍在流式→重置,继续等终态
                 if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] transient 中间帧,仍流式,继续等 seq=" + messageSeq);
                 break;
             case UNPRODUCTIVE_CONTINUE:
-                Integer n = m.computeIfPresent(messageSeq, (kk, v) -> v + 1);
+                int n = prior + 1;
+                m.put(messageSeq, n);
                 if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 无进展 #" + n + "/" + MAX_UNPRODUCTIVE_CARD_REFRESH + " seq=" + messageSeq);
                 break;
             case UNPRODUCTIVE_DEREGISTER:

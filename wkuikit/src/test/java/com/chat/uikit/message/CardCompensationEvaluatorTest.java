@@ -63,7 +63,7 @@ public class CardCompensationEvaluatorTest {
         // priorHash 命中同一内容 → progressed=false，逼迫走 transient 分支。
         String contentEditStr = CardCompensationEvaluator.extractContentEditMap(result, TARGET_SEQ).toString();
         Outcome outcome = CardCompensationEvaluator.evaluate(
-                result, TARGET_SEQ, contentEditStr.hashCode(), 4, MAX);
+                result, TARGET_SEQ, contentEditStr.hashCode(), 4, MAX, false);
 
         assertFalse(outcome.nonSignal);
         assertEquals("transient 中间帧无进展应 MIDSTREAM_RESET，而非 UNPRODUCTIVE（守住 P1-1）",
@@ -87,7 +87,7 @@ public class CardCompensationEvaluatorTest {
     @Test
     public void nullResultIsNonSignal() {
         // (b) 请求失败 → result 空：非信号，不动预算。
-        Outcome outcome = CardCompensationEvaluator.evaluate(null, TARGET_SEQ, null, 3, MAX);
+        Outcome outcome = CardCompensationEvaluator.evaluate(null, TARGET_SEQ, null, 3, MAX, false);
         assertTrue(outcome.nonSignal);
         assertNull(outcome.decision);
     }
@@ -95,7 +95,7 @@ public class CardCompensationEvaluatorTest {
     @Test
     public void emptyResultIsNonSignal() {
         // (b) 返回 messages 空数组：非信号。
-        Outcome outcome = CardCompensationEvaluator.evaluate(parse("[]"), TARGET_SEQ, null, 3, MAX);
+        Outcome outcome = CardCompensationEvaluator.evaluate(parse("[]"), TARGET_SEQ, null, 3, MAX, false);
         assertTrue(outcome.nonSignal);
     }
 
@@ -103,27 +103,57 @@ public class CardCompensationEvaluatorTest {
     public void targetSeqAbsentIsNonSignal() {
         // 返回非空但不含目标 seq（[seq,seq+1] 窗口捞回邻居消息）：非信号。
         WKSyncChannelMsg result = parse("[" + cardMsg(TARGET_SEQ + 1, "{\"type\":17}") + "]");
-        assertTrue(CardCompensationEvaluator.evaluate(result, TARGET_SEQ, null, 3, MAX).nonSignal);
+        assertTrue(CardCompensationEvaluator.evaluate(result, TARGET_SEQ, null, 3, MAX, false).nonSignal);
     }
 
     @Test
     public void messagePresentButNoContentEditIsNonSignal() {
         // 命中目标消息但还没 content_edit（bot 首帧未到）：非信号——绝不能当"无进展"扣预算。
         WKSyncChannelMsg result = parse("[" + cardMsg(TARGET_SEQ, null) + "]");
-        assertTrue(CardCompensationEvaluator.evaluate(result, TARGET_SEQ, null, 3, MAX).nonSignal);
+        assertTrue(CardCompensationEvaluator.evaluate(result, TARGET_SEQ, null, 3, MAX, false).nonSignal);
     }
 
     @Test
     public void fiveUnrelatedProbesOnNoFrameCardNeverConverge() {
-        // (c) 无帧卡被同频道 5 次无关 CMD 补拉：每次都非信号、计数恒为 0，永不 UNPRODUCTIVE_DEREGISTER。
+        // (c) 无帧卡被同频道 5 次无关 CMD 补拉：每次都非信号（decision=null），调用方据此直接 return、
+        // 不动预算，所以 5 次后也不会走到 UNPRODUCTIVE_DEREGISTER。真正的断言是每次都 nonSignal。
         WKSyncChannelMsg noFrame = parse("[" + cardMsg(TARGET_SEQ, null) + "]");
-        int unproductive = 0;
         for (int i = 0; i < 5; i++) {
-            Outcome outcome = CardCompensationEvaluator.evaluate(noFrame, TARGET_SEQ, null, unproductive, MAX);
+            // priorUnproductive 传 i 模拟"即便预算被别处推高，无帧仍不产出收敛决策"。
+            Outcome outcome = CardCompensationEvaluator.evaluate(noFrame, TARGET_SEQ, null, i, MAX, false);
             assertTrue("第 " + i + " 次无帧补拉必须是非信号", outcome.nonSignal);
-            // 调用方对非信号直接 return、不 +1，这里模拟其预算不动。
+            assertNull("非信号不产出任何收敛决策", outcome.decision);
         }
-        assertEquals("无帧卡的收敛预算不该被无关 CMD 消耗", 0, unproductive);
+    }
+
+    // ─────────────────────── P1-2：终态后陈 transient 帧不得覆盖 ───────────────────────
+
+    @Test
+    public void staleTransientAfterTerminalAppliedIsDropped() {
+        // 已锁存终态帧后，乱序滞后的 transient 帧（即便内容"有进展"）必须当非信号丢弃，
+        // 否则 CONFLICT_REPLACE 会拿它覆盖已落库的终态帧（P1-2）。
+        WKSyncChannelMsg transientFrame = parse("[" + cardMsg(TARGET_SEQ, "{\"transient\":true,\"plain\":\"late\"}") + "]");
+        Outcome outcome = CardCompensationEvaluator.evaluate(
+                transientFrame, TARGET_SEQ, "whatever".hashCode(), 0, MAX, /* terminalApplied= */ true);
+        assertTrue("终态已应用后的 transient 帧应被丢弃", outcome.nonSignal);
+    }
+
+    @Test
+    public void terminalFrameSetsAppliedTerminalFlag() {
+        // 非 transient 且有进展的帧 = 终态帧：evaluate 应标记 appliedTerminal，供调用方锁存。
+        WKSyncChannelMsg terminal = parse("[" + cardMsg(TARGET_SEQ, "{\"transient\":false,\"plain\":\"done\"}") + "]");
+        Outcome outcome = CardCompensationEvaluator.evaluate(terminal, TARGET_SEQ, "old".hashCode(), 0, MAX, false);
+        assertEquals(CardRefreshDecider.Decision.PROGRESS_RESET, outcome.decision);
+        assertTrue("非 transient 进展帧应标记为终态", outcome.appliedTerminal);
+    }
+
+    @Test
+    public void terminalAppliedStillAcceptsNewerNonTransientFrame() {
+        // 终态已应用后，又来一个**非** transient 的新帧（如再次编辑）应放行，不被 P1-2 守卫误杀。
+        WKSyncChannelMsg newer = parse("[" + cardMsg(TARGET_SEQ, "{\"transient\":false,\"plain\":\"edited-again\"}") + "]");
+        Outcome outcome = CardCompensationEvaluator.evaluate(newer, TARGET_SEQ, "old".hashCode(), 0, MAX, true);
+        assertFalse(outcome.nonSignal);
+        assertEquals(CardRefreshDecider.Decision.PROGRESS_RESET, outcome.decision);
     }
 
     // ─────────────────────── 正常进展 / 收敛路径（回归） ───────────────────────
@@ -131,7 +161,7 @@ public class CardCompensationEvaluatorTest {
     @Test
     public void changedContentEditProgressesAndCarriesNewHash() {
         WKSyncChannelMsg result = parse("[" + cardMsg(TARGET_SEQ, "{\"transient\":false,\"plain\":\"final\"}") + "]");
-        Outcome outcome = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, "old".hashCode(), 2, MAX);
+        Outcome outcome = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, "old".hashCode(), 2, MAX, false);
         assertFalse(outcome.nonSignal);
         assertEquals(CardRefreshDecider.Decision.PROGRESS_RESET, outcome.decision);
         assertNotNull("有进展需带回新哈希供调用方记录", outcome.newContentHash);
@@ -142,9 +172,9 @@ public class CardCompensationEvaluatorTest {
         // 非 transient 且无进展（bot 崩在同一非流式帧）：达上限时注销，收敛有界。
         WKSyncChannelMsg result = parse("[" + cardMsg(TARGET_SEQ, "{\"transient\":false,\"plain\":\"stuck\"}") + "]");
         String hash = CardCompensationEvaluator.extractContentEditMap(result, TARGET_SEQ).toString();
-        Outcome atLimit = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, hash.hashCode(), MAX - 1, MAX);
+        Outcome atLimit = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, hash.hashCode(), MAX - 1, MAX, false);
         assertEquals(CardRefreshDecider.Decision.UNPRODUCTIVE_DEREGISTER, atLimit.decision);
-        Outcome below = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, hash.hashCode(), 0, MAX);
+        Outcome below = CardCompensationEvaluator.evaluate(result, TARGET_SEQ, hash.hashCode(), 0, MAX, false);
         assertEquals(CardRefreshDecider.Decision.UNPRODUCTIVE_CONTINUE, below.decision);
     }
 

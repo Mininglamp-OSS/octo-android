@@ -18,10 +18,13 @@ package com.chat.uikit.message;
  *
  * <p><b>计数语义 = 连续无进展补拉次数</b>（不是总次数）：
  * <ul>
- *   <li>有进展 → 清零，继续补（长推理卡流式几十个 transient 帧不会被"总次数上限"饿死 → 修 P1-2）；</li>
- *   <li>无进展 → +1，连续 {@code maxUnproductive} 次即注销（纯展示卡永无 content_edit 会几次就退出、
- *       不再 fan-out；bot 崩在某帧也有界收敛 → 修 P1-3）。</li>
+ *   <li>有进展 → 清零，继续补（长推理卡流式几十个 transient 帧不会被"总次数上限"饿死）；</li>
+ *   <li>无进展且非 transient（bot 崩在同一非流式帧）→ +1，连续 {@code maxUnproductive} 次即注销，有界收敛。</li>
  * </ul>
+ * 注意：**纯展示卡（profile=octo/v1，永无 content_edit）根本不登记待补偿**（见
+ * {@link MsgModel#onCardRendered} 的 displayOnlyNeverFrame 分支，P1-1），所以不会走到这里、也不靠计数
+ * 收敛；无 content_edit 的补拉（含流式卡首帧到达前）一律当"非信号"不计数（P1-3），此计数只服务
+ * "已有真实 content_edit 但 bot 卡在同一非 transient 帧"这一窄场景。</p>
  *
  * <p><b>进展判定用 content_edit 内容哈希</b>，不用 extra_version：多副本 HiLo 下 version 非单调，
  * 终态帧 version 可能反而更低，用它判会把终态帧误当"无进展"漏掉。

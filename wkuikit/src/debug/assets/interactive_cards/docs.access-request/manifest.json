@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "id": "docs.access-request",
+  "name": "文档访问申请",
+  "version": "0.3.0",
+  "contractVersion": "1.1.0",
+  "adaptiveCardVersion": "1.5",
+  "renderProfile": "octo-chat@1.2.0-rc.1",
+  "defaultLocale": "zh-CN",
+  "dataSchema": "contract/data.schema.json",
+  "views": {
+    "pending": {
+      "wireProfile": "octo/v2",
+      "template": "templates/pending.template.json",
+      "samples": [
+        "samples/pending.json"
+      ]
+    },
+    "result": {
+      "wireProfile": "octo/v1",
+      "template": "templates/result.template.json",
+      "samples": [
+        "samples/approved.json",
+        "samples/rejected.json"
+      ]
+    }
+  }
+}

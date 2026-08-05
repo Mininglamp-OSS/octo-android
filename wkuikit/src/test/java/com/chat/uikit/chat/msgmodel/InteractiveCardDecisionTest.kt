@@ -361,15 +361,30 @@ class InteractiveCardDecisionTest {
     }
 
     @Test
+    fun `decide BOT v1 display card with CopyToClipboard returns Card not Plain`() {
+        val card = cardWithActions(JSONObject().apply {
+            put("type", "Action.CopyToClipboard"); put("title", "复制")
+        })
+        val d = InteractiveCardDecision.decide(
+            CardSenderTrust.BOT,
+            InteractiveCardDecision.PROFILE_OCTO_V1,
+            "1.5",
+            card,
+        )
+        assertTrue("含复制按钮的展示卡应正常渲染而非整卡降级 plain", d is InteractiveCardDecision.Decision.Card)
+    }
+
+    @Test
     fun `validateOcto rejects Action ShowCard even under v2`() {
         val card = cardWithActions(action("Action.ShowCard", "a1"))
         assertFalse(InteractiveCardDecision.validateOcto(card, allowInteractive = true))
     }
 
     @Test
-    fun `validateOcto rejects unknown action type`() {
+    fun `validateOcto tolerates unknown action type (not whole-card fatal)`() {
+        // 对齐 iOS：未知 action 不毙整卡，渲染时由 sanitizer 剥离该按钮。
         val card = cardWithActions(action("Action.WeirdCustom", "a1"))
-        assertFalse(InteractiveCardDecision.validateOcto(card, allowInteractive = true))
+        assertTrue(InteractiveCardDecision.validateOcto(card, allowInteractive = true))
     }
 
     @Test
@@ -379,10 +394,11 @@ class InteractiveCardDecisionTest {
     }
 
     @Test
-    fun `validateOcto rejects Action CopyToClipboard (no SDK parser)`() {
-        // 未支持：AC 3.7.0 Android SDK 无内置 CopyToClipboardActionParser
+    fun `validateOcto tolerates Action CopyToClipboard (stripped at render)`() {
+        // AC 3.7.0 Android SDK 无内置 CopyToClipboardActionParser，但不应毙整卡（对齐 iOS）：
+        // 校验容忍 + 由 sanitizer 剥离该按钮，展示卡正常渲染、仅复制按钮不出现。
         val card = cardWithActions(action("Action.CopyToClipboard", "a1"))
-        assertFalse(InteractiveCardDecision.validateOcto(card, allowInteractive = true))
+        assertTrue(InteractiveCardDecision.validateOcto(card, allowInteractive = true))
     }
 
     // ─────────────────────────────── validateOcto: id uniqueness ───────────────────────────────

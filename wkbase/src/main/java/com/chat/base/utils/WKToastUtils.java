@@ -74,6 +74,19 @@ public class WKToastUtils {
         toast.show();
     }
 
+    /**
+     * 屏幕**居中**的 toast（对齐 iOS 卡片操作提示的居中样式）。
+     * 必须用自定义 View（setView）—— Android 12+ 对文本 toast 的 setGravity 一律忽略、
+     * 固定显示在底部；只有自定义 View 的 toast 在前台仍尊重 gravity。
+     */
+    public void showToastCenter(String msg) {
+        Toast toast = new Toast(WKBaseApplication.getInstance().getContext());
+        toast.setView(getToastView(msg, 3));
+        toast.setDuration(Toast.LENGTH_SHORT);
+        toast.setGravity(Gravity.CENTER, 0, 0);
+        toast.show();
+    }
+
     private View getToastView(String content, int type) {
         View view = LayoutInflater.from(WKBaseApplication.getInstance().getContext()).inflate(R.layout.wk_toast_layout, null);
         TextView toastTv = view.findViewById(R.id.toastTv);

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 夜间 positive 按钮：day 版的 #313131 贴夜间卡片底 (#1C1C1E) 对比仅 ~1.3:1，几乎看不出胶囊。
+     这里用更亮的灰 (#48484A / pressed #5A5A5C) 让填充从深底浮出来；白字（Stylizer 硬编码
+     Color.WHITE）在这两色上对比仍 >7:1，成立。不改字色以避免 day 版白字/夜间浅底的耦合翻车。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#5A5A5C" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#48484A" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</selector>

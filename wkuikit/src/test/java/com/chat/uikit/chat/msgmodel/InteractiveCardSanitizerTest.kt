@@ -275,6 +275,268 @@ class InteractiveCardSanitizerTest {
         assertEquals("订阅", toggle.getString("label"))
     }
 
+    // ─────────────────────────────── P1-C: ColumnSet 拆行 ───────────────────────────────
+    // 覆盖 stackColumnSetForMobileActions 的三条路径：正例拆行 / 单 button 不拆 / 无 ActionSet 不拆。
+    // 关键动机：SDK 3.7.0 在 auto column 装 >=2 button 的 ActionSet 时，若 ColumnSet 宽度不
+    // 够会**整体 skip auto column 的渲染**（观测：216dp 群接收下 pending 卡 3 按钮消失）。
+    // Sanitizer 主动把这类 ColumnSet 转成 Container(vertical stack)，让 ActionSet 独占一行。
+
+    @Test
+    fun `stackColumnSet transforms to Container when ActionSet has multiple actions`() {
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "查看详情") })
+                put(JSONObject().apply { put("type", "Action.ToggleVisibility"); put("title", "拒绝") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "允许") })
+            })
+        }
+        val textBlock = JSONObject().apply {
+            put("type", "TextBlock"); put("text", "申请于 11:03")
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("verticalContentAlignment", "Center")
+            put("spacing", "None")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply { put(textBlock) })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("命中拆行：type 应改成 Container", "Container", out.getString("type"))
+        assertFalse("columns 字段应删除", out.has("columns"))
+        assertFalse("verticalContentAlignment 应删除（Container 无此属性）", out.has("verticalContentAlignment"))
+        assertEquals("spacing 应保留", "None", out.getString("spacing"))
+
+        val items = out.getJSONArray("items")
+        assertEquals("两个 column 各一个 item 平铺 → 2 项", 2, items.length())
+        assertEquals("第一项应为 TextBlock", "TextBlock", items.getJSONObject(0).getString("type"))
+        assertEquals("申请于 11:03", items.getJSONObject(0).getString("text"))
+        assertEquals("第二项应为 ActionSet", "ActionSet", items.getJSONObject(1).getString("type"))
+        assertEquals("ActionSet 的 3 个 actions 保留", 3, items.getJSONObject(1).getJSONArray("actions").length())
+    }
+
+    @Test
+    fun `stackColumnSet preserves ColumnSet when ActionSet has only one action`() {
+        // approved/rejected 卡的底部只有 1 个 "查看详情"，SDK 装得下不需要拆
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "查看详情") })
+            })
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "处理于 11:08") })
+                    })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("未命中拆行：type 应保持 ColumnSet", "ColumnSet", out.getString("type"))
+        assertTrue("columns 字段应保留", out.has("columns"))
+        assertFalse("items 字段应不存在", out.has("items"))
+    }
+
+    @Test
+    fun `stackColumnSet preserves ColumnSet when no ActionSet inside`() {
+        // 头部 header ColumnSet：无 ActionSet，纯 TextBlock，不该拆
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "文档申请") })
+                    })
+                })
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "待你处理") })
+                    })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("无 ActionSet：type 应保持 ColumnSet", "ColumnSet", out.getString("type"))
+        assertTrue(out.has("columns"))
+    }
+
+    @Test
+    fun `stackColumnSet wraps column with isVisible or id in a Container to preserve them`() {
+        // 带 isVisible:false 的列在拆行后必须仍隐藏、id 必须仍在（否则漏显隐藏内容、
+        // Action.ToggleVisibility 目标失效）。命中拆行（ActionSet 有 3 个 action）。
+        val actionSet = JSONObject().apply {
+            put("type", "ActionSet")
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "详情") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "允许") })
+                put(JSONObject().apply { put("type", "Action.Submit"); put("title", "拒绝") })
+            })
+        }
+        val columnSet = JSONObject().apply {
+            put("type", "ColumnSet")
+            put("columns", JSONArray().apply {
+                // 列 0：带 isVisible=false + id → 应被包进 Container 保留
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "stretch")
+                    put("isVisible", false)
+                    put("id", "secret_col")
+                    put("items", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "TextBlock"); put("text", "隐藏内容") })
+                    })
+                })
+                // 列 1：普通列（仅 width + items）→ 平铺，输出与旧行为一致
+                put(JSONObject().apply {
+                    put("type", "Column"); put("width", "auto")
+                    put("items", JSONArray().apply { put(actionSet) })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(columnSet)
+
+        assertEquals("命中拆行：type 应改成 Container", "Container", out.getString("type"))
+        assertFalse("columns 字段应删除", out.has("columns"))
+        val items = out.getJSONArray("items")
+        assertEquals("列0 包 Container、列1 平铺 ActionSet → 2 项", 2, items.length())
+
+        val wrapped = items.getJSONObject(0)
+        assertEquals("带属性的列应包成 Container", "Container", wrapped.getString("type"))
+        assertFalse("isVisible=false 必须保留（否则隐藏内容被漏显）", wrapped.getBoolean("isVisible"))
+        assertEquals("id 必须保留（否则 ToggleVisibility 目标失效）", "secret_col", wrapped.getString("id"))
+        assertEquals("列内 items 应挂在包裹 Container 下", "TextBlock",
+            wrapped.getJSONArray("items").getJSONObject(0).getString("type"))
+        assertFalse("width 是 Column 专属、竖直堆叠无意义，不应带入 Container", wrapped.has("width"))
+
+        assertEquals("普通列直接平铺 ActionSet", "ActionSet", items.getJSONObject(1).getString("type"))
+    }
+
+    @Test
+    fun `strips Action_CopyToClipboard from actions but keeps renderable ones`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray())
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "打开"); put("url", "https://x.com") })
+                put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val actions = out.getJSONArray("actions")
+        assertEquals("CopyToClipboard 应被剥离，只剩可渲染的 OpenUrl", 1, actions.length())
+        assertEquals("Action.OpenUrl", actions.getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `strips unsupported selectAction so container still renders`() {
+        val el = JSONObject().apply {
+            put("type", "Container")
+            put("selectAction", JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            put("items", JSONArray().apply { put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") }) })
+        }
+        val out = sanitizeSingleElement(el)
+        assertFalse("不可渲染的 selectAction 应删除（否则 SDK 渲染异常）", out.has("selectAction"))
+        assertEquals("容器其余内容保留", "TextBlock", out.getJSONArray("items").getJSONObject(0).getString("type"))
+    }
+
+    // ───────────────────── 剥空的 ActionSet（CopyToClipboard-only 展示卡）─────────────────────
+    // stripUnsupportedActions 剥掉唯一的 CopyToClipboard 后，ActionSet 剩 actions=[] 的空壳。
+    // 留着会让 SDK 渲染出空按钮区/占位行；应从父容器整体剔除（对齐 iOS：那一行整体消失）。
+
+    @Test
+    fun `ActionSet with only CopyToClipboard is dropped after stripping`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply {
+                put(JSONObject().apply { put("type", "TextBlock"); put("text", "结果已生成") })
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val body = out.getJSONArray("body")
+        assertEquals("空壳 ActionSet 应被丢弃，仅剩 TextBlock", 1, body.length())
+        assertEquals("TextBlock", body.getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `ActionSet keeps renderable action and is not dropped`() {
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.OpenUrl"); put("title", "打开"); put("url", "https://x.com") })
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        val body = out.getJSONArray("body")
+        assertEquals("含可渲染 action → ActionSet 保留", 1, body.length())
+        assertEquals("ActionSet", body.getJSONObject(0).getString("type"))
+        assertEquals("仅剥掉 CopyToClipboard，OpenUrl 保留", 1, body.getJSONObject(0).getJSONArray("actions").length())
+    }
+
+    @Test
+    fun `nested empty ActionSet inside Container is dropped`() {
+        val inner = JSONObject().apply {
+            put("type", "Container")
+            put("items", JSONArray().apply {
+                put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") })
+                put(JSONObject().apply {
+                    put("type", "ActionSet")
+                    put("actions", JSONArray().apply {
+                        put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+                    })
+                })
+            })
+        }
+        val out = sanitizeSingleElement(inner)
+        val items = out.getJSONArray("items")
+        assertEquals("嵌套空壳 ActionSet 也应被剔除", 1, items.length())
+        assertEquals("TextBlock", items.getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `root-level actions emptied by stripping is removed not left empty`() {
+        // 根 AdaptiveCard 动作条只含 CopyToClipboard：剥空后不该残留 actions:[]（P2-3）。
+        val card = JSONObject().apply {
+            put("type", "AdaptiveCard")
+            put("body", JSONArray().apply { put(JSONObject().apply { put("type", "TextBlock"); put("text", "x") }) })
+            put("actions", JSONArray().apply {
+                put(JSONObject().apply { put("type", "Action.CopyToClipboard"); put("title", "复制") })
+            })
+        }
+        val out = InteractiveCardSanitizer.sanitize(card)!!
+        assertFalse("剥空的根 actions 应整体删除，不留空数组", out.has("actions"))
+    }
+
     // ─────────────────────────────── 辅助 ───────────────────────────────
 
     /** 便捷：包一层 AdaptiveCard body，返回 sanitize 后的第一个 element。 */

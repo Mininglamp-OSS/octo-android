@@ -21,6 +21,7 @@ import androidx.fragment.app.FragmentActivity
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.InteractiveCardDecision
 import com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer
+import com.chat.uikit.chat.msgmodel.OctoAdaptiveImageLoader
 import com.chat.uikit.chat.msgmodel.OctoHostConfig
 import io.adaptivecards.objectmodel.AdaptiveCard
 import io.adaptivecards.objectmodel.BaseActionElement
@@ -29,6 +30,8 @@ import io.adaptivecards.objectmodel.OpenUrlAction
 import io.adaptivecards.renderer.AdaptiveCardRenderer
 import io.adaptivecards.renderer.RenderedAdaptiveCard
 import io.adaptivecards.renderer.actionhandler.ICardActionHandler
+import io.adaptivecards.renderer.registration.CardRendererRegistration
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 交互卡的**渲染层**——把 SDK 渲染（sanitize + parse + render + stylize）从 Provider 里
@@ -75,9 +78,15 @@ import io.adaptivecards.renderer.actionhandler.ICardActionHandler
  */
 class InteractiveCardRenderer(
     private val dispatcher: CardActionDispatcher,
-    private val stylize: (View) -> Unit,
     cacheSize: Int = DEFAULT_CACHE_SIZE,
 ) {
+
+    init {
+        // SDK 的 CardRendererRegistration 是进程级 singleton，多实例创建时只需 register 一次。
+        // 用 AtomicBoolean guard 是防并发 double-register（无害但多余）；重复 register 会
+        // 覆盖前值 —— 仍然是同一个 loader，观感一致，仅日志层面浪费。
+        ensureOnlineImageLoaderRegistered()
+    }
 
     /** 渲染结果：Success 已 attach 到 container；Fallback 由 Provider 显示 plain 兜底。 */
     sealed interface Result {
@@ -168,6 +177,20 @@ class InteractiveCardRenderer(
         return fresh
     }
 
+    /** DEBUG：分块打全量卡片 JSON（logcat 单行 ~4KB 会截断）。tag=CardJsonDump。 */
+    private fun dumpCardJson(label: String, json: org.json.JSONObject?) {
+        val s = json?.toString() ?: "null"
+        val chunk = 3000
+        var i = 0
+        var idx = 0
+        while (i < s.length) {
+            val end = minOf(i + chunk, s.length)
+            Log.d("CardJsonDump", "$label[$idx] ${s.substring(i, end)}")
+            i = end
+            idx++
+        }
+    }
+
     private fun build(context: Context, spec: CardRenderSpec, hash: Int, isDark: Boolean): Entry? {
         return try {
             // 渲染前 sanitize —— 对齐 iOS `WKACardRenderer.wk_sanitizeNode`：
@@ -175,8 +198,13 @@ class InteractiveCardRenderer(
             //  · Input.ChoiceSet 一律 style=expanded（绕开 SDK compact 下拉的样式 & 生命周期问题）
             // Sanitizer 用 org.json（不是 fastjson），parse 前先转过来。
             val cardObj = org.json.JSONObject(spec.cardJson)
+            if (com.chat.uikit.BuildConfig.DEBUG) dumpCardJson("RAW", cardObj)
             val sanitized = InteractiveCardSanitizer.sanitize(cardObj)
+            if (com.chat.uikit.BuildConfig.DEBUG) dumpCardJson("SANITIZED", sanitized)
             val cardJsonForSdk = sanitized?.toString() ?: spec.cardJson
+            // 预扫 (title → Action.style) 映射，供 stylize 时按 button.text 反查语义色。
+            // 用 sanitized（若 non-null）作为源，跟真正传给 SDK 的 JSON 一致；null 时 fallback 到 cardObj。
+            val actionStyles = collectActionStyles(sanitized ?: cardObj)
             val parseResult = AdaptiveCard.DeserializeFromString(cardJsonForSdk, spec.cardVersion)
             val adaptiveCard = parseResult.GetAdaptiveCard()
             val fragmentManager = (context as? FragmentActivity)?.supportFragmentManager
@@ -188,13 +216,52 @@ class InteractiveCardRenderer(
                 proxyHandler,
                 OctoHostConfig.get(context),
             )
-            // post-render 视觉改造（按钮胶囊化等）—— 只在**首次构建**时执行一次，
+            // post-render 视觉改造（按钮胶囊化 + 按 style 分色）—— 只在**首次构建**时执行一次，
             // 缓存 view 复用不再重复 walk 整棵树。这是缓存带来的额外性能收益。
-            stylize(rendered.view)
+            InteractiveCardStylizer.stylize(rendered.view, actionStyles)
             Entry(view = rendered.view, rendered = rendered, cardJsonHash = hash, isDark = isDark)
         } catch (t: Throwable) {
             Log.w(TAG, "SDK render 失败: ${t.message}", t)
             null
+        }
+    }
+
+    /**
+     * 递归遍历卡片 JSON，收集所有 `Action.*` 节点上的 `title → style` 映射。stylize 用
+     * button.text 反查该 map 决定用红字浅粉底 (destructive) / 白字深底 (positive) / 默认紫字。
+     *
+     * 按 title 反查有小概率碰撞（同 title 双 Action），当前 goldens 无此场景；将来出现的话
+     * 升级到"预扫时给 button 打自定义 tag / 注册 ActionElementRenderer"两条路都可。
+     */
+    private fun collectActionStyles(root: org.json.JSONObject): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        walkJson(root) { node ->
+            if (node is org.json.JSONObject) {
+                val type = node.optString("type", "")
+                if (type.startsWith("Action.")) {
+                    val title = node.optString("title", "")
+                    val style = node.optString("style", "")
+                    if (title.isNotBlank() && style.isNotBlank()) {
+                        map[title] = style
+                    }
+                }
+            }
+        }
+        return map
+    }
+
+    private fun walkJson(node: Any?, visit: (Any) -> Unit) {
+        if (node == null) return
+        visit(node)
+        when (node) {
+            is org.json.JSONObject -> {
+                val keys = node.keys()
+                while (keys.hasNext()) walkJson(node.opt(keys.next()), visit)
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until node.length()) walkJson(node.opt(i), visit)
+            }
+            else -> Unit
         }
     }
 
@@ -248,6 +315,23 @@ class InteractiveCardRenderer(
     private companion object {
         const val TAG = "InteractiveCard"
         const val DEFAULT_CACHE_SIZE = 32
+
+        /** 全进程 loader register 一次即可（[CardRendererRegistration] 是 singleton）。 */
+        private val onlineImageLoaderRegistered = AtomicBoolean(false)
+
+        fun ensureOnlineImageLoaderRegistered() {
+            if (onlineImageLoaderRegistered.compareAndSet(false, true)) {
+                try {
+                    CardRendererRegistration.getInstance()
+                        .registerOnlineImageLoader(OctoAdaptiveImageLoader)
+                    Log.d(TAG, "OnlineImageLoader 已注册 (SVG-aware)")
+                } catch (t: Throwable) {
+                    // 注册失败最坏就是 SVG 不解，与"没本 loader"的 baseline 等价；不吞其它异常。
+                    onlineImageLoaderRegistered.set(false)
+                    Log.w(TAG, "OnlineImageLoader 注册失败，SVG 图标将空白", t)
+                }
+            }
+        }
 
         /**
          * SDK ↔ 业务边界：把 [BaseActionElement] 展平成纯 Kotlin [CardAction]。

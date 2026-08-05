@@ -26,9 +26,10 @@ package com.chat.uikit.chat.provider.card
  *
  * `Action.CopyToClipboard` 曾在早期草案里作为独立变体存在。AC 3.7.0 Android SDK
  * 无内置 `CopyToClipboardActionParser`（web AC JS SDK 有；Teams AAR 也未提供），
- * 支持需自写 SWIG native parser，工作量与收益不匹配。当前策略：
- * [com.chat.uikit.chat.msgmodel.InteractiveCardDecision] 白名单也移除该 action
- * 类型 → 服务端下发含 Copy 的卡整卡降级 plain。
+ * 真正实现需自写 SWIG native parser，工作量与收益不匹配（iOS 目前也没实现它）。
+ * 当前策略（对齐 iOS 净效果）：[com.chat.uikit.chat.msgmodel.InteractiveCardDecision] **容忍**
+ * 未知 action 不毙整卡，[com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer] 在喂 SDK 前
+ * 剥掉该按钮 → 含 Copy 的卡**正常渲染、仅复制按钮不出现**（不再整卡降级 plain）。
  */
 sealed interface CardAction {
     val actionId: String

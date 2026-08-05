@@ -87,6 +87,7 @@ import com.chat.base.endpoint.entity.ReadMsgMenu;
 import com.chat.base.endpoint.entity.SetChatBgMenu;
 import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.entity.UserOnlineStatus;
+import com.chad.library.adapter.base.provider.BaseItemProvider;
 import com.chat.base.entity.WKChannelCustomerExtras;
 import com.chat.base.entity.WKGroupType;
 import com.chat.base.msg.ChatAdapter;
@@ -94,6 +95,7 @@ import com.chat.base.msg.ChatContentSpanType;
 import com.chat.base.msg.IConversationContext;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.msgitem.WKContentType;
+import com.chat.uikit.chat.provider.WKInteractiveCardProvider;
 import com.chat.base.msgitem.WKUIChatMsgItemEntity;
 import com.chat.base.net.HttpResponseCode;
 import com.chat.base.space.SpaceChangedBroadcaster;
@@ -1243,6 +1245,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
         // 先持久化旧 channel 编辑态（此时 editText / readMsgIds / redDot 还是旧值）。
         persistOldChannelEditState(oldChannelId, oldChannelType);
+        // 清掉旧频道的 type=17 卡片待补偿登记，避免单例上长期留存 + 限制 fan-out。
+        MsgModel.getInstance().clearPendingCards(oldChannelId, oldChannelType);
 
         setIntent(intent);
         initParam();
@@ -1791,6 +1795,16 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             return null;
         });
         WKIM.getInstance().getConnectionManager().addOnConnectionStatusListener(channelId, (i, s) -> {
+            if (i == WKConnectStatus.syncCompleted) {
+                // type=17 交互卡终态帧补偿（对齐 iOS 重连无条件按 seq 补拉）：
+                // 重连 sync 完成时，对已登记的"处理中"卡片走游标免疫的 message/channel/sync
+                // 各补拉一次，**不受下方 maxOrderSeq gate 限制**——卡住的卡常是最后一条、
+                // gate（maxOrderSeq > 本地尾）不成立就不会走 getData 刷新，卡片永远补不回来。
+                // refreshPendingCards 无待补偿卡时是 no-op，仅 type=17，节流 + 上限见 MsgModel。
+                if (BuildConfig.DEBUG) android.util.Log.d("CardFrameDebug",
+                        "[reconnect] syncCompleted → refreshPendingCards channelID=" + channelId + " type=" + channelType);
+                MsgModel.getInstance().refreshPendingCards(channelId, channelType);
+            }
             if (i == WKConnectStatus.syncCompleted && WKUIKitApplication.getInstance().isRefreshChatActivityMessage) {
                 WKUIKitApplication.getInstance().isRefreshChatActivityMessage = false;
                 int maxOrderSeq = WKIM.getInstance().getMsgManager().getMaxOrderSeqWithChannel(channelId, channelType);
@@ -3861,6 +3875,8 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // 退出会话，清掉本频道 type=17 卡片待补偿登记（内存归零 + 停止后续 CMD 触发的 fan-out）。
+        MsgModel.getInstance().clearPendingCards(channelId, channelType);
         if (messageEffectManager != null) {
             messageEffectManager.destroy();
             messageEffectManager = null;
@@ -4465,6 +4481,18 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
     private synchronized void refreshMsg(WKMsg wkMsg) {
         if (BuildConfig.DEBUG) Log.d("MsgDebug", "[ChatActivity.refreshMsg] channelID=" + wkMsg.channelID + " status=" + wkMsg.status + " msgID=" + wkMsg.messageID + " msgSeq=" + wkMsg.messageSeq + " revoke=" + wkMsg.remoteExtra.revoke + " revoker=" + wkMsg.remoteExtra.revoker);
+        // type=17 交互卡：帧落库触发的消息刷新 = 提交闭环完成的 **bind-无关** 信号 → 清 submit
+        // 转圈态。避免卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 指纹比对漏清、导致提交明明成功却
+        // 误报"操作超时"（P2-3）。必须打到 **本 adapter 实际渲染的 provider 实例**（反射 clone 的那份），
+        // 而非 WKMsgItemViewManager（注册表）单例原型——原型的 dispatcher 是另一份、submittingIds 为空，
+        // clearSubmitting 会成 no-op（P1-2）。是否清由 provider 内按"新非 transient 终态帧"再 gate。
+        if (wkMsg.type == WKContentType.interactiveCard && !TextUtils.isEmpty(wkMsg.messageID)) {
+            BaseItemProvider<WKUIChatMsgItemEntity> p =
+                    chatAdapter.getRenderingProvider(WKContentType.interactiveCard);
+            if (p instanceof WKInteractiveCardProvider) {
+                ((WKInteractiveCardProvider) p).onCardMessageRefreshed(wkMsg);
+            }
+        }
         WKIMUtils.getInstance().resetMsgProhibitWord(wkMsg);
         List<WKUIChatMsgItemEntity> list = chatAdapter.getData();
         chatAdapter.refreshReplyMsg(wkMsg);

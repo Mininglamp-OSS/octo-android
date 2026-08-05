@@ -59,9 +59,9 @@ object InteractiveCardDecision {
     // Action.Execute / ShowCard / 模板绑定 永不支持
     private val ACTIONS_FORBIDDEN = setOf("Action.Execute", "Action.ShowCard")
 
-    // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser，
-    // 白名单中不列出 → 服务端下发含 Copy 的卡整卡降级 plain（未知 action 走
-    // "unknown action" 分支拒绝）。
+    // Action.CopyToClipboard 未支持：AC 3.7.0 Android SDK 无内置 parser。不列入白名单，但
+    // **不再毙整卡**——walkAction 对未知/不支持 action 容忍（对齐 iOS），由 InteractiveCardSanitizer
+    // 在喂 SDK 前剥掉该按钮，含 Copy 的卡正常渲染、仅复制按钮不出现。
 
     /** 渲染决策结果。 */
     sealed class Decision {
@@ -124,7 +124,9 @@ object InteractiveCardDecision {
      *  - 深度 ≤ 16、节点数 ≤ 200；
      *  - Input.* / Action.Submit 的 id 必填且帧内唯一（v2 才可出现）；
      *  - Action.OpenUrl.url 必须是 http/https；
-     *  - Action.Execute / ShowCard / 未知类型 → 整卡降级。
+     *  - Action.Execute / ShowCard → 整卡降级（fail-closed 安全拒绝）；
+     *  - 其它未知/不支持的 action（如 Action.CopyToClipboard）→ **容忍**，不毙整卡（对齐 iOS），
+     *    由 [InteractiveCardSanitizer] 在喂 SDK 前剥离该按钮。
      */
     fun validateOcto(card: JSONObject, allowInteractive: Boolean): Boolean {
         return try {
@@ -221,22 +223,29 @@ object InteractiveCardDecision {
         if (type.isEmpty()) throw OctoInvalidCard("action missing type")
         if (ACTIONS_FORBIDDEN.contains(type)) throw OctoInvalidCard("forbidden action: $type")
 
-        val allowedAction = ACTIONS_ALL.contains(type) ||
-            (ctx.allowInteractive && ACTIONS_V2_INTERACTIVE.contains(type))
-        if (!allowedAction) throw OctoInvalidCard("unknown action: $type")
-
-        // Action.Submit 必须有 id 且帧内唯一（v2 才允许出现）
-        if (type == "Action.Submit") {
+        // 交互 action（Action.Submit）：仅 v2 interactive 卡允许；display(v1) 卡出现即违规拒卡
+        // （id 必填且帧内唯一）。
+        if (ACTIONS_V2_INTERACTIVE.contains(type)) {
+            if (!ctx.allowInteractive) throw OctoInvalidCard("interactive action in non-interactive card: $type")
             val id = action.optString("id", "").trim()
-            if (id.isEmpty()) throw OctoInvalidCard("Action.Submit missing id")
+            if (id.isEmpty()) throw OctoInvalidCard("$type missing id")
             if (!ctx.seenIds.add(id)) throw OctoInvalidCard("duplicate id: $id")
+            return
         }
 
-        // Action.OpenUrl.url 必须 http/https（防 javascript:/file:/intent: 等）
-        if (type == "Action.OpenUrl") {
-            val url = action.optString("url", "").trim()
-            if (!isSafeUrl(url)) throw OctoInvalidCard("unsafe url: $url")
+        // 基础可渲染 action（OpenUrl / ToggleVisibility）。OpenUrl 的 url 必须 http/https。
+        if (ACTIONS_ALL.contains(type)) {
+            if (type == "Action.OpenUrl") {
+                val url = action.optString("url", "").trim()
+                if (!isSafeUrl(url)) throw OctoInvalidCard("unsafe url: $url")
+            }
+            return
         }
+
+        // 其余（Action.CopyToClipboard / 未知）：**不毙整卡** —— 对齐 iOS（未知 action 当
+        // UnknownAction 容忍、渲染时丢按钮）。这类 action 由 InteractiveCardSanitizer 在喂 SDK
+        // 前剥离，卡片其余部分照常渲染。
+        android.util.Log.d("InteractiveCard", "tolerate unsupported action (stripped at render): $type")
     }
 
     private fun consumeNode(ctx: ValidateCtx): Boolean {

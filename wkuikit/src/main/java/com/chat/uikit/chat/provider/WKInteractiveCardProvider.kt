@@ -12,23 +12,16 @@ package com.chat.uikit.chat.provider
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.util.LruCache
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroup.LayoutParams
-import android.view.ViewGroup.MarginLayoutParams
-import android.widget.Button
-import android.widget.CompoundButton
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.alibaba.fastjson.JSONObject
 import com.chat.base.WKBaseApplication
 import com.chat.base.act.WKWebViewActivity
@@ -41,6 +34,7 @@ import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.net.IRequestResultListener
 import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
+import com.chat.uikit.BuildConfig
 import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.CardSenderClassifier
 import com.chat.uikit.chat.msgmodel.CardSenderTrust
@@ -50,6 +44,8 @@ import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent
 import com.chat.uikit.chat.provider.card.CardActionDispatcher
 import com.chat.uikit.chat.provider.card.CardRenderSpec
 import com.chat.uikit.chat.provider.card.InteractiveCardRenderer
+import com.chat.uikit.chat.provider.card.InteractiveCardStylizer
+import com.xinbida.wukongim.entity.WKMsg
 import com.chat.uikit.chat.provider.card.MessageContext
 import com.chat.uikit.message.MsgModel
 import java.lang.ref.WeakReference
@@ -126,10 +122,32 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
 
     /** 按内容缓存 rendered view 的渲染层，避开滚动时反复走 SWIG 反射。 */
     private val renderer: InteractiveCardRenderer by lazy {
-        InteractiveCardRenderer(
-            dispatcher = dispatcher,
-            stylize = ::stylizeInteractiveElements,
-        )
+        InteractiveCardRenderer(dispatcher = dispatcher)
+    }
+
+    /**
+     * bot 改卡新帧落库触发消息刷新时调用（bind 无关：ChatActivity.refreshMsg → 这里）。
+     * 清 submit 转圈态 —— 解决卡片滚出屏幕 / 指纹被 LRU 淘汰时 setData 的指纹比对漏掉、
+     * 导致提交明明成功却误报"操作超时"的回归（P2-3）。
+     *
+     * 必须由 ChatActivity 从 **本 adapter 实际渲染的 provider 实例**（ChatAdapter.getRenderingProvider）
+     * 投递到这里；打到 WKMsgItemViewManager 单例原型上 [dispatcher] 是另一份、submittingIds 为空，
+     * clearSubmitting 成 no-op、超时照样误报（P1-2）。
+     *
+     * 只在收到**真正新的非 transient 终态帧**时清（"新" = cardJson 指纹相对上次渲染有变化，复用 bind 路径
+     * 的 [lastRenderedFingerprint]）：终态帧本身也可能带 Action.Submit（见 goldens），若不校验"新帧"，
+     * 一次无关 refresh（reaction / 已读态 / 同帧补写）会在 10s 窗口内误清 submit、放开按钮致重复提交（P2-1）。
+     */
+    fun onCardMessageRefreshed(wkMsg: WKMsg) {
+        val messageId = wkMsg.messageID
+        if (messageId.isNullOrEmpty()) return
+        val edited = wkMsg.remoteExtra?.contentEditMsgModel as? WKInteractiveCardContent ?: return
+        if (edited.transient) return                       // transient 中间帧不算提交回帧
+        val newFp = edited.cardJson?.toString()?.hashCode() ?: 0
+        val oldFp = lastRenderedFingerprint.get(messageId)
+        // 指纹变化 = 真正新帧 → 清；指纹未变 = 同一终态帧的无关刷新 → 不动 submit（避免误清）。
+        // oldFp==null（从未渲染 / 已被 LRU 淘汰）时按新帧处理：宁可清，避免离屏卡片误报超时。
+        if (oldFp == null || oldFp != newFp) dispatcher.clearSubmitting(messageId)
     }
 
     private fun createDispatcher(): CardActionDispatcher {
@@ -171,7 +189,8 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 }
             },
             toaster = CardActionDispatcher.Toaster { text ->
-                WKToastUtils.getInstance().showToastNormal(text)
+                // 居中显示（对齐 iOS）——卡片操作的 loading/超时/失败提示都走屏幕中央。
+                WKToastUtils.getInstance().showToastCenter(text)
             },
             timeoutScheduler = object : CardActionDispatcher.TimeoutScheduler {
                 private val handler = Handler(Looper.getMainLooper())
@@ -193,6 +212,13 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             uiListener = object : CardActionDispatcher.SubmitUiListener {
                 override fun onSubmitStart(messageId: String) = applySubmittingUiFor(messageId)
                 override fun onSubmitEnd(messageId: String) = restoreCardBoxFor(messageId)
+
+                // 卡片当前是否在屏幕上可见：cardBox 弱引用还在、tag 未被 RecyclerView 复用给别条、
+                // 且 isShown（attached + 可见）。滚出屏幕 / 回收 → false → 超时提示不弹（对齐 iOS）。
+                override fun isCardOnScreen(messageId: String): Boolean {
+                    val box = cardBoxByMsgId.get(messageId)?.get() ?: return false
+                    return box.tag == messageId && box.isShown
+                }
             },
             strings = CardActionDispatcher.Strings(
                 openUrlFailed = appCtx.getString(R.string.base_open_url_failed),
@@ -281,10 +307,41 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
             // channelInfo 未命中：主动拉取，等 SDK 广播回来后 RecyclerView 会重新 bind → 重新决策。
             CardSenderClassifier.fetchSenderChannelInfo(wkMsg.fromUID.orEmpty())
         }
+        // trust gate 独立前置：未信任发送者直接降级 plain 且**不登记补偿**（避免被无关发送者放大补拉）。
+        if (!CardSenderClassifier.isTrusted(trust)) {
+            Log.d(TAG, "trust=$trust → 整卡降级 plain(未信任,不登记补偿)")
+            showFallback(container, fallback, plain)
+            resetCellBackground(parentView, uiChatMsgItemEntity, from)
+            return
+        }
+
+        // ── 补偿漏接的终态帧（游标免疫 + CMD 驱动）——放在 API + trust gate 之后、profile/version/白名单
+        // 校验之前（#8）。这样即便一帧因 profile 不支持 / 白名单外被降级 plain，只要它是权威终态帧
+        //（editedContent != null && !transient）也能凭 hasTerminalFrame 注销、不会永久留在 pending 被无限补拉；
+        // 而 API<26 / 未信任发送者已在上面 return、不到这里，不会被无谓补拉（含被无关发送者放大）。
+        // 判据：只有非 transient 的权威帧算终态；中间流式帧 transient=true 也有 content_edit，绝不能当终态
+        // 注销——否则第一个中间帧一到就停止补偿、真终态帧漏接时卡死。
+        if (messageId.isNotEmpty()) {
+            val hasTerminalFrame = editedContent != null && !editedContent.transient
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    "CardFrameDebug",
+                    "[render] seq=${wkMsg.messageSeq} msgID=$messageId hasEdit=${editedContent != null}" +
+                        " transient=${editedContent?.transient} terminal=$hasTerminalFrame",
+                )
+            }
+            MsgModel.getInstance().onCardRendered(
+                wkMsg.channelID,
+                wkMsg.channelType,
+                wkMsg.messageSeq.toLong(),
+                hasTerminalFrame,
+            )
+        }
+
         val cardObj = model.cardJson
         val decision = InteractiveCardDecision.decide(trust, model.profile, model.cardVersion, cardObj)
         if (decision is InteractiveCardDecision.Decision.Plain) {
-            Log.d(TAG, "trust=$trust profile=${model.profile} → 整卡降级 plain")
+            Log.d(TAG, "profile=${model.profile} 白名单校验未过 → 整卡降级 plain")
             showFallback(container, fallback, plain)
             resetCellBackground(parentView, uiChatMsgItemEntity, from)
             return
@@ -368,69 +425,9 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
     }
 
     /**
-     * 后置改造 AC SDK 渲染出的交互控件，让窄气泡内视觉协调：
-     *
-     * 1. **Action 按钮**（Submit/OpenUrl/ToggleVisibility/ShowCard 都是 android.widget.Button）：
-     *    Material 默认 minWidth=88dp、minHeight=48dp、有阴影，桌面级尺寸。改成胶囊：
-     *    min-height 28dp、去 minWidth、textSize 13sp、wrap_content 宽、无阴影、accent 文字色。
-     * 2. **ChoiceSet RadioButton/CheckBox**：SDK 默认 0px 垂直间距，多选项贴一起像"连体胶囊"，
-     *    每个加 4dp bottom margin 分开。
-     *
-     * 不注册自定义 ActionElementRenderer 的原因：Submit / OpenUrl / ToggleVisibility / ShowCard
-     * 有各自的默认 renderer 分支，逐一覆盖工作量大且易漏。post-walk 一次覆盖全部类型，
-     * 副作用可控（rendered.view 每次 setData 都是新对象，不需要撤销）。
+     * 后置视觉改造已抽到 [com.chat.uikit.chat.provider.card.InteractiveCardStylizer]，
+     * Provider 与预览页共用。此处 renderer 构造时通过 method reference 挂上。
      */
-    private fun stylizeInteractiveElements(root: View) {
-        val ctx = context ?: return
-        val accent = ContextCompat.getColor(ctx, com.chat.base.R.color.colorAccent)
-        val btnPadH = dp(12f)
-        val btnPadV = dp(4f)
-        val btnMinH = dp(28f)
-        val choiceGap = dp(4f)
-        walkTree(root) { v ->
-            when {
-                // RadioButton / CheckBox 归 CompoundButton，先判 Button 会被覆盖（Button 是 TextView 子类，
-                // 但 RadioButton 不是 Button）。CompoundButton 优先判定，避免落到 Button 分支。
-                v is CompoundButton -> {
-                    val lp = v.layoutParams
-                    if (lp is MarginLayoutParams) {
-                        lp.bottomMargin = choiceGap
-                        v.layoutParams = lp
-                    }
-                }
-                v is Button -> {
-                    v.minWidth = 0
-                    v.minimumWidth = 0
-                    v.minHeight = btnMinH
-                    v.minimumHeight = btnMinH
-                    v.setPadding(btnPadH, btnPadV, btnPadH, btnPadV)
-                    v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    v.setTextColor(accent)
-                    v.setAllCaps(false)
-                    v.setBackgroundResource(R.drawable.shape_interactive_card_button)
-                    v.elevation = 0f
-                    v.stateListAnimator = null
-                    v.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-                    v.layoutParams?.apply {
-                        height = LayoutParams.WRAP_CONTENT
-                        width = LayoutParams.WRAP_CONTENT
-                    }
-                }
-            }
-        }
-    }
-
-    private fun walkTree(view: View, visit: (View) -> Unit) {
-        visit(view)
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) walkTree(view.getChildAt(i), visit)
-        }
-    }
-
-    private fun dp(value: Float): Int {
-        val density = context.resources.displayMetrics.density
-        return (value * density + 0.5f).toInt()
-    }
 
     /**
      * SDK ↔ dispatcher 边界适配器已经下沉到
@@ -438,9 +435,10 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
      * adaptSdkAction 静态方法），此处不再持有 SDK 类型。
      */
 
-    /** 应用 submitting UI：cardBox alpha=0.6 + overlay 拦截触摸。 */
+    /** 应用 submitting UI：显示 scrim + 转圈 overlay。压暗由 overlay 的半透明 scrim 负责，
+     *  不再改 cardBox alpha（否则会把 overlay 里的 ProgressBar 一起调淡）。alpha 复位到 1 防遗留。 */
     private fun applySubmittingUI(cardBox: View, overlay: View) {
-        cardBox.alpha = 0.6f
+        cardBox.alpha = 1f
         overlay.visibility = View.VISIBLE
     }
 

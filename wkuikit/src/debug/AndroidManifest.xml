@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  debug-only manifest overlay。只在 debug 变体 merge 进 app，release 不含。
+
+  AdaptiveCard 模板预览页（源码 / 布局 / golden 资产都在 wkuikit/src/debug/ 下，
+  release 变体彻底不含）。入口：debug 包「关于」页长按版本号（WKAboutActivity 内
+  BuildConfig.DEBUG 分支按类名启动）。
+  · DayNight 主题：AppCompatDelegate.setDefaultNightMode 才能触发 recreate 让 OctoHostConfig 换色板。
+  · exported=false：仅 App 内启动。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name="com.chat.uikit.chat.preview.InteractiveCardPreviewActivity"
+            android:exported="false"
+            android:label="AdaptiveCard 预览"
+            android:theme="@style/Theme.AppCompat.DayNight" />
+    </application>
+</manifest>

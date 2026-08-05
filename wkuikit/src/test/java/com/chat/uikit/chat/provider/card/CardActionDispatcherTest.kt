@@ -157,20 +157,20 @@ class CardActionDispatcherTest {
     }
 
     @Test
-    fun `dispatch Submit onSuccess fires onSubmitEnd and triggers extra sync + retries`() {
+    fun `dispatch Submit onSuccess keeps submitting and triggers extra sync + retries (aligns iOS)`() {
         dispatcher.dispatch(
             ctx(msg = msg("m1", "chan1", WKChannelType.PERSONAL, "peer")),
             CardAction.Submit(actionId = "a1", inputs = emptyMap()),
         )
         submitter.calls.single().onSuccess(JSONObject())
-        assertEquals(listOf("m1"), uiListener.ends)
-        // 立即 sync 一次 + 两个 delayed
+        // 对齐 iOS：HTTP 200 不清态，保持转圈等 bot 新帧，不提前复位 UI。
+        assertTrue("HTTP 200 后仍在提交中（转圈保持）", dispatcher.isSubmitting("m1"))
+        assertEquals("不应提前 onSubmitEnd", emptyList<String>(), uiListener.ends)
+        // 立即 sync 一次 + 两个 delayed；10s 超时仍武装（未被取消）。
         assertEquals(1, extraSync.calls.size)
         assertEquals("chan1", extraSync.calls[0].first)
-        assertEquals(listOf(500L, 1500L), scheduler.scheduledDelays().sorted())
-        // fire delayed → 触发额外 sync
-        scheduler.fireAll()
-        assertEquals(3, extraSync.calls.size)
+        assertTrue(scheduler.scheduledDelays().containsAll(listOf(500L, 1500L)))
+        assertTrue("超时仍武装，等新帧或超时", scheduler.entries.any { it.delayMs == 10_000L && !it.cancelled })
     }
 
     @Test
@@ -215,6 +215,17 @@ class CardActionDispatcherTest {
     }
 
     @Test
+    fun `dispatch Submit timeout suppresses toast when card scrolled off screen (aligns iOS)`() {
+        uiListener.cardOnScreen = false
+        dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
+        val timeout = scheduler.entries.single { it.delayMs == 10_000L }
+        timeout.fire()
+        assertEquals("卡片滑出屏幕时不应弹超时提示", emptyList<String>(), toaster.messages)
+        assertEquals("但仍复位视觉，滑回来卡片正常", listOf("m1"), uiListener.ends)
+        assertFalse(dispatcher.isSubmitting("m1"))
+    }
+
+    @Test
     fun `dispatch Submit timeout calls onSubmitEnd to restore card visual`() {
         dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
         assertEquals(listOf("m1"), uiListener.starts)
@@ -226,13 +237,29 @@ class CardActionDispatcherTest {
     }
 
     @Test
-    fun `dispatch Submit timeout after success is no-op (already cleared)`() {
+    fun `dispatch Submit timeout after HTTP success still fires when bot never replies (aligns iOS)`() {
         dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
         submitter.calls.single().onSuccess(null)
-        // success 已经 cancel 了 timeout；即便 fake 手动 fire 也应该不产 toast
-        val timeout = scheduler.entries.singleOrNull { it.delayMs == 10_000L }
-        // dispatcher.clearSubmitting 应 cancel timeout → cancelled 标记
-        assertTrue("timeout handle 应已被 cancel", timeout == null || timeout.cancelled)
+        // HTTP 200 不再取消超时：仍在提交中，等 bot 新帧；bot 一直不回帧则超时提示。
+        assertTrue(dispatcher.isSubmitting("m1"))
+        val timeout = scheduler.entries.single { it.delayMs == 10_000L }
+        assertFalse("成功后超时不应被取消", timeout.cancelled)
+        timeout.fire()
+        assertEquals(listOf("timeout"), toaster.messages)
+        assertEquals(listOf("m1"), uiListener.ends)
+        assertFalse(dispatcher.isSubmitting("m1"))
+    }
+
+    @Test
+    fun `bot frame arrival after success cancels timeout with no toast (happy path)`() {
+        dispatcher.dispatch(ctx(), CardAction.Submit(actionId = "a1", inputs = emptyMap()))
+        submitter.calls.single().onSuccess(null)
+        // 模拟 bot 改卡新帧到达 → Provider 侧调 clearSubmitting 收尾。
+        dispatcher.clearSubmitting("m1")
+        assertFalse(dispatcher.isSubmitting("m1"))
+        val timeout = scheduler.entries.single { it.delayMs == 10_000L }
+        assertTrue("新帧到达应取消超时", timeout.cancelled)
+        assertEquals("未超时 → 不弹提示", emptyList<String>(), toaster.messages)
     }
 
     @Test
@@ -325,6 +352,7 @@ class CardActionDispatcherTest {
     private class RecordingUiListener : CardActionDispatcher.SubmitUiListener {
         val starts = mutableListOf<String>()
         val ends = mutableListOf<String>()
+        var cardOnScreen = true
         override fun onSubmitStart(messageId: String) {
             starts += messageId
         }
@@ -332,6 +360,8 @@ class CardActionDispatcherTest {
         override fun onSubmitEnd(messageId: String) {
             ends += messageId
         }
+
+        override fun isCardOnScreen(messageId: String): Boolean = cardOnScreen
     }
 
     /**

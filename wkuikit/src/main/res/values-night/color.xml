@@ -26,7 +26,8 @@
           - subtle 文字用 #B0B0B0（对齐 iOS fgSub） -->
     <color name="interactive_card_bg">#1C1C1E</color>
     <color name="interactive_card_bg_emphasis">#2C2C2E</color>
-    <color name="interactive_card_bg_accent">#2E2547</color>
+    <!-- P1-B: accent 夜间也回归 default 底色（原 #2E2547 略紫），跟浅色模式方案对齐 —— 不靠背景色分层。 -->
+    <color name="interactive_card_bg_accent">#1C1C1E</color>
     <color name="interactive_card_bg_good">#1C1C1E</color>
     <color name="interactive_card_bg_warning">#1C1C1E</color>
     <color name="interactive_card_bg_attention">#1C1C1E</color>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Action.style="destructive" 按钮：浅粉底 (reminderColor 12% alpha) + 999dp 圆角胶囊。
+     文字/图标在 code 里设成 reminderColor（红）。pressed 加深到 24%。
+     对齐 web .ac-pushButton.ac-destructive 视觉。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#3DFF5353" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1FFF5353" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</selector>

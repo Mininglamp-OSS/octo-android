@@ -104,6 +104,21 @@ public class WKAboutActivity extends WKBaseActivity<ActAboutLayoutBinding> {
                     }, 500);
                 }
             });
+            // 长按版本号: 跳 AdaptiveCard 模板预览页 (feat/interactive-card-templates 分支阶段性 debug 入口).
+            // 复用同一个 versionTv 是因为它已经是 DEBUG 专属点击目标, 普通用户看不到、release 版无入口;
+            // 长按 vs 连点 5 击互不冲突, 一个手势一个动作.
+            // 预览页源码在 wkuikit/src/debug 下, release 变体不含该类 —— 用 setClassName 按类名启动避免
+            // src/main 编译期依赖 (本分支 release 走不到这里, class 也不存在, try/catch 兜底).
+            wkVBinding.versionTv.setOnLongClickListener(view1 -> {
+                try {
+                    android.content.Intent intent = new android.content.Intent();
+                    intent.setClassName(this, "com.chat.uikit.chat.preview.InteractiveCardPreviewActivity");
+                    startActivity(intent);
+                } catch (Throwable t) {
+                    WKToastUtils.getInstance().showToastNormal("预览页启动失败: " + t.getMessage());
+                }
+                return true;
+            });
         }
     }
 

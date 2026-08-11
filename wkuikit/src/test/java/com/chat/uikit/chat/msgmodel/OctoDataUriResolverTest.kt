@@ -16,17 +16,31 @@
 
 package com.chat.uikit.chat.msgmodel
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.IOException
 
 /**
- * `data:` URI 解码单测。只覆盖 percent-encoded 分支 —— base64 分支依赖
- * `android.util.Base64`，host-side 单测（`returnDefaultValues=true`）拿不到真实实现。
+ * `data:` URI 解码单测。
+ *
+ * base64 分支通过 [decodeDataUri] 的解码器接缝注入 JVM 的 `java.util.Base64` 覆盖 ——
+ * host-side 单测（`returnDefaultValues=true`）拿不到 `android.util.Base64` 的真实实现。
+ * `getMimeDecoder()` 与 `android.util.Base64.DEFAULT` 语义一致（标准字母表 + 容忍换行）。
  */
 class OctoDataUriResolverTest {
+
+    /** 记录是否真的走到解码器 —— 越界用例要证明**解码前**就被拒了。 */
+    private class RecordingBase64 : (String) -> ByteArray? {
+        var invoked = false
+        override fun invoke(payload: String): ByteArray? {
+            invoked = true
+            return java.util.Base64.getMimeDecoder().decode(payload)
+        }
+    }
 
     private fun decode(url: String) = String(OctoDataUriResolver.decodeDataUri(url), Charsets.UTF_8)
 
@@ -96,6 +110,87 @@ class OctoDataUriResolverTest {
     @Test
     fun `empty payload is rejected`() {
         assertThrowsIO { decode("data:image/svg+xml,") }
+    }
+
+    // ---- base64 分支 ----
+
+    /** PNG 魔数 `89 50 4E 47 0D 0A 1A 0A` 的 base64 形态。 */
+    @Test
+    fun `base64 payload decodes to raw bytes`() {
+        val bytes = OctoDataUriResolver.decodeDataUri(
+            "data:image/png;base64,iVBORw0KGgo=",
+            RecordingBase64()
+        )
+        assertArrayEquals(
+            byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A),
+            bytes
+        )
+    }
+
+    /** `;base64` 标记大小写不敏感，且容忍参数间空格（`data:image/png; base64,...`）。 */
+    @Test
+    fun `base64 marker is case insensitive and space tolerant`() {
+        val expected = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        assertArrayEquals(
+            expected,
+            OctoDataUriResolver.decodeDataUri("data:image/png;BASE64,iVBORw0KGgo=", RecordingBase64())
+        )
+        assertArrayEquals(
+            expected,
+            OctoDataUriResolver.decodeDataUri("data:image/png; base64,iVBORw0KGgo=", RecordingBase64())
+        )
+    }
+
+    /** base64 payload 里 `+` `/` 属标准字母表，必须交给解码器而不是被当 percent 语义处理。 */
+    @Test
+    fun `base64 standard alphabet is decoded not percent unescaped`() {
+        val bytes = OctoDataUriResolver.decodeDataUri("data:;base64,//79", RecordingBase64())
+        assertArrayEquals(byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0xFD.toByte()), bytes)
+    }
+
+    // ---- 内存上限（回归：上限必须在解码前/解码中生效，不能事后补刀）----
+
+    /**
+     * 超长 base64 payload 必须在**调用解码器之前**就被拒 —— `Base64.decode` 会一次性
+     * 分配完整结果数组，解码完再查上限等于让畸形 payload 先把内存吃掉。
+     */
+    @Test
+    fun `oversized base64 payload is rejected before decoding`() {
+        val recorder = RecordingBase64()
+        val payload = "A".repeat(OctoDataUriResolver.MAX_BASE64_CHARS + 1)
+        assertThrowsIO {
+            OctoDataUriResolver.decodeDataUri("data:image/png;base64,$payload", recorder)
+        }
+        assertFalse("解码器不应被调用：越界判定必须发生在解码前", recorder.invoked)
+    }
+
+    /** 刚好压线的 base64 payload 不应被上限误杀。 */
+    @Test
+    fun `base64 payload at the char limit is accepted`() {
+        val payload = "A".repeat(OctoDataUriResolver.MAX_BASE64_CHARS)
+        val bytes = OctoDataUriResolver.decodeDataUri("data:image/png;base64,$payload", RecordingBase64())
+        assertTrue(
+            "压线 payload 解码后应落在 MAX_BYTES 内，实际 ${bytes.size}",
+            bytes.isNotEmpty() && bytes.size <= OctoDataUriResolver.MAX_BYTES
+        )
+    }
+
+    /**
+     * percent 分支边解边查上限：必须**解码过程中**抛，而不是缓冲完整个 payload 再由
+     * 末尾的兜底校验补刀。靠异常消息区分这两条路径。
+     */
+    @Test
+    fun `oversized percent payload is rejected mid decode`() {
+        val payload = "A".repeat(OctoDataUriResolver.MAX_BYTES + 1024)
+        try {
+            decode("data:image/svg+xml,$payload")
+            fail("expected IOException")
+        } catch (e: IOException) {
+            assertTrue(
+                "应由解码中的增量上限拦截，实际消息：${e.message}",
+                e.message?.contains("解码中") == true
+            )
+        }
     }
 
     private fun assertThrowsIO(block: () -> Unit) {

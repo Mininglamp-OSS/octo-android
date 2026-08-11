@@ -55,11 +55,31 @@ object OctoDataUriResolver : IResourceResolver {
     const val SCHEME = "data"
 
     /**
-     * 单张图 base64/percent-encoded 解码后的字节上限（2MB），与
-     * [OctoAdaptiveImageLoader] 的 MAX_BYTES 对齐。data URI 是内联的，畸形超长
-     * payload 会把整个 body 读进内存，加上限避免 OOM 掉会话页。
+     * 单张图解码后的字节上限（2MB），与 [OctoAdaptiveImageLoader] 的 MAX_BYTES 对齐。
+     *
+     * **两条分支都在解码前/解码中生效，不是事后校验** —— 事后校验挡不住任何东西：
+     * 畸形 payload 已经把内存吃完了才抛异常。见 [MAX_BASE64_CHARS] 与 [percentDecode]。
+     *
+     * `internal` 而非 `private`：让单测按真实上限构造越界用例，避免测试里复制一份常量后漂移。
      */
-    private const val MAX_BYTES = 2 * 1024 * 1024
+    internal const val MAX_BYTES = 2 * 1024 * 1024
+
+    /**
+     * base64 形态**解码前**的字符上限。
+     *
+     * `Base64.decode` 一次性分配完整结果数组，没有流式/带上限的入口，所以只能按输入
+     * 长度判。标准 base64 是 4 字符 → 3 字节，故 payload 长度超过 `MAX_BYTES/3*4`
+     * 时解码结果必然越界；换行等空白只会让结果更小，而"90% 是空白"的 payload 也不是
+     * 合法内联图，一并拒掉即可。
+     */
+    internal const val MAX_BASE64_CHARS = MAX_BYTES / 3 * 4
+
+    /**
+     * percent 形态缓冲区的初始容量（8KB）。折叠箭头 SVG 约 1KB，按 `payload.length`
+     * 预分配等于信任不可信长度；且它甚至不是解码结果的上界——多字节字符 1 char → 3 byte，
+     * 结果最多可达 3 倍长度，预分配后还要成倍扩容 + `toByteArray()` 再拷一份。
+     */
+    private const val PERCENT_BUF_INITIAL = 8 * 1024
 
     override fun resolveImageResource(
         url: String,
@@ -87,10 +107,14 @@ object OctoDataUriResolver : IResourceResolver {
      * 不用 `Uri.parse` 取 scheme-specific part：SVG payload 里带 `#`（如 fill="#333"）
      * 会被当 fragment 截断。这里按第一个逗号手工切分。
      *
-     * `internal` 供单测直接覆盖 percent-encoded 分支（base64 分支依赖
-     * `android.util.Base64`，host-side 单测拿不到真实实现）。
+     * @param base64Decode base64 解码器接缝。默认 `android.util.Base64`；host-side 单测
+     *   （`returnDefaultValues=true`）拿不到真实实现（返回 null），由测试注入 JVM 的
+     *   `java.util.Base64` 来覆盖这条分支。
      */
-    internal fun decodeDataUri(url: String): ByteArray {
+    internal fun decodeDataUri(
+        url: String,
+        base64Decode: (String) -> ByteArray? = { Base64.decode(it, Base64.DEFAULT) }
+    ): ByteArray {
         if (!url.startsWith("$SCHEME:", ignoreCase = true)) {
             throw IOException("not a data URI")
         }
@@ -103,12 +127,17 @@ object OctoDataUriResolver : IResourceResolver {
 
         val isBase64 = meta.split(';').any { it.trim().equals("base64", ignoreCase = true) }
         val bytes: ByteArray? = if (isBase64) {
+            if (payload.length > MAX_BASE64_CHARS) {
+                throw IOException("data URI base64 payload 超过 $MAX_BASE64_CHARS 字符上限")
+            }
             // DEFAULT 即标准字母表（+/），data URI 用的就是它；解码时本身容忍换行。
-            Base64.decode(payload, Base64.DEFAULT)
+            base64Decode(payload)
         } else {
             percentDecode(payload)
         }
         if (bytes == null || bytes.isEmpty()) throw IOException("data URI decoded to 0 byte")
+        // 兜底精确校验：base64 的字符上限是保守估计（空白字符会让实际结果更小），
+        // percent 分支边解边查最多溢出一个字符的字节数，都可能停在略超 MAX_BYTES 处。
         if (bytes.size > MAX_BYTES) throw IOException("data URI 超过 $MAX_BYTES 字节上限")
         return bytes
     }
@@ -122,9 +151,14 @@ object OctoDataUriResolver : IResourceResolver {
      * `%89PNG`）不是合法 UTF-8，转 String 会被替换成 U+FFFD，字节就毁了。
      */
     private fun percentDecode(payload: String): ByteArray {
-        val out = java.io.ByteArrayOutputStream(payload.length)
+        val out = java.io.ByteArrayOutputStream(minOf(payload.length, PERCENT_BUF_INITIAL))
         var i = 0
         while (i < payload.length) {
+            // 边解边查上限：缓冲区最多长到 MAX_BYTES + 一个字符的字节数就抛，
+            // 不会先把畸形 payload 吃满内存再判越界。
+            if (out.size() > MAX_BYTES) {
+                throw IOException("data URI percent payload 解码中超过 $MAX_BYTES 字节上限")
+            }
             val c = payload[i]
             if (c == '%' && i + 2 < payload.length) {
                 val hi = Character.digit(payload[i + 1], 16)

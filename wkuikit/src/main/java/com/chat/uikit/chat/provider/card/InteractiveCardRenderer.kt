@@ -22,6 +22,7 @@ import com.chat.uikit.R
 import com.chat.uikit.chat.msgmodel.InteractiveCardDecision
 import com.chat.uikit.chat.msgmodel.InteractiveCardSanitizer
 import com.chat.uikit.chat.msgmodel.OctoAdaptiveImageLoader
+import com.chat.uikit.chat.msgmodel.OctoDataUriResolver
 import com.chat.uikit.chat.msgmodel.OctoHostConfig
 import io.adaptivecards.objectmodel.AdaptiveCard
 import io.adaptivecards.objectmodel.BaseActionElement
@@ -324,7 +325,12 @@ class InteractiveCardRenderer(
                 try {
                     CardRendererRegistration.getInstance()
                         .registerOnlineImageLoader(OctoAdaptiveImageLoader)
-                    Log.d(TAG, "OnlineImageLoader 已注册 (SVG-aware)")
+                    // data: URI 走 SDK 的 ResourceResolver 通道（按 scheme 查，优先于在线加载）。
+                    // 不注册的话 ai.reasoning-process 的 SVG data URI 折叠箭头渲染为空，
+                    // 卡片没有可点区域、无法展开。
+                    CardRendererRegistration.getInstance()
+                        .registerResourceResolver(OctoDataUriResolver.SCHEME, OctoDataUriResolver)
+                    Log.d(TAG, "OnlineImageLoader + data URI resolver 已注册 (SVG-aware)")
                 } catch (t: Throwable) {
                     // 注册失败最坏就是 SVG 不解，与"没本 loader"的 baseline 等价；不吞其它异常。
                     onlineImageLoaderRegistered.set(false)

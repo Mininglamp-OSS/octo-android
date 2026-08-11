@@ -82,17 +82,21 @@ object OctoAdaptiveImageLoader : IOnlineImageLoader {
         }
         return try {
             val bytes = fetchBytes(url)
-            val bitmap = if (looksLikeSvg(bytes)) {
-                decodeSvg(bytes)
-            } else {
-                decodeRasterDownsampled(bytes)
-            }
-            HttpRequestResult(bitmap)
+            HttpRequestResult(decodeImageBytes(bytes))
         } catch (t: Throwable) {
             Log.w(TAG, "load 失败 url=$url", t)
             HttpRequestResult(t as? Exception ?: RuntimeException(t))
         }
     }
+
+    /**
+     * 字节 → Bitmap。SVG 走 AndroidSVG，其余走降采样位图解码。
+     *
+     * 供 [OctoDataUriResolver] 复用——data URI 与 http 图片只在"取字节"这一步不同，
+     * 解码分支完全一样。
+     */
+    internal fun decodeImageBytes(bytes: ByteArray): Bitmap =
+        if (looksLikeSvg(bytes)) decodeSvg(bytes) else decodeRasterDownsampled(bytes)
 
     // ─────────────────────────────── Fetch ───────────────────────────────
 

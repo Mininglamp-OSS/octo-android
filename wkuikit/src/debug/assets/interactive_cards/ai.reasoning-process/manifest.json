@@ -2,15 +2,14 @@
   "schemaVersion": 2,
   "id": "ai.reasoning-process",
   "name": "推理过程卡",
-  "version": "0.1.0",
-  "contractVersion": "1.0.0",
+  "version": "0.4.1",
+  "contractVersion": "1.2.0",
   "protocol": "octo-card@1.0",
   "adaptiveCardVersion": "1.5",
-  "renderProfile": "octo-chat@1.2.0-rc.1",
+  "renderProfile": "octo-chat@1.2.0-rc.3",
   "renderProfileCompatibility": "octo-chat/v1",
   "defaultLocale": "zh-CN",
   "owner": "ai",
-  "actionType": "reasoning.control",
   "dataSchema": "contract/data.schema.json",
   "views": {
     "active": {

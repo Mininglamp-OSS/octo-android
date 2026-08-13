@@ -10,6 +10,7 @@ import android.text.TextUtils;
 import com.xinbida.wukongim.WKIMApplication;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelSearchResult;
+import com.xinbida.wukongim.entity.WKChannelType;
 import com.xinbida.wukongim.utils.WKCommonUtils;
 import com.xinbida.wukongim.utils.WKLoggerUtils;
 
@@ -161,6 +162,9 @@ public class ChannelDBManager {
         } finally {
             helper.endTransaction();
         }
+        for (WKChannel wkChannel : list) {
+            invalidateMemberCacheIfPersonal(wkChannel);
+        }
     }
 
     public synchronized void insertOrUpdate(WKChannel channel) {
@@ -183,6 +187,7 @@ public class ChannelDBManager {
         }
         WKIMApplication.getInstance().getDbHelper()
                 .insert(channel, cv);
+        invalidateMemberCacheIfPersonal(wkChannel);
     }
 
     public synchronized void update(WKChannel wkChannel) {
@@ -200,7 +205,21 @@ public class ChannelDBManager {
         }
         WKIMApplication.getInstance().getDbHelper()
                 .update(channel, cv, WKDBColumns.WKChannelColumns.channel_id + "=? and " + WKDBColumns.WKChannelColumns.channel_type + "=?", update);
+        invalidateMemberCacheIfPersonal(wkChannel);
+    }
 
+    /**
+     * PERSONAL 频道行变更后，让 {@link ChannelMembersDbManager} 里以该 uid 为成员的缓存失效。
+     *
+     * <p>原因：{@code ChannelMembersDbManager.query(channelId, channelType, uid)} 的 SQL 是
+     * {@code channel_members LEFT JOIN channel ON member_uid = channel_id AND channel_type=1}，
+     * 序列化时 memberName / remark / memberAvatar / avatarCacheKey 会被 channel 表的列覆写。
+     * 所以成员缓存同时依赖 channel 表，个人频道改名/改备注/换头像后必须失效，
+     * 否则消息列表里的发送者昵称会停在旧值。
+     */
+    private void invalidateMemberCacheIfPersonal(WKChannel wkChannel) {
+        if (wkChannel == null || wkChannel.channelType != WKChannelType.PERSONAL) return;
+        ChannelMembersDbManager.getInstance().invalidateMemberUid(wkChannel.channelID);
     }
 
     /**
@@ -373,6 +392,9 @@ public class ChannelDBManager {
         whereValue[1] = String.valueOf(channelType);
         WKIMApplication.getInstance().getDbHelper()
                 .update(channel, updateKey, updateValue, where, whereValue);
+        if (channelType == WKChannelType.PERSONAL) {
+            ChannelMembersDbManager.getInstance().invalidateMemberUid(channelID);
+        }
     }
 
     public WKChannel serializableChannel(Cursor cursor) {

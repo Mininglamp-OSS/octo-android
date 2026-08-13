@@ -3,6 +3,7 @@ package com.xinbida.wukongim.manager;
 import android.text.TextUtils;
 
 import com.xinbida.wukongim.db.ChannelDBManager;
+import com.xinbida.wukongim.db.ChannelMembersDbManager;
 import com.xinbida.wukongim.db.WKDBColumns;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKChannelSearchResult;
@@ -536,6 +537,8 @@ public class ChannelManager extends BaseManager {
         //  · ChannelInfoCache 必须同步清理，否则切账号 / 退出登录后 map 里的
         // stale 实例会让 fast path 返回旧 Space 的 channel（同 iOS `removeChannelAllCache`）。
         channelInfoCache.clear();
+        // 成员缓存同理：它 join 了 channel 表，切账号后不清会把上个账号的成员昵称/头像带过来。
+        ChannelMembersDbManager.getInstance().clearCache();
     }
 
     // 刷新频道

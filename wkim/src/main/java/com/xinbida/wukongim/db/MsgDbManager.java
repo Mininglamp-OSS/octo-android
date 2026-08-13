@@ -62,7 +62,6 @@ public class MsgDbManager {
         return MsgDbManagerBinder.db;
     }
 
-    private int requestCount;
     //    private int more = 1;
     private final HashMap<String, Long> channelMinMsgSeqs = new HashMap<>();
     //  P1-1: per-channel preview gate. Without this, a channel-level
@@ -72,6 +71,48 @@ public class MsgDbManager {
     // Keyed by channelId + channelType + oldestOrderSeq so every distinct
     // load (first-open / paging) gets its own one-shot gate.
     private final ConcurrentHashMap<String, Boolean> previewPosted = new ConcurrentHashMap<>();
+    /**
+     * 同步轮次计数，key 与 {@link #previewPosted} 同为
+     * {@code channelId_channelType_oldestOrderSeq}。
+     *
+     * <p>原先是单例字段 {@code private int requestCount}，是上一轮修 {@code previewPosted}
+     * 时漏掉的同一类坑：它跨频道、跨分页位置共享，于是
+     * <ul>
+     *     <li>A 频道把它顶到 5（服务端某轮返回不足一页）后，</li>
+     *     <li>B 频道（或同频道的下一个 oldestOrderSeq）进来时 {@code requestCount < 5}
+     *         直接不成立 → 跳过同步分支 → 把本地查询结果原样上报；</li>
+     *     <li>若本地那一段恰好是空洞，上报的就是空 list，
+     *         而 UI 侧把空 list 当成「到头了」永久关掉加载开关。</li>
+     * </ul>
+     * 改为按 key 隔离后，每次独立的加载各自计数，互不污染。递归调用沿用同一个
+     * {@code oldestOrderSeq}，所以 key 在递归过程中稳定。
+     */
+    private final ConcurrentHashMap<String, Integer> requestCounts = new ConcurrentHashMap<>();
+
+    private int getRequestCount(String key) {
+        Integer count = requestCounts.get(key);
+        return count == null ? 0 : count;
+    }
+
+    /**
+     * 两个闸门 map 都只在终止分支清理，若某次加载的同步回调始终不回来（进程被冻结、
+     * 请求被丢弃等），条目会留下。加个上限阀：超了整清。清空是 fail-open ——
+     * 在途加载的计数归零，最坏结果是多同步一轮 / 多 post 一次 preview
+     * （{@code ChatActivity.applyDataToAdapter} 本来就能处理重复回调），
+     * 比让泄漏条目把某个分页位置永久闸死安全。
+     */
+    private void guardLoadGateSize() {
+        if (requestCounts.size() > 256 || previewPosted.size() > 256) {
+            requestCounts.clear();
+            previewPosted.clear();
+        }
+    }
+
+    /** 终止分支统一收口：同步轮次与 preview 闸门一起清，避免其中一个泄漏。 */
+    private void clearLoadGates(String key) {
+        requestCounts.remove(key);
+        previewPosted.remove(key);
+    }
 
     public void queryOrSyncHistoryMessages(String channelId, byte channelType, long oldestOrderSeq, boolean contain, int pullMode, int limit, final IGetOrSyncHistoryMsgBack iGetOrSyncHistoryMsgBack) {
         //获取原始数据
@@ -205,10 +246,8 @@ public class MsgDbManager {
                 }
             }
             if (minMessageSeq == minSeq) {
-                requestCount = 0;
-//                more = 1;
                 //  P1-1: clear the preview gate on terminal callback
-                previewPosted.remove(previewKey);
+                clearLoadGates(previewKey);
                 new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 return;
             }
@@ -232,31 +271,29 @@ public class MsgDbManager {
             endMsgSeq = oldestMsgSeq;
             startMsgSeq = 0;
         }
+        int requestCount = getRequestCount(previewKey);
         if (isSyncMsg && requestCount < 5) {
             if (requestCount == 0) {
                 new Handler(Looper.getMainLooper()).post(iGetOrSyncHistoryMsgBack::onSyncing);
             }
             //同步消息
-            requestCount++;
+            guardLoadGateSize();
+            requestCounts.put(previewKey, requestCount + 1);
             MsgManager.getInstance().setSyncChannelMsgListener(channelId, channelType, startMsgSeq, endMsgSeq, limit, pullMode, syncChannelMsg -> {
                 if (syncChannelMsg != null) {
                     if (oldestMsgSeq == 0 || (syncChannelMsg.messages != null && syncChannelMsg.messages.size() < limit)) {
-                        requestCount = 5;
+                        requestCounts.put(previewKey, 5);
                     }
                     queryOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit, iGetOrSyncHistoryMsgBack);
                 } else {
-                    requestCount = 0;
-//                    more = 1;
                     //  P1-1: clear the preview gate on terminal callback
-                    previewPosted.remove(previewKey);
+                    clearLoadGates(previewKey);
                     new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 }
             });
         } else {
-            requestCount = 0;
-//            more = 1;
             //  P1-1: clear the preview gate on terminal callback
-            previewPosted.remove(previewKey);
+            clearLoadGates(previewKey);
             new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
         }
     }

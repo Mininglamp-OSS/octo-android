@@ -250,6 +250,29 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     boolean isRefreshLoading = false;
     boolean isMoreLoading = false;
     boolean isCanRefresh = true;
+    /**
+     * 空结果重试护栏。
+     *
+     * <p>原实现是「{@code onResult} 拿到一次空 list 就把 {@code isCanRefresh} /
+     * {@code isCanLoadMore} 置 false」，而这两个字段是 {@link #showRefreshLoading()} /
+     * {@link #showMoreLoading()} 的闸门，一旦置 false 在本 Activity 实例内几乎不再复位
+     * （只有 {@code trimTopIfNeeded} / {@code trimBottomIfNeeded} 在列表超长时顺带复位），
+     * 于是表现为「大群往上翻着翻着就再也加载不出来，退出重进又好了」。
+     *
+     * <p>问题在于空 list 有两种含义，UI 侧分不清：
+     * <ul>
+     *     <li>真的没有更多了 —— 应该锁；</li>
+     *     <li>本轮没取到（网络失败走 {@code syncChannelMsg == null} 分支、
+     *         同步轮次被截断、本地正好是空洞）—— 不该锁。</li>
+     * </ul>
+     * 故改为连续空达到阈值才锁；只要有一次非空结果就清零。真到头时用户至多多触发
+     * 一次请求（触发点是 SCROLL_STATE_IDLE + 已在边界，需要一次新的滚动手势，不会自激）。
+     */
+    private static final int EMPTY_RESULT_LOCK_THRESHOLD = 2;
+    private int consecutiveEmptyRefresh;
+    private int consecutiveEmptyLoadMore;
+    /** debug-only：分页闸门追踪。一次复现即可判断卡在忙位还是 canLoad 位，见 showRefreshLoading/showMoreLoading。 */
+    private static final String LOAD_TAG = "ANRFix-LoadMore";
     private boolean isShowChatActivity = true;
     // typing 超时兜底：收到 typing CMD 后 8s 内无真实消息跟上则自动清除，避免 typing 永久残留。
     // Handler 绑定主线程 Looper，确保对 chatAdapter 的所有改动都在主线程，杜绝后台线程裸操作共享数据。
@@ -1552,6 +1575,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         isRefreshLoading = false;
         isMoreLoading = false;
         isCanRefresh = true;
+        // 空结果计数是「本 channel 本轮」的判据，切 channel 必须清，否则新 channel
+        // 会继承旧 channel 的连续空次数，第一次空就直接锁死。
+        consecutiveEmptyRefresh = 0;
+        consecutiveEmptyLoadMore = 0;
 
         //  P2-2 · RxJava subscription：旧 channel 的 media 下载 / 任务订阅如果不
         // dispose，切到新 channel 后订阅叠加 → 回调错绑（新 channel 收到旧 channel 的
@@ -2211,6 +2238,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         if (unreadStartMsgOrderSeq != 0) contain = true;
         // 系统 Bot 跨 Space 共享：加大加载量，确保过滤后有足够的当前 Space 消息
         int loadLimit = com.chat.base.space.SystemBotsFallback.isSystemBot(channelId) ? Math.max(limit, 500) : limit;
+        if (BuildConfig.DEBUG) {
+            Log.d(LOAD_TAG, "request pullMode=" + pullMode + " oldestOrderSeq=" + oldestOrderSeq
+                    + " contain=" + contain + " limit=" + loadLimit);
+        }
         WKIM.getInstance().getMsgManager().getOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, loadLimit, aroundMsgOrderSeq, new IGetOrSyncHistoryMsgBack() {
             @Override
             public void onSyncing() {
@@ -2228,15 +2259,28 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
             @Override
             public void onResult(List<WKMsg> list) {
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOAD_TAG, "onResult pullMode=" + pullMode
+                            + " size=" + (list == null ? -1 : list.size()));
+                }
                 if (isShowPinnedView) {
                     EndpointManager.getInstance().invoke("is_syncing_message", 0);
                 }
                 if (pullMode == 0) {
-                    if (WKReader.isEmpty(list))
-                        isCanRefresh = false;
+                    if (WKReader.isEmpty(list)) {
+                        if (++consecutiveEmptyRefresh >= EMPTY_RESULT_LOCK_THRESHOLD) {
+                            isCanRefresh = false;
+                        }
+                    } else {
+                        consecutiveEmptyRefresh = 0;
+                    }
                 } else {
                     if (WKReader.isEmpty(list)) {
-                        isCanLoadMore = false;
+                        if (++consecutiveEmptyLoadMore >= EMPTY_RESULT_LOCK_THRESHOLD) {
+                            isCanLoadMore = false;
+                        }
+                    } else {
+                        consecutiveEmptyLoadMore = 0;
                     }
                 }
                 isSyncLastMsg = false;
@@ -2249,6 +2293,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     }
                 }
                 // 预处理 msgList（快，主线程）
+                if (BuildConfig.DEBUG) {
+                    // fetched=SDK 返回条数, afterSpaceFilter=Space 过滤后, added=去重后真正入 adapter 的条数。
+                    // added=0 而 fetched>0 → 取回来的全被吃掉，adapter 不增长，
+                    // 下次 getFirstMsgOrderSeq() 不变 → 会用同一个 oldestOrderSeq 原地打转。
+                    Log.d(LOAD_TAG, "merge fetched=" + (list == null ? -1 : list.size())
+                            + " afterSpaceFilter=" + filteredList.size()
+                            + " added=" + tempList.size()
+                            + " adapterSize=" + chatAdapter.getData().size());
+                }
                 boolean msgAddEmptyView = WKReader.isNotEmpty(tempList) && tempList.size() < limit;
                 if (msgAddEmptyView) {
                     WKMsg emptyMsg = new WKMsg();
@@ -2291,6 +2344,19 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             }
                             isRefreshLoading = false;
                             isMoreLoading = false;
+                            if (BuildConfig.DEBUG) {
+                                Log.d(LOAD_TAG, "busy flags released pullMode=" + pullMode);
+                            }
+                        }, throwable -> {
+                            // 原先是单参 subscribe：buildUiMsgList 一旦抛异常，下游 lambda 不执行，
+                            // 忙位就永远停在 true，加载彻底卡死（还会走 RxJava 默认 handler 崩主线程）。
+                            // 补上 onError：先把忙位放掉，保证下一次滚动还能重试。
+                            isRefreshLoading = false;
+                            isMoreLoading = false;
+                            removeLoadingIndicator();
+                            if (BuildConfig.DEBUG) {
+                                Log.e(LOAD_TAG, "buildUiMsgList failed, busy flags released", throwable);
+                            }
                         });
             }
         });
@@ -2790,7 +2856,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
 
     private void showRefreshLoading() {
-        if (isRefreshLoading || !isCanRefresh) return;
+        if (isRefreshLoading || !isCanRefresh) {
+            if (BuildConfig.DEBUG) {
+                Log.w(LOAD_TAG, "refresh BLOCKED isRefreshLoading=" + isRefreshLoading
+                        + " isCanRefresh=" + isCanRefresh
+                        + " emptyStreak=" + consecutiveEmptyRefresh);
+            }
+            return;
+        }
         isRefreshLoading = true;
         WKMsg wkMsg = new WKMsg();
         wkMsg.type = WKContentType.loading;
@@ -2812,7 +2885,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
     }
 
     private void showMoreLoading() {
-        if (isMoreLoading || !isCanLoadMore) return;
+        if (isMoreLoading || !isCanLoadMore) {
+            if (BuildConfig.DEBUG) {
+                Log.w(LOAD_TAG, "loadMore BLOCKED isMoreLoading=" + isMoreLoading
+                        + " isCanLoadMore=" + isCanLoadMore
+                        + " emptyStreak=" + consecutiveEmptyLoadMore);
+            }
+            return;
+        }
         isMoreLoading = true;
         WKMsg wkMsg = new WKMsg();
         wkMsg.type = WKContentType.loading;
@@ -2915,6 +2995,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             chatAdapter.getData().get(newSize - 1).nextMsg = null;
         }
         isCanLoadMore = true;
+        consecutiveEmptyLoadMore = 0;
         chatAdapter.rebuildIndex();
     }
 
@@ -2931,6 +3012,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             chatAdapter.getData().get(0).previousMsg = null;
         }
         isCanRefresh = true;
+        consecutiveEmptyRefresh = 0;
         chatAdapter.rebuildIndex();
     }
 

@@ -992,6 +992,16 @@ public class MsgManager extends BaseManager {
                 }
                 iSyncChannelMsgBack.onBack(syncChannelMsg);
             }));
+        } else {
+            // listener 未注册时原先直接 return，iSyncChannelMsgBack 被静默丢弃。
+            // 调用方 MsgDbManager#queryOrSyncHistoryMessages 是在等这个回调推进的：
+            // 回调不来 → onResult 永不触发 → ChatActivity 的 isRefreshLoading/isMoreLoading
+            // 永远停在 true → 「翻着翻着再也加载不出来，退出重进才好」。
+            // 回调 API 任何分支都必须回一次，哪怕是 null。
+            if (BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG, "syncChannelMsgListener is null, fallback onBack(null)");
+            }
+            iSyncChannelMsgBack.onBack(null);
         }
     }
 

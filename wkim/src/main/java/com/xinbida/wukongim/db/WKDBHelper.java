@@ -68,6 +68,15 @@ public class WKDBHelper {
 
     /** 仅 debug：持续采样连接池实际占用峰值，用来定 {@link #WAL_CONNECTION_POOL_SIZE}。测完置 false。 */
     private static final boolean DEBUG_POOL_USAGE_SAMPLER = false;
+
+    /**
+     * 仅 debug：对 message 表上四条 max() 热查询 + synckey 查询跑 EXPLAIN QUERY PLAN 并计时，
+     * 用来验证 {@code 202608132100.sql} 的两个复合索引是否真的被优化器选中。测完置 false。
+     *
+     * <p>看什么：计划里出现 {@code USING COVERING INDEX idx_message_channel_*} 或
+     * {@code USING INDEX idx_message_channel_*} 即命中；若仍是 {@code SCAN message} 说明没走上。
+     */
+    private static final boolean DEBUG_EXPLAIN_HOT_QUERIES = false;
     private static final long POOL_SAMPLE_INTERVAL_MS = 300;
     private static final long SELF_TEST_START_DELAY_MS = 3000;
     private static final long SELF_TEST_PROBE_DELAY_MS = 900;
@@ -137,6 +146,7 @@ public class WKDBHelper {
             WKDBUpgrade.getInstance().onUpgrade(mDb);
             if (BuildConfig.DEBUG) debugContentionSelfTest();
             if (BuildConfig.DEBUG) debugPoolUsageSampler(databaseFile.getAbsolutePath());
+            if (BuildConfig.DEBUG) debugExplainHotQueries();
         } catch (Exception e) {
             WKLoggerUtils.getInstance().e(TAG + " init WKDBHelper error: " + e.getMessage());
             e.printStackTrace();
@@ -285,6 +295,90 @@ public class WKDBHelper {
                 }
             }
         }, "anrfix-poolsampler").start();
+    }
+
+    /**
+     * 仅 debug：验证 {@code 202608132100.sql} 两个复合索引是否被优化器选中，并测实际耗时。
+     *
+     * <p>取消息量最大的频道作为最坏用例（线上样本里单群有 1.9 万条），跑
+     * message 表上全部四条 max() 查询 + synckey 查询。放后台线程 + 延迟启动，
+     * 不占冷启动主线程。
+     */
+    private void debugExplainHotQueries() {
+        if (!DEBUG_EXPLAIN_HOT_QUERIES) return;
+        new Thread(() -> {
+            try {
+                Thread.sleep(SELF_TEST_START_DELAY_MS);
+                String channelId = null;
+                int channelType = 0;
+                try (Cursor c = mDb.rawQuery("select count(*) from message", null)) {
+                    if (c != null && c.moveToFirst()) {
+                        Log.d(PERF_TAG, "[explain] message 表总行数=" + c.getLong(0));
+                    }
+                }
+                try (Cursor c = mDb.rawQuery(
+                        "select channel_id, channel_type, count(*) c from message"
+                                + " group by channel_id, channel_type order by c desc limit 10", null)) {
+                    int rank = 0;
+                    while (c != null && c.moveToNext()) {
+                        rank++;
+                        if (rank == 1) {
+                            channelId = c.getString(0);
+                            channelType = c.getInt(1);
+                        }
+                        Log.d(PERF_TAG, "[explain] top" + rank + " channel=" + c.getString(0)
+                                + " type=" + c.getInt(1) + " rows=" + c.getLong(2));
+                    }
+                }
+
+                if (channelId == null) {
+                    Log.d(PERF_TAG, "[explain] message 表为空，跳过");
+                    return;
+                }
+                Object[] args = new Object[]{channelId, channelType};
+                explainAndTime("maxOrderSeq(发消息路径)",
+                        "select max(order_seq) order_seq from message where channel_id=? and channel_type=?"
+                                + " and type<>99 and type<>0 and is_deleted=0", args);
+                explainAndTime("maxOrderSeq(开聊天页)",
+                        "SELECT max(order_seq) order_seq FROM message WHERE channel_id=? AND channel_type=?", args);
+                explainAndTime("maxMessageSeq(开聊天页)",
+                        "SELECT max(message_seq) message_seq FROM message WHERE channel_id=? AND channel_type=?", args);
+                explainAndTime("synckey(每次重连)",
+                        "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey"
+                                + " from (select *,(select max(message_seq) from message"
+                                + " where message.channel_id=conversation.channel_id"
+                                + " and message.channel_type=conversation.channel_type limit 1) last_seq"
+                                + " from conversation where conversation.channel_id<>''"
+                                + " AND conversation.is_deleted=0) cn", null);
+            } catch (Exception e) {
+                Log.e(PERF_TAG, "[explain] failed: " + e.getMessage());
+            }
+        }, "anrfix-explain").start();
+    }
+
+    private void explainAndTime(String label, String sql, Object[] args) {
+        StringBuilder plan = new StringBuilder();
+        try (Cursor c = mDb.rawQuery("EXPLAIN QUERY PLAN " + sql, args)) {
+            if (c != null) {
+                while (c.moveToNext()) {
+                    if (plan.length() > 0) plan.append(" | ");
+                    plan.append(c.getString(c.getColumnCount() - 1));
+                }
+            }
+        } catch (Exception e) {
+            plan.append("explain error: ").append(e.getMessage());
+        }
+        long start = SystemClock.elapsedRealtimeNanos();
+        try (Cursor c = mDb.rawQuery(sql, args)) {
+            // 必须真正取一次数据：rawQuery 返回的 Cursor 是惰性的，
+            // 扫描发生在首次填充 CursorWindow，不 moveToFirst 量不到任何东西。
+            if (c != null) c.moveToFirst();
+        } catch (Exception e) {
+            Log.e(PERF_TAG, "[explain] " + label + " query error: " + e.getMessage());
+            return;
+        }
+        long costMs = (SystemClock.elapsedRealtimeNanos() - start) / 1_000_000;
+        Log.d(PERF_TAG, "[explain] " + label + " cost=" + costMs + "ms plan=" + plan);
     }
 
     /**

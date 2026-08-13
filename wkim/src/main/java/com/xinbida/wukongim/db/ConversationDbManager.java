@@ -257,9 +257,29 @@ public class ConversationDbManager {
         helper.insertSql(conversation, cv);
     }
 
+    /**
+     * 构造 sync 用的 lastMsgSeq 串（每次 WebSocket 连上都会跑一次）。
+     *
+     * <p>线上实测过 54.7 秒（Bugly #89，占着唯一连接把主线程堵死）。三个问题叠加：
+     * <ol>
+     *     <li>相关子查询：每个 conversation 行跑一次 {@code max(message_seq)}；</li>
+     *     <li><b>过滤条件写在外层</b>：内层派生表是裸的 {@code select * from conversation}，
+     *         已删除 / 空 channel_id 的会话也要完整跑一遍子查询，算完再被外层丢掉；</li>
+     *     <li>{@code message_seq} 没有覆盖索引，求 max 要把命中行逐条回表。</li>
+     * </ol>
+     *
+     * <p>本次改 2（把 {@code is_deleted=0 AND channel_id<>''} 下推进派生表）+
+     * 3（{@code 202608132100.sql} 加 {@code idx_message_channel_msg_seq}）。
+     * 1 是语义本身要求的，不动。
+     *
+     * <p>结果集等价：下推的两个条件都是 {@code conversation} 自己的列，
+     * {@code select *} 原样透传，先过滤后计算与先计算后过滤的存活行集合完全相同，
+     * 只是不再为注定被丢弃的行付子查询的代价。
+     */
     public synchronized String queryLastMsgSeqs() {
         String lastMsgSeqs = "";
-        String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey from (select *,(select max(message_seq) from " + message + " where " + message + ".channel_id=" + conversation + ".channel_id and " + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq from " + conversation + ") cn where channel_id<>'' AND is_deleted=0";
+        String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey from (select *,(select max(message_seq) from " + message + " where " + message + ".channel_id=" + conversation + ".channel_id and " + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq from " + conversation + " where " + conversation + ".channel_id<>'' AND " + conversation + ".is_deleted=0) cn";
+
         WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
         if (helper == null || helper.isClosed()) return lastMsgSeqs;
         Cursor cursor = helper.rawQuery(sql);

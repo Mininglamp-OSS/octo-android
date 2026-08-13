@@ -3,6 +3,7 @@ package com.xinbida.wukongim.db;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.CursorWrapper;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -22,6 +23,8 @@ import net.zetetic.database.sqlcipher.SQLiteDatabaseHook;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -250,6 +253,8 @@ public class WKDBHelper {
         }
     }
 
+
+
     /**
      * 仅 debug：持续采样连接池实际开了几条连接，只在刷新峰值时打日志。
      *
@@ -353,7 +358,10 @@ public class WKDBHelper {
         if (db == null || !db.isOpen()) {
             return null;
         }
-        return db.rawQuery(sql, null);
+        warnIfMainThread(sql);
+        long start = SystemClock.elapsedRealtime();
+        Cursor cursor = db.rawQuery(sql, null);
+        return guardCursor(cursor, sql, SystemClock.elapsedRealtime() - start);
     }
 
     public Cursor rawQuery(String sql, Object[] selectionArgs) {
@@ -361,7 +369,10 @@ public class WKDBHelper {
         if (db == null || !db.isOpen()) {
             return null;
         }
-        return db.rawQuery(sql, selectionArgs);
+        warnIfMainThread(sql);
+        long start = SystemClock.elapsedRealtime();
+        Cursor cursor = db.rawQuery(sql, selectionArgs);
+        return guardCursor(cursor, sql, SystemClock.elapsedRealtime() - start);
     }
 
     public Cursor select(String table, String selection,
@@ -370,6 +381,8 @@ public class WKDBHelper {
         SQLiteDatabase db = mDb;
         if (db == null || !db.isOpen()) return null;
         Cursor cursor;
+        warnIfMainThread(table);
+        long start = SystemClock.elapsedRealtime();
         try {
             cursor = db.query(table, null, selection, selectionArgs,
                     null, null, orderBy);
@@ -377,7 +390,117 @@ public class WKDBHelper {
             WKLoggerUtils.getInstance().e(TAG + " select WKDBHelper error");
             return null;
         }
-        return cursor;
+        return guardCursor(cursor, "select from " + table + " where " + selection,
+                SystemClock.elapsedRealtime() - start);
+    }
+
+    // ==================== 慢查询护栏 ====================
+
+    /**
+     * 取连接超过这个时长就记日志。ANR 堆栈里主线程 park 在 SQLiteConnectionPool 等连接，
+     * 就是这一段 —— 有了它，下次不用等撞成 ANR 才知道池被谁占住了。
+     */
+    private static final long SLOW_ACQUIRE_MS = 300;
+
+    /** 首次填充 CursorWindow（真正的扫描）超过这个时长就记日志。 */
+    private static final long SLOW_FILL_MS = 500;
+
+    private static final int SQL_LOG_MAX_LEN = 300;
+
+    /**
+     * 给 Cursor 包一层计时。**必须包**：rawQuery 返回的 Cursor 是惰性的，真正的表扫描发生在
+     * 首次填充 CursorWindow（moveToFirst / getCount）时，在 rawQuery 外面计时什么都量不到 ——
+     * 线上那条跑了 89 秒的 {@code select * from message where flame=1} 正是卡在
+     * executeForCursorWindow，只有连接池耗尽告警（30 秒阈值）才偶然把它暴露出来。
+     *
+     * <p>release 也记录，走 {@link WKLoggerUtils}，Bugly 能捞到。
+     */
+    private Cursor guardCursor(Cursor cursor, String sql, long acquireMs) {
+        if (acquireMs >= SLOW_ACQUIRE_MS) {
+            WKLoggerUtils.getInstance().e(TAG, "[slow-db] acquire=" + acquireMs + "ms thread="
+                    + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
+        }
+        if (cursor == null) return null;
+        return new SlowQueryCursor(cursor, sql);
+    }
+
+    private static String abbreviate(String sql) {
+        if (sql == null) return "null";
+        return sql.length() <= SQL_LOG_MAX_LEN ? sql : sql.substring(0, SQL_LOG_MAX_LEN) + "...";
+    }
+
+    /**
+     * debug 下把主线程 DB 访问打出来（带调用栈）。不在 release 生效，也不改变任何行为 ——
+     * 只是让这类写法在开发期就可见。ANR #2 就是 adapter.convert() 在 onBindViewHolder 里直接查库。
+     *
+     * <p>按 SQL 去重：实测一分钟正常使用会产生 3000+ 次主线程查询，但只对应十来种 SQL。
+     * 每种只打第一次，输出才是一份可行动的清单而不是刷屏。
+     */
+    private static void warnIfMainThread(String sql) {
+        if (!BuildConfig.DEBUG) return;
+        if (Looper.myLooper() != Looper.getMainLooper()) return;
+        String key = abbreviate(sql);
+        if (loggedMainThreadSql.size() >= MAIN_THREAD_SQL_LOG_CAP) return;
+        if (!loggedMainThreadSql.add(key)) return;
+        Log.w(PERF_TAG, "[main-thread-db] #" + loggedMainThreadSql.size() + " " + key,
+                new Throwable("call site"));
+    }
+
+    private static final int MAIN_THREAD_SQL_LOG_CAP = 200;
+    private static final Set<String> loggedMainThreadSql = ConcurrentHashMap.newKeySet();
+
+    private static final class SlowQueryCursor extends CursorWrapper {
+        private final String sql;
+        private boolean measured;
+
+        SlowQueryCursor(Cursor cursor, String sql) {
+            super(cursor);
+            this.sql = sql;
+        }
+
+        @Override
+        public int getCount() {
+            if (measured) return super.getCount();
+            long start = SystemClock.elapsedRealtime();
+            int count = super.getCount();
+            report(SystemClock.elapsedRealtime() - start);
+            return count;
+        }
+
+        @Override
+        public boolean moveToFirst() {
+            if (measured) return super.moveToFirst();
+            long start = SystemClock.elapsedRealtime();
+            boolean moved = super.moveToFirst();
+            report(SystemClock.elapsedRealtime() - start);
+            return moved;
+        }
+
+        @Override
+        public boolean moveToLast() {
+            if (measured) return super.moveToLast();
+            long start = SystemClock.elapsedRealtime();
+            boolean moved = super.moveToLast();
+            report(SystemClock.elapsedRealtime() - start);
+            return moved;
+        }
+
+        @Override
+        public boolean moveToPosition(int position) {
+            if (measured) return super.moveToPosition(position);
+            long start = SystemClock.elapsedRealtime();
+            boolean moved = super.moveToPosition(position);
+            report(SystemClock.elapsedRealtime() - start);
+            return moved;
+        }
+
+        private void report(long fillMs) {
+            measured = true;
+            if (fillMs >= SLOW_FILL_MS) {
+                WKLoggerUtils.getInstance().e(TAG, "[slow-db] fill=" + fillMs + "ms thread="
+                        + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
+            }
+        }
     }
 
     public long insert(String table, ContentValues cv) {
@@ -480,12 +603,27 @@ public class WKDBHelper {
 
     public void execSQL(String sql) {
         SQLiteDatabase db = mDb;
-        if (db != null && db.isOpen()) db.execSQL(sql);
+        if (db == null || !db.isOpen()) return;
+        warnIfMainThread(sql);
+        long start = SystemClock.elapsedRealtime();
+        db.execSQL(sql);
+        reportSlowWrite(SystemClock.elapsedRealtime() - start, sql);
     }
 
     public void execSQL(String sql, Object[] bindArgs) {
         SQLiteDatabase db = mDb;
-        if (db != null && db.isOpen()) db.execSQL(sql, bindArgs);
+        if (db == null || !db.isOpen()) return;
+        warnIfMainThread(sql);
+        long start = SystemClock.elapsedRealtime();
+        db.execSQL(sql, bindArgs);
+        reportSlowWrite(SystemClock.elapsedRealtime() - start, sql);
+    }
+
+    /** 写操作是即时执行的，不像 rawQuery 那样惰性，直接计时即可。 */
+    private static void reportSlowWrite(long costMs, String sql) {
+        if (costMs < SLOW_FILL_MS) return;
+        WKLoggerUtils.getInstance().e(TAG, "[slow-db] write=" + costMs + "ms thread="
+                + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
     }
 
     // ==================== 异步查询方法 ====================

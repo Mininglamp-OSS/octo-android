@@ -80,9 +80,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import io.reactivex.rxjava3.disposables.Disposable;
 
 /**
  * 2019-11-24 14:18
@@ -103,55 +106,86 @@ public class MsgModel extends WKBaseModel {
         return MsgModelBinder.msgModel;
     }
 
-    private Timer timer;
+    /**
+     * 阅后即焚轮询。原来用 java.util.Timer 固定每秒触发，而 TimerTask 只把任务丢进单线程的
+     * {@link WKDbScheduler} 就立刻返回 —— 队列每秒进 1 个、每次扫描却要几十秒，无界积压把 DB
+     * 线程永久占满，连接被长时间独占后主线程任何查询都 park（Bugly ANRWatchdog 那批 ANR）。
+     * 改为自排程：上一轮跑完才排下一轮，且没有待过期消息时直接停。
+     */
+    private final AtomicBoolean flameLoopRunning = new AtomicBoolean(false);
+    private volatile Disposable flameLoopTask;
+    /** 仅 debug：数轮询跑了几轮，用来确认"没有阅后即焚消息时会停"。 */
+    private final AtomicInteger flameSweepCount = new AtomicInteger();
+
+    private static final long FLAME_FIRST_DELAY_MS = 100;
+    private static final long FLAME_INTERVAL_MS = 1000;
 
     public void stopTimer() {
-        if (timer != null) {
-            timer.cancel();
-            timer.purge();
-            timer = null;
+        flameLoopRunning.set(false);
+        Disposable task = flameLoopTask;
+        if (task != null && !task.isDisposed()) {
+            task.dispose();
         }
+        flameLoopTask = null;
     }
 
-    public synchronized void startCheckFlameMsgTimer() {
-        if (timer == null) {
-            timer = new Timer();
-            timer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    deleteFlameMsg();
-                }
-            }, 100, 1000);
-        }
+    public void startCheckFlameMsgTimer() {
+        // CAS 兼作并发保护：原来 startCheckFlameMsgTimer 是 synchronized 而 DB 线程上的
+        // timer.cancel()/timer=null 没有同步，两边竞争可能留下两个 timer。
+        if (!flameLoopRunning.compareAndSet(false, true)) return;
+        scheduleFlameSweep(FLAME_FIRST_DELAY_MS);
+    }
+
+    private void scheduleFlameSweep(long delayMs) {
+        if (!flameLoopRunning.get()) return;
+        flameLoopTask = WKDbScheduler.get().scheduleDirect(() -> {
+            if (!flameLoopRunning.get()) return;
+            if (sweepFlameMsg()) {
+                scheduleFlameSweep(FLAME_INTERVAL_MS);
+            } else {
+                flameLoopRunning.set(false);
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
     }
 
     public void deleteFlameMsg() {
         if (!WKConstants.isLogin()) return;
-        // getWithFlame + deleteWithClientMsgNos 有 DB 操作，放 IO 线程避免 ANR（onPause 等主线程调用场景）
-        WKDbScheduler.get().scheduleDirect(() -> {
-            List<WKMsg> list = WKIM.getInstance().getMsgManager().getWithFlame();
-            if (WKReader.isEmpty(list)) return;
-            List<String> deleteClientMsgNoList = new ArrayList<>();
-            List<WKMsg> deleteMsgList = new ArrayList<>();
-            boolean isStopTimer = true;
-            for (WKMsg msg : list) {
-                if (msg.flame == 1 && msg.viewed == 1) {
-                    long time = WKTimeUtils.getInstance().getCurrentMills() - msg.viewedAt;
-                    if (time / 1000 > msg.flameSecond || msg.flameSecond == 0) {
-                        deleteClientMsgNoList.add(msg.clientMsgNO);
-                        deleteMsgList.add(msg);
-                    }
-                    isStopTimer = false;
-                }
+        // 一次性清理（退出聊天页 / 前后台切换等时机调用），不参与轮询。
+        WKDbScheduler.get().scheduleDirect(this::sweepFlameMsg);
+    }
+
+    /**
+     * 扫一轮阅后即焚消息，删掉已到期的。必须在 {@link WKDbScheduler} 线程上调用。
+     *
+     * @return 是否还存在"已读的"阅后即焚消息 —— 有才需要继续轮询。返回 false 时轮询停止，
+     * 这正是原实现缺的那一步：原来 {@code if (isEmpty(list)) return;} 在 cancel 之前，
+     * 导致从没用过阅后即焚的用户（绝大多数）永远停不下来。
+     */
+    private boolean sweepFlameMsg() {
+        if (!WKConstants.isLogin()) return false;
+        List<WKMsg> list = WKIM.getInstance().getMsgManager().getWithFlame();
+        if (BuildConfig.DEBUG) {
+            Log.d("ANRFix", "[flame] sweep #" + flameSweepCount.incrementAndGet()
+                    + " rows=" + (list == null ? 0 : list.size()));
+        }
+        if (WKReader.isEmpty(list)) return false;
+        List<String> deleteClientMsgNoList = new ArrayList<>();
+        List<WKMsg> deleteMsgList = new ArrayList<>();
+        boolean hasViewedFlameMsg = false;
+        for (WKMsg msg : list) {
+            if (msg.flame != 1 || msg.viewed != 1) continue;
+            hasViewedFlameMsg = true;
+            long elapsedSecond = (WKTimeUtils.getInstance().getCurrentMills() - msg.viewedAt) / 1000;
+            if (elapsedSecond > msg.flameSecond || msg.flameSecond == 0) {
+                deleteClientMsgNoList.add(msg.clientMsgNO);
+                deleteMsgList.add(msg);
             }
-            if (isStopTimer && timer != null) {
-                timer.cancel();
-                timer.purge();
-                timer = null;
-            }
+        }
+        if (!deleteMsgList.isEmpty()) {
             deleteMsg(deleteMsgList, null);
             WKIM.getInstance().getMsgManager().deleteWithClientMsgNos(deleteClientMsgNoList);
-        });
+        }
+        return hasViewedFlameMsg;
     }
 
     private void ackMsg() {

@@ -285,8 +285,21 @@ public class MsgDbManager {
         return minSeq;
     }
 
+    /**
+     * 查出未删除的阅后即焚消息。
+     *
+     * <p>只取清理逻辑真正要用的列，**不返回完整 WKMsg** —— 原来是 {@code select *}，会把每条
+     * 消息的 content / searchable_word 等大字段全读出来再由 SQLCipher 逐页解密，配合 flame 列
+     * 上没有索引的整表扫描，线上实测单次执行 89 秒并独占连接（Bugly ANRWatchdog）。
+     *
+     * <p>已填充字段：clientMsgNO / messageID / channelID / channelType / messageSeq /
+     * flame / flameSecond / viewed / viewedAt。其余字段保持默认值。
+     */
     public List<WKMsg> queryWithFlame() {
-        String sql = "select * from " + message + " where " + WKDBColumns.WKMessageColumns.flame + "=1 and " + WKDBColumns.WKMessageColumns.is_deleted + "=0";
+        String sql = "select client_msg_no,message_id,channel_id,channel_type,message_seq,"
+                + "flame,flame_second,viewed,viewed_at from " + message
+                + " where " + WKDBColumns.WKMessageColumns.flame + "=1 and "
+                + WKDBColumns.WKMessageColumns.is_deleted + "=0";
         List<WKMsg> list = new ArrayList<>();
         WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
         if (dbHelper == null) return list;
@@ -295,8 +308,17 @@ public class MsgDbManager {
                 return list;
             }
             for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
-                WKMsg extra = serializeMsg(cursor);
-                list.add(extra);
+                WKMsg msg = new WKMsg();
+                msg.clientMsgNO = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.client_msg_no);
+                msg.messageID = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.message_id);
+                msg.channelID = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.channel_id);
+                msg.channelType = WKCursor.readByte(cursor, WKDBColumns.WKMessageColumns.channel_type);
+                msg.messageSeq = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.message_seq);
+                msg.flame = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.flame);
+                msg.flameSecond = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.flame_second);
+                msg.viewed = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.viewed);
+                msg.viewedAt = WKCursor.readLong(cursor, WKDBColumns.WKMessageColumns.viewed_at);
+                list.add(msg);
             }
         }
         return list;

@@ -147,6 +147,15 @@ import com.chat.uikit.sidebar.SidebarItemEntity;
  */
 public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBinding> {
 
+    /** ANR 修复专用埋点 tag，只在 debug 输出：{@code adb logcat -s ANRFix}。 */
+    private static final String PERF_TAG = "ANRFix";
+
+    /**
+     * 仅 debug：置 true 后每次刷会话列表额外跑一遍改动前的逐群 LIKE 查法并计时，
+     * 用于同机同数据的 A/B 对比。默认 false —— 打开会把被优化掉的全表扫又跑回来。
+     */
+    private static final boolean DEBUG_COMPARE_LEGACY_REMINDER_QUERY = false;
+
     private ChatConversationAdapter chatConversationAdapter;
     private ChatConversationAdapter followAdapter;
     private ChatConversationAdapter recentAdapter;
@@ -2659,31 +2668,6 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         return total;
     }
 
-    private boolean hasMentionInCategory(CategoryEntity category, HashMap<String, ChatConversationMsg> channelMap) {
-        if (category.groups == null) return false;
-        String loginUID = WKConfig.getInstance().getUid();
-        for (CategoryEntity.CategoryGroup cg : category.groups) {
-            if (!channelMap.containsKey(cg.group_no)) continue;
-            // 从 SDK DB 直接读取提醒（不依赖会话对象的 reminderList，避免时序问题）
-            List<WKReminder> reminders = WKIM.getInstance().getReminderManager()
-                    .getReminders(cg.group_no, WKChannelType.GROUP);
-            if (WKReader.isNotEmpty(reminders)) {
-                for (WKReminder r : reminders) {
-                    if (r.type == WKMentionType.WKReminderTypeMentionMe && r.done == 0
-                            && (TextUtils.isEmpty(r.publisher) || !r.publisher.equals(loginUID))) {
-                        return true;
-                    }
-                }
-            }
-            // 检查子区：直接查 DB（不依赖 threadDataCache，冷启动时可能为空）
-            if (ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
-                    cg.group_no, WKMentionType.WKReminderTypeMentionMe)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /**
      * 为任意 ChatConversationMsg 列表计算未读总数。
      *
@@ -2711,10 +2695,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     /**
      * 为任意 ChatConversationMsg 列表判定是否存在未处理的 @mention 提醒。
      *
-     * <p>：未分组 section orphan 合并路径的对应版本。保持与
-     * {@link #hasMentionInCategory} 一致的判定口径（SDK DB 查提醒 + 子区前缀查）。
+     * <p>：未分组 section orphan 合并路径的对应版本。保持与原实现一致的判定口径
+     * （SDK 缓存查本群提醒 + 子区前缀匹配），但子区那一路的 DB 查询由调用方一次批量取出，
+     * 见 {@code undoneMentionChannelIds}。
      */
-    private boolean computeHasMentionForItems(List<ChatConversationMsg> items) {
+    private boolean computeHasMentionForItems(List<ChatConversationMsg> items,
+                                              Set<String> undoneMentionChannelIds) {
         if (items == null || items.isEmpty()) return false;
         String loginUID = WKConfig.getInstance().getUid();
         for (ChatConversationMsg msg : items) {
@@ -2731,8 +2717,24 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     }
                 }
             }
-            if (ReminderDBManager.getInstance().hasUndoneReminderWithChannelPrefix(
-                    cid, WKMentionType.WKReminderTypeMentionMe)) {
+            if (hasUndoneThreadMention(cid, undoneMentionChannelIds)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 子区 channel_id = 父群号 + 恰好 4 字符子区后缀 + 任意，等价于原来的
+     * {@code channel_id LIKE 'parentChannelId____%'}。用 regionMatches(true, ...) 而非
+     * startsWith：SQLite 的 LIKE 对 ASCII 默认大小写不敏感，保持与原 SQL 完全相同的口径。
+     */
+    private boolean hasUndoneThreadMention(String parentChannelId, Set<String> undoneChannelIds) {
+        if (undoneChannelIds == null || undoneChannelIds.isEmpty()) return false;
+        int minLength = parentChannelId.length() + 4;
+        for (String channelId : undoneChannelIds) {
+            if (channelId.length() >= minLength
+                    && channelId.regionMatches(true, 0, parentChannelId, 0, parentChannelId.length())) {
                 return true;
             }
         }
@@ -2744,9 +2746,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
      * 群聊 tab (0): channelType == GROUP，按 category 分组显示
      * 私聊 tab (1): channelType == PERSONAL，无分组
      *
-     *  · 外层封装为 50ms debounce：同一 UI 帧内的多次触发（消息到达 + reminder +
-     * channel 刷新 + typing/calling 变化）合并为一次 DiffUtil 遍历，避免 ACTION_DOWN
-     * 和 ACTION_UP 之间发生多次 notifyDataSetChanged 导致 ViewHolder detach → touch cancel。
+     * <p>即时刷新，无 debounce —— 50ms debounce 已在 e68a171「对齐 iOS 体验」时移除。
+     * 保留 removeCallbacks 是为了取消 onResume 等路径 post 出去的 {@link #filterRunnable}，
+     * 避免同一次刷新跑两遍。
      */
     private void filterAndDisplay() {
         filterDebounceHandler.removeCallbacks(filterRunnable);
@@ -2806,6 +2808,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     private List<ChatConversationMsg> buildFollowDisplayList() {
+        final long buildStartNs = BuildConfig.DEBUG ? System.nanoTime() : 0L;
+        final List<String> debugScannedChannelIds = BuildConfig.DEBUG ? new ArrayList<>() : null;
+        final List<String> debugMentionSections = BuildConfig.DEBUG ? new ArrayList<>() : null;
         FollowedKeysStore store = FollowedKeysStore.getInstance();
         Map<String, List<SidebarItemEntity>> itemsByCategory = store.getItemsByCategory();
 
@@ -2824,6 +2829,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         }
 
         List<ChatConversationMsg> displayList = new ArrayList<>();
+
+        // 一次取出全部未完成 @我 提醒的 channel_id，供下面每个 section 做内存前缀匹配。
+        // 原来是在 category × group 双层循环里逐个查 DB，主线程上放大成 N 次全表扫 → ANR。
+        Set<String> undoneMentionChannelIds = ReminderDBManager.getInstance()
+                .queryUndoneChannelIds(WKMentionType.WKReminderTypeMentionMe);
 
         List<CategoryEntity> categories = new ArrayList<>(categoryList);
         for (CategoryEntity category : categories) {
@@ -2850,7 +2860,16 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             ChatConversationMsg sectionHeader = new ChatConversationMsg(category.category_id, category.name);
             sectionHeader.sectionGroupCount = sectionItems.size();
             sectionHeader.sectionUnreadCount = computeUnreadCountForItems(sectionItems);
-            sectionHeader.sectionHasMention = computeHasMentionForItems(sectionItems);
+            sectionHeader.sectionHasMention = computeHasMentionForItems(sectionItems, undoneMentionChannelIds);
+            if (BuildConfig.DEBUG) {
+                for (ChatConversationMsg m : sectionItems) {
+                    if (m != null && m.uiConversationMsg != null
+                            && !TextUtils.isEmpty(m.uiConversationMsg.channelID)) {
+                        debugScannedChannelIds.add(m.uiConversationMsg.channelID);
+                    }
+                }
+                if (sectionHeader.sectionHasMention) debugMentionSections.add(category.name);
+            }
             displayList.add(sectionHeader);
 
             if (!followAdapter.isSectionCollapsed(category.category_id)) {
@@ -2871,6 +2890,18 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             }
         }
 
+        if (BuildConfig.DEBUG) {
+            Log.d(PERF_TAG, "[list] buildFollowDisplayList items=" + debugScannedChannelIds.size()
+                    + " undoneMentionRows=" + undoneMentionChannelIds.size()
+                    + " mentionSections=" + debugMentionSections
+                    + " cost=" + String.format(java.util.Locale.US, "%.2fms",
+                            (System.nanoTime() - buildStartNs) / 1_000_000.0)
+                    + " thread=" + Thread.currentThread().getName());
+            if (DEBUG_COMPARE_LEGACY_REMINDER_QUERY) {
+                ReminderDBManager.getInstance().debugCompareLegacyPrefixScan(
+                        debugScannedChannelIds, WKMentionType.WKReminderTypeMentionMe);
+            }
+        }
         return displayList;
     }
 

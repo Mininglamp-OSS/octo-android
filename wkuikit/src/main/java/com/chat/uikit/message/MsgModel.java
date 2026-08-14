@@ -146,24 +146,31 @@ public class MsgModel extends WKBaseModel {
             if (!flameLoopRunning.get()) return;
             // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
             // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
-            // 不变量：这个 runnable 退出时，要么已排下一轮，要么 flameLoopRunning 已置回 false。
-            boolean keepGoing;
+            boolean keepGoing = false;
             try {
                 keepGoing = sweepFlameMsg();
                 flameFailureStreak = 0;
-            } catch (Throwable t) {
-                // 瞬时故障（同步高峰的 SQLiteException / OOM）下一轮重试，连续失败到上限才收摊，
-                // 避免把一个必然失败的 DB 操作变成每秒一次的热循环。
+            } catch (Exception e) {
+                // 只接可恢复的瞬时故障（同步高峰的 SQLiteException 等）：下一轮重试，连续失败到
+                // 上限才收摊，避免把一个必然失败的 DB 操作变成每秒一次的热循环。
+                //
+                // 刻意不接 Error：本仓库没有设 RxJavaPlugins.setErrorHandler，OOM 原本会经
+                // RxJavaPlugins.onError → uncaught handler 抵达 Bugly。接住它而 release 下又
+                // 不上报，等于把这批改动（见 BaseObserver.reportIfSwallowedError）要暴露的东西
+                // 重新吞一次。让它照原路穿出去，崩溃语义与改动前一致；也不重试刚 OOM 的操作。
                 keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
                 if (BuildConfig.DEBUG) {
                     Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
-                            + " keepGoing=" + keepGoing, t);
+                            + " keepGoing=" + keepGoing, e);
                 }
-            }
-            if (keepGoing) {
-                scheduleFlameSweep(FLAME_INTERVAL_MS);
-            } else {
-                flameLoopRunning.set(false);
+            } finally {
+                // 不变量：无论正常返回、Exception 还是 Error 穿出去，都不能把 flameLoopRunning
+                // 留在 true —— 那才是「清理永久禁用」的根因。
+                if (keepGoing) {
+                    scheduleFlameSweep(FLAME_INTERVAL_MS);
+                } else {
+                    flameLoopRunning.set(false);
+                }
             }
         }, delayMs, TimeUnit.MILLISECONDS);
     }

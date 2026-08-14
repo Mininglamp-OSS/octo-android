@@ -516,12 +516,30 @@ public class WKDBHelper {
      * <p>release 也记录，走 {@link WKLoggerUtils}，Bugly 能捞到。
      */
     private Cursor guardCursor(Cursor cursor, String sql, long acquireMs) {
-        if (acquireMs >= SLOW_ACQUIRE_MS) {
+        if (acquireMs >= SLOW_ACQUIRE_MS && shouldLogSlow("acquire:" + abbreviate(sql))) {
             WKLoggerUtils.getInstance().e(TAG, "[slow-db] acquire=" + acquireMs + "ms thread="
                     + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
         }
         if (cursor == null) return null;
         return new SlowQueryCursor(cursor, sql);
+    }
+
+    private static final long SLOW_LOG_MIN_INTERVAL_MS = 60_000;
+    private static final int SLOW_LOG_KEY_CAP = 200;
+    private static final Map<String, Long> slowLogLastAt = new ConcurrentHashMap<>();
+
+    /**
+     * 按 SQL 节流：慢 DB 通常是持续状态（一次同步里同一条 SQL 反复超时），而这些日志走
+     * {@link WKLoggerUtils} 在 release 也会落盘。不节流就等于给一台已经在挣扎的设备再加一份
+     * 无上界的磁盘 IO —— 信号一条就够，重复的只是放大故障。计数存在良性竞争，不影响用途。
+     */
+    private static boolean shouldLogSlow(String key) {
+        long now = SystemClock.elapsedRealtime();
+        if (slowLogLastAt.size() > SLOW_LOG_KEY_CAP) slowLogLastAt.clear();
+        Long last = slowLogLastAt.get(key);
+        if (last != null && now - last < SLOW_LOG_MIN_INTERVAL_MS) return false;
+        slowLogLastAt.put(key, now);
+        return true;
     }
 
     private static String abbreviate(String sql) {
@@ -594,9 +612,24 @@ public class WKDBHelper {
             return moved;
         }
 
+        /**
+         * 必须覆盖：{@code while (cursor.moveToNext())} 这种写法（如
+         * {@code ChannelDBManager.isExist}）从不调 getCount/moveToFirst，首次填充
+         * CursorWindow 的开销全落在这里，不测就是盲区 —— 而这个包装器存在的意义正是抓下一个
+         * {@code queryWithFlame} 那种量级的扫描。
+         */
+        @Override
+        public boolean moveToNext() {
+            if (measured) return super.moveToNext();
+            long start = SystemClock.elapsedRealtime();
+            boolean moved = super.moveToNext();
+            report(SystemClock.elapsedRealtime() - start);
+            return moved;
+        }
+
         private void report(long fillMs) {
             measured = true;
-            if (fillMs >= SLOW_FILL_MS) {
+            if (fillMs >= SLOW_FILL_MS && shouldLogSlow("fill:" + abbreviate(sql))) {
                 WKLoggerUtils.getInstance().e(TAG, "[slow-db] fill=" + fillMs + "ms thread="
                         + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
             }

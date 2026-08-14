@@ -119,6 +119,10 @@ public class MsgModel extends WKBaseModel {
 
     private static final long FLAME_FIRST_DELAY_MS = 100;
     private static final long FLAME_INTERVAL_MS = 1000;
+    /** 连续失败到这个次数就停止轮询（下次进聊天页 startCheckFlameMsgTimer 会重新起）。 */
+    private static final int FLAME_MAX_FAILURE_STREAK = 3;
+    /** 只在 {@link WKDbScheduler} 单线程上读写，无需同步。 */
+    private int flameFailureStreak;
 
     public void stopTimer() {
         flameLoopRunning.set(false);
@@ -140,7 +144,23 @@ public class MsgModel extends WKBaseModel {
         if (!flameLoopRunning.get()) return;
         flameLoopTask = WKDbScheduler.get().scheduleDirect(() -> {
             if (!flameLoopRunning.get()) return;
-            if (sweepFlameMsg()) {
+            // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
+            // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
+            // 不变量：这个 runnable 退出时，要么已排下一轮，要么 flameLoopRunning 已置回 false。
+            boolean keepGoing;
+            try {
+                keepGoing = sweepFlameMsg();
+                flameFailureStreak = 0;
+            } catch (Throwable t) {
+                // 瞬时故障（同步高峰的 SQLiteException / OOM）下一轮重试，连续失败到上限才收摊，
+                // 避免把一个必然失败的 DB 操作变成每秒一次的热循环。
+                keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
+                if (BuildConfig.DEBUG) {
+                    Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
+                            + " keepGoing=" + keepGoing, t);
+                }
+            }
+            if (keepGoing) {
                 scheduleFlameSweep(FLAME_INTERVAL_MS);
             } else {
                 flameLoopRunning.set(false);

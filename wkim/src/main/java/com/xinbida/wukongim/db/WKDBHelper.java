@@ -532,13 +532,18 @@ public class WKDBHelper {
      * 按 SQL 节流：慢 DB 通常是持续状态（一次同步里同一条 SQL 反复超时），而这些日志走
      * {@link WKLoggerUtils} 在 release 也会落盘。不节流就等于给一台已经在挣扎的设备再加一份
      * 无上界的磁盘 IO —— 信号一条就够，重复的只是放大故障。计数存在良性竞争，不影响用途。
+     *
+     * <p>key 先把数字串归一成 {@code ?}：有几处调用点把值内联进 SQL（成员分页的
+     * {@code limit 20,20}、{@code IN (...)} 列表），不归一的话翻页一次就是一个新 key，
+     * 几轮就把 {@link #SLOW_LOG_KEY_CAP} 走穿触发整清，节流对所有语句一起失效。
      */
     private static boolean shouldLogSlow(String key) {
+        String shape = key.replaceAll("\\d+", "?");
         long now = SystemClock.elapsedRealtime();
         if (slowLogLastAt.size() > SLOW_LOG_KEY_CAP) slowLogLastAt.clear();
-        Long last = slowLogLastAt.get(key);
+        Long last = slowLogLastAt.get(shape);
         if (last != null && now - last < SLOW_LOG_MIN_INTERVAL_MS) return false;
-        slowLogLastAt.put(key, now);
+        slowLogLastAt.put(shape, now);
         return true;
     }
 

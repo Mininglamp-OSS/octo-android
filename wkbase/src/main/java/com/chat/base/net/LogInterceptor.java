@@ -95,9 +95,12 @@ public class LogInterceptor implements Interceptor {
 
             if (requestBody != null && !requestBody.isOneShot()) {
                 long reqLen = requestBody.contentLength();
-                if (reqLen > MAX_LOG_BODY_BYTES) {
-                    // 文件上传这类：writeTo 会把整包灌进内存，不能为了打一条日志付这个代价
-                    requestParams = "body 过大，已跳过打印（" + reqLen + " bytes）";
+                if (reqLen < 0 || reqLen > MAX_LOG_BODY_BYTES) {
+                    // 文件上传这类：writeTo 会把整包灌进内存，不能为了打一条日志付这个代价。
+                    // 长度未知（-1，流式 body）同样跳过：写完才知道多大，等于没有上界。
+                    requestParams = reqLen < 0
+                            ? "body 长度未知，已跳过打印"
+                            : "body 过大，已跳过打印（" + reqLen + " bytes）";
                 } else if (freeHeapBytes() < LOW_HEAP_SKIP_BYTES) {
                     requestParams = "堆吃紧，跳过 body 打印";
                 } else {

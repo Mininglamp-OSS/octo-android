@@ -37,6 +37,7 @@ import com.chat.base.net.ICommonListener;
 import com.chat.base.net.IRequestResultListener;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.base.net.ud.WKUploader;
+import com.chat.base.utils.DispatchQueuePool;
 import com.chat.base.utils.WKDeviceUtils;
 import com.chat.base.utils.WKReader;
 import com.chat.base.utils.WKTimeUtils;
@@ -64,6 +65,9 @@ import java.util.List;
  * 用户
  */
 public class UserModel extends WKBaseModel {
+    // 与 FriendModel 同一份范式: HTTP 回调在主线程, DB 读写走这个池。池大小 3 对齐 FriendModel。
+    private final DispatchQueuePool dispatchQueuePool = new DispatchQueuePool(3);
+
     private UserModel() {
     }
 
@@ -255,36 +259,52 @@ public class UserModel extends WKBaseModel {
                 }
                 WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_pc_online", online);
                 WKSharedPreferencesUtil.getInstance().putInt(WKConfig.getInstance().getUid() + "_mute_of_app", muteOfAPP);
-                List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
-                List<WKChannel> list = new ArrayList<>();
-                if (WKReader.isNotEmpty(result.friends)) {
-                    if (WKReader.isNotEmpty(tempList)) {
-                        for (int i = 0, size = tempList.size(); i < size; i++) {
-                            boolean isReset = true;
-                            for (int j = 0, len = result.friends.size(); j < len; j++) {
-                                if (result.friends.get(j).uid.equals(tempList.get(i).channelID)) {
-                                    isReset = false;
-                                    tempList.get(i).online = result.friends.get(j).online;
-                                    tempList.get(i).lastOffline = result.friends.get(j).last_offline;
-                                    break;
+                // 整段 DB 读写下沉到后台队列: 这个回调在主线程(HTTP onSuccess), 里面有 1 次
+                // getWithFollowAndStatus 全表读 + 每个新好友 1 次 getChannel + 末尾一次
+                // saveOrUpdateChannels 写事务。同一份逻辑在 FriendModel:186 早就是
+                // dispatchQueuePool.execute 包装的, 这里是漏了。触发点是 App 回前台
+                // (TSApplication:176), 正是 Bugly 那批 ANR 的触发场景之一。
+                dispatchQueuePool.execute(() -> {
+                    List<WKChannel> tempList = WKIM.getInstance().getChannelManager().getWithFollowAndStatus(WKChannelType.PERSONAL, 1, 1);
+                    List<WKChannel> list = new ArrayList<>();
+                    if (WKReader.isNotEmpty(result.friends)) {
+                        if (WKReader.isNotEmpty(tempList)) {
+                            for (int i = 0, size = tempList.size(); i < size; i++) {
+                                boolean isReset = true;
+                                for (int j = 0, len = result.friends.size(); j < len; j++) {
+                                    if (result.friends.get(j).uid.equals(tempList.get(i).channelID)) {
+                                        isReset = false;
+                                        tempList.get(i).online = result.friends.get(j).online;
+                                        tempList.get(i).lastOffline = result.friends.get(j).last_offline;
+                                        break;
+                                    }
                                 }
+                                if (isReset) {
+                                    tempList.get(i).online = 0;
+                                    // tempList.get(i).lastOffline = 0;
+                                }
+                                list.add(tempList.get(i));
                             }
-                            if (isReset) {
-                                tempList.get(i).online = 0;
-                                // tempList.get(i).lastOffline = 0;
-                            }
-                            list.add(tempList.get(i));
-                        }
 
-                        for (int i = 0, size = result.friends.size(); i < size; i++) {
-                            boolean isAdd = true;
-                            for (int j = 0, len = tempList.size(); j < len; j++) {
-                                if (result.friends.get(i).uid.equals(tempList.get(j).channelID)) {
-                                    isAdd = false;
-                                    break;
+                            for (int i = 0, size = result.friends.size(); i < size; i++) {
+                                boolean isAdd = true;
+                                for (int j = 0, len = tempList.size(); j < len; j++) {
+                                    if (result.friends.get(i).uid.equals(tempList.get(j).channelID)) {
+                                        isAdd = false;
+                                        break;
+                                    }
+                                }
+                                if (isAdd) {
+                                    WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(result.friends.get(i).uid, WKChannelType.PERSONAL);
+                                    if (channel != null) {
+                                        channel.lastOffline = result.friends.get(i).last_offline;
+                                        channel.online = result.friends.get(i).online;
+                                        list.add(channel);
+                                    }
                                 }
                             }
-                            if (isAdd) {
+                        } else {
+                            for (int i = 0, size = result.friends.size(); i < size; i++) {
                                 WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(result.friends.get(i).uid, WKChannelType.PERSONAL);
                                 if (channel != null) {
                                     channel.lastOffline = result.friends.get(i).last_offline;
@@ -294,40 +314,16 @@ public class UserModel extends WKBaseModel {
                             }
                         }
                     } else {
-                        for (int i = 0, size = result.friends.size(); i < size; i++) {
-                            WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(result.friends.get(i).uid, WKChannelType.PERSONAL);
-                            if (channel != null) {
-                                channel.lastOffline = result.friends.get(i).last_offline;
-                                channel.online = result.friends.get(i).online;
-                                list.add(channel);
-                            }
-                        }
-                    }
-                } else {
-                    for (int i = 0, size = tempList.size(); i < size; i++) {
-                        if (tempList.get(i).online == 1 || tempList.get(i).lastOffline > 0) {
-                            tempList.get(i).online = 0;
-                            // tempList.get(i).lastOffline = 0;
-                            list.add(tempList.get(i));
-                        }
-                    }
-                }
-
-                if (WKReader.isNotEmpty(result.friends)) {
-                    if (WKReader.isNotEmpty(tempList)) {
                         for (int i = 0, size = tempList.size(); i < size; i++) {
-                            for (int j = 0, len = result.friends.size(); j < len; j++) {
-                                if (result.friends.get(j).uid.equals(tempList.get(i).channelID)) {
-                                    tempList.get(i).online = result.friends.get(j).online;
-                                    tempList.get(i).lastOffline = result.friends.get(j).last_offline;
-                                    list.add(tempList.get(i));
-                                    break;
-                                }
+                            if (tempList.get(i).online == 1 || tempList.get(i).lastOffline > 0) {
+                                tempList.get(i).online = 0;
+                                // tempList.get(i).lastOffline = 0;
+                                list.add(tempList.get(i));
                             }
                         }
                     }
-                }
-                WKIM.getInstance().getChannelManager().saveOrUpdateChannels(list);
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannels(list);
+                });
             }
 
             @Override

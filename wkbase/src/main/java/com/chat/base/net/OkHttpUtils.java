@@ -86,6 +86,10 @@ public class OkHttpUtils {
                             .addInterceptor(mRewriteCacheControlInterceptor)
                             .addInterceptor(new CommonRequestParamInterceptor())
                             .addNetworkInterceptor(mRewriteCacheControlInterceptor)
+                            // LogInterceptor 只在 debug 生效（内部 WKBinder.isDebug 判定，release 走
+                            // chain.proceed 直通）。它对 body 有 256KB 上界：小 body 照旧全打，大 body
+                            // 只打大小——原实现会把整个响应体物化五六份，debug 包凭空多吃 80MB+，
+                            // 既带偏堆测量，又把 logcat 缓冲区冲爆。详见 LogInterceptor.MAX_LOG_BODY_BYTES。
                             .addInterceptor(new LogInterceptor())
                             // Emoji manifest 端点公开无鉴权，parse 前先做 raw body 字节上限
                             // 检查，防 hostile / MITM 推巨大 body → FastJson buffer 后 OOM。
@@ -93,9 +97,9 @@ public class OkHttpUtils {
                             //
                             // ⚠️ 必须放在 LogInterceptor 之后（即 list 末尾，最内层）：
                             // application interceptor 按 list order 由外到内包装，list 末尾的
-                            // interceptor 最先看到 response。LogInterceptor 会 body().string()
-                            // 全量读 body 后再打日志，若 BodyLimit 在 Log 之前（更外层），
-                            // Log 已经 OOM 了 BodyLimit 才拿到 response——检查太晚。
+                            // interceptor 最先看到 response，能在任何人读 body 之前先做大小检查。
+                            // （LogInterceptor 现在只 peek 最多 256KB，不再整包读，但这个顺序仍是
+                            // 正确的：让上限检查处在最内层，谁都别想先碰到超大 body。）
                             // 参考 PR #94 Jerry-Xin round-3 review B2。
                             .addInterceptor(new EmojiManifestBodyLimitInterceptor())
                             // 全局搜索 L1/L2 端点也做 body 大小上限（同 Emoji 拦截器语义），

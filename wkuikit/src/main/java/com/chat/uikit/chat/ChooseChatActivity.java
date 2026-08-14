@@ -750,12 +750,26 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     }
 
     private void sortByTopAndTime(List<ChooseChatEntity> list) {
+        // 排序键排序前算好，理由同 ChatFragment.buildRecentDisplayList：
+        // ① getWkChannel() 为 null 时不回缓存，comparator 里写两遍就每次比较都查库；
+        // ② 懒加载/并发刷新会让比较结果在排序中途改变，触发 TimSort 契约异常。
+        // 顺带修掉原来 `uiConveursationMsg == null → return 0` 的不可传递比较（null 与任何元素
+        // 都"相等"，但被它判等的两个元素之间未必相等），改为把 null 项确定性地排到末尾。
+        java.util.Map<ChooseChatEntity, Integer> topFlags = new java.util.IdentityHashMap<>(list.size());
+        java.util.Map<ChooseChatEntity, Long> timeKeys = new java.util.IdentityHashMap<>(list.size());
+        for (int i = 0, size = list.size(); i < size; i++) {
+            ChooseChatEntity e = list.get(i);
+            WKUIConversationMsg uc = e.uiConveursationMsg;
+            WKChannel ch = uc == null ? null : uc.getWkChannel();
+            topFlags.put(e, (ch != null && ch.top == 1) ? 1 : 0);
+            timeKeys.put(e, uc == null ? Long.MIN_VALUE : uc.lastMsgTimestamp);
+        }
         list.sort((a, b) -> {
-            if (a.uiConveursationMsg == null || b.uiConveursationMsg == null) return 0;
-            int topA = (a.uiConveursationMsg.getWkChannel() != null && a.uiConveursationMsg.getWkChannel().top == 1) ? 1 : 0;
-            int topB = (b.uiConveursationMsg.getWkChannel() != null && b.uiConveursationMsg.getWkChannel().top == 1) ? 1 : 0;
+            int topA = topFlags.getOrDefault(a, 0);
+            int topB = topFlags.getOrDefault(b, 0);
             if (topA != topB) return topB - topA;
-            return Long.compare(b.uiConveursationMsg.lastMsgTimestamp, a.uiConveursationMsg.lastMsgTimestamp);
+            return Long.compare(timeKeys.getOrDefault(b, Long.MIN_VALUE),
+                    timeKeys.getOrDefault(a, Long.MIN_VALUE));
         });
     }
 

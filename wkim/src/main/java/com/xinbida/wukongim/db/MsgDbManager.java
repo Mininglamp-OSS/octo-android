@@ -62,7 +62,6 @@ public class MsgDbManager {
         return MsgDbManagerBinder.db;
     }
 
-    private int requestCount;
     //    private int more = 1;
     private final HashMap<String, Long> channelMinMsgSeqs = new HashMap<>();
     //  P1-1: per-channel preview gate. Without this, a channel-level
@@ -72,6 +71,48 @@ public class MsgDbManager {
     // Keyed by channelId + channelType + oldestOrderSeq so every distinct
     // load (first-open / paging) gets its own one-shot gate.
     private final ConcurrentHashMap<String, Boolean> previewPosted = new ConcurrentHashMap<>();
+    /**
+     * 同步轮次计数，key 与 {@link #previewPosted} 同为
+     * {@code channelId_channelType_oldestOrderSeq}。
+     *
+     * <p>原先是单例字段 {@code private int requestCount}，是上一轮修 {@code previewPosted}
+     * 时漏掉的同一类坑：它跨频道、跨分页位置共享，于是
+     * <ul>
+     *     <li>A 频道把它顶到 5（服务端某轮返回不足一页）后，</li>
+     *     <li>B 频道（或同频道的下一个 oldestOrderSeq）进来时 {@code requestCount < 5}
+     *         直接不成立 → 跳过同步分支 → 把本地查询结果原样上报；</li>
+     *     <li>若本地那一段恰好是空洞，上报的就是空 list，
+     *         而 UI 侧把空 list 当成「到头了」永久关掉加载开关。</li>
+     * </ul>
+     * 改为按 key 隔离后，每次独立的加载各自计数，互不污染。递归调用沿用同一个
+     * {@code oldestOrderSeq}，所以 key 在递归过程中稳定。
+     */
+    private final ConcurrentHashMap<String, Integer> requestCounts = new ConcurrentHashMap<>();
+
+    private int getRequestCount(String key) {
+        Integer count = requestCounts.get(key);
+        return count == null ? 0 : count;
+    }
+
+    /**
+     * 两个闸门 map 都只在终止分支清理，若某次加载的同步回调始终不回来（进程被冻结、
+     * 请求被丢弃等），条目会留下。加个上限阀：超了整清。清空是 fail-open ——
+     * 在途加载的计数归零，最坏结果是多同步一轮 / 多 post 一次 preview
+     * （{@code ChatActivity.applyDataToAdapter} 本来就能处理重复回调），
+     * 比让泄漏条目把某个分页位置永久闸死安全。
+     */
+    private void guardLoadGateSize() {
+        if (requestCounts.size() > 256 || previewPosted.size() > 256) {
+            requestCounts.clear();
+            previewPosted.clear();
+        }
+    }
+
+    /** 终止分支统一收口：同步轮次与 preview 闸门一起清，避免其中一个泄漏。 */
+    private void clearLoadGates(String key) {
+        requestCounts.remove(key);
+        previewPosted.remove(key);
+    }
 
     public void queryOrSyncHistoryMessages(String channelId, byte channelType, long oldestOrderSeq, boolean contain, int pullMode, int limit, final IGetOrSyncHistoryMsgBack iGetOrSyncHistoryMsgBack) {
         //获取原始数据
@@ -205,10 +246,8 @@ public class MsgDbManager {
                 }
             }
             if (minMessageSeq == minSeq) {
-                requestCount = 0;
-//                more = 1;
                 //  P1-1: clear the preview gate on terminal callback
-                previewPosted.remove(previewKey);
+                clearLoadGates(previewKey);
                 new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 return;
             }
@@ -232,31 +271,29 @@ public class MsgDbManager {
             endMsgSeq = oldestMsgSeq;
             startMsgSeq = 0;
         }
+        int requestCount = getRequestCount(previewKey);
         if (isSyncMsg && requestCount < 5) {
             if (requestCount == 0) {
                 new Handler(Looper.getMainLooper()).post(iGetOrSyncHistoryMsgBack::onSyncing);
             }
             //同步消息
-            requestCount++;
+            guardLoadGateSize();
+            requestCounts.put(previewKey, requestCount + 1);
             MsgManager.getInstance().setSyncChannelMsgListener(channelId, channelType, startMsgSeq, endMsgSeq, limit, pullMode, syncChannelMsg -> {
                 if (syncChannelMsg != null) {
                     if (oldestMsgSeq == 0 || (syncChannelMsg.messages != null && syncChannelMsg.messages.size() < limit)) {
-                        requestCount = 5;
+                        requestCounts.put(previewKey, 5);
                     }
                     queryOrSyncHistoryMessages(channelId, channelType, oldestOrderSeq, contain, pullMode, limit, iGetOrSyncHistoryMsgBack);
                 } else {
-                    requestCount = 0;
-//                    more = 1;
                     //  P1-1: clear the preview gate on terminal callback
-                    previewPosted.remove(previewKey);
+                    clearLoadGates(previewKey);
                     new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
                 }
             });
         } else {
-            requestCount = 0;
-//            more = 1;
             //  P1-1: clear the preview gate on terminal callback
-            previewPosted.remove(previewKey);
+            clearLoadGates(previewKey);
             new Handler(Looper.getMainLooper()).post(() -> iGetOrSyncHistoryMsgBack.onResult(list));
         }
     }
@@ -285,8 +322,21 @@ public class MsgDbManager {
         return minSeq;
     }
 
+    /**
+     * 查出未删除的阅后即焚消息。
+     *
+     * <p>只取清理逻辑真正要用的列，**不返回完整 WKMsg** —— 原来是 {@code select *}，会把每条
+     * 消息的 content / searchable_word 等大字段全读出来再由 SQLCipher 逐页解密，配合 flame 列
+     * 上没有索引的整表扫描，线上实测单次执行 89 秒并独占连接（Bugly ANRWatchdog）。
+     *
+     * <p>已填充字段：clientMsgNO / messageID / channelID / channelType / messageSeq /
+     * flame / flameSecond / viewed / viewedAt。其余字段保持默认值。
+     */
     public List<WKMsg> queryWithFlame() {
-        String sql = "select * from " + message + " where " + WKDBColumns.WKMessageColumns.flame + "=1 and " + WKDBColumns.WKMessageColumns.is_deleted + "=0";
+        String sql = "select client_msg_no,message_id,channel_id,channel_type,message_seq,"
+                + "flame,flame_second,viewed,viewed_at from " + message
+                + " where " + WKDBColumns.WKMessageColumns.flame + "=1 and "
+                + WKDBColumns.WKMessageColumns.is_deleted + "=0";
         List<WKMsg> list = new ArrayList<>();
         WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
         if (dbHelper == null) return list;
@@ -295,8 +345,17 @@ public class MsgDbManager {
                 return list;
             }
             for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
-                WKMsg extra = serializeMsg(cursor);
-                list.add(extra);
+                WKMsg msg = new WKMsg();
+                msg.clientMsgNO = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.client_msg_no);
+                msg.messageID = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.message_id);
+                msg.channelID = WKCursor.readString(cursor, WKDBColumns.WKMessageColumns.channel_id);
+                msg.channelType = WKCursor.readByte(cursor, WKDBColumns.WKMessageColumns.channel_type);
+                msg.messageSeq = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.message_seq);
+                msg.flame = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.flame);
+                msg.flameSecond = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.flame_second);
+                msg.viewed = WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.viewed);
+                msg.viewedAt = WKCursor.readLong(cursor, WKDBColumns.WKMessageColumns.viewed_at);
+                list.add(msg);
             }
         }
         return list;
@@ -975,6 +1034,18 @@ public class MsgDbManager {
     }
 
     public List<WKMsg> insertOrReplaceExtra(List<WKMsgExtra> list) {
+        return insertOrReplaceExtra(list, true);
+    }
+
+    /**
+     * @param needUpdatedMsgs 是否需要返回「更新后的消息列表」。
+     *                        <p>false 时跳过末尾的 {@link #queryWithMsgIds(List)} —— 那一步会把刚写入
+     *                        extra 的每条消息重新查回来并 {@code serializeMsg}，其中包含把每条 content
+     *                        解析成 {@code org.json.JSONObject} DOM（交互卡这类深层嵌套结构尤其重）。
+     *                        冷启动会话同步一次几千条时，这批临时对象是几百 MB 级别，线上 OOM 的崩溃栈
+     *                        就停在这里。调用方不用返回值时必须传 false。
+     */
+    public List<WKMsg> insertOrReplaceExtra(List<WKMsgExtra> list, boolean needUpdatedMsgs) {
         List<String> msgIds = new ArrayList<>();
         List<ContentValues> cvList = new ArrayList<>();
         for (int i = 0, size = list.size(); i < size; i++) {
@@ -999,6 +1070,9 @@ public class MsgDbManager {
             WKLoggerUtils.getInstance().e(TAG, "insertOrReplace error");
         } finally {
             helper.endTransaction();
+        }
+        if (!needUpdatedMsgs) {
+            return new ArrayList<>();
         }
         List<WKMsg> msgList = queryWithMsgIds(msgIds);
         return msgList;
@@ -1403,6 +1477,12 @@ public class MsgDbManager {
     }
 
     public List<WKMsg> queryWithMsgIds(List<String> messageIds) {
+        // OOM 诊断：这是线上崩溃栈停住的函数。批量大时（同步路径）打一条水位，
+        // 小批量（单条编辑/撤回）不打，避免刷屏。问题闭环后删。
+        final boolean probe = com.xinbida.wukongim.BuildConfig.DEBUG && messageIds.size() > 200;
+        if (probe) {
+            com.xinbida.wukongim.utils.WKHeapProbe.mark("queryWithMsgIds enter", "ids=" + messageIds.size());
+        }
 
         String sql = "select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id=" + messageExtra + ".message_id where " + message + ".message_id in (" + WKCursor.getPlaceholders(messageIds.size()) + ")";
         List<WKMsg> list = new ArrayList<>();
@@ -1499,6 +1579,14 @@ public class MsgDbManager {
                     }
                 }
             }
+        }
+        if (probe) {
+            long chars = 0;
+            for (int i = 0, size = list.size(); i < size; i++) {
+                if (list.get(i).content != null) chars += list.get(i).content.length();
+            }
+            com.xinbida.wukongim.utils.WKHeapProbe.mark("queryWithMsgIds exit",
+                    "rows=" + list.size() + " contentChars=" + chars);
         }
         return list;
     }

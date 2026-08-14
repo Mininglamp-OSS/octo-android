@@ -1577,10 +1577,13 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         long threeDaysAgoSec = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         List<ThreadEntity> recentList = new ArrayList<>();
         List<ThreadEntity> inactiveList = new ArrayList<>();
+        // 一次批量查回本群所有子区会话：原来循环里逐个 getUIConversationMsg，每次都是一条带两个
+        // left join 的查询，在 RecyclerView bind 的主线程上按子区数放大。
+        java.util.Map<String, WKUIConversationMsg> threadConvMap =
+                queryThreadConversations(groupNo, activeList);
         for (ThreadEntity te : activeList) {
             String tcId = ThreadModel.getInstance().buildChannelId(groupNo, te.short_id);
-            WKUIConversationMsg conv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+            WKUIConversationMsg conv = threadConvMap.get(tcId);
             long lastTs = conv != null ? conv.lastMsgTimestamp : 0;
             if (lastTs > threeDaysAgoSec) {
                 recentList.add(te);
@@ -1653,8 +1656,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             // 未读数气泡
             int unread = entity.unread_count;
             String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
-            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            WKUIConversationMsg threadConv = threadConvMap.get(threadChannelId);
             if (threadConv != null) {
                 unread = threadConv.unreadCount;
             }
@@ -1760,8 +1762,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                     moreMention = true;
                 }
                 int u = te.unread_count;
-                WKUIConversationMsg tc = WKIM.getInstance().getConversationManager()
-                        .getUIConversationMsg(tcId, WKChannelType.COMMUNITY_TOPIC);
+                // inactiveList 是 activeList 的子集，直接复用上面那次批量查询的结果
+                WKUIConversationMsg tc = threadConvMap.get(tcId);
                 if (tc != null) {
                     u = tc.unreadCount;
                 }
@@ -1895,6 +1897,10 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (!(cardContainerView instanceof LinearLayout)) return;
         LinearLayout cardContainer = (LinearLayout) cardContainerView;
 
+        // 一次批量查回，替代下面循环里逐行 getUIConversationMsg（这个方法是 bind 复用路径，
+        // 每次刷新未读气泡都会走一遍）
+        java.util.Map<String, WKUIConversationMsg> threadConvMap =
+                queryThreadConversations(groupNo, activeList);
         int rowIndex = 0;
         for (int i = 0; i < cardContainer.getChildCount() && rowIndex < showCount; i++) {
             View child = cardContainer.getChildAt(i);
@@ -1903,8 +1909,7 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (rowIndex >= activeList.size()) break;
             ThreadEntity entity = activeList.get(rowIndex);
             String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
-            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            WKUIConversationMsg threadConv = threadConvMap.get(threadChannelId);
             int unread = threadConv != null ? threadConv.unreadCount : entity.unread_count;
 
             WKChannel threadChannel = WKIM.getInstance().getChannelManager()
@@ -2126,17 +2131,42 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     private int getThreadUnreadCount(String groupNo) {
         List<ThreadEntity> cachedList = threadDataCache.get(groupNo);
         if (cachedList == null || cachedList.isEmpty()) return 0;
-        int total = 0;
+        // 只查 status==1 的子区，保持与下面循环的过滤条件一致
+        List<ThreadEntity> activeList = new ArrayList<>(cachedList.size());
         for (ThreadEntity entity : cachedList) {
-            if (entity.status != 1) continue;
+            if (entity != null && entity.status == 1) activeList.add(entity);
+        }
+        java.util.Map<String, WKUIConversationMsg> threadConvMap =
+                queryThreadConversations(groupNo, activeList);
+        int total = 0;
+        for (ThreadEntity entity : activeList) {
             String threadChannelId = ThreadModel.getInstance().buildChannelId(groupNo, entity.short_id);
-            WKUIConversationMsg threadConv = WKIM.getInstance().getConversationManager()
-                    .getUIConversationMsg(threadChannelId, WKChannelType.COMMUNITY_TOPIC);
+            WKUIConversationMsg threadConv = threadConvMap.get(threadChannelId);
             if (threadConv != null) {
                 total += threadConv.unreadCount;
             }
         }
         return total;
+    }
+
+    /**
+     * 批量查一组子区的会话，key 是子区 channelID。
+     *
+     * <p>原来各处在循环里逐个 {@code getUIConversationMsg}，每次都是一条带两个 left join 的
+     * 查询，跑在 RecyclerView bind 的主线程上、按子区数放大。这里压成 1 次。
+     * 查不到的子区在 map 里缺席，调用方拿到 null 走原来的 {@code entity.unread_count} 兜底，
+     * 与逐条查询语义一致。
+     */
+    private java.util.Map<String, WKUIConversationMsg> queryThreadConversations(
+            String groupNo, List<ThreadEntity> entities) {
+        if (entities == null || entities.isEmpty()) return java.util.Collections.emptyMap();
+        List<String> ids = new ArrayList<>(entities.size());
+        for (ThreadEntity te : entities) {
+            if (te == null) continue;
+            ids.add(ThreadModel.getInstance().buildChannelId(groupNo, te.short_id));
+        }
+        return WKIM.getInstance().getConversationManager()
+                .getUIConversationMsgs(ids, WKChannelType.COMMUNITY_TOPIC);
     }
 
     public boolean hasThreadMention(String groupNo) {

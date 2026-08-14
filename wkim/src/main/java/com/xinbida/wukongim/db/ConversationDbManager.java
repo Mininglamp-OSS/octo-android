@@ -257,9 +257,29 @@ public class ConversationDbManager {
         helper.insertSql(conversation, cv);
     }
 
+    /**
+     * 构造 sync 用的 lastMsgSeq 串（每次 WebSocket 连上都会跑一次）。
+     *
+     * <p>线上实测过 54.7 秒（Bugly #89，占着唯一连接把主线程堵死）。三个问题叠加：
+     * <ol>
+     *     <li>相关子查询：每个 conversation 行跑一次 {@code max(message_seq)}；</li>
+     *     <li><b>过滤条件写在外层</b>：内层派生表是裸的 {@code select * from conversation}，
+     *         已删除 / 空 channel_id 的会话也要完整跑一遍子查询，算完再被外层丢掉；</li>
+     *     <li>{@code message_seq} 没有覆盖索引，求 max 要把命中行逐条回表。</li>
+     * </ol>
+     *
+     * <p>本次改 2（把 {@code is_deleted=0 AND channel_id<>''} 下推进派生表）+
+     * 3（{@code 202608132100.sql} 加 {@code idx_message_channel_msg_seq}）。
+     * 1 是语义本身要求的，不动。
+     *
+     * <p>结果集等价：下推的两个条件都是 {@code conversation} 自己的列，
+     * {@code select *} 原样透传，先过滤后计算与先计算后过滤的存活行集合完全相同，
+     * 只是不再为注定被丢弃的行付子查询的代价。
+     */
     public synchronized String queryLastMsgSeqs() {
         String lastMsgSeqs = "";
-        String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey from (select *,(select max(message_seq) from " + message + " where " + message + ".channel_id=" + conversation + ".channel_id and " + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq from " + conversation + ") cn where channel_id<>'' AND is_deleted=0";
+        String sql = "select GROUP_CONCAT(channel_id||':'||channel_type||':'|| last_seq,'|') synckey from (select *,(select max(message_seq) from " + message + " where " + message + ".channel_id=" + conversation + ".channel_id and " + message + ".channel_type=" + conversation + ".channel_type limit 1) last_seq from " + conversation + " where " + conversation + ".channel_id<>'' AND " + conversation + ".is_deleted=0) cn";
+
         WKDBHelper helper = WKIMApplication.getInstance().getDbHelper();
         if (helper == null || helper.isClosed()) return lastMsgSeqs;
         Cursor cursor = helper.rawQuery(sql);
@@ -323,6 +343,44 @@ public class ConversationDbManager {
             cursor.close();
         }
         return conversationMsg;
+    }
+
+    /**
+     * 批量版 {@link #queryWithChannel(String, byte)}：同一 channelType 下一次查回多个会话。
+     *
+     * <p>用于子区预览卡这类「一次 bind 要读 K 个子区会话」的场景，把 K 次带两个 left join 的
+     * 查询压成 1 次。SQL、join 与 is_deleted 过滤跟单条版逐字一致，返回的行用同一个
+     * {@code serializeMsg} 反序列化，保证与逐条查询结果等价。
+     *
+     * <p>分片 500 规避 SQLite 999 变量上限（同 {@link #queryWithExtraChannelIds}）。
+     */
+    public List<WKConversationMsg> queryWithChannelIds(List<String> channelIDs, byte channelType) {
+        List<WKConversationMsg> list = new ArrayList<>();
+        if (channelIDs == null || channelIDs.isEmpty()) return list;
+        int chunkSize = 500;
+        for (int start = 0; start < channelIDs.size(); start += chunkSize) {
+            int end = Math.min(start + chunkSize, channelIDs.size());
+            List<String> chunk = channelIDs.subList(start, end);
+            String sql = "select " + conversation + ".*," + channelCols + "," + extraCols + " from " + conversation + " left join " + channel + " on " + conversation + ".channel_id=" + channel + ".channel_id and " + conversation + ".channel_type=" + channel + ".channel_type left join " + conversationExtra + " on " + conversation + ".channel_id=" + conversationExtra + ".channel_id and " + conversation + ".channel_type=" + conversationExtra + ".channel_type where " + conversation + ".channel_id in (" + WKCursor.getPlaceholders(chunk.size()) + ") and " + conversation + ".channel_type=? and " + conversation + ".is_deleted=0";
+            Object[] args = new Object[chunk.size() + 1];
+            for (int i = 0; i < chunk.size(); i++) {
+                args[i] = chunk.get(i);
+            }
+            args[chunk.size()] = channelType;
+            try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, args)) {
+                if (cursor == null) continue;
+                for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
+                    WKConversationMsg msg = serializeMsg(cursor);
+                    if (msg != null) list.add(msg);
+                }
+            } catch (Exception e) {
+                // WKLoggerUtils 走 WKIM.isDebug()，本仓库 setDebug(true) 写死 → 不包 DEBUG 会进 release
+                if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                    WKLoggerUtils.getInstance().e(TAG, "queryWithChannelIds chunk error");
+                }
+            }
+        }
+        return list;
     }
 
     public synchronized boolean deleteWithChannel(String channelID, byte channelType, int isDeleted) {

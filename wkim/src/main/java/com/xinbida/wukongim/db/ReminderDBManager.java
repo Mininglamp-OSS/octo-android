@@ -5,7 +5,9 @@ import static com.xinbida.wukongim.db.WKDBColumns.TABLE.reminders;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.text.TextUtils;
+import android.util.Log;
 
+import com.xinbida.wukongim.BuildConfig;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.WKIMApplication;
 import com.xinbida.wukongim.entity.WKReminder;
@@ -18,8 +20,11 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class ReminderDBManager {
     private static final String TAG = "ReminderDBManager";
@@ -65,19 +70,65 @@ public class ReminderDBManager {
     }
 
     /**
-     * 查询指定父群下所有子区的未完成提醒（channel_id LIKE 'groupNo____%'）
+     * 一次取出指定类型全部未完成提醒的 channel_id，由调用方在内存里做前缀匹配。
+     *
+     * <p>取代原来按父群逐个查 {@code channel_id LIKE 'groupNo____%'} 的写法：通配符不在末尾时
+     * SQLite 的 LIKE 索引优化本就受限，而 idx_channel 是 BINARY 排序、case_sensitive_like 默认
+     * OFF，两者不匹配 → 优化彻底失效，每次都是全表扫。会话列表刷新按分组 × 群循环调用，
+     * 主线程上放大成 N 次全表扫，是 ANRWatchdog 那批 ANR 的直接触发点。
      */
-    public boolean hasUndoneReminderWithChannelPrefix(String groupNo, int reminderType) {
-        String prefix = groupNo + "____%";
-        String sql = "select 1 from " + reminders + " where channel_id LIKE ? and done=0 and type=? limit 1";
+    public Set<String> queryUndoneChannelIds(int reminderType) {
+        final long startNs = BuildConfig.DEBUG ? System.nanoTime() : 0L;
+        Set<String> channelIds = new HashSet<>();
         WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
-        if (dbHelper == null) return false;
-        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{prefix, reminderType})) {
-            return cursor != null && cursor.moveToFirst();
+        if (dbHelper == null) return channelIds;
+        String sql = "select channel_id from " + reminders + " where done=0 and type=?";
+        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{reminderType})) {
+            if (cursor == null) return channelIds;
+            for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
+                String channelId = cursor.getString(0);
+                if (!TextUtils.isEmpty(channelId)) {
+                    channelIds.add(channelId);
+                }
+            }
         } catch (Exception e) {
-            WKLoggerUtils.getInstance().e(TAG, "hasUndoneReminderWithChannelPrefix error");
-            return false;
+            // WKLoggerUtils 走 WKIM.isDebug()，本仓库 setDebug(true) 写死 → 不包 DEBUG 会进 release
+            if (BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG, "queryUndoneChannelIds error");
+            }
         }
+        if (BuildConfig.DEBUG) {
+            Log.d(WKDBHelper.PERF_TAG, "[reminder] batched query: 1 query, rows=" + channelIds.size()
+                    + ", cost=" + fmtMs(System.nanoTime() - startNs)
+                    + ", thread=" + Thread.currentThread().getName());
+        }
+        return channelIds;
+    }
+
+    /**
+     * 仅 debug：跑一遍改动前的逐个 {@code LIKE 'channelId____%'} 查法并计时，用于和
+     * {@link #queryUndoneChannelIds} 做同机同数据的 A/B 对比。由调用方显式开关，默认不跑。
+     */
+    public void debugCompareLegacyPrefixScan(List<String> channelIds, int reminderType) {
+        if (!BuildConfig.DEBUG) return;
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null || channelIds == null || channelIds.isEmpty()) return;
+        String sql = "select 1 from " + reminders + " where channel_id LIKE ? and done=0 and type=? limit 1";
+        long startNs = System.nanoTime();
+        int hits = 0;
+        for (String channelId : channelIds) {
+            try (Cursor cursor = dbHelper.rawQuery(sql,
+                    new Object[]{channelId + "____%", reminderType})) {
+                if (cursor != null && cursor.moveToFirst()) hits++;
+            } catch (Exception ignored) {
+            }
+        }
+        Log.d(WKDBHelper.PERF_TAG, "[reminder] LEGACY per-channel LIKE: " + channelIds.size()
+                + " queries, hits=" + hits + ", cost=" + fmtMs(System.nanoTime() - startNs));
+    }
+
+    private static String fmtMs(long elapsedNs) {
+        return String.format(Locale.US, "%.2fms", elapsedNs / 1_000_000.0);
     }
 
     /**

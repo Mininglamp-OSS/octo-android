@@ -992,6 +992,16 @@ public class MsgManager extends BaseManager {
                 }
                 iSyncChannelMsgBack.onBack(syncChannelMsg);
             }));
+        } else {
+            // listener 未注册时原先直接 return，iSyncChannelMsgBack 被静默丢弃。
+            // 调用方 MsgDbManager#queryOrSyncHistoryMessages 是在等这个回调推进的：
+            // 回调不来 → onResult 永不触发 → ChatActivity 的 isRefreshLoading/isMoreLoading
+            // 永远停在 true → 「翻着翻着再也加载不出来，退出重进才好」。
+            // 回调 API 任何分支都必须回一次，哪怕是 null。
+            if (BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG, "syncChannelMsgListener is null, fallback onBack(null)");
+            }
+            iSyncChannelMsgBack.onBack(null);
         }
     }
 
@@ -1027,7 +1037,9 @@ public class MsgManager extends BaseManager {
             }
         }
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
-            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
+            // needUpdatedMsgs=false：下面紧接着自己 queryWithMsgIds 一次，带上返回值等于同一批消息
+            // 查两遍、content JSON 解析两遍。
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList, false);
         }
         if (WKCommonUtils.isNotEmpty(msgList)) {
             MsgDbManager.getInstance().insertMsgs(msgList);
@@ -1074,7 +1086,8 @@ public class MsgManager extends BaseManager {
             }
         }
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
-            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
+            // needUpdatedMsgs=false：理由同上，下面自己会 queryWithMsgIds。
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList, false);
         }
         if (!msgIds.isEmpty()) {
             List<String> ids = new ArrayList<>(msgIds);

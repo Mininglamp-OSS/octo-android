@@ -400,6 +400,22 @@ public class ConversationManager extends BaseManager {
         return ConversationDbManager.getInstance().getUIMsg(msg);
     }
 
+    /**
+     * 批量版 {@link #getUIConversationMsg(String, byte)}：同一 channelType 下一次查回多个会话，
+     * 按 channelID 建索引。查不到的 channelID 在 map 里缺席，调用方按 null 走原来的兜底分支，
+     * 与逐条查询语义一致。
+     */
+    public java.util.Map<String, WKUIConversationMsg> getUIConversationMsgs(java.util.List<String> channelIds, byte channelType) {
+        java.util.Map<String, WKUIConversationMsg> map = new java.util.HashMap<>();
+        if (channelIds == null || channelIds.isEmpty()) return map;
+        List<WKConversationMsg> list = ConversationDbManager.getInstance().queryWithChannelIds(channelIds, channelType);
+        for (WKConversationMsg msg : list) {
+            if (msg == null || TextUtils.isEmpty(msg.channelID)) continue;
+            map.put(msg.channelID, ConversationDbManager.getInstance().getUIMsg(msg));
+        }
+        return map;
+    }
+
     public long getMsgExtraMaxVersion() {
         return ConversationDbManager.getInstance().queryMsgExtraMaxVersion();
     }
@@ -478,7 +494,11 @@ public class ConversationManager extends BaseManager {
         if (com.xinbida.wukongim.BuildConfig.DEBUG) {
             android.util.Log.d("ConvSync", "[ConvSync] sync request: version=" + version);
         }
+        com.xinbida.wukongim.utils.WKHeapProbe.ensureBallast(PROBE_BALLAST_MB);
+        com.xinbida.wukongim.utils.WKHeapProbe.snapshot("convSync request issued");
         runOnMainThread(() -> iSyncConversationChat.syncConversationChat(lastMsgSeqStr, 10, version, syncChat -> {
+            com.xinbida.wukongim.utils.WKHeapProbe.snapshot("convSync response parsed conv="
+                    + (syncChat == null || syncChat.conversations == null ? -1 : syncChat.conversations.size()));
             dispatchQueuePool.execute(() -> saveSyncChat(syncChat, () -> {
                 try {
                     if (syncChat != null) {
@@ -512,9 +532,11 @@ public class ConversationManager extends BaseManager {
             android.os.Trace.beginSection("YUJ312-saveSyncChat");
             android.util.Log.d("YUJ312", "saveSyncChat START convCount=" + yuj312T7ConvCount);
         }
+        com.xinbida.wukongim.utils.WKHeapProbe.begin("saveSyncChat");
         try {
             saveSyncChatImpl(syncChat, iSaveSyncChatBack);
         } finally {
+            com.xinbida.wukongim.utils.WKHeapProbe.end();
             if (com.xinbida.wukongim.BuildConfig.DEBUG) {
                 android.os.Trace.endSection();
                 android.util.Log.d("YUJ312", "saveSyncChat END convCount=" + yuj312T7ConvCount
@@ -522,6 +544,28 @@ public class ConversationManager extends BaseManager {
             }
         }
     }
+
+    /**
+     * OOM 诊断开关：置 true 可在本地复现「修复前」的行为——即 insertOrReplaceExtra 写完 extra 后
+     * 再把这一批消息全查回来物化一遍。配合 WKHeapProbe 的 peak 做同一账号 A/B，用来量化那一步
+     * 到底吃掉多少内存。<b>常态必须是 false，问题闭环后连同探针一起删。</b>
+     */
+    private static final boolean PROBE_FORCE_EXTRA_REQUERY = false;
+
+    /**
+     * OOM 复现用压舱重量（MB），0 = 关闭。在同步发起前占住这么多堆并一直持有，把本机可用空间
+     * 压到线上大账号那样的紧张程度。用法：先取一个刚好会崩的值确认能复现同一条栈，然后每上一处
+     * 优化就看同一个压舱值是否还崩——崩不崩的分界线就是这处优化买到的余量，单位 MB，量出来的不是估的。
+     * <b>常态必须是 0，问题闭环后连同探针一起删。</b>
+     */
+    private static final int PROBE_BALLAST_MB = 0;
+
+    /**
+     * 会话同步的落盘批大小。一批处理完就把派生列表清空，峰值内存与这个数成正比、与账号的
+     * 会话总数无关。20 个会话 × 每会话最多 30 条 recent ≈ 600 条消息一批，既不会让事务过碎，
+     * 也远低于会撑爆堆的量级。
+     */
+    private static final int SYNC_CHAT_CONVERSATION_BATCH = 20;
 
     private void saveSyncChatImpl(WKSyncChat syncChat, final ISaveSyncChatBack iSaveSyncChatBack) {
         if (syncChat == null) {
@@ -537,10 +581,23 @@ public class ConversationManager extends BaseManager {
             }
             android.util.Log.d("ConvSync", sb.toString());
         }
+        // 全量 space 缓存必须在 UI 通知之前就绪。原实现放在写 extra 之后、写会话之前；分批之后
+        // 提到循环之前——它与逐条 prefill 互斥（prefill 只在 space_memberships == null 时跑，
+        // 而 applySpaceMemberships 收到 null 直接 return），两者不会交叉，语义不变。
+        applySpaceMemberships(syncChat.space_memberships);
+        // 这四个列表现在只装「当前这一批」会话的数据，每批落盘后 clear()：上一批的 WKMsg
+        // （含 content 字符串和已解析的 baseContentMsgModel）随即不可达，GC 立刻能回收。
+        // 峰值内存因此只与 SYNC_CHAT_CONVERSATION_BATCH 有关，与账号的会话总数无关。
+        // 服务端有没有分页不影响这一点——响应仍然整包收，但派生对象不再同时全量持有。
         List<WKConversationMsg> conversationMsgList = new ArrayList<>();
         List<WKMsg> msgList = new ArrayList<>();
         List<WKMsgReaction> msgReactionList = new ArrayList<>();
         List<WKMsgExtra> msgExtraList = new ArrayList<>();
+        // 每个会话一条，几百个也只有百来 KB，跨批累积无压力；UI 仍然只在最后刷新一次。
+        List<WKUIConversationMsg> uiMsgList = new ArrayList<>();
+        // OOM 诊断用：本次同步所有 content 字符串的总长度。
+        long probeContentChars = 0;
+        int probeBatchNo = 0;
         if (WKCommonUtils.isNotEmpty(syncChat.conversations)) {
             for (int i = 0, size = syncChat.conversations.size(); i < size; i++) {
                 //最近会话消息对象
@@ -590,89 +647,39 @@ public class ConversationManager extends BaseManager {
                             msgExtraList.add(extra);
                         }
                         msgList.add(msg);
+                        if (com.xinbida.wukongim.BuildConfig.DEBUG && msg.content != null) {
+                            probeContentChars += msg.content.length();
+                        }
                     }
                 }
 
                 conversationMsgList.add(conversationMsg);
+
+                // 消费完就把解析树上这一条的 recents 断掉。分批只让「派生列表」有上界，
+                // 但 FastJson 解出来的 WKSyncChat 树本身要活到 onBack 回调，
+                // recents 又是整棵树里最大的一块（content 字符串全在这），不断引用的话
+                // 峰值仍然与账号会话总数成正比，分批等于白做。
+                // 安全性：recents 全仓只有上面那一处消费；onBack 的三个实现只读
+                // conversations.size()（见 ChatFragment / WKIMUtils 的 sync 回调）。
+                syncChat.conversations.get(i).recents = null;
+
+                // 攒够一批（或到末尾）就落盘并清空，让这一批的对象立刻变成可回收。
+                if (conversationMsgList.size() >= SYNC_CHAT_CONVERSATION_BATCH || i == size - 1) {
+                    probeBatchNo++;
+                    flushSyncChatBatch(conversationMsgList, msgList, msgExtraList,
+                            msgReactionList, uiMsgList, probeBatchNo);
+                    conversationMsgList.clear();
+                    msgList.clear();
+                    msgExtraList.clear();
+                    msgReactionList.clear();
+                }
             }
         }
-        if (WKCommonUtils.isNotEmpty(msgExtraList)) {
-            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
-        }
-        // 在 UI 通知之前应用全量 space 缓存，确保主线程过滤时数据已就绪
-        applySpaceMemberships(syncChat.space_memberships);
-        List<WKUIConversationMsg> uiMsgList = new ArrayList<>();
-        WKDBHelper txHelper = WKIMApplication.getInstance().getDbHelper();
-        if (WKCommonUtils.isNotEmpty(conversationMsgList)) {
-            if (WKCommonUtils.isNotEmpty(msgList)) {
-                MsgDbManager.getInstance().insertMsgs(msgList);
-            }
-            try {
-                if (WKCommonUtils.isNotEmpty(conversationMsgList) && txHelper != null && !txHelper.isClosed()) {
-                    List<ContentValues> cvList = new ArrayList<>();
-                    for (int i = 0, size = conversationMsgList.size(); i < size; i++) {
-                        ContentValues cv = ConversationDbManager.getInstance().getInsertSyncCV(conversationMsgList.get(i));
-                        cvList.add(cv);
-                        WKUIConversationMsg uiMsg = ConversationDbManager.getInstance().getUIMsg(conversationMsgList.get(i));
-                        if (uiMsg != null) {
-                            uiMsgList.add(uiMsg);
-                        }
-                    }
-                    txHelper.beginTransaction();
-                    for (ContentValues cv : cvList) {
-                        ConversationDbManager.getInstance().insertSyncMsg(cv);
-                    }
-                    txHelper.setTransactionSuccessful();
-                }
-            } catch (Exception ignored) {
-                WKLoggerUtils.getInstance().e(TAG, "Save synchronization session message exception");
-            } finally {
-                if (txHelper != null) {
-                    txHelper.endTransaction();
-                }
-            }
-            if (WKCommonUtils.isNotEmpty(msgReactionList)) {
-                MsgManager.getInstance().saveMsgReactions(msgReactionList);
-            }
-            // fixme 离线消息应该不能push给UI
-            if (WKCommonUtils.isNotEmpty(msgList)) {
-                HashMap<String, List<WKMsg>> allMsgMap = new HashMap<>();
-                for (WKMsg wkMsg : msgList) {
-                    if (TextUtils.isEmpty(wkMsg.channelID)) continue;
-                    List<WKMsg> list;
-                    if (allMsgMap.containsKey(wkMsg.channelID)) {
-                        list = allMsgMap.get(wkMsg.channelID);
-                        if (list == null) {
-                            list = new ArrayList<>();
-                        }
-                    } else {
-                        list = new ArrayList<>();
-                    }
-                    list.add(wkMsg);
-                    allMsgMap.put(wkMsg.channelID, list);
-                }
-
-//                for (Map.Entry<String, List<WKMsg>> entry : allMsgMap.entrySet()) {
-//                    List<WKMsg> channelMsgList = entry.getValue();
-//                    if (channelMsgList != null && channelMsgList.size() < 20) {
-//                        Collections.sort(channelMsgList, new Comparator<WKMsg>() {
-//                            @Override
-//                            public int compare(WKMsg o1, WKMsg o2) {
-//                                return Long.compare(o1.messageSeq, o2.messageSeq);
-//                            }
-//                        });
-//                        MsgManager.getInstance().pushNewMsg(channelMsgList);
-//                    }
-//                }
-
-
-            }
-            if (WKCommonUtils.isNotEmpty(uiMsgList)) {
-                setOnRefreshMsg(uiMsgList, "saveSyncChat");
-//                for (int i = 0, size = uiMsgList.size(); i < size; i++) {
-//                    WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsgList.get(i), i == uiMsgList.size() - 1, "saveSyncChat");
-//                }
-            }
+        if (WKCommonUtils.isNotEmpty(uiMsgList)) {
+            com.xinbida.wukongim.utils.WKHeapProbe.mark("all batches done",
+                    "batches=" + probeBatchNo + " uiMsg=" + uiMsgList.size()
+                            + " contentChars=" + probeContentChars);
+            setOnRefreshMsg(uiMsgList, "saveSyncChat");
         }
 
         if (WKCommonUtils.isNotEmpty(syncChat.cmds)) {
@@ -690,6 +697,99 @@ public class ConversationManager extends BaseManager {
         }
         WKIM.getInstance().getConnectionManager().setConnectionStatus(WKConnectStatus.syncCompleted, "");
         iSaveSyncChatBack.onBack();
+    }
+
+    /**
+     * 把一批会话及其派生数据落盘。顺序与分批前保持一致：extra → message → conversation → reaction。
+     *
+     * <p>调用方在本方法返回后 {@code clear()} 这些列表，因此本方法不得持有任何入参的引用。
+     */
+    private void flushSyncChatBatch(List<WKConversationMsg> conversationMsgList,
+                                    List<WKMsg> msgList,
+                                    List<WKMsgExtra> msgExtraList,
+                                    List<WKMsgReaction> msgReactionList,
+                                    List<WKUIConversationMsg> uiMsgList,
+                                    int batchNo) {
+        if (WKCommonUtils.isNotEmpty(msgExtraList)) {
+            // needUpdatedMsgs=false：这里不用返回值。带上它会把刚写的这批消息重新查库并把每条
+            // content 解析成 JSONObject + content model，纯浪费（线上有崩溃栈就停在那一步）。
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList, PROBE_FORCE_EXTRA_REQUERY);
+        }
+        if (WKCommonUtils.isNotEmpty(msgList)) {
+            MsgDbManager.getInstance().insertMsgs(msgList);
+        }
+        saveConversationBatch(conversationMsgList, uiMsgList);
+        if (WKCommonUtils.isNotEmpty(msgReactionList)) {
+            MsgManager.getInstance().saveMsgReactions(msgReactionList);
+        }
+        com.xinbida.wukongim.utils.WKHeapProbe.mark("batch " + batchNo,
+                "conv=" + conversationMsgList.size()
+                        + " msg=" + msgList.size()
+                        + " extra=" + msgExtraList.size()
+                        + " reaction=" + msgReactionList.size());
+    }
+
+    /**
+     * 写一批会话到 conversation 表，并把对应的 UI 模型追加到 {@code uiMsgList}。
+     *
+     * <p>分批后这里由一次大事务变成每批一次事务：某一批失败时前面几批已经提交，是部分成功而不是
+     * 整体回滚。对「会话列表」这种可由下次同步自愈的数据，部分成功优于全丢。
+     */
+    private void saveConversationBatch(List<WKConversationMsg> conversationMsgList,
+                                       List<WKUIConversationMsg> uiMsgList) {
+        if (WKCommonUtils.isEmpty(conversationMsgList)) return;
+        WKDBHelper txHelper = WKIMApplication.getInstance().getDbHelper();
+        if (txHelper == null || txHelper.isClosed()) return;
+        boolean began = false;
+        try {
+            List<ContentValues> cvList = new ArrayList<>();
+            for (int i = 0, size = conversationMsgList.size(); i < size; i++) {
+                ContentValues cv = ConversationDbManager.getInstance().getInsertSyncCV(conversationMsgList.get(i));
+                cvList.add(cv);
+                WKUIConversationMsg uiMsg = ConversationDbManager.getInstance().getUIMsg(conversationMsgList.get(i));
+                if (uiMsg != null) {
+                    uiMsgList.add(uiMsg);
+                }
+            }
+            txHelper.beginTransaction();
+            began = true;
+            for (ContentValues cv : cvList) {
+                ConversationDbManager.getInstance().insertSyncMsg(cv);
+            }
+            txHelper.setTransactionSuccessful();
+        } catch (Throwable t) {
+            // ⚠️⚠️ 这一段的 Error 语义必须与 main 完全一致，不许动。
+            //
+            // main 上这里是 catch (Exception ignored)：Error 不在捕获范围 → 直接抛出去 →
+            // DispatchQueuePool 线程崩 → Bugly 收到崩溃报告。线上那 6 条 OOM 栈
+            // （saveSyncChatImpl → insertOrReplaceExtra → queryWithMsgIds）就是这么捞到的，
+            // 是我们发现 OOM 的唯一渠道。把 Error 吞掉 = 线上 OOM 变成「半截数据 + 一片安静」。
+            //
+            // rethrow 必须放在最前面，早于任何字符串拼接：堆已经耗尽时，拼一条日志本身
+            // 就可能再抛一个 OOM，把原始堆栈顶掉，Bugly 收到的会是一条毫无意义的栈。
+            if (t instanceof Error) {
+                throw (Error) t;
+            }
+            // 到这里只剩 Exception。main 上是 catch (Exception ignored) + 一条不带异常信息的
+            // 日志，失败了只能靠猜；而且会话没写进库 → queryLastMsgSeqs 游标停在原地 →
+            // 下次同步服务端返回同样大的全量包 → 用户卡在这个循环里。至少让失败可见。
+            // 门控：WKLoggerUtils 走 WKIM.isDebug()，本仓库 setDebug(true) 写死，
+            // 不包 BuildConfig.DEBUG 的话 release 里照样打印。
+            if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG,
+                        "saveConversationBatch failed (size=" + conversationMsgList.size() + "): " + t);
+            }
+        } finally {
+            if (began) {
+                try {
+                    txHelper.endTransaction();
+                } catch (Exception ignored) {
+                    // 只兜 Exception（比如事务已结束的 IllegalStateException）。
+                    // 这里同样不能写成 catch (Throwable)：endTransaction 抛 OOM 时若被吞掉，
+                    // 那条 Error 就到不了 Bugly——main 上这里连 try 都没有，Error 直接往上走。
+                }
+            }
+        }
     }
 
     /**

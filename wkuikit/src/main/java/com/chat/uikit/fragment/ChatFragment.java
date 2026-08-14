@@ -2581,10 +2581,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         List<ChatConversationMsg> topList = new ArrayList<>();
         List<ChatConversationMsg> normalList = new ArrayList<>();
         for (int i = 0, size = snapshot.size(); i < size; i++) {
-            if (snapshot.get(i).uiConversationMsg.getWkChannel() != null && snapshot.get(i).uiConversationMsg.getWkChannel().top == 1) {
-                topList.add(snapshot.get(i));
+            ChatConversationMsg m = snapshot.get(i);
+            // 取一次存局部变量：getWkChannel() 返回 null 时不会回缓存，写两遍就查两遍库。
+            WKChannel ch = m.uiConversationMsg.getWkChannel();
+            if (ch != null && ch.top == 1) {
+                topList.add(m);
             } else {
-                normalList.add(snapshot.get(i));
+                normalList.add(m);
             }
         }
         List<ChatConversationMsg> tempList = new ArrayList<>();
@@ -2960,9 +2963,23 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             filtered.add(threadMsg);
         }
 
+        // 排序前把 top 快照成 int：comparator 里直接调 getWkChannel() 有两个问题 ——
+        // ① WKUIConversationMsg.getWkChannel() 只在非 null 时回缓存，本地缺 channel 行的会话
+        //    每次比较都重新进 ChannelManager 慢路径，O(N log N) 次比较 = 反复查库；
+        // ② 懒加载可能在排序中途成功、或并发刷新改了 top，导致同一对元素的比较结果前后不一致，
+        //    触发 TimSort 的 IllegalArgumentException: Comparison method violates its general contract!
+        // 每个对象取一次、排序期间恒定，两个问题一起解决。用 IdentityHashMap 是因为
+        // ChatConversationMsg 没有值语义的 equals/hashCode。
+        java.util.Map<ChatConversationMsg, Integer> topFlags =
+                new java.util.IdentityHashMap<>(filtered.size());
+        for (int i = 0, size = filtered.size(); i < size; i++) {
+            ChatConversationMsg m = filtered.get(i);
+            WKChannel ch = m.uiConversationMsg.getWkChannel();
+            topFlags.put(m, (ch != null && ch.top == 1) ? 1 : 0);
+        }
         filtered.sort((a, b) -> {
-            int topA = (a.uiConversationMsg.getWkChannel() != null && a.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
-            int topB = (b.uiConversationMsg.getWkChannel() != null && b.uiConversationMsg.getWkChannel().top == 1) ? 1 : 0;
+            int topA = topFlags.getOrDefault(a, 0);
+            int topB = topFlags.getOrDefault(b, 0);
             if (topA != topB) return topB - topA;
             // 排序键退回 uc.lastMsgTimestamp 直读 (与 sortMsg 保持一致, 见那边的注释)。
             return Long.compare(

@@ -400,6 +400,22 @@ public class ConversationManager extends BaseManager {
         return ConversationDbManager.getInstance().getUIMsg(msg);
     }
 
+    /**
+     * 批量版 {@link #getUIConversationMsg(String, byte)}：同一 channelType 下一次查回多个会话，
+     * 按 channelID 建索引。查不到的 channelID 在 map 里缺席，调用方按 null 走原来的兜底分支，
+     * 与逐条查询语义一致。
+     */
+    public java.util.Map<String, WKUIConversationMsg> getUIConversationMsgs(java.util.List<String> channelIds, byte channelType) {
+        java.util.Map<String, WKUIConversationMsg> map = new java.util.HashMap<>();
+        if (channelIds == null || channelIds.isEmpty()) return map;
+        List<WKConversationMsg> list = ConversationDbManager.getInstance().queryWithChannelIds(channelIds, channelType);
+        for (WKConversationMsg msg : list) {
+            if (msg == null || TextUtils.isEmpty(msg.channelID)) continue;
+            map.put(msg.channelID, ConversationDbManager.getInstance().getUIMsg(msg));
+        }
+        return map;
+    }
+
     public long getMsgExtraMaxVersion() {
         return ConversationDbManager.getInstance().queryMsgExtraMaxVersion();
     }

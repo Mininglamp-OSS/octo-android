@@ -345,6 +345,41 @@ public class ConversationDbManager {
         return conversationMsg;
     }
 
+    /**
+     * 批量版 {@link #queryWithChannel(String, byte)}：同一 channelType 下一次查回多个会话。
+     *
+     * <p>用于子区预览卡这类「一次 bind 要读 K 个子区会话」的场景，把 K 次带两个 left join 的
+     * 查询压成 1 次。SQL、join 与 is_deleted 过滤跟单条版逐字一致，返回的行用同一个
+     * {@code serializeMsg} 反序列化，保证与逐条查询结果等价。
+     *
+     * <p>分片 500 规避 SQLite 999 变量上限（同 {@link #queryWithExtraChannelIds}）。
+     */
+    public List<WKConversationMsg> queryWithChannelIds(List<String> channelIDs, byte channelType) {
+        List<WKConversationMsg> list = new ArrayList<>();
+        if (channelIDs == null || channelIDs.isEmpty()) return list;
+        int chunkSize = 500;
+        for (int start = 0; start < channelIDs.size(); start += chunkSize) {
+            int end = Math.min(start + chunkSize, channelIDs.size());
+            List<String> chunk = channelIDs.subList(start, end);
+            String sql = "select " + conversation + ".*," + channelCols + "," + extraCols + " from " + conversation + " left join " + channel + " on " + conversation + ".channel_id=" + channel + ".channel_id and " + conversation + ".channel_type=" + channel + ".channel_type left join " + conversationExtra + " on " + conversation + ".channel_id=" + conversationExtra + ".channel_id and " + conversation + ".channel_type=" + conversationExtra + ".channel_type where " + conversation + ".channel_id in (" + WKCursor.getPlaceholders(chunk.size()) + ") and " + conversation + ".channel_type=? and " + conversation + ".is_deleted=0";
+            Object[] args = new Object[chunk.size() + 1];
+            for (int i = 0; i < chunk.size(); i++) {
+                args[i] = chunk.get(i);
+            }
+            args[chunk.size()] = channelType;
+            try (Cursor cursor = WKIMApplication.getInstance().getDbHelper().rawQuery(sql, args)) {
+                if (cursor == null) continue;
+                for (cursor.moveToFirst(); !cursor.isAfterLast(); cursor.moveToNext()) {
+                    WKConversationMsg msg = serializeMsg(cursor);
+                    if (msg != null) list.add(msg);
+                }
+            } catch (Exception e) {
+                WKLoggerUtils.getInstance().e(TAG, "queryWithChannelIds chunk error");
+            }
+        }
+        return list;
+    }
+
     public synchronized boolean deleteWithChannel(String channelID, byte channelType, int isDeleted) {
         String[] update = new String[2];
         update[0] = channelID;

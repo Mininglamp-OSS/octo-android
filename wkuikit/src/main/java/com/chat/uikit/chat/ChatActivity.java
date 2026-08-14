@@ -2353,10 +2353,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                             // 补上 onError：先把忙位放掉，保证下一次滚动还能重试。
                             isRefreshLoading = false;
                             isMoreLoading = false;
-                            removeLoadingIndicator();
                             if (BuildConfig.DEBUG) {
                                 Log.e(LOAD_TAG, "buildUiMsgList failed, busy flags released", throwable);
                             }
+                            // 忙位是纯字段，销毁后置了也无害，所以放在守卫之前。
+                            // 但 removeLoadingIndicator() 会动 wkVBinding / chatAdapter：
+                            // buildUiMsgList 跑在 computation 线程，异常回到主线程时 Activity 可能
+                            // 已经销毁，必须和 onNext 分支一样先守存活。
+                            if (isFinishing() || isDestroyed()) return;
+                            removeLoadingIndicator();
                         });
             }
         });

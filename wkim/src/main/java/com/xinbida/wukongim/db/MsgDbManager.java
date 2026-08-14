@@ -1034,6 +1034,18 @@ public class MsgDbManager {
     }
 
     public List<WKMsg> insertOrReplaceExtra(List<WKMsgExtra> list) {
+        return insertOrReplaceExtra(list, true);
+    }
+
+    /**
+     * @param needUpdatedMsgs 是否需要返回「更新后的消息列表」。
+     *                        <p>false 时跳过末尾的 {@link #queryWithMsgIds(List)} —— 那一步会把刚写入
+     *                        extra 的每条消息重新查回来并 {@code serializeMsg}，其中包含把每条 content
+     *                        解析成 {@code org.json.JSONObject} DOM（交互卡这类深层嵌套结构尤其重）。
+     *                        冷启动会话同步一次几千条时，这批临时对象是几百 MB 级别，线上 OOM 的崩溃栈
+     *                        就停在这里。调用方不用返回值时必须传 false。
+     */
+    public List<WKMsg> insertOrReplaceExtra(List<WKMsgExtra> list, boolean needUpdatedMsgs) {
         List<String> msgIds = new ArrayList<>();
         List<ContentValues> cvList = new ArrayList<>();
         for (int i = 0, size = list.size(); i < size; i++) {
@@ -1058,6 +1070,9 @@ public class MsgDbManager {
             WKLoggerUtils.getInstance().e(TAG, "insertOrReplace error");
         } finally {
             helper.endTransaction();
+        }
+        if (!needUpdatedMsgs) {
+            return new ArrayList<>();
         }
         List<WKMsg> msgList = queryWithMsgIds(msgIds);
         return msgList;
@@ -1462,6 +1477,12 @@ public class MsgDbManager {
     }
 
     public List<WKMsg> queryWithMsgIds(List<String> messageIds) {
+        // OOM 诊断：这是线上崩溃栈停住的函数。批量大时（同步路径）打一条水位，
+        // 小批量（单条编辑/撤回）不打，避免刷屏。问题闭环后删。
+        final boolean probe = com.xinbida.wukongim.BuildConfig.DEBUG && messageIds.size() > 200;
+        if (probe) {
+            com.xinbida.wukongim.utils.WKHeapProbe.mark("queryWithMsgIds enter", "ids=" + messageIds.size());
+        }
 
         String sql = "select " + messageCols + "," + extraCols + " from " + message + " left join " + messageExtra + " on " + message + ".message_id=" + messageExtra + ".message_id where " + message + ".message_id in (" + WKCursor.getPlaceholders(messageIds.size()) + ")";
         List<WKMsg> list = new ArrayList<>();
@@ -1558,6 +1579,14 @@ public class MsgDbManager {
                     }
                 }
             }
+        }
+        if (probe) {
+            long chars = 0;
+            for (int i = 0, size = list.size(); i < size; i++) {
+                if (list.get(i).content != null) chars += list.get(i).content.length();
+            }
+            com.xinbida.wukongim.utils.WKHeapProbe.mark("queryWithMsgIds exit",
+                    "rows=" + list.size() + " contentChars=" + chars);
         }
         return list;
     }

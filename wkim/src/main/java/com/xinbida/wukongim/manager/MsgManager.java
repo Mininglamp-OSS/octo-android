@@ -1037,7 +1037,9 @@ public class MsgManager extends BaseManager {
             }
         }
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
-            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
+            // needUpdatedMsgs=false：下面紧接着自己 queryWithMsgIds 一次，带上返回值等于同一批消息
+            // 查两遍、content JSON 解析两遍。
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList, false);
         }
         if (WKCommonUtils.isNotEmpty(msgList)) {
             MsgDbManager.getInstance().insertMsgs(msgList);
@@ -1084,7 +1086,8 @@ public class MsgManager extends BaseManager {
             }
         }
         if (WKCommonUtils.isNotEmpty(msgExtraList)) {
-            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList);
+            // needUpdatedMsgs=false：理由同上，下面自己会 queryWithMsgIds。
+            MsgDbManager.getInstance().insertOrReplaceExtra(msgExtraList, false);
         }
         if (!msgIds.isEmpty()) {
             List<String> ids = new ArrayList<>(msgIds);

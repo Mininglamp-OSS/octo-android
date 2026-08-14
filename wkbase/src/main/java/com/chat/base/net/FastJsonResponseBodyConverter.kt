@@ -49,15 +49,21 @@ class FastJsonResponseBodyConverter<T>(
     override fun convert(value: ResponseBody): T? {
         return value.use { body ->
             val reader = body.charStream()
-            val head = CharArray(STREAM_THRESHOLD_CHARS)
+            // 探测缓冲按需翻倍，不要一上来就按阈值分配：那样每个响应（99% 是几 KB 的小接口）
+            // 都要白拿 512KB，超过 TLAB、每次走慢路径分配，在一个「降内存峰值」的改动里
+            // 反而制造出固定的 per-request 垃圾。
+            var head = CharArray(INITIAL_PROBE_CHARS)
             var headLen = 0
-            while (headLen < head.size) {
+            while (headLen < STREAM_THRESHOLD_CHARS) {
+                if (headLen == head.size) {
+                    head = head.copyOf(minOf(head.size * 2, STREAM_THRESHOLD_CHARS))
+                }
                 val read = reader.read(head, headLen, head.size - headLen)
                 if (read == -1) break
                 headLen += read
             }
 
-            if (headLen < head.size) {
+            if (headLen < STREAM_THRESHOLD_CHARS) {
                 // 小响应：整包已在手上，保持原路径
                 if (headLen == 0) null else JSON.parseObject(String(head, 0, headLen), type)
             } else {
@@ -67,7 +73,7 @@ class FastJsonResponseBodyConverter<T>(
                     JSONReader(pushback).use { it.readObject<T>(type) }
                 }
                 WKHeapProbe.span(
-                    "http JSONReader(stream)", ">${head.size}chars", before, WKHeapProbe.usedNow()
+                    "http JSONReader(stream)", ">${headLen}chars", before, WKHeapProbe.usedNow()
                 )
                 result
             }
@@ -77,5 +83,12 @@ class FastJsonResponseBodyConverter<T>(
     private companion object {
         /** 超过这个长度才值得流式。256K 字符 ≈ 512KB，远小于会话同步那种 350 万字符的响应。 */
         const val STREAM_THRESHOLD_CHARS = 256 * 1024
+
+        /**
+         * 探测缓冲的起始容量，按需翻倍到 [STREAM_THRESHOLD_CHARS] 为止。
+         * 16K 字符（32KB）覆盖绝大多数接口，一次扩容都不用；越过阈值的大包最多 4 次
+         * arraycopy（总拷贝量 < 2× 阈值），相对后面的解析可以忽略。
+         */
+        const val INITIAL_PROBE_CHARS = 16 * 1024
     }
 }

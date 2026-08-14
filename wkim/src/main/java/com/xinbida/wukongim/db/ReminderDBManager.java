@@ -92,7 +92,10 @@ public class ReminderDBManager {
                 }
             }
         } catch (Exception e) {
-            WKLoggerUtils.getInstance().e(TAG, "queryUndoneChannelIds error");
+            // WKLoggerUtils 走 WKIM.isDebug()，本仓库 setDebug(true) 写死 → 不包 DEBUG 会进 release
+            if (BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG, "queryUndoneChannelIds error");
+            }
         }
         if (BuildConfig.DEBUG) {
             Log.d(WKDBHelper.PERF_TAG, "[reminder] batched query: 1 query, rows=" + channelIds.size()

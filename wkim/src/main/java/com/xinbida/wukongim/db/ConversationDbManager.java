@@ -374,7 +374,10 @@ public class ConversationDbManager {
                     if (msg != null) list.add(msg);
                 }
             } catch (Exception e) {
-                WKLoggerUtils.getInstance().e(TAG, "queryWithChannelIds chunk error");
+                // WKLoggerUtils 走 WKIM.isDebug()，本仓库 setDebug(true) 写死 → 不包 DEBUG 会进 release
+                if (com.xinbida.wukongim.BuildConfig.DEBUG) {
+                    WKLoggerUtils.getInstance().e(TAG, "queryWithChannelIds chunk error");
+                }
             }
         }
         return list;

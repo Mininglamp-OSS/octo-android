@@ -177,11 +177,17 @@ public class WKDBHelper {
                             + " journal_size_limit=" + queryPragma("journal_size_limit"));
                 }
             } else {
-                WKLoggerUtils.getInstance().e(TAG, "SQLCipher WAL NOT active, journal_mode=" + mode
-                        + " (connection pool stays at 1)");
+                // 门控原因：WKLoggerUtils 走 WKIM.isDebug()，而本仓库 setDebug(true) 写死，
+                // 不包 BuildConfig.DEBUG 的话 release 里照样打印 + writeLog 落文件。
+                if (BuildConfig.DEBUG) {
+                    WKLoggerUtils.getInstance().e(TAG, "SQLCipher WAL NOT active, journal_mode=" + mode
+                            + " (connection pool stays at 1)");
+                }
             }
         } catch (Exception e) {
-            WKLoggerUtils.getInstance().e(TAG + " verifyWalMode error: " + e.getMessage());
+            if (BuildConfig.DEBUG) {
+                WKLoggerUtils.getInstance().e(TAG + " verifyWalMode error: " + e.getMessage());
+            }
         }
     }
 

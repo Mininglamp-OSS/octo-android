@@ -2,6 +2,7 @@ package com.chat.base.net;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import com.alibaba.fastjson.JSON;
 
@@ -149,5 +150,49 @@ public class FastJsonStreamConverterTest {
                             .conversations.get(0).recents.get(0).content.length(),
                     actual.conversations.get(0).recents.get(0).content.length());
         }
+    }
+
+    /**
+     * 空 body：{@code headLen == 0 -> null} 是这个转换器里唯一一处由我们手写、而非 fastjson
+     * 决定的分支，所以必须有测试钉住。改动前 {@code JSON.parseObject("")} 也是 null。
+     */
+    @Test
+    public void emptyBodyReturnsNull() throws Exception {
+        assertNull("空 body 应返回 null", convert(""));
+        assertNull("改动前的路径同样返回 null", JSON.parseObject("", SyncChat.class));
+    }
+
+    /**
+     * 截断 JSON。按大小分流最容易出的洞是两条路径抛不同类型的异常 —— 上层
+     * {@code ResponseExceptionHandle} 就会因为响应多大而走不同分支。这里钉住「同一类异常」，
+     * 小包（原路径）和越过阈值的大包（流式路径）各测一次。
+     */
+    @Test
+    public void malformedPayloadThrowsSameTypeAsLegacy() {
+        assertSameThrowAsLegacy(truncate(buildPayload(3, 2, 100)));
+        assertSameThrowAsLegacy(truncate(buildPayload(300, 5, 2_000)));
+    }
+
+    /** 砍掉尾部让结构不闭合。 */
+    private static String truncate(String payload) {
+        return payload.substring(0, payload.length() - 20);
+    }
+
+    private static void assertSameThrowAsLegacy(String payload) {
+        Class<?> legacy = null;
+        Class<?> actual = null;
+        try {
+            JSON.parseObject(payload, SyncChat.class);
+        } catch (Throwable t) {
+            legacy = t.getClass();
+        }
+        try {
+            convert(payload);
+        } catch (Throwable t) {
+            actual = t.getClass();
+        }
+        assertNotNull("改动前的路径没有抛异常，这个用例失去意义（截断得不够狠）", legacy);
+        assertEquals("两条路径抛的异常类型不一致，上层会因响应大小走不同分支",
+                legacy, actual);
     }
 }

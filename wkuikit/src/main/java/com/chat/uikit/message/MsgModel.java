@@ -157,9 +157,9 @@ public class MsgModel extends WKBaseModel {
             // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
             // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
             boolean keepGoing = false;
+            Exception failure = null;
             try {
                 keepGoing = sweepFlameMsg();
-                flameFailureStreak = 0;
             } catch (Exception e) {
                 // 只接可恢复的瞬时故障（同步高峰的 SQLiteException 等）：下一轮重试，连续失败到
                 // 上限才收摊，避免把一个必然失败的 DB 操作变成每秒一次的热循环。
@@ -168,17 +168,26 @@ public class MsgModel extends WKBaseModel {
                 // RxJavaPlugins.onError → uncaught handler 抵达 Bugly。接住它而 release 下又
                 // 不上报，等于把这批改动（见 BaseObserver.reportIfSwallowedError）要暴露的东西
                 // 重新吞一次。让它照原路穿出去，崩溃语义与改动前一致；也不重试刚 OOM 的操作。
-                keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
-                if (BuildConfig.DEBUG) {
-                    Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
-                            + " keepGoing=" + keepGoing, e);
-                }
+                //
+                // 成功/失败只记在局部，共享计数留到 finally 里确认世代后再动 —— 否则
+                // stopTimer → startCheckFlameMsgTimer 已经清零并起了新链时，本轮这次
+                // ++ 会污染新链的重试预算（WKDbScheduler 单线程，新链第一轮必然排在其后）。
+                failure = e;
             } finally {
                 // 不变量：无论正常返回、Exception 还是 Error 穿出去，都不能把 flameLoopRunning
                 // 留在 true —— 那才是「清理永久禁用」的根因。
-                // 世代已变则这一轮已被 stopTimer 作废：新链路持有 flameLoopRunning，
-                // 既不排下一轮也不动它的标志位。
+                // 世代已变则这一轮已被 stopTimer 作废：新链路持有 flameLoopRunning 与
+                // flameFailureStreak，本轮既不排下一轮，也不碰这两个状态。
                 if (flameEpoch.get() == epoch) {
+                    if (failure == null) {
+                        flameFailureStreak = 0;
+                    } else {
+                        keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
+                        if (BuildConfig.DEBUG) {
+                            Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
+                                    + " keepGoing=" + keepGoing, failure);
+                        }
+                    }
                     if (keepGoing) {
                         scheduleFlameSweep(FLAME_INTERVAL_MS, epoch);
                     } else {

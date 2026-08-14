@@ -53,7 +53,10 @@ public class ChannelMembersDbManager {
      *         会回调 {@link #invalidateMemberUid(String)}。</li>
      * </ul>
      *
-     * <p>与 channelInfoCache 一致，命中时返回**共享实例**而非副本，调用方不得就地改字段。
+     * <p>命中时返回**副本**：缓存条目是进程级共享的，若把实例交出去，调用方就地改字段
+     * （如 ChatActivity 收到 PERSONAL 频道刷新后改 memberName/memberRemark）会污染所有
+     * 引用它的消息，且写入的语义可能不同（channel.channelRemark 是个人频道备注，
+     * member_remark 是群内备注）。副本是一次浅拷贝，比它替掉的那次 DB 查询便宜得多。
      */
     private static final int MAX_CACHE_SIZE = 2000;
     /** 负缓存哨兵：DB 里查不到该成员时也要记住，否则每次 bind 都重查。 */
@@ -72,6 +75,10 @@ public class ChannelMembersDbManager {
      * 但 {@code insertMembers}（两个重载）与 {@code deleteWithChannel} 没有加锁，会。
      * 故读路径在发起 DB 查询前记下代际，回填时若代际已变就丢弃本次结果
      * （退化为不缓存，与改动前行为一致，是 fail-safe 方向）。
+     *
+     * <p>回填做**两次**代际检查：put 之前一次是快速退出，put 之后再一次才是真正关窗口 ——
+     * 只查 put 之前的话，失效落在 check 与 put 之间时脏值会被写在删除之后，而这份缓存没有
+     * TTL，错的昵称/头像会一直钉到下次该成员被写或切账号。见 {@link #putCache}。
      */
     private final AtomicLong cacheGeneration = new AtomicLong();
 
@@ -99,8 +106,42 @@ public class ChannelMembersDbManager {
             clearCache();
             return;
         }
-        memberCache.put(key, member == null ? NULL_MEMBER : member);
+        memberCache.put(key, member == null ? NULL_MEMBER : copyOf(member));
+        // put 之后复查：失效可能落在上面那次 check 与这次 put 之间（insertMembers /
+        // deleteWithChannel 不与本方法互斥），那样 remove 先发生、脏值后写入就永久留下。
+        // 两种交错都安全：失效方的 remove 与这里的 remove 至少有一个在 put 之后执行。
+        if (cacheGeneration.get() != generation) {
+            memberCache.remove(key);
+            return;
+        }
         keysByMemberUid.computeIfAbsent(memberUid, k -> ConcurrentHashMap.newKeySet()).add(key);
+    }
+
+    /**
+     * 浅拷贝。{@code extraMap} 也复制一层，否则调用方改 map 内容照样穿透到缓存条目。
+     */
+    private static WKChannelMember copyOf(WKChannelMember src) {
+        WKChannelMember copy = new WKChannelMember();
+        copy.id = src.id;
+        copy.channelID = src.channelID;
+        copy.channelType = src.channelType;
+        copy.memberUID = src.memberUID;
+        copy.memberName = src.memberName;
+        copy.memberRemark = src.memberRemark;
+        copy.memberAvatar = src.memberAvatar;
+        copy.memberAvatarCacheKey = src.memberAvatarCacheKey;
+        copy.role = src.role;
+        copy.status = src.status;
+        copy.isDeleted = src.isDeleted;
+        copy.createdAt = src.createdAt;
+        copy.updatedAt = src.updatedAt;
+        copy.version = src.version;
+        copy.robot = src.robot;
+        copy.remark = src.remark;
+        copy.memberInviteUID = src.memberInviteUID;
+        copy.forbiddenExpirationTime = src.forbiddenExpirationTime;
+        copy.extraMap = src.extraMap == null ? null : new HashMap<>(src.extraMap);
+        return copy;
     }
 
     private void invalidate(String channelId, byte channelType, String uid) {
@@ -132,7 +173,13 @@ public class ChannelMembersDbManager {
         cacheGeneration.incrementAndGet();
         String prefix = channelId + "|" + (int) channelType + "|";
         for (String key : memberCache.keySet()) {
-            if (key.startsWith(prefix)) memberCache.remove(key);
+            if (!key.startsWith(prefix)) continue;
+            memberCache.remove(key);
+            // 反向索引同步剪掉，否则频道反复删除时它只增不减：上限只看 memberCache.size()，
+            // 拦不住这里的孤儿 key。空 Set 留着不删 —— 删它有「删除瞬间另一线程刚 add」的
+            // 竞态，代价是漏一次失效（脏名字），比留一个空 Set 的代价大。
+            Set<String> keys = keysByMemberUid.get(key.substring(prefix.length()));
+            if (keys != null) keys.remove(key);
         }
     }
 
@@ -298,7 +345,7 @@ public class ChannelMembersDbManager {
         WKChannelMember cached = memberCache.get(cacheKey(channelId, channelType, uid));
         if (cached != null) {
             if (BuildConfig.DEBUG) debugCountHit();
-            return cached == NULL_MEMBER ? null : cached;
+            return cached == NULL_MEMBER ? null : copyOf(cached);
         }
         if (BuildConfig.DEBUG) debugCountMiss();
         return querySlowPath(channelId, channelType, uid);
@@ -335,7 +382,7 @@ public class ChannelMembersDbManager {
         String key = cacheKey(channelId, channelType, uid);
         // double-check：进 synchronized 之前可能另一线程已经回填
         WKChannelMember cached = memberCache.get(key);
-        if (cached != null) return cached == NULL_MEMBER ? null : cached;
+        if (cached != null) return cached == NULL_MEMBER ? null : copyOf(cached);
 
         long generation = cacheGeneration.get();
         WKChannelMember wkChannelMember = null;

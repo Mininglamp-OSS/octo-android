@@ -121,10 +121,17 @@ public class MsgModel extends WKBaseModel {
     private static final long FLAME_INTERVAL_MS = 1000;
     /** 连续失败到这个次数就停止轮询（下次进聊天页 startCheckFlameMsgTimer 会重新起）。 */
     private static final int FLAME_MAX_FAILURE_STREAK = 3;
-    /** 只在 {@link WKDbScheduler} 单线程上读写，无需同步。 */
-    private int flameFailureStreak;
+    /** DB 线程自增、主线程在 startCheckFlameMsgTimer 里清零，故 volatile。 */
+    private volatile int flameFailureStreak;
+    /**
+     * 轮询世代。stopTimer 自增使在途的那一轮作废：否则 stopTimer（退登）与紧接着的
+     * startCheckFlameMsgTimer（进聊天页）之间，CAS 会起一条新链，而在途 runnable 的 finally
+     * 看到 flameLoopRunning 又是 true，也会排下一轮 —— 两条链各自自排程，轮询频率翻倍。
+     */
+    private final AtomicInteger flameEpoch = new AtomicInteger();
 
     public void stopTimer() {
+        flameEpoch.incrementAndGet();
         flameLoopRunning.set(false);
         Disposable task = flameLoopTask;
         if (task != null && !task.isDisposed()) {
@@ -137,13 +144,16 @@ public class MsgModel extends WKBaseModel {
         // CAS 兼作并发保护：原来 startCheckFlameMsgTimer 是 synchronized 而 DB 线程上的
         // timer.cancel()/timer=null 没有同步，两边竞争可能留下两个 timer。
         if (!flameLoopRunning.compareAndSet(false, true)) return;
-        scheduleFlameSweep(FLAME_FIRST_DELAY_MS);
+        // 不清零的话，上一次因故障收摊时它停在上限值，本次第一次失败就 ++3 < 3 → false，
+        // 只剩一次尝试而不是三次。
+        flameFailureStreak = 0;
+        scheduleFlameSweep(FLAME_FIRST_DELAY_MS, flameEpoch.get());
     }
 
-    private void scheduleFlameSweep(long delayMs) {
-        if (!flameLoopRunning.get()) return;
+    private void scheduleFlameSweep(long delayMs, int epoch) {
+        if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
         flameLoopTask = WKDbScheduler.get().scheduleDirect(() -> {
-            if (!flameLoopRunning.get()) return;
+            if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
             // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
             // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
             boolean keepGoing = false;
@@ -166,10 +176,14 @@ public class MsgModel extends WKBaseModel {
             } finally {
                 // 不变量：无论正常返回、Exception 还是 Error 穿出去，都不能把 flameLoopRunning
                 // 留在 true —— 那才是「清理永久禁用」的根因。
-                if (keepGoing) {
-                    scheduleFlameSweep(FLAME_INTERVAL_MS);
-                } else {
-                    flameLoopRunning.set(false);
+                // 世代已变则这一轮已被 stopTimer 作废：新链路持有 flameLoopRunning，
+                // 既不排下一轮也不动它的标志位。
+                if (flameEpoch.get() == epoch) {
+                    if (keepGoing) {
+                        scheduleFlameSweep(FLAME_INTERVAL_MS, epoch);
+                    } else {
+                        flameLoopRunning.set(false);
+                    }
                 }
             }
         }, delayMs, TimeUnit.MILLISECONDS);

@@ -30,6 +30,9 @@ build/
 # Release output
 app/release/
 
+# Bugly 符号表上传工具的产物（buglySymbolAndroid.jar 的工作目录，不是模块）
+/buglybin/
+
 # Local configuration file (sdk path, etc)
 local.properties
 /local.properties

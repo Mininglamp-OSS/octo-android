@@ -70,6 +70,9 @@ class FastJsonResponseBodyConverter<T>(
                 val before = WKHeapProbe.usedNow()
                 val result = PushbackReader(reader, headLen).use { pushback ->
                     pushback.unread(head, 0, headLen)
+                    // unread 已把探测缓冲拷进 PushbackReader 自己的 buf，这里必须放掉本地引用：
+                    // 否则两份 512KB 在整个 readObject 期间同时强可达，正好抵掉这条路径省下的量。
+                    head = CharArray(0)
                     JSONReader(pushback).use { it.readObject<T>(type) }
                 }
                 WKHeapProbe.span(

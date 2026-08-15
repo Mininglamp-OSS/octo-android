@@ -119,14 +119,18 @@ public class MsgModel extends WKBaseModel {
 
     private static final long FLAME_FIRST_DELAY_MS = 100;
     private static final long FLAME_INTERVAL_MS = 1000;
-    /** 连续失败到这个次数就停止轮询（下次进聊天页 startCheckFlameMsgTimer 会重新起）。 */
+    /**
+     * 连续失败到这个次数就停止轮询。停了不等于永久停：{@code startCheckFlameMsgTimer} 的唯一
+     * 调用点是 {@code ChatActivity.onDestroy}（退出聊天页），下次退出任一聊天页就会重新起。
+     */
     private static final int FLAME_MAX_FAILURE_STREAK = 3;
     /** DB 线程自增、主线程在 startCheckFlameMsgTimer 里清零，故 volatile。 */
     private volatile int flameFailureStreak;
     /**
-     * 轮询世代。stopTimer 自增使在途的那一轮作废：否则 stopTimer（退登）与紧接着的
-     * startCheckFlameMsgTimer（进聊天页）之间，CAS 会起一条新链，而在途 runnable 的 finally
-     * 看到 flameLoopRunning 又是 true，也会排下一轮 —— 两条链各自自排程，轮询频率翻倍。
+     * 轮询世代。stopTimer 自增使在途的那一轮作废：否则 stopTimer（{@code exitLogin} 退登）与
+     * 紧接着的 startCheckFlameMsgTimer（{@code ChatActivity.onDestroy}，退登会销毁聊天页）
+     * 之间，CAS 会起一条新链，而在途 runnable 的 finally 看到 flameLoopRunning 又是 true，
+     * 也会排下一轮 —— 两条链各自自排程，轮询频率翻倍。
      */
     private final AtomicInteger flameEpoch = new AtomicInteger();
 

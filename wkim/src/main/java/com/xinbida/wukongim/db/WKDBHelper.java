@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 /**
  * 2019-11-12 13:57
@@ -516,7 +517,7 @@ public class WKDBHelper {
      * <p>release 也记录，走 {@link WKLoggerUtils}，Bugly 能捞到。
      */
     private Cursor guardCursor(Cursor cursor, String sql, long acquireMs) {
-        if (acquireMs >= SLOW_ACQUIRE_MS && shouldLogSlow("acquire:" + abbreviate(sql))) {
+        if (acquireMs >= SLOW_ACQUIRE_MS && shouldLogSlow("acquire:" + sql)) {
             WKLoggerUtils.getInstance().e(TAG, "[slow-db] acquire=" + acquireMs + "ms thread="
                     + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
         }
@@ -533,18 +534,41 @@ public class WKDBHelper {
      * {@link WKLoggerUtils} 在 release 也会落盘。不节流就等于给一台已经在挣扎的设备再加一份
      * 无上界的磁盘 IO —— 信号一条就够，重复的只是放大故障。计数存在良性竞争，不影响用途。
      *
-     * <p>key 先把数字串归一成 {@code ?}：有几处调用点把值内联进 SQL（成员分页的
-     * {@code limit 20,20}、{@code IN (...)} 列表），不归一的话翻页一次就是一个新 key，
-     * 几轮就把 {@link #SLOW_LOG_KEY_CAP} 走穿触发整清，节流对所有语句一起失效。
+     * <p>key 走 {@link #slowLogShape} 归一后再截断，顺序不能反：截断在前的话归一只作用于
+     * 前 300 字符，而 {@code rawQuery} 那几条长语句里会变的部分都在尾部（实测
+     * {@code ChannelMembersDbManager.queryWithPage} 全长 463、{@code limit} 在 451），
+     * 早被 {@link #abbreviate} 丢掉了 —— 那种写法看着在归一，其实是空操作。
      */
     private static boolean shouldLogSlow(String key) {
-        String shape = key.replaceAll("\\d+", "?");
+        String shape = abbreviate(slowLogShape(key));
         long now = SystemClock.elapsedRealtime();
         if (slowLogLastAt.size() > SLOW_LOG_KEY_CAP) slowLogLastAt.clear();
         Long last = slowLogLastAt.get(shape);
         if (last != null && now - last < SLOW_LOG_MIN_INTERVAL_MS) return false;
         slowLogLastAt.put(shape, now);
         return true;
+    }
+
+    private static final Pattern SLOW_LOG_NUMS = Pattern.compile("\\d+");
+    private static final Pattern SLOW_LOG_PLACEHOLDER_RUN = Pattern.compile("\\?(?:\\s*,\\s*\\?)+");
+
+    /**
+     * 把一条 SQL 归一成「语句形状」：数字串 → {@code ?}，连续占位符 → 单个 {@code ?}。
+     *
+     * <p>占位符那一条才是 key 空间的主要来源：{@code IN (...)} 由
+     * {@link WKCursor#getPlaceholders} 生成绑定占位符（不内联值），所以同一条语句会按
+     * **占位符个数**裂成多个 key；而 {@link #select} 的 key（{@code "select from … where …"}）
+     * 短到不会被截断，于是每个 arity 都能各占一个槽位，一条语句就能吃掉
+     * {@link #SLOW_LOG_KEY_CAP} 的一大截，触发整清、让节流对所有语句一起失效。
+     *
+     * <p>数字归一则覆盖少数把值拼进 SQL 的调用点（如 {@code MsgDbManager} 的 type 列表）。
+     *
+     * <p>包级可见：{@code WKDBHelperSlowLogShapeTest} 直接测这个方法。
+     */
+    static String slowLogShape(String sql) {
+        if (sql == null) return "null";
+        String s = SLOW_LOG_NUMS.matcher(sql).replaceAll("?");
+        return SLOW_LOG_PLACEHOLDER_RUN.matcher(s).replaceAll("?");
     }
 
     private static String abbreviate(String sql) {
@@ -634,7 +658,7 @@ public class WKDBHelper {
 
         private void report(long fillMs) {
             measured = true;
-            if (fillMs >= SLOW_FILL_MS && shouldLogSlow("fill:" + abbreviate(sql))) {
+            if (fillMs >= SLOW_FILL_MS && shouldLogSlow("fill:" + sql)) {
                 WKLoggerUtils.getInstance().e(TAG, "[slow-db] fill=" + fillMs + "ms thread="
                         + Thread.currentThread().getName() + " sql=" + abbreviate(sql));
             }

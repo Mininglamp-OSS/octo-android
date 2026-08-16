@@ -3050,36 +3050,38 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     }
 
-    // RecyclerView 正在 layout / scroll 时 notify* 会抛 IllegalStateException，只能延后一帧。
-    // 已有动作在排队时后续动作也必须排队，否则新回调会插到旧回调前面，
-    // 同一条消息的两次刷新会被旧状态覆盖。
-    // 若某次 layout 抛异常被上层吞掉，RecyclerView 会永久停在 computing 态，
-    // 重试多少次都没用——这时宁可丢掉这次刷新也不崩。
+    // RecyclerView 正在 layout / scroll 时 notify* 会抛 IllegalStateException，只能延后。
+    // 排队与重试规则见 SafeAdapterActionQueue —— 关键是队头被挡住时重排的是同一个队头，
+    // 后到的动作不会插队。
     private static final int MAX_SAFE_ADAPTER_RETRY = 3;
-    private int pendingAdapterActions = 0;
 
+    private final SafeAdapterActionQueue adapterActionQueue = new SafeAdapterActionQueue(
+            new SafeAdapterActionQueue.Host() {
+                @Override
+                public boolean isBusy() {
+                    return wkVBinding.recyclerView.isComputingLayout();
+                }
+
+                @Override
+                public void postDrain(Runnable drain) {
+                    wkVBinding.recyclerView.post(drain);
+                }
+
+                @Override
+                public void onDropped(int count) {
+                    if (BuildConfig.DEBUG) {
+                        Log.w("MsgDebug", "[safeAdapterAction] recyclerView stuck in computing state, drop "
+                                + count + " pending refresh");
+                    }
+                }
+            }, MAX_SAFE_ADAPTER_RETRY);
+
+    /** 只能在主线程调用 —— {@link SafeAdapterActionQueue} 的状态全是裸字段，无同步。 */
     private void safeAdapterAction(Runnable action) {
-        if (pendingAdapterActions == 0 && !wkVBinding.recyclerView.isComputingLayout()) {
-            action.run();
-            return;
+        if (BuildConfig.DEBUG && Looper.myLooper() != Looper.getMainLooper()) {
+            Log.e("MsgDebug", "[safeAdapterAction] called off main thread", new IllegalStateException());
         }
-        postAdapterAction(action, 0);
-    }
-
-    private void postAdapterAction(Runnable action, int retryCount) {
-        if (retryCount >= MAX_SAFE_ADAPTER_RETRY) {
-            if (BuildConfig.DEBUG) Log.w("MsgDebug", "[safeAdapterAction] recyclerView stuck in computing state, drop refresh");
-            return;
-        }
-        pendingAdapterActions++;
-        wkVBinding.recyclerView.post(() -> {
-            pendingAdapterActions--;
-            if (wkVBinding.recyclerView.isComputingLayout()) {
-                postAdapterAction(action, retryCount + 1);
-            } else {
-                action.run();
-            }
-        });
+        adapterActionQueue.submit(action);
     }
 
     // 显示一条时间消息

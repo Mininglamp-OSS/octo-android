@@ -58,6 +58,7 @@ import com.chat.base.entity.PopupMenuItem;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.jsbrigde.CallBackFunction;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.BottomSheet;
@@ -213,14 +214,21 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
      * 外链（非自家域名）不动，保持原 loadUrl。
      */
     private void loadUrlWithHandoff(String url) {
-        Uri webOrigin = getOctoWebOrigin();
-        if (webOrigin == null || !isSameOrigin(url, webOrigin)) {
+        String webOrigin = DocsViewerUrlPolicy.originOfConfiguredBases(
+                WKApiConfig.baseUrl, WKApiConfig.baseWebUrl);
+        if (webOrigin == null || !DocsViewerUrlPolicy.isTrustedOriginUrl(url, webOrigin)) {
             // 外链 / origin 解析失败：走原有 loadUrl，不注入任何 App 状态（防 token 泄露给第三方）。
             wkVBinding.webView.loadUrl(url);
             return;
         }
-        // report.html 已经走 ?uid=&token= URL 参数握手（见上面 line 174-176），不需要再走 localStorage 注入。
-        if (url.contains("report.html")) {
+        boolean docsViewer = DocsViewerUrlPolicy.isTrustedViewerUrl(url, webOrigin);
+        // Capture once for this launch, before any credential-dependent branch. Even an anonymous
+        // Docs launch must clear stale pooled storage when the native selection is empty.
+        String currentSpaceId = docsViewer ? SpaceFilter.getCurrentSpaceId() : null;
+
+        // report.html already uses its URL-parameter handshake. A query value containing that text
+        // must not bypass an otherwise valid Docs viewer handoff.
+        if (!docsViewer && url.contains("report.html")) {
             wkVBinding.webView.loadUrl(url);
             return;
         }
@@ -228,8 +236,14 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         String uid = WKConfig.getInstance().getUid();
         String name = WKConfig.getInstance().getUserInfo() != null ? WKConfig.getInstance().getUserInfo().name : "";
         if (TextUtils.isEmpty(token) || TextUtils.isEmpty(uid)) {
-            // 未登录或缺关键身份：不做注入，走原路径（web 端会自己跳登录）。
-            wkVBinding.webView.loadUrl(url);
+            if (docsViewer) {
+                String bootstrap = buildDocsViewerSpaceBootstrapHtml(url, currentSpaceId);
+                wkVBinding.webView.loadDataWithBaseURL(
+                        webOrigin + "/", bootstrap, "text/html", "UTF-8", null);
+            } else {
+                // 未登录或缺关键身份：不做身份注入，走原路径（web 端会自己跳登录）。
+                wkVBinding.webView.loadUrl(url);
+            }
             return;
         }
         String urlWithSid = appendSidParam(url, "android");
@@ -238,66 +252,12 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         // URL 带 ?sid=web 时 web 端会读 tokenweb / uidweb / nameweb（都不存在），
         // 但我们只写了 tokenandroid → 免登失效。
         String effectiveSid = extractSid(urlWithSid, "android");
-        String bootstrap = buildHandoffBootstrapHtml(urlWithSid, effectiveSid, token, uid, name);
+        // Other first-party pages keep the existing identity handoff without gaining or clearing
+        // Docs authorization context.
+        String bootstrap = buildHandoffBootstrapHtml(
+                urlWithSid, effectiveSid, token, uid, name, currentSpaceId);
         // baseURL 用自家 origin：localStorage 写入的是这个 origin 的存储，跳转到 origin 内任意页面都能读到。
-        wkVBinding.webView.loadDataWithBaseURL(webOrigin.toString() + "/", bootstrap, "text/html", "UTF-8", null);
-    }
-
-    /**
-     * 从 {@link WKApiConfig#baseUrl}（e.g. https://im-test.deepminer.com.cn/api/v1/）
-     * 抽出 web origin，作为 scheme+host+port 三元组返回（e.g. https://im-test.deepminer.com.cn，
-     * 或含端口 https://im-test.deepminer.com.cn:8443）。仅保留 origin 部分，去掉 path / query / fragment。
-     */
-    @Nullable
-    private static Uri getOctoWebOrigin() {
-        String base = WKApiConfig.baseUrl;
-        if (TextUtils.isEmpty(base)) return null;
-        try {
-            Uri u = Uri.parse(base);
-            String scheme = u.getScheme();
-            String host = u.getHost();
-            if (TextUtils.isEmpty(scheme) || TextUtils.isEmpty(host)) return null;
-            Uri.Builder b = new Uri.Builder().scheme(scheme).encodedAuthority(
-                    u.getPort() >= 0 ? host + ":" + u.getPort() : host);
-            return b.build();
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    /**
-     * 判定 {@code url} 与 {@code origin} 是否属于同一 origin —— 严格按 scheme+host+port 三元组比对，
-     * 不用 {@code String.startsWith}。后者会被 {@code https://im-test.deepminer.com.cn.evil.com}
-     * 这类攻击者构造的域名绕过（前缀恰好匹配但 host 完全是另一个域），从而在 App 内 WebView
-     * 里加载攻击者页面并共享 cookies / JS bridge。
-     */
-    @VisibleForTesting
-    static boolean isSameOrigin(@Nullable String url, @Nullable Uri origin) {
-        if (TextUtils.isEmpty(url) || origin == null) return false;
-        try {
-            Uri u = Uri.parse(url);
-            String scheme = u.getScheme();
-            String host = u.getHost();
-            if (TextUtils.isEmpty(scheme) || TextUtils.isEmpty(host)) return false;
-            if (!scheme.equalsIgnoreCase(origin.getScheme())) return false;
-            if (!host.equalsIgnoreCase(origin.getHost())) return false;
-            // 端口对齐：URL 未显式给端口时视为该 scheme 的默认端口（http=80 / https=443）。
-            // Uri.getPort() 未显式给端口返回 -1。
-            int urlPort = effectivePort(u);
-            int originPort = effectivePort(origin);
-            return urlPort == originPort;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private static int effectivePort(Uri u) {
-        int p = u.getPort();
-        if (p >= 0) return p;
-        String s = u.getScheme();
-        if ("https".equalsIgnoreCase(s)) return 443;
-        if ("http".equalsIgnoreCase(s)) return 80;
-        return -1;
+        wkVBinding.webView.loadDataWithBaseURL(webOrigin + "/", bootstrap, "text/html", "UTF-8", null);
     }
 
     /**
@@ -345,23 +305,16 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
      * （release 里 remote debugging 通常关但仍是不良实践）。boot 失败时依赖 web 自身
      * 的登录跳转来暴露问题，不靠自打日志。
      */
-    private static String buildHandoffBootstrapHtml(String realUrl, String sid, String token, String uid, String name) {
-        // JSONObject.quote 会返回带引号的 JSON 字符串字面量（e.g. "abc\"def" → "\"abc\\\"def\""），
-        // 直接嵌 <script> 里安全。
-        String jToken = org.json.JSONObject.quote(token);
-        String jUid = org.json.JSONObject.quote(uid);
-        String jName = org.json.JSONObject.quote(name);
-        String jUrl = org.json.JSONObject.quote(realUrl);
-        String jSid = org.json.JSONObject.quote(sid);
-        return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title></title></head><body>" +
-                "<script>(function(){try{" +
-                "var s=" + jSid + ";" +
-                "localStorage.setItem('token'+s, " + jToken + ");" +
-                "localStorage.setItem('uid'+s, " + jUid + ");" +
-                "localStorage.setItem('name'+s, " + jName + ");" +
-                "}catch(e){}" +
-                "window.location.replace(" + jUrl + ");" +
-                "})();</script></body></html>";
+    @VisibleForTesting
+    static String buildHandoffBootstrapHtml(String realUrl, String sid, String token, String uid,
+                                            String name, @Nullable String currentSpaceId) {
+        return DocsViewerUrlPolicy.buildIdentityBootstrapHtml(
+                realUrl, sid, token, uid, name, currentSpaceId);
+    }
+
+    @VisibleForTesting
+    static String buildDocsViewerSpaceBootstrapHtml(String realUrl, @Nullable String currentSpaceId) {
+        return DocsViewerUrlPolicy.buildSpaceBootstrapHtml(realUrl, currentSpaceId);
     }
 
     @SuppressLint("SetJavaScriptEnabled")

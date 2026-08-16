@@ -144,7 +144,7 @@ public class SecretDeleteTimer extends FrameLayout {
             EndpointManager.getInstance().invoke("deleteRemoteMsg", clientMsgNo);
             // DB 删除操作放 IO 线程，onDraw 中做 DB 操作会导致 ANR
             final String msgNo = clientMsgNo;
-            WKDbScheduler.get().scheduleDirect(() ->
+            WKDbScheduler.submit(() ->
                 WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(msgNo)
             );
             return;

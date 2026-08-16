@@ -119,13 +119,37 @@ public class MsgModel extends WKBaseModel {
 
     private static final long FLAME_FIRST_DELAY_MS = 100;
     private static final long FLAME_INTERVAL_MS = 1000;
-    /** 连续失败到这个次数就停止轮询（下次进聊天页 startCheckFlameMsgTimer 会重新起）。 */
+    /**
+     * 连续失败到这个次数就停止轮询。停了不等于永久停：{@code startCheckFlameMsgTimer} 的唯一
+     * 调用点是 {@code ChatActivity.onDestroy}（退出聊天页），下次退出任一聊天页就会重新起。
+     */
     private static final int FLAME_MAX_FAILURE_STREAK = 3;
-    /** 只在 {@link WKDbScheduler} 单线程上读写，无需同步。 */
-    private int flameFailureStreak;
+    /** DB 线程自增、主线程在 startCheckFlameMsgTimer 里清零，故 volatile。 */
+    private volatile int flameFailureStreak;
+    /**
+     * 轮询世代。stopTimer 自增使在途的那一轮作废：否则 stopTimer（{@code exitLogin} 退登）与
+     * 紧接着的 startCheckFlameMsgTimer（{@code ChatActivity.onDestroy}，退登会销毁聊天页）
+     * 之间，CAS 会起一条新链，而在途 runnable 的 finally 看到 flameLoopRunning 又是 true，
+     * 也会排下一轮 —— 两条链各自自排程，轮询频率翻倍。
+     */
+    private final AtomicInteger flameEpoch = new AtomicInteger();
+    /**
+     * 保护 {@link #flameEpoch} 与 {@link #flameLoopRunning} 这一对状态的原子性。
+     *
+     * <p>两个独立的原子变量凑不出「检查世代 + 改运行位」的原子操作：轮询收尾时先读世代、再写
+     * running，中间若插入 stopTimer（退登，主线程）+ startCheckFlameMsgTimer（销毁聊天页，
+     * 主线程）这一对，旧轮就会把新链刚 CAS 抢到的 running 打回 false，新链一进 runnable 就早退。
+     * 而收尾分支是常态路径 —— 没有待删的阅后即焚消息时每一轮都走它，不是只有失败才走。
+     *
+     * <p>锁里只做几个字段的读写，不含 IO、不嵌套其它锁；排程动作一律放在锁外。
+     */
+    private final Object flameLock = new Object();
 
     public void stopTimer() {
-        flameLoopRunning.set(false);
+        synchronized (flameLock) {
+            flameEpoch.incrementAndGet();
+            flameLoopRunning.set(false);
+        }
         Disposable task = flameLoopTask;
         if (task != null && !task.isDisposed()) {
             task.dispose();
@@ -134,22 +158,48 @@ public class MsgModel extends WKBaseModel {
     }
 
     public void startCheckFlameMsgTimer() {
-        // CAS 兼作并发保护：原来 startCheckFlameMsgTimer 是 synchronized 而 DB 线程上的
-        // timer.cancel()/timer=null 没有同步，两边竞争可能留下两个 timer。
-        if (!flameLoopRunning.compareAndSet(false, true)) return;
-        scheduleFlameSweep(FLAME_FIRST_DELAY_MS);
+        int epoch;
+        synchronized (flameLock) {
+            // CAS 兼作并发保护：原来 startCheckFlameMsgTimer 是 synchronized 而 DB 线程上的
+            // timer.cancel()/timer=null 没有同步，两边竞争可能留下两个 timer。
+            if (!flameLoopRunning.compareAndSet(false, true)) return;
+            // 不清零的话，上一次因故障收摊时它停在上限值，本次第一次失败就 ++3 < 3 → false，
+            // 只剩一次尝试而不是三次。
+            flameFailureStreak = 0;
+            epoch = flameEpoch.get();
+        }
+        scheduleFlameSweep(FLAME_FIRST_DELAY_MS, epoch);
     }
 
-    private void scheduleFlameSweep(long delayMs) {
-        if (!flameLoopRunning.get()) return;
+    /**
+     * 收尾：本轮仍然有效才交还运行位。返回 true 表示「本轮仍持有轮询」，调用方据此决定是否排下一轮。
+     */
+    private boolean flameRoundFinished(int epoch, boolean keepGoing, boolean failed) {
+        synchronized (flameLock) {
+            // 世代已变 = 本轮已被 stopTimer 作废，运行位与失败计数都归新链所有，一概不碰。
+            if (flameEpoch.get() != epoch) return false;
+            if (failed) {
+                keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
+            } else {
+                flameFailureStreak = 0;
+            }
+            // 检查世代与交还运行位必须在同一把锁内：分开做的话，中间插入
+            // stopTimer + startCheckFlameMsgTimer 这一对，就会把新链刚抢到的运行位打回 false。
+            if (!keepGoing) flameLoopRunning.set(false);
+            return keepGoing;
+        }
+    }
+
+    private void scheduleFlameSweep(long delayMs, int epoch) {
+        if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
         flameLoopTask = WKDbScheduler.get().scheduleDirect(() -> {
-            if (!flameLoopRunning.get()) return;
+            if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
             // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
             // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
             boolean keepGoing = false;
+            Exception failure = null;
             try {
                 keepGoing = sweepFlameMsg();
-                flameFailureStreak = 0;
             } catch (Exception e) {
                 // 只接可恢复的瞬时故障（同步高峰的 SQLiteException 等）：下一轮重试，连续失败到
                 // 上限才收摊，避免把一个必然失败的 DB 操作变成每秒一次的热循环。
@@ -158,18 +208,23 @@ public class MsgModel extends WKBaseModel {
                 // RxJavaPlugins.onError → uncaught handler 抵达 Bugly。接住它而 release 下又
                 // 不上报，等于把这批改动（见 BaseObserver.reportIfSwallowedError）要暴露的东西
                 // 重新吞一次。让它照原路穿出去，崩溃语义与改动前一致；也不重试刚 OOM 的操作。
-                keepGoing = ++flameFailureStreak < FLAME_MAX_FAILURE_STREAK;
-                if (BuildConfig.DEBUG) {
-                    Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
-                            + " keepGoing=" + keepGoing, e);
-                }
+                //
+                // 成功/失败只记在局部，共享计数留到 finally 里确认世代后再动 —— 否则
+                // stopTimer → startCheckFlameMsgTimer 已经清零并起了新链时，本轮这次
+                // ++ 会污染新链的重试预算（WKDbScheduler 单线程，新链第一轮必然排在其后）。
+                failure = e;
             } finally {
                 // 不变量：无论正常返回、Exception 还是 Error 穿出去，都不能把 flameLoopRunning
-                // 留在 true —— 那才是「清理永久禁用」的根因。
-                if (keepGoing) {
-                    scheduleFlameSweep(FLAME_INTERVAL_MS);
-                } else {
-                    flameLoopRunning.set(false);
+                // 留在 true —— 那才是「清理永久禁用」的根因。世代校验、失败计数、交还运行位这三件
+                // 事在 flameRoundFinished 里同锁完成；排下一轮放在锁外。
+                if (flameRoundFinished(epoch, keepGoing, failure != null)) {
+                    if (BuildConfig.DEBUG && failure != null) {
+                        Log.w("ANRFix", "[flame] sweep failed #" + flameFailureStreak
+                                + "，下一轮重试", failure);
+                    }
+                    scheduleFlameSweep(FLAME_INTERVAL_MS, epoch);
+                } else if (BuildConfig.DEBUG && failure != null) {
+                    Log.w("ANRFix", "[flame] sweep failed，轮询停止（下次退出聊天页重启）", failure);
                 }
             }
         }, delayMs, TimeUnit.MILLISECONDS);

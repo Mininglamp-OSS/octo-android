@@ -76,9 +76,13 @@ public class ChannelMembersDbManager {
      * 故读路径在发起 DB 查询前记下代际，回填时若代际已变就丢弃本次结果
      * （退化为不缓存，与改动前行为一致，是 fail-safe 方向）。
      *
-     * <p>回填做**两次**代际检查：put 之前一次是快速退出，put 之后再一次才是真正关窗口 ——
-     * 只查 put 之前的话，失效落在 check 与 put 之间时脏值会被写在删除之后，而这份缓存没有
-     * TTL，错的昵称/头像会一直钉到下次该成员被写或切账号。见 {@link #putCache}。
+     * <p>回填的发布顺序是「反向索引 add → memberCache put → 复查代际」。两个结构都在复查之前
+     * 发布，于是任一交错都安全：失效方的代际自增落在复查之前 → 这里 remove；落在复查之后 →
+     * 它必然已看见索引与缓存，由它 remove。只查 put 之前是不够的（失效落在 check 与 put 之间
+     * 时脏值写在删除之后），只在 put 后复查也不够 —— {@link #invalidateMemberUid} 是唯一经
+     * 反向索引到达 memberCache 的路径，它可能在 key 尚未进索引时跑完而什么都没删。
+     * 而这份缓存没有 TTL，一次漏删就把错的昵称/头像钉到下次该成员被写或切账号。
+     * 见 {@link #putCache}。
      */
     private final AtomicLong cacheGeneration = new AtomicLong();
 
@@ -106,15 +110,19 @@ public class ChannelMembersDbManager {
             clearCache();
             return;
         }
+        // 发布顺序：先注册反向索引，再写缓存，最后复查代际 —— 两个结构都在复查之前发布。
+        // 反过来（put → 复查 → add）关不掉 invalidateMemberUid：它是唯一经反向索引到达
+        // memberCache 的失效路径，若整段跑在复查之后、add 之前，remove(memberUid) 时 key 还
+        // 不在集合里，于是什么都没删，紧接着 add 又把 key 注册回去，脏值永久留下。
+        keysByMemberUid.computeIfAbsent(memberUid, k -> ConcurrentHashMap.newKeySet()).add(key);
         memberCache.put(key, member == null ? NULL_MEMBER : copyOf(member));
-        // put 之后复查：失效可能落在上面那次 check 与这次 put 之间（insertMembers /
-        // deleteWithChannel 不与本方法互斥），那样 remove 先发生、脏值后写入就永久留下。
-        // 两种交错都安全：失效方的 remove 与这里的 remove 至少有一个在 put 之后执行。
         if (cacheGeneration.get() != generation) {
             memberCache.remove(key);
-            return;
+            // 反向索引里留下孤儿 key 是无害的（下次 invalidateMemberUid 会带走），
+            // 但顺手清掉，理由同 invalidateChannel：只 remove、不删空 Set。
+            Set<String> keys = keysByMemberUid.get(memberUid);
+            if (keys != null) keys.remove(key);
         }
-        keysByMemberUid.computeIfAbsent(memberUid, k -> ConcurrentHashMap.newKeySet()).add(key);
     }
 
     /**

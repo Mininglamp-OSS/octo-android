@@ -51,6 +51,19 @@ public class MyItemAnimator extends SimpleItemAnimator {
     ArrayList<RecyclerView.ViewHolder> mRemoveAnimations = new ArrayList<>();
     ArrayList<RecyclerView.ViewHolder> mChangeAnimations = new ArrayList<>();
 
+    public MyItemAnimator() {
+        // change 动画的实现早已被注释成同步 dispatchStart + dispatchFinish（见 animateChangeImpl），
+        // 但只要 supportsChangeAnimations 还是 true，不带 payload 的 notifyItemChanged 仍会走
+        // "旧 holder + 新 holder" 那条路：旧 view 被塞进 RecyclerView 的 hidden 列表，动画结束时
+        // 由 removeAnimatingView → recycleViewHolderInternal 回收。这条路径要求旧 holder 的
+        // tmpDetached 标记是干净的，一旦某次 layout 抛异常被上层吞掉，标记就永久脏了，回收时抛
+        // "Tmp detached view should be removed from RecyclerView before it can be recycled"。
+        //
+        // 关掉之后 canReuseUpdatedViewHolder 恒为 true —— 更新复用同一个 holder，既不再创建
+        // 多余 holder，也彻底没有 hidden view 需要回收。动画本来就是空实现，观感不变。
+        setSupportsChangeAnimations(false);
+    }
+
     private static class MoveInfo {
         public RecyclerView.ViewHolder holder;
         public int fromX, fromY, toX, toY;

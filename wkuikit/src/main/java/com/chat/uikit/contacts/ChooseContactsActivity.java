@@ -85,7 +85,10 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     // 不显示的uids
     private String unVisibleUIDs;
     //所有用户
-    private List<FriendUIEntity> allList;
+    // 成员是异步拉的, 数据到达前用户就能在搜索框输入, 所以这里必须始终非 null
+    private List<FriendUIEntity> allList = new ArrayList<>();
+    //数据到达前用户已输入的搜索词
+    private String searchKey = "";
     //默认选中的用户
     private List<WKChannel> defaultSelected;
     private int type;//0：创建群聊1：群聊加人2：选择用户
@@ -396,9 +399,14 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
         SpaceModel.getInstance().getMembers(spaceId, new SpaceModel.IMembersListener() {
             @Override
             public void onResult(List<SpaceEntity.SpaceMember> members) {
+                if (isFinishing() || isDestroyed()) return;
+                if (members == null) {
+                    loadContactsLocal();
+                    return;
+                }
                 List<WKChannel> tempList = new ArrayList<>();
                 for (SpaceEntity.SpaceMember member : members) {
-                    if (member.uid.equals(myUid)) continue;
+                    if (member == null || TextUtils.isEmpty(member.uid) || member.uid.equals(myUid)) continue;
                     WKChannel channel = new WKChannel(member.uid, WKChannelType.PERSONAL);
                     channel.channelName = member.name;
                     channel.robot = member.robot;
@@ -422,6 +430,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
 
             @Override
             public void onError(int code, String msg) {
+                if (isFinishing() || isDestroyed()) return;
                 loadContactsLocal();
             }
         });
@@ -433,6 +442,7 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
     }
 
     private void buildAndDisplayList(List<WKChannel> tempList) {
+        if (tempList == null) tempList = new ArrayList<>();
         WKAPPConfig wkappConfig = WKConfig.getInstance().getAppConfig();
         int inviteSystemAccountJoinGroupOn = 0;
         if (wkappConfig != null) {
@@ -493,24 +503,33 @@ public class ChooseContactsActivity extends WKBaseActivity<ActChooseContactsLayo
         allList.addAll(letterList);
         allList.addAll(numList);
         allList.addAll(otherList);
-        contactsAdapter.setList(allList);
+        // 数据到达时用户可能已经在搜索框输入了, 直接 setList 会把输入吞掉
+        if (TextUtils.isEmpty(searchKey)) {
+            contactsAdapter.setList(allList);
+        } else {
+            searchUser(searchKey);
+        }
         hideTitleRightView();
     }
 
     private void searchUser(String content) {
-        if (TextUtils.isEmpty(content)) {
+        searchKey = content == null ? "" : content;
+        if (TextUtils.isEmpty(searchKey)) {
             contactsAdapter.setList(allList);
             return;
         }
+        String key = searchKey.toLowerCase(Locale.getDefault());
         List<FriendUIEntity> tempList = new ArrayList<>();
         for (int i = 0, size = allList.size(); i < size; i++) {
-            if ((!TextUtils.isEmpty(allList.get(i).channel.channelName) && allList.get(i).channel.channelName.toLowerCase(Locale.getDefault())
-                    .contains(content.toLowerCase(Locale.getDefault())))
-                    || (!TextUtils.isEmpty(allList.get(i).channel.channelRemark) && allList.get(i).channel.channelRemark.toLowerCase(Locale.getDefault())
-                    .contains(content.toLowerCase(Locale.getDefault())))
-                    || content.contains(allList.get(i).pying.toLowerCase(
-                    Locale.getDefault()))) {
-                tempList.add(allList.get(i));
+            FriendUIEntity entity = allList.get(i);
+            if (entity == null || entity.channel == null) continue;
+            if ((!TextUtils.isEmpty(entity.channel.channelName) && entity.channel.channelName.toLowerCase(Locale.getDefault())
+                    .contains(key))
+                    || (!TextUtils.isEmpty(entity.channel.channelRemark) && entity.channel.channelRemark.toLowerCase(Locale.getDefault())
+                    .contains(key))
+                    || (!TextUtils.isEmpty(entity.pying) && key.contains(entity.pying.toLowerCase(
+                    Locale.getDefault())))) {
+                tempList.add(entity);
             }
         }
         contactsAdapter.setList(tempList);

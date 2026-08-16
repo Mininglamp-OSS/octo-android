@@ -651,7 +651,7 @@ public class WKIMUtils {
                 byte channelType = (byte) jsonObject.optInt("channel_type");
                 if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug", "[revokeMsg] CMD received: messageId=" + messageId + " channelID=" + channelID + " channelType=" + channelType);
                 // 撤回消息涉及多次 DB 读写操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
-                com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+                com.chat.base.utils.WKDbScheduler.submit(() -> {
                     WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(channelID, channelType);
                     //是否撤回提醒
                     int revokeRemind = 1;
@@ -702,7 +702,7 @@ public class WKIMUtils {
      */
     private void scheduleRevokeRetry(String messageId, String channelID, byte channelType, int attempt, long delayMs) {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+            com.chat.base.utils.WKDbScheduler.submit(() -> {
                 WKMsg local = WKIM.getInstance().getMsgManager().getWithMessageID(messageId);
                 boolean alreadyRevoked = local != null && local.remoteExtra != null && local.remoteExtra.revoke == 1;
                 if (BuildConfig.DEBUG) android.util.Log.d("RevokeDebug",
@@ -735,7 +735,7 @@ public class WKIMUtils {
      */
     public void markMsgRevokedLocallyByClientMsgNO(String clientMsgNo, String revoker) {
         if (android.text.TextUtils.isEmpty(clientMsgNo)) return;
-        com.chat.base.utils.WKDbScheduler.get().scheduleDirect(() -> {
+        com.chat.base.utils.WKDbScheduler.submit(() -> {
             WKMsg wkMsg = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
             if (wkMsg == null) {
                 if (BuildConfig.DEBUG) android.util.Log.w("RevokeDebug",

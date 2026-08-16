@@ -31,7 +31,9 @@ import android.widget.FrameLayout;
 
 import androidx.core.view.ViewCompat;
 
+import com.chat.base.BuildConfig;
 import com.chat.base.R;
+import com.tencent.bugly.crashreport.CrashReport;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -406,7 +408,12 @@ public class SwipeBackLayout extends FrameLayout {
                         mContentLeft + mContentView.getMeasuredWidth(),
                         mContentTop + mContentView.getMeasuredHeight());
             } catch (Exception e) {
-                Log.e("error", "e=" + e);
+                // 吞掉能避免当场崩，但异常从 RecyclerView 的 layout 里逃逸会让它的
+                // mLayoutOrScrollCounter 永久 >0，之后任意 notifyItem* 都抛
+                // "Cannot call this method while RecyclerView is computing a layout"，
+                // 崩在毫不相干的地方。所以这里必须把真正的现场上报出去。
+                if (BuildConfig.DEBUG) Log.e("SwipeBackLayout", "content layout failed", e);
+                CrashReport.postCatchedException(e);
             }
         }
         mInLayout = false;

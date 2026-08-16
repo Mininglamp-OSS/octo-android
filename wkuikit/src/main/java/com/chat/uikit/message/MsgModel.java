@@ -192,7 +192,7 @@ public class MsgModel extends WKBaseModel {
 
     private void scheduleFlameSweep(long delayMs, int epoch) {
         if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
-        flameLoopTask = WKDbScheduler.get().scheduleDirect(() -> {
+        flameLoopTask = WKDbScheduler.submit(() -> {
             if (!flameLoopRunning.get() || flameEpoch.get() != epoch) return;
             // sweepFlameMsg 会查库 / 写库，抛出时若不接住，递归排程不会发生而 flameLoopRunning
             // 仍是 true —— startCheckFlameMsgTimer 的 CAS 从此永久短路，清理进程内静默停摆。
@@ -233,7 +233,7 @@ public class MsgModel extends WKBaseModel {
     public void deleteFlameMsg() {
         if (!WKConstants.isLogin()) return;
         // 一次性清理（退出聊天页 / 前后台切换等时机调用），不参与轮询。
-        WKDbScheduler.get().scheduleDirect(this::sweepFlameMsg);
+        WKDbScheduler.submit(this::sweepFlameMsg);
     }
 
     /**
@@ -365,7 +365,7 @@ public class MsgModel extends WKBaseModel {
     public void clearUnread(String channelId, byte channelType, int unreadCount, ICommonListener iCommonListener) {
         final int count = Math.max(unreadCount, 0);
         // updateRedDot 内部有 DB 操作，放 IO 线程避免和 sync 争抢数据库锁导致 ANR
-        WKDbScheduler.get().scheduleDirect(() ->
+        WKDbScheduler.submit(() ->
             WKIM.getInstance().getConversationManager().updateRedDot(channelId, channelType, count)
         );
         com.alibaba.fastjson.JSONObject jsonObject = new com.alibaba.fastjson.JSONObject();
@@ -1002,7 +1002,7 @@ public class MsgModel extends WKBaseModel {
                 m.put(messageSeq, 0);   // 有进展→重置无进展计数
                 if (outcome.appliedTerminal) cardTerminalApplied.add(tk);   // 锁存终态帧,拦后续陈 transient(P1-2)
                 if (BuildConfig.DEBUG) Log.d("CardFrameDebug", "[pending] 有进展→落 extra 刷新 seq=" + messageSeq + " terminal=" + outcome.appliedTerminal);
-                WKDbScheduler.get().scheduleDirect(() ->
+                WKDbScheduler.submit(() ->
                         WKIM.getInstance().getMsgManager().saveCardMsgExtra(result.messages));
                 break;
             case MIDSTREAM_RESET:
@@ -1074,7 +1074,7 @@ public class MsgModel extends WKBaseModel {
                         }
                     }
                     // addCmd 内部有 DB 事务操作，放 IO 线程避免 ANR
-                    WKDbScheduler.get().scheduleDirect(() -> {
+                    WKDbScheduler.submit(() -> {
                         WKBaseCMDManager.getInstance().addCmd(cmdList);
                         if (last_message_seq != 0) {
                             ackMsg();
@@ -1087,7 +1087,7 @@ public class MsgModel extends WKBaseModel {
                         ackMsg();
                     }
                     // handleCmd 内部有大量 DB 读写操作，放 IO 线程避免 ANR
-                    WKDbScheduler.get().scheduleDirect(() -> WKBaseCMDManager.getInstance().handleCmd());
+                    WKDbScheduler.submit(() -> WKBaseCMDManager.getInstance().handleCmd());
                 }
             }
 
@@ -1109,7 +1109,7 @@ public class MsgModel extends WKBaseModel {
      */
     public void syncExtraMsg(String channelID, byte channelType) {
         // getMsgExtraMaxVersionWithChannel 有 DB 查询，整体放 IO 线程避免 ANR
-        WKDbScheduler.get().scheduleDirect(() -> {
+        WKDbScheduler.submit(() -> {
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("channel_id", channelID);
             jsonObject.put("channel_type", channelType);
@@ -1143,7 +1143,7 @@ public class MsgModel extends WKBaseModel {
                     }
                     // saveRemoteExtraMsg 内部有 DB 操作，必须在 IO 线程执行，
                     // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                    WKDbScheduler.get().scheduleDirect(() -> {
+                    WKDbScheduler.submit(() -> {
                         WKIM.getInstance().getMsgManager().saveRemoteExtraMsg(new WKChannel(channelID, channelType), result);
                         new Handler(Looper.getMainLooper()).postDelayed(() -> syncExtraMsg(channelID, channelType), 500);
                     });
@@ -1207,7 +1207,7 @@ public class MsgModel extends WKBaseModel {
 
     public void syncReminder() {
         // getMaxVersion / getWithChannelType 有 DB 查询，整体放 IO 线程避免 ANR
-        WKDbScheduler.get().scheduleDirect(() -> {
+        WKDbScheduler.submit(() -> {
             long version = WKIM.getInstance().getReminderManager().getMaxVersion();
             List<String> channelIDs = new ArrayList<>();
             List<WKConversationMsg> list = WKIM.getInstance().getConversationManager().getWithChannelType(WKChannelType.GROUP);
@@ -1237,7 +1237,7 @@ public class MsgModel extends WKBaseModel {
                     }
                     // saveOrUpdateReminders 内部有 DB 操作，必须在 IO 线程执行，
                     // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                    WKDbScheduler.get().scheduleDirect(() ->
+                    WKDbScheduler.submit(() ->
                         WKIM.getInstance().getReminderManager().saveOrUpdateReminders(list)
                     );
                 }
@@ -1257,7 +1257,7 @@ public class MsgModel extends WKBaseModel {
 
         // DB 操作放 IO 线程，避免 onPause 主线程阻塞
         List<Long> idsCopy = new ArrayList<>(list);
-        WKDbScheduler.get().scheduleDirect(() -> {
+        WKDbScheduler.submit(() -> {
             // Step 1: 查出受影响的 channelID
             List<WKReminder> affected = ReminderDBManager.getInstance().queryWithIds(idsCopy);
             List<String> channelIds = new ArrayList<>();
@@ -1317,7 +1317,7 @@ public class MsgModel extends WKBaseModel {
             extra.draftUpdatedAt = WKTimeUtils.getInstance().getCurrentSeconds();
         }
         // updateMsgExtra 内部有 DB 操作，放 IO 线程避免 onPause 时和 sync 争抢数据库锁导致 ANR
-        WKDbScheduler.get().scheduleDirect(() ->
+        WKDbScheduler.submit(() ->
             WKIM.getInstance().getConversationManager().updateMsgExtra(extra)
         );
 
@@ -1341,7 +1341,7 @@ public class MsgModel extends WKBaseModel {
 
     public void syncCoverExtra() {
         // getMsgExtraMaxVersion 有 DB 查询，整体放 IO 线程避免 ANR
-        WKDbScheduler.get().scheduleDirect(() -> {
+        WKDbScheduler.submit(() -> {
             long version = WKIM.getInstance().getConversationManager().getMsgExtraMaxVersion();
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("version", version);
@@ -1350,7 +1350,7 @@ public class MsgModel extends WKBaseModel {
             public void onSuccess(List<WKSyncConvMsgExtra> result) {
                 // saveSyncMsgExtras 内部有 DB 操作，必须在 IO 线程执行，
                 // 放主线程会和 sync 写入争抢数据库锁导致 ANR
-                WKDbScheduler.get().scheduleDirect(() -> {
+                WKDbScheduler.submit(() -> {
                     WKIM.getInstance().getConversationManager().saveSyncMsgExtras(result);
                     if (WKReader.isNotEmpty(result)) {
                         new Handler(Looper.getMainLooper()).post(() ->

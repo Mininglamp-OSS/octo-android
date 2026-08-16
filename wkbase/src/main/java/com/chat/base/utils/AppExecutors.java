@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>{@link #background()} —— CPU 密集（JSON parse、图形运算、差分等）。
  *   池大小 = CPU 核心数，避免过度并发造成 context switch。</li>
  *   <li>{@link #db()} —— 单线程顺序化 DB 任务（非 Rx 场景；Rx 场景请继续走
- *   {@link WKDbScheduler#get()}）。</li>
+ *   {@link WKDbScheduler#submit(Runnable)}）。</li>
  *   <li>{@link #mainThread(Runnable)} / {@link #postDelayed(Runnable, long)} ——
  *   投递到主线程 Looper；等价于 {@code AndroidUtilities.runOnUIThread}，但不依赖它。</li>
  * </ul>

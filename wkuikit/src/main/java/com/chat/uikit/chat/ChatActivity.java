@@ -788,6 +788,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         wkVBinding.recyclerView.setLayoutManager(linearLayoutManager);
         wkVBinding.recyclerView.setAdapter(chatAdapter);
         //  perf: MyItemAnimator 需显式关 change 动画，避免 notify 刷新与 fling 叠加掉帧。
+        // 现在由 MyItemAnimator 构造函数里的 setSupportsChangeAnimations(false) 保证。
         wkVBinding.recyclerView.setItemAnimator(new MyItemAnimator());
         chatAdapter.setAnimationFirstOnly(true);
         chatAdapter.setAnimationEnable(false);
@@ -1661,34 +1662,39 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 }
                 EndpointManager.getInstance().invoke("set_chat_bg", new SetChatBgMenu(channelId, channelType, wkVBinding.imageView, wkVBinding.rootView, wkVBinding.blurView));
             } else {
-                for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                    if (TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID)) continue;
-                    boolean isRefresh = false;
-                    if (chatAdapter.getData().get(i).wkMsg.fromUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
-                        chatAdapter.getData().get(i).wkMsg.setFrom(channel);
-                        isRefresh = true;
-                    }
-                    if (chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channel.channelRemark;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channel.channelName;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channel.avatar;
-                        chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatarCacheKey = channel.avatarCacheKey;
-                        isRefresh = true;
-                    }
-                    if (chatAdapter.getData().get(i).wkMsg.baseContentMsgModel != null && WKReader.isNotEmpty(chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities)) {
-                        for (WKMsgEntity entity : chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities) {
-                            if (entity.type.equals(ChatContentSpanType.getMention()) && !TextUtils.isEmpty(entity.value) && entity.value.equals(channel.channelID)) {
-                                isRefresh = true;
-                                chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
-                                break;
+                // 频道信息刷新是 IM SDK 回调, 可能落在 RecyclerView 的 layout / scroll 中间,
+                // 直接 notify 会抛 IllegalStateException
+                safeAdapterAction(() -> {
+                    for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                        if (chatAdapter.getData().get(i).wkMsg == null) continue;
+                        if (TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID)) continue;
+                        boolean isRefresh = false;
+                        if (chatAdapter.getData().get(i).wkMsg.fromUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
+                            chatAdapter.getData().get(i).wkMsg.setFrom(channel);
+                            isRefresh = true;
+                        }
+                        if (chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channel.channelID) && channel.channelType == WKChannelType.PERSONAL) {
+                            chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channel.channelRemark;
+                            chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channel.channelName;
+                            chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channel.avatar;
+                            chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatarCacheKey = channel.avatarCacheKey;
+                            isRefresh = true;
+                        }
+                        if (chatAdapter.getData().get(i).wkMsg.baseContentMsgModel != null && WKReader.isNotEmpty(chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities)) {
+                            for (WKMsgEntity entity : chatAdapter.getData().get(i).wkMsg.baseContentMsgModel.entities) {
+                                if (entity.type.equals(ChatContentSpanType.getMention()) && !TextUtils.isEmpty(entity.value) && entity.value.equals(channel.channelID)) {
+                                    isRefresh = true;
+                                    chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
+                                    break;
+                                }
                             }
                         }
+                        if (isRefresh) {
+                            chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
+                            chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
+                        }
                     }
-                    if (isRefresh) {
-                        chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
-                        chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
-                    }
-                }
+                });
             }
         });
 
@@ -1702,15 +1708,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         wkVBinding.topLayout.titleCenterTv.setText(name);
                     } else {
                         //成员名字改变
-                        for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                            if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID) && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channelMember.memberUID)) {
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channelMember.memberName;
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channelMember.memberRemark;
-                                chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channelMember.memberAvatar;
-                                chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
-                                chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
+                        safeAdapterAction(() -> {
+                            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                                if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached() != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID) && chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberUID.equals(channelMember.memberUID)) {
+                                    chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberName = channelMember.memberName;
+                                    chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberRemark = channelMember.memberRemark;
+                                    chatAdapter.getData().get(i).wkMsg.getMemberOfFromIfCached().memberAvatar = channelMember.memberAvatar;
+                                    chatAdapter.getData().get(i).isRefreshAvatarAndName = true;
+                                    chatAdapter.notifyItemChanged(i, chatAdapter.getData().get(i));
+                                }
                             }
-                        }
+                        });
                     }
                 }
             }
@@ -1743,7 +1751,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         //监听删除消息
         WKIM.getInstance().getMsgManager().addOnDeleteMsgListener(channelId, msg -> {
             if (msg != null) {
-                removeMsg(msg);
+                safeAdapterAction(() -> removeMsg(msg));
             }
         });
         // 命令消息监听
@@ -1778,10 +1786,10 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         //监听消息刷新
         WKIM.getInstance().getMsgManager().addOnRefreshMsgListener(channelId, (wkMsg, left) -> {
             if (wkMsg.remoteExtra.isMutualDeleted == 1) {
-                removeMsg(wkMsg);
+                safeAdapterAction(() -> removeMsg(wkMsg));
                 return;
             }
-            refreshMsg(wkMsg);
+            safeAdapterAction(() -> refreshMsg(wkMsg));
         });
         //监听发送消息返回
         WKIM.getInstance().getMsgManager().addOnSendMsgCallback(channelId, this::sendMsgInserted);
@@ -1800,12 +1808,14 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     });
                     wkVBinding.recyclerView.setAdapter(chatAdapter);
                 } else {
-                    for (int i = 0; i < chatAdapter.getData().size(); i++) {
-                        if (chatAdapter.getData().get(i).wkMsg != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID) && chatAdapter.getData().get(i).wkMsg.fromUID.equals(fromUID)) {
-                            chatAdapter.removeAt(i);
-                            i--;
+                    safeAdapterAction(() -> {
+                        for (int i = 0; i < chatAdapter.getData().size(); i++) {
+                            if (chatAdapter.getData().get(i).wkMsg != null && !TextUtils.isEmpty(chatAdapter.getData().get(i).wkMsg.fromUID) && chatAdapter.getData().get(i).wkMsg.fromUID.equals(fromUID)) {
+                                chatAdapter.removeAt(i);
+                                i--;
+                            }
                         }
-                    }
+                    });
                 }
             }
 
@@ -1857,13 +1867,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
             if (WKReader.isEmpty(chatAdapter.getData())) {
                 return 1;
             }
-            for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
-                if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.type == WKContentType.WK_TEXT) {
-                    WKIMUtils.getInstance().resetMsgProhibitWord(chatAdapter.getData().get(i).wkMsg);
-                    chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
-                    chatAdapter.notifyItemChanged(i);
+            safeAdapterAction(() -> {
+                for (int i = 0, size = chatAdapter.getData().size(); i < size; i++) {
+                    if (chatAdapter.getData().get(i).wkMsg != null && chatAdapter.getData().get(i).wkMsg.type == WKContentType.WK_TEXT) {
+                        WKIMUtils.getInstance().resetMsgProhibitWord(chatAdapter.getData().get(i).wkMsg);
+                        chatAdapter.getData().get(i).formatSpans(ChatActivity.this, chatAdapter.getData().get(i).wkMsg);
+                        chatAdapter.notifyItemChanged(i);
+                    }
                 }
-            }
+            });
             return 1;
         });
     }
@@ -2141,13 +2153,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
      */
     private void refreshThreadCreatedCards() {
         if (chatAdapter == null) return;
-        int headerCount = chatAdapter.getHeaderLayoutCount();
-        for (int i = 0; i < chatAdapter.getData().size(); i++) {
-            WKUIChatMsgItemEntity item = chatAdapter.getData().get(i);
-            if (item.wkMsg != null && item.wkMsg.type == WKContentType.threadCreated) {
-                chatAdapter.notifyItemChanged(i + headerCount);
+        safeAdapterAction(() -> {
+            int headerCount = chatAdapter.getHeaderLayoutCount();
+            for (int i = 0; i < chatAdapter.getData().size(); i++) {
+                WKUIChatMsgItemEntity item = chatAdapter.getData().get(i);
+                if (item.wkMsg != null && item.wkMsg.type == WKContentType.threadCreated) {
+                    chatAdapter.notifyItemChanged(i + headerCount);
+                }
             }
-        }
+        });
     }
 
     private void getChannelState() {
@@ -2163,15 +2177,17 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                 if (channelState.call_info == null || WKReader.isEmpty(channelState.call_info.getCalling_participants())) {
                     wkVBinding.callLayout.setVisibility(View.GONE);
                     isShowCallingView = false;
-                    if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
-                        if (!isShowPinnedView) {
-                            chatAdapter.getData().remove(0);
-                            chatAdapter.notifyItemRemoved(0);
-                        } else {
-                            chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
-                            chatAdapter.notifyItemChanged(0);
+                    safeAdapterAction(() -> {
+                        if (WKReader.isNotEmpty(chatAdapter.getData()) && chatAdapter.getData().get(0).wkMsg != null && chatAdapter.getData().get(0).wkMsg.type == WKContentType.spanEmptyView) {
+                            if (!isShowPinnedView) {
+                                chatAdapter.getData().remove(0);
+                                chatAdapter.notifyItemRemoved(0);
+                            } else {
+                                chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
+                                chatAdapter.notifyItemChanged(0);
+                            }
                         }
-                    }
+                    });
                 } else {
                     Object object = EndpointManager.getInstance().invoke("show_calling_participants", new CallingViewMenu(this, channelState.call_info));
                     if (object != null) {
@@ -2180,13 +2196,15 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         wkVBinding.callLayout.addView(view, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
                         wkVBinding.callLayout.setVisibility(View.VISIBLE);
                         isShowCallingView = true;
-                        if (isAddedSpanEmptyView()) {
-                            chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
-                            chatAdapter.notifyItemChanged(0);
-                        } else {
-                            WKMsg msg = getSpanEmptyMsg();
-                            chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
-                        }
+                        safeAdapterAction(() -> {
+                            if (isAddedSpanEmptyView()) {
+                                chatAdapter.getData().get(0).wkMsg.messageSeq = getTopPinViewHeight();
+                                chatAdapter.notifyItemChanged(0);
+                            } else {
+                                WKMsg msg = getSpanEmptyMsg();
+                                chatAdapter.addData(0, new WKUIChatMsgItemEntity(this, msg, null));
+                            }
+                        });
                     } else {
                         isShowCallingView = false;
                     }
@@ -3032,12 +3050,36 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
         }
     }
 
+    // RecyclerView 正在 layout / scroll 时 notify* 会抛 IllegalStateException，只能延后一帧。
+    // 已有动作在排队时后续动作也必须排队，否则新回调会插到旧回调前面，
+    // 同一条消息的两次刷新会被旧状态覆盖。
+    // 若某次 layout 抛异常被上层吞掉，RecyclerView 会永久停在 computing 态，
+    // 重试多少次都没用——这时宁可丢掉这次刷新也不崩。
+    private static final int MAX_SAFE_ADAPTER_RETRY = 3;
+    private int pendingAdapterActions = 0;
+
     private void safeAdapterAction(Runnable action) {
-        if (wkVBinding.recyclerView.isComputingLayout()) {
-            wkVBinding.recyclerView.post(action);
-        } else {
+        if (pendingAdapterActions == 0 && !wkVBinding.recyclerView.isComputingLayout()) {
             action.run();
+            return;
         }
+        postAdapterAction(action, 0);
+    }
+
+    private void postAdapterAction(Runnable action, int retryCount) {
+        if (retryCount >= MAX_SAFE_ADAPTER_RETRY) {
+            if (BuildConfig.DEBUG) Log.w("MsgDebug", "[safeAdapterAction] recyclerView stuck in computing state, drop refresh");
+            return;
+        }
+        pendingAdapterActions++;
+        wkVBinding.recyclerView.post(() -> {
+            pendingAdapterActions--;
+            if (wkVBinding.recyclerView.isComputingLayout()) {
+                postAdapterAction(action, retryCount + 1);
+            } else {
+                action.run();
+            }
+        });
     }
 
     // 显示一条时间消息

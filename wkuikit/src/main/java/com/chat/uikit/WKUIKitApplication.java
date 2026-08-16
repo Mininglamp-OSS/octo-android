@@ -317,7 +317,7 @@ public class WKUIKitApplication {
                         .postDelayed(this::startChat, 100);
                 return;
             }
-            Log.e("去连接", "-->");
+            if (BuildConfig.DEBUG) Log.e("去连接", "-->");
             WKIM.getInstance().getConnectionManager().connection();
         }
     }

@@ -1182,6 +1182,22 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                         });
                     }
                 }
+            } else if (i == WKConnectStatus.syncCompleted) {
+                // 会话 sync 落库完成 —— 重绘一次列表。
+                //
+                // 锁屏挂起恢复的时序是错位的：onResume 先跑（用挂起前的旧数据重绘一次）→
+                // WebSocket 才开始重连 → sync 回来更新 allConversations，但增量路径对
+                // 「已存在会话的字段更新」只做逐行 notifyItemChanged，不重建列表 → 界面停在
+                // onResume 那一帧。表现为「状态显示已连接、列表还是旧的」，直到来新消息或
+                // 进聊天页返回才自愈。
+                //
+                // 这里的数据是就绪的：setOnRefreshMsg 与本状态都经 BaseManager.runOnMainThread
+                // 投到主线程队列，且前者先投（ConversationManager 内 :682 早于 :698），
+                // FIFO 保证 allConversations 已更新完再走到这里。
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("ConvSync", "[ConvSync] syncCompleted -> filterAndDisplay");
+                }
+                filterAndDisplay();
             } else if (i == WKConnectStatus.connecting) {
                 wkVBinding.textSwitcher.setText(getString(R.string.connecting));
                 wkVBinding.spaceChevronIv.setVisibility(View.GONE);

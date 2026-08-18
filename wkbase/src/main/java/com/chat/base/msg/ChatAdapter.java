@@ -578,6 +578,9 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
             return;
         List<WKUIChatMsgItemEntity> list = getData();
         for (int i = 0, size = list.size(); i < size; i++) {
+            // loading / 占位 item 的 wkMsg 是 null（同 #129 在其它遍历点补的空判），
+            // 这里原来直接解引用，列表里存在占位项时会 NPE。
+            if (list.get(i) == null || list.get(i).wkMsg == null) continue;
             if (list.get(i).wkMsg.baseContentMsgModel == null || list.get(i).wkMsg.baseContentMsgModel.reply == null) {
                 continue;
             }

@@ -366,6 +366,16 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
 //            val deleteTimerLP = deleteTimer.layoutParams as RelativeLayout.LayoutParams
             baseView.removeAllViews()
             baseView.addView(getChatViewItem(baseView, from))
+            // 气泡内部几个容器开着 animateLayoutChanges，其 CHANGING 动画默认会沿父链把本 item 根
+            // （ChatItemView）的 bounds 也一起动画掉，并停在动画开始时捕获的旧 bounds 上，
+            // 把 LayoutManager 刚排好的位置改写掉 → 气泡压住相邻消息。这里只关掉"动祖先"这一项，
+            // 气泡内部动画不变。详见 ChatItemView.disableParentHierarchyTransitions 的注释。
+            //
+            // ⚠️ 必须在整棵 item 子树 inflate 完之后调用：它只遍历调用时已存在的 view。
+            // 当前三个带 animateLayoutChanges 的布局（chat_item_base_layout / wk_msg_status_layout /
+            // chat_item_text）都在上面 getChatViewItem 里就 inflate 好了，覆盖是全的；若将来有谁在
+            // 下方的 setData 里再 inflate 带该属性的容器，需要把这行挪到其后，否则会漏成偶发重叠。
+            ChatItemView.disableParentHierarchyTransitions(baseViewHolder.itemView)
             baseViewHolder.getView<View>(R.id.viewContentLayout).setOnClickListener {
                 val chatAdapter = getAdapter() as ChatAdapter
                 chatAdapter.conversationContext.hideSoftKeyboard()

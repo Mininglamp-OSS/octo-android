@@ -61,6 +61,14 @@ public class MyItemAnimator extends SimpleItemAnimator {
         //
         // 关掉之后 canReuseUpdatedViewHolder 恒为 true —— 更新复用同一个 holder，既不再创建
         // 多余 holder，也彻底没有 hidden view 需要回收。动画本来就是空实现，观感不变。
+        //
+        // ⚠️ 这个 flag 与下面 animateChange 的 oldHolder==newHolder 分支是**一对**，不能只留一个：
+        // 关掉 change 动画后，RecyclerView 会用 (h, h) 调 animateChange，DefaultItemAnimator 的
+        // 默认做法是转成 move 动画（setTranslationY 再动画回 0），高频刷新打断就会残留位移 ⇒ 气泡
+        // 重叠（v1.2.4 的 c954e92 当时是靠删掉本 flag 来规避的）。所以那个分支已改成直接归位。
+        //
+        // animateMove 保持原样（真实位移的 delta 是收敛的，v1.2.4 删 flag 后它单独跑过一个版本
+        // 没出问题），只堵掉 (h, h) 这条把"自身高度变化"误当位移的通道。
         setSupportsChangeAnimations(false);
     }
 
@@ -334,7 +342,25 @@ public class MyItemAnimator extends SimpleItemAnimator {
     public boolean animateChange(RecyclerView.ViewHolder oldHolder,
                                  RecyclerView.ViewHolder newHolder, int fromLeft, int fromTop, int toLeft, int toTop) {
         if (oldHolder == newHolder) {
-            return animateMove(oldHolder, fromLeft, fromTop, toLeft, toTop);
+            // supportsChangeAnimations=false ⇒ canReuseUpdatedViewHolder 恒 true ⇒ 复用同一个 holder，
+            // RecyclerView 用 (h, h) 调到这里。DefaultItemAnimator 在这个分支委托给 animateMove：
+            // 先同步 setTranslationY(-deltaY)，再用 ViewPropertyAnimator 动画回 0。
+            //
+            // 但本 animator 的 change 动画本来就是空实现（animateChangeImpl 全被注释掉），这个位移
+            // 纯属副作用：高频 notifyItemChanged（发送态回包 / 已读回执 / 机器人流式编辑）会在动画
+            // 落地前反复打断它，translationY 残留下来，气泡就叠在相邻消息上。
+            // v1.2.4 已经踩过一次（c954e92：删 setSupportsChangeAnimations(false) 修气泡重叠），
+            // #129 为堵 "Tmp detached view" 崩溃把 flag 加回来时把这个副作用一并带了回来。
+            //
+            // 这里直接归位 + 立即 dispatch：既不产生任何中间位移帧（重叠无从谈起），又保住 #129
+            // 靠 holder 复用堵掉的那条崩溃路径。返回 false 让 RecyclerView 不必 post 动画 runner。
+            final View view = oldHolder.itemView;
+            resetAnimation(oldHolder);
+            view.setTranslationX(0);
+            view.setTranslationY(0);
+            view.setAlpha(1);
+            dispatchChangeFinished(oldHolder, true);
+            return false;
         }
         final float prevTranslationX = oldHolder.itemView.getTranslationX();
         final float prevTranslationY = oldHolder.itemView.getTranslationY();

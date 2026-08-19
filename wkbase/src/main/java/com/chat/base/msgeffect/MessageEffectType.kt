@@ -25,6 +25,7 @@ sealed class MessageEffectType(val durationMs: Long) {
     object ThumbsUp : MessageEffectType(7500L)
     object ActionVideo : MessageEffectType(4000L)
     object ClassyVideo : MessageEffectType(5500L)
+    object ShangfangVideo : MessageEffectType(4000L)
 
     companion object {
         private val heartEmojis = listOf("❤️", "💗", "💕", "💖", "💘", "❤")
@@ -37,6 +38,7 @@ sealed class MessageEffectType(val durationMs: Long) {
             // 否则混在长消息里会让大段文字也触发全屏视频，体验割裂。
             if (trimmed == "[崇尚行动]") return ActionVideo
             if (trimmed == "[有品位]") return ClassyVideo
+            if (trimmed == "[尚方宝剑]") return ShangfangVideo
             return when {
                 text.contains("[使命必达]") -> Rocket
                 text.contains("💣") -> Bomb

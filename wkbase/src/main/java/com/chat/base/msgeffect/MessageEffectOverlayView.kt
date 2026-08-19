@@ -107,8 +107,10 @@ class MessageEffectOverlayView @JvmOverloads constructor(
             is MessageEffectType.ThumbsUp -> ThumbsUpEffect(type, sourceRect, w, h).also {
                 it.attachBubbleTargets(this, messageRecyclerView)
             }
+            // 视频类特效不走粒子系统，由 MessageEffectManager 交给 LumaKeyVideoEffectPlayer 播放
             is MessageEffectType.ActionVideo -> null
             is MessageEffectType.ClassyVideo -> null
+            is MessageEffectType.ShangfangVideo -> null
         }
     }
 

@@ -21,7 +21,6 @@ import com.alibaba.fastjson.JSONObject;
 import com.chat.base.net.entity.CommonResponse;
 import com.chat.uikit.enity.WKSyncReminder;
 import com.chat.uikit.enity.ProhibitWord;
-import com.chat.uikit.enity.SensitiveWords;
 import com.xinbida.wukongim.entity.WKSyncChannelMsg;
 import com.xinbida.wukongim.entity.WKSyncChat;
 import com.xinbida.wukongim.entity.WKSyncConvMsgExtra;
@@ -81,9 +80,6 @@ public interface MsgService {
 
     @POST("message/offset")
     Observable<CommonResponse> offsetMsg(@Body JSONObject jsonObject);
-
-    @GET("message/sync/sensitivewords")
-    Observable<SensitiveWords> syncSensitiveWords(@Query("version") long version);
 
     @POST("conversation/syncack")
     Observable<CommonResponse> ackCoverMsg(@Body JSONObject jsonObject);

@@ -234,7 +234,6 @@ public class WKIMUtils {
             boolean isAlertMsg = false;
             String channelID = "";
             byte channelType = WKChannelType.PERSONAL;
-            WKMsg sensitiveWordsMsg = null;
             String loginUID = WKConfig.getInstance().getUid();
             // 方案 B (跨 Space 串台兜底): 本批次内若有任一群成员关系变更事件,
             // 循环结束后触发一次 conv/sync 增量刷新 space_memberships,
@@ -306,40 +305,6 @@ public class WKIMUtils {
                     if (!TextUtils.isEmpty(loginUID) && !TextUtils.isEmpty(msgList.get(i).fromUID) && msgList.get(i).fromUID.equals(loginUID)) {
                         isAlertMsg = false;
                     }
-                    if (msgList.get(i).type == WKContentType.WK_TEXT) {
-                        boolean isContains = false;
-                        WKTextContent textContent = (WKTextContent) msgList.get(i).baseContentMsgModel;
-                        // 判断是否包含敏感词
-                        if (WKUIKitApplication.getInstance().sensitiveWords != null
-                                && WKReader.isNotEmpty(WKUIKitApplication.getInstance().sensitiveWords.list)
-                                && textContent != null && !TextUtils.isEmpty(textContent.getDisplayContent())) {
-                            for (String word : WKUIKitApplication.getInstance().sensitiveWords.list) {
-                                if (textContent.getDisplayContent().contains(word)) {
-                                    isContains = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (isContains) {
-                            sensitiveWordsMsg = new WKMsg();
-                            sensitiveWordsMsg.channelID = msgList.get(i).channelID;
-                            sensitiveWordsMsg.channelType = msgList.get(i).channelType;
-                            JSONObject jsonObject = new JSONObject();
-                            try {
-                                jsonObject.put("content", WKUIKitApplication.getInstance().sensitiveWords.tips);
-                                jsonObject.put("type", WKContentType.sensitiveWordsTips);
-                            } catch (JSONException e) {
-                                WKLogUtils.e("解析敏感词错误");
-                            }
-                            WKChannel channel = new WKChannel(msgList.get(i).channelID, msgList.get(i).channelType);
-                            sensitiveWordsMsg.setChannelInfo(channel);
-                            sensitiveWordsMsg.content = jsonObject.toString();
-                            sensitiveWordsMsg.type = WKContentType.sensitiveWordsTips;
-                            sensitiveWordsMsg.orderSeq = msgList.get(i).orderSeq + 1;
-                            sensitiveWordsMsg.status = WKSendMsgResult.send_success;
-
-                        }
-                    }
                 }
             }
             // 方案 B: 本批次有任一群成员关系变更 → 触发一次 memberships 增量刷新.
@@ -401,11 +366,6 @@ public class WKIMUtils {
             }
 
             assert msgList != null;
-
-            if (sensitiveWordsMsg != null) {
-                WKMsg finalSensitiveWordsMsg = sensitiveWordsMsg;
-                new Handler(Objects.requireNonNull(Looper.myLooper())).postDelayed(() -> WKIM.getInstance().getMsgManager().saveAndUpdateConversationMsg(finalSensitiveWordsMsg, false), 1000 * 2);
-            }
         });
         WKIM.getInstance().getMsgManager().addOnUploadMsgExtraListener(msgExtra -> {
             WKMsg msg = WKIM.getInstance().getMsgManager().getWithMessageID(msgExtra.messageID);

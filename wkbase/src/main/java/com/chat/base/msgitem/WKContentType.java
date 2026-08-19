@@ -42,7 +42,15 @@ public class WKContentType extends WKMsgContentType {
     public final static int videoCallGroup = -7;
     // 非好友
     public final static int noRelation = -9;
-    // 敏感词提醒
+    /**
+     * 敏感词提醒。
+     *
+     * @deprecated 功能已整套移除（对齐 iOS —— iOS 侧 securityTipLbl 只有 hidden=YES，
+     * 从来不显示）。历史 DB 行由迁移 wk_sql/202608191100.sql 清理。
+     * <p>常量刻意保留：-10 是已被占用过的协议号，删掉后若被复用表示别的消息类型，
+     * 尚未升级的老客户端上的历史数据会串味。请勿复用此值。
+     */
+    @Deprecated
     public final static int sensitiveWordsTips = -10;
     public final static int emptyView = -12;
     public final static int spanEmptyView = -13;

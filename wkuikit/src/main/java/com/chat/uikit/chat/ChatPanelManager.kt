@@ -160,6 +160,22 @@ class ChatPanelManager(
     val resetTitleViewListener: () -> Unit,
     val showNewImageListener: (path: String) -> Unit,
 ) {
+    private companion object {
+        /** 内置表情面板的工具栏 sid，见 initToolBar() 里兜底添加的那颗。 */
+        const val EMOJI_TOOL_BAR_SID = "emojiToolBar"
+
+        /** 外部模块自带表情面板时用的 sid —— 存在它就不再兜底加内置表情面板。 */
+        const val STICKER_TOOL_BAR_SID = "chat_toolbar_sticker"
+
+        /**
+         * emoji 网格底部要让出来的高度：悬浮删除键 5dp 下边距 + 5dp 阴影 + 36dp 视觉 + 5dp 阴影
+         * = 51dp，取 52dp。作为 RecyclerView 的 bottom padding，让最后一行能滚到按钮上方、点得到。
+         *
+         * 按钮尺寸改了（view_emoji_panel_delete_btn.xml）就要回来改这里。
+         */
+        const val EMOJI_PANEL_BOTTOM_INSET_DP = 52f
+    }
+
     private val eventKey = "InputPanel"
     private val loginUID = WKConfig.getInstance().uid
     private var isShowSendBtn: Boolean = false
@@ -927,6 +943,7 @@ class ChatPanelManager(
             timer = null
         }
         releaseHoldToTalk()
+        stopEmojiDeleteRepeat()
         EndpointManager.getInstance().remove("emoji_click")
         WKIM.getInstance().robotManager.removeRefreshRobotMenu(iConversationContext.chatChannelInfo.channelID)
         WKIM.getInstance().channelManager.removeRefreshChannelInfo(this.eventKey)
@@ -1095,7 +1112,7 @@ class ChatPanelManager(
         var isAddEmojiLayout = true
         for (menu in toolBarList) {
             if (menu != null) {
-                if (menu.sid.equals("chat_toolbar_sticker")) {
+                if (menu.sid.equals(STICKER_TOOL_BAR_SID)) {
                     isAddEmojiLayout = false
                 }
                 tempToolBarList.add(menu)
@@ -1103,7 +1120,7 @@ class ChatPanelManager(
         }
         if (isAddEmojiLayout) {
             val emojiToolBar = ChatToolBarMenu(
-                "emojiToolBar",
+                EMOJI_TOOL_BAR_SID,
                 R.mipmap.icon_chat_toolbar_emoji,
                 R.mipmap.icon_chat_toolbar_emoji,
                 getEmojiLayout()
@@ -2388,6 +2405,78 @@ class ChatPanelManager(
         return root
     }
 
+    /**
+     * 表情面板右下角的悬浮删除（退格）键。
+     *
+     * 旧表情面板 [com.chat.base.emoji.EmojiFragment] 本来就有这颗键（frag_emoji_layout.xml），
+     * 面板迁到本类纯代码搭建时漏掉了 —— 结果表情点错只能去点输入框调起系统键盘退格，
+     * 而点输入框又会把表情面板收起来。这里把它补回来。
+     *
+     * 单击退一格；长按按 [emojiDeleteRepeatIntervalMs] 连续退格，抬手即停。
+     */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun buildEmojiDeleteButton(): View {
+        val activity = iConversationContext.chatActivity
+        val btn = android.view.LayoutInflater.from(activity)
+            .inflate(R.layout.view_emoji_panel_delete_btn, null, false)
+
+        // passcode_delete 是深色图标，跟主题染色否则深色模式下看不见（对齐 EmojiFragment.initView）
+        Theme.setColorFilter(
+            activity,
+            btn.findViewById<AppCompatImageView>(R.id.emojiDeleteIv),
+            R.color.popupTextColor
+        )
+
+        val hitArea = btn.findViewById<RelativeLayout>(R.id.emojiDeleteLayout)
+        hitArea.setOnClickListener { dispatchBackspace() }
+        hitArea.setOnLongClickListener {
+            startEmojiDeleteRepeat()
+            true  // 消费掉长按，系统不会再补一次 click，避免长按结束后多删一个
+        }
+        hitArea.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> stopEmojiDeleteRepeat()
+            }
+            false  // 不拦截，click / longClick 照常走
+        }
+        return btn
+    }
+
+    private val emojiDeleteRepeatIntervalMs = 80L
+
+    private val emojiDeleteRepeat = object : Runnable {
+        override fun run() {
+            // 删空了就自然收尾，不在空输入框上空转
+            if (!dispatchBackspace()) return
+            mainHandler.postDelayed(this, emojiDeleteRepeatIntervalMs)
+        }
+    }
+
+    private fun startEmojiDeleteRepeat() {
+        mainHandler.removeCallbacks(emojiDeleteRepeat)
+        mainHandler.post(emojiDeleteRepeat)
+    }
+
+    private fun stopEmojiDeleteRepeat() {
+        mainHandler.removeCallbacks(emojiDeleteRepeat)
+    }
+
+    /**
+     * 往输入框派发一次退格，与 initListener() 里 "emoji_click" 端点的删除分支同源。
+     *
+     * "[微笑]" 这类自定义表情由 [com.chat.base.emoji.MoonUtil.addEmojiSpan] 插入时带
+     * AlignImageSpan（ReplacementSpan 子类），系统 BaseKeyListener 退格会整体删掉，
+     * 不用在这里特殊处理。
+     *
+     * @return 是否真的删了 —— 输入框已空时返回 false，供长按连续删自行停下。
+     */
+    private fun dispatchBackspace(): Boolean {
+        if (editText.text.isNullOrEmpty()) return false
+        editText.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        return true
+    }
+
     private fun buildEmojiPanelTabButton(label: String): AppCompatTextView {
         val activity = iConversationContext.chatActivity
         return AppCompatTextView(activity).apply {
@@ -2430,6 +2519,11 @@ class ChatPanelManager(
         val recyclerView = RecyclerView(activity)
         recyclerView.layoutManager = GridLayoutManager(activity, 8)
         recyclerView.adapter = emojiAdapter
+        // 底部让出删除键的高度，否则最后一行被压住点不到。
+        // clipToPadding=false：滚动中表情照常从这块区域穿过，只有停在底部时
+        // 最后一行才停在按钮上方。
+        recyclerView.clipToPadding = false
+        recyclerView.setPadding(0, 0, 0, AndroidUtilities.dp(EMOJI_PANEL_BOTTOM_INSET_DP))
         emojiLayout.addView(
             recyclerView,
             LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT)
@@ -2451,7 +2545,30 @@ class ChatPanelManager(
             }
             recordRecentEmoji(emojiEntry.text)
         }
-        return emojiLayout
+
+        // 悬浮删除键只挂在「表情」tab —— 另一个 tab（自定义表情/贴图）点了直接发送、
+        // 全程不写输入框，退格键在那儿没有作用对象，挂上去还会白占一块防遮挡留白。
+        val emojiRoot = FrameLayout(activity)
+        emojiRoot.addView(
+            emojiLayout,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        emojiRoot.addView(
+            buildEmojiDeleteButton(),
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.END
+            ).apply {
+                marginEnd = AndroidUtilities.dp(5f)
+                bottomMargin = AndroidUtilities.dp(5f)
+            }
+        )
+        return emojiRoot
     }
 
     /**
@@ -3294,6 +3411,19 @@ class ChatPanelManager(
                 SoftKeyboardUtils.getInstance().loseFocus(editText)
                 SoftKeyboardUtils.getInstance()
                     .hideInput(iConversationContext.chatActivity, editText)
+                // 表情面板要保留输入框光标：面板里点表情是往输入框插入、右下角退格键是往输入框删，
+                // 没有光标就看不出会插到哪 / 删掉哪。上面的 loseFocus 把焦点转交给了父容器
+                // （见 SoftKeyboardUtils.loseFocus），而 TextView 只在 isFocused() 时才画光标。
+                //
+                // 这里在原有 loseFocus + hideInput 之后再把焦点要回来，而不是直接不调 loseFocus ——
+                // 保留那套压键盘的顺序，避免动到它原本可能在兜的 OEM 键盘反弹。requestFocus 本身
+                // 不拉输入法，且 ChatActivity 是 stateAlwaysHidden，重新获焦也不会把系统键盘带出来。
+                // 其他工具栏面板（+ 更多等）不涉及输入框编辑，行为保持不变。
+                if (mChatToolBarMenu.sid == EMOJI_TOOL_BAR_SID ||
+                    mChatToolBarMenu.sid == STICKER_TOOL_BAR_SID
+                ) {
+                    SoftKeyboardUtils.getInstance().requestFocus(editText)
+                }
             }
         }
         if (mChatToolBarMenu.iChatToolBarListener != null) mChatToolBarMenu.iChatToolBarListener.onChecked(

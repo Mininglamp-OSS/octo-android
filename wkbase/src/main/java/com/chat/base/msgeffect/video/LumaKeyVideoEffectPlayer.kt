@@ -25,10 +25,10 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 
 /**
- * Plays a full-screen luma-keyed mp4 (e.g. action_celebrate / classy_celebrate)
- * inside the provided container. Mirrors iOS WKActionVideoEffect / WKClassyVideoEffect:
- * fade-in → play once → fade-out → remove. Watchdog removes the view if the
- * MediaPlayer never completes.
+ * Plays a full-screen luma-keyed mp4 (e.g. action_celebrate / classy_celebrate /
+ * shangfang_celebrate) inside the provided container: fade-in → play once →
+ * fade-out → remove. Watchdog removes the view if the MediaPlayer never
+ * completes. Per-effect keying params come from [LumaKeyParams].
  */
 class LumaKeyVideoEffectPlayer(private val context: Context) {
 
@@ -38,12 +38,19 @@ class LumaKeyVideoEffectPlayer(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private val timeoutRunnable = Runnable { cleanup() }
 
-    fun play(container: ViewGroup, assetPath: String, timeoutMs: Long) {
+    fun play(
+        container: ViewGroup,
+        assetPath: String,
+        timeoutMs: Long,
+        params: LumaKeyParams = LumaKeyParams.DEFAULT
+    ) {
         if (isPlaying) return
         isPlaying = true
         this.container = container
 
         val view = LumaKeyVideoView(context)
+        // 必须在 startVideo 之前设置：保护圈几何遮罩按首帧时的 params 预计算。
+        view.params = params
         videoView = view
         view.alpha = 0f
 

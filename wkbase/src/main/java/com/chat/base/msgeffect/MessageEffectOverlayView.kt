@@ -45,8 +45,8 @@ class MessageEffectOverlayView @JvmOverloads constructor(
     private var lastFrameTimeMs = 0L
     /**
      * 聊天列表的 RecyclerView。仅 [ThumbsUpEffect] 用——粒子飘过气泡时调用
-     * [BubblePulseHelper] 让对应 cell 抖动一下，对齐 iOS WKStarburstEffect 的
-     * onHitCheckTimer。其它特效拿不到也不影响。可空：宿主未注入时安静跳过。
+     * [BubblePulseHelper] 让对应 cell 抖动一下。其它特效拿不到也不影响。
+     * 可空：宿主未注入时安静跳过。
      */
     private var messageRecyclerView: RecyclerView? = null
 
@@ -107,8 +107,10 @@ class MessageEffectOverlayView @JvmOverloads constructor(
             is MessageEffectType.ThumbsUp -> ThumbsUpEffect(type, sourceRect, w, h).also {
                 it.attachBubbleTargets(this, messageRecyclerView)
             }
+            // 视频类特效不走粒子系统，由 MessageEffectManager 交给 LumaKeyVideoEffectPlayer 播放
             is MessageEffectType.ActionVideo -> null
             is MessageEffectType.ClassyVideo -> null
+            is MessageEffectType.ShangfangVideo -> null
         }
     }
 

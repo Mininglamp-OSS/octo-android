@@ -26,6 +26,7 @@ import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import com.chat.base.msgeffect.video.LumaKeyParams
 import com.chat.base.msgeffect.video.LumaKeyVideoEffectPlayer
 import com.tencent.bugly.crashreport.CrashReport
 import com.xinbida.wukongim.entity.WKMsg
@@ -106,7 +107,8 @@ class MessageEffectManager(
             if (activityRef.get()?.isFinishing == true) return
 
             if (candidate.effectType is MessageEffectType.ActionVideo ||
-                candidate.effectType is MessageEffectType.ClassyVideo) {
+                candidate.effectType is MessageEffectType.ClassyVideo ||
+                candidate.effectType is MessageEffectType.ShangfangVideo) {
                 playEffect(candidate.effectType, candidate.bubbleView?.get(), candidate.avatarBitmap)
                 return
             }
@@ -128,23 +130,34 @@ class MessageEffectManager(
             if (videoEffectPlayer == null) {
                 videoEffectPlayer = LumaKeyVideoEffectPlayer(activity)
             }
-            videoEffectPlayer?.play(root, videoSpec.assetPath, videoSpec.timeoutMs)
+            videoEffectPlayer?.play(root, videoSpec.assetPath, videoSpec.timeoutMs, videoSpec.lumaParams)
             return
         }
         val sourceRect = calculateSourceRect(bubbleView)
         overlayView.playEffect(effectType, sourceRect, avatarBitmap)
     }
 
-    private data class VideoSpec(val assetPath: String, val timeoutMs: Long)
+    private data class VideoSpec(
+        val assetPath: String,
+        val timeoutMs: Long,
+        val lumaParams: LumaKeyParams = LumaKeyParams.DEFAULT
+    )
 
     /**
-     * 全屏 luma-key 视频特效（[崇尚行动] / [有品位]）的资源 + 兜底超时映射。
-     * 超时与 iOS 的 scheduleRemovalAfterDelay 一致：action ≈ 视频 3.2s + 余量 = 6s，
-     * classy ≈ 视频 5.07s + 余量 = 8s，避免 MediaPlayer 异常导致 view 残留。
+     * 全屏 luma-key 视频特效（[崇尚行动] / [有品位] / [尚方宝剑]）的资源 + 兜底超时映射。
+     * 超时 = 视频时长 + 余量，避免 MediaPlayer 异常时 view 残留在屏幕上：
+     * action ≈ 视频 3.2s + 余量 = 6s，classy ≈ 视频 5.07s + 余量 = 8s，
+     * shangfang ≈ 视频 3.5s + 余量 = 6s。
+     *
+     * 尚方宝剑单独带一组抠像参数（见 LumaKeyParams.SHANGFANG）：素材主体偏画面右上、
+     * 且前 0.6s 主体尚未铺满，用默认的居中常驻保护盘会在浅色模式下露出黑圈。
      */
     private fun videoSpecFor(effectType: MessageEffectType): VideoSpec? = when (effectType) {
         is MessageEffectType.ActionVideo -> VideoSpec("effects/action_celebrate.mp4", 6000L)
         is MessageEffectType.ClassyVideo -> VideoSpec("effects/classy_celebrate.mp4", 8000L)
+        is MessageEffectType.ShangfangVideo -> VideoSpec(
+            "effects/shangfang_celebrate.mp4", 6000L, LumaKeyParams.SHANGFANG
+        )
         else -> null
     }
 

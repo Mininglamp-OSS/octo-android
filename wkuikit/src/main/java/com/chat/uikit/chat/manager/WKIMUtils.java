@@ -82,7 +82,6 @@ import com.xinbida.wukongim.entity.WKMsg;
 
 import org.json.JSONObject;
 import com.xinbida.wukongim.entity.WKUIConversationMsg;
-import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.msgmodel.WKTextContent;
 
 import org.json.JSONException;
@@ -92,7 +91,6 @@ import org.json.JSONArray;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 

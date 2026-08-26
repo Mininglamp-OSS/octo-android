@@ -45,8 +45,9 @@ public class WKContentType extends WKMsgContentType {
     /**
      * 敏感词提醒。
      *
-     * @deprecated 功能已整套移除（对齐 iOS —— iOS 侧 securityTipLbl 只有 hidden=YES，
-     * 从来不显示）。历史 DB 行由迁移 wk_sql/202608191100.sql 清理。
+     * @deprecated 功能已整套移除：该提示由客户端本地 contains() 匹配凭空造出，
+     * 以一条真实消息落库并顶掉会话列表的最后一条消息，服务端并无对应约束。
+     * 历史 DB 行由迁移 wk_sql/202608191100.sql 清理。
      * <p>常量刻意保留：-10 是已被占用过的协议号，删掉后若被复用表示别的消息类型，
      * 尚未升级的老客户端上的历史数据会串味。请勿复用此值。
      */

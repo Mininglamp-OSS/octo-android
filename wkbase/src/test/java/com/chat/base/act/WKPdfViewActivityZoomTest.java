@@ -16,6 +16,8 @@
 package com.chat.base.act;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -29,6 +31,7 @@ public class WKPdfViewActivityZoomTest {
 
     private static final int VIEWPORT_HEIGHT = 1920;
     private static final int CONTENT_HEIGHT = 8400;
+    private static final int TOUCH_SLOP = 24;
 
     /**
      * 放大后底部要滑得到 —— 本次修复的核心。ScrollView 的滚动范围只认子 View 的
@@ -83,5 +86,21 @@ public class WKPdfViewActivityZoomTest {
         assertEquals(5f, WKPdfViewActivity.clamp(-3f, 5f, 10f), 0f);
         assertEquals(10f, WKPdfViewActivity.clamp(42f, 5f, 10f), 0f);
         assertEquals(7f, WKPdfViewActivity.clamp(7f, 5f, 10f), 0f);
+    }
+
+    /** 竖向滚动里累积的横向抖动不应被判成横向平移。 */
+    @Test public void mostlyVerticalSwipeDoesNotStartHorizontalPan() {
+        assertFalse(WKPdfViewActivity.shouldStartHorizontalPan(30f, 400f, TOUCH_SLOP));
+        assertFalse(WKPdfViewActivity.shouldStartHorizontalPan(-30f, -400f, TOUCH_SLOP));
+    }
+
+    @Test public void horizontalSwipePastSlopStartsPan() {
+        assertTrue(WKPdfViewActivity.shouldStartHorizontalPan(120f, 20f, TOUCH_SLOP));
+        assertTrue(WKPdfViewActivity.shouldStartHorizontalPan(-120f, 20f, TOUCH_SLOP));
+    }
+
+    @Test public void horizontalMovementWithinSlopDoesNotStartPan() {
+        assertFalse(WKPdfViewActivity.shouldStartHorizontalPan(TOUCH_SLOP - 1f, 0f, TOUCH_SLOP));
+        assertTrue(WKPdfViewActivity.shouldStartHorizontalPan(TOUCH_SLOP, 0f, TOUCH_SLOP));
     }
 }

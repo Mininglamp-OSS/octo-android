@@ -9,6 +9,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.ViewConfiguration;
+import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -17,6 +18,7 @@ import android.widget.TextView;
 
 import com.chat.base.R;
 
+import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.File;
@@ -43,12 +45,18 @@ public class WKPdfViewActivity extends AppCompatActivity {
     private float lastPanX;
     private boolean panning;
     private int pendingScrollY;
-    private final Runnable applyPendingScroll = new Runnable() {
-        @Override
-        public void run() {
-            scrollView.scrollTo(0, pendingScrollY);
-        }
-    };
+    private boolean scrollCorrectionScheduled;
+    // layout 完成、绘制之前用新的高度补正 scrollY，见 applyScale
+    private final ViewTreeObserver.OnPreDrawListener scrollCorrection =
+            new ViewTreeObserver.OnPreDrawListener() {
+                @Override
+                public boolean onPreDraw() {
+                    scrollView.getViewTreeObserver().removeOnPreDrawListener(this);
+                    scrollCorrectionScheduled = false;
+                    scrollView.scrollTo(0, pendingScrollY);
+                    return true;
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,9 +66,8 @@ public class WKPdfViewActivity extends AppCompatActivity {
         container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         container.setGravity(Gravity.CENTER_HORIZONTAL);
-        // 缩放锚点固定在左上角：内容只向右、向下溢出，右侧靠 translationX、
-        // 底部靠 bottomMargin 变成可达区域。用中心锚点的话两侧同时溢出，
-        // 可平移范围和 ScrollView 的滚动范围都算不干净。
+        // 缩放锚点固定在左上角：内容只向右、向下溢出，右侧靠 translationX、底部靠
+        // 撑高测量高度变成可达区域。用中心锚点的话两侧同时溢出，可平移范围算不干净。
         container.setPivotX(0f);
         container.setPivotY(0f);
         scrollView.addView(container, new FrameLayout.LayoutParams(
@@ -99,40 +106,78 @@ public class WKPdfViewActivity extends AppCompatActivity {
 
     /**
      * 以手势焦点为锚点应用新的缩放级别。
-     * <p>
-     * 锚点在左上角时，内容坐标 c 的屏幕位置是 {@code c * scale - offset}（横向 offset 即
-     * -translationX，竖向即 scrollY）。要让焦点前后停在同一处内容上，解出新的偏移：
-     * {@code offset1 = (focus + offset0) * scale1 / scale0 - focus}。
      */
     private void applyScale(float previousScale, float focusX, float focusY) {
-        float offsetX = -container.getTranslationX();
-        float offsetY = scrollView.getScrollY();
         float ratio = scaleFactor / previousScale;
+        float offsetX = anchoredOffset(focusX, -container.getTranslationX(), ratio);
+        float offsetY = anchoredOffset(focusY, scrollView.getScrollY(), ratio);
 
         container.setScaleX(scaleFactor);
         container.setScaleY(scaleFactor);
         updateVerticalScrollRange();
-        container.setTranslationX(-clampOffsetX((focusX + offsetX) * ratio - focusX));
+        container.setTranslationX(-clampOffsetX(offsetX));
 
-        pendingScrollY = Math.max(0, Math.round((focusY + offsetY) * ratio - focusY));
-        // 先立即滚一次保证跟手（会被旧的滚动范围钳制），再等 bottomMargin 触发的
-        // layout 生效后补正一次，否则放大时竖向锚点会往回漂。
+        pendingScrollY = Math.max(0, Math.round(offsetY));
+        // setPadding 触发的 requestLayout 是异步的，此刻 scrollTo 仍会被旧高度钳制
+        // （ScrollView.scrollTo 按 child.getHeight() 夹取），所以先尽力滚一次保证跟手，
+        // 再在 layout 完成、绘制之前按新高度补正一次。
         scrollView.scrollTo(0, pendingScrollY);
-        scrollView.removeCallbacks(applyPendingScroll);
-        scrollView.post(applyPendingScroll);
+        if (!scrollCorrectionScheduled) {
+            scrollCorrectionScheduled = true;
+            scrollView.getViewTreeObserver().addOnPreDrawListener(scrollCorrection);
+        }
     }
 
     /**
-     * setScaleY 只改绘制、不改 layout 尺寸，ScrollView 仍按未缩放的高度算滚动范围。
-     * 把放大多出来的高度补进 bottomMargin，底部才滑得到（ScrollView 的滚动范围含子 View margin）。
+     * 用底部内边距把 container 的测量高度撑到 H * scale，让 ScrollView 的滚动范围跟上缩放。
+     * <p>
+     * 只能用 padding，两条约束都验证过：
+     * <ul>
+     *   <li>ScrollView 的滚动范围只认子 View 的测量高度 —— {@code getScrollRange()} 与
+     *       {@code scrollTo()} 都按 {@code child.getHeight()} 夹取，<b>不计 margin</b>
+     *       （计 margin 的是 androidx 的 NestedScrollView，两者别混）；</li>
+     *   <li>{@code ScrollView.measureChildWithMargins()} 强制以 UNSPECIFIED 测量子 View，
+     *       <b>无视 LayoutParams.height</b>，所以直接设高度同样没用。</li>
+     * </ul>
+     * 而 LinearLayout 自身测量时一定把 padding 计进 mTotalLength，不受父级 spec 影响。
+     * <p>
+     * setScaleY 只改绘制、不改测量尺寸，配合 pivotY = 0 内容绘制在 0..H*scale；撑高后
+     * 滚到底时内容底部正好落在视口底部，多出来的空白在视口之外。
      */
     private void updateVerticalScrollRange() {
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) container.getLayoutParams();
-        int extraHeight = Math.round(container.getHeight() * (scaleFactor - 1f));
-        if (lp.bottomMargin != extraHeight) {
-            lp.bottomMargin = extraHeight;
-            container.setLayoutParams(lp);
+        int contentHeight = container.getHeight() - container.getPaddingBottom();
+        if (contentHeight <= 0) {
+            return;
         }
+        int padding = scaleCompensationPadding(contentHeight, scaleFactor);
+        if (container.getPaddingBottom() != padding) {
+            container.setPadding(0, 0, 0, padding);
+        }
+    }
+
+    /** 缩放 scale 倍后 container 应有的测量高度，ScrollView 靠它算滚动范围。 */
+    @VisibleForTesting
+    static int scaledContentHeight(int contentHeight, float scale) {
+        return Math.max(contentHeight, Math.round(contentHeight * scale));
+    }
+
+    /** 把测量高度从 contentHeight 撑到缩放后高度所需的底部内边距。 */
+    @VisibleForTesting
+    static int scaleCompensationPadding(int contentHeight, float scale) {
+        return scaledContentHeight(contentHeight, scale) - contentHeight;
+    }
+
+    /**
+     * 以 focus 为锚点缩放后的新偏移量。
+     * <p>
+     * 缩放锚点在左上角时，内容坐标 c 的屏幕位置是 {@code c * scale - offset}
+     * （横向 offset 即 -translationX，竖向即 scrollY）。要让 focus 处的内容在缩放前后
+     * 停在同一位置，解出 {@code offset1 = (focus + offset0) * ratio - focus}，
+     * 其中 {@code ratio = scale1 / scale0}。
+     */
+    @VisibleForTesting
+    static float anchoredOffset(float focus, float previousOffset, float ratio) {
+        return (focus + previousOffset) * ratio - focus;
     }
 
     /** 放大后内容宽度为 width * scale，可横向平移的范围是 [0, width * (scale - 1)]。 */
@@ -140,7 +185,8 @@ public class WKPdfViewActivity extends AppCompatActivity {
         return clamp(offsetX, 0f, container.getWidth() * (scaleFactor - 1f));
     }
 
-    private static float clamp(float value, float min, float max) {
+    @VisibleForTesting
+    static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(value, max));
     }
 

@@ -17,15 +17,13 @@
 package com.chat.base.msgeffect.video
 
 /**
- * 单个 luma-key 特效的抠像参数，对齐 iOS `WKLumaKeyVideoView` 的实例属性。
+ * 单个 luma-key 特效的抠像参数。
  *
- * iOS 侧每个特效（Action / Classy / Shangfang）各自设置这些属性；Android 早期移植
- * 把它们写死成常量，导致新素材无法单独调参。这里提成值对象，默认值 = 移植时的原常量，
+ * 每个特效（Action / Classy / Shangfang）的素材构图不同，需要各自调参；早期实现
+ * 把这些值写死成常量，导致新素材无法单独调。这里提成值对象，默认值 = 改造前的原常量，
  * 所以不传参的调用方（action / classy）行为与改造前完全一致。
  *
- * 坐标约定：归一化 (0,0)~(1,1)，**原点左上**，与 iOS 头文件注释一致。
- * 注意 iOS 内部要把 y 翻转成 CoreImage 的左下原点（`1.0 - center.y`），
- * Android 的 Bitmap 本身就是左上原点、y 向下，**不需要翻转**。
+ * 坐标约定：归一化 (0,0)~(1,1)，**原点左上、y 向下**，与 Bitmap 的像素坐标一致。
  */
 data class LumaKeyParams(
     /** 亮度抠像阈值：luma < threshold 视为背景。 */
@@ -61,8 +59,8 @@ data class LumaKeyParams(
      * - `<= 0`（默认）：中心盘从头常驻全强度，即 action / classy 的原始行为。
      * - `> 0`：播放位置 < startTime 时强度 0；随后在 rampDuration 内线性淡入到全强度。
      *
-     * iOS 注释记录了这个门控的来由：素材前段主体尚未铺满画面时就摆上完整盘，
-     * 盘子会罩在还是纯黑的背景上，浅色模式下呈现为"浮在画面中间的黑圈"。
+     * 门控的来由：素材前段主体尚未铺满画面时就摆上完整盘，盘子会罩在还是纯黑的
+     * 背景上，浅色模式下呈现为"浮在画面中间的黑圈"。
      */
     val centerProtectStartTimeMs: Long = 0L,
     val centerProtectRampDurationMs: Long = 0L,
@@ -70,15 +68,17 @@ data class LumaKeyParams(
     /**
      * CPU 抠像缓冲的长边上限（像素）。缓冲的**宽高比始终跟随素材**，这里只限制分辨率。
      *
-     * iOS 走 Metal/CoreImage 在 GPU 上按设备原生分辨率抠像，没有这个限制；Android 是
-     * 逐像素 Kotlin 循环 + TextureView.getBitmap 回读，分辨率直接决定每帧耗时，
-     * 必须设上限。数值越大越清晰、越吃 CPU（耗时约与像素数成正比）：
-     *   1280 → 589×1280 ≈ 0.75M px（默认，兼顾清晰度与流畅）
-     *   1600 → 736×1600 ≈ 1.18M px
-     *   1920 → 884×1920 ≈ 1.70M px（等于素材原生，最清晰，低端机可能掉帧）
+     * 抠像是逐像素 Kotlin 循环 + TextureView.getBitmap 回读，每帧耗时约与像素数
+     * 成正比，必须设上限。
+     *
+     * **默认 960 是为了不动已有特效的性能画像**：改造前缓冲写死 540×960 = 518k px/帧，
+     * 按 960 长边跟随素材比例算下来，action(1080×2004) → 517×960 = 496k px、
+     * classy(1080×2352) → 440×960 = 422k px，都不超过改前，所以低端机上的流畅度不会退。
+     * 新素材若需要更清晰，在自己的参数里单独调高（见 [SHANGFANG]），不要动这个默认值。
+     *
      * 掉帧不会卡 UI：processFrame 有 `processing` 门闩，来不及处理的帧直接跳过。
      */
-    val processMaxLongSide: Int = 1280,
+    val processMaxLongSide: Int = 960,
 ) {
     companion object {
         /** action / classy 沿用的默认参数（等价于参数化改造前的写死常量）。 */
@@ -86,9 +86,9 @@ data class LumaKeyParams(
         val DEFAULT = LumaKeyParams()
 
         /**
-         * [尚方宝剑] 专用参数，逐项对齐 iOS `WKShangfangVideoEffect.m:48-67`。
+         * [尚方宝剑] 专用参数。
          *
-         * 其中中心盘圆心 (0.54, 0.41)、眼部圈 (0.60, 0.42) 是 iOS 侧按帧实测得到的，
+         * 其中中心盘圆心 (0.54, 0.41)、眼部圈 (0.60, 0.42) 是逐帧实测量出来的，
          * 换素材时需要重新量。
          */
         @JvmField
@@ -107,6 +107,9 @@ data class LumaKeyParams(
             eyeProtectSoftness = 0.05f,
             centerProtectStartTimeMs = 600L,
             centerProtectRampDurationMs = 650L,
+            // 素材 884×1920，主体是有细节的人物+剑刃，960 长边下边缘发糊，
+            // 单独提到 1280（589×1280 ≈ 754k px/帧）。只影响本特效。
+            processMaxLongSide = 1280,
         )
     }
 }

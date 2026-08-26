@@ -26,10 +26,9 @@ import android.widget.FrameLayout
 
 /**
  * Plays a full-screen luma-keyed mp4 (e.g. action_celebrate / classy_celebrate /
- * shangfang_celebrate) inside the provided container. Mirrors iOS
- * WKActionVideoEffect / WKClassyVideoEffect / WKShangfangVideoEffect:
- * fade-in → play once → fade-out → remove. Watchdog removes the view if the
- * MediaPlayer never completes. Per-effect keying params come from [LumaKeyParams].
+ * shangfang_celebrate) inside the provided container: fade-in → play once →
+ * fade-out → remove. Watchdog removes the view if the MediaPlayer never
+ * completes. Per-effect keying params come from [LumaKeyParams].
  */
 class LumaKeyVideoEffectPlayer(private val context: Context) {
 

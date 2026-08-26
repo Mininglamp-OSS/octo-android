@@ -38,13 +38,21 @@ import kotlin.math.sqrt
 /**
  * 把不带 alpha 通道的深色背景视频实时 luma-key 抠像成"透明视频"叠放播放。
  *
- * 算法逐行对齐 iOS `WKLumaKeyVideoView` 的 CIColorKernel（见该文件 setupKernel）：
+ * 每帧逐像素按亮度求 alpha：
  *   luma  = dot(rgb, (0.299, 0.587, 0.114))
  *   bgA   = bgFloor + clamp(luma / thr, 0, 1) * (bgCeil - bgFloor)
  *   edge  = smoothstep(thr, thr + tol, luma)
  *   a     = mix(bgA, 1, edge)
  *   a     = max(a, centerProtect * centerStrength)
  *   a     = max(a, eyeProtect * eyeStrength)
+ * 即：越暗越透明，但暗处仍保留 bgFloor 的底纱、亮处最多保留到 bgCeil（留住光晕）；
+ * 主体内部与背景同为暗色、luma 分不开的地方再用保护圈兜住。
+ *
+ * 实现上的两个取舍：
+ *   1. 输出直通 alpha 而非预乘 alpha —— 沿用最初的既有行为，避免改动已上线的
+ *      action / classy 观感。
+ *   2. 抠像走 CPU 逐像素循环，不依赖 GPU shader，因此必须限制缓冲分辨率，
+ *      见 [LumaKeyParams.processMaxLongSide]。
  *
  * 抠像参数由 [params] 提供，默认值等价于参数化改造前的写死常量。
  */
@@ -120,18 +128,31 @@ class LumaKeyVideoView @JvmOverloads constructor(
             override fun onDraw(canvas: Canvas) {
                 val bmp = displayBitmap ?: return
                 if (width <= 0 || height <= 0) return
-                // 布局对齐 iOS WKClassyVideoEffect / WKShangfangVideoEffect：
-                // 宽度铺满、高度按素材比例等比、垂直居中；比屏更"高"时上下溢出被裁掉
-                // （边缘本来就是抠透明的黑边，裁掉无妨）。
+                // aspect-fill：等比放大到**铺满整个 view**，溢出的一边居中裁掉。
+                // renderView 是 MATCH_PARENT 的子 View，Canvas 天然按自身边界裁剪，
+                // 溢出部分自然被切掉，不需要额外 clip。
+                //   action  (1080×2004) 比屏"矮" → 以高度为准，两侧各裁掉一点
+                //   classy  (1080×2352) / shangfang (884×1920) 比屏"高" → 以宽度为准，上下各溢出几像素
                 //
-                // 改造前这里是把 bitmap 直接拉伸填满整个 view（MATCH_PARENT），
-                // 素材比例与屏幕比例不一致时会非等比变形，半透明黑背景的覆盖范围
-                // 也随之和 iOS 对不上。
+                // 两处历史问题都由这里修掉：
+                //   1) 最早是把 bitmap 拉伸填满 view，素材比例≠屏幕比例时非等比变形；
+                //   2) 上一版改成了 aspect-fit（宽度铺满、高度按比例），classy/shangfang 没问题，
+                //      但 action 比屏"矮"，上下会各留一条透明缺口，半透明压暗纱在缺口处硬生生断掉。
                 val aspect = sourceAspect(bmp)
-                val dstW = width.toFloat()
-                val dstH = dstW / aspect
+                val dstW: Float
+                val dstH: Float
+                if (width.toFloat() / height > aspect) {
+                    // view 比素材更"宽" → 宽度先铺满，高度溢出
+                    dstW = width.toFloat()
+                    dstH = dstW / aspect
+                } else {
+                    // view 比素材更"高" → 高度先铺满，宽度溢出
+                    dstH = height.toFloat()
+                    dstW = dstH * aspect
+                }
+                val left = (width - dstW) * 0.5f
                 val top = (height - dstH) * 0.5f
-                dstRect.set(0f, top, dstW, top + dstH)
+                dstRect.set(left, top, left + dstW, top + dstH)
                 canvas.drawBitmap(bmp, null, dstRect, drawPaint)
             }
         }
@@ -198,8 +219,8 @@ class LumaKeyVideoView @JvmOverloads constructor(
         }
         decoderView.getBitmap(captureBitmap!!)
 
-        // 播放进度必须在主线程取（MediaPlayer 非线程安全），随帧一起丢给 worker。
-        // 对齐 iOS 用 item time 驱动 centerStrength 的做法。
+        // 播放进度必须在主线程取（MediaPlayer 非线程安全），随帧一起丢给 worker
+        // 驱动 centerStrength 的时间门控。
         val positionMs = try {
             mediaPlayer?.currentPosition?.toLong() ?: 0L
         } catch (_: Exception) {
@@ -232,7 +253,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
      * 这一点是清晰度与形状正确性的关键。改造前缓冲写死 540×960（比例 0.5625），
      * 而素材是 884×1920（比例 0.4604）——帧被非等比压进缓冲、再非等比拉回屏幕，
      * 于是 buildRadialMask 画的正圆在屏幕上变成约 1.22:1 的竖椭圆，
-     * 保护区形状不对，黑色背景的留存范围也就和 iOS 对不上。
+     * 保护区形状不对，黑色背景的留存范围也跟着错。
      *
      * 素材尺寸未知时（首帧之前）退回原来的兜底尺寸。
      */
@@ -255,7 +276,7 @@ class LumaKeyVideoView @JvmOverloads constructor(
     }
 
     /**
-     * 中心保护盘的时间门控强度，对齐 iOS `WKLumaKeyVideoView.m` 的 centerStrength 计算：
+     * 中心保护盘的时间门控强度：
      * startTime <= 0 全程 1；position <= startTime 为 0；之后在 ramp 内线性到 1。
      */
     private fun centerStrengthAt(positionMs: Long): Float {
@@ -335,9 +356,8 @@ class LumaKeyVideoView @JvmOverloads constructor(
     /**
      * 生成一张径向保护遮罩：圆内 1、圆外 0、边缘 smoothstep 过渡。
      *
-     * 半径/软度是相对画面短边的比例（与 iOS 一致）。圆心为归一化坐标、原点左上——
-     * Bitmap 本身就是左上原点，所以这里不做 iOS 那样的 y 翻转。
-     * 半径 <= 0 直接返回全 0（关闭该保护圈）。
+     * 半径/软度是相对画面短边的比例。圆心是归一化坐标、原点左上，与 Bitmap 的
+     * 像素坐标同向，不需要翻转 y。半径 <= 0 直接返回全 0（关闭该保护圈）。
      */
     private fun buildRadialMask(
         w: Int,

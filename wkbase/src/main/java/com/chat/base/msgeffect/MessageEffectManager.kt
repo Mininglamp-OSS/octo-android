@@ -145,9 +145,9 @@ class MessageEffectManager(
 
     /**
      * 全屏 luma-key 视频特效（[崇尚行动] / [有品位] / [尚方宝剑]）的资源 + 兜底超时映射。
-     * 超时与 iOS 的 scheduleRemovalAfterDelay 一致：action ≈ 视频 3.2s + 余量 = 6s，
-     * classy ≈ 视频 5.07s + 余量 = 8s，shangfang ≈ 视频 3.5s + 余量 = 6s，
-     * 避免 MediaPlayer 异常导致 view 残留。
+     * 超时 = 视频时长 + 余量，避免 MediaPlayer 异常时 view 残留在屏幕上：
+     * action ≈ 视频 3.2s + 余量 = 6s，classy ≈ 视频 5.07s + 余量 = 8s，
+     * shangfang ≈ 视频 3.5s + 余量 = 6s。
      *
      * 尚方宝剑单独带一组抠像参数（见 LumaKeyParams.SHANGFANG）：素材主体偏画面右上、
      * 且前 0.6s 主体尚未铺满，用默认的居中常驻保护盘会在浅色模式下露出黑圈。

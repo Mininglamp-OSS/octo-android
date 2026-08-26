@@ -52,7 +52,6 @@ import com.chat.base.utils.WKTimeUtils;
 
 import com.chat.base.utils.WKDbScheduler;
 import com.chat.uikit.WKUIKitApplication;
-import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.enity.WKSyncReminder;
 import com.xinbida.wukongim.WKIM;
 import com.xinbida.wukongim.entity.WKChannel;
@@ -1160,28 +1159,6 @@ public class MsgModel extends WKBaseModel {
         }); // end Schedulers.io
     }
 
-
-    // 同步敏感词
-    public void syncSensitiveWords() {
-        if (TextUtils.isEmpty(WKConfig.getInstance().getToken())) return;
-        long version = WKSharedPreferencesUtil.getInstance().getLong("wk_sensitive_words_version");
-        request(createService(MsgService.class).syncSensitiveWords(version), new IRequestResultListener<>() {
-            @Override
-            public void onSuccess(SensitiveWords result) {
-                WKSharedPreferencesUtil.getInstance().putLong("wk_sensitive_words_version", result.version);
-                if (!TextUtils.isEmpty(result.tips)) {
-                    WKUIKitApplication.getInstance().sensitiveWords = result;
-                    String json = JSON.toJSONString(result);
-                    WKSharedPreferencesUtil.getInstance().putSP("wk_sensitive_words", json);
-                }
-            }
-
-            @Override
-            public void onFail(int code, String msg) {
-
-            }
-        });
-    }
 
     public void editMsg(String msgID, int msgSeq, String channelID, byte channelType, String content, ICommonListener iCommonListener) {
         JSONObject jsonObject = new JSONObject();

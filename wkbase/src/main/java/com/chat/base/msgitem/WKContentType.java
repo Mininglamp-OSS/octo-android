@@ -42,7 +42,18 @@ public class WKContentType extends WKMsgContentType {
     public final static int videoCallGroup = -7;
     // 非好友
     public final static int noRelation = -9;
-    // 敏感词提醒
+    /**
+     * 敏感词提醒。
+     *
+     * @deprecated 功能已整套移除：该提示由客户端本地 contains() 匹配凭空造出，
+     * 以一条真实消息落库并顶掉会话列表的最后一条消息，服务端并无对应约束。
+     * 历史 DB 行由迁移 wk_sql/202608191100.sql 清理：先把 last_client_msg_no 还指着
+     * 这类行的会话重新指向该频道最新一条真实消息，再删行 —— 否则会话列表预览会因为
+     * 指针悬空而渲染成空白。
+     * <p>常量刻意保留：-10 是已被占用过的协议号，删掉后若被复用表示别的消息类型，
+     * 尚未升级的老客户端上的历史数据会串味。请勿复用此值。
+     */
+    @Deprecated
     public final static int sensitiveWordsTips = -10;
     public final static int emptyView = -12;
     public final static int spanEmptyView = -13;

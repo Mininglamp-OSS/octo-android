@@ -46,7 +46,6 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.alibaba.fastjson.JSON;
 import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -116,7 +115,6 @@ import com.chat.uikit.chat.provider.WKImageProvider;
 import com.chat.uikit.chat.provider.WKMultiForwardProvider;
 import com.chat.uikit.chat.provider.WKNoRelationProvider;
 import com.chat.uikit.chat.provider.WKPromptNewMsgProvider;
-import com.chat.uikit.chat.provider.WKSensitiveWordsProvider;
 import com.chat.uikit.chat.provider.WKSpanEmptyProvider;
 import com.chat.uikit.chat.provider.WKTextProvider;
 import com.chat.uikit.chat.provider.WKRichTextProvider;
@@ -132,7 +130,6 @@ import com.chat.uikit.contacts.ChooseContactsActivity;
 import com.chat.uikit.contacts.MyGroupsListActivity;
 import com.chat.uikit.contacts.NewFriendsActivity;
 import com.chat.uikit.contacts.SpaceBotsListActivity;
-import com.chat.uikit.enity.SensitiveWords;
 import com.chat.uikit.group.WKAllMembersActivity;
 import com.chat.uikit.message.MsgModel;
 import com.chat.uikit.space.SpaceEntity;
@@ -169,7 +166,6 @@ import java.util.UUID;
 public class WKUIKitApplication {
     int totalMsgCount = 0;
     public String chattingChannelID;
-    public SensitiveWords sensitiveWords;
     public boolean isRefreshChatActivityMessage = false;
     // 注册场景设为 true，loginMenus 跳过页面导航
     public static volatile boolean skipNavigation = false;
@@ -231,13 +227,10 @@ public class WKUIKitApplication {
         //       Intent 到达 ChatActivity 之前就绪。
         //   Phase-B（首屏依赖，立即异步）：WKIM.init + IMListener 注册——会话列表/
         //       聊天页面都必须等这步完成才能读数据。
-        //       本地 sensitiveWords 缓存解析（SP → SensitiveWords）也归此阶段，
-        //       必须在 initIMListener 之前完成，保证 WKIM 入站消息过滤不出现冷启
-        //       窗口内敏感词失效的短暂窗口（ / ReviewBot P2-1）。
-        //   Phase-C（idle 后执行）：sensitive_words / prohibit words 的 **网络同步**
-        //       + 阅后即焚清理——纯远端拉新，首屏不依赖，延迟到首帧之后不影响体验。
+        //   Phase-C（idle 后执行）：prohibit words 网络同步 + 阅后即焚清理——纯远端
+        //       拉新，首屏不依赖，延迟到首帧之后不影响体验。
 
-        // Phase-B — 本地 sensitiveWords 解析 + WKIM 监听绑定
+        // Phase-B — WKIM 监听绑定
         //
         // initIM() 必须同步执行：ViewPager2 重构后 ChatFragment 布局阶段即触发 DB 查询，
         // 若 initIM 仍在后台异步，重启时 UI 跑在 init 前面导致会话列表空白。
@@ -249,36 +242,14 @@ public class WKUIKitApplication {
         //   permit 锁死 10s（STUCK_RESET_MS），ChatFragment 冷启动会话列表
         //   只剩 SYSTEM_BOTS 兜底的 3-4 个 Bot。ConversationManager 侧已加
         //   onBack(null) 兜底，这里再做主防：listener 必须在连接之前就位。
-        parseLocalSensitiveWords();
         initIM();
         WKIMUtils.getInstance().initIMListener();
 
-        // Phase-C — sensitive_words / prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
+        // Phase-C — prohibit words 网络同步 + 阅后即焚清理（首屏不依赖）
         AppStartup.postPhaseC("post-wkim-idle", () -> {
-            MsgModel.getInstance().syncSensitiveWords();
             ProhibitWordModel.Companion.getInstance().sync();
             MsgModel.getInstance().deleteFlameMsg();
         });
-    }
-
-    /**
-     * 从 SP 读取并反序列化本地 sensitiveWords 缓存（）。
-     *
-     * <p>纯内存操作（SP 已由  P-01 预热），无网络；抛出异常只打日志、不影响
-     * 后续启动链——与 AppStartup runWithTrace 的 fire-and-forget 语义一致。
-     *
-     * <p>调用方必须保证此方法在 {@code WKIMUtils.initIMListener()} 之前执行，
-     * 否则入站消息过滤可能命中 null sensitiveWords。
-     */
-    private void parseLocalSensitiveWords() {
-        try {
-            String json = WKSharedPreferencesUtil.getInstance().getSP("wk_sensitive_words");
-            if (!TextUtils.isEmpty(json)) {
-                sensitiveWords = JSON.parseObject(json, SensitiveWords.class);
-            }
-        } catch (Throwable t) {
-            Log.e("WKUIKitApplication", "parseLocalSensitiveWords failed", t);
-        }
     }
 
     public Context getContext() {
@@ -342,7 +313,6 @@ public class WKUIKitApplication {
         WKIM.getInstance().getMsgManager().registerContentMsg(WKVectorStickerContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKEmojiStickerContent.class);
         //添加消息item
-        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.sensitiveWordsTips, new WKSensitiveWordsProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.noRelation, new WKNoRelationProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.msgPromptNewMsg, new WKPromptNewMsgProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());

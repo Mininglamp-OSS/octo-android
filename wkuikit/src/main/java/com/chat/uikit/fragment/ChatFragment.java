@@ -209,6 +209,46 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private int filterCallCount = 0;
     private static final String TAG_FILTER = "ChatFragment.filter";
 
+    // ── channelInfo 后台预热 ────────────────────────────────────────────────
+    // 会话行的置顶(top)、免打扰(mute)、名称、头像全部只存在于 channel 表，
+    // conversation/sync 不下发这些字段。新设备 / 清数据后登录时 channel 表是空的，
+    // sortMsg 读 getWkChannel() 拿到 null，置顶会话就被当普通会话排，名字显示成
+    // 「聊天」占位。原本唯一的补齐时机是 adapter bind 里的 fetchChannelInfo，
+    // 所以用户不滑到那一行就永远补不上 —— 表现为「滑到哪条哪条才置顶」。
+    //
+    // 这里在列表装配完成后启动一条后台链，分批把缺失的 channel 拉回来。拉回后走
+    // 既有的 saveOrUpdateChannel → setRefreshChannel → 本类的刷新监听 → topChanged
+    // → 重排链路自然收敛，不新增任何刷新路径；拉取失败就退化回原来的「滑到才拉」。
+    private static final String TAG_WARMUP = "ConvTopWarmup";
+    // 批次大小 / 间隔的取值理由：
+    // ① OkHttp 默认 maxRequestsPerHost=5（OkHttpUtils 没有自定义 Dispatcher），取 4 是为了
+    //    给用户主动触发的请求留一个槽位，不让预热把 host 并发占满。
+    // ② 每收到一个 channel 响应，刷新监听都会走一次 setAllCount() 全表扫。新设备上尚未
+    //    补齐的行每次都要重进 ChannelManager 慢路径，整体是 O(N²) 的主线程开销。放慢节奏
+    //    不减少总量，但把它摊平，避免首屏几秒内集中掉帧。
+    private static final int WARMUP_BATCH = 4;
+    private static final long WARMUP_INTERVAL_MS = 300L;
+    private int warmupGen = 0;
+    private boolean warmupRunning = false;
+    private String warmupSpaceId = null;
+    private List<WarmupTarget> warmupPending = null;
+    private int warmupOffset = 0;
+    // 本 Space 内已发过请求的 channel key。sortMsg 触发频率很高（预热拉回来的每个
+    // channel 都会触发 topChanged → sortMsg 再进来一次），没有这个集合的话，永远
+    // 拉不到的 channel（已解散 / 无权限）会在每次 sortMsg 被重复请求。
+    // Space 切换时清空，允许在新 Space 重新尝试。
+    private final Set<String> warmupAttempted = new HashSet<>();
+
+    /** 预热目标：只带 channelID + channelType，不持有会话 / 频道对象，避免跨线程读写。 */
+    private static final class WarmupTarget {
+        final String channelID;
+        final byte channelType;
+
+        WarmupTarget(String channelID, byte channelType) {
+            this.channelID = channelID;
+            this.channelType = channelType;
+        }
+    }
 
     /**
      *  · DiffUtil callback。
@@ -1430,7 +1470,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             ChatConversationMsg item = source.get(i);
             if (item.isSectionHeader) continue;
             if (item.uiConversationMsg == null) continue;
-            if (item.uiConversationMsg.getWkChannel() != null && item.uiConversationMsg.getWkChannel().mute == 1)
+            // 取一次存局部变量：getWkChannel() 只在非 null 时回缓存，本地缺 channel 行的
+            // 会话每次调用都会重进 ChannelManager 慢路径（synchronized + 线性扫 + DB 查），
+            // 写两遍就查两遍库。本方法在每次 channel 刷新回调里都会全表跑一遍，是热路径。
+            WKChannel ch = item.uiConversationMsg.getWkChannel();
+            if (ch != null && ch.mute == 1)
                 continue;
             byte type = item.uiConversationMsg.channelType;
             if (type == WKChannelType.PERSONAL) {
@@ -1446,7 +1490,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         // 子区未读（allThreadConversations 独立于 allConversations）
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
-            if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
+            // 同上：取一次存局部变量，避免缺 channel 时重复走慢路径。
+            WKChannel threadCh = threadMsg.uiConversationMsg.getWkChannel();
+            if (threadCh != null && threadCh.mute == 1)
                 continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
             if (ts <= 0) continue;
@@ -1471,7 +1517,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 ? chatConversationAdapter.getData() : allConversations;
         for (ChatConversationMsg item : source) {
             if (item.isSectionHeader || item.uiConversationMsg == null) continue;
-            if (item.uiConversationMsg.getWkChannel() != null && item.uiConversationMsg.getWkChannel().mute == 1)
+            // 同 setAllCount：取一次存局部变量，避免缺 channel 时重复走慢路径。
+            WKChannel ch = item.uiConversationMsg.getWkChannel();
+            if (ch != null && ch.mute == 1)
                 continue;
             String channelID = item.uiConversationMsg.channelID;
             byte channelType = item.uiConversationMsg.channelType;
@@ -1489,7 +1537,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         long threeDaysAgoForFollow = System.currentTimeMillis() / 1000 - 3L * 24 * 60 * 60;
         for (ChatConversationMsg threadMsg : allThreadConversations) {
             if (threadMsg.uiConversationMsg == null) continue;
-            if (threadMsg.uiConversationMsg.getWkChannel() != null && threadMsg.uiConversationMsg.getWkChannel().mute == 1)
+            // 同上：取一次存局部变量，避免缺 channel 时重复走慢路径。
+            WKChannel threadCh = threadMsg.uiConversationMsg.getWkChannel();
+            if (threadCh != null && threadCh.mute == 1)
                 continue;
             long ts = threadMsg.uiConversationMsg.lastMsgTimestamp;
             if (ts <= 0 || ts <= threeDaysAgoForFollow) continue;
@@ -2197,6 +2247,140 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     }
 
     /**
+     * 启动 channelInfo 后台预热链（幂等）。
+     *
+     * <p>注意与 {@link #prewarmChannelInfoCache(List)} 的区别：那个只把 <b>本地已有</b>
+     * 的 channel 从 DB 捞进内存 cache，省主线程 IO；本方法负责把 <b>本地根本没有</b>
+     * 的 channel 从网络拉回来，是置顶 / 免打扰 / 名称在新设备上能否生效的关键。
+     *
+     * <p>接入点只有 {@link #sortMsg(List)} 的 UI 收尾一处 —— 冷启动 getChatMsg、
+     * Space 切换、sync 完成重建三条路径最终都汇流到 sortMsg。
+     *
+     * <p>幂等（{@link #warmupRunning}）很关键：预热拉回 channel 会触发刷新监听里的
+     * topChanged 分支，那里又会调回 sortMsg。如果每次进来都重启链，链就会被自己
+     * 制造出来的刷新反复掐断，永远走不完。只有 Space 切换 / 销毁才通过自增
+     * {@link #warmupGen} 让在跑的链失效。
+     */
+    private void kickoffChannelInfoWarmup() {
+        if (warmupRunning) return;
+        // 主线程只做无 IO 的快照，判空(要查 DB)挪到 IO 线程。
+        final List<WarmupTarget> snapshot = new ArrayList<>(allConversations.size());
+        for (int i = 0, size = allConversations.size(); i < size; i++) {
+            ChatConversationMsg m = allConversations.get(i);
+            if (m == null || m.isSectionHeader || m.uiConversationMsg == null) continue;
+            String id = m.uiConversationMsg.channelID;
+            if (TextUtils.isEmpty(id)) continue;
+            byte type = m.uiConversationMsg.channelType;
+            if (warmupAttempted.contains(channelKey(id, type))) continue;
+            snapshot.add(new WarmupTarget(id, type));
+        }
+        if (snapshot.isEmpty()) return;
+        warmupRunning = true;
+        warmupSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        final int gen = warmupGen;
+        Schedulers.io().scheduleDirect(() -> {
+            final List<WarmupTarget> pending = new ArrayList<>();
+            try {
+                for (int i = 0, size = snapshot.size(); i < size; i++) {
+                    WarmupTarget t = snapshot.get(i);
+                    if (WKIM.getInstance().getChannelManager()
+                            .getChannel(t.channelID, t.channelType) == null) {
+                        pending.add(t);
+                    }
+                }
+            } catch (Throwable e) {
+                // 扫描失败不影响列表显示，退化回「滑到才拉」。
+                Log.w(TAG_WARMUP, "scan failed", e);
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                // gen 不匹配说明新一代已接管，warmupRunning 归新一代所有，这里不要动它。
+                if (gen != warmupGen) return;
+                if (pending.isEmpty()) {
+                    warmupRunning = false;
+                    warmupPending = null;
+                    return;
+                }
+                warmupPending = pending;
+                warmupOffset = 0;
+                warmupNextBatch(gen);
+            });
+        });
+    }
+
+    /**
+     * 预热链的一拍：发出至多 {@link #WARMUP_BATCH} 个 fetchChannelInfo，然后
+     * {@link #WARMUP_INTERVAL_MS} 后递归下一拍。
+     *
+     * <p>下一拍是 lambda，{@code removeCallbacks} 拿不到引用，所以收链一律靠
+     * {@code gen} 判定 —— 与 Space 切换 / onDestroy 的自增配合。
+     */
+    private void warmupNextBatch(int gen) {
+        // gen 不匹配说明新一代已接管，warmupRunning 归新一代所有，这里不要动它。
+        if (gen != warmupGen) return;
+        if (!isAdded() || getActivity() == null) {
+            warmupRunning = false;
+            warmupPending = null;
+            return;
+        }
+        String currentSpaceId = MsgModel.getInstance().getCurrentSpaceId();
+        // 注意：这里不能像"空 spaceId 直接 return"那样处理 —— 本项目有无 Space 模式
+        // （见 getChatMsg 的第二个分支），空 spaceId 是合法状态，直接 return 会让
+        // 该模式永远不预热。只比较「是否还是启动这条链时的那个 Space」。
+        if (!TextUtils.equals(currentSpaceId, warmupSpaceId)) {
+            warmupRunning = false;
+            warmupPending = null;
+            return;
+        }
+        if (warmupPending == null || warmupOffset >= warmupPending.size()) {
+            finishChannelInfoWarmup();
+            return;
+        }
+        int end = Math.min(warmupOffset + WARMUP_BATCH, warmupPending.size());
+        for (int i = warmupOffset; i < end; i++) {
+            WarmupTarget t = warmupPending.get(i);
+            // 这一拍之前如果别的路径（用户滑到该行 / 推送 / 好友同步）已经把 channel
+            // 填上了，就跳过，避免重复请求。
+            if (WKIM.getInstance().getChannelManager()
+                    .getChannel(t.channelID, t.channelType) != null) {
+                continue;
+            }
+            warmupAttempted.add(channelKey(t.channelID, t.channelType));
+            WKIM.getInstance().getChannelManager().fetchChannelInfo(t.channelID, t.channelType);
+        }
+        warmupOffset = end;
+        if (warmupOffset >= warmupPending.size()) {
+            finishChannelInfoWarmup();
+            return;
+        }
+        pingHandler.postDelayed(() -> warmupNextBatch(gen), WARMUP_INTERVAL_MS);
+    }
+
+    /**
+     * 收链。不在这里主动重启：预热拉回来的 channel 会触发 topChanged → sortMsg →
+     * {@link #kickoffChannelInfoWarmup()}，此时 running 已置回 false，新会话
+     * （如果有）会在那一次自然被扫到，已请求过的则被 warmupAttempted 挡住。
+     */
+    private void finishChannelInfoWarmup() {
+        warmupRunning = false;
+        warmupPending = null;
+    }
+
+    /**
+     * 让在跑的预热链失效。Space 切换（会话集换了一批，旧链继续拉毫无意义）和
+     * onDestroy（Fragment 没了）都要调。
+     *
+     * @param clearAttempted Space 切换传 true —— 新 Space 允许对同一个 channel 重新尝试；
+     *                       销毁传 false。
+     */
+    private void resetChannelInfoWarmup(boolean clearAttempted) {
+        warmupGen++;
+        warmupRunning = false;
+        warmupPending = null;
+        warmupOffset = 0;
+        if (clearAttempted) warmupAttempted.clear();
+    }
+
+    /**
      *  Fix C · 本地兜底合成缺失的系统 Bot（botfather）占位会话。
      *
      * <p>背景：botfather 跨 Space 共享，但后端 sync 在某些 Space 下不返回其 conversation
@@ -2369,6 +2553,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
         setSpaceSwitcherText(space.name);
         updateSpaceAvatar(space.name);
+        // 会话集整体换了一批，旧 Space 的预热链继续拉没有意义；清 attempted 让同一个
+        // channel 在新 Space 允许重新尝试。放在 setCurrentSpaceId 之后、tryBegin 之前，
+        // 保证被 debounce 提前 return 的那条路径也已经把旧链停掉。
+        resetChannelInfoWarmup(true);
 
         SpaceModel.getInstance().invalidateMembersCache();
         CategoryModel.getInstance().invalidateCache();
@@ -2647,6 +2835,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             //  · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
             // 稍后到，或用户侧首次 DB 命中先于 sync），立刻隐藏给用户即时反馈。
             hideSpaceSwitchOverlay();
+            // 列表已装配完成 → 把本地缺 channel 的会话在后台补齐，否则新设备上
+            // 置顶 / 免打扰 / 名称要等用户滑到那一行才生效。
+            kickoffChannelInfoWarmup();
             if (BuildConfig.DEBUG) {
                 Trace.endSection();
                 Log.d("YUJ312", "adapter-setList-final done size=" + yuj312T10Size
@@ -4350,6 +4541,8 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         pingHandler.removeCallbacks(spaceResyncRunnable);
         //  · 清理 filterAndDisplay debounce handler，防止 Fragment 销毁后 Runnable 回调。
         filterDebounceHandler.removeCallbacks(filterRunnable);
+        // 预热链的下一拍是 lambda，removeCallbacks 拿不到引用，靠自增 gen 让它下次醒来自行收链。
+        resetChannelInfoWarmup(false);
         stopPingTimer();
     }
 

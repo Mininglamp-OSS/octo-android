@@ -123,7 +123,29 @@ public class ChannelInfoWarmupStateTest {
         ChannelInfoWarmupState s = new ChannelInfoWarmupState();
         s.tryBegin("space-a");
         assertFalse(s.onScanResult(s.generation(), new ArrayList<>()));
-        assertFalse("没有待办应当直接收链，否则运行标志会永久卡住", s.isRunning());
+        assertFalse("空扫描后必须能收链，否则运行标志会永久卡住",
+                s.finish(s.generation()));
+        assertFalse(s.isRunning());
+    }
+
+    @Test
+    public void onScanResult_empty_stillReportsSwallowedKickoff() {
+        // 锁住调用点所依赖的契约：空扫描之后 finish() 仍然要能把被吞掉的 kickoff
+        // 上报出来。
+        //
+        // 注意这个用例抓不住它对应的那个缺陷 —— 缺陷在调用点：空扫描路径上
+        // 「onScanResult 返回 false 就直接 return」，压根没人调 finish()，dirty
+        // 于是烂在里面，下一次 tryBegin 再把它重置掉。状态机本身一直是对的。
+        // ChatFragment 是 Fragment，这条路径 JVM 单测覆盖不到，只能靠「收链的唯一
+        // 出口是 finish()」这个约定 + 本用例守住契约的另一半。
+        ChannelInfoWarmupState s = new ChannelInfoWarmupState();
+        s.tryBegin("space-a");
+        s.tryBegin("space-a");   // 扫描期间新会话进来 → 被吞 → dirty
+
+        assertFalse(s.onScanResult(s.generation(), new ArrayList<>()));
+        assertTrue("空扫描后 finish 必须仍能上报被吞掉的 kickoff", s.finish(s.generation()));
+        assertFalse(s.isRunning());
+        assertFalse(s.isDirty());
     }
 
     @Test
@@ -131,6 +153,7 @@ public class ChannelInfoWarmupStateTest {
         ChannelInfoWarmupState s = new ChannelInfoWarmupState();
         s.tryBegin("space-a");
         assertFalse(s.onScanResult(s.generation(), null));
+        assertFalse(s.finish(s.generation()));
         assertFalse(s.isRunning());
     }
 
@@ -271,6 +294,22 @@ public class ChannelInfoWarmupStateTest {
         assertFalse(s.isRunning());
         assertFalse(s.hasMore());
         assertTrue("中止后应能重新开链", s.tryBegin("space-a"));
+    }
+
+    @Test
+    public void abort_discardsDirtyRatherThanLeavingItDangling() {
+        // 「链已经不跑了、dirty 却还挂着」这种中间态一旦存在，下一次 tryBegin 会把
+        // 它悄悄重置掉，等于又开一条能漏掉 kickoff 的缝。中止的语义就是这一轮不要了，
+        // 所以要显式丢弃。不变式：dirty 只由 finish 消费，由 abort / reset 丢弃。
+        ChannelInfoWarmupState s = new ChannelInfoWarmupState();
+        s.tryBegin("space-a");
+        s.tryBegin("space-a");   // 被吞 → dirty
+        assertTrue(s.isDirty());
+
+        s.abort(s.generation());
+
+        assertFalse(s.isRunning());
+        assertFalse("中止应当丢弃 dirty，不留悬挂状态", s.isDirty());
     }
 
     // ── 端到端序列 ────────────────────────────────────────────────────────

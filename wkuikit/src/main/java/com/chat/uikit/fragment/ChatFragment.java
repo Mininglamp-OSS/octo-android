@@ -2309,7 +2309,14 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 Log.w(TAG_WARMUP, "scan failed", e);
             }
             AndroidUtilities.runOnUIThread(() -> {
-                if (!warmupState.onScanResult(gen, pending)) return;
+                if (!warmupState.onScanResult(gen, pending)) {
+                    // 扫描结果为空同样是收链，必须走 finish 把期间被吞掉的 kickoff
+                    // 补回来。代际已作废时 finish 会被 isStale 挡掉，不会误重起。
+                    if (warmupState.finish(gen)) {
+                        kickoffChannelInfoWarmup();
+                    }
+                    return;
+                }
                 warmupNextBatch(gen);
             });
         });

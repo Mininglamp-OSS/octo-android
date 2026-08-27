@@ -132,16 +132,17 @@ final class ChannelInfoWarmupState {
     /**
      * IO 线程扫描结果回到主线程。
      *
-     * @return {@code true} 表示可以开始发批次；{@code false} 表示本代已作废
-     *         （不改任何状态）或没有待办（已收链）。
+     * @return {@code true} 表示可以开始发批次；{@code false} 表示本代已作废，
+     *         或者没有待办 —— 后者调用方仍需走 {@link #finish(int)} 收链。
      */
     boolean onScanResult(int gen, @Nullable List<Target> scanned) {
         // 陈旧代际：running 归新一代所有，这里绝不能碰。
         if (isStale(gen)) return false;
         if (scanned == null || scanned.isEmpty()) {
-            running = false;
-            pending = null;
-            offset = 0;
+            // 空扫描同样是收链，但不在这里关闭：收链的唯一出口是 finish()，
+            // 只有它会消费 dirty。若在这里直接把 running 置回 false，本轮期间被
+            // 吞掉的 kickoff 就再也没人补 —— 下一次 tryBegin 会把 dirty 重置掉，
+            // 那条新会话只能干等下一次无关的 sortMsg。
             return false;
         }
         pending = new ArrayList<>(scanned);
@@ -156,10 +157,18 @@ final class ChannelInfoWarmupState {
         return !Objects.equals(spaceId, currentSpaceId);
     }
 
-    /** 中止本代（Fragment 不可用 / Space 变了）。陈旧代际调用是 no-op。 */
+    /**
+     * 中止本代（Fragment 不可用 / Space 变了）。陈旧代际调用是 no-op。
+     *
+     * <p>中止的语义就是「这一轮不要了」，所以显式丢弃 dirty ——「链已经不跑了、
+     * dirty 却还挂着」这种中间态一旦存在，下一次 {@link #tryBegin} 会把它悄悄
+     * 重置掉，等于又开了一条能漏掉 kickoff 的缝。不变式：dirty 只由
+     * {@link #finish(int)} 消费，由 abort / {@link #reset(boolean)} 丢弃。
+     */
     void abort(int gen) {
         if (isStale(gen)) return;
         running = false;
+        dirty = false;
         pending = null;
         offset = 0;
     }

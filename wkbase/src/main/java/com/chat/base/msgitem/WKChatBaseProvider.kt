@@ -645,6 +645,7 @@ abstract class WKChatBaseProvider : BaseItemProvider<WKUIChatMsgItemEntity>() {
         }
         if (previousMsg != null && !TextUtils.isEmpty(previousMsg.fromUID)
             && previousMsg.type != WKContentType.screenshot
+            && previousMsg.type != WKContentType.summaryNotify
             && previousMsg.remoteExtra.revoke == 0 && !WKContentType.isSystemMsg(previousMsg.type)
         ) {
             prevUID = previousMsg.fromUID

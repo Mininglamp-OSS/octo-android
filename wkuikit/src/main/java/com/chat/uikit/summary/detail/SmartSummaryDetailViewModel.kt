@@ -140,6 +140,8 @@ class SmartSummaryDetailViewModel(
             // 后端给的新 task_id 必须切过去, 否则 loadDetail 一直拉旧任务的终态 (Cancelled),
             // 用户在详情页看不到新生成的任务从 Processing 走到 Completed (与 list VM 同思路)。
             val newId = res.getOrThrow()
+            // 重新生成同样是"本机发起了一次总结", 新 task_id 也要登记, 否则它完成时没人发提示。
+            com.chat.base.summary.notify.SummaryNotifyCoordinator.track(if (newId > 0) newId else tid)
             if (newId > 0 && newId != tid) {
                 trackedTaskId = newId
                 // 旧 detail 已无效, 立刻清空让 loading 卡显示, 避免短暂闪现旧 cancelled 内容。

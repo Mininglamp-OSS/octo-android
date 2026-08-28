@@ -214,6 +214,10 @@ class SmartSummaryListViewModel(
             // 位置不变是因为 taskId/created_at 没变" — 这是 server-side 数据决定的, 客户
             // 端尊重这个排序). 与 iOS [OctoSummaryListVC performRegenerate:topic:] 同语义.
             val newId = res.getOrThrow()
+            // 与详情页 performRegenerate 同口径: 重新生成也是"本机发起", 登记进 notify
+            // coordinator; 后端没给新 id (原地重生成) 时登记原 taskId。
+            com.chat.base.summary.notify.SummaryNotifyCoordinator
+                .track(if (newId > 0) newId else origTaskId)
             if (newId > 0 && newId != origTaskId) {
                 replaceItem(origTaskId) {
                     it.copy(

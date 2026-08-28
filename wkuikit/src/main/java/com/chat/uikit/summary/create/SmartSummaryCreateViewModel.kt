@@ -142,6 +142,9 @@ class SmartSummaryCreateViewModel(
                 }
                 return@launch
             }
+            // 登记进 notify coordinator: 任务完成后由本机往来源群发一条系统提示。
+            // 只登记本机发起的任务是"谁创建谁负责发"这条不变量的核心, 见 SummaryNotifyCoordinator。
+            com.chat.base.summary.notify.SummaryNotifyCoordinator.track(res.getOrThrow())
             _state.update { it.copy(submitting = false, effect = CreateEffect.Done) }
         }
     }

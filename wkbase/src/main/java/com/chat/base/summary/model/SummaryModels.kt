@@ -313,6 +313,8 @@ data class SummaryDetail(
     val result: SummaryResult?,
     val errorMessage: String?,
     val scheduleId: Long?,
+    /** 创建者 uid. 群总结完成提示只由创建者所在端发出, 见 SummaryNotifyCoordinator. */
+    val creatorId: String?,
     val originChannelId: String?,
     val originChannelType: Int,
     val createdAt: String?,
@@ -341,6 +343,11 @@ data class SummaryDetail(
                 result = SummaryResult.fromJson(json.objOf("result")),
                 errorMessage = json.nstrOf("error_message"),
                 scheduleId = (schedRaw as? Number)?.toLong(),
+                // creator_id 在后端契约里是可选的 (对齐 octo-web types/summary.ts 的
+                // `creator_id?: string`)。fastjson 的 getString 对缺失 key 返回 null 而非
+                // 抛异常, 所以 nstrOf 天然降级成 null —— 缺字段只会让"谁创建谁发提示"
+                // 退化成不发, 不影响详情页加载。
+                creatorId = json.nstrOf("creator_id"),
                 originChannelId = json.nstrOf("origin_channel_id"),
                 originChannelType = json.intOf("origin_channel_type"),
                 createdAt = json.nstrOf("created_at"),

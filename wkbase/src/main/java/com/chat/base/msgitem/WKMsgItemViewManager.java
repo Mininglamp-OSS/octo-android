@@ -56,6 +56,8 @@ public class WKMsgItemViewManager {
             }
             // 截屏消息（type=20）当作系统提示显示
             chatItemProviderList.put(WKContentType.screenshot, new WKScreenshotProvider());
+            // 群总结完成提示（type=21，Web 端发送）当作系统提示显示
+            chatItemProviderList.put(WKContentType.summaryNotify, new WKSummaryNotifyProvider());
         }
         chatItemProviderList.put(type, itemProvider);
         // 置顶消息的itemProvider
@@ -72,6 +74,7 @@ public class WKMsgItemViewManager {
                 pinnedChatItemProviderList.put(i, new WKSystemProvider(i));
             }
             pinnedChatItemProviderList.put(WKContentType.screenshot, new WKScreenshotProvider());
+            pinnedChatItemProviderList.put(WKContentType.summaryNotify, new WKSummaryNotifyProvider());
         }
         try {
             Object myObject = itemProvider.getClass().newInstance();

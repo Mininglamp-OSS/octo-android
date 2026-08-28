@@ -367,11 +367,11 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         });
         SingleClickUtil.onSingleClick(wkVBinding.groupNameLayout, view1 -> {
             if (!groupIsEnable()) return;
-            if (memberRole != WKChannelMemberRole.normal) {
-                Intent intent = new Intent(this, UpdateGroupNameActivity.class);
-                intent.putExtra("groupNo", groupNo);
-                startActivity(intent);
-            } else showSingleBtnDialog(getString(R.string.edit_group_notice));
+            // 放开：所有活跃人类成员都能进入改名页；龙虾做粗过滤，服务端最终裁决龙虾/外部/黑名单。
+            if (isCurrentUserRobot()) return;
+            Intent intent = new Intent(this, UpdateGroupNameActivity.class);
+            intent.putExtra("groupNo", groupNo);
+            startActivity(intent);
         });
         //监听频道改变通知
         WKIM.getInstance().getChannelManager().addOnRefreshChannelInfo("group_detail_refresh_channel", (channel, isEnd) -> {
@@ -763,6 +763,13 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
 
     private boolean groupIsEnable() {
         return groupChannel != null && groupChannel.status != Const.GroupStatusDisband;
+    }
+
+    // 当前登录用户是否为龙虾（机器人）。改名入口只做粗过滤，服务端 fail-closed 兜底。
+    private boolean isCurrentUserRobot() {
+        WKChannelMember me = WKIM.getInstance().getChannelMembersManager()
+                .getMember(groupNo, WKChannelType.GROUP, WKConfig.getInstance().getUid());
+        return me != null && me.robot == 1;
     }
 
     private void initGroupAvatar() {

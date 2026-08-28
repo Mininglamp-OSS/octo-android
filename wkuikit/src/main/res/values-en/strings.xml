@@ -563,7 +563,6 @@
     <string name="str_close_thread_confirm">Close this thread? All members will lose access.</string>
     <string name="str_rename_thread">Rename Thread</string>
     <string name="str_rename_thread_hint">Enter thread name</string>
-    <string name="str_rename_thread_no_permission">Only the creator or group admin can rename</string>
     <string name="str_thread_closed_tip">This thread has been closed</string>
     <string name="str_thread_name_empty">Thread name cannot be empty</string>
     <string name="group_md">GROUP.md</string>

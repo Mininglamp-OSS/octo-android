@@ -421,7 +421,6 @@
     <string name="str_rename_thread">修改子区名称</string>
     <string name="str_rename_thread_hint">请输入子区名称</string>
     <string name="str_thread_name_empty">子区名称不能为空</string>
-    <string name="str_rename_thread_no_permission">仅子区创建者或群管理员可修改名称</string>
     <string name="str_join_thread">加入子区</string>
     <string name="str_leave_thread">离开子区</string>
     <string name="str_archive_thread">归档子区</string>

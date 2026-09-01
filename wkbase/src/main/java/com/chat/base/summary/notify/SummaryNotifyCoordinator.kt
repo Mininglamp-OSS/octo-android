@@ -11,7 +11,6 @@
 package com.chat.base.summary.notify
 
 import com.chat.base.config.WKConfig
-import com.chat.base.msgitem.WKContentType
 import com.chat.base.summary.SummaryDeps
 import com.chat.base.summary.model.SourceType
 import com.chat.base.summary.model.SummaryDetail
@@ -20,7 +19,6 @@ import com.chat.base.summary.repository.SummaryRepository
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
-import com.xinbida.wukongim.utils.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,38 +52,21 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 里的 `creatorId == 自己` 双保险。绝对不要改成 "启动时把自己创建的所有在途任务都跟上" ——
  * 那样多台设备会同时跟同一条任务, 必然重复。
  *
- * ## 与 Web 的重复怎么防
+ * ## 与 Web 的重复: 当前不做防护
  *
- * 去重账本存在各端本地 (Web 在 localStorage, 这里在 SP), 互相看不见, 所以没法靠账本
- * 协调。但**提示本身就是一条落库的群消息, 两端都看得见** —— 用频道当共享状态:
- * 观测到完成后先等 [PEER_TIP_GRACE_MILLIS], 再查本地库看这个群里是不是已经有本人发出的
- * 总结提示了; 有就不发。
+ * 完成即发, 不等待、不检查频道内是否已有 Web 发出的同款提示。
  *
- * 延时取 8s 的依据 (Web 从任务完成到消息落到本机的耗时):
- *   - SSE 推送路径 (按人总结): 亚秒级
- *   - 列表页 2s 轮询广播: ≤2s
- *   - 详情页兜底轮询: 5s 延迟启动 + 15s 间隔, 最坏 ~17s  ← **不覆盖**
- * 再叠加本类 [POLL_INTERVAL_MILLIS]=10s 的轮询本身就比 Web 晚 0~10s 发现完成, 实际
- * 判定点落在完成后 8~18s, 前两条主路径留了足够余量。第三条长尾 (只开详情页 + 非按人
- * 模式 + 同一总结手机也发起了) 概率极低, 接受偶发重复。
- *
- * 这是概率性防护不是锁: 两端的"检查"和"发送"之间没有原子性。Android 单方面做不到消除,
- * 消除需要 Web 也遵守某种协议 (例如只发本浏览器创建的任务) 或干脆由服务端下发。
+ * 代价: 手机发起总结 + Web 同时开着这条总结的详情页停留到完成, 两端都会各发一条,
+ * 群里出现两条一样的提示。这是已知且当前接受的取舍 —— 曾经实现过"等 8s 宽限期 +
+ * 查本地库确认 Web 没抢发"的门禁 (2721d832), 但去重判断天生不精确 (提示消息体不带
+ * task_id, 只能按频道+发送人+时间窗匹配), 真机复现过它把"自己上一次总结的提示"
+ * 误判成"Web 已经发过", 平白吞掉一条本该发的提示。两害相权, 选择了更简单可预测的
+ * "完成即发", 接受偶发的跨端重复。
  */
 object SummaryNotifyCoordinator {
 
-    // TODO(排查完成后删除): 临时诊断日志, 定位"停在群聊页面也不发提示"这个问题
-    // 具体卡在 handleCompleted 的哪一步。
-    private const val TAG = "SummaryNotify"
-
-    /** 轮询在途任务的间隔。比 Web 慢一拍是刻意的, 见类注释里的延时依据。 */
+    /** 轮询在途任务的间隔。 */
     private const val POLL_INTERVAL_MILLIS = 10_000L
-
-    /** 观测到完成后, 留给 Web 的提示送达本机的宽限期。 */
-    private const val PEER_TIP_GRACE_MILLIS = 8_000L
-
-    /** 扫描频道内提示消息的条数上限。提示很稀疏, 20 条足够覆盖回溯窗口。 */
-    private const val PEER_TIP_SCAN_LIMIT = 20
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -118,7 +99,6 @@ object SummaryNotifyCoordinator {
     @JvmStatic
     fun track(taskId: Long) {
         if (taskId <= 0L) return
-        android.util.Log.i(TAG, "track taskId=$taskId")
         SummaryNotifyStore.addPending(taskId, System.currentTimeMillis())
         pendingChanged.set(true)
         ensureLoopRunning()
@@ -149,20 +129,17 @@ object SummaryNotifyCoordinator {
     }
 
     private suspend fun pollLoop() {
-        android.util.Log.i(TAG, "pollLoop started")
         while (currentCoroutineContext().isActive) {
             pendingChanged.set(false)
 
             // 未登录: 停掉循环, 登录后由 track 拉起。SP 键按 uid 隔离, 不会串账。
             if (WKConfig.getInstance().uid.isNullOrEmpty()) {
-                android.util.Log.i(TAG, "pollLoop: not logged in, idling")
                 if (finishLoopIfIdle()) return
                 delay(POLL_INTERVAL_MILLIS)
                 continue
             }
 
             val pending = SummaryNotifyStore.activePendingTaskIds(System.currentTimeMillis())
-            android.util.Log.i(TAG, "pollLoop tick pending=$pending")
             if (pending.isEmpty()) {
                 if (finishLoopIfIdle()) return
                 delay(POLL_INTERVAL_MILLIS)
@@ -170,17 +147,14 @@ object SummaryNotifyCoordinator {
             }
 
             val batch = repository.batchStatus(pending)
-            android.util.Log.i(TAG, "batchStatus result=$batch")
             batch.getOrNull()?.forEach { item ->
                 when (item.status) {
                     TaskStatus.Completed -> {
-                        android.util.Log.i(TAG, "taskId=${item.taskId} completed, handling")
-                        // 先摘出 pending 再异步处理: 处理链路里有 8s 等待, 不能占着轮询。
+                        // 先摘出 pending 再异步处理: 结果未知前不占着轮询继续跑。
                         SummaryNotifyStore.removePending(item.taskId)
                         launchCompletionHandling(item.taskId)
                     }
                     TaskStatus.Failed, TaskStatus.Cancelled -> {
-                        android.util.Log.i(TAG, "taskId=${item.taskId} terminal status=${item.status}, dropping")
                         SummaryNotifyStore.removePending(item.taskId)
                     }
                     else -> Unit
@@ -210,49 +184,26 @@ object SummaryNotifyCoordinator {
     private suspend fun handleCompleted(taskId: Long) {
         val uid = WKConfig.getInstance().uid.orEmpty()
         if (uid.isEmpty()) {
-            android.util.Log.i(TAG, "handleCompleted taskId=$taskId: no uid, abort")
             return
         }
 
         val detailResult = repository.getSummaryDetail(taskId)
-        android.util.Log.i(TAG, "handleCompleted taskId=$taskId: detail=$detailResult")
         val detail = detailResult.getOrNull() ?: return
-        android.util.Log.i(
-            TAG,
-            "handleCompleted taskId=$taskId: creatorId=${detail.creatorId} uid=$uid " +
-                "sources=${detail.sources} originChannelId=${detail.originChannelId} " +
-                "originChannelType=${detail.originChannelType}",
-        )
         // 双保险: SP 只登记本机发起的任务, 这里再按服务端权威字段确认一次创建者身份。
         // creatorId 缺失时按"不是我"处理 —— 宁可漏发。
         if (detail.creatorId.isNullOrEmpty() || detail.creatorId != uid) {
-            android.util.Log.i(TAG, "handleCompleted taskId=$taskId: creatorId mismatch, abort")
             return
         }
 
         val channels = groupSourceIds(detail)
-        android.util.Log.i(TAG, "handleCompleted taskId=$taskId: groupChannels=$channels")
         if (channels.isEmpty()) return
 
         val notified = SummaryNotifyStore.notifiedChannels(taskId)
         val targets = channels.filterNot { notified.contains(it) }
-        android.util.Log.i(TAG, "handleCompleted taskId=$taskId: notified=$notified targets=$targets")
         if (targets.isEmpty()) return
-
-        // 宽限期只等一次, 不是每个群各等一次 —— 多群来源时不该把提示拖成 N × 8s。
-        // "开始等待"这一刻的时间戳是 peerTipExists 的判定基准, 见该函数注释里的踩坑记录。
-        val waitStartedAtSeconds = DateUtils.getInstance().currentSeconds
-        delay(PEER_TIP_GRACE_MILLIS)
 
         val name = selfDisplayName(uid)
         for (channelId in targets) {
-            if (peerTipExists(channelId, uid, waitStartedAtSeconds)) {
-                android.util.Log.i(TAG, "handleCompleted taskId=$taskId channel=$channelId: peer tip exists, skip")
-                // Web 已经发过了。同样记账, 免得下次任务重试时又白等一轮宽限期。
-                SummaryNotifyStore.markNotified(taskId, channelId)
-                continue
-            }
-            android.util.Log.i(TAG, "handleCompleted taskId=$taskId channel=$channelId: sending, name=$name")
             // claim-before-send: 先记账再发。SDK 的 send 是 fire-and-forget (void, 无回调),
             // 拿不到发送结果, 所以没有回滚 —— 与"宁可漏发也不重发"的取舍一致。
             SummaryNotifyStore.markNotified(taskId, channelId)
@@ -261,38 +212,6 @@ object SummaryNotifyCoordinator {
                 WKChannel(channelId, WKChannelType.GROUP),
             )
         }
-    }
-
-    /**
-     * 这个群里是不是已经有本人发出的总结提示了 —— 只看**宽限期等待开始之后**才出现的。
-     *
-     * 同时匹配 [WKContentType.summaryTip] (2000, 新) 与 [WKContentType.summaryNotify]
-     * (21, Web 旧版本), 因为线上 Web 可能还没升到 2000。
-     *
-     * ## 踩过的坑: 曾经用固定回溯窗口 (10 分钟), 把"自己上一次总结"当成了"Web 抢发"
-     *
-     * 提示消息体里**不带 task_id**, 只能按 (频道 + 发送人 + 类型 + 时间) 匹配, 天生无法
-     * 区分"这条提示属于哪次总结"。固定回溯窗口的问题: 连续对同一个群做两次总结, 只要
-     * 间隔小于窗口, 第二次的检查会把第一次自己发的提示误判成"Web 已经发过了", 直接跳过
-     * 发送 —— 真机复现: 两次总结间隔 94 秒, 10 分钟窗口下第二条被吞。
-     *
-     * 改成以 [waitStartedAtSeconds] (进入宽限期那一刻的时间戳) 为下界: 宽限期开始之前
-     * 就存在的消息 (不管是自己上次发的还是 Web 更早发的) 一律不算数, 只有等待期间
-     * **新出现**的才可能是 Web 这次抢发的。
-     *
-     * 仍然无法区分"宽限期内新出现的这条是不是恰好也是自己另一台设备刚发的" —— 但那本来
-     * 就是 [SummaryNotifyStore] 记账要防的范畴, 不是本函数的职责; 本函数只负责"和 Web
-     * 撞车"这一种情况。
-     */
-    private fun peerTipExists(channelId: String, uid: String, waitStartedAtSeconds: Long): Boolean {
-        val msgs = WKIM.getInstance().msgManager.searchMsgWithChannelAndContentTypes(
-            channelId,
-            WKChannelType.GROUP,
-            0,
-            PEER_TIP_SCAN_LIMIT,
-            intArrayOf(WKContentType.summaryTip, WKContentType.summaryNotify),
-        ) ?: return false
-        return msgs.any { it != null && it.fromUID == uid && it.timestamp >= waitStartedAtSeconds }
     }
 
     /** 对齐 octo-web collectGroupSourceIds(): 群聊来源; sources 为空时退回 origin channel。 */

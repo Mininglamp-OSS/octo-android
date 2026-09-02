@@ -198,7 +198,7 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                     context.startActivity(intent)
                     true
                 } catch (e: ActivityNotFoundException) {
-                    Log.w("InteractiveCard", "无法打开 URL: $url", e)
+                    Log.w(TAG, "无法打开 URL: $url", e)
                     false
                 }
             },

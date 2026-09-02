@@ -259,20 +259,31 @@ class SmartSummaryListViewModel(
                 "applyStatusChanges: ${changes.entries.joinToString { "${it.key}->${it.value.status}" }}",
             )
         }
-        var anyNewlyCompleted = false
+        val newlyCompletedIds = mutableListOf<Long>()
         _uiState.update { state ->
             val newItems = state.items.map { it ->
                 val upd = changes[it.taskId] ?: return@map it
                 if (it.status == upd.status) return@map it
                 if (upd.status == TaskStatus.Completed && it.status != TaskStatus.Completed) {
-                    anyNewlyCompleted = true
+                    newlyCompletedIds += it.taskId
                 }
                 it.copy(status = upd.status)
             }
             state.copy(items = newItems)
         }
-        // processing -> completed 的 cell 立刻拉一次详情回填 preview, 不必等用户手动刷新
-        if (anyNewlyCompleted) hydratePreview()
+        if (newlyCompletedIds.isNotEmpty()) {
+            // processing -> completed 的 cell 立刻拉一次详情回填 preview, 不必等用户手动刷新
+            hydratePreview()
+            // 列表页 regenerate (performRegenerate) 登记的 eligible 标记, 唯一的消费入口
+            // 之前只有详情页的 loadDetail 轮询——用户重新生成后留在列表页不进详情页,
+            // 任务完成时这里的 poller 只更新了 UI 状态, 没人触发提示判定, eligible 标记
+            // 永远躺在账本里没人消费。notifyByTaskIdIfEligible 本身是 fire-and-forget +
+            // 内部拉详情判定, 不命中 eligible 也是安全的 no-op, 这里可以放心对每个新完成的
+            // 任务都调一次。
+            newlyCompletedIds.forEach {
+                com.chat.base.summary.notify.SummaryNotifyCoordinator.notifyByTaskIdIfEligible(it)
+            }
+        }
     }
 
     fun activeStatusTaskIds(): List<Long> = current.items

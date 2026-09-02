@@ -213,6 +213,11 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
                     // 列表页入口 (submitSuccessHudText 为空) 也走同一条路径 —— 之前"用户
                     // 已经在列表页没必要跳详情"的取舍不再成立: 跳详情让用户立刻看到进度,
                     // 返回就直接回列表, 跟聊天页入口体感一致。
+                    //
+                    // setResult(RESULT_OK) 必须保留: 列表页 (SmartSummaryListActivity)
+                    // 的 createLauncher 靠这个结果码触发 reloadAndScrollToTop(), 让用户
+                    // 从详情页按返回回到列表时能立刻看到新任务并跳到顶部, 不必手动下拉刷新。
+                    setResult(Activity.RESULT_OK)
                     val taskId = effect.taskId
                     startActivity(
                         com.chat.uikit.summary.detail.SmartSummaryDetailActivity

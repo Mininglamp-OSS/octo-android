@@ -27,12 +27,25 @@ import kotlinx.coroutines.launch
 /**
  * 群总结完成后往来源群发一条系统提示, 补上 "App 发起的总结群里没有任何提示" 这个缺口。
  *
- * ## 触发方式: 挂在详情页自身的轮询节奏上, 不用独立常驻协程
+ * ## 触发方式: 挂在详情页/列表页自身的轮询节奏上, 不用独立常驻协程
  *
- * 由 [com.chat.uikit.summary.detail.SmartSummaryDetailViewModel] 自身已有的 8s 轮询
- * (`loadDetail`/`schedulePollIfNeeded`) 在观测到 "非完成 → Completed" 状态跃变时调
- * [notifyIfNeeded]。通知助手卡片的 "/s/STxxx?sp=..." 深链点击也会在打开 WebView 前
- * 做一次同样的判定。
+ * 对齐 octo-web `SummaryDetailPage.notifyGroupsOnCompletion` 的设计: Web 同样只在
+ * 总结详情页挂载着、且亲眼看到 processing→completed 状态沿时才发, 没有应用级/后台
+ * 常驻机制统一兜底。Android 侧同一设计落地为三个触发点:
+ *   - [com.chat.uikit.summary.detail.SmartSummaryDetailViewModel] 自身已有的 8s 轮询
+ *     (`loadDetail`/`schedulePollIfNeeded`) 在观测到 "非完成 → Completed" 状态跃变时调
+ *     [notifyIfNeeded]。
+ *   - [com.chat.uikit.summary.list.SmartSummaryListViewModel] 的列表 5s 轮询
+ *     (`applyStatusChanges`) 观测到同样的跃变时调 [notifyByTaskIdIfEligible] —— 覆盖
+ *     "在列表页点重新生成、不进详情页" 这条路径, 否则 `track()` 登记的 eligible 标记
+ *     没有消费者, 永远发不出去。
+ *   - 通知助手卡片的 "/s/STxxx?sp=..." 深链点击, 在打开 WebView 前做一次同样的判定。
+ *
+ * 与 Web 同口径的代价: 创建/重新生成后, 如果这台设备上"详情页"和"列表页"都没有在
+ * 任务完成时刻挂载着 (例如创建后立刻退出详情页、且此后再也不重新打开这个任务的
+ * 详情页/列表页), 这条提示就不会被发出——账本里的 eligible 标记会一直留着, 直到
+ * 某次重新打开触发一次检查才补发, 但如果永远不再打开就永远不发。这是与 Web
+ * 一致的行为, 不是本实现独有的缺陷。
  *
  * ## 不变量: 谁创建, 谁负责发 —— 且判定权只归 eligible 账本
  *
@@ -101,7 +114,8 @@ object SummaryNotifyCoordinator {
 
     /**
      * 识别"总结详情页"URL, 返回用于查找详情的 key 类型和值。支持两种格式:
-     *   - "/summary/detail?taskId=<数字>" (octo-web 内部路由)
+     *   - "/summary/detail?taskId=<数字>" (octo-web 内部路由, 也支持 hash 路由形态
+     *     "…/#/summary/detail?taskId=<数字>")
      *   - "/s/<segment>" (通知助手卡片深链, 单段路径, 纯数字按 taskId 否则按 taskNo)
      *
      * 匹配失败返回 null。
@@ -111,15 +125,19 @@ object SummaryNotifyCoordinator {
         if (url.isBlank()) return null
         return try {
             val uri = Uri.parse(url)
-            val rawPath = (uri.path ?: return null).trimEnd('/')
-            val path = if (rawPath.contains('#')) {
-                rawPath.substringAfterLast('#').trimEnd('/')
-            } else {
-                rawPath
-            }
+            // hash 路由 (SPA 常见形态, 例如 "https://host/#/summary/detail?taskId=42"):
+            // 真正的路径和 query 整体被塞进了 fragment 里, 不能指望它们出现在 uri.path /
+            // uri.getQueryParameter 上——Android Uri.parse 遵循 RFC 3986, 在解析阶段就把
+            // '#' 之后的全部内容切给 fragment 组件, path 组件本身永远不可能包含字面的
+            // '#' 字符 (旧实现里 `rawPath.contains('#')` 因此恒为 false, 处理 hash 路由
+            // 的分支是死代码, 这类 URL 一律被 uri.path=="/" 兜底成 null)。这里改为显式
+            // 取 fragment, 非空就当作一个独立的相对 URI 重新解析一次 (Uri.parse 能正确
+            // 把 "/summary/detail?taskId=42" 这样的字符串再拆出 path 和 query)。
+            val effectiveUri = uri.fragment?.let { Uri.parse(it) } ?: uri
+            val path = (effectiveUri.path ?: return null).trimEnd('/')
             when {
                 path.endsWith("/summary/detail") -> {
-                    val tid = uri.getQueryParameter("taskId")?.trim()
+                    val tid = effectiveUri.getQueryParameter("taskId")?.trim()
                     val id = tid?.toLongOrNull()?.takeIf { it > 0L } ?: return null
                     SummaryLookup.ById(id)
                 }

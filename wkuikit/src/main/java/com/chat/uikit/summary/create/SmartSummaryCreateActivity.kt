@@ -37,7 +37,6 @@ import com.chat.base.summary.model.TopicTemplate
 import com.chat.base.summary.model.TopicTemplatePlaceholder
 import com.chat.uikit.R
 import com.chat.uikit.databinding.ActSmartSummaryCreateBinding
-import com.chat.uikit.summary.SummaryActionToast
 import com.chat.uikit.summary.SummaryHud
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
@@ -207,42 +206,19 @@ class SmartSummaryCreateActivity : WKBaseActivity<ActSmartSummaryCreateBinding>(
         state.effect?.let { effect ->
             when (effect) {
                 is CreateEffect.ToastRes -> SummaryHud.show(this, effect.resId)
-                CreateEffect.Done -> {
-                    // 入口区分 (1:1 对齐 iOS commit 045f8f0 OctoSummaryCreateVC.onSubmit 末尾):
-                    //   - sparkle 入口 (submitSuccessHudText 非空) → 底部 ActionToast +「查看」按钮
-                    //     点击 push SmartSummaryListActivity, 让用户直接进列表跟进度。
-                    //   - 列表 FAB 入口 (submitSuccessHudText 为空) → 维持中央 SummaryHud
-                    //     ("已创建总结任务"), 因为用户已经在列表页, 没必要再给"查看"。
-                    //
-                    // 关键: ActionToast 不能直接挂在 createActivity 的 contentView ——
-                    // finish() 后 createActivity 还没真正 onPause/onStop, 此刻 ActManagerUtils
-                    // 拿到的 currentActivity 仍是 createActivity, toast view 跟着 window 一起被
-                    // destroy, 用户只看到 "闪一下"。SummaryActionToast.show 内部用
-                    // ActivityLifecycleCallbacks 等下一个非 createActivity 的 activity onResumed,
-                    // 这条路径稳, 不依赖具体 finish→resume 时序窗口。
-                    //
-                    // SmartSummaryListActivity 是 main entry, 直接传 SmartSummaryListActivity::class
-                    // 给 callback; sparkle 入口下的目标 activity 一般是 ChatActivity, 但这里不需要
-                    // 强 typed —— 任何先回到前台的非 self activity 都行, 1:1 对齐 iOS topViewController。
-                    val sparkleEntry = !state.submitSuccessHudText.isNullOrBlank()
-                    val successMsg = state.submitSuccessHudText
-                        ?: getString(R.string.summary_create_success)
-                    val viewLabel = getString(R.string.summary_view_action)
-                    val app = application
-                    val self = this
-                    setResult(Activity.RESULT_OK)
+                is CreateEffect.Done -> {
+                    // 创建成功后直接跳原生详情页跟踪进度 (与详情页自身 8s 轮询对齐,
+                    // 详情页观测到 Processing→Completed 时会自动发群提示), 用户按返回
+                    // 自然回到发起前的页面 (聊天页 / 列表页), 不需要手动 finish。
+                    // 列表页入口 (submitSuccessHudText 为空) 也走同一条路径 —— 之前"用户
+                    // 已经在列表页没必要跳详情"的取舍不再成立: 跳详情让用户立刻看到进度,
+                    // 返回就直接回列表, 跟聊天页入口体感一致。
+                    val taskId = effect.taskId
+                    startActivity(
+                        com.chat.uikit.summary.detail.SmartSummaryDetailActivity
+                            .newIntent(this, taskId),
+                    )
                     finish()
-                    if (sparkleEntry) {
-                        SummaryActionToast.show(app, self, successMsg, viewLabel) {
-                            val act = com.chat.base.utils.ActManagerUtils.getInstance().currentActivity
-                                ?: return@show
-                            act.startActivity(
-                                Intent(act, com.chat.uikit.summary.list.SmartSummaryListActivity::class.java),
-                            )
-                        }
-                    } else {
-                        SummaryHud.show(app, successMsg)
-                    }
                 }
             }
             viewModel.consumeEffect()

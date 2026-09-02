@@ -48,6 +48,9 @@ interface SummaryApiService {
     @GET("summaries/{id}")
     suspend fun getSummaryDetail(@Path("id") taskId: Long): Response<JSONObject>
 
+    @GET("summaries/{id}")
+    suspend fun getSummaryDetailByNo(@Path("id", encoded = true) taskNo: String): Response<JSONObject>
+
     @DELETE("summaries/{id}")
     suspend fun deleteSummary(@Path("id") taskId: Long): Response<JSONObject>
 

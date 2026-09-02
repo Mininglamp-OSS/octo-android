@@ -928,6 +928,14 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         if (msg.type == WKContentType.summaryNotify) {
             content = WKSummaryNotifyProvider.showSummaryTip(getContext(), msg);
         }
+        // 新协议总结提示（type=2000/WK_TIP）：不走 getShowContent() 的通用
+        // "uid==自己显示你"替换 —— 无论是不是本机自己发起的，都要显示发起人姓名本身。
+        if (msg.type == WKContentType.summaryTip) {
+            String resolved = com.chat.base.summary.notify.SummaryTipContent.resolveDisplayContent(msg.content);
+            if (!TextUtils.isEmpty(resolved)) {
+                content = resolved;
+            }
+        }
         if (msg.remoteExtra.contentEditMsgModel != null) {
             content = msg.remoteExtra.contentEditMsgModel.getDisplayContent();
         }

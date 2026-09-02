@@ -81,8 +81,15 @@ class SmartSummaryDetailViewModel(
      * 失败弹 toast, 同样按 last-known status 继续轮询 (避免 onResume 时一拍失败后再也不刷新)。
      */
     fun loadDetail(silent: Boolean = false) {
+        // 本次调用发起时锁定 taskId: 若这次网络请求在飞行途中 performRegenerate 抢先完成并
+        // 切换了 trackedTaskId, 下面 resume 后必须能分辨"这个响应是不是还对应当前任务",
+        // 否则旧任务的响应会覆盖刚切换到的新任务状态 (detail/loading 被旧任务数据打回去)
+        // (pollJob?.cancel() 只能取消"排下一拍"的协程, 取消不了已经在飞行中的这次
+        // loadDetail 请求 —— 两者是不同的 Job)。
+        val requestedTaskId = trackedTaskId
         viewModelScope.launch {
-            val res = repository.getSummaryDetail(trackedTaskId)
+            val res = repository.getSummaryDetail(requestedTaskId)
+            if (requestedTaskId != trackedTaskId) return@launch
             if (res.isFailure) {
                 if (!silent) {
                     _state.update {
@@ -105,7 +112,28 @@ class SmartSummaryDetailViewModel(
                 )
             }
             _state.update { it.copy(loading = false, detail = detail) }
+            notifyGroupsIfCompleted(detail)
             schedulePollIfNeeded(detail.status)
+        }
+    }
+
+    /**
+     * 群总结完成提示的挂载点: 对齐 octo-web SummaryDetailPage.notifyGroupsOnCompletion,
+     * 但挂在这个详情页自身已有的 8s 轮询节奏上, 不单独起轮询协程 (见
+     * [com.chat.base.summary.notify.SummaryNotifyCoordinator] 类注释)。
+     *
+     * 放行判定完全交给 coordinator 内部的 eligible 账本 (taskId 是否本机 track 过),
+     * 这里不需要也不应该再用"是否观测到状态跃变"参与放行——那样会让"这台设备亲眼看到了
+     * Processing→Completed"跳过账本检查直接发, 挡不住"同一账号在别处创建、这台设备刚好
+     * 停留见证完成"的跨端重复场景。每次拿到 detail 都触发一次检查, isEligible 是幂等
+     * 只读操作, 重复调用无副作用。
+     */
+    private fun notifyGroupsIfCompleted(detail: SummaryDetail) {
+        if (detail.status != TaskStatus.Completed) return
+        viewModelScope.launch {
+            runCatching {
+                com.chat.base.summary.notify.SummaryNotifyCoordinator.notifyIfNeeded(detail)
+            }
         }
     }
 

@@ -23,8 +23,20 @@ import org.json.JSONObject
  *     完成是靠状态跃变还是首次加载就是终态, 放行前都必须查这份账本命中。没有
  *     TTL: 同一个人在多端登录时, "任务处理超过 N 分钟" 不该变成"这台设备突然
  *     又发不出本该由它发的提示", 生命周期完全交给 [markEligible]/[clearEligible]
- *     显式管理, 不靠时间推断。
- *   - [SENT_KEY]     taskId → 已通知过的 channelId 集合。claim-before-send 的记账处。
+ *     显式管理, 不靠时间推断。仍然只按 taskId 记, 不需要区分版本 —— 它的语义是
+ *     "这个任务是不是本机发起的", 跟"这次具体是第几次生成"无关。
+ *   - [SENT_KEY]     "taskId:version" → 已通知过的 channelId 集合。claim-before-send
+ *     的记账处。键必须带 [SummaryResult.version] 而不是只用 taskId —— 后端
+ *     `POST /summaries/{id}/regenerate` 是原地复用同一个 taskId 的 UPDATE, 不产生
+ *     新 task_id (已用 octo-smart-summary internal/api/handler/task.go 的 Regenerate
+ *     handler 源码确认: 返回体里的 task_id 恒等于请求时传入的 taskId)。若只按
+ *     taskId 记账, 第一次生成完成发过的提示会让"已通知"集合永久非空, 重新生成
+ *     完成后 claimUnnotifiedChannels 会把同一批 channelId 全部判定为"已通知"而
+ *     直接跳过, 提示永远发不出第二次。version 取自服务端 saveLatestResultAndCompleteTask
+ *     事务里维护的单调递增列 (GetNextVersion), 且该事务保证"新 SummaryResult 落库"
+ *     严格先于"任务状态改为 Completed"提交, 所以客户端读到 status=Completed 时
+ *     result.version 必然存在且是这一轮生成的权威版本号, 不会有"完成了但 version
+ *     还没写好"的窗口。
  *
  * 全部走 [WKSharedPreferencesUtil.putSPWithUID] 按 uid 隔离, 多账号切换不串台。
  * App 实质单进程 (只有腾讯 X5 的 :dexopt service 是独立进程, 不碰 SP), MODE_PRIVATE 够用。
@@ -39,7 +51,7 @@ internal object SummaryNotifyStore {
     // 合并到同一临界区, 避免两个调用者各自读到旧集合、各自覆盖写回导致的重复发送。
 
     private const val ELIGIBLE_KEY = "summary_tip_eligible_v2"
-    private const val SENT_KEY = "summary_tip_sent_v1"
+    private const val SENT_KEY = "summary_tip_sent_v2"
 
     /** eligible 账本保留的任务数上限, 防止 [clearEligible] 漏调时 SP 无限增长。 */
     private const val MAX_ELIGIBLE_TASKS = 100
@@ -85,9 +97,12 @@ internal object SummaryNotifyStore {
 
     // ===== sent =====
 
+    /** "taskId:version" 复合键, 见类文档 [SENT_KEY] 部分。 */
+    private fun sentKeyOf(taskId: Long, version: Int): String = "$taskId:$version"
+
     @Synchronized
-    fun notifiedChannels(taskId: Long): Set<String> {
-        val arr = readObject(SENT_KEY).optJSONArray(taskId.toString()) ?: return emptySet()
+    fun notifiedChannels(taskId: Long, version: Int): Set<String> {
+        val arr = readObject(SENT_KEY).optJSONArray(sentKeyOf(taskId, version)) ?: return emptySet()
         val set = HashSet<String>(arr.length())
         for (i in 0 until arr.length()) {
             arr.optString(i).takeIf { it.isNotEmpty() }?.let(set::add)
@@ -100,20 +115,23 @@ internal object SummaryNotifyStore {
      * synchronized 临界区里, 避免调用方先 read 再逐个 write 时中间被并发调用者插入
      * 导致的 TOCTOU —— 两个协程 (例如详情页跃变判定 + 通知助手卡片点击几乎同时
      * 命中同一 taskId) 分别 read 到空集合、各自算出相同 targets、都发一遍, 就会在群里
-     * 出现重复提示, 与"claim-before-send: 同 taskId 同群不重发"这条不变量矛盾。
+     * 出现重复提示, 与"claim-before-send: 同 taskId+version 同群不重发"这条不变量矛盾。
+     *
+     * [version] 必须是这次判定对应的 [SummaryResult.version] (来自
+     * [com.chat.base.summary.model.SummaryDetail.result]), 不能只用 taskId —— 见类文档。
      *
      * 返回值是这次真正抢到、且已经记账过的 channelId 子集 —— 调用方对这些 id 发送即可。
      * 无回滚: SDK 的 send 是 fire-and-forget, 拿不到发送结果, 与"宁可漏发也不重发"一致。
      */
     @Synchronized
-    fun claimUnnotifiedChannels(taskId: Long, candidates: List<String>): List<String> {
-        val already = notifiedChannels(taskId)
+    fun claimUnnotifiedChannels(taskId: Long, version: Int, candidates: List<String>): List<String> {
+        val already = notifiedChannels(taskId, version)
         val claimed = candidates.filterNot { already.contains(it) }
         if (claimed.isEmpty()) return claimed
         val json = readObject(SENT_KEY)
         val merged = (already + claimed).toMutableSet()
-        json.put(taskId.toString(), JSONArray(merged.toList()))
-        writeObject(SENT_KEY, trimToCap(json, MAX_SENT_TASKS))
+        json.put(sentKeyOf(taskId, version), JSONArray(merged.toList()))
+        writeObject(SENT_KEY, trimSentToCap(json, MAX_SENT_TASKS))
         return claimed
     }
 
@@ -121,12 +139,32 @@ internal object SummaryNotifyStore {
 
     /**
      * 超出上限时按 taskId 从小到大丢弃 —— taskId 由后端自增, 数值小即更早创建,
-     * 这等价于"丢最旧的", 且不需要额外存时间戳。两份账本 (eligible / sent) 共用。
+     * 这等价于"丢最旧的", 且不需要额外存时间戳。给 [ELIGIBLE_KEY] (纯 taskId 键) 用。
      */
     private fun trimToCap(json: JSONObject, cap: Int): JSONObject {
         if (json.length() <= cap) return json
         val ordered = json.keys().asSequence().toList()
             .sortedByDescending { it.toLongOrNull() ?: 0L }
+            .take(cap)
+        val trimmed = JSONObject()
+        for (key in ordered) trimmed.put(key, json.get(key))
+        return trimmed
+    }
+
+    /**
+     * [SENT_KEY] 专用: 键是 "taskId:version" 复合字符串, 不能直接 toLongOrNull()
+     * (会因为带冒号解析失败全部退化成 0, 排序失效)。按 taskId 主序、version 次序
+     * 降序排, 语义仍是"丢最旧的" —— taskId 更大或同 taskId 下 version 更大都代表
+     * 更晚发生。
+     */
+    private fun trimSentToCap(json: JSONObject, cap: Int): JSONObject {
+        if (json.length() <= cap) return json
+        val ordered = json.keys().asSequence().toList()
+            .sortedWith(compareByDescending<String> { key ->
+                key.split(':', limit = 2).getOrNull(0)?.toLongOrNull() ?: 0L
+            }.thenByDescending { key ->
+                key.split(':', limit = 2).getOrNull(1)?.toIntOrNull() ?: 0
+            })
             .take(cap)
         val trimmed = JSONObject()
         for (key in ordered) trimmed.put(key, json.get(key))

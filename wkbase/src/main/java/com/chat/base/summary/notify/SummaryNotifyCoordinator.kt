@@ -184,13 +184,21 @@ object SummaryNotifyCoordinator {
         // 身份。creatorId 缺失时按"不是我"处理 —— 宁可漏发。
         if (detail.creatorId.isNullOrEmpty() || detail.creatorId != uid) return
 
+        // 去重记账必须带 version, 不能只用 taskId —— 后端 regenerate 是原地复用同一
+        // taskId 的 UPDATE (见 SummaryNotifyStore 类文档), 只按 taskId 记账会让重新
+        // 生成完成后的提示被上一轮的"已通知"记录误判成重复而直接跳过。status==Completed
+        // 时 result/version 按服务端事务顺序必然已落库 (saveLatestResultAndCompleteTask
+        // 先写 SummaryResult 再改状态), 这里仍防御性判空 —— 真拿不到就宁可漏发这一次,
+        // 不猜一个假版本号出来记账。
+        val version = detail.result?.version ?: return
+
         val channels = groupSourceIds(detail)
         if (channels.isEmpty()) return
 
         // 原子 claim: read-未通知 + 记账合并到一次 synchronized 调用, 避免两个协程
         // (详情页跃变判定 / 通知助手卡片点击) 几乎同时命中同一 taskId 时, 分别读到
         // 空集合、各自把同一批 channelId 判定为"未通知"而重复发送。
-        val targets = SummaryNotifyStore.claimUnnotifiedChannels(taskId, channels)
+        val targets = SummaryNotifyStore.claimUnnotifiedChannels(taskId, version, channels)
         if (targets.isEmpty()) return
 
         val name = selfDisplayName(uid)

@@ -229,6 +229,31 @@ class SummaryRepositoryImplTest {
         assertEquals(true, d.permissions?.canEdit)
     }
 
+    /**
+     * 通知助手卡片深链 "/s/STxxx?sp=..." 走字符串 task_no 反查详情, 与数字 taskId
+     * 版本共用同一套 envelope 解析 (callEnvelope), 这里单独锁一次入参透传 + 解析结果,
+     * 覆盖 SummaryNotifyCoordinator.notifyByTaskNoIfEligible 依赖的这条路径。
+     */
+    @Test
+    fun `getSummaryDetailByNo forwards task_no path param and parses result`() = runTest {
+        api.stubSuccess(
+            "GET summaries/ST12345",
+            JSONObject().apply {
+                put("task_id", 42L)
+                put("title", "T")
+                put("summary_mode", 1)
+                put("status", 3)
+                put("trigger_type", 1)
+            },
+        )
+
+        val res = repo.getSummaryDetailByNo(taskNo = "ST12345")
+        assertTrue(res.isSuccess)
+        val d = res.getOrThrow()
+        assertEquals(42L, d.taskId)
+        assertEquals("ST12345", api.lastRequest("GET summaries/ST12345"))
+    }
+
     @Test
     fun `getTopicTemplates reads templates field`() = runTest {
         api.stubSuccess(

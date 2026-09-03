@@ -619,7 +619,6 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     .addKeyboardStateListener((visible, height) -> {
                         if (visible && height > 0) {
                             WKConstants.setKeyboardHeight(height);
-                            chatPanelManager.syncEmojiPanelHeightWithKeyboard();
                         }
                     })
                     //可选

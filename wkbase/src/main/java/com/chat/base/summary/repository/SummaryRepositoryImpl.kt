@@ -206,6 +206,12 @@ class SummaryRepositoryImpl(
                 ?: throw SummaryException(httpStatus = 200, apiCode = 0, message = "empty detail")
         }
 
+    override suspend fun getSummaryDetailByNo(taskNo: String): Result<SummaryDetail> =
+        callEnvelope({ it.getSummaryDetailByNo(taskNo) }) { data ->
+            SummaryDetail.fromJson(asObject(data))
+                ?: throw SummaryException(httpStatus = 200, apiCode = 0, message = "empty detail")
+        }
+
     override suspend fun deleteSummary(taskId: Long): Result<Unit> =
         callEnvelope({ it.deleteSummary(taskId) }) { }
 

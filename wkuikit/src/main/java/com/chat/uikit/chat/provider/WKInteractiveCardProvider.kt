@@ -28,6 +28,9 @@ import com.chat.base.act.WKWebViewActivity
 import com.chat.base.base.WKBaseModel
 import com.chat.base.config.WKConfig
 import com.chat.base.msgitem.WKChatBaseProvider
+import com.chat.base.summary.SummaryDeps
+import com.chat.base.summary.model.TaskStatus
+import com.chat.base.summary.notify.SummaryNotifyCoordinator
 import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
@@ -173,6 +176,17 @@ class WKInteractiveCardProvider : WKChatBaseProvider() {
                 }.run()
             },
             webView = CardActionDispatcher.WebViewLauncher { url ->
+                // 通知助手 (u_10000) 总结完成卡片 "查看详情" 指向 "/s/STxxx?sp=..." 深链,
+                // WebView 内 octo-web JS 不会发群提示 (无独立 WKSDK 连接/eligible 标记),
+                // native 侧在打开 WebView 前做一次判定补上: 解析 taskNo 拉详情, 命中本机
+                // 发起 + eligible 标记在 + 状态已 Completed 时发提示; 不命中则静默忽略。
+                when (val lookup = SummaryNotifyCoordinator.extractSummaryLookup(url)) {
+                    is SummaryNotifyCoordinator.SummaryLookup.ById ->
+                        SummaryNotifyCoordinator.notifyByTaskIdIfEligible(lookup.taskId)
+                    is SummaryNotifyCoordinator.SummaryLookup.ByNo ->
+                        SummaryNotifyCoordinator.notifyByTaskNoIfEligible(lookup.taskNo)
+                    null -> Unit
+                }
                 // 走 App 内 WebView（对齐 WKTextProvider 链接预览卡、WKMarkwonProvider linkResolver
                 // 的处理路径）。FLAG_ACTIVITY_NEW_TASK：context 可能是 application context（Provider 由
                 // adapter 持有，而 adapter 可能在非 Activity context 下 bind），保守带 flag 兜底。

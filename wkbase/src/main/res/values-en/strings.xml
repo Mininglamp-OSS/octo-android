@@ -232,6 +232,9 @@
     <string name="str_default_text_file_name">Message</string>
     <string name="str_send_message_hint">Leave a message</string>
     <string name="str_someone">The other party</string>
+    <string name="summary_notify_tip">%1$s summarized the chat</string>
+    <string name="summary_notify_you">You</string>
+    <string name="summary_notify_unknown">Someone</string>
     <string name="str_text_exceed_limit_tip">Text exceeds the limit. Send as a document instead?</string>
 
     <!-- i18n: Animated avatar -->

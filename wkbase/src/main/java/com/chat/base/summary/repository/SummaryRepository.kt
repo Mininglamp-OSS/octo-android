@@ -49,6 +49,9 @@ interface SummaryRepository {
 
     suspend fun getSummaryDetail(taskId: Long): Result<SummaryDetail>
 
+    /** 通过 task_no (ST 开头字符串) 查详情, 后端详情接口支持字符串 id 反查。 */
+    suspend fun getSummaryDetailByNo(taskNo: String): Result<SummaryDetail>
+
     suspend fun deleteSummary(taskId: Long): Result<Unit>
 
     /** 返回新生成的 task_id (后端给新 id, 旧 id 终态). */

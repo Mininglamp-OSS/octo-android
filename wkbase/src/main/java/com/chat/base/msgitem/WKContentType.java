@@ -76,8 +76,24 @@ public class WKContentType extends WKMsgContentType {
     public final static int approveGroupMember = 1009;
     //截屏消息
     public final static int screenshot = 20;
+    /**
+     * 群总结完成提示（对齐 octo-web MessageContentTypeConst.summaryNotify）。
+     * <p>content 形如 {@code {from_uid, from_name}}，不在 1000-2000 系统号段内，
+     * 需要像 {@link #screenshot} 一样单独注册 provider 才能当系统提示渲染。
+     * <p>Web 自 octo-web d31a10c3 起改用 WK_TIP(2000) 发新消息（2000 走
+     * {@code isSystemMsg()} 通用路径，无需适配），此类型仅用于渲染存量历史消息。
+     */
+    public final static int summaryNotify = 21;
     //子区创建通知
     public final static int threadCreated = 1100;
+    /**
+     * 群总结完成提示（WK_TIP 号段，对齐 octo-web MessageContentTypeConst.summaryTip）。
+     * <p>content 形如 {@code {content:"{0}总结了群聊内容", extra:[{uid,name}]}}，落在
+     * 1000-2000 系统号段内，收端由 WKSystemProvider + StringUtils.getShowContent()
+     * 通用路径渲染，无需单独注册 provider；此常量供发送侧构造消息体使用。
+     * @see #summaryNotify 已废弃的自定义 type-21 旧协议
+     */
+    public final static int summaryTip = 2000;
 
     public static boolean isSystemMsg(int type) {
         return type >= 1000 && type <= 2000;

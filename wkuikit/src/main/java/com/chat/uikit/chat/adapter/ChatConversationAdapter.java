@@ -56,6 +56,7 @@ import com.chat.base.entity.WKChannelState;
 import com.chat.base.msgitem.WKContentType;
 import com.chat.base.msgitem.WKMsgItemViewManager;
 import com.chat.base.msgitem.WKRevokeProvider;
+import com.chat.base.msgitem.WKSummaryNotifyProvider;
 import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.CounterView;
@@ -863,7 +864,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         String fromName = "";
         if (msg != null && (WKContentType.isSystemMsg(msg.type)
                 || msg.type == WKContentType.revoke
-                || msg.remoteExtra.revoke == 1 || msg.type == WKContentType.screenshot)) {
+                || msg.remoteExtra.revoke == 1 || msg.type == WKContentType.screenshot
+                || msg.type == WKContentType.summaryNotify)) {
             return fromName;
         }
         if (channelType == WKChannelType.PERSONAL || channelType == WKChannelType.CUSTOMER_SERVICE || msg == null || TextUtils.isEmpty(msg.fromUID) || msg.fromUID.equals(WKConfig.getInstance().getUid())) {
@@ -920,6 +922,19 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 }
             }
             content = String.format(getContext().getString(R.string.screenshot_tip), name);
+        }
+        // 群总结完成提示（type=21）：content JSON 里没有 "content" 字段，上面的
+        // getShowContent() 会兜底成"未知消息"，这里覆盖成与聊天页气泡同一份文案。
+        if (msg.type == WKContentType.summaryNotify) {
+            content = WKSummaryNotifyProvider.showSummaryTip(getContext(), msg);
+        }
+        // 新协议总结提示（type=2000/WK_TIP）：不走 getShowContent() 的通用
+        // "uid==自己显示你"替换 —— 无论是不是本机自己发起的，都要显示发起人姓名本身。
+        if (msg.type == WKContentType.summaryTip) {
+            String resolved = com.chat.base.summary.notify.SummaryTipContent.resolveDisplayContent(msg.content);
+            if (!TextUtils.isEmpty(resolved)) {
+                content = resolved;
+            }
         }
         if (msg.remoteExtra.contentEditMsgModel != null) {
             content = msg.remoteExtra.contentEditMsgModel.getDisplayContent();

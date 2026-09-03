@@ -173,6 +173,10 @@
     <string name="str_default_text_file_name">消息</string>
     <string name="screenshot_tip">%s在聊天中截屏了</string>
     <string name="str_someone">对方</string>
+    <!-- 群总结完成提示（消息 type=21，发送方为 Web 端）。文案与 octo-web 保持一致 -->
+    <string name="summary_notify_tip">%1$s总结了群聊内容</string>
+    <string name="summary_notify_you">你</string>
+    <string name="summary_notify_unknown">某用户</string>
     <string name="api_url_dialog_title">服务器配置</string>
     <string name="api_url_dialog_hint">修改后将重启应用并重新登录，请确认地址正确</string>
     <string name="api_url_dialog_preset_label">快速选择</string>

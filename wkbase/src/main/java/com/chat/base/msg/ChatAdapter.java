@@ -209,6 +209,9 @@ public class ChatAdapter extends BaseProviderMultiAdapter<WKUIChatMsgItemEntity>
         if (list.get(i).wkMsg.type == WKContentType.screenshot) {
             return WKContentType.screenshot;
         }
+        if (list.get(i).wkMsg.type == WKContentType.summaryNotify) {
+            return WKContentType.summaryNotify;
+        }
         return WKContentType.unknown_msg;
     }
 

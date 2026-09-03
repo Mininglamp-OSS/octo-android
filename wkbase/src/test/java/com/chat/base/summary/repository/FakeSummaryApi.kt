@@ -90,6 +90,10 @@ class FakeSummaryApi : SummaryApiService {
         record("GET summaries/$taskId", taskId); return consume("GET summaries/$taskId")
     }
 
+    override suspend fun getSummaryDetailByNo(taskNo: String): Response<JSONObject> {
+        record("GET summaries/$taskNo", taskNo); return consume("GET summaries/$taskNo")
+    }
+
     override suspend fun deleteSummary(taskId: Long): Response<JSONObject> {
         record("DELETE summaries/$taskId", taskId); return consume("DELETE summaries/$taskId")
     }

@@ -56,8 +56,14 @@ class WKSystemProvider(val type: Int) : WKChatBaseProvider() {
             chatAdapter.conversationContext.hideSoftKeyboard()
         }
         val textView = helper.getView<TextView>(R.id.contentTv)
-        val content: String? = if (type == WKContentType.msgPromptTime) item.wkMsg.content else {
-            getShowContent(item.wkMsg.content)
+        val content: String? = when (type) {
+            WKContentType.msgPromptTime -> item.wkMsg.content
+            // 总结提示不走通用的"uid==自己显示你"替换 —— 无论是不是本机自己发起的,
+            // 群里都要显示发起人姓名本身, 见 SummaryTipContent.resolveDisplayContent。
+            WKContentType.summaryTip ->
+                com.chat.base.summary.notify.SummaryTipContent.resolveDisplayContent(item.wkMsg.content)
+                    ?: getShowContent(item.wkMsg.content)
+            else -> getShowContent(item.wkMsg.content)
         }
         textView.setShadowLayer(AndroidUtilities.dp(5f).toFloat(), 0f, 0f, 0)
         val str = SpannableString(content)

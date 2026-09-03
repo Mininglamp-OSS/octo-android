@@ -24,8 +24,8 @@ import kotlinx.coroutines.launch
 
 sealed interface CreateEffect {
     data class ToastRes(val resId: Int) : CreateEffect
-    /** 创建成功 → Activity 关闭 + 通知列表刷新. */
-    object Done : CreateEffect
+    /** 创建成功 → Activity 跳转到原生详情页跟踪进度, 返回回到调用方 (聊天页/列表页). */
+    data class Done(val taskId: Long) : CreateEffect
 }
 
 data class CreateUiState(
@@ -142,7 +142,11 @@ class SmartSummaryCreateViewModel(
                 }
                 return@launch
             }
-            _state.update { it.copy(submitting = false, effect = CreateEffect.Done) }
+            // 登记进 notify coordinator: 任务完成后由本机往来源群发一条系统提示。
+            // 只登记本机发起的任务是"谁创建谁负责发"这条不变量的核心, 见 SummaryNotifyCoordinator。
+            val taskId = res.getOrThrow()
+            com.chat.base.summary.notify.SummaryNotifyCoordinator.track(taskId)
+            _state.update { it.copy(submitting = false, effect = CreateEffect.Done(taskId)) }
         }
     }
 

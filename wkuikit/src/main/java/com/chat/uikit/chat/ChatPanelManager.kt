@@ -2332,6 +2332,50 @@ class ChatPanelManager(
         toolBarAdapter!!.notifyItemRangeChanged(0, toolBarAdapter!!.itemCount)
     }
 
+    /**
+     * emoji 面板内容区（tab bar 下面那块，[getEmojiLayout] 里的 contentContainer）的高度，
+     * 单位 px —— 跟 [syncEmojiPanelHeightWithKeyboard] 共享，用来判断键盘高度变化后要不要重新排布。
+     */
+    private var emojiPanelContentHeightPx = 0
+
+    /** [getEmojiLayout] 里的 contentContainer，供 [syncEmojiPanelHeightWithKeyboard] 重新设置高度。 */
+    private var emojiPanelContentContainer: View? = null
+
+    /**
+     * 面板内容高度：已知真实键盘高度就用它，否则（新设备/键盘从未弹出过）退化为屏幕高度的 1/3 估算。
+     *
+     * 唯一的高度来源 —— 以后新增面板要跟键盘对齐高度，也应该调这个方法，不要各自重复
+     * "读 WKConstants.getKeyboardHeight() + /3 兜底" 这段逻辑。
+     */
+    private fun resolvePanelContentHeightPx(): Int {
+        val height = WKConstants.getKeyboardHeight()
+        return if (height > 0) height else AndroidUtilities.getScreenHeight() / 3
+    }
+
+    /**
+     * 键盘高度第一次被真实记录（或后续变化，如切换输入法）时，由 [ChatActivity] 的
+     * addKeyboardStateListener 回调调用，把 emoji 面板内容区的高度同步过去。
+     *
+     * 面板此刻必然不可见（这个回调只在键盘正显示时触发，键盘和面板互斥），所以这里改
+     * LayoutParams 不会让用户看到面板跳动 —— 下次点表情按钮重新显示时用的就是新高度。
+     *
+     * 若目前面板还没建出来（[emojiPanelContentContainer] 为空）或高度没变化，直接跳过。
+     */
+    fun syncEmojiPanelHeightWithKeyboard() {
+        val container = emojiPanelContentContainer ?: return
+        val tabBarHeightDp = 36
+        val newContentHeightPx =
+            resolvePanelContentHeightPx() - AndroidUtilities.dp(tabBarHeightDp.toFloat())
+        if (newContentHeightPx == emojiPanelContentHeightPx) return
+        emojiPanelContentHeightPx = newContentHeightPx
+        // 注意单位：这里是 LayoutParams.height 本身，要填 px；跟 getEmojiLayout() 里传给
+        // LayoutHelper.createLinear(...) 的入参不同 —— 那个方法内部会把 int 参数当 dp 再转 px。
+        val params = container.layoutParams
+        params.height = newContentHeightPx
+        container.layoutParams = params
+        container.requestLayout()
+    }
+
     private fun getEmojiLayout(): View {
         val activity = iConversationContext.chatActivity
 
@@ -2381,12 +2425,11 @@ class ChatPanelManager(
         emojiTabBtn.setOnClickListener { selectTab(0) }
         stickerTabBtn.setOnClickListener { selectTab(1) }
 
-        var height = WKConstants.getKeyboardHeight()
-        if (height == 0) {
-            height = AndroidUtilities.getScreenHeight() / 3
-        }
         val tabBarHeightDp = 36
-        val contentHeightPx = height - AndroidUtilities.dp(tabBarHeightDp.toFloat())
+        val contentHeightPx =
+            resolvePanelContentHeightPx() - AndroidUtilities.dp(tabBarHeightDp.toFloat())
+        emojiPanelContentHeightPx = contentHeightPx
+        emojiPanelContentContainer = contentContainer
 
         val root = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         root.addView(

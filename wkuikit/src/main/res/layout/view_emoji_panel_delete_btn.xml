@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  表情面板右下角的悬浮删除（退格）键。
+  样式 1:1 复刻旧表情面板 wkbase/res/layout/frag_emoji_layout.xml 的删除键块 —— 迁到
+  ChatPanelManager 纯代码搭面板时这颗键漏掉了，导致点错表情只能去点输入框调系统键盘退格。
+  由 ChatPanelManager.buildEmojiContentView() inflate 后叠在 emoji 网格右下角。只挂「表情」
+  tab —— 「自定义表情」tab 点了直接发送、全程不写输入框，退格键在那儿没有作用对象。
+
+  视觉尺寸 44×36dp = padding(10/9) + icon(24×18)，外面 ShadowLayout 再各撑 5dp 阴影。
+  改这里的尺寸要同步 ChatPanelManager.EMOJI_PANEL_BOTTOM_INSET_DP —— 网格底部留白是按
+  按钮总高算的。icon 用默认 fitCenter，24×18 不会把 passcode_delete 拉变形。
+-->
+<com.chat.base.views.ShadowLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/emojiDeleteShadowLayout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    app:hl_cornerRadius="5dp"
+    app:hl_dx="0dp"
+    app:hl_dy="0dp"
+    app:hl_shadowBackColor="@color/colorDark"
+    app:hl_shadowColor="@color/colorDark"
+    app:hl_shadowLimit="5dp">
+
+    <RelativeLayout
+        android:id="@+id/emojiDeleteLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/white_bg"
+        android:clickable="true"
+        android:contentDescription="@string/str_delete"
+        android:focusable="true"
+        android:paddingStart="10dp"
+        android:paddingTop="9dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="9dp">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/emojiDeleteIv"
+            android:layout_width="24dp"
+            android:layout_height="18dp"
+            android:src="@mipmap/passcode_delete" />
+    </RelativeLayout>
+</com.chat.base.views.ShadowLayout>

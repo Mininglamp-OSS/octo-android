@@ -632,6 +632,7 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
 
                         @Override
                         public void onNone() {
+                            chatPanelManager.clearToolBarSelection();
                         }
 
                         @Override

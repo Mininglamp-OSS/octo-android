@@ -2332,6 +2332,18 @@ class ChatPanelManager(
         toolBarAdapter!!.notifyItemRangeChanged(0, toolBarAdapter!!.itemCount)
     }
 
+    /**
+     * 面板/键盘真正收起（[helper] 回到 NONE）时用这个，只清选中态，不动 isDisable ——
+     * isDisable 的所有权归 [isDisableToolBar]，多选期间它会先禁用工具栏再收起面板，
+     * 如果这里也清 isDisable，收面板这个动作会把多选设的禁用状态顺手清掉。
+     */
+    fun clearToolBarSelection() {
+        for (index in toolBarAdapter!!.data.indices) {
+            toolBarAdapter!!.getItem(index).isSelected = false
+        }
+        toolBarAdapter!!.notifyItemRangeChanged(0, toolBarAdapter!!.itemCount)
+    }
+
     private fun getEmojiLayout(): View {
         val activity = iConversationContext.chatActivity
 

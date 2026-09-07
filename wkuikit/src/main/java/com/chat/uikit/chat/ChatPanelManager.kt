@@ -2420,7 +2420,9 @@ class ChatPanelManager(
      * 面板迁到本类纯代码搭建时漏掉了 —— 结果表情点错只能去点输入框调起系统键盘退格，
      * 而点输入框又会把表情面板收起来。这里把它补回来。
      *
-     * 单击退一格；长按按 [emojiDeleteRepeatIntervalMs] 连续退格，抬手即停。
+     * 单击退一格；触摸长按按 [emojiDeleteRepeatIntervalMs] 连续退格，抬手即停。
+     * 无障碍服务（TalkBack）、硬件键盘/D-pad 触发的长按不经过触摸事件，不会启动连续
+     * 退格，退化成一次单击，避免没有"抬手"信号可停的失控循环（见 [emojiDeleteTouchDown]）。
      */
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     private fun buildEmojiDeleteButton(): View {
@@ -2437,25 +2439,43 @@ class ChatPanelManager(
 
         val hitArea = btn.findViewById<RelativeLayout>(R.id.emojiDeleteLayout)
         hitArea.setOnClickListener { dispatchBackspace() }
-        hitArea.setOnLongClickListener {
-            startEmojiDeleteRepeat()
-            true  // 消费掉长按，系统不会再补一次 click，避免长按结束后多删一个
-        }
         hitArea.setOnTouchListener { _, event ->
             when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> emojiDeleteTouchDown = true
                 android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL -> stopEmojiDeleteRepeat()
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    emojiDeleteTouchDown = false
+                    stopEmojiDeleteRepeat()
+                }
             }
             false  // 不拦截，click / longClick 照常走
         }
+        hitArea.setOnLongClickListener {
+            // 长按连续删格只在真实触摸序列内启动。无障碍服务（TalkBack）的
+            // ACTION_LONG_CLICK、硬件键盘/D-pad 的长按都能直接触发 performLongClick()、
+            // 不经过任何 MotionEvent —— 这种情况下没有"抬手"这个信号能停下重复删除，
+            // 会一直删到输入框清空、无法撤销。emojiDeleteTouchDown 只由触摸事件维护，
+            // 这里没有真实触摸就不启动重复，返回 false 让框架继续走 performClick()，
+            // 退化成一次单击退格。
+            if (emojiDeleteTouchDown) {
+                startEmojiDeleteRepeat()
+                true  // 消费掉长按，系统不会再补一次 click，避免长按结束后多删一个
+            } else {
+                false
+            }
+        }
         return btn
     }
+
+    private var emojiDeleteTouchDown = false
 
     private val emojiDeleteRepeatIntervalMs = 80L
 
     private val emojiDeleteRepeat = object : Runnable {
         override fun run() {
-            // 删空了就自然收尾，不在空输入框上空转
+            // 按实际删掉的字符数判断要不要继续，而不是"输入框是否为空"——光标在开头时
+            // （比如打开面板前先把光标拖到最前面）退格不会删掉任何东西，若只看"是否为空"
+            // 会一直是非空、一直返回 true，在空转的输入框上无限重复下去。
             if (!dispatchBackspace()) return
             mainHandler.postDelayed(this, emojiDeleteRepeatIntervalMs)
         }
@@ -2477,12 +2497,15 @@ class ChatPanelManager(
      * AlignImageSpan（ReplacementSpan 子类），系统 BaseKeyListener 退格会整体删掉，
      * 不用在这里特殊处理。
      *
-     * @return 是否真的删了 —— 输入框已空时返回 false，供长按连续删自行停下。
+     * @return 是否真的删掉了字符 —— 按删除前后的文本长度判断，不是"输入框是否非空"。
+     * 光标在开头时非空文本也可能一格都删不掉，返回 false 供长按连续删自行停下，
+     * 避免在空转的输入框上无限重复。
      */
     private fun dispatchBackspace(): Boolean {
-        if (editText.text.isNullOrEmpty()) return false
+        val lengthBeforeDelete = editText.text?.length ?: return false
+        if (lengthBeforeDelete == 0) return false
         editText.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
-        return true
+        return (editText.text?.length ?: 0) < lengthBeforeDelete
     }
 
     private fun buildEmojiPanelTabButton(label: String): AppCompatTextView {

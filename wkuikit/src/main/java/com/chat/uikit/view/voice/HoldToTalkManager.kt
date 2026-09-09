@@ -48,7 +48,6 @@ class HoldToTalkManager(private val activity: Activity) {
         fun onSendVoice(audioPath: String, seconds: Int, waveform: String)
         fun onRecordingStarted()
         fun onRecordingStopped()
-        fun getCurrentInputText(): String?
         fun getChatContext(): String?
         fun onShowResultUI(text: String)
         fun onDismissResultUI()
@@ -81,6 +80,10 @@ class HoldToTalkManager(private val activity: Activity) {
     @Volatile private var meteringAmplitude = 0
 
     private val waveformLevels = mutableListOf<Float>()
+
+    // 对齐 iOS WKHoldToTalkManager.transcribedText：context_text 只用本次语音会话
+    // 已转写出的文本（连续追加说话场景），与外部输入框草稿无关。
+    private var transcribedText: String? = null
 
     fun handleTouch(event: MotionEvent): Boolean {
         when (event.action) {
@@ -149,6 +152,7 @@ class HoldToTalkManager(private val activity: Activity) {
             return
         }
 
+        transcribedText = null
         state = State.RECORDING
         recordDuration = 0
         smoothedPower = 0f
@@ -216,7 +220,8 @@ class HoldToTalkManager(private val activity: Activity) {
             return
         }
 
-        val contextText = listener?.getCurrentInputText()
+        // context_text: 只用本次语音会话已转写的文本，不读外部输入框草稿（对齐 iOS）
+        val contextText = transcribedText
         val fullContext = listener?.getChatContext()
 
         // 拆分 fullContext：聊天成员：xxx\n[发送者]: yyy → memberContext + chatContext
@@ -245,6 +250,7 @@ class HoldToTalkManager(private val activity: Activity) {
                     return@transcribeAudio
                 }
 
+                transcribedText = result.text
                 dismissOverlay()
                 showResult(result.text)
             }
@@ -256,16 +262,26 @@ class HoldToTalkManager(private val activity: Activity) {
         listener?.onShowResultUI(text)
     }
 
+    /**
+     * 用户手动编辑结果气泡文本时调用，同步为下一次追加录音的 context_text（对齐 iOS
+     * textViewDidChange 回写 self.transcribedText）。
+     */
+    fun updateTranscribedText(text: String) {
+        transcribedText = text
+    }
+
     fun sendResultText(text: String) {
         state = State.IDLE
         listener?.onDismissResultUI()
         listener?.onSendText(text)
+        transcribedText = null
         cleanupAudioFile()
     }
 
     fun cancelResult() {
         state = State.IDLE
         listener?.onDismissResultUI()
+        transcribedText = null
         cleanupAudioFile()
     }
 
@@ -304,7 +320,8 @@ class HoldToTalkManager(private val activity: Activity) {
         listener?.onAppendThinkingStart()
 
         val file = audioFile ?: return
-        val contextText = listener?.getCurrentInputText()
+        // context_text: 只用本次语音会话已转写的文本，不读外部输入框草稿（对齐 iOS）
+        val contextText = transcribedText
         val fullContext = listener?.getChatContext()
 
         var memberContext: String? = null
@@ -329,6 +346,8 @@ class HoldToTalkManager(private val activity: Activity) {
                     cleanupAudioFile()
                     return@transcribeAudio
                 }
+                // 追加录音必带上下文，服务端已基于 transcribedText 续接返回，直接替换（对齐 iOS）
+                transcribedText = result.text
                 listener?.onAppendText(result.text)
                 cleanupAudioFile()
             }

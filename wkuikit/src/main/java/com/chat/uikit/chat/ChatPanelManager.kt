@@ -187,6 +187,14 @@ class ChatPanelManager(
     private var isVoiceMode = false
     private var holdToTalkManager: HoldToTalkManager? = null
     private var isResultMode = false
+
+    /**
+     * 语音结果气泡展示期间（含思考中/追加录音子状态），气泡里的 bubbleEt 可能正持有焦点。
+     * PanelSwitchLayout 监听主输入框 focus/window-insets 变化，一旦感知变化就会在
+     * ChatActivity.onKeyboard() 里强制把焦点拉回主输入框，与气泡抢焦点。此处供
+     * ChatActivity 查询以豁免这次抢焦点。
+     */
+    fun isVoiceResultBubbleActive(): Boolean = isResultMode
     private var resultBubbleEditText: android.widget.EditText? = null
     private var appendOverlay: View? = null
     private var appendWaveBars: List<View>? = null
@@ -2719,6 +2727,7 @@ class ChatPanelManager(
             editTextContainer.visibility = View.GONE
             holdToTalkBtn.visibility = View.VISIBLE
             sendIV.visibility = View.GONE
+            isShowSendBtn = false
             markdownIv.visibility = View.GONE
             SoftKeyboardUtils.getInstance().loseFocus(editText)
             SoftKeyboardUtils.getInstance().hideInput(iConversationContext.chatActivity, editText)
@@ -2762,10 +2771,6 @@ class ChatPanelManager(
                         override fun onRecordingStarted() {}
                         override fun onRecordingStopped() {}
 
-                        override fun getCurrentInputText(): String? {
-                            return editText.text?.toString()
-                        }
-
                         override fun getChatContext(): String? {
                             return com.chat.uikit.chat.face.WKVoiceViewManager.getInstance()
                                 .buildChatContext(iConversationContext)
@@ -2780,11 +2785,11 @@ class ChatPanelManager(
                         }
 
                         override fun onAppendText(text: String) {
+                            // text 是本次追加录音后、服务端基于已转写文本续接返回的完整文本，
+                            // 整体覆盖显示（对齐 iOS finishThinkingAndShowText），而非追加拼接。
                             resultBubbleEditText?.let { et ->
-                                val current = et.text?.toString() ?: ""
-                                val newText = if (current.isEmpty()) text else "$current$text"
-                                et.setText(newText)
-                                et.setSelection(newText.length)
+                                et.setText(text)
+                                et.setSelection(text.length)
                             }
                         }
 
@@ -2868,6 +2873,13 @@ class ChatPanelManager(
             gravity = android.view.Gravity.START or android.view.Gravity.TOP
             isFocusable = true
             isFocusableInTouchMode = true
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: Editable?) {
+                    holdToTalkManager?.updateTranscribedText(s?.toString() ?: "")
+                }
+            })
         }
         bubble.addView(bubbleEt, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
@@ -3209,12 +3221,19 @@ class ChatPanelManager(
     }
 
     private fun dismissResultMode() {
-        isResultMode = false
         hideBubbleThinking()
         hideAppendRecordingUI()
+        // bubbleEt 移出视图树前主动把焦点转给面板根布局，避免系统把焦点自动转给主输入框
+        // （editText 一直保持可获焦状态），进而被 IME 感知为「有输入框获焦」而自动弹出主键盘。
+        resultBubbleEditText?.let { et ->
+            SoftKeyboardUtils.getInstance().hideInput(iConversationContext.chatActivity, et)
+            et.clearFocus()
+        }
+        SoftKeyboardUtils.getInstance().requestFocus(parentView)
         resultOverlay?.let {
             (it.parent as? ViewGroup)?.removeView(it)
         }
+        isResultMode = false
         resultOverlay = null
         resultBubbleEditText = null
         resultBubbleContainer = null

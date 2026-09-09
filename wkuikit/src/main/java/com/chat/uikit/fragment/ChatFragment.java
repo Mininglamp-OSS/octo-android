@@ -203,12 +203,68 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     private final Handler filterDebounceHandler = new Handler(Looper.getMainLooper());
     private final Runnable filterRunnable = this::filterAndDisplayInternal;
     private static final long FILTER_DEBOUNCE_MS = 50L;
+
+    //  · setAllCount 的 150ms 合并刷新。
+    //
+    // setAllCount 自身会全表扫一遍 allConversations，内部还会调 computeFollowUnread
+    // 再扫一遍，每行都读 getWkChannel()。本地缺 channel 的行每次都会重进
+    // ChannelManager 慢路径（synchronized + 线性扫 + DB 点查，且缺失结果不进缓存），
+    // 所以在「新设备刚登录、大批 channel 陆续到达」时，逐条同步重算会把主线程压垮。
+    //
+    // 频道刷新监听是唯一的高频调用方（每个 channel 响应一次），改走合并入口：窗口内
+    // 的多次请求只实算一次。这样重算次数由时间窗口决定，而不再随响应条数线性增长
+    // —— 这是预热期间主线程不被压垮的关键（配套的批次节奏见 WARMUP_BATCH 注释）。
+    //
+    // 其余 14 处调用点保持同步不变 —— 像「点开会话后立刻清红点」这类路径需要即时生效。
+    private static final long SET_ALL_COUNT_DEBOUNCE_MS = 150L;
+    private boolean setAllCountPending = false;
+    private final Runnable setAllCountRunnable = () -> {
+        setAllCountPending = false;
+        setAllCount();
+    };
+
+    /** 合并版 {@link #setAllCount()}：窗口内多次调用只实算一次。 */
+    private void setAllCountDebounced() {
+        if (setAllCountPending) return;
+        setAllCountPending = true;
+        filterDebounceHandler.postDelayed(setAllCountRunnable, SET_ALL_COUNT_DEBOUNCE_MS);
+    }
     // 诊断：每 10s 汇总一次 filterAndDisplay 触发次数（Fix 6），便于 Yu / ReviewBot 观察
     // debounce 合并效果。
     private long lastFilterLogMs = 0;
     private int filterCallCount = 0;
     private static final String TAG_FILTER = "ChatFragment.filter";
 
+    // ── channelInfo 后台预热 ────────────────────────────────────────────────
+    // 会话行的置顶(top)、免打扰(mute)、名称、头像全部只存在于 channel 表，
+    // conversation/sync 不下发这些字段。新设备 / 清数据后登录时 channel 表是空的，
+    // sortMsg 读 getWkChannel() 拿到 null，置顶会话就被当普通会话排，名字显示成
+    // 「聊天」占位。原本唯一的补齐时机是 adapter bind 里的 fetchChannelInfo，
+    // 所以用户不滑到那一行就永远补不上 —— 表现为「滑到哪条哪条才置顶」。
+    //
+    // 这里在列表装配完成后启动一条后台链，分批把缺失的 channel 拉回来。拉回后走
+    // 既有的 saveOrUpdateChannel → setRefreshChannel → 本类的刷新监听 → topChanged
+    // → 重排链路自然收敛，不新增任何刷新路径；拉取失败就退化回原来的「滑到才拉」。
+    //
+    // 代际 / 取消 / 重起等易错语义抽到 ChannelInfoWarmupState（可 JVM 单测），
+    // 本类只负责线程、网络和生命周期。
+    private static final String TAG_WARMUP = "ConvTopWarmup";
+    // 批次大小 / 间隔：8 个 / 200ms。
+    //
+    // 直觉上「拉慢一点更不容易卡」是错的 —— 在 setAllCount 已经按窗口合并之后，
+    // 全表重算的次数不再取决于响应条数，而取决于时间：
+    //     重算次数 ≈ 预热时长 / 合并窗口 = (N / 响应速率) / 窗口
+    //     主线程总工作量 ≈ N² / (响应速率 × 窗口)
+    // 也就是说「响应速率 × 窗口」越大越省：拉得越快，每个合并窗口能吸收的响应越多，
+    // 摊到每条响应的重算成本越低。把批次调慢反而会让每个窗口只吸收到寥寥几条，
+    // 总工作量不降反升。
+    //
+    // 另外真实响应速率还受服务端吞吐和 OkHttp 默认 maxRequestsPerHost=5 约束
+    // （OkHttpUtils 没有自定义 Dispatcher），客户端这边的节流只能把速率往下压、
+    // 压不上去 —— 所以压低是纯损失。
+    private static final int WARMUP_BATCH = 8;
+    private static final long WARMUP_INTERVAL_MS = 200L;
+    private final ChannelInfoWarmupState warmupState = new ChannelInfoWarmupState();
 
     /**
      *  · DiffUtil callback。
@@ -708,11 +764,13 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                     } else {
                         sortMsg(allConversations);
                     }
-                    setAllCount();
+                    // 本回调在预热期间会被每个 channel 响应触发一次，走合并入口，
+                    // 避免逐条全表重算把主线程压垮（见 setAllCountDebounced 注释）。
+                    setAllCountDebounced();
                 } else {
                     refreshChannelInAdapter(followAdapter, channel);
                     refreshChannelInAdapter(recentAdapter, channel);
-                    setAllCount();
+                    setAllCountDebounced();
                 }
             }
         });
@@ -1164,6 +1222,11 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 connectedAtMs = System.currentTimeMillis();
                 // 立即触发第一次 ping，有真实数据后才显示信号栏
                 startPingTimer();
+                // 网络恢复：预热的拉取失败没有任何回调信号（provider 对非子区频道传的是
+                // null 回调，超时 / 5xx 被静默吞掉），所以「已尝试」集合无法区分永久失败
+                // （已解散 / 无权限）和网络抖动。而全新登录恰恰是网络最拥挤的时候。这里
+                // 清空让后续 kickoff 重新尝试；重试量受实际仍缺失的数量约束，不会放大。
+                warmupState.clearAttempted();
                 // 注册流程补偿：SDK 连接成功时如果列表仍为空（getChatMsg 的 sync 因连接未就绪而未触发），补一次 sync
                 // 必须等 DB 查询完成后再判断，否则查询还在飞行中会误判为空并 clearAll
                 String spaceId = MsgModel.getInstance().getCurrentSpaceId();
@@ -2041,6 +2104,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         //  · 同步清 allConversations + conversationIndex
         clearAllConversations();
         allThreadConversations.clear();
+        // 会话集被整体清空重来，和 performSpaceSwitch 是同一种情况：在跑的预热链
+        // 拉的都是已经不在列表里的目标，必须让它失效，否则它会一直占着运行标志、
+        // 把重建后列表的 kickoff 全部吞掉。清 attempted 让重建后可以重新尝试。
+        resetChannelInfoWarmup(true);
         followAdapter.setList(new ArrayList<>());
         recentAdapter.setList(new ArrayList<>());
         //  · resync 也接入 coordinator 去重
@@ -2194,6 +2261,117 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
                 android.util.Log.w("YUJ318-prewarm", "prewarmChannelInfoCache failed", t);
             }
         });
+    }
+
+    /**
+     * 启动 channelInfo 后台预热链。
+     *
+     * <p>注意与 {@link #prewarmChannelInfoCache(List)} 的区别：那个只把 <b>本地已有</b>
+     * 的 channel 从 DB 捞进内存 cache，省主线程 IO；本方法负责把 <b>本地根本没有</b>
+     * 的 channel 从网络拉回来，是置顶 / 免打扰 / 名称在新设备上能否生效的关键。
+     *
+     * <p>已有链在跑时不会重复开链 —— 预热拉回 channel 会触发刷新监听的 topChanged
+     * 分支回调 sortMsg，每次都重启的话链会被自己制造的刷新反复掐断。但这次调用会被
+     * {@link ChannelInfoWarmupState#tryBegin} 记为 dirty，收链时自动重起一轮，
+     * 保证链运行期间新进列表的会话不会被漏掉。
+     */
+    private void kickoffChannelInfoWarmup() {
+        // 主线程只做无 IO 的快照，判空(要查 DB)挪到 IO 线程。
+        final List<ChannelInfoWarmupState.Target> snapshot =
+                new ArrayList<>(allConversations.size());
+        for (int i = 0, size = allConversations.size(); i < size; i++) {
+            ChatConversationMsg m = allConversations.get(i);
+            if (m == null || m.isSectionHeader || m.uiConversationMsg == null) continue;
+            String id = m.uiConversationMsg.channelID;
+            if (TextUtils.isEmpty(id)) continue;
+            byte type = m.uiConversationMsg.channelType;
+            if (warmupState.isAttempted(id, type)) continue;
+            snapshot.add(new ChannelInfoWarmupState.Target(id, type));
+        }
+        // 没有任何候选就别去打扰在跑的链（也不必置 dirty，本来就没活干）。
+        if (snapshot.isEmpty()) return;
+        if (!warmupState.tryBegin(MsgModel.getInstance().getCurrentSpaceId())) return;
+        final int gen = warmupState.generation();
+        Schedulers.io().scheduleDirect(() -> {
+            final List<ChannelInfoWarmupState.Target> pending = new ArrayList<>();
+            try {
+                for (int i = 0, size = snapshot.size(); i < size; i++) {
+                    ChannelInfoWarmupState.Target t = snapshot.get(i);
+                    // 这里要的是「本地到底有没有」，必须走会查 DB 的 getChannel；
+                    // 在 IO 线程所以不阻塞主线程。
+                    if (WKIM.getInstance().getChannelManager()
+                            .getChannel(t.channelID, t.channelType) == null) {
+                        pending.add(t);
+                    }
+                }
+            } catch (Throwable e) {
+                // 扫描失败不影响列表显示，退化回「滑到才拉」。
+                Log.w(TAG_WARMUP, "scan failed", e);
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                if (!warmupState.onScanResult(gen, pending)) {
+                    // 扫描结果为空同样是收链，必须走 finish 把期间被吞掉的 kickoff
+                    // 补回来。代际已作废时 finish 会被 isStale 挡掉，不会误重起。
+                    if (warmupState.finish(gen)) {
+                        kickoffChannelInfoWarmup();
+                    }
+                    return;
+                }
+                warmupNextBatch(gen);
+            });
+        });
+    }
+
+    /**
+     * 预热链的一拍：发出至多 {@link #WARMUP_BATCH} 个 fetchChannelInfo，然后
+     * {@link #WARMUP_INTERVAL_MS} 后递归下一拍。
+     *
+     * <p>下一拍是 lambda，{@code removeCallbacks} 拿不到引用，所以收链一律靠
+     * 代际判定 —— 与 Space 切换 / 视图销毁时的 {@code reset} 配合。
+     */
+    private void warmupNextBatch(int gen) {
+        if (warmupState.isStale(gen)) return;
+        if (!isAdded() || getActivity() == null) {
+            warmupState.abort(gen);
+            return;
+        }
+        if (warmupState.spaceChanged(MsgModel.getInstance().getCurrentSpaceId())) {
+            warmupState.abort(gen);
+            return;
+        }
+        for (ChannelInfoWarmupState.Target t : warmupState.nextBatch(WARMUP_BATCH)) {
+            // 这一拍之前如果别的路径（用户滑到该行 / 推送 / 好友同步）已经把 channel
+            // 填上了，就跳过，避免重复请求。这里刻意用只读内存缓存的版本：本方法在
+            // 主线程，而这些目标当初就是因为「本地没有」才入选的，走会查 DB 的
+            // getChannel 等于每拍在主线程做几次 SQLite 点查。返回 stale null 的唯一
+            // 代价是多发一个请求，划算。
+            if (WKIM.getInstance().getChannelManager()
+                    .getChannelIfCached(t.channelID, t.channelType) != null) {
+                continue;
+            }
+            warmupState.markAttempted(t);
+            WKIM.getInstance().getChannelManager().fetchChannelInfo(t.channelID, t.channelType);
+        }
+        if (warmupState.hasMore()) {
+            pingHandler.postDelayed(() -> warmupNextBatch(gen), WARMUP_INTERVAL_MS);
+            return;
+        }
+        // 收链；期间若有被吞掉的 kickoff，立刻重起一轮。已请求过的会被 attempted
+        // 过滤掉，所以重起必然收敛（下一轮没有新候选时 snapshot 为空直接返回）。
+        if (warmupState.finish(gen)) {
+            kickoffChannelInfoWarmup();
+        }
+    }
+
+    /**
+     * 让在跑的预热链失效。Space 切换、整体重新同步（会话集换了一批，旧链继续拉毫无
+     * 意义）以及视图销毁都要调。
+     *
+     * @param clearAttempted Space 切换 / 重新同步传 true —— 允许对同一个 channel
+     *                       重新尝试；单纯销毁传 false。
+     */
+    private void resetChannelInfoWarmup(boolean clearAttempted) {
+        warmupState.reset(clearAttempted);
     }
 
     /**
@@ -2369,6 +2547,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         MsgModel.getInstance().setCurrentSpaceId(space.space_id, space.name);
         setSpaceSwitcherText(space.name);
         updateSpaceAvatar(space.name);
+        // 会话集整体换了一批，旧 Space 的预热链继续拉没有意义；清 attempted 让同一个
+        // channel 在新 Space 允许重新尝试。放在 setCurrentSpaceId 之后、tryBegin 之前，
+        // 保证被 debounce 提前 return 的那条路径也已经把旧链停掉。
+        resetChannelInfoWarmup(true);
 
         SpaceModel.getInstance().invalidateMembersCache();
         CategoryModel.getInstance().invalidateCache();
@@ -2647,6 +2829,9 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
             //  · 首帧 sortMsg 完成：如果 Space 切换 overlay 还在（sync 回调可能
             // 稍后到，或用户侧首次 DB 命中先于 sync），立刻隐藏给用户即时反馈。
             hideSpaceSwitchOverlay();
+            // 列表已装配完成 → 把本地缺 channel 的会话在后台补齐，否则新设备上
+            // 置顶 / 免打扰 / 名称要等用户滑到那一行才生效。
+            kickoffChannelInfoWarmup();
             if (BuildConfig.DEBUG) {
                 Trace.endSection();
                 Log.d("YUJ312", "adapter-setList-final done size=" + yuj312T10Size
@@ -4350,6 +4535,10 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
         pingHandler.removeCallbacks(spaceResyncRunnable);
         //  · 清理 filterAndDisplay debounce handler，防止 Fragment 销毁后 Runnable 回调。
         filterDebounceHandler.removeCallbacks(filterRunnable);
+        filterDebounceHandler.removeCallbacks(setAllCountRunnable);
+        setAllCountPending = false;
+        // 预热链的下一拍是 lambda，removeCallbacks 拿不到引用，靠自增代际让它下次醒来自行收链。
+        resetChannelInfoWarmup(false);
         stopPingTimer();
     }
 
@@ -4357,6 +4546,12 @@ public class ChatFragment extends WKBaseFragment<FragChatConversationLayoutBindi
     public void onDestroyView() {
         super.onDestroyView();
         filterDebounceHandler.removeCallbacks(filterRunnable);
+        filterDebounceHandler.removeCallbacks(setAllCountRunnable);
+        setAllCountPending = false;
+        // 视图没了就停预热：isAdded() / getActivity() 对「view 已销毁但 fragment 还在」
+        // 的状态仍然为 true，不在这里收链的话，链会继续发请求并持有 fragment。
+        // 下一拍是 lambda、removeCallbacks 拿不到引用，所以靠自增代际让它醒来即退。
+        resetChannelInfoWarmup(false);
         FollowedKeysStore.getInstance().removeListener(followedKeysChangeListener);
     }
 

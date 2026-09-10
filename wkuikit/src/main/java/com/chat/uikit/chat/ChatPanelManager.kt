@@ -879,13 +879,24 @@ class ChatPanelManager(
     /**
      * 文本超出字节限制时弹窗提示，确认后转为 .txt 文件发送
      */
-    private fun showTextToFileAlert(text: String) {
+    /**
+     * @param restoreComposerText 语音场景专用：弹窗关闭后要写回 editText 的用户草稿（顶替前
+     *        暂存的内容）。null 表示无需还原（如手动发送键路径，text 本来就是用户在打的内容）。
+     *
+     * 🔴 R4 fix (review)：还原时机不能抢在用户点弹窗按钮之前——旧实现在弹窗弹出的同一时刻就
+     * 同步把 restoreComposerText 写回 editText，导致两个出口都把这次还原的价值抵消掉：点
+     * 「确认」，sendTextAsFile 内部无条件清空 editText，刚写回的草稿立刻被清没；点「取消」，
+     * STT 文本（此刻只存在于 editText，气泡已随 dismissResultMode 销毁）被草稿覆盖后无副本，
+     * 用户只能重录。现在把还原挪进各自的按钮回调：确认发送后才写回草稿；取消则保留 STT 文本
+     * 不还原，让用户能看到、能编辑重发，与空草稿子路径的行为一致。
+     */
+    private fun showTextToFileAlert(text: String, restoreComposerText: String? = null) {
         val context = iConversationContext.chatActivity
         AlertDialog.Builder(context)
             .setMessage(context.getString(com.chat.base.R.string.str_text_exceed_limit_tip))
             .setNegativeButton(context.getString(com.chat.base.R.string.cancel), null)
             .setPositiveButton(context.getString(com.chat.base.R.string.str_confirm_send)) { _, _ ->
-                sendTextAsFile(text)
+                sendTextAsFile(text, restoreComposerText)
             }
             .show()
     }
@@ -893,7 +904,7 @@ class ChatPanelManager(
     /**
      * 将文本内容生成 .txt 文件并以文件消息发送
      */
-    private fun sendTextAsFile(text: String) {
+    private fun sendTextAsFile(text: String, restoreComposerText: String? = null) {
         val context = iConversationContext.chatActivity
         // 用前10个字符作为文件名
         var namePrefix = if (text.length > 10) text.substring(0, 10) else text
@@ -919,8 +930,14 @@ class ChatPanelManager(
 
         iConversationContext.sendMessage(fileContent)
 
-        // 清空输入框
-        editText.text = null
+        // 语音场景：写回用户草稿，而不是无条件清空——editText 此刻仍是 STT 占位文本，
+        // 直接清空会把 restoreComposerText 的还原价值抵消掉（见 showTextToFileAlert 说明）。
+        if (!restoreComposerText.isNullOrEmpty()) {
+            editText.setText(restoreComposerText)
+            editText.setSelection(restoreComposerText.length)
+        } else {
+            editText.text = null
+        }
         lastInputTime = 0
         if (chatTopView?.visibility == View.VISIBLE) {
             CommonAnim.getInstance().animateClose(chatTopView)
@@ -4414,13 +4431,10 @@ class ChatPanelManager(
         // 🔴 R3 fix (review)：「转文件」弹窗针对的是 STT placeholder 文本本身超限（长语音
         // 识别结果超字节），托盘图片这次发送并未被接管。sendVoiceTextDirect 没有超字节兜底，
         // 不能靠返回 false 甩给调用方直接发出去（会绕过超限保护）；这里仍然弹提示、返回 true
-        // 表示「已处理」，但要先把 editText 还原成用户草稿，不能让草稿跟着 STT 占位文本一起清空。
+        // 表示「已处理」。还原草稿的时机交给 showTextToFileAlert 的两个按钮回调（见 R4 fix），
+        // 不能在弹窗弹出的同一刻同步还原——用户还没做选择，还原会被两个出口分别抵消或丢弹。
         if (!TextUtils.isEmpty(rawText) && isTextOverByteLimit(rawText)) {
-            showTextToFileAlert(rawText)
-            if (!restoreComposerText.isNullOrEmpty()) {
-                editText.setText(restoreComposerText)
-                editText.setSelection(restoreComposerText.length)
-            }
+            showTextToFileAlert(rawText, restoreComposerText)
             return true
         }
         richTextTraySending = true

@@ -1715,10 +1715,17 @@ class ChatPanelManager(
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                 this.start = start
                 this.count = count
+                // 🔴 语音模式下发送按钮显示异常：本 watcher 写 sendIV.visibility 时原先缺少
+                // isVoiceMode 判断（updateSendBtnForTray() 在 :4556 有对等的早返回，这里没有）。
+                // 语音模式下 onSendText 会用 editText.setText(text) 临时顶替文本去拼图文消息，
+                // 这个赋值本身会触发本 watcher，从而在语音模式下把 sendIV 错误置为可见——
+                // 用户看到的是「按住说话」条，但旁边多出一个可点的发送键，状态与实际输入模式不
+                // 一致。isShowSendBtn 仍照常更新（退出语音模式后据此正确恢复），只是可见性的
+                // 写入在语音模式下跳过，交由 toggleVoiceMode() 统一控制 sendIV 显隐。
                 if (!TextUtils.isEmpty(s.toString())) {
                     val content = StringUtils.replaceBlank(s.toString())
                     if (!TextUtils.isEmpty(content)) {
-                        if (!isShowSendBtn) {
+                        if (!isShowSendBtn && !isVoiceMode) {
                             sendIV.clearColorFilter()
                             sendIV.visibility = View.VISIBLE
                             CommonAnim.getInstance().animImageView(sendIV)
@@ -1728,10 +1735,10 @@ class ChatPanelManager(
                         // 文本为空白：托盘有图时仍保留发送键（Phase 2 纯图片托盘可发）。
                         if (!richTextTray.isEmpty()) {
                             isShowSendBtn = true
-                            sendIV.visibility = View.VISIBLE
+                            if (!isVoiceMode) sendIV.visibility = View.VISIBLE
                         } else {
                             isShowSendBtn = false
-                            sendIV.visibility = View.GONE
+                            if (!isVoiceMode) sendIV.visibility = View.GONE
                         }
                     }
                     if (flame == 1) {
@@ -1744,10 +1751,10 @@ class ChatPanelManager(
                     // 文本清空：托盘有图时仍保留发送键（Phase 2 纯图片托盘可发）。
                     if (!richTextTray.isEmpty()) {
                         isShowSendBtn = true
-                        sendIV.visibility = View.VISIBLE
+                        if (!isVoiceMode) sendIV.visibility = View.VISIBLE
                     } else {
                         isShowSendBtn = false
-                        sendIV.visibility = View.GONE
+                        if (!isVoiceMode) sendIV.visibility = View.GONE
                     }
                 }
                 // slash command detection for bot chats
@@ -2738,10 +2745,20 @@ class ChatPanelManager(
                         override fun onSendText(text: String) {
                             // 有 pending 图：STT 文本作 caption，与图聚合（或 caption 全空时纯图）。
                             // 对齐 iOS holdToTalkManager:sendText: → _commitPendingWithCaption。
+                            //
+                            // 🔴 已修复的草稿丢失问题：这里会把 editText 临时顶替成 STT 文本（下一行），
+                            // flushRichTextTraySend 内部又是从 editText 读文本去发送/判断是否清空的，
+                            // 它完全不知道"顶替前"用户还有一份没发出去的草稿 previous。旧实现只在
+                            // !handled（tray 未接管）时才把 previous 写回去；handled=true（tray 正常
+                            // 接管、走异步发送）时函数直接 return，previous 从此没有任何路径被恢复，
+                            // 而 flushRichTextTraySend 的 onEnqueued 回调随后会按"消费快照==当前内容"
+                            // 判定清空 editText——清掉的其实是 STT placeholder，用户原始草稿已经在
+                            // 被顶替的那一刻静默丢失。现在把 previous 传给 flushRichTextTraySend，
+                            // 由它在真正该清空 editText 的那一刻，改为写回 previous。
                             if (!richTextTray.isEmpty()) {
                                 val previous = editText.text?.toString() ?: ""
                                 editText.setText(text)
-                                if (!flushRichTextTraySend()) {
+                                if (!flushRichTextTraySend(restoreComposerText = previous)) {
                                     // tray 未接管（如 reply/edit 态）— 复原文本并按原文本路径发出。
                                     editText.setText(previous)
                                     sendVoiceTextDirect(text)
@@ -4345,7 +4362,14 @@ class ChatPanelManager(
      * @return true 表示本次点击已被托盘发送接管（含「超字节弹转文件框」）；false 表示未接管
      *         （如进入 reply/edit 态），调用方应继续走原有文本 / reply / edit 发送路径。
      */
-    private fun flushRichTextTraySend(): Boolean {
+    /**
+     * @param restoreComposerText 语音输入场景专用：调用前 editText 已被 STT 文本临时顶替
+     *        （见 onSendText 的 caption 聚合），这里保存的是被顶替前、用户真正在打的草稿。
+     *        消息入队后若 editText 按 shouldClearComposer 被清空，用这份草稿写回，而不是
+     *        placeholder 文本随手一清就把用户还没发的字丢了。null 表示无需还原（如普通点击
+     *        发送键，editText 本来就是要发的内容）。
+     */
+    private fun flushRichTextTraySend(restoreComposerText: String? = null): Boolean {
         // in-flight 防重入：上一次托盘发送还在上传图片期间，吞掉重复点击，避免重复 type=14。
         if (richTextTraySending) {
             return true
@@ -4374,7 +4398,13 @@ class ChatPanelManager(
             // （rawTextRaw，含空白）时才清，否则保留用户新打的内容，绝不擦新草稿。
             val current = editText.text?.toString() ?: ""
             if (WKRichTextSender.shouldClearComposer(rawTextRaw, current)) {
-                editText.text = null
+                if (!restoreComposerText.isNullOrEmpty()) {
+                    // 语音场景：清掉的是 STT placeholder，不是用户草稿——写回真正的草稿。
+                    editText.setText(restoreComposerText)
+                    editText.setSelection(restoreComposerText.length)
+                } else {
+                    editText.text = null
+                }
                 lastInputTime = 0
             }
             if (chatTopView?.visibility == View.VISIBLE) {
@@ -4551,21 +4581,33 @@ class ChatPanelManager(
      * 托盘非空时，即便输入框没有文本也应允许发送（纯图片托盘 → 发单条 RichText，
      * 或退化为逐张图片由发送路径决定）。文本存在与否的发送键显隐仍由 TextWatcher 管理，
      * 这里只在「有图无字」时把发送键补显出来；「无图无字」时不强制显示。
+     *
+     * 🔴 语音模式下发送键在切回键盘后消失（本分支曾修过一版，此次是同类问题的另一条触发
+     * 路径）：图文混排发送是异步的（WKRichTextSender 上传中），用户点发送键后若在上传完成
+     * 前切到语音模式，onEnqueued 回调会在语音模式期间才落地，调用本函数——旧实现在语音模式
+     * 下整函数早返回，导致 isShowSendBtn 停留在「进语音模式前」的旧值，没有跟着托盘被清空这
+     * 件事同步更新。等用户再切回键盘，updateSendBtnForTray 用这个失真的 isShowSendBtn 做防抖
+     * 判断（if (!isShowSendBtn) 才去设可见性），误判为「已经显示，不用再设」，实际 sendIV 早
+     * 已被 toggleVoiceMode 设成 GONE，于是发送键就此消失。修复：isShowSendBtn 这个状态量始终
+     * 正常计算更新，只把 sendIV.visibility 的写入放在语音模式判断之后跳过，两件事解耦。
      */
     private fun updateSendBtnForTray() {
-        if (isVoiceMode) {
-            return
-        }
         val hasText = !TextUtils.isEmpty(StringUtils.replaceBlank(editText.text?.toString() ?: ""))
         val hasTrayImages = !richTextTray.isEmpty()
-        if (hasTrayImages || hasText) {
-            if (!isShowSendBtn) {
+        val shouldShow = hasTrayImages || hasText
+        val wasShowing = isShowSendBtn
+        isShowSendBtn = shouldShow
+        if (isVoiceMode) {
+            // 语音模式下发送键本就应保持隐藏，交由 toggleVoiceMode() 统一控制；这里只同步
+            // isShowSendBtn 状态，避免退出语音模式后该状态与实际托盘/文本内容脱节。
+            return
+        }
+        if (shouldShow) {
+            if (!wasShowing) {
                 sendIV.clearColorFilter()
                 sendIV.visibility = View.VISIBLE
             }
-            isShowSendBtn = true
         } else {
-            isShowSendBtn = false
             sendIV.visibility = View.GONE
         }
     }

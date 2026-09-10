@@ -1716,16 +1716,24 @@ class ChatPanelManager(
                 this.start = start
                 this.count = count
                 // 🔴 语音模式下发送按钮显示异常：本 watcher 写 sendIV.visibility 时原先缺少
-                // isVoiceMode 判断（updateSendBtnForTray() 在 :4556 有对等的早返回，这里没有）。
+                // isVoiceMode 判断（updateSendBtnForTray() 在 :4600 有对等的早返回，这里没有）。
                 // 语音模式下 onSendText 会用 editText.setText(text) 临时顶替文本去拼图文消息，
                 // 这个赋值本身会触发本 watcher，从而在语音模式下把 sendIV 错误置为可见——
                 // 用户看到的是「按住说话」条，但旁边多出一个可点的发送键，状态与实际输入模式不
                 // 一致。isShowSendBtn 仍照常更新（退出语音模式后据此正确恢复），只是可见性的
                 // 写入在语音模式下跳过，交由 toggleVoiceMode() 统一控制 sendIV 显隐。
+                //
+                // 🔴 R3 fix (review)：上一版用 !isShowSendBtn 做「已经显示就不用重设」的防抖，
+                // 但 isShowSendBtn 在语音模式期间会被正常同步更新（见下方/updateSendBtnForTray
+                // 的解耦逻辑），可能与 sendIV 的真实可见性脱节——例如语音模式期间图文托盘异步
+                // 发送完成，isShowSendBtn 被同步为 true，但 sendIV 因为语音模式早返回仍是 GONE；
+                // 退出语音模式或本 watcher 之后再被触发时，!isShowSendBtn 判断为 false，误判为
+                // 「已经在显示」而跳过重设，sendIV 卡在 GONE。改为直接看 sendIV.visibility 的
+                // 真实值，不依赖可能失真的缓存标记。
                 if (!TextUtils.isEmpty(s.toString())) {
                     val content = StringUtils.replaceBlank(s.toString())
                     if (!TextUtils.isEmpty(content)) {
-                        if (!isShowSendBtn && !isVoiceMode) {
+                        if (sendIV.visibility != View.VISIBLE && !isVoiceMode) {
                             sendIV.clearColorFilter()
                             sendIV.visibility = View.VISIBLE
                             CommonAnim.getInstance().animImageView(sendIV)
@@ -2758,7 +2766,8 @@ class ChatPanelManager(
                             if (!richTextTray.isEmpty()) {
                                 val previous = editText.text?.toString() ?: ""
                                 editText.setText(text)
-                                if (!flushRichTextTraySend(restoreComposerText = previous)) {
+                                val handled = flushRichTextTraySend(restoreComposerText = previous)
+                                if (!handled) {
                                     // tray 未接管（如 reply/edit 态）— 复原文本并按原文本路径发出。
                                     editText.setText(previous)
                                     sendVoiceTextDirect(text)
@@ -4359,19 +4368,30 @@ class ChatPanelManager(
      * 才做（onEnqueued）。上传未完成期间图片留在托盘、文本留在输入框。注：托盘仅内存态，
      * 进程死会丢失托盘图片（文本草稿另有持久化）——这是 accepted scope 的 UX 非对称，非发送原子性回归。
      *
-     * @return true 表示本次点击已被托盘发送接管（含「超字节弹转文件框」）；false 表示未接管
-     *         （如进入 reply/edit 态），调用方应继续走原有文本 / reply / edit 发送路径。
-     */
-    /**
      * @param restoreComposerText 语音输入场景专用：调用前 editText 已被 STT 文本临时顶替
      *        （见 onSendText 的 caption 聚合），这里保存的是被顶替前、用户真正在打的草稿。
      *        消息入队后若 editText 按 shouldClearComposer 被清空，用这份草稿写回，而不是
      *        placeholder 文本随手一清就把用户还没发的字丢了。null 表示无需还原（如普通点击
      *        发送键，editText 本来就是要发的内容）。
+     * @return true 表示本次点击已被托盘发送接管（含「超字节弹转文件框」）；false 表示未接管
+     *         （如进入 reply/edit 态，或语音场景下命中 in-flight 防重入），调用方应继续走
+     *         原有文本 / reply / edit / sendVoiceTextDirect 发送路径。
      */
     private fun flushRichTextTraySend(restoreComposerText: String? = null): Boolean {
         // in-flight 防重入：上一次托盘发送还在上传图片期间，吞掉重复点击，避免重复 type=14。
+        //
+        // 🔴 R3 fix (review)：这个分支和下面「超字节」分支原先都在 richTextTraySending=true
+        // 之前 return true——对着手动连续点发送键，「吞掉、不重复发」是对的；但语音场景传入
+        // restoreComposerText 时，这次调用代表的是一段新的语音识别结果，不是重复点击，如果
+        // 仍然返回 true，调用方会认为「已接管」而不再发送这段语音文本，等于把这次语音结果和
+        // 用户原始草稿一起丢掉。返回 false 让调用方走原文本路径把语音结果单独发出去，同时
+        // 把 editText 还原成草稿，不动本次未被接管的托盘状态（留给上一次 in-flight 发送收尾）。
         if (richTextTraySending) {
+            if (!restoreComposerText.isNullOrEmpty()) {
+                editText.setText(restoreComposerText)
+                editText.setSelection(restoreComposerText.length)
+                return false
+            }
             return true
         }
         val rawTextRaw = editText.text?.toString() ?: ""
@@ -4384,8 +4404,17 @@ class ChatPanelManager(
             return false
         }
         // 文本超字节上限：交回发送键转文件路径（与纯文本同源阈值），不发超限 payload。
+        //
+        // 🔴 R3 fix (review)：「转文件」弹窗针对的是 STT placeholder 文本本身超限（长语音
+        // 识别结果超字节），托盘图片这次发送并未被接管。sendVoiceTextDirect 没有超字节兜底，
+        // 不能靠返回 false 甩给调用方直接发出去（会绕过超限保护）；这里仍然弹提示、返回 true
+        // 表示「已处理」，但要先把 editText 还原成用户草稿，不能让草稿跟着 STT 占位文本一起清空。
         if (!TextUtils.isEmpty(rawText) && isTextOverByteLimit(rawText)) {
             showTextToFileAlert(rawText)
+            if (!restoreComposerText.isNullOrEmpty()) {
+                editText.setText(restoreComposerText)
+                editText.setSelection(restoreComposerText.length)
+            }
             return true
         }
         richTextTraySending = true
@@ -4590,12 +4619,19 @@ class ChatPanelManager(
      * 判断（if (!isShowSendBtn) 才去设可见性），误判为「已经显示，不用再设」，实际 sendIV 早
      * 已被 toggleVoiceMode 设成 GONE，于是发送键就此消失。修复：isShowSendBtn 这个状态量始终
      * 正常计算更新，只把 sendIV.visibility 的写入放在语音模式判断之后跳过，两件事解耦。
+     *
+     * 🔴 R3 fix (review)：上面这版解耦本身又引入了镜像缺陷——isShowSendBtn 在语音模式期间
+     * 被正常同步为 true 后，退出语音模式时 wasShowing 读到的正是这个「已经是 true」的值，
+     * if (!wasShowing) 判断为 false，误判为「已经在显示」而跳过 VISIBLE 写入；但 sendIV 从
+     * 进语音模式起一直是 GONE，从未被语音模式期间的早返回路径设置过——用户能看到恢复的草稿，
+     * 却没有发送键，且无法通过继续输入恢复（TextWatcher 同样用缓存标记做防抖）。根源是缓存
+     * 标记 isShowSendBtn 不能保证等于 sendIV 的真实可见性。改为直接判断 sendIV.visibility
+     * 本身，不再依赖可能与实际视图状态脱节的缓存值。
      */
     private fun updateSendBtnForTray() {
         val hasText = !TextUtils.isEmpty(StringUtils.replaceBlank(editText.text?.toString() ?: ""))
         val hasTrayImages = !richTextTray.isEmpty()
         val shouldShow = hasTrayImages || hasText
-        val wasShowing = isShowSendBtn
         isShowSendBtn = shouldShow
         if (isVoiceMode) {
             // 语音模式下发送键本就应保持隐藏，交由 toggleVoiceMode() 统一控制；这里只同步
@@ -4603,7 +4639,7 @@ class ChatPanelManager(
             return
         }
         if (shouldShow) {
-            if (!wasShowing) {
+            if (sendIV.visibility != View.VISIBLE) {
                 sendIV.clearColorFilter()
                 sendIV.visibility = View.VISIBLE
             }

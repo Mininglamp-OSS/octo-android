@@ -4387,9 +4387,15 @@ class ChatPanelManager(
         // 用户原始草稿一起丢掉。返回 false 让调用方走原文本路径把语音结果单独发出去，同时
         // 把 editText 还原成草稿，不动本次未被接管的托盘状态（留给上一次 in-flight 发送收尾）。
         if (richTextTraySending) {
-            if (!restoreComposerText.isNullOrEmpty()) {
-                editText.setText(restoreComposerText)
-                editText.setSelection(restoreComposerText.length)
+            // 用 null 判空而非 isNullOrEmpty()：手动点发送键走默认参数 null，语音场景
+            // 永远传非 null 的 previous（即便用户没打草稿也是 ""）。isNullOrEmpty() 会把
+            // 「语音场景空草稿」误判成「手动重复点击」直接 return true，调用方因此认为
+            // 已接管、不再走 sendVoiceTextDirect，语音识别结果被静默丢弃。
+            if (restoreComposerText != null) {
+                if (restoreComposerText.isNotEmpty()) {
+                    editText.setText(restoreComposerText)
+                    editText.setSelection(restoreComposerText.length)
+                }
                 return false
             }
             return true

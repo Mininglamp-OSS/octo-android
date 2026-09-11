@@ -18,6 +18,7 @@ package com.chat.base.glide;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -40,8 +41,7 @@ import com.chat.base.WKBaseApplication;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.utils.AndroidUtilities;
 import com.chat.base.config.WKConstants;
-import com.chat.base.endpoint.EndpointManager;
-import com.chat.base.endpoint.entity.EditImgMenu;
+import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.utils.WKLogUtils;
 import com.luck.picture.lib.animators.AnimationType;
 import com.luck.picture.lib.basic.PictureSelector;
@@ -273,6 +273,8 @@ public class GlideUtils {
     }
 
     public void chooseIMG(Activity activity, int maxSelectNum, boolean isCamera, ChooseMimeType mimeType, boolean isWithSelectVideoImage, boolean isOriginalControl, final ISelectBack iSelectBack) {
+        WKLogUtils.d("EditImgFlow", "GlideUtils.chooseIMG[" + Integer.toHexString(hashCode()) + "] 被调用, activity=" + activity.getClass().getSimpleName() + "@" + Integer.toHexString(activity.hashCode())
+                + " maxSelectNum=" + maxSelectNum + " 调用栈: " + android.util.Log.getStackTraceString(new Throwable()));
         if (isCamera) WKBaseApplication.getInstance().disconnect = false;
         PictureSelectorStyle selectorStyle = new PictureSelectorStyle();
         selectorStyle.setTitleBarStyle(getTitleBarStyle());
@@ -304,9 +306,18 @@ public class GlideUtils {
 //                .isCompress(true)
                 .isOriginalControl(isOriginalControl).setEditMediaInterceptListener((fragment, currentLocalMedia, requestCode) -> {
                     WKBaseApplication.getInstance().disconnect = true;
-                    EndpointManager.getInstance().invoke("edit_img", new EditImgMenu(null, false, currentLocalMedia.getRealPath(), fragment, requestCode, (bitmap, path) -> {
-
-                    }));
+                    String editPath = currentLocalMedia.getRealPath();
+                    WKLogUtils.d("EditImgFlow", "GlideUtils: PictureSelector 点击编辑，跳转裁剪页 path=" + editPath + " requestCode=" + requestCode
+                            + " fragment=" + fragment.getClass().getSimpleName() + "@" + Integer.toHexString(fragment.hashCode())
+                            + " isCut=" + currentLocalMedia.isCut() + " isCompressed=" + currentLocalMedia.isCompressed());
+                    WKLogUtils.d("EditImgFlow", "GlideUtils: 编辑回调调用栈: " + android.util.Log.getStackTraceString(new Throwable()));
+                    if (fragment.getContext() == null) {
+                        WKLogUtils.e("EditImgFlow", "GlideUtils: fragment.getContext() 为空，无法跳转裁剪页");
+                        return;
+                    }
+                    Intent cropIntent = new Intent(fragment.getContext(), WKCropImageActivity.class);
+                    cropIntent.putExtra("path", editPath);
+                    fragment.startActivityForResult(cropIntent, requestCode);
                 })
                 .isGif(true).forResult(new OnResultCallbackListener<>() {
                     @Override
@@ -316,6 +327,10 @@ public class GlideUtils {
                         for (LocalMedia media : result) {
                             String path;
                             ChooseResult chooseResult = new ChooseResult();
+                            WKLogUtils.d("EditImgFlow", "GlideUtils.onResult: media isCut=" + media.isCut() + " isCompressed=" + media.isCompressed()
+                                    + " cutPath=" + media.getCutPath() + " compressPath=" + media.getCompressPath()
+                                    + " realPath=" + media.getRealPath() + " sandboxPath=" + media.getSandboxPath()
+                                    + " isToSandboxPath=" + media.isToSandboxPath() + " mimeType=" + media.getMimeType());
                             if (media.isCut() && !media.isCompressed()) {
                                 // 裁剪过
                                 path = media.getCutPath();
@@ -345,7 +360,7 @@ public class GlideUtils {
                                 chooseResult.model = ChooseResultModel.image;
                                 chooseResult.path = path;
                             }
-                            WKLogUtils.e(path);
+                            WKLogUtils.d("EditImgFlow", "GlideUtils.onResult: 最终选定 path=" + path + " 文件是否存在=" + (TextUtils.isEmpty(path) ? "N/A" : new File(path).exists()));
                             list.add(chooseResult);
                         }
                         iSelectBack.onBack(list);
@@ -390,6 +405,7 @@ public class GlideUtils {
      * @param paths   图片本地地址
      */
     public void compressImg(Context context, List<String> paths, final ICompressListener iCompressListener) {
+        WKLogUtils.d("EditImgFlow", "GlideUtils.compressImg[" + Integer.toHexString(hashCode()) + "]: 开始压缩, paths=" + paths);
         files.clear();
         errCount = 0;
         Luban.with(context)
@@ -404,6 +420,7 @@ public class GlideUtils {
 
                     @Override
                     public void onSuccess(int index, File file) {
+                        WKLogUtils.d("EditImgFlow", "GlideUtils.compressImg[" + Integer.toHexString(hashCode()) + "]: onSuccess index=" + index + " file=" + (file != null ? file.getAbsolutePath() : null) + " files.size=" + (files.size() + 1) + " errCount=" + errCount + " total=" + paths.size());
                         if (file != null) files.add(file);
                         if ((files.size() + errCount) == paths.size()) {
                             iCompressListener.onResult(files);
@@ -413,6 +430,7 @@ public class GlideUtils {
                     @Override
                     public void onError(int index, Throwable e) {
                         errCount++;
+                        WKLogUtils.e("EditImgFlow", "GlideUtils.compressImg[" + Integer.toHexString(hashCode()) + "]: onError index=" + index + " files.size=" + files.size() + " errCount=" + errCount + " total=" + paths.size() + " error=" + e);
                         if ((files.size() + errCount) == paths.size()) {
                             iCompressListener.onResult(files);
                         }

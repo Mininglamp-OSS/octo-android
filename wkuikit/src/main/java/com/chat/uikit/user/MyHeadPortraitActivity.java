@@ -27,7 +27,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.chat.base.WKBaseApplication;
-import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
@@ -168,14 +167,13 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
                     if (isFinishing() || isDestroyed()) return;
                     String path = paths.get(0).path;
                     if (!TextUtils.isEmpty(path)) {
-                        Intent intent;
                         if (AnimatedImageUtils.isAnimatedGif(path)) {
-                            intent = new Intent(MyHeadPortraitActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                            Intent intent = new Intent(MyHeadPortraitActivity.this, WKAnimatedAvatarPreviewActivity.class);
+                            intent.putExtra("path", path);
+                            chooseResultLac.launch(intent);
                         } else {
-                            intent = new Intent(MyHeadPortraitActivity.this, WKCropImageActivity.class);
+                            uploadAvatarPath(path);
                         }
-                        intent.putExtra("path", path);
-                        chooseResultLac.launch(intent);
                     }
                 }
             }
@@ -191,23 +189,27 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
     ActivityResultLauncher<Intent> chooseResultLac = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() == RESULT_OK && result.getData() != null) {
             String path = result.getData().getStringExtra("path");
-            UserModel.getInstance().uploadAvatar(path, code -> {
-                if (code == HttpResponseCode.success) {
-                    WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
-                    if (channel == null || TextUtils.isEmpty(channel.channelID)) {
-                        channel = new WKChannel();
-                        channel.channelType = WKChannelType.PERSONAL;
-                        channel.channelID = WKConfig.getInstance().getUid();
-                        WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
-                    }
-                    channel.avatarCacheKey = UUID.randomUUID().toString().replace("-", "");
-                    WKIM.getInstance().getChannelManager().updateAvatarCacheKey(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL, channel.avatarCacheKey);
-                    GlideUtils.getInstance().showAvatarImg(this, channel.channelID, WKChannelType.PERSONAL, channel.avatarCacheKey, wkVBinding.avatarIv);
-                    String avatarURL = WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid());
-                    avatarURL = avatarURL + "?key=" + channel.avatarCacheKey;
-                    EndpointManager.getInstance().invoke("updateRtcAvatarUrl", avatarURL);
-                }
-            });
+            uploadAvatarPath(path);
         }
     });
+
+    private void uploadAvatarPath(String path) {
+        UserModel.getInstance().uploadAvatar(path, code -> {
+            if (code == HttpResponseCode.success) {
+                WKChannel channel = WKIM.getInstance().getChannelManager().getChannel(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
+                if (channel == null || TextUtils.isEmpty(channel.channelID)) {
+                    channel = new WKChannel();
+                    channel.channelType = WKChannelType.PERSONAL;
+                    channel.channelID = WKConfig.getInstance().getUid();
+                    WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel);
+                }
+                channel.avatarCacheKey = UUID.randomUUID().toString().replace("-", "");
+                WKIM.getInstance().getChannelManager().updateAvatarCacheKey(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL, channel.avatarCacheKey);
+                GlideUtils.getInstance().showAvatarImg(this, channel.channelID, WKChannelType.PERSONAL, channel.avatarCacheKey, wkVBinding.avatarIv);
+                String avatarURL = WKApiConfig.getAvatarUrl(WKConfig.getInstance().getUid());
+                avatarURL = avatarURL + "?key=" + channel.avatarCacheKey;
+                EndpointManager.getInstance().invoke("updateRtcAvatarUrl", avatarURL);
+            }
+        });
+    }
 }

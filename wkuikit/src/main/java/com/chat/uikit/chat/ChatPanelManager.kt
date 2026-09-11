@@ -2755,13 +2755,21 @@ class ChatPanelManager(
             activity, 1, false, ChooseMimeType.img, false, false,
             object : GlideUtils.ISelectBack {
                 override fun onBack(paths: MutableList<ChooseResult>?) {
-                    val first = paths?.firstOrNull { it.path?.isNotEmpty() == true } ?: return
+                    com.chat.base.utils.WKLogUtils.d("StickerUpload", "pickAndUploadSticker onBack paths.size=${paths?.size}")
+                    val first = paths?.firstOrNull { it.path?.isNotEmpty() == true }
+                    if (first == null) {
+                        com.chat.base.utils.WKLogUtils.e("StickerUpload", "pickAndUploadSticker onBack: no valid path in result")
+                        return
+                    }
                     val file = java.io.File(first.path)
+                    com.chat.base.utils.WKLogUtils.d("StickerUpload", "pickAndUploadSticker chosenPath=${first.path} exists=${file.exists()} len=${file.length()}")
                     WKStickerUploader.upload(file, object : WKStickerUploader.Callback {
                         override fun onSuccess(sticker: WKSticker) {
                             // WKStickerUploader 内部已 toast 成功，此处不重复
+                            com.chat.base.utils.WKLogUtils.d("StickerUpload", "pickAndUploadSticker onSuccess sticker_id=${sticker.sticker_id}")
                         }
                         override fun onError(messageResId: Int) {
+                            com.chat.base.utils.WKLogUtils.e("StickerUpload", "pickAndUploadSticker onError messageResId=$messageResId")
                             if (messageResId != 0) {
                                 com.chat.base.utils.WKToastUtils.getInstance()
                                     .showToastNormal(activity.getString(messageResId))

@@ -166,12 +166,15 @@ public class ImageUtils {
 
         String fileName = System.currentTimeMillis() + ".jpg";
         File file = new File(WKConstants.imageDir, fileName);
+        WKLogUtils.d("ImageUtils", "saveBitmap start bitmap=" + bitmap.getWidth() + "x" + bitmap.getHeight() + " target=" + file.getAbsolutePath());
         try {
             FileOutputStream fos = new FileOutputStream(file);
             bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
             fos.flush();
             fos.close();
+            WKLogUtils.d("ImageUtils", "saveBitmap 完成 path=" + file.getAbsolutePath() + " size=" + file.length());
         } catch (IOException e) {
+            WKLogUtils.e("ImageUtils", "saveBitmap failed path=" + file.getAbsolutePath(), e);
             e.printStackTrace();
         }
         if (iSave != null)
@@ -181,6 +184,7 @@ public class ImageUtils {
                 MediaStore.Images.Media.insertImage(context.getContentResolver(),
                         file.getAbsolutePath(), fileName, null);
             } catch (FileNotFoundException e) {
+                WKLogUtils.e("ImageUtils", "saveBitmap insertImage failed path=" + file.getAbsolutePath(), e);
                 e.printStackTrace();
             }
             context.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.parse(file.getAbsolutePath())));

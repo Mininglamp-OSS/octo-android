@@ -92,7 +92,8 @@ object WKStickerUploader : WKBaseModel() {
         val contentType = mimeFor(meta.format)
         // path 不带 type 前缀（服务端会自己拼 fileType+path，见 getFilePath 对
         // type=sticker 的参考实现），只需 /{uid}/{uuid}.ext；服务端校验 uid 段与登录用户一致
-        val remotePath = "/$uid/${UUID.randomUUID().toString().replace("-", "")}$ext"
+        val uploadName = "${UUID.randomUUID().toString().replace("-", "")}$ext"
+        val remotePath = "/$uid/$uploadName"
 
         val url = Uri.parse(WKApiConfig.baseUrl + "file/upload").buildUpon().apply {
             appendQueryParameter("type", "sticker")
@@ -103,7 +104,13 @@ object WKStickerUploader : WKBaseModel() {
 
         val mediaType = contentType.toMediaType()
         val fileBody = file.asRequestBody(mediaType)
-        val part = MultipartBody.Part.createFormData("file", file.name, fileBody)
+        // multipart part 的 filename 必须与 path 用同一个扩展名（均来自魔数校验出的
+        // meta.format），否则本地文件名后缀（如 .jpeg）与 path 的 .jpg 不一致时，
+        // 服务端会拿 part filename 推导 ext 做魔数校验、再跟 path 的 ext 比较，
+        // 二者不等直接 400「贴纸路径扩展名与文件内容不一致」（见 octo-server
+        // modules/file/api.go 的 pathExt != ext 校验）。file.name 是本地原始文件名，
+        // 后缀完全由用户/相册决定，与内容真实格式无必然关系，不能直接拿来用。
+        val part = MultipartBody.Part.createFormData("file", uploadName, fileBody)
 
         callback.onProgress(10)
         request(apiService.uploadMultipart(url, part), object : IRequestResultListener<StickerUploadResult> {

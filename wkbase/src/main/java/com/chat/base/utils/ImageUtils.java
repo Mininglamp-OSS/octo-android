@@ -177,6 +177,11 @@ public class ImageUtils {
             WKLogUtils.e("ImageUtils", "saveBitmap failed path=" + file.getAbsolutePath(), e);
             e.printStackTrace();
         }
+        if (!file.exists() || file.length() == 0) {
+            // 写盘失败/空文件时不能回调成功，否则调用方会把坏文件当作有效裁剪结果继续走后续流程
+            WKLogUtils.e("ImageUtils", "saveBitmap 落盘失败，放弃回调 path=" + file.getAbsolutePath());
+            return;
+        }
         if (iSave != null)
             iSave.onResult(file.getAbsolutePath());
         if (isRefresh) {

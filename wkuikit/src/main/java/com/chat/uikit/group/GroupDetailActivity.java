@@ -788,6 +788,8 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                     if (AnimatedImageUtils.isAnimatedGif(path)) {
                         intent = new Intent(GroupDetailActivity.this, WKAnimatedAvatarPreviewActivity.class);
                     } else {
+                        // 注意：WKCropImageActivity 底层 CropImageView 未设置固定宽高比，这里是自由裁剪，
+                        // 并不会强制裁成正方形；后端/产品也未要求头像必须为正方形
                         intent = new Intent(GroupDetailActivity.this, WKCropImageActivity.class);
                     }
                     intent.putExtra("path", path);

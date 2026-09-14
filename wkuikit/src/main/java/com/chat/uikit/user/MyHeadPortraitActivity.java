@@ -172,6 +172,10 @@ public class MyHeadPortraitActivity extends WKBaseActivity<ActMyHeadPortraitLayo
                             intent.putExtra("path", path);
                             chooseResultLac.launch(intent);
                         } else {
+                            // 曾尝试跳转 WKCropImageActivity 强制走一次裁剪以对齐群头像/Bot头像入口，
+                            // 但实测确认 WKCropImageActivity 底层 CropImageView 从未设置固定宽高比，
+                            // 三个入口现状都是自由裁剪、并非"裁成正方形"，后端/产品也未要求头像必须为正方形，
+                            // 故这一步裁剪对本场景没有实际约束意义，回滚为直接上传选图结果
                             uploadAvatarPath(path);
                         }
                     }

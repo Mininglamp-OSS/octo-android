@@ -21,10 +21,12 @@ import android.content.Intent;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.os.Build;
+import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 
@@ -44,8 +46,10 @@ import com.chat.uikit.databinding.ActPreviewNewImgLayoutBinding;
  */
 public class PreviewNewImgActivity extends WKBaseActivity<ActPreviewNewImgLayoutBinding> {
     private static final String TAG = "EditImgFlow";
+    private static final String KEY_PATH = "cropped_path";
 
     private String path;
+    private String pendingRestorePath;
 
     private final ActivityResultLauncher<Intent> cropResultLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -132,10 +136,26 @@ public class PreviewNewImgActivity extends WKBaseActivity<ActPreviewNewImgLayout
     }
 
     @Override
+    protected void initData(Bundle savedInstanceState) {
+        // initData 在 initView 之前执行（见 WKBaseActivity.onCreate），先把重建前保存的裁剪结果暂存，
+        // 避免 initView 无条件从 Intent 读取原始 path 时覆盖掉裁剪结果
+        if (savedInstanceState != null) {
+            pendingRestorePath = savedInstanceState.getString(KEY_PATH);
+        }
+    }
+
+    @Override
     protected void initView() {
-        path = getIntent().getStringExtra("path");
+        path = !TextUtils.isEmpty(pendingRestorePath) ? pendingRestorePath : getIntent().getStringExtra("path");
         WKLogUtils.d(TAG, "PreviewNewImgActivity[" + Integer.toHexString(hashCode()) + "]: initView taskId=" + getTaskId() + " path=" + path);
         GlideUtils.getInstance().showImg(this, path, wkVBinding.imageView);
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        // 保存当前 path（可能是裁剪后的最新值），供旋转/深色模式切换等触发的重建后恢复
+        super.onSaveInstanceState(outState);
+        outState.putString(KEY_PATH, path);
     }
 
     @Override

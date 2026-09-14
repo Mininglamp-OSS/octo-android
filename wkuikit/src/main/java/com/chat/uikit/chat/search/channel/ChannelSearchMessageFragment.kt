@@ -32,6 +32,7 @@ import com.chat.base.utils.WKReader
 import com.chat.uikit.R
 import com.chat.uikit.chat.search.SearchMessageAdapter
 import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKChannelType
 
 /**
  * 消息 tab：仅文本/转发命中。服务端 503/网络 → 回退到 IMSDK 本地搜索 + 顶部 banner。
@@ -104,6 +105,7 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
             val gm = GlobalMessage()
             gm.message_seq = msg.messageSeq.toLong()
             gm.from_uid = msg.fromUID ?: ""
+            gm.sender_name = resolveSenderName(gm.from_uid)
             gm.timestamp = msg.timestamp
             val payload = HashMap<String, Any>()
             payload["type"] = msg.type
@@ -127,6 +129,13 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
     private fun resolveChannelName(): String {
         val ch = WKIM.getInstance().channelManager.getChannel(channelID, channelType) ?: return ""
         return ch.channelRemark?.takeIf { it.isNotEmpty() } ?: ch.channelName ?: ""
+    }
+
+    private fun resolveSenderName(uid: String): String {
+        if (uid.isEmpty()) return uid
+        val ch = WKIM.getInstance().channelManager.getChannel(uid, WKChannelType.PERSONAL)
+            ?: return uid
+        return ch.channelRemark?.takeIf { it.isNotEmpty() } ?: ch.channelName?.takeIf { it.isNotEmpty() } ?: uid
     }
 
     private fun jumpToChat(gm: GlobalMessage) {

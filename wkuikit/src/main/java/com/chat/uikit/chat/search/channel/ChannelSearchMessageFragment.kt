@@ -32,6 +32,7 @@ import com.chat.base.utils.WKReader
 import com.chat.uikit.R
 import com.chat.uikit.chat.search.SearchMessageAdapter
 import com.xinbida.wukongim.WKIM
+import com.xinbida.wukongim.entity.WKMsg
 
 /**
  * 消息 tab：仅文本/转发命中。服务端 503/网络 → 回退到 IMSDK 本地搜索 + 顶部 banner。
@@ -75,8 +76,7 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
             }
             showOfflineBanner(false)
             val list = outcome.data!!
-            val name = resolveChannelName()
-            val mapped = list.data.map { it.toGlobalMessage(channelID, channelType, name) }
+            val mapped = list.data.map { it.toGlobalMessage(channelID, channelType) }
             if (isReset) adapter.setList(mapped) else if (mapped.isNotEmpty()) adapter.addData(mapped)
             updatePaginationState(
                 hasMore = list.pagination.has_more,
@@ -98,12 +98,12 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
             binding.refreshLayout.setEnableLoadMore(false)
             return
         }
-        val name = resolveChannelName()
         val mapped = ArrayList<GlobalMessage>(localMsgs.size)
         for (msg in localMsgs) {
             val gm = GlobalMessage()
             gm.message_seq = msg.messageSeq.toLong()
             gm.from_uid = msg.fromUID ?: ""
+            gm.sender_name = resolveSenderName(msg)
             gm.timestamp = msg.timestamp
             val payload = HashMap<String, Any>()
             payload["type"] = msg.type
@@ -113,7 +113,6 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
             gm.channel = GlobalChannel().apply {
                 channel_id = channelID
                 channel_type = channelType
-                channel_name = name
             }
             mapped.add(gm)
         }
@@ -124,9 +123,25 @@ class ChannelSearchMessageFragment : BaseChannelSearchFragment() {
         binding.refreshLayout.setEnableLoadMore(false)
     }
 
-    private fun resolveChannelName(): String {
-        val ch = WKIM.getInstance().channelManager.getChannel(channelID, channelType) ?: return ""
-        return ch.channelRemark?.takeIf { it.isNotEmpty() } ?: ch.channelName ?: ""
+    /**
+     * 群内发送人展示名，走仓库规范五级链路（对齐 [com.chat.base.msgitem.WKChatBaseProvider] 聊天页逻辑）：
+     * from.channelRemark → memberOfFrom.remark → memberOfFrom.memberRemark → from.channelName → memberOfFrom.memberName。
+     *
+     * 群成员的备注/群昵称存于 channel_members 表，与该成员是否有 PERSONAL 频道缓存行无关——
+     * 只查 PERSONAL 频道（2 参数 getChannel）拿不到这两级，本地没同步过该成员资料时会退化成裸 UID。
+     * searchWithChannel 已经把 msg.from（PERSONAL 频道）和 msg.memberOfFrom（群成员）查好挂在消息上，
+     * 这里直接复用，不再重复查库，避免在主线程未命中缓存时触发同步 DB 查询。
+     */
+    private fun resolveSenderName(msg: WKMsg): String {
+        val uid = msg.fromUID ?: ""
+        val from = msg.from
+        val member = msg.memberOfFrom
+        return from?.channelRemark?.takeIf { it.isNotEmpty() }
+            ?: member?.remark?.takeIf { it.isNotEmpty() }
+            ?: member?.memberRemark?.takeIf { it.isNotEmpty() }
+            ?: from?.channelName?.takeIf { it.isNotEmpty() }
+            ?: member?.memberName?.takeIf { it.isNotEmpty() }
+            ?: uid
     }
 
     private fun jumpToChat(gm: GlobalMessage) {

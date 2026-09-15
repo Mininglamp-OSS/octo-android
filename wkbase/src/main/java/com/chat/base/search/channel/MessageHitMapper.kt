@@ -25,17 +25,17 @@ import com.chat.base.search.channel.dto.MessageHit
  * 把服务端 [MessageHit] 适配成现有 `SearchMessageAdapter` 消费的 [GlobalMessage]。
  * snippet 已带 `<mark>…</mark>` 高亮，adapter 内部识别 HTML 后渲染紫色。
  *
- * 由于服务端只回 sender_id（不带 sender_name / channel_name 等聊天框需要的元信息），
- * 调用方负责传入本地解析后的 channelName。
+ * 服务端已回 sender_name，直接展示发送人姓名；channel_name 不再需要（跳转只读
+ * channel_id / channel_type），调用方无需再解析群名传入。
  */
 fun MessageHit.toGlobalMessage(
     channelID: String,
     channelType: Byte,
-    channelName: String,
 ): GlobalMessage {
     val gm = GlobalMessage()
     gm.message_seq = message_seq
     gm.from_uid = sender_id
+    gm.sender_name = sender_name?.takeIf { it.isNotEmpty() } ?: sender_id
     gm.timestamp = Rfc3339.toEpochSeconds(sent_at)
     val payload = HashMap<String, Any>()
     payload["type"] = WKContentType.WK_TEXT
@@ -44,7 +44,6 @@ fun MessageHit.toGlobalMessage(
     gm.channel = GlobalChannel().apply {
         channel_id = channelID
         channel_type = channelType
-        channel_name = channelName
     }
     return gm
 }

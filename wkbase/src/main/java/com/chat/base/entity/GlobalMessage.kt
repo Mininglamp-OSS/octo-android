@@ -31,6 +31,7 @@ class GlobalMessage {
     var message_seq: Long = 0
     lateinit var client_msg_no: String
     lateinit var from_uid: String
+    var sender_name: String? = null
     var timestamp: Long = 0L
     var is_deleted: Int = 0
     lateinit var channel: GlobalChannel

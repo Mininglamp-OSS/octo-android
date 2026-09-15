@@ -131,6 +131,7 @@ public class WKUploader extends WKBaseModel {
     public void putUpload(String uploadUrl, String filePath, String contentType,
                           String contentDisposition, Object tag, IUploadBack callback) {
         File file = new File(filePath);
+        WKLogUtils.d("WKUploader", "putUpload start filePath=" + filePath + " exists=" + file.exists() + " size=" + file.length() + " contentType=" + contentType + " uploadUrl=" + (uploadUrl != null && uploadUrl.length() > 120 ? uploadUrl.substring(0, 120) : uploadUrl));
         MediaType mediaType = MediaType.parse(contentType);
         RequestBody fileBody = RequestBody.create(file, mediaType);
         FileRequestBody progressBody = new FileRequestBody(fileBody, tag);
@@ -147,6 +148,7 @@ public class WKUploader extends WKBaseModel {
         getCosClient().newCall(reqBuilder.build()).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
+                WKLogUtils.e("WKUploader", "putUpload IOException filePath=" + filePath, e);
                 android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
                 handler.post(() -> {
                     if (callback != null) callback.onError();
@@ -157,11 +159,12 @@ public class WKUploader extends WKBaseModel {
             public void onResponse(Call call, Response response) {
                 android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
                 if (response.isSuccessful()) {
+                    WKLogUtils.d("WKUploader", "putUpload success code=" + response.code() + " filePath=" + filePath);
                     handler.post(() -> {
                         if (callback != null) callback.onSuccess("");
                     });
                 } else {
-                    WKLogUtils.e("WKUploader", "putUpload non-2xx: " + response.code());
+                    WKLogUtils.e("WKUploader", "putUpload non-2xx: " + response.code() + " filePath=" + filePath);
                     handler.post(() -> {
                         if (callback != null) callback.onError();
                     });

@@ -12,6 +12,7 @@ package com.chat.uikit.chat.sticker
 
 import android.graphics.BitmapFactory
 import com.chat.base.R as BaseR
+import com.chat.base.utils.WKLogUtils
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -28,6 +29,8 @@ import java.io.IOException
  * 完整图像，走磁盘一次 IO 即可完成尺寸校验。
  */
 object StickerUploadValidator {
+
+    private const val TAG = "StickerUpload"
 
     const val MAX_FILE_BYTES: Long = 1024 * 1024
     const val MAX_DIMENSION_PX: Int = 512
@@ -47,20 +50,33 @@ object StickerUploadValidator {
     }
 
     fun validate(file: File): Result<Meta> {
-        if (!file.exists() || !file.isFile) return Result.failure(FailureException(Failure.IoError))
-        if (file.length() > MAX_FILE_BYTES) return Result.failure(FailureException(Failure.TooLarge))
+        if (!file.exists() || !file.isFile) {
+            WKLogUtils.e(TAG, "validate IoError: file not exists or not a file, path=${file.absolutePath}")
+            return Result.failure(FailureException(Failure.IoError))
+        }
+        if (file.length() > MAX_FILE_BYTES) {
+            WKLogUtils.e(TAG, "validate TooLarge: len=${file.length()} max=$MAX_FILE_BYTES path=${file.absolutePath}")
+            return Result.failure(FailureException(Failure.TooLarge))
+        }
 
-        val format = detectFormat(file) ?: return Result.failure(FailureException(Failure.UnsupportedFormat))
+        val format = detectFormat(file)
+        if (format == null) {
+            WKLogUtils.e(TAG, "validate UnsupportedFormat: path=${file.absolutePath}")
+            return Result.failure(FailureException(Failure.UnsupportedFormat))
+        }
 
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, opts)
         val width = opts.outWidth
         val height = opts.outHeight
+        WKLogUtils.d(TAG, "validate decoded bounds width=$width height=$height format=$format len=${file.length()} path=${file.absolutePath}")
         if (width <= 0 || height <= 0) {
             // WebP animated 或损坏的图 → BitmapFactory 可能拿不到尺寸；宽容处理，让服务端兜底
+            WKLogUtils.d(TAG, "validate width/height<=0, passthrough to server, format=$format")
             return Result.success(Meta(0, 0, format))
         }
         if (maxOf(width, height) > MAX_DIMENSION_PX) {
+            WKLogUtils.e(TAG, "validate DimensionTooLarge: width=$width height=$height max=$MAX_DIMENSION_PX path=${file.absolutePath}")
             return Result.failure(FailureException(Failure.DimensionTooLarge))
         }
         return Result.success(Meta(width, height, format))

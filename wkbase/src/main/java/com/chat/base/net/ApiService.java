@@ -17,9 +17,14 @@
 package com.chat.base.net;
 
 import com.chat.base.net.entity.UploadFileUrl;
+import com.chat.base.net.entity.StickerUploadResult;
 
 import io.reactivex.rxjava3.core.Observable;
+import okhttp3.MultipartBody;
 import retrofit2.http.GET;
+import retrofit2.http.Multipart;
+import retrofit2.http.POST;
+import retrofit2.http.Part;
 import retrofit2.http.Url;
 
 /**
@@ -32,4 +37,10 @@ public interface ApiService {
 
     @GET
     Observable<UploadFileUrl> getUploadCredentials(@Url String url);
+
+    // 贴纸专用：服务端要求贴纸内容必须经 multipart 上传校验（魔数/尺寸/格式），
+    // 不支持预签名直传。url 需带 query 参数 type=sticker&path=...&contenttype=...
+    @Multipart
+    @POST
+    Observable<StickerUploadResult> uploadMultipart(@Url String url, @Part MultipartBody.Part file);
 }

@@ -627,7 +627,11 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                         @Override
                         public void onKeyboard() {
                             chatPanelManager.resetToolBar();
-                            SoftKeyboardUtils.getInstance().requestFocus(wkVBinding.editText);
+                            // 语音识别结果气泡展示期间，气泡自己的 EditText 可能正持有焦点；
+                            // 此处若照常抢回主输入框焦点，会把刚获得的气泡焦点冲掉。
+                            if (!chatPanelManager.isVoiceResultBubbleActive()) {
+                                SoftKeyboardUtils.getInstance().requestFocus(wkVBinding.editText);
+                            }
                         }
 
                         @Override

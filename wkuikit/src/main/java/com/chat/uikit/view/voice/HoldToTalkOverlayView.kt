@@ -61,6 +61,9 @@ class HoldToTalkOverlayView(context: Context) : FrameLayout(context) {
     private val bubbleGreenColor = Color.argb(255, 77, 199, 102)
 
     init {
+        // 录音/转写期间需挡住底层消息列表的点击/长按穿透——拖拽手势由外部
+        // HoldToTalkManager.handleTouch 处理，这里只需拦截，不需要消费具体事件。
+        isClickable = true
         setBackgroundColor(Color.argb(166, 0, 0, 0)) // 65% black
 
         // Bottom area (theme color arc)

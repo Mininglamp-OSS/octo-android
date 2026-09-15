@@ -38,11 +38,12 @@ import com.xinbida.wukongim.entity.WKChannelType
  * `/_search_all` 混排结果适配器。message / file 两种 result_type 分别走不同 item 布局。
  *  - message 复用 [R.layout.item_global_message_layout]（与频道 / 全局搜索同视觉风格）
  *  - file 复用 [R.layout.item_channel_search_file]
+ *
+ * 展示层每行的姓名/头像均来自命中数据自身的 sender_id / sender_name，不依赖群名。
  */
 class ChannelCombinedHitAdapter(
     private val channelID: String,
     private val channelType: Byte,
-    private val channelName: String,
 ) : BaseMultiItemQuickAdapter<ChannelCombinedHitAdapter.Entry, BaseViewHolder>() {
 
     init {

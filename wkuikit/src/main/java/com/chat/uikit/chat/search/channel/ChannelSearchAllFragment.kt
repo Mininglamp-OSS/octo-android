@@ -41,7 +41,7 @@ class ChannelSearchAllFragment : BaseChannelSearchFragment() {
     override val emptyResultHintRes = R.string.nodata
 
     override fun setupRecyclerView(recyclerView: RecyclerView) {
-        adapter = ChannelCombinedHitAdapter(channelID, channelType, resolveChannelName())
+        adapter = ChannelCombinedHitAdapter(channelID, channelType)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
         adapter.setOnItemClickListener { a: BaseQuickAdapter<*, *>, _, position ->
@@ -93,11 +93,6 @@ class ChannelSearchAllFragment : BaseChannelSearchFragment() {
         hasMore = false
         nextCursor = null
         binding.refreshLayout.setEnableLoadMore(false)
-    }
-
-    private fun resolveChannelName(): String {
-        val ch = WKIM.getInstance().channelManager.getChannel(channelID, channelType) ?: return ""
-        return ch.channelRemark?.takeIf { it.isNotEmpty() } ?: ch.channelName ?: ""
     }
 
     private fun jumpToChat(messageSeq: Long) {

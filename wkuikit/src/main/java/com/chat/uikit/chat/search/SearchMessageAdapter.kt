@@ -16,7 +16,6 @@
 
 package com.chat.uikit.chat.search
 
-import android.os.Build
 import android.text.Html
 import android.view.View
 import android.widget.ImageView
@@ -45,14 +44,9 @@ class SearchMessageAdapter :
         // 改为发送人头像后每行明确"谁发的"，子区也不会再出现空头像。
         avatarView.showAvatar(item.from_uid, WKChannelType.PERSONAL)
         val senderName = item.sender_name?.takeIf { it.isNotEmpty() } ?: item.from_uid
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            holder.setText(
-                R.id.nameTv,
-                Html.fromHtml(senderName, Html.FROM_HTML_MODE_LEGACY)
-            )
-        } else {
-            holder.setText(R.id.nameTv, Html.fromHtml(senderName))
-        }
+        // sender_name 是纯资料名（非 <mark> 高亮 snippet），必须原样纯文本展示，
+        // 否则用户昵称里的 <、& 等字符会被 Html.fromHtml 当标签/实体吞掉或解码。
+        holder.setText(R.id.nameTv, senderName)
         val contentTv = holder.getView<TextView>(R.id.contentTv)
         val fileTagIv = holder.getView<ImageView>(R.id.fileTagIv)
         val type = item.getContentType()

@@ -51,7 +51,6 @@ import com.chat.uikit.TabActivity
 import com.chat.uikit.WKUIKitApplication
 import com.chat.uikit.chat.manager.WKIMUtils
 import com.chat.uikit.user.service.UserModel
-import kotlin.system.exitProcess
 
 class TSApplication : MultiDexApplication() {
     override fun onCreate() {
@@ -93,17 +92,14 @@ class TSApplication : MultiDexApplication() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (applicationContext != null && applicationContext.resources != null && applicationContext.resources.configuration != null && applicationContext.resources.configuration.uiMode != newConfig.uiMode) {
-            WKMultiLanguageUtil.getInstance().setConfiguration()
-            Theme.applyTheme()
-            killAppProcess()
-        }
-    }
-
-    private fun killAppProcess() {
-        ActManagerUtils.getInstance().clearAllActivity()
-        Process.killProcess(Process.myPid())
-        exitProcess(0)
+        val appContext = applicationContext ?: return
+        val isSystemDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
+        Theme.applyThemeForSystemMode(isSystemDark)
+        val refreshConfig = Configuration(appContext.resources.configuration)
+        refreshConfig.uiMode = (refreshConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK)
+        Theme.refreshColors(appContext.createConfigurationContext(refreshConfig))
     }
 
     override fun attachBaseContext(base: Context?) {
@@ -114,6 +110,7 @@ class TSApplication : MultiDexApplication() {
         WKMultiLanguageUtil.getInstance().init(this)
         WKBaseApplication.getInstance().init(getAppPackageName(), this)
         Theme.applyTheme()
+        Theme.refreshColors(this)
         initApi()
         WKLoginApplication.getInstance().init(this)
         WKScanApplication.getInstance().init(this)

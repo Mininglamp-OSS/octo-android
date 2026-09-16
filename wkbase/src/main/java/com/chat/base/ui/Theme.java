@@ -77,6 +77,19 @@ public class Theme {
     public static final String DEFAULT_MODE = "default";
     public static final String wk_theme_pref = "wk_theme_pref";
 
+    /**
+     * 主题静态色值原本只在类加载时赋值一次，切换深浅色只触发 Activity recreate，
+     * 不会重新加载类，导致这些颜色一直停留在旧值。此处在 uiMode 变化后
+     * 重新从资源解析，使其吃到 values-night 覆盖。
+     */
+    public static void refreshColors(@NonNull Context context) {
+        colorAccount = ContextCompat.getColor(context, R.color.colorAccent);
+        colorAccountDisable = ContextCompat.getColor(context, R.color.colorAccentUn);
+        color999 = ContextCompat.getColor(context, R.color.color999);
+        colorCCC = ContextCompat.getColor(context, R.color.clrCCC);
+        pressedColor = ContextCompat.getColor(context, R.color.pressedColor);
+    }
+
     //    public static final int[][] defaultColorsLight = new int[][]{
 //            new int[]{0xa6B0CDEB, 0xa69FB0EA, 0xa6BBEAD5, 0xa6B2E3DD},
 //            new int[]{0xa640CDDE, 0xa6AC86ED, 0xa6E984D8, 0xa6EFD359},
@@ -150,28 +163,51 @@ public class Theme {
         return color;
     }
 
+    private static int currentEffectiveNightMode = AppCompatDelegate.MODE_NIGHT_UNSPECIFIED;
+
     private static void applyTheme(@NonNull String themePref) {
-        switch (themePref) {
-            case LIGHT_MODE -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-            }
-            case DARK_MODE -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-            }
-            default -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
-                } else {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY);
-                }
-            }
+        applyResolvedTheme(themePref, isSystemDarkModeNow());
+    }
+
+    private static boolean isSystemDarkModeNow() {
+        Context context = WKBaseApplication.getInstance().getContext();
+        if (context == null) {
+            return false;
         }
+        return (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
     public static void applyTheme() {
         String themePref =
                 WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
         Theme.applyTheme(themePref);
+    }
+
+    /**
+     * 系统深浅色变化时调用：把观察者拿到的系统模式直接解析为具体 night mode，
+     * "跟随系统"时不再走 MODE_NIGHT_FOLLOW_SYSTEM（部分页面对其响应不可靠）。
+     */
+    public static void applyThemeForSystemMode(boolean systemDark) {
+        applyResolvedTheme(getTheme(), systemDark);
+    }
+
+    /**
+     * themePref 为具体模式（light/dark）时忽略 systemDark，否则按 systemDark 解析。
+     * 若目标 night mode 与上次实际生效值相同，跳过 setDefaultNightMode，
+     * 避免重复触发 Activity recreate（对齐 App 内点击同一模式不重启的行为）。
+     */
+    private static void applyResolvedTheme(String themePref, boolean systemDark) {
+        int targetNightMode;
+        switch (themePref) {
+            case LIGHT_MODE -> targetNightMode = AppCompatDelegate.MODE_NIGHT_NO;
+            case DARK_MODE -> targetNightMode = AppCompatDelegate.MODE_NIGHT_YES;
+            default -> targetNightMode = systemDark ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
+        }
+        if (targetNightMode == currentEffectiveNightMode) {
+            return;
+        }
+        AppCompatDelegate.setDefaultNightMode(targetNightMode);
+        currentEffectiveNightMode = targetNightMode;
     }
 
     public static String getTheme() {
@@ -211,6 +247,11 @@ public class Theme {
         String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
         if (wk_theme_pref.equals(DARK_MODE)) return true;
         if (wk_theme_pref.equals(DEFAULT_MODE)) {
+            // applicationContext 的 resources.configuration.uiMode 在 setDefaultNightMode
+            // 后可能长时间停留在旧值（系统异步同步），用它判断会得到与实际显示不符的结果。
+            // currentEffectiveNightMode 由 applyResolvedTheme 在每次真正生效时记录。
+            if (currentEffectiveNightMode == AppCompatDelegate.MODE_NIGHT_YES) return true;
+            if (currentEffectiveNightMode == AppCompatDelegate.MODE_NIGHT_NO) return false;
             try {
                 Context ctx = com.chat.base.WKBaseApplication.getInstance().getContext();
                 if (ctx != null) {

@@ -1097,7 +1097,8 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
             if (unread > 0) {
                 boolean isMute = item.uiConversationMsg.getWkChannel() != null
                         && item.uiConversationMsg.getWkChannel().mute == 1;
-                badge.setBackground(getBadgeDrawable(getContext(), isMute));
+                // 复用同一个静态 Drawable 会导致多个同时可见的 badge 共享并互相覆盖颜色，克隆后各自 mutate
+                badge.setBackground(getBadgeDrawable(getContext(), isMute).getConstantState().newDrawable().mutate());
                 badge.setText(unread > 99 ? "99+" : String.valueOf(unread));
                 badge.setVisibility(View.VISIBLE);
             } else {

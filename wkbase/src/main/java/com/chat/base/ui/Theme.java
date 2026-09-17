@@ -206,6 +206,17 @@ public class Theme {
      * 避免重复触发 Activity recreate（对齐 App 内点击同一模式不重启的行为）。
      * 颜色刷新按 targetNightMode（即将生效的模式）取色，不依赖系统当前 uiMode，
      * 覆盖冷启动、系统切换、App 内切换三条路径，是颜色的唯一刷新入口。
+     *
+     * "跟随系统"（default 分支）改动前按 API 版本区分：Q 及以上走
+     * MODE_NIGHT_FOLLOW_SYSTEM，Q 以下走 MODE_NIGHT_AUTO_BATTERY（省电模式开启时
+     * 自动切深色）。现在统一按 systemDark 直接解析成具体的 YES/NO，不再有
+     * AUTO_BATTERY 这个由 AppCompat 按电量状态动态决定的第三态。
+     * 有意去掉：minSdkVersion=23，API 23-28 没有系统级深色开关，这些设备上
+     * "跟随系统"用户只能靠开省电模式触发自动深色；这条能力在本次改动后不再支持，
+     * 这些设备上"跟随系统"会固定停留在浅色。currentEffectiveNightMode 只建模
+     * UNSPECIFIED/NO/YES 三种确定状态，若要恢复 AUTO_BATTERY 需要让这个字段和
+     * isDark() 的判断优先级都能表达"由系统按电量动态决定"这个不确定态，属于
+     * 结构性改动，本次不做。
      */
     private static void applyResolvedTheme(String themePref, boolean systemDark) {
         int targetNightMode;

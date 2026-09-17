@@ -53,6 +53,9 @@ import com.chat.uikit.chat.manager.WKIMUtils
 import com.chat.uikit.user.service.UserModel
 
 class TSApplication : MultiDexApplication() {
+    @Volatile
+    private var initCompleted = false
+
     override fun onCreate() {
         super.onCreate()
         val processName = getProcessName(this, Process.myPid())
@@ -92,14 +95,14 @@ class TSApplication : MultiDexApplication() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val appContext = applicationContext ?: return
+        // initAll() 只在默认进程执行；非默认进程（如 :dexopt）里 WKBaseApplication/
+        // WKSharedPreferencesUtil 未初始化，Theme.applyThemeForSystemMode 触碰到它们会崩溃。
+        if (!initCompleted) {
+            return
+        }
         val isSystemDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
         Theme.applyThemeForSystemMode(isSystemDark)
-        val refreshConfig = Configuration(appContext.resources.configuration)
-        refreshConfig.uiMode = (refreshConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-                (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK)
-        Theme.refreshColors(appContext.createConfigurationContext(refreshConfig))
     }
 
     override fun attachBaseContext(base: Context?) {
@@ -110,7 +113,6 @@ class TSApplication : MultiDexApplication() {
         WKMultiLanguageUtil.getInstance().init(this)
         WKBaseApplication.getInstance().init(getAppPackageName(), this)
         Theme.applyTheme()
-        Theme.refreshColors(this)
         initApi()
         WKLoginApplication.getInstance().init(this)
         WKScanApplication.getInstance().init(this)
@@ -123,6 +125,7 @@ class TSApplication : MultiDexApplication() {
         // backport 时要么折版 (debug only) 要么删掉; 选删掉以简化,
         // 如果需要 debug 工具可以后续独立 PR 添加。
         // DebugTools.init(this)
+        initCompleted = true
     }
 
     private fun initApi() {

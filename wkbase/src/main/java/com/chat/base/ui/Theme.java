@@ -81,13 +81,22 @@ public class Theme {
      * 主题静态色值原本只在类加载时赋值一次，切换深浅色只触发 Activity recreate，
      * 不会重新加载类，导致这些颜色一直停留在旧值。此处在 uiMode 变化后
      * 重新从资源解析，使其吃到 values-night 覆盖。
+     *
+     * 只在 {@link #applyResolvedTheme} 内、night mode 真正生效变化时调用，
+     * 传入的 context 必须按 targetNightMode（而非系统当前 uiMode）解析，
+     * 否则手动锁定 light/dark 时颜色会被系统状态污染。
      */
-    public static void refreshColors(@NonNull Context context) {
-        colorAccount = ContextCompat.getColor(context, R.color.colorAccent);
-        colorAccountDisable = ContextCompat.getColor(context, R.color.colorAccentUn);
-        color999 = ContextCompat.getColor(context, R.color.color999);
-        colorCCC = ContextCompat.getColor(context, R.color.clrCCC);
-        pressedColor = ContextCompat.getColor(context, R.color.pressedColor);
+    private static void refreshColors(@NonNull Context context, int targetNightMode) {
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        int nightBit = targetNightMode == AppCompatDelegate.MODE_NIGHT_YES
+                ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO;
+        config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK) | nightBit;
+        Context themedContext = context.createConfigurationContext(config);
+        colorAccount = ContextCompat.getColor(themedContext, R.color.colorAccent);
+        colorAccountDisable = ContextCompat.getColor(themedContext, R.color.colorAccentUn);
+        color999 = ContextCompat.getColor(themedContext, R.color.color999);
+        colorCCC = ContextCompat.getColor(themedContext, R.color.clrCCC);
+        pressedColor = ContextCompat.getColor(themedContext, R.color.pressedColor);
     }
 
     //    public static final int[][] defaultColorsLight = new int[][]{
@@ -193,8 +202,10 @@ public class Theme {
 
     /**
      * themePref 为具体模式（light/dark）时忽略 systemDark，否则按 systemDark 解析。
-     * 若目标 night mode 与上次实际生效值相同，跳过 setDefaultNightMode，
+     * 若目标 night mode 与上次实际生效值相同，跳过 setDefaultNightMode 与颜色刷新，
      * 避免重复触发 Activity recreate（对齐 App 内点击同一模式不重启的行为）。
+     * 颜色刷新按 targetNightMode（即将生效的模式）取色，不依赖系统当前 uiMode，
+     * 覆盖冷启动、系统切换、App 内切换三条路径，是颜色的唯一刷新入口。
      */
     private static void applyResolvedTheme(String themePref, boolean systemDark) {
         int targetNightMode;
@@ -208,6 +219,10 @@ public class Theme {
         }
         AppCompatDelegate.setDefaultNightMode(targetNightMode);
         currentEffectiveNightMode = targetNightMode;
+        Context context = WKBaseApplication.getInstance().getContext();
+        if (context != null) {
+            refreshColors(context, targetNightMode);
+        }
     }
 
     public static String getTheme() {

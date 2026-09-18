@@ -32,4 +32,7 @@
     <!-- 跨 Space 加群 Toast「切换过去」按钮紫色（夜间模式保持一致紫色）-->
     <color name="join_success_switch_purple">#722ED1</color>
     <color name="dividerColor">#2C2C2E</color>
+    <color name="color999">#8A8A8E</color>
+    <color name="clrCCC">#8E8E93</color>
+    <color name="pressedColor">#6e7378</color>
 </resources>

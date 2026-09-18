@@ -51,9 +51,11 @@ import com.chat.uikit.TabActivity
 import com.chat.uikit.WKUIKitApplication
 import com.chat.uikit.chat.manager.WKIMUtils
 import com.chat.uikit.user.service.UserModel
-import kotlin.system.exitProcess
 
 class TSApplication : MultiDexApplication() {
+    @Volatile
+    private var initCompleted = false
+
     override fun onCreate() {
         super.onCreate()
         val processName = getProcessName(this, Process.myPid())
@@ -91,19 +93,25 @@ class TSApplication : MultiDexApplication() {
         })
     }
 
+    private var lastConfigLocale: java.util.Locale? = null
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (applicationContext != null && applicationContext.resources != null && applicationContext.resources.configuration != null && applicationContext.resources.configuration.uiMode != newConfig.uiMode) {
-            WKMultiLanguageUtil.getInstance().setConfiguration()
-            Theme.applyTheme()
-            killAppProcess()
+        // initAll() 只在默认进程执行；非默认进程（如 :dexopt）里 WKBaseApplication/
+        // WKSharedPreferencesUtil 未初始化，Theme.applyThemeForSystemMode 触碰到它们会崩溃。
+        if (!initCompleted) {
+            return
         }
-    }
-
-    private fun killAppProcess() {
-        ActManagerUtils.getInstance().clearAllActivity()
-        Process.killProcess(Process.myPid())
-        exitProcess(0)
+        val isSystemDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        // 旋转/字体缩放/分屏等配置变化都会触发这个回调，只有 locale 真的变了
+        // 才需要重新走 setConfiguration，否则每次无关变化都调用过时的
+        // updateConfiguration API 没有必要。
+        val newLocale = newConfig.locale
+        if (newLocale != lastConfigLocale) {
+            lastConfigLocale = newLocale
+            WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
+        }
+        Theme.applyThemeForSystemMode(isSystemDark)
     }
 
     override fun attachBaseContext(base: Context?) {
@@ -126,6 +134,7 @@ class TSApplication : MultiDexApplication() {
         // backport 时要么折版 (debug only) 要么删掉; 选删掉以简化,
         // 如果需要 debug 工具可以后续独立 PR 添加。
         // DebugTools.init(this)
+        initCompleted = true
     }
 
     private fun initApi() {

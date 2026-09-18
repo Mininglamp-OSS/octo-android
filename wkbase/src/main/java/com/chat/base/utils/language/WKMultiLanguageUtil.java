@@ -63,19 +63,31 @@ public class WKMultiLanguageUtil {
      * 设置语言
      */
     public void setConfiguration() {
-        if (mContext != null) {
-            Locale targetLocale = getLanguageLocale();
-            Configuration configuration = mContext.get().getResources().getConfiguration();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-                configuration.setLocale(targetLocale);
-            } else {
-                configuration.locale = targetLocale;
-            }
-            Resources resources = mContext.get().getResources();
-            DisplayMetrics dm = resources.getDisplayMetrics();
-            resources.updateConfiguration(configuration, dm);//语言更换生效的代码!
-        }
+        setConfiguration(null);
+    }
 
+    /**
+     * 以 baseConfig 为基准设置语言。baseConfig 传系统派发的最新 Configuration，
+     * 避免读取当前 resources 里尚未更新的旧配置（会把旧 uiMode 等值盖回去）。
+     */
+    public void setConfiguration(Configuration baseConfig) {
+        if (mContext == null || mContext.get() == null) {
+            return;
+        }
+        // baseConfig 为 null 时也要拷贝一份再改，不能直接改 live 的 getConfiguration()
+        // 再整份传给 updateConfiguration ——那样等于把当前 resources 里可能已过时的
+        // uiMode 等字段原样写回去，是这个方法本来要避免的问题。
+        Configuration configuration = new Configuration(
+                baseConfig != null ? baseConfig : mContext.get().getResources().getConfiguration());
+        Locale targetLocale = getLanguageLocale();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            configuration.setLocale(targetLocale);
+        } else {
+            configuration.locale = targetLocale;
+        }
+        Resources resources = mContext.get().getResources();
+        DisplayMetrics dm = resources.getDisplayMetrics();
+        resources.updateConfiguration(configuration, dm);//语言更换生效的代码!
     }
 
     //如果不是英文、简体中文、繁体中文，默认返回简体中文

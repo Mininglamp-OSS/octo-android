@@ -472,8 +472,9 @@ public class TabActivity extends WKBaseActivity<ActTabMainBinding> {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        WKMultiLanguageUtil.getInstance().setConfiguration();
-        Theme.applyTheme();
+        boolean isSystemDark = (newConfig.uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        WKMultiLanguageUtil.getInstance().setConfiguration(newConfig);
+        Theme.applyThemeForSystemMode(isSystemDark);
     }
 
     @Override

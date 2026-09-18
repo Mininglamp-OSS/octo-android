@@ -173,18 +173,23 @@ public class Theme {
         return color;
     }
 
-    private static int currentEffectiveNightMode = AppCompatDelegate.MODE_NIGHT_UNSPECIFIED;
+    // isDark() 可能被消息渲染等非主线程路径调用，volatile 保证跨线程可见性。
+    private static volatile int currentEffectiveNightMode = AppCompatDelegate.MODE_NIGHT_UNSPECIFIED;
 
     private static void applyTheme(@NonNull String themePref) {
         applyResolvedTheme(themePref, isSystemDarkModeNow());
     }
 
+    /**
+     * WKBaseApplication 持有的 Context 的 Configuration 会在 setDefaultNightMode
+     * 之后被 AppCompat 钉成"App 认为的当前主题"，不是系统真实状态，读它会导致
+     * "跟随系统"判断跟真实系统状态脱节（甚至相反）。Resources.getSystem() 是
+     * 框架全局 Resources，不受 App 级 createConfigurationContext 覆写影响，
+     * 项目里 WKMultiLanguageUtil.getSysLocale() 已有同样的先例。
+     */
     private static boolean isSystemDarkModeNow() {
-        Context context = WKBaseApplication.getInstance().getContext();
-        if (context == null) {
-            return false;
-        }
-        return (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        return (Resources.getSystem().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
     }
 
     /**
@@ -262,25 +267,29 @@ public class Theme {
             if (currentEffectiveNightMode == AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY) {
                 return;
             }
+            Context context = WKBaseApplication.getInstance().getContext();
+            if (context == null) {
+                // context 拿不到时不落定 currentEffectiveNightMode，留到下次真正
+                // 能刷新颜色时再重试，避免被下面的去重判断永久卡住。
+                return;
+            }
             AppCompatDelegate.setDefaultNightMode(targetNightMode);
             currentEffectiveNightMode = targetNightMode;
-            Context context = WKBaseApplication.getInstance().getContext();
-            if (context != null) {
-                int resolvedMode = isPowerSaveModeNow()
-                        ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
-                refreshColors(context, resolvedMode);
-            }
+            int resolvedMode = isPowerSaveModeNow()
+                    ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
+            refreshColors(context, resolvedMode);
             return;
         }
         if (targetNightMode == currentEffectiveNightMode) {
             return;
         }
+        Context context = WKBaseApplication.getInstance().getContext();
+        if (context == null) {
+            return;
+        }
         AppCompatDelegate.setDefaultNightMode(targetNightMode);
         currentEffectiveNightMode = targetNightMode;
-        Context context = WKBaseApplication.getInstance().getContext();
-        if (context != null) {
-            refreshColors(context, targetNightMode);
-        }
+        refreshColors(context, targetNightMode);
     }
 
     public static String getTheme() {

@@ -74,9 +74,11 @@ public class WKMultiLanguageUtil {
         if (mContext == null || mContext.get() == null) {
             return;
         }
-        Configuration configuration = baseConfig != null
-                ? new Configuration(baseConfig)
-                : mContext.get().getResources().getConfiguration();
+        // baseConfig 为 null 时也要拷贝一份再改，不能直接改 live 的 getConfiguration()
+        // 再整份传给 updateConfiguration ——那样等于把当前 resources 里可能已过时的
+        // uiMode 等字段原样写回去，是这个方法本来要避免的问题。
+        Configuration configuration = new Configuration(
+                baseConfig != null ? baseConfig : mContext.get().getResources().getConfiguration());
         Locale targetLocale = getLanguageLocale();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             configuration.setLocale(targetLocale);

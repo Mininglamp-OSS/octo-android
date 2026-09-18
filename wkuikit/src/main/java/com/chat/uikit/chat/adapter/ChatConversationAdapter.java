@@ -156,24 +156,33 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
     // 缓存：groupNo → 上次渲染的结构签名，用于跳过不必要的容器重建
     private final Map<String, String> renderedThreadSigs = new ConcurrentHashMap<>();
 
-    // Phase 2: 缓存 GradientDrawable 避免热路径分配
+    // Phase 2: 缓存 GradientDrawable 的 ConstantState 避免重复查颜色资源；
+    // 调用方各自 newDrawable().mutate() 克隆一份再用——多个 badge 视图不能
+    // 共享同一个 Drawable 实例，否则某一处 setColor 会连带改到其它视图，
+    // 这次克隆分配是保正确性必须付出的成本，不能一并去掉。
     private static GradientDrawable sBadgeBgNormal;
     private static GradientDrawable sBadgeBgMuted;
+    private static int sBadgeBgNormalColor;
+    private static int sBadgeBgMutedColor;
 
     private static GradientDrawable getBadgeDrawable(Context context, boolean muted) {
         if (muted) {
-            if (sBadgeBgMuted == null) {
+            int color = ContextCompat.getColor(context, R.color.color999);
+            if (sBadgeBgMuted == null || sBadgeBgMutedColor != color) {
                 sBadgeBgMuted = new GradientDrawable();
                 sBadgeBgMuted.setCornerRadius(AndroidUtilities.dp(9f));
+                sBadgeBgMuted.setColor(color);
+                sBadgeBgMutedColor = color;
             }
-            sBadgeBgMuted.setColor(ContextCompat.getColor(context, R.color.color999));
             return sBadgeBgMuted;
         } else {
-            if (sBadgeBgNormal == null) {
+            int color = ContextCompat.getColor(context, R.color.reminderColor);
+            if (sBadgeBgNormal == null || sBadgeBgNormalColor != color) {
                 sBadgeBgNormal = new GradientDrawable();
                 sBadgeBgNormal.setCornerRadius(AndroidUtilities.dp(9f));
+                sBadgeBgNormal.setColor(color);
+                sBadgeBgNormalColor = color;
             }
-            sBadgeBgNormal.setColor(ContextCompat.getColor(context, R.color.reminderColor));
             return sBadgeBgNormal;
         }
     }

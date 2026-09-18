@@ -93,6 +93,8 @@ class TSApplication : MultiDexApplication() {
         })
     }
 
+    private var lastConfigLocale: java.util.Locale? = null
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // initAll() 只在默认进程执行；非默认进程（如 :dexopt）里 WKBaseApplication/
@@ -101,7 +103,14 @@ class TSApplication : MultiDexApplication() {
             return
         }
         val isSystemDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
+        // 旋转/字体缩放/分屏等配置变化都会触发这个回调，只有 locale 真的变了
+        // 才需要重新走 setConfiguration，否则每次无关变化都调用过时的
+        // updateConfiguration API 没有必要。
+        val newLocale = newConfig.locale
+        if (newLocale != lastConfigLocale) {
+            lastConfigLocale = newLocale
+            WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
+        }
         Theme.applyThemeForSystemMode(isSystemDark)
     }
 

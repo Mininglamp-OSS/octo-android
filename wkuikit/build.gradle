@@ -70,7 +70,7 @@ dependencies {
     // 会被 returnDefaultValues stub 成空操作，encode/decode 单测就会形同虚设
     // （参见  EP1 codex review round-3 P2）。
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.json:json:20260814'
     testImplementation 'com.google.code.gson:gson:2.8.9'
     // ViewModel/StateFlow + debounce 单测：kotlinx-coroutines-test 提供 runTest + StandardTestDispatcher，
     // 与 wkbase 保持同版本；用于 GlobalSearchViewModel debounce/sequence 乱序防护验证。

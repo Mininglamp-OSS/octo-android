@@ -35,5 +35,5 @@ dependencies {
     // 需要显式挂载 junit + org.json（wkbase 的 testImplementation 不会传递到
     // 依赖方 module，每个 module 要单独声明）。
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.json:json:20231013'
+    testImplementation 'org.json:json:20260814'
 }

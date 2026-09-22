@@ -62,7 +62,7 @@ dependencies {
     //vivo
     implementation project(path: ':MyLibs:vivopush')
     // firebase
-    implementation platform('com.google.firebase:firebase-bom:32.8.1')
+    implementation platform('com.google.firebase:firebase-bom:34.19.0')
     implementation 'com.google.firebase:firebase-analytics'
     implementation 'com.google.firebase:firebase-messaging'
 

@@ -74,7 +74,7 @@ dependencies {
     //  · 显式带入真实 org.json，避免 returnDefaultValues 把 JSONObject 的
     // put/optXxx 全部 stub 成 null/0，导致 WKReply encode/decode round-trip 单测形同虚设。
     // （对齐 wkuikit 的  EP1 codex review round-3 P2 约定。）
-    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.json:json:20260814'
 }
 
 afterEvaluate {

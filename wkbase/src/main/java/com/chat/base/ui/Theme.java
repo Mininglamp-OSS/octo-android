@@ -45,6 +45,7 @@ import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.graphics.drawable.shapes.RoundRectShape;
 import android.os.Build;
+import android.os.PowerManager;
 import android.util.StateSet;
 import android.view.View;
 import android.widget.ImageView;
@@ -76,6 +77,36 @@ public class Theme {
     public static final String DARK_MODE = "dark";
     public static final String DEFAULT_MODE = "default";
     public static final String wk_theme_pref = "wk_theme_pref";
+
+    /**
+     * 主题静态色值原本只在类加载时赋值一次，切换深浅色只触发 Activity recreate，
+     * 不会重新加载类，导致这些颜色一直停留在旧值。此处在 uiMode 变化后
+     * 重新从资源解析，使其吃到 values-night 覆盖。
+     *
+     * 只在 {@link #applyResolvedTheme} 内、night mode 真正生效变化时调用，
+     * 传入的 context 必须按 targetNightMode（而非系统当前 uiMode）解析，
+     * 否则手动锁定 light/dark 时颜色会被系统状态污染。
+     */
+    private static void refreshColors(@NonNull Context context, int targetNightMode) {
+        ThemeTrace.log("Theme.refreshColors.in",
+                "targetNightMode=" + ThemeTrace.nightModeName(targetNightMode)
+                        + " " + ThemeTrace.snapshot(context)
+                        + " before:" + ThemeTrace.colors());
+        Configuration config = new Configuration(context.getResources().getConfiguration());
+        int nightBit = targetNightMode == AppCompatDelegate.MODE_NIGHT_YES
+                ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO;
+        config.uiMode = (config.uiMode & ~Configuration.UI_MODE_NIGHT_MASK) | nightBit;
+        Context themedContext = context.createConfigurationContext(config);
+        ThemeTrace.log("Theme.refreshColors.ctx",
+                "overriddenConfig=" + ThemeTrace.uiMode(config)
+                        + " themedCtxRes=" + ThemeTrace.uiMode(themedContext.getResources().getConfiguration()));
+        colorAccount = ContextCompat.getColor(themedContext, R.color.colorAccent);
+        colorAccountDisable = ContextCompat.getColor(themedContext, R.color.colorAccentUn);
+        color999 = ContextCompat.getColor(themedContext, R.color.color999);
+        colorCCC = ContextCompat.getColor(themedContext, R.color.clrCCC);
+        pressedColor = ContextCompat.getColor(themedContext, R.color.pressedColor);
+        ThemeTrace.log("Theme.refreshColors.out", "after:" + ThemeTrace.colors());
+    }
 
     //    public static final int[][] defaultColorsLight = new int[][]{
 //            new int[]{0xa6B0CDEB, 0xa69FB0EA, 0xa6BBEAD5, 0xa6B2E3DD},
@@ -150,28 +181,229 @@ public class Theme {
         return color;
     }
 
+    // isDark() 可能被消息渲染等非主线程路径调用，volatile 保证跨线程可见性。
+    // 记录【实际生效】的 night mode（YES/NO），由 refreshColorsForCurrentMode 在读到
+    // 真实 uiMode 后写入；不再存放 FOLLOW_SYSTEM 这类"策略值"。
+    private static volatile int currentEffectiveNightMode = AppCompatDelegate.MODE_NIGHT_UNSPECIFIED;
+
+    // 上一次下发给 AppCompat 的 night mode（可能是 FOLLOW_SYSTEM 等策略值），
+    // 仅用于跳过重复的 setDefaultNightMode，避免多余的 Activity 重建。
+    private static volatile int lastRequestedNightMode = AppCompatDelegate.MODE_NIGHT_UNSPECIFIED;
+
     private static void applyTheme(@NonNull String themePref) {
-        switch (themePref) {
-            case LIGHT_MODE -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-            }
-            case DARK_MODE -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-            }
-            default -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
-                } else {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY);
-                }
-            }
-        }
+        applyResolvedTheme(themePref);
     }
 
     public static void applyTheme() {
         String themePref =
                 WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
+        ThemeTrace.logWithStack("Theme.applyTheme", "themePref=" + themePref
+                + " " + ThemeTrace.snapshot(WKBaseApplication.getInstance().getContext()));
         Theme.applyTheme(themePref);
+    }
+
+    /**
+     * 系统深浅色变化时的兼容入口。
+     *
+     * 回归官方模式后，"跟随系统"由 MODE_NIGHT_FOLLOW_SYSTEM 表达，系统深浅色变化时
+     * App 无需再手动同步 night mode——系统自身已经会因 uiMode 变化重建 Activity。
+     * 这里只剩下静态色值的刷新（{@link #refreshColors} 覆盖的那几个 Theme.colorXxx），
+     * 它们不随资源系统自动更新，仍需显式重取。
+     *
+     * @deprecated 保留仅为兼容既有调用点。新代码不要调用：主题切换交给 AppCompat，
+     *             静态色值刷新由 {@link #refreshColorsForCurrentMode} 在 Activity
+     *             重建后触发。
+     */
+    @Deprecated
+    public static void applyThemeForSystemMode(boolean systemDark) {
+        ThemeTrace.logWithStack("Theme.applyThemeForSystemMode",
+                "argSystemDark=" + systemDark
+                        + " " + ThemeTrace.snapshot(WKBaseApplication.getInstance().getContext()));
+        refreshColorsForCurrentMode();
+    }
+
+    /**
+     * 解析"此刻是否应当深色"，作为静态色值取色的依据。
+     *
+     * 按 themePref 分流，不能统一读某个 context 的 uiMode：
+     *  - light/dark：偏好本身就是答案，直接返回。
+     *  - 跟随系统（API 29+）：必须查 {@link Resources#getSystem()} 的系统级 uiMode。App 若曾经
+     *    锁定过 light/dark，{@code setDefaultNightMode} 会把 Application/Activity 的
+     *    Configuration 钉成那个强制值；切回"跟随系统"后该值不会立刻同步成系统真实状态，
+     *    读它会得到上一次锁定的残留（表现为"系统已深色、切到跟随系统仍是浅色"）。
+     *    Resources.getSystem() 是框架全局 Resources，不受 App 级覆写影响。
+     *  - 跟随系统（API 23-28）：系统没有全局深色开关，交给 AppCompat 的
+     *    MODE_NIGHT_AUTO_BATTERY，即"省电模式开启时深色"。静态色值必须用同一个数据源
+     *    （{@link PowerManager#isPowerSaveMode()}）自己判一遍，否则会与 AppCompat 的
+     *    实际渲染结果相反。
+     */
+    private static boolean shouldBeDarkNow() {
+        String themePref = getTheme();
+        int sysNight = Resources.getSystem().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK;
+        boolean result;
+        String source;
+        if (DARK_MODE.equals(themePref)) {
+            result = true;
+            source = "themePref";
+        } else if (LIGHT_MODE.equals(themePref)) {
+            result = false;
+            source = "themePref";
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            result = sysNight == Configuration.UI_MODE_NIGHT_YES;
+            source = "Resources.getSystem()";
+        } else {
+            result = isPowerSaveModeNow();
+            source = "PowerManager.isPowerSaveMode()";
+        }
+        // 去抖：shouldBeDarkNow 在渲染热路径被高频调用，逐帧打日志会给主线程注入延迟、
+        // 垫平竞态窗口。只在【判定结果发生变化】时落一条，既覆盖每一次真实翻转，又几乎零噪声。
+        if (lastLoggedShouldBeDark == null || result != lastLoggedShouldBeDark) {
+            lastLoggedShouldBeDark = result;
+            ThemeTrace.log("Theme.shouldBeDarkNow.change",
+                    "themePref=" + themePref
+                            + " source=" + source
+                            + " sysNight=" + ThemeTrace.nightBitName(sysNight)
+                            + " result=" + result);
+        }
+        return result;
+    }
+
+    /**
+     * API 23-28 没有系统级深色开关，"跟随系统"走 MODE_NIGHT_AUTO_BATTERY，AppCompat
+     * 按省电模式状态决定是否深色；{@link #shouldBeDarkNow()} 需要在同一个数据源上自己
+     * 查一遍，保证静态色值与 AppCompat 的渲染结果一致。
+     *
+     * 这是"当前是否开着省电模式"的近似判断，不是对 AppCompat 内部判定逻辑的精确复刻
+     * （不同厂商 ROM 的省电-深色联动策略可能有细微差异）。该近似符合本次修复范围：
+     * 只覆盖 API 23-28 跟随系统这一存量场景，允许极少数机型上 isDark() 判断与
+     * AppCompat 实际渲染有短暂不一致。
+     */
+    private static boolean isPowerSaveModeNow() {
+        Context context = WKBaseApplication.getInstance().getContext();
+        if (context == null) {
+            return false;
+        }
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isPowerSaveMode();
+    }
+
+    // 仅用于 shouldBeDarkNow 日志去抖，记录上一次已打印的判定结果。Boolean 用可空初值
+    // 保证首次调用必落一条。
+    private static volatile Boolean lastLoggedShouldBeDark = null;
+
+    /**
+     * 按当前应当生效的模式刷新静态色值。
+     *
+     * 取色依据来自 {@link #shouldBeDarkNow()}，而不是某个 context 当前的 uiMode——
+     * {@code setDefaultNightMode} 是异步生效的，调用后紧接着读 context 的 uiMode 仍是
+     * 旧值；且 App 曾锁定过具体模式时，该值会残留为强制值。
+     */
+    public static void refreshColorsForCurrentMode() {
+        Context context = WKBaseApplication.getInstance().getContext();
+        ThemeTrace.logWithStack("Theme.refreshColorsForCurrentMode.in",
+                "context=" + (context == null ? "null" : "nonNull")
+                        + " currentEffectiveNightMode=" + ThemeTrace.nightModeName(currentEffectiveNightMode)
+                        + " lastRequestedNightMode=" + ThemeTrace.nightModeName(lastRequestedNightMode)
+                        + " " + ThemeTrace.snapshot(context));
+        if (context == null) {
+            ThemeTrace.log("Theme.refreshColorsForCurrentMode.skip", "reason=contextNull");
+            return;
+        }
+        int resolved = shouldBeDarkNow()
+                ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
+        ThemeTrace.log("Theme.refreshColorsForCurrentMode.resolved",
+                "prevEffective=" + ThemeTrace.nightModeName(currentEffectiveNightMode)
+                        + " newEffective=" + ThemeTrace.nightModeName(resolved)
+                        + " changed=" + (currentEffectiveNightMode != resolved));
+        currentEffectiveNightMode = resolved;
+        refreshColors(context, resolved);
+    }
+
+    /**
+     * themePref 决定交给 AppCompat 的 night mode：
+     * light/dark 映射到 MODE_NIGHT_NO/YES；"跟随系统"（default）在 API 29+ 映射到
+     * MODE_NIGHT_FOLLOW_SYSTEM，由系统与 AppCompat 自行决定何时深色；API 23-28
+     * 没有系统级深色开关（FOLLOW_SYSTEM 在那里恒为浅色），沿用
+     * MODE_NIGHT_AUTO_BATTERY，即"省电模式开启时深色"。
+     *
+     * 交给 AppCompat 自行解析是官方推荐做法。此前"跟随系统"手动把系统模式解析成具体
+     * YES/NO 再调 setDefaultNightMode，会在一次系统深浅色切换中产生两次 Activity 重建——
+     * 系统因 uiMode 变化重建一次，setDefaultNightMode 又触发 AppCompat 重建一次
+     * （AppCompat 1.1.0 起 setDefaultNightMode 自带重建）。当时之所以绕开
+     * FOLLOW_SYSTEM，根因是 AppTheme 的 parent 在非 night 分支被写成 .Light、
+     * 只靠 values-night 切换 parent，主题不具备 DayNight 行为；该配置已修正。
+     *
+     * 若目标与上次下发值相同则跳过，避免重复触发重建（对齐 App 内点击同一模式
+     * 不重启的行为）。
+     *
+     * 静态色值不在这里刷新：setDefaultNightMode 之后 Activity 会重建，届时由
+     * {@link #refreshColorsForCurrentMode} 按真正生效的 uiMode 取色。
+     */
+    private static void applyResolvedTheme(String themePref) {
+        int targetNightMode = switch (themePref) {
+            case LIGHT_MODE -> AppCompatDelegate.MODE_NIGHT_NO;
+            case DARK_MODE -> AppCompatDelegate.MODE_NIGHT_YES;
+            // API 23-28 没有系统级深色开关，FOLLOW_SYSTEM 在那里恒解析为浅色；
+            // 沿用 AUTO_BATTERY 保留"省电模式即深色"这一 pre-Q 的既有能力。
+            default -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                    ? AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                    : AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY;
+        };
+        int currentDefault = AppCompatDelegate.getDefaultNightMode();
+        ThemeTrace.log("Theme.applyResolvedTheme.in",
+                "themePref=" + themePref
+                        + " targetNightMode=" + ThemeTrace.nightModeName(targetNightMode)
+                        + " lastRequestedNightMode=" + ThemeTrace.nightModeName(lastRequestedNightMode)
+                        + " currentDefaultNightMode=" + ThemeTrace.nightModeName(currentDefault));
+        if (targetNightMode == lastRequestedNightMode
+                && targetNightMode == currentDefault) {
+            ThemeTrace.log("Theme.applyResolvedTheme.skip",
+                    "reason=sameAsLastRequestedAndCurrentDefault"
+                            + " targetNightMode=" + ThemeTrace.nightModeName(targetNightMode));
+            return;
+        }
+        lastRequestedNightMode = targetNightMode;
+        // 记录“下发前”当前可见 Activity 的 context uiMode。App 内切换场景下，此刻它仍是
+        // 上一次锁定的强制值（如 light 锁定后为 NIGHT_NO），setDefaultNightMode 只是 post
+        // 了一个 recreate，还没同步改它。
+        int actNightBefore = currentActivityNightBit();
+        ThemeTrace.log("Theme.applyResolvedTheme.setDefaultNightMode.pre",
+                "set=" + ThemeTrace.nightModeName(targetNightMode)
+                        + " actCtxNight=" + ThemeTrace.nightBitName(actNightBefore));
+        AppCompatDelegate.setDefaultNightMode(targetNightMode);
+        // 下发后立刻再读一次可见 Activity 的 uiMode：若与下发前相同，说明 recreate 尚未
+        // 同步发生（还在 handler 队列里），补刷就会“抢跑”。
+        int actNightAfter = currentActivityNightBit();
+        ThemeTrace.log("Theme.applyResolvedTheme.setDefaultNightMode.post",
+                "defaultNightMode=" + ThemeTrace.nightModeName(AppCompatDelegate.getDefaultNightMode())
+                        + " actCtxNightBefore=" + ThemeTrace.nightBitName(actNightBefore)
+                        + " actCtxNightAfter=" + ThemeTrace.nightBitName(actNightAfter)
+                        + " recreateAlreadyApplied=" + (actNightBefore != actNightAfter));
+        // 冷启动等尚无 Activity 重建可依赖的路径，这里补一次即时刷新；
+        // 重建路径下 Activity 侧还会再刷一次，两者结果一致，重复无副作用。
+        refreshColorsForCurrentMode();
+        // 补刷后：静态色值已按"应当生效模式"取好，但可见 Activity 的 Configuration 可能
+        // 还停在旧值（recreate 未跑）。这里做一次轻量错位探针——若 SKEW! 出现，即证明
+        // 存在"静态色值已新、页面配置仍旧"的半帧窗口（页面部分变色的根因）。
+        ThemeTrace.skew("applyResolvedTheme.afterRefresh", isDarkRaw(), currentActivityNightBit());
+    }
+
+    /**
+     * 当前可见 Activity 的 uiMode night 位；无可见 Activity 时返回 UNDEFINED。
+     * 只读不写，供错位探针使用。
+     */
+    private static int currentActivityNightBit() {
+        Context act = com.chat.base.utils.ActManagerUtils.getInstance().getCurrentActivity();
+        if (act == null) {
+            return Configuration.UI_MODE_NIGHT_UNDEFINED;
+        }
+        return act.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+    }
+
+    /** 不带日志的 isDark 原值，供探针内部调用，避免探针自身触发 Theme.isDark 的日志噪声。 */
+    private static boolean isDarkRaw() {
+        return currentEffectiveNightMode == AppCompatDelegate.MODE_NIGHT_YES;
     }
 
     public static String getTheme() {
@@ -179,6 +411,10 @@ public class Theme {
     }
 
     public static void setTheme(String s) {
+        String previous = getTheme();
+        ThemeTrace.logWithStack("Theme.setTheme",
+                "from=" + previous + " to=" + s
+                        + " " + ThemeTrace.snapshot(WKBaseApplication.getInstance().getContext()));
         WKSharedPreferencesUtil.getInstance().putSP(Theme.wk_theme_pref, s);
         Theme.applyTheme(s);
     }
@@ -190,7 +426,11 @@ public class Theme {
 
     public static boolean getDarkModeStatus(Context context) {
         int mode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-        return mode == Configuration.UI_MODE_NIGHT_YES;
+        boolean result = mode == Configuration.UI_MODE_NIGHT_YES;
+        // 轻量：不再每次采样 Resources.getSystem()（那是重操作，会给渲染路径注入延迟、
+        // 垫平竞态窗口）。改用错位探针把“context 态 vs 静态色值态”一行打出，错位才醒目告警。
+        ThemeTrace.skew("getDarkModeStatus", isDarkRaw(), mode);
+        return result;
     }
 
     public static int getSwitchViewTrackColor() {
@@ -208,18 +448,11 @@ public class Theme {
     }
 
     public static boolean isDark() {
-        String wk_theme_pref = WKSharedPreferencesUtil.getInstance().getSP(Theme.wk_theme_pref, Theme.DEFAULT_MODE);
-        if (wk_theme_pref.equals(DARK_MODE)) return true;
-        if (wk_theme_pref.equals(DEFAULT_MODE)) {
-            try {
-                Context ctx = com.chat.base.WKBaseApplication.getInstance().getContext();
-                if (ctx != null) {
-                    int mode = ctx.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
-                    return mode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
-                }
-            } catch (Exception ignored) {}
-        }
-        return false;
+        // 与静态色值取色使用同一个判定源，避免两者在"刚切换、配置尚未同步"的窗口内不一致。
+        // 不在此处加日志：isDark 是渲染热路径，且它与静态色值同源、无法自证错位；真正
+        // 有价值的错位（静态态 vs context 配置）由 getDarkModeStatus / OctoHostConfig 的
+        // skew 探针捕获。这里保持零额外开销，避免垫平竞态窗口。
+        return shouldBeDarkNow();
     }
 
     public static RoundTextView getChannelCategoryTV(Context context, String text, int bgColor, int textColor, int borderColor) {

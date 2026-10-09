@@ -1,18 +1,15 @@
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-<!--        <item name="android:windowIsTranslucent">false</item>-->
-<!--        <item name="android:windowContentOverlay">@null</item>-->
-<!--        <item name="android:windowBackground">@color/homeColor</item>-->
-        <item name="android:textColorPrimary">@color/colorDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-        <item name="colorPrimaryDark">@color/welcome_bg</item>
-<!--        <item name="android:forceDarkAllowed">false</item>-->
-        <item name="colorPrimary">@color/color999</item>
-<!--        <item name="android:windowIsTranslucent">true</item>-->
-<!--        <item name="android:windowAnimationStyle">@style/animation_translucent_translate</item>-->
+    <!--
+      AppTheme 不再在此处重定义。
 
-    </style>
+      历史写法在 values/ 与 values-v29/ 里把 parent 写成 Theme.MaterialComponents.Light，
+      仅靠本文件在 night 限定符下把 parent 换成 DayNight。这形成了循环依赖：values-night
+      要生效，前提是 resources 的 uiMode 已经是 night；而 App 主题在白天分支不具备
+      DayNight 行为，MODE_NIGHT_FOLLOW_SYSTEM 依赖的正是主题的 DayNight 属性。
+
+      现在 values/ 与 values-v29/ 的 AppTheme 直接继承 DayNight，深浅色差异由
+      values-night/color.xml 的色值覆盖表达，不需要再切换 parent。
+    -->
 
 </resources>

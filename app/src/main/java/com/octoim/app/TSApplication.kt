@@ -51,9 +51,11 @@ import com.chat.uikit.TabActivity
 import com.chat.uikit.WKUIKitApplication
 import com.chat.uikit.chat.manager.WKIMUtils
 import com.chat.uikit.user.service.UserModel
-import kotlin.system.exitProcess
 
 class TSApplication : MultiDexApplication() {
+    @Volatile
+    private var initCompleted = false
+
     override fun onCreate() {
         super.onCreate()
         val processName = getProcessName(this, Process.myPid())
@@ -93,17 +95,32 @@ class TSApplication : MultiDexApplication() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (applicationContext != null && applicationContext.resources != null && applicationContext.resources.configuration != null && applicationContext.resources.configuration.uiMode != newConfig.uiMode) {
-            WKMultiLanguageUtil.getInstance().setConfiguration()
-            Theme.applyTheme()
-            killAppProcess()
+        com.chat.base.ui.ThemeTrace.log(
+            "TSApplication.onConfigurationChanged",
+            "newConfig=" + com.chat.base.ui.ThemeTrace.uiMode(newConfig) +
+                " initCompleted=" + initCompleted +
+                " " + com.chat.base.ui.ThemeTrace.snapshot(this)
+        )
+        // initAll() 只在默认进程执行；非默认进程（如 :dexopt）里 WKBaseApplication/
+        // WKSharedPreferencesUtil 未初始化，触碰到它们会崩溃。
+        if (!initCompleted) {
+            com.chat.base.ui.ThemeTrace.log(
+                "TSApplication.onConfigurationChanged.skip", "reason=initNotCompleted"
+            )
+            return
         }
-    }
-
-    private fun killAppProcess() {
-        ActManagerUtils.getInstance().clearAllActivity()
-        Process.killProcess(Process.myPid())
-        exitProcess(0)
+        // 深浅色不在这里处理主题：主题为 DayNight、"跟随系统"走 MODE_NIGHT_FOLLOW_SYSTEM，
+        // 系统 uiMode 变化由 AppCompat/框架自行重建 Activity。但必须把系统派发的
+        // newConfig（含最新 uiMode）刷进进程级 Application Resources——否则 app 级配置
+        // 停留在旧 night 位，AppCompat 的"跟随系统"解析会读到过期值算出"无变化"，
+        // 静态色值（读 Resources.getSystem() 真值）却已翻转，页面持久错位。
+        // newConfig 在 Application 回调里是 app 级配置，不含 Activity 窗口几何，整份
+        // 下传是安全的（Activity 派发的 newConfig 才不能传，见 TabActivity）。
+        WKMultiLanguageUtil.getInstance().setConfiguration(newConfig)
+        // 深浅色不在这里处理：主题为 DayNight、"跟随系统"走 MODE_NIGHT_FOLLOW_SYSTEM，
+        // 系统 uiMode 变化会自行重建 Activity。此处再调一次 setDefaultNightMode 会让
+        // AppCompat 额外重建一次，一次系统切换变成两次重建。静态色值的刷新已移到
+        // Activity 重建后（WKBaseActivity.onCreate → Theme.refreshColorsForCurrentMode）。
     }
 
     override fun attachBaseContext(base: Context?) {
@@ -126,6 +143,7 @@ class TSApplication : MultiDexApplication() {
         // backport 时要么折版 (debug only) 要么删掉; 选删掉以简化,
         // 如果需要 debug 工具可以后续独立 PR 添加。
         // DebugTools.init(this)
+        initCompleted = true
     }
 
     private fun initApi() {

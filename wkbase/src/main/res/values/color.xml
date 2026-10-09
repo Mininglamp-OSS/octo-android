@@ -108,4 +108,5 @@
         <item>#52A98B</item>
     </array>
     <color name="dividerColor">#E5E5E5</color>
+    <color name="pressedColor">#8c9197</color>
 </resources>

@@ -81,9 +81,23 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
 
         boolean na = WKStatusBarUtils.isNavigationBarExist(this);
         WKMultiLanguageUtil.getInstance().setConfiguration();
+        com.chat.base.ui.ThemeTrace.log("WKBaseActivity.onCreate",
+                "act=" + getClass().getSimpleName()
+                        + "@" + Integer.toHexString(System.identityHashCode(this))
+                        + " savedInstanceState=" + (savedInstanceState == null ? "null" : "nonNull")
+                        + " " + com.chat.base.ui.ThemeTrace.snapshot(this));
+        // Theme.colorAccount/color999/colorCCC/pressedColor/colorAccountDisable 这几个静态
+        // 色值只在类加载时赋值一次，不会随资源系统的 night 切换自动更新。深浅色变化会重建
+        // Activity，在这里按当前实际生效的 uiMode 重取一次，即可覆盖系统切换与 App 内切换
+        // 两条路径。放在 setContentView 之前，保证 inflate 时读到的已是新值。
+        Theme.refreshColorsForCurrentMode();
 
         wkVBinding = getViewBinding();
         setContentView(wkVBinding.getRoot());
+        com.chat.base.ui.ThemeTrace.log("WKBaseActivity.afterSetContentView",
+                "act=" + getClass().getSimpleName()
+                        + " ctxNight=" + com.chat.base.ui.ThemeTrace.uiMode(getResources().getConfiguration())
+                        + " " + com.chat.base.ui.ThemeTrace.colors());
 
         initSwipeBackFinish();
         initPresenter();
@@ -149,7 +163,12 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
         Window window = getWindow();
         if (window == null) return;
         WKStatusBarUtils.transparentStatusBar(window);
-        if (!Theme.getDarkModeStatus(this))
+        boolean darkModeStatus = Theme.getDarkModeStatus(this);
+        com.chat.base.ui.ThemeTrace.log("WKBaseActivity.toggleStatusBarMode",
+                "act=" + getClass().getSimpleName()
+                        + " darkModeStatus=" + darkModeStatus
+                        + " apply=" + (darkModeStatus ? "setLightMode" : "setDarkMode"));
+        if (!darkModeStatus)
             WKStatusBarUtils.setDarkMode(window);
         else WKStatusBarUtils.setLightMode(window);
     }
@@ -427,6 +446,11 @@ public abstract class WKBaseActivity<WKVBinding extends ViewBinding> extends Swi
 
     @Override
     protected void onDestroy() {
+        com.chat.base.ui.ThemeTrace.log("WKBaseActivity.onDestroy",
+                "act=" + getClass().getSimpleName()
+                        + "@" + Integer.toHexString(System.identityHashCode(this))
+                        + " isChangingConfigurations=" + isChangingConfigurations()
+                        + " isFinishing=" + isFinishing());
         super.onDestroy();
         ActManagerUtils.getInstance().removeActivity(this);
     }

@@ -1,6 +1,6 @@
 <resources>
     <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:textColorPrimary">@color/colorDark</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="colorPrimaryDark">@color/welcome_bg</item>
@@ -18,8 +18,8 @@
 <!--        <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>-->
 <!--    </style>-->
 
-    <style name="Theme.FullscreenTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+    <style name="Theme.FullscreenTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>

@@ -40,6 +40,7 @@ class GlobalSearchFiltersTest {
             contentTypes = emptyList(),
             sentAtFrom = "",
             sentAtTo = "",
+            fileExts = emptyList(),
         )
         assertTrue(f.isEmpty())
     }
@@ -54,6 +55,7 @@ class GlobalSearchFiltersTest {
         assertFalse(GlobalSearchFilters(contentTypes = listOf(1)).isEmpty())
         assertFalse(GlobalSearchFilters(sentAtFrom = "2026-06-01").isEmpty())
         assertFalse(GlobalSearchFilters(sentAtTo = "2026-06-30").isEmpty())
+        assertFalse(GlobalSearchFilters(fileExts = listOf("pdf")).isEmpty())
     }
 
     @Test

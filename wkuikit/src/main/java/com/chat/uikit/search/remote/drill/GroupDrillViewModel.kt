@@ -109,11 +109,19 @@ class GroupDrillViewModel(
     /** 目标 channel（来自 GlobalActivity 的桶点击）。init 后不变。 */
     private var targetChannel: GlobalChannelRef? = null
 
+    /** L1 带入的筛选条件（时间/发送人/文件类型等）。init 后不变，与 [targetChannel] 是 AND 关系。 */
+    private var baseFilters: GlobalSearchFilters = GlobalSearchFilters()
+
     /**
      * Activity onCreate 时调用一次。触发首屏搜索（若 [initialKeyword] 非空）。
+     *
+     * [filters] 来自 L1 聊天记录 tab 当前生效的筛选条件；本页仅在其基础上追加
+     * `channelIds = [channelId]` 限定本群/子区/DM，其余字段原样保留并继续生效
+     * （对齐 iOS WKGlobalMsgDetailVM 的 filter + channel_ids 合并方式）。
      */
-    fun init(channelId: String, channelType: Byte, initialKeyword: String) {
+    fun init(channelId: String, channelType: Byte, initialKeyword: String, filters: GlobalSearchFilters = GlobalSearchFilters()) {
         targetChannel = GlobalChannelRef(channelId, channelType)
+        baseFilters = filters
         if (initialKeyword.isEmpty()) {
             _state.value = State(keyword = "")
             return
@@ -164,8 +172,12 @@ class GroupDrillViewModel(
         )
         val req = SearchGlobalMessagesReq(
             keyword = keyword,
-            filters = GlobalSearchFilters(channelIds = listOf(target)),
-            sort = SearchGlobalMessagesReq.SORT_TIME_DESC,
+            filters = baseFilters.withChannelIds(listOf(target)),
+            // 排序取 L1 带入的筛选条件：对齐 iOS——sort 是请求体顶层字段，且只有 L2
+            // `_search_global_messages` 消费（L1 聚合与文件端点都不发），所以筛选页上
+            // 选的"时间正序/倒序"正是在下钻页生效。
+            sort = if (baseFilters.sortTimeAsc) SearchGlobalMessagesReq.SORT_TIME_ASC
+                else SearchGlobalMessagesReq.SORT_TIME_DESC,
             pageSize = PAGE_SIZE,
             cursor = cursor,
             sequence = seq,

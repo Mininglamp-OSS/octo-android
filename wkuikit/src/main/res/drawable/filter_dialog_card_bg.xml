@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 筛选弹窗卡片背景，对齐 iOS Form Sheet 的圆角卡片效果 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/homeColor" />
+    <corners android:radius="16dp" />
+</shape>

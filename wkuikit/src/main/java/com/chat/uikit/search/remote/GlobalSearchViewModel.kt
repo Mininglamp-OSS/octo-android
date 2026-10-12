@@ -101,13 +101,24 @@ class GlobalSearchViewModel(
     /** 单调递增的请求序号。用于识别乱序响应。 */
     private var nextSequence: Long = 0L
 
+    /** 当前生效的筛选条件（聊天记录 tab 专用；"全部" tab 不设置，恒为空）。 */
+    private var currentFilters: GlobalSearchFilters = GlobalSearchFilters()
+
+    /**
+     * 更新筛选条件。仅更新内部状态，不自动触发搜索——由调用方在更新后显式调用 [triggerNow]，
+     * 与 [setKeyword] 的 debounce 时机解耦（筛选"应用"是用户主动操作，应立即生效，不等待 debounce）。
+     */
+    fun setFilters(filters: GlobalSearchFilters) {
+        currentFilters = filters
+    }
+
     /**
      * 关键词变更入口。空串立即清空结果并取消所有在途 debounce；
      * 非空串等 [debounceMillis] 之后触发一次搜索。
      */
     fun setKeyword(value: String) {
         if (_state.value.keyword == value) return
-        _state.value = _state.value.copy(keyword = value)
+        _state.value = _state.value.copy(keyword = value, isLoading = true)
         debounceJob?.cancel()
         if (value.isEmpty()) {
             // 清空回到初始态，但保留 nextSequence 单调性
@@ -141,12 +152,20 @@ class GlobalSearchViewModel(
         val mySeq = ++nextSequence
         _state.value = _state.value.copy(
             isLoading = true,
+            // 新一轮请求发起即清空旧结果：否则 Activity 侧任何「重新搜索前先清空列表」的尝试
+            // 都会被这次 state 更新用旧 groups 覆盖回去（isLoading=true 但 groups 原样保留），
+            // 导致 loading UI 被跳过，或旧结果和新结果短暂重叠显示。
+            groups = emptyList(),
             errorCode = null,
             errorMessage = null,
             retryAfterSec = 0,
             sequence = mySeq,
         )
-        val req = SearchGlobalGroupsReq(keyword = keyword, sequence = mySeq)
+        val req = SearchGlobalGroupsReq(
+            keyword = keyword,
+            sequence = mySeq,
+            filters = currentFilters.takeUnless { it.isEmpty() },
+        )
         searchCaller.call(req) { outcome -> handleResponse(mySeq, keyword, outcome) }
     }
 

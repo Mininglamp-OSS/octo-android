@@ -262,7 +262,10 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
             pagerAdapter.getPageRecyclerView(TAB_CHATS)?.let { initAdapter(it, chatsTabAdapter) }
             pagerAdapter.getPageRecyclerView(TAB_CONTACTS)?.let { initAdapter(it, contactsTabAdapter) }
             pagerAdapter.getPageRecyclerView(TAB_GROUPS)?.let { initAdapter(it, groupsTabAdapter) }
-            pagerAdapter.getPageRecyclerView(TAB_FILES)?.let { initAdapter(it, filesTabAdapter) }
+            pagerAdapter.getPageRecyclerView(TAB_FILES)?.let {
+                initAdapter(it, filesTabAdapter)
+                attachFilesLoadMore(it)
+            }
         }
         setupChannelTabItemClick(chatsTabAdapter, TAB_CHATS)
         setupChannelTabItemClick(contactsTabAdapter, TAB_CONTACTS)
@@ -270,9 +273,17 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         filesTabAdapter.setOnItemClickListener { a, _, position ->
             val hit = a.getItem(position) as? FileHit ?: return@setOnItemClickListener
             if (hit.channel_id.isEmpty()) return@setOnItemClickListener
+            // 用命中消息的 message_seq 解析 orderSeq，让会话定位到该文件消息而不是默认位置
+            // （与 GroupDrillActivity.openHit / ChannelSearchFileFragment.jumpToChat 同口径）。
+            val orderSeq = WKIM.getInstance().msgManager.getMessageOrderSeq(
+                hit.message_seq,
+                hit.channel_id,
+                hit.channel_type,
+            )
             EndpointManager.getInstance().invoke(
                 EndpointSID.chatView,
-                ChatViewMenu(this@GlobalActivity, hit.channel_id, hit.channel_type, 0, false),
+                ChatViewMenu(this@GlobalActivity, hit.channel_id, hit.channel_type, orderSeq, false)
+                    .apply { fromSearch = true },
             )
         }
         observeChatsTabState()
@@ -514,29 +525,54 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         }
     }
 
-    /** 聊天记录 tab：独立 keyword/filters 生命周期的 L1 聚合结果，对齐 [observeChatRecordsState] 的映射规则。 */
+    /**
+     * 文件 tab 触底加载下一页。文件是本页唯一支持 cursor 翻页的结果类型
+     * （L1 聚合一次返回全部桶、联系人/群组复用「全部」tab 的一次性结果，都没有下一页）。
+     *
+     * 用滚动监听而不是 SmartRefreshLayout：ViewPager2 的每页只是裸 RecyclerView，
+     * 不像 GroupDrillActivity 那样有 refreshLayout 容器可挂 footer。
+     * 翻页防护（hasMore / 在途请求 / 游标为空 / 游标停滞）全部在
+     * [FilesSearchViewModel.loadMore] 内判定，这里只负责在接近底部时转发一次调用。
+     */
+    private fun attachFilesLoadMore(recyclerView: RecyclerView) {
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (dy <= 0) return
+                val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+                val total = lm.itemCount
+                if (total == 0) return
+                // 距底部不足 5 条时预取下一页
+                if (lm.findLastVisibleItemPosition() >= total - 5) {
+                    filesTabViewModel.loadMore()
+                }
+            }
+        })
+    }
+
+    /** 聊天记录 tab：独立 keyword/filters 生命周期的 L1 聚合结果，映射规则同 [observeChatRecordsState]。 */
     private fun observeChatsTabState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 chatsTabViewModel.state.collect { state ->
-                    if (state.keyword.isEmpty()) {
-                        chatsTabAdapter.setList(ArrayList())
-                        chatsTabLoaded = false
-                        chatsTabError = false
-                        updateAllEmptyView()
-                        return@collect
-                    }
                     val action = state.uiAction()
-                    val items = when (action) {
-                        null -> state.groups.map { bucketToDataVO(it, state.keyword) }
-                        ChannelSearchUiAction.FALLBACK_TO_LOCAL -> localMessagesAsDataVO(state.keyword)
-                        else -> emptyList()
+                    // 本地兜底能否使用取决于是否有筛选条件生效，见 [ChatsFallbackPolicy.decide]。
+                    val decision = ChatsFallbackPolicy.decide(
+                        action,
+                        filtersByTab[TAB_CHATS] ?: GlobalSearchFilters(),
+                    )
+                    val items = when (decision) {
+                        ChatsFallbackDecision.SHOW_REMOTE ->
+                            state.groups.map { bucketToDataVO(it, state.keyword) }
+                        ChatsFallbackDecision.FALLBACK_TO_LOCAL ->
+                            localMessagesAsDataVO(state.keyword)
+                        ChatsFallbackDecision.SHOW_ERROR -> emptyList()
                     }
-                    // FALLBACK_TO_LOCAL 已有本地结果兜底，不算错误态；其余非 null action
-                    // （限流/未启用/权限/校验/通用）视为加载失败，展示 Error + 重试。
-                    chatsTabError = action != null && action != ChannelSearchUiAction.FALLBACK_TO_LOCAL
                     chatsTabAdapter.setList(items)
-                    if (!state.isLoading) chatsTabLoaded = true
+                    chatsTabEmptyInput = TabEmptyInput(
+                        loading = state.isLoading,
+                        queryStarted = state.queryStarted,
+                        error = decision == ChatsFallbackDecision.SHOW_ERROR,
+                    )
                     updateAllEmptyView()
                 }
             }
@@ -545,24 +581,19 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
     /**
      * 文件 tab：无本地兜底数据源（文件不像消息有 IMSDK 本地聚合），任何失败都落 Error 态
-     * 并展示重试按钮——不能像消息那样回退到本地聚合，若混进 NoResults 则「接口未部署」
-     * 与「真的没文件」在 UI 上无法区分（对齐 iOS 文件 tab 不做本地回落、直接走 Error 的行为）。
+     * 并展示重试按钮——若混进 NoResults 则「接口未部署」与「真的没文件」在 UI 上无法区分。
      */
     private fun observeFilesTabState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 filesTabViewModel.state.collect { state ->
-                    if (state.keyword.isEmpty()) {
-                        filesTabAdapter.setList(ArrayList())
-                        filesTabLoaded = false
-                        filesTabError = false
-                        updateAllEmptyView()
-                        return@collect
-                    }
                     val action = state.uiAction()
-                    filesTabError = action != null
                     filesTabAdapter.setList(if (action == null) state.files else emptyList())
-                    if (!state.isLoading) filesTabLoaded = true
+                    filesTabEmptyInput = TabEmptyInput(
+                        loading = state.isLoading,
+                        queryStarted = state.queryStarted,
+                        error = action != null,
+                    )
                     updateAllEmptyView()
                 }
             }
@@ -691,15 +722,11 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     private fun reapplyFilters(tab: Int, filters: GlobalSearchFilters) {
         when (tab) {
             TAB_CHATS -> {
-                chatsTabLoaded = false
-                chatsTabError = false
                 chatsTabAdapter.setList(ArrayList())
                 chatsTabViewModel.setFilters(filters)
                 chatsTabViewModel.triggerNow()
             }
             TAB_FILES -> {
-                filesTabLoaded = false
-                filesTabError = false
                 filesTabAdapter.setList(ArrayList())
                 filesTabViewModel.setFilters(filters)
                 filesTabViewModel.triggerNow()
@@ -709,8 +736,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     }
 
     /**
-     * Error 态重试：用该 tab 当前生效的筛选条件重跑一次搜索（对齐 iOS
-     * `emptyView.onRetry = ^{ [ws syncActiveVM]; }`——重试不改变任何条件，只是再发一次请求）。
+     * Error 态重试：用该 tab 当前生效的筛选条件重跑一次搜索（重试不改变任何条件，只是再发一次请求）。
      */
     private fun retryTab(tab: Int) {
         reapplyFilters(tab, filtersByTab[tab] ?: GlobalSearchFilters())
@@ -879,17 +905,20 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         adapter.setList(list)
     }
 
-    // 聊天记录/文件 tab 各自是否已完成至少一轮加载（!isLoading），用于空态判定——
-    // 不能复用 TAB_ALL 的 chatRecordsLoaded（那是 [viewModel] 的状态，与这两个独立 VM 实例无关）。
-    private var chatsTabLoaded = false
-    private var filesTabLoaded = false
+    // 聊天记录/文件 tab 各自的空态输入：直接取自对应 ViewModel 的 state，不再用「一旦完成
+    // 就永久为 true」的 sticky 标记——后者在第二次及以后的搜索中永远停在 true，
+    // 导致请求在途时 updateTabEmptyView 落到 (loaded && isEmpty) 分支误报「无搜索结果」。
+    //
+    // loading 为 true 代表这一轮请求仍在途（含 debounce 窗口），此时既不能报无结果也不能报错；
+    // queryStarted 为 false 代表还没发起过任何请求（空输入态）。
+    private data class TabEmptyInput(
+        val loading: Boolean = false,
+        val queryStarted: Boolean = false,
+        val error: Boolean = false,
+    )
 
-    // 首屏请求是否以「真错误」结束（非本地兜底、非空结果），用于区分 Error 态与 NoResults 态。
-    // 对齐 iOS WKGlobalSearchV2VC.activeFirstPageError：接口未部署/网络异常/服务不可用时
-    // 必须展示「加载失败 + 重试」，不能和「未找到相关内容」混为一谈。文件 tab 无本地兜底，
-    // 这个区分尤其关键（否则接口 404 与真的没文件在 UI 上完全一样）。
-    private var chatsTabError = false
-    private var filesTabError = false
+    private var chatsTabEmptyInput = TabEmptyInput()
+    private var filesTabEmptyInput = TabEmptyInput()
 
     /**
      * 更新 5 个 tab 的空态提示。「所有」tab 区分三种态：空输入提示 / 无搜索结果 / 隐藏（有结果或仍在
@@ -919,32 +948,23 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 else -> visibility = View.GONE
             }
         }
-        updateTabEmptyView(TAB_CHATS, isEmptyKeyword, loaded = chatsTabLoaded, isEmpty = chatsTabAdapter.data.isEmpty(), isError = chatsTabError)
-        updateTabEmptyView(TAB_CONTACTS, isEmptyKeyword, loaded = contactsGroupsLoaded, isEmpty = friendsList.isEmpty())
-        updateTabEmptyView(TAB_GROUPS, isEmptyKeyword, loaded = contactsGroupsLoaded, isEmpty = groupsList.isEmpty())
-        updateTabEmptyView(TAB_FILES, isEmptyKeyword, loaded = filesTabLoaded, isEmpty = filesTabAdapter.data.isEmpty(), isError = filesTabError)
+        updateTabEmptyView(TAB_CHATS, chatsTabEmptyInput, isEmpty = chatsTabAdapter.data.isEmpty())
+        updateTabEmptyView(TAB_CONTACTS, TabEmptyInput(loading = !contactsGroupsLoaded && !isEmptyKeyword, queryStarted = !isEmptyKeyword), isEmpty = friendsList.isEmpty())
+        updateTabEmptyView(TAB_GROUPS, TabEmptyInput(loading = !contactsGroupsLoaded && !isEmptyKeyword, queryStarted = !isEmptyKeyword), isEmpty = groupsList.isEmpty())
+        updateTabEmptyView(TAB_FILES, filesTabEmptyInput, isEmpty = filesTabAdapter.data.isEmpty())
     }
 
     /**
-     * 分类 tab 空态/加载态优先级，对齐 iOS `WKGlobalSearchV2VC.updateEmptyState` 的判定顺序：
-     * 空输入提示(WaitingInput) > 加载失败(Error，带重试) > 搜索中(Loading) > 无搜索结果(NoResults) > 隐藏(有结果)。
+     * 分类 tab 空态优先级：加载失败（带重试）> 搜索中 > 未发起过搜索（空输入提示）> 无搜索结果 > 隐藏（有结果）。
      *
-     * iOS 的 Offline 态依赖 `WKNetworkListener`，Android 侧未接入网络监听，并入 Error 态展示。
+     * 用 [TabEmptyInput.queryStarted] 而不是"关键词是否为空"来判断该不该显示"输入关键词搜索"：
+     * 两者在当前门禁下等价（无关键词不搜索），但 queryStarted 直接来自 ViewModel 的真实状态，
+     * 不会在门禁规则调整时与数据层脱节。
      */
-    private fun updateTabEmptyView(
-        tab: Int,
-        isEmptyKeyword: Boolean,
-        loaded: Boolean,
-        isEmpty: Boolean,
-        isError: Boolean = false,
-    ) {
+    private fun updateTabEmptyView(tab: Int, input: TabEmptyInput, isEmpty: Boolean) {
         emptyViews[tab].apply {
             visibility = when {
-                isEmptyKeyword -> {
-                    render(getString(EMPTY_TEXTS[tab]), loading = false)
-                    View.VISIBLE
-                }
-                isError && isEmpty -> {
+                input.error && isEmpty -> {
                     render(
                         getString(R.string.search_load_failed),
                         loading = false,
@@ -953,11 +973,15 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                     )
                     View.VISIBLE
                 }
-                !loaded && isEmpty -> {
+                input.loading && isEmpty -> {
                     render(getString(R.string.search_searching), loading = true)
                     View.VISIBLE
                 }
-                loaded && isEmpty -> {
+                !input.queryStarted -> {
+                    render(getString(EMPTY_TEXTS[tab]), loading = false)
+                    View.VISIBLE
+                }
+                isEmpty -> {
                     render(
                         getString(R.string.search_no_result),
                         loading = false,

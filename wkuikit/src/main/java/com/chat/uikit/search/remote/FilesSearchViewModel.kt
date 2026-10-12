@@ -36,10 +36,15 @@ import kotlinx.coroutines.launch
  * 全局搜索「文件」tab 的 ViewModel，对接 `_search_global_files`（[SearchGlobalFilesModel]，
  * 该接口此前已写好但零调用，本次首次接入 UI）。
  *
- * 结构对称 [GlobalSearchViewModel]：keyword debounce + sequence 防竞态；区别是 filters
- * 从一开始就是必需参数（文件 tab 的筛选不是后补能力），且没有本地兜底数据源——文件搜索
- * 失败时无法像消息那样回退到 IMSDK 本地聚合，`FALLBACK_TO_LOCAL` 态在 UI 层只能展示
- * "暂时无法搜索"的空态，不会产生本地结果列表。
+ * 结构对称 [GlobalSearchViewModel] 与 [com.chat.uikit.search.remote.drill.GroupDrillViewModel]：
+ *  - keyword debounce + 自增 sequence 防竞态
+ *  - cursor 分页：首屏 cursor = null，翻页用 [State.nextCursor]（见 [loadMore]）
+ *  - 没有本地兜底数据源——文件搜索失败时无法像消息那样回退到 IMSDK 本地聚合，
+ *    任何失败都落 UI 的 Error 态（带重试），不产生本地结果列表。
+ *
+ * **无关键词不搜索**：关键词为空时不发请求、不返回任何结果，筛选条件只用于收窄
+ * 关键词搜索的范围（见 [shouldRunSearch]）。请求体层面支持省略 keyword 的浏览态，
+ * 但客户端刻意不暴露该能力。
  */
 class FilesSearchViewModel(
     private val searchCaller: SearchCaller = DefaultSearchCaller,
@@ -49,12 +54,22 @@ class FilesSearchViewModel(
     data class State(
         val keyword: String = "",
         val isLoading: Boolean = false,
+        /** 翻页中（已有首屏结果，正在追加下一页）。与 [isLoading] 区分，避免翻页时整屏转圈。 */
+        val isLoadingMore: Boolean = false,
         val files: List<FileHit> = emptyList(),
         val hasMore: Boolean = false,
+        /** 服务端签发的下一页游标；null 表示没有下一页。 */
+        val nextCursor: String? = null,
         val errorCode: String? = null,
         val errorMessage: String? = null,
         val retryAfterSec: Int = 0,
         val sequence: Long = 0L,
+        /**
+         * 是否已发起过至少一次请求（含在途）。用于 UI 区分「空输入等待」与「搜到了但没结果」。
+         * 不能用 isLoading 代替：debounce 窗口内 isLoading 为 true 但请求还没发出；
+         * 也不能用 keyword 是否为空代替，那会把门禁规则复制到 UI 层。
+         */
+        val queryStarted: Boolean = false,
     ) {
         fun uiAction(): com.chat.base.search.channel.ChannelSearchUiAction? =
             errorCode?.let {
@@ -85,15 +100,48 @@ class FilesSearchViewModel(
     private var nextSequence: Long = 0L
     private var currentFilters: GlobalSearchFilters = GlobalSearchFilters()
 
+    /**
+     * 更新筛选条件并立刻重搜（由调用方随后显式 [triggerNow]）。
+     * 仅更新内部状态，不自动触发——与 [setKeyword] 的 debounce 时机解耦。
+     */
     fun setFilters(filters: GlobalSearchFilters) {
         currentFilters = filters
     }
 
+    /**
+     * 搜索门禁：**必须有关键词**。
+     *
+     * 这是产品上的明确决定：不输入关键词时不返回任何结果，筛选条件只用于收窄关键词搜索的
+     * 结果范围，不能单独作为查询条件。
+     *
+     * 服务端层面「浏览态」是支持的（`_search_global_files` 的 keyword 可空，
+     * [SearchGlobalFilesBodyBuilder] 也会在 keyword 为空时省略该字段），
+     * 但客户端刻意不暴露这个能力——按文件类型或日期范围无界浏览整个工作区的历史文件，
+     * 结果量大且对用户无实际意义。因此这里只认关键词，不看 filters。
+     *
+     * 若后续要放开浏览态，改这一处即可：加上 `|| !currentFilters.isEmpty()`，
+     * 同时需要让 [GlobalActivity] 的空态不再把"未发起搜索"等同于"请输入关键词"。
+     */
+    private fun shouldRunSearch(keyword: String): Boolean = keyword.isNotEmpty()
+
     fun setKeyword(value: String) {
         if (_state.value.keyword == value) return
-        _state.value = _state.value.copy(keyword = value, isLoading = true)
         debounceJob?.cancel()
-        if (value.isEmpty()) {
+        // 关键词一变立即清空上一轮结果与分页游标，避免 debounce 窗口内旧结果渲染在新关键词之下。
+        _state.value = _state.value.copy(
+            keyword = value,
+            isLoading = true,
+            isLoadingMore = false,
+            files = emptyList(),
+            hasMore = false,
+            nextCursor = null,
+            errorCode = null,
+            errorMessage = null,
+            retryAfterSec = 0,
+            queryStarted = true,
+        )
+        // 关键词为空 → 回到初始态，不发请求（见 [shouldRunSearch]：无关键词不返回任何结果）。
+        if (!shouldRunSearch(value)) {
             _state.value = State()
             return
         }
@@ -103,27 +151,59 @@ class FilesSearchViewModel(
         }
     }
 
-    /** 显式强制触发：筛选"应用"、键盘搜索键等场景，跳过 debounce。 */
+    /**
+     * 显式强制触发：筛选"应用"、键盘搜索键、错误态重试等场景，跳过 debounce。
+     * 无关键词时不发请求——筛选"应用"若在空搜索框下点击，等同于只记下条件、不出结果。
+     */
     fun triggerNow() {
         val keyword = _state.value.keyword
-        if (keyword.isEmpty()) return
         debounceJob?.cancel()
+        if (!shouldRunSearch(keyword)) {
+            // 无关键词 → 回到空输入态，并清掉可能残留的结果/错误
+            _state.value = State()
+            return
+        }
         triggerSearch(keyword)
+    }
+
+    /**
+     * 上滑触底加载下一页。仅在已有下一页游标、且无其它请求在途时执行。
+     * 翻页结果**追加**到现有列表，不替换。
+     */
+    fun loadMore() {
+        val s = _state.value
+        if (!s.hasMore || s.isLoading || s.isLoadingMore) return
+        val cursor = s.nextCursor?.takeIf { it.isNotEmpty() } ?: return
+        val mySeq = ++nextSequence
+        _state.value = s.copy(isLoadingMore = true, sequence = mySeq)
+        val req = SearchGlobalFilesReq(
+            keyword = s.keyword.takeIf { it.isNotEmpty() },
+            filters = currentFilters,
+            cursor = cursor,
+            sequence = mySeq,
+        )
+        searchCaller.call(req) { outcome -> handleResponse(mySeq, s.keyword, outcome, isAppend = true) }
     }
 
     private fun triggerSearch(keyword: String) {
         val mySeq = ++nextSequence
         _state.value = _state.value.copy(
             isLoading = true,
-            // 新一轮请求发起即清空旧结果，原因见 GlobalSearchViewModel.triggerSearch 的同类注释。
+            isLoadingMore = false,
+            // 新一轮请求发起即清空旧结果与游标，原因见 GlobalSearchViewModel.triggerSearch 的同类注释。
             files = emptyList(),
+            hasMore = false,
+            nextCursor = null,
             errorCode = null,
             errorMessage = null,
             retryAfterSec = 0,
             sequence = mySeq,
+            queryStarted = true,
         )
         val req = SearchGlobalFilesReq(
-            keyword = keyword,
+            // keyword 恒非空（见 shouldRunSearch 门禁）；仍走 takeIf 以保持与 body builder
+            // "空则省略"契约一致，避免门禁放开后这里漏改发出 "keyword": ""。
+            keyword = keyword.takeIf { it.isNotEmpty() },
             filters = currentFilters,
             sequence = mySeq,
         )
@@ -134,26 +214,36 @@ class FilesSearchViewModel(
         reqSeq: Long,
         requestKeyword: String,
         outcome: ChannelSearchOutcome<CursorList<FileHit>>,
+        isAppend: Boolean = false,
     ) {
+        // 乱序防护：已发出更新的请求 → 丢弃此响应
         if (reqSeq != nextSequence) return
-        if (_state.value.keyword.isEmpty()) return
+        // keyword 已变 → 丢弃（用相等判定而非判空，门禁放开后空串对空串也能正确匹配）
         if (_state.value.keyword != requestKeyword) return
 
         if (outcome.ok) {
             val body = outcome.data ?: return
+            val nextCursor = body.pagination.next_cursor.takeIf { it.isNotEmpty() }
+            // 服务端回传同一个游标时强制停止翻页，避免无限循环拉同一页。
+            val cursorStalled = isAppend && nextCursor != null && nextCursor == _state.value.nextCursor
             _state.value = _state.value.copy(
                 isLoading = false,
-                files = body.data,
-                hasMore = body.pagination.has_more,
+                isLoadingMore = false,
+                files = if (isAppend) _state.value.files + body.data else body.data,
+                hasMore = if (cursorStalled) false else body.pagination.has_more,
+                nextCursor = if (cursorStalled) null else nextCursor,
                 errorCode = null,
                 errorMessage = null,
                 retryAfterSec = 0,
             )
         } else {
+            // 翻页失败时保留已加载的页，只停止继续翻页；首屏失败才清空列表。
             _state.value = _state.value.copy(
                 isLoading = false,
-                files = emptyList(),
+                isLoadingMore = false,
+                files = if (isAppend) _state.value.files else emptyList(),
                 hasMore = false,
+                nextCursor = null,
                 errorCode = outcome.errorCode,
                 errorMessage = outcome.errorMessage,
                 retryAfterSec = outcome.retryAfterSec,

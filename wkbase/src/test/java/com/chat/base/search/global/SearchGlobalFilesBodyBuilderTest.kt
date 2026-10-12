@@ -41,35 +41,33 @@ class SearchGlobalFilesBodyBuilderTest {
         assertEquals(listOf("pdf", "docx"), filters["file_exts"])
     }
 
-    @Test
-    fun build_omits_empty_keyword_for_browse_mode() {
-        val req = SearchGlobalFilesReq(
-            keyword = null,
-            filters = GlobalSearchFilters(fileExts = listOf("pdf")),
-        )
-        val body = SearchGlobalFilesBodyBuilder.build(req)
-        assertFalse("空 keyword 是 browse 模式，不应写入", body.containsKey("keyword"))
-    }
-
     /**
-     * 浏览态完整 body 形状，逐字段对齐 iOS
-     * `WKGlobalSearchV2API +searchGlobalFilesWithKeyword:filter:cursor:`：
-     * keyword 省略、page_size/cursor/filters 恒在、无 sort 字段。
+     * 序列化器层面的防御性契约，**不对应任何用户可达路径**：
+     * UI 侧 [com.chat.uikit.search.remote.FilesSearchViewModel] 的门禁要求关键词非空，
+     * 所以 keyword 为空的请求当前不会真的发出（产品决定：不输关键词不返回结果）。
+     *
+     * 仍然锁定这个行为，是因为服务端契约允许省略 keyword，一旦将来放开门禁，
+     * 序列化必须是"省略整个 key"而不是发 `"keyword": ""`——后者语义不同。
+     * 若判定该测试在误导读者（断言了不可达能力），可以连同门禁一起删除，
+     * 但不要只删门禁留下测试。
      */
     @Test
-    fun build_browse_mode_body_shape_matches_ios() {
-        val req = SearchGlobalFilesReq(
-            keyword = "",
-            filters = GlobalSearchFilters(fileExts = listOf("pdf")),
-        )
-        val body = SearchGlobalFilesBodyBuilder.build(req)
+    fun build_omits_empty_keyword_defensively() {
+        // null 与空串都必须省略，不能退化成 "keyword": ""
+        for (keyword in listOf(null, "")) {
+            val req = SearchGlobalFilesReq(
+                keyword = keyword,
+                filters = GlobalSearchFilters(fileExts = listOf("pdf")),
+            )
+            val body = SearchGlobalFilesBodyBuilder.build(req)
 
-        assertEquals("恰好 3 个顶层字段", setOf("page_size", "cursor", "filters"), body.keys)
-        assertFalse("空串 keyword 也要省略", body.containsKey("keyword"))
-        assertEquals("", body["cursor"])
-        assertEquals(20, body["page_size"])
-        assertFalse("文件端点不发 sort", body.containsKey("sort"))
-        assertEquals(listOf("pdf"), body.getJSONObject("filters")["file_exts"])
+            assertFalse("keyword=$keyword 应省略整个 key", body.containsKey("keyword"))
+            assertEquals("恰好 3 个顶层字段", setOf("page_size", "cursor", "filters"), body.keys)
+            assertEquals("", body["cursor"])
+            assertEquals(20, body["page_size"])
+            assertFalse("文件端点不发 sort", body.containsKey("sort"))
+            assertEquals(listOf("pdf"), body.getJSONObject("filters")["file_exts"])
+        }
     }
 
     @Test

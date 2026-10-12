@@ -39,8 +39,9 @@ internal object SearchGlobalFilesBodyBuilder {
 
     fun build(req: SearchGlobalFilesReq): JSONObject {
         val body = JSONObject()
-        // keyword 为空时整个 key 省略（浏览态），不能发 "keyword": ""
-        // ——对齐 iOS WKGlobalSearchV2API.searchGlobalFilesWithKeyword 的 `if (kw.length > 0)`。
+        // keyword 为空时整个 key 省略，不能发 "keyword": ""（两者服务端语义不同）。
+        // 注意 UI 侧门禁要求关键词非空，当前不会真的发出空 keyword 的请求，
+        // 这里是序列化层的防御性实现，详见 FilesSearchViewModel.shouldRunSearch。
         if (!req.keyword.isNullOrEmpty()) {
             body["keyword"] = req.keyword
         }

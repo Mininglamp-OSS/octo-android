@@ -227,9 +227,15 @@ class FilesSearchViewModelTest {
         assertEquals(listOf("pdf"), caller.pending[1].req.filters.fileExts)
     }
 
-    /** 翻页失败只停止继续翻页，不应丢掉已加载的页。 */
+    /**
+     * 翻页失败保留已加载的页，并保留游标让用户再次上滑重试。
+     *
+     * 注意这个断言只覆盖 ViewModel 层。真正的缺陷曾经在渲染层：Activity 的 collector
+     * 在 errorCode 非空时无条件 setList(emptyList())，把这里保留下来的页又丢掉了。
+     * 渲染层由 [FilesTabRenderPolicyTest] 单独锁定，两者缺一不可。
+     */
     @Test
-    fun `failed loadMore keeps already loaded pages`() = runTest(dispatcher) {
+    fun `failed loadMore keeps already loaded pages and cursor`() = runTest(dispatcher) {
         val caller = RecordingCaller()
         val vm = FilesSearchViewModel(caller)
 
@@ -240,7 +246,52 @@ class FilesSearchViewModelTest {
         caller.failAt(1)
 
         assertEquals(listOf("a"), vm.state.value.files.map { it.file_name })
+        assertTrue("错误须对 UI 可见（用于 toast）", vm.state.value.errorCode != null)
+        assertFalse("翻页失败不应卡在 loadingMore", vm.state.value.isLoadingMore)
+        // 保留游标与 hasMore：否则翻页永久停死，只能重新搜索才能继续
+        assertTrue("hasMore 须保留以便重试", vm.state.value.hasMore)
+        assertEquals("游标须保留以便重试", "cur1", vm.state.value.nextCursor)
+    }
+
+    /** 翻页失败后再次上滑应能用保留的游标重试这一页。 */
+    @Test
+    fun `loadMore can retry after a failed page`() = runTest(dispatcher) {
+        val caller = RecordingCaller()
+        val vm = FilesSearchViewModel(caller)
+
+        vm.setKeyword("报告")
+        tick()
+        caller.completeAt(0, page(listOf(hit("a")), hasMore = true, nextCursor = "cur1"))
+        vm.loadMore()
+        caller.failAt(1)
+
+        vm.loadMore()
+        assertEquals("应能用保留的游标再发一次", 3, caller.pending.size)
+        assertEquals("cur1", caller.pending[2].req.cursor)
+
+        caller.completeAt(2, page(listOf(hit("b")), hasMore = false, nextCursor = ""))
+        assertEquals(
+            "重试成功后应追加到已有结果之后",
+            listOf("a", "b"),
+            vm.state.value.files.map { it.file_name },
+        )
+        assertNull("重试成功后错误须清空", vm.state.value.errorCode)
+    }
+
+    /** 首屏失败与翻页失败必须区分：首屏失败要清空列表和游标，交给空态接管。 */
+    @Test
+    fun `failed first page clears list and cursor`() = runTest(dispatcher) {
+        val caller = RecordingCaller()
+        val vm = FilesSearchViewModel(caller)
+
+        vm.setKeyword("报告")
+        tick()
+        caller.failAt(0)
+
+        assertTrue("首屏失败须清空列表", vm.state.value.files.isEmpty())
         assertFalse(vm.state.value.hasMore)
+        assertNull(vm.state.value.nextCursor)
+        assertTrue(vm.state.value.errorCode != null)
     }
 
     // ---------- 无关键词不搜索 ----------

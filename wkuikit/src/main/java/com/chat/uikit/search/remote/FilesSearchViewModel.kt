@@ -237,13 +237,16 @@ class FilesSearchViewModel(
                 retryAfterSec = 0,
             )
         } else {
-            // 翻页失败时保留已加载的页，只停止继续翻页；首屏失败才清空列表。
+            // 翻页失败：保留已加载的页，并**保留游标与 hasMore**，让用户再次上滑即可重试这一页
+            // （UI 侧 observeFilesTabState 会照常渲染已有结果，错误用 toast 提示）。
+            // 若此处把 hasMore/nextCursor 清掉，翻页会永久停死，只能重新搜索才能继续。
+            // 首屏失败则清空列表与游标，由空态接管展示「加载失败 + 重试」。
             _state.value = _state.value.copy(
                 isLoading = false,
                 isLoadingMore = false,
                 files = if (isAppend) _state.value.files else emptyList(),
-                hasMore = false,
-                nextCursor = null,
+                hasMore = if (isAppend) _state.value.hasMore else false,
+                nextCursor = if (isAppend) _state.value.nextCursor else null,
                 errorCode = outcome.errorCode,
                 errorMessage = outcome.errorMessage,
                 retryAfterSec = outcome.retryAfterSec,

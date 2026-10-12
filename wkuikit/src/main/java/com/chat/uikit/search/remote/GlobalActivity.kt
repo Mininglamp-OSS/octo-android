@@ -153,6 +153,10 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     // 新一轮请求发起时 errorCode 被清 null，允许下次错误再次弹。
     private var lastToastedErrorCode: String? = null
 
+    // 文件 tab 的 toast 去重，与 [lastToastedErrorCode] 分开：两者订阅不同 ViewModel，
+    // 共用一个字段会让其中一个 tab 的错误把另一个 tab 的 toast 去重掉。
+    private var lastFilesToastedErrorCode: String? = null
+
     override fun getViewBinding(): ActGlobalLayoutBinding {
         return ActGlobalLayoutBinding.inflate(layoutInflater)
     }
@@ -580,19 +584,34 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     }
 
     /**
-     * 文件 tab：无本地兜底数据源（文件不像消息有 IMSDK 本地聚合），任何失败都落 Error 态
+     * 文件 tab：无本地兜底数据源（文件不像消息有 IMSDK 本地聚合），**首屏**失败落 Error 态
      * 并展示重试按钮——若混进 NoResults 则「接口未部署」与「真的没文件」在 UI 上无法区分。
+     *
+     * **翻页失败不能清屏**：文件是本页唯一 cursor 翻页的 tab，第二页失败时 ViewModel 会
+     * 刻意保留已加载的页（见 [FilesSearchViewModel.handleResponse] 的 isAppend 分支），
+     * 这里必须无条件渲染 `state.files`，否则用户已经看到的 20 条结果会被整屏「加载失败」
+     * 顶掉，且重试走的是 triggerNow → 从第一页重来，连滚动位置一并丢失。
+     * 做法对齐同包的 [GroupDrillActivity.observeState]：列表照常渲染，错误用 toast 提示。
      */
     private fun observeFilesTabState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 filesTabViewModel.state.collect { state ->
                     val action = state.uiAction()
-                    filesTabAdapter.setList(if (action == null) state.files else emptyList())
+                    val decision = FilesTabRenderPolicy.decide(action, state.files.size)
+                    // 列表无条件渲染：翻页失败时 ViewModel 保留的页必须留在屏上。
+                    filesTabAdapter.setList(state.files)
+                    if (action == null) {
+                        // 新请求成功或刚发起时 errorCode 被清空 → 允许下次 toast
+                        lastFilesToastedErrorCode = null
+                    } else if (decision.toastError && state.errorCode != lastFilesToastedErrorCode) {
+                        lastFilesToastedErrorCode = state.errorCode
+                        showFilesErrorToast(state)
+                    }
                     filesTabEmptyInput = TabEmptyInput(
                         loading = state.isLoading,
                         queryStarted = state.queryStarted,
-                        error = action != null,
+                        error = decision.takeOverWithError,
                     )
                     updateAllEmptyView()
                 }
@@ -860,16 +879,30 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     }
 
     private fun showErrorToast(state: GlobalSearchViewModel.State) {
-        val msg = when (state.uiAction()) {
-            ChannelSearchUiAction.RATE_LIMITED ->
-                if (state.retryAfterSec > 0) "请求过于频繁，${state.retryAfterSec}s 后重试"
-                else "请求过于频繁，请稍后重试"
-            ChannelSearchUiAction.FEATURE_DISABLED -> "搜索功能未启用"
-            ChannelSearchUiAction.BLOCK_NOT_FOUND -> null   // 不打扰
-            ChannelSearchUiAction.VALIDATION_ERROR -> null  // 触发条件不满足是常态
-            else -> state.errorMessage?.takeIf { it.isNotEmpty() } ?: "搜索失败，请重试"
-        }
-        msg?.let { showToast(it) }
+        errorToastMessage(state.uiAction(), state.retryAfterSec, state.errorMessage)
+            ?.let { showToast(it) }
+    }
+
+    /** 文件 tab 的错误 toast：仅在列表已有结果（空态不可见）时使用，见 [observeFilesTabState]。 */
+    private fun showFilesErrorToast(state: FilesSearchViewModel.State) {
+        errorToastMessage(state.uiAction(), state.retryAfterSec, state.errorMessage)
+            ?.let { showToast(it) }
+    }
+
+    /** 错误码 → toast 文案。返回 null 表示该错误不打扰用户。 */
+    private fun errorToastMessage(
+        action: ChannelSearchUiAction?,
+        retryAfterSec: Int,
+        errorMessage: String?,
+    ): String? = when (action) {
+        null -> null
+        ChannelSearchUiAction.RATE_LIMITED ->
+            if (retryAfterSec > 0) "请求过于频繁，${retryAfterSec}s 后重试"
+            else "请求过于频繁，请稍后重试"
+        ChannelSearchUiAction.FEATURE_DISABLED -> "搜索功能未启用"
+        ChannelSearchUiAction.BLOCK_NOT_FOUND -> null   // 不打扰
+        ChannelSearchUiAction.VALIDATION_ERROR -> null  // 触发条件不满足是常态
+        else -> errorMessage?.takeIf { it.isNotEmpty() } ?: "搜索失败，请重试"
     }
 
     /** 组合三段 + 分隔符，一次提交给 adapter。空字符串场景由 [afterTextChanged] 直接 setList(空) 处理。 */

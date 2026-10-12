@@ -286,7 +286,9 @@ class ChatMultiForwardDetailAdapter(
                         val progressBar = holder.getView<android.widget.ProgressBar>(R.id.fileProgressBar)
                         progressBar.visibility = View.GONE
                         holder.getView<View>(R.id.fileLayout).setOnClickListener {
-                            if (fileContent != null) handleForwardFileClick(fileContent, progressBar)
+                            if (fileContent != null) {
+                                handleForwardFileClick(item.msg.clientMsgNO, fileContent, progressBar)
+                            }
                         }
                     }
 
@@ -492,16 +494,16 @@ class ChatMultiForwardDetailAdapter(
         )
     }
 
-    private fun handleForwardFileClick(fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
-        // Check download directory
+    private fun handleForwardFileClick(clientMsgNO: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
+        // 缓存键 = clientMsgNO（参照 iOS：路径由消息唯一标识结构性推导），
+        // 每条转发消息独立路径，避免跨会话同名文件撞车；原始文件名仅用于展示。
         val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val rawName = fileContent.name ?: ("file." + (fileContent.extension ?: "dat"))
-        val fileName = File(rawName).name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val fileName = WKFileProvider.buildCacheFileName(clientMsgNO, fileContent.extension)
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists()) {
-            openForwardFile(file)
+        if (file.exists() && (fileContent.size <= 0L || file.length() == fileContent.size)) {
+            openForwardFile(file, fileContent.name)
             return
         }
 
@@ -524,7 +526,14 @@ class ChatMultiForwardDetailAdapter(
                     progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
-                        openForwardFile(downloadedFile)
+                        // 回写 localPath 并持久化（参照 WKVoiceProvider），下次点击直接命中本地文件
+                        fileContent.localPath = filePath
+                        WKIM.getInstance().msgManager.updateContentAndRefresh(
+                            clientMsgNO,
+                            fileContent,
+                            false
+                        )
+                        openForwardFile(downloadedFile, fileContent.name)
                     }
                 }
 
@@ -634,8 +643,8 @@ class ChatMultiForwardDetailAdapter(
         }
     }
 
-    private fun openForwardFile(file: File) {
-        WKFileProvider.openFileWithOptions(context, file)
+    private fun openForwardFile(file: File, displayName: String? = null) {
+        WKFileProvider.openFileWithOptions(context, file, displayName)
     }
 
     private fun applyUrlHighlighting(spanned: android.text.Spanned): android.text.SpannableStringBuilder {

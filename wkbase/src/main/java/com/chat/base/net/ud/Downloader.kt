@@ -196,6 +196,13 @@ internal class Downloader private constructor() {
                     } else {
                         e.message
                     }
+                    // 清理残留的半截 .tmp 文件，并通知上层失败（否则 UI 进度条永远卡住）
+                    cleanupTmpFile(mTask)
+                    val callback = mOnDownloadHashMap[mTask.url]
+                    Handler(Looper.getMainLooper()).post {
+                        callback?.third?.invoke(mTask.url, mTask.errorMsg ?: "unKnow error")
+                        mOnDownloadHashMap.remove(mTask.url)
+                    }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
@@ -208,7 +215,8 @@ internal class Downloader private constructor() {
                         mTask.contentSize = body.contentLength()
                         mTask.inputStream = body.byteStream()
                         if (mTask.fileOutputStream == null) {
-                            mTask.fileOutputStream = FileOutputStream(mTask.file)
+                            // 先写 .tmp 临时文件，完成后原子 rename 到目标路径，避免中断残留半截文件
+                            mTask.fileOutputStream = FileOutputStream(tmpFileFor(mTask.file))
                         }
                         calculate(mTask)
                     } else {
@@ -218,6 +226,22 @@ internal class Downloader private constructor() {
                 }
 
             })
+    }
+
+    /** 目标文件对应的临时文件路径（下载期间写入，完成后 rename）。 */
+    private fun tmpFileFor(file: File): File = File(file.absolutePath + ".tmp")
+
+    /** 删除残留的 .tmp 文件（下载失败/异常时调用）。 */
+    private fun cleanupTmpFile(mTask: Task) {
+        try {
+            mTask.fileOutputStream?.close()
+        } catch (_: Exception) {
+        }
+        mTask.fileOutputStream = null
+        try {
+            tmpFileFor(mTask.file).delete()
+        } catch (_: Exception) {
+        }
     }
 
     private fun calculate(mTask: Task) {
@@ -266,8 +290,26 @@ internal class Downloader private constructor() {
                 }
                 val len = mTask.inputStream!!.read(bytes)
                 if (len == -1) {
+                    // 下载完成：关闭流后把 .tmp 原子 rename 到目标路径，再回调最终文件
+                    try {
+                        mTask.fileOutputStream!!.flush()
+                    } catch (_: Exception) {
+                    }
+                    try {
+                        mTask.fileOutputStream!!.close()
+                    } catch (_: Exception) {
+                    }
+                    mTask.fileOutputStream = null
+                    val finalFile = mTask.file
+                    val tmpFile = tmpFileFor(finalFile)
+                    if (!tmpFile.renameTo(finalFile)) {
+                        // rename 失败（如跨挂载点）时退化为复制覆盖
+                        tmpFile.copyTo(finalFile, overwrite = true)
+                        tmpFile.delete()
+                    }
                     Handler(Looper.getMainLooper()).post {
-                        callback?.second?.invoke(mTask.url, mTask.file)
+                        callback?.second?.invoke(mTask.url, finalFile)
+                        mOnDownloadHashMap.remove(mTask.url)
                     }
                     mDownloadTasks.remove(mTask.url)
                     break
@@ -284,8 +326,21 @@ internal class Downloader private constructor() {
             }
         } catch (e: Exception) {
             e.localizedMessage?.let { Log.e(TAG, it) }
-            mTask.inputStream!!.close()
-
+            try {
+                mTask.inputStream!!.close()
+            } catch (_: Exception) {
+            }
+            // 清理半截 .tmp 文件并通知上层失败，避免残file被后续 exists() 当作有效缓存
+            cleanupTmpFile(mTask)
+            mTask.status = DownloadStatus.ERROR
+            mTask.errorMsg = e.message ?: "download error"
+            val callback = mOnDownloadHashMap[mTask.url]
+            val failMsg = mTask.errorMsg ?: "download error"
+            Handler(Looper.getMainLooper()).post {
+                callback?.third?.invoke(mTask.url, failMsg)
+                mOnDownloadHashMap.remove(mTask.url)
+            }
+            mDownloadTasks.remove(mTask.url)
         }
 
 

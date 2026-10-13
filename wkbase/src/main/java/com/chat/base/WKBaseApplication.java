@@ -195,6 +195,13 @@ public class WKBaseApplication {
 
         initCacheDir();
 
+        // 残留 .tmp / .copytmp 清扫：下载现在走 ".tmp 写入 + rename 落地"，进程被杀
+        // （而非走 dispatchFail 的失败收尾）时会留下半截临时文件。它们不被任何
+        // isValidCache 逻辑承认，但会一直占着磁盘，启动时统一扫一遍。必须等
+        // initCacheDir() 把 chatDownloadFileDir 填好之后再跑。
+        AppStartup.postPhaseB("tmp-sweep", () ->
+                WKFileUtils.getInstance().sweepStaleDownloadTmp(WKConstants.chatDownloadFileDir));
+
         boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
 
         if (isShowDialog) {

@@ -93,7 +93,14 @@ class ChatMultiForwardDetailAdapter(
      * field itself may be null when the payload omits users[].
      * See  / web PR #981.
      */
-    private val users: List<WKChannel>?
+    private val users: List<WKChannel>?,
+    /**
+     * 父消息（合并转发包装消息）的 clientMsgNO，来自 message 表的真实持久化行。
+     * 用于文件缓存键的 bundle 作用域前缀——forward/ 目录是全局共享的，子消息键
+     * 必须先按 bundle 隔离，再按条目隔离，否则跨会话互相命中。嵌套转发（走
+     * forward_content_json 进入）没有 DB 行，传 null，此时退化为内容哈希作用域。
+     */
+    private val parentClientMsgNO: String?
 ) :
     BaseMultiItemQuickAdapter<ChatMultiForwardEntity, BaseViewHolder>() {
     init {
@@ -101,6 +108,10 @@ class ChatMultiForwardDetailAdapter(
         addItemType(1, R.layout.item_chat_multi_froward_time)
         addItemType(2, R.layout.item_chat_multi_froward_view)
         setList(list)
+        // bundle 作用域键：list 与 msgList 一一对应（header 在 index 0、尾部 view 在
+        // 末尾），构造时一次算好整张映射，点击时按下标查，不用在点击回调里重复 identity
+        // 查找。见 [bundleScopedKeys] 与 [forwardFileCacheKey]。
+        buildBundleScopedKeys()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -498,25 +509,68 @@ class ChatMultiForwardDetailAdapter(
         )
     }
 
+    /** UI 下标 → bundle 作用域缓存键，构造时一次性算好。 */
+    private val bundleScopedKeys: MutableMap<Int, String> = HashMap()
+
     /**
-     * 合并转发子消息的稳定缓存键。
+     * 给 list 里每个条目算出 bundle 作用域缓存键并缓存。
+     *
+     * forward/ 目录全局共享，键的作用域必须覆盖"全局"，分解为两层：
+     * bundle 层（父消息 clientMsgNO，或嵌套转发时的内容哈希）× 条目层（messageID，
+     * 缺失时该 bundle 内的下标）。两层任何一层单独使用都不够：clientMsgNO 对子消息
+     * 不存在（见 [forwardFileCacheKey] 注释），单靠下标只在单屏内唯一。
+     */
+    private fun buildBundleScopedKeys() {
+        // 嵌套转发（forward_content_json 进入）没有父 DB 行，用父内容哈希做作用域：
+        // 同一转发内容在两个会话里命中同一缓存是正确行为（字节相同）。
+        val scope = if (!parentClientMsgNO.isNullOrEmpty()) {
+            "b_${sanitizeScope(parentClientMsgNO)}"
+        } else {
+            "h_${Integer.toHexString(list.hashCode())}"
+        }
+        bundleScopedKeys.clear()
+        var fileIndex = 0
+        for (i in list.indices) {
+            val item = list[i]
+            val msg = item.msg ?: continue
+            val messageID = msg.messageID
+            val entry = if (!TextUtils.isEmpty(messageID)) {
+                "${scope}_${sanitizeScope(messageID!!)}"
+            } else {
+                // messageID 缺失（发送中/发送失败的子消息 encode 后为空）：回落到
+                // bundle 内下标。下标在 bundle 作用域内稳定，不再跨 bundle 冲突。
+                "${scope}_i$fileIndex"
+            }
+            fileIndex++
+            bundleScopedKeys[i] = entry
+        }
+    }
+
+    /** 作用域/键段清洗：与 WKFileProvider.sanitizePathSegment 同级的防护，这里防超长与分隔符。 */
+    private fun sanitizeScope(raw: String): String {
+        val cleaned = raw.replace(Regex("[\\\\/:*?\"<>| ]"), "_")
+        return if (cleaned.length > 64) cleaned.substring(0, 64) else cleaned
+    }
+
+    /**
+     * 合并转发子消息的稳定缓存键（bundle 作用域 × 条目）。
      *
      * 不能用 `item.msg.clientMsgNO`：子消息由 `WKMultiForwardContent.decodeMsg` 反序列化
      * 得来，decodeMsg 从不赋值 clientMsgNO，它来自 `WKMsg` 构造函数的
      * `createClientMsgNO()` 兜底，是个每次 decode 都重新生成的随机 UUID。
      *
-     * 优先用 `messageID`（decodeMsg 从 payload 的 `message_id` 赋值，跨 decode 稳定）。
-     * 该字段可能为空（`optString`），此时回落到 `fwd_<在 list 中的下标>` —— 下标在
-     * msgList 内稳定，且比常量兜底好：不会让所有无 ID 文件塌到同一个路径上。
+     * messageID 跨 decode 稳定且全局唯一，但可能缺失（发送中/发送失败的消息
+     * encode 时 messageID 为 null，JSONObject.put 移除该键）；decodeMsg 已对
+     * JSON null 加 isNull 守卫（对齐 users[] 的既有写法），缺失时按 bundle 内
+     * 顺序取下标。单层下标键曾在全局目录下让所有 bundle 的第 N 条塌到同一路径
+     * （跨会话内容互串），所以下标永远不单独使用，必须挂在 bundle 作用域之下。
      */
     private fun forwardFileCacheKey(item: ChatMultiForwardEntity): String {
-        val messageID = item.msg?.messageID
-        if (!TextUtils.isEmpty(messageID)) return messageID!!
-        // indexOf 走 identity（ChatMultiForwardEntity 未重写 equals），命中即稳定下标。
-        // 理论上查不到时（-1）退回 identityHashCode，仅保证本次进程内不与他人撞车。
         val index = list.indexOf(item)
-        if (index >= 0) return "fwd_$index"
-        return "fwd_" + System.identityHashCode(item)
+        bundleScopedKeys[index]?.let { return it }
+        // 理论兜底：查不到（adapter 数据被整体替换后未重建映射）时退回内容哈希，
+        // 仅保证本次进程内不与他人撞车。
+        return "f_" + System.identityHashCode(item)
     }
 
     private fun handleForwardFileClick(cacheKey: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {

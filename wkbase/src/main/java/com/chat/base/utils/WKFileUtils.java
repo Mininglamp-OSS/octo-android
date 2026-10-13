@@ -245,6 +245,35 @@ public class WKFileUtils {
     }
 
     /**
+     * 递归清扫下载目录下的残留临时文件（{@code *.tmp} / {@code *.copytmp}）。
+     *
+     * <p>下载链路是 ".tmp 写入 + rename 落地"：失败路径（dispatchFail）会清掉临时
+     * 文件，但进程被杀时没有机会走收尾，会留下半截 {@code *.tmp}。这些残留不会被
+     * 任何 exists()/isValidCache 逻辑当作有效缓存打开，只是白白占磁盘，冷启动扫一遍。
+     * 命名上以 {@code .tmp} / {@code .copytmp} 结尾即视为临时文件——正式缓存文件名
+     * 来自 buildCacheFileName（clientMsgNO + 扩展名），不会产生这些后缀。
+     *
+     * @param dir 下载根目录（chatDownloadFileDir）；为空或不存在时静默返回
+     */
+    public void sweepStaleDownloadTmp(String dir) {
+        if (TextUtils.isEmpty(dir)) return;
+        File root = new File(dir);
+        if (!root.exists() || !root.isDirectory()) return;
+        File[] files = root.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (file == null) continue;
+            if (file.isDirectory()) {
+                sweepStaleDownloadTmp(file.getAbsolutePath());
+            } else if (file.getName().endsWith(".tmp") || file.getName().endsWith(".copytmp")) {
+                if (!file.delete()) {
+                    Log.w("fileUtils", "sweepStaleDownloadTmp delete fail: " + file.getAbsolutePath());
+                }
+            }
+        }
+    }
+
+    /**
      * 保存录音文件
      *
      * @param oldPath

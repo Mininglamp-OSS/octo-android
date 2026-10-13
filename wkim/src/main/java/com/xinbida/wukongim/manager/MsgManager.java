@@ -790,6 +790,14 @@ public class MsgManager extends BaseManager {
     }
 
 
+    /**
+     * @deprecated 整列覆盖：用 {@code model.encodeMsg()} 的结果整体替换 content，
+     * 会抹掉模型不持有的顶层协议字段（{@code mention} / {@code reply} / {@code entities} /
+     * {@code robot_id} / {@code space_id}），导致 Space 隔离与 @ 提及状态静默失效。
+     * 仓库内已无调用方；回写单个附件字段请用
+     * {@link #updateContentLocalPath(String, String, boolean)}（单键 merge）。
+     */
+    @Deprecated
     public boolean updateContentAndRefresh(String clientMsgNo, WKMessageContent model, boolean isRefreshUI) {
         JSONObject jsonObject = model.encodeMsg();
         try {

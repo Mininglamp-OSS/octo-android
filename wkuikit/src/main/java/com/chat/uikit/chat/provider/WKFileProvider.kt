@@ -21,6 +21,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.text.TextUtils
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -213,11 +214,16 @@ class WKFileProvider : WKChatBaseProvider() {
                         // robot_id（WKFileContent.encodeMsg 只输出 5 个字段），导致
                         // Space 隔离与 @ 提及状态静默失效。
                         fileContent.localPath = filePath
-                        WKIM.getInstance().msgManager.updateContentLocalPath(
+                        val merged = WKIM.getInstance().msgManager.updateContentLocalPath(
                             uiChatMsgItemEntity.wkMsg.clientMsgNO,
                             filePath,
                             false
                         )
+                        if (!merged) {
+                            // false = DB 里没有该 clientMsgNO 的行（如嵌套转发消息）或
+                            // content JSON 已损坏——本次内存态 localPath 仍生效，仅缺持久化。
+                            Log.w(TAG, "updateContentLocalPath merged nothing, clientMsgNO=${uiChatMsgItemEntity.wkMsg.clientMsgNO}")
+                        }
                         openFile(downloadedFile, fileContent.name)
                     }
                 }
@@ -239,50 +245,62 @@ class WKFileProvider : WKChatBaseProvider() {
         isValidFileCache(file, fileContent.size)
 
     companion object {
+        private const val TAG = "WKFileProvider"
 
         /**
-         * 本次进程内已完整下载并 rename 落地的文件路径，供 [isValidCache] 在发送方
-         * 上报 `size` 不准时作为逃生通道（见该方法注释）。仅进程内有效，不做持久化。
+         * 本次进程内已完整下载并 rename 落地的文件：路径 → 落地时的实际字节数。
+         *
+         * 记长度而不是只记路径：路径只能证明"这里完整落过一个文件"，证明不了
+         * "落的就是当前这条消息的文件"。键冲突时（如合并转发目录的退化键）另一条
+         * 消息会在同一路径上看到长度不匹配——那正是应触发重下的信号，若只按路径放行
+         * 就会把别人的字节当成本条消息的缓存打开。进程内有效，不持久化。
          */
-        private val verifiedDownloads: MutableSet<String> =
-            java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
+        private val verifiedDownloads: MutableMap<String, Long> =
+            java.util.concurrent.ConcurrentHashMap()
 
-        /** 记录一个已完整下载并落地的路径（下载成功回调里调用）。 */
+        /** 记录一个已完整下载并落地的路径及其字节数（下载成功回调里调用）。 */
         @JvmStatic
         fun markDownloadVerified(file: File) {
-            verifiedDownloads.add(file.absolutePath)
+            verifiedDownloads[file.absolutePath] = file.length()
         }
 
         /**
          * 缓存有效性：`size > 0` 时要求 `file.length() == size`，防止中断残留的半截文件
          * 被命中；`size <= 0`（服务端未下发）退化为仅判断存在。
          *
-         * 例外：本次进程内已完整下载并落地过的路径直接放行。`size` 由发送方上报
-         * （ChatActivity / ShareReceiveActivity / ChatPanelManager），一旦上报不准，
+         * 例外：本进程内已完整下载落地的 (路径, 字节数) 完全匹配时放行。`size` 由发送方
+         * 上报（ChatActivity / ShareReceiveActivity / ChatPanelManager），一旦上报不准，
          * 严格相等会让这条消息陷入"每次点击都重下、下完又因不等而不认"的死循环
-         * （onSuccess 只校验 exists() 所以仍会打开，但下次点击重复整个过程）。
-         * 由于下载已改为写 .tmp + 完成后 rename，能出现在最终路径上的文件必然是完整的，
-         * 此时以实际落地为准比以上报 size 为准更可靠。
+         * （onSuccess 只校验 exists() 所以仍会打开，但下次点击重复整个过程）。由于下载
+         * 已改为写 .tmp + 完成后 rename，最终路径上的文件是本次进程完整收流的结果，
+         * 以"实际落地的字节数"为准比以"上报的 size"为准更可靠；同时因为还比对了长度，
+         * 该例外不会把键冲突场景下"别人的文件"误判为有效缓存。
          */
         @JvmStatic
         fun isValidFileCache(file: File, size: Long): Boolean {
             if (size <= 0L) return true
-            if (file.length() == size) return true
-            return verifiedDownloads.contains(file.absolutePath)
+            val length = file.length()
+            if (length == size) return true
+            return verifiedDownloads[file.absolutePath] == length
         }
 
         /**
          * 本地缓存文件名：`<缓存键>.<ext>`，以消息唯一标识做缓存键
          * （参照 iOS WKMediaUtil.getLocalPath），避免同名不同内容互相命中。
          *
-         * 缓存键与 extension 都可能来自对端/服务端 JSON（`optString`），
-         * 直接拼路径会被 `../` 穿越，故两者都只保留 basename 并清洗危险字符。
+         * 缓存键与扩展名都可能来自对端/服务端 JSON（`optString`），直接拼路径会被
+         * `../` 穿越，故两者都只保留 basename 并清洗危险字符。
          *
          * 扩展名优先取自 `displayName`（即 `fileContent.name`）的后缀：展示层的
          * 预览类型、MIME、分享标题全部按 `name` 的后缀判定，若磁盘后缀改用
          * `fileContent.extension`，两者不一致时（name="report.pdf" 而
          * extension="bin"）会出现 MIME 为 pdf 但 content:// URI 以 .bin 结尾的错配，
          * 按后缀嗅探的接收方会判错类型。两者同源时结果不变。
+         *
+         * 最终名按 UTF-8 字节截断到 [MAX_FILENAME_BYTES]：key 通常定长（~45 字节），
+         * 但扩展名完全由对端控制、无上限，长中文/emoji 名（3~4 字节/字符）在
+         * ext4/f2fs 的 NAME_MAX=255 下必然 `ENAMETOOLONG`，而该异常落在下载器的
+         * 流构造处，用户观感是"点了没反应"。留出余量给下载器的 `.tmp` 后缀（4 字节）。
          */
         @JvmStatic
         @JvmOverloads
@@ -295,7 +313,7 @@ class WKFileProvider : WKChatBaseProvider() {
             val fromDisplay = displayName?.substringAfterLast('.', "")
             val preferred = if (!fromDisplay.isNullOrEmpty()) fromDisplay else extension
             val ext = sanitizePathSegment(preferred?.removePrefix(".")).ifEmpty { "dat" }
-            return "$key.$ext"
+            return truncateToByteLength("$key.$ext", MAX_FILENAME_BYTES)
         }
 
         /** 去掉路径分隔符与危险字符，只留下单段安全名（防目录穿越）。 */
@@ -305,8 +323,60 @@ class WKFileProvider : WKChatBaseProvider() {
             return File(raw).name
                 .replace(Regex("[\\\\/:*?\"<>|]"), "_")
                 .replace("..", "")
+                .replace(Regex("[\\x00-\\x1f]"), "")
                 .trim()
         }
+
+        /**
+         * 按 UTF-8 字节长度截断文件名，保留扩展名，按 code point 边界截取避免破坏字符。
+         *
+         * Linux NAME_MAX = 255 字节（UTF-8，不是字符）。上限取 [MAX_FILENAME_BYTES]
+         * （200），预留 55 字节：4 字节给下载器的 `.tmp` 后缀，其余给挂载点/未来变化。
+         * 溢出时先压缩扩展名到 16 字节，再截主名——扩展名对类型判定有意义，主名是
+         * 定长键，被截后仍大概率唯一。
+         */
+        private fun truncateToByteLength(name: String, maxBytes: Int): String {
+            if (name.toByteArray(Charsets.UTF_8).size <= maxBytes) return name
+            val dot = name.lastIndexOf('.')
+            val ext = if (dot > 0) name.substring(dot) else ""
+            val base = if (dot > 0) name.substring(0, dot) else name
+            val extBytes = ext.toByteArray(Charsets.UTF_8).size
+            val finalExt = if (extBytes > MAX_EXT_BYTES) {
+                // 扩展名本身超长（对端可构造）：截到 16 字节并保底可读
+                var s = ""
+                var used = 0
+                for (ch in ext) {
+                    val b = ch.toString().toByteArray(Charsets.UTF_8).size
+                    if (used + b > MAX_EXT_BYTES) break
+                    s += ch
+                    used += b
+                }
+                if (s.isEmpty()) ".dat" else s
+            } else {
+                ext
+            }
+            val baseBudget = (maxBytes - finalExt.toByteArray(Charsets.UTF_8).size).coerceAtLeast(1)
+            val sb = StringBuilder()
+            var used = 0
+            var i = 0
+            while (i < base.length) {
+                val cp = base.codePointAt(i)
+                val charCount = Character.charCount(cp)
+                val cpStr = base.substring(i, i + charCount)
+                val chBytes = cpStr.toByteArray(Charsets.UTF_8).size
+                if (used + chBytes > baseBudget) break
+                sb.append(cpStr)
+                used += chBytes
+                i += charCount
+            }
+            if (sb.isEmpty()) sb.append("file")
+            return sb.toString() + finalExt
+        }
+
+        private const val MAX_EXT_BYTES = 16
+
+        /** 文件名 UTF-8 字节长度上限（Linux NAME_MAX=255，留 55 字节余量给临时后缀/挂载点差异）。 */
+        private const val MAX_FILENAME_BYTES = 200
 
         /** 文本预览截断阈值（字符数），与 [TextPreviewActivity] 内部常量对齐。 */
         private const val TEXT_PREVIEW_MAX_CHARS = 50_000

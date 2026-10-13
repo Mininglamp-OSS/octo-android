@@ -17,6 +17,8 @@
 package com.chat.uikit.search.remote
 
 import android.content.Intent
+import android.os.Bundle
+import android.os.Parcelable
 import android.text.Editable
 import android.text.Html
 import android.text.TextUtils
@@ -75,6 +77,7 @@ import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.entity.WKChannelType
 import java.util.Objects
 import kotlinx.coroutines.launch
+import kotlinx.parcelize.Parcelize
 
 class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
@@ -86,6 +89,9 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         const val TAB_FILES = 4
         const val TAB_COUNT = 5
         private const val CHATS_TAB_VM_KEY = "chatsTabViewModel"
+
+        /** 恢复 [filtersByTab]：旋转/深色模式/进程死亡后重建时回填。 */
+        private const val KEY_FILTERS_BY_TAB = "filtersByTab"
         private val EMPTY_TEXTS = arrayOf(
             R.string.search_empty_all,
             R.string.search_empty_chats,
@@ -110,13 +116,28 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     private lateinit var filesTabAdapter: FilesTabAdapter
 
     // 筛选条件仅聊天记录/文件 tab 可编辑，各自独立，切 tab 不互相污染（见 [onPageSelected]）。
+    //
+    // 这是唯一权威存储：ViewModel 里的 currentFilters 只是它的影子（见 reapplyFilters）。
+    // 配置变更（旋转/深色模式切换/字体/多窗口）时 ViewModelStore 会被保留，但这个 Map 是
+    // 普通字段、不会被保留——若不手动存取，重建后 UI 侧认为"无筛选"而 ViewModel 侧仍持有
+    // 旧筛选并继续按它渲染结果，二者从此不一致；点"重试"还会用这个空 Map 覆盖 ViewModel
+    // 里原本生效的筛选，把结果悄悄放宽成无筛选状态。见 [onSaveInstanceState] / [initData]。
     private val filtersByTab = mutableMapOf<Int, GlobalSearchFilters>()
 
+    /**
+     * 写回目标 tab 从结果 Intent 的 [FilterActivity.EXTRA_RESULT_TAB] 读取，不读
+     * `wkVBinding.searchResultPager.currentItem`——后者是启动时的 live view state，
+     * 筛选弹窗开着的这段时间里用户理论上仍可能切换底层 tab（例如双击返回键触发的某些
+     * 导航路径），与两个 launcher 拆分 sender/member 的教训是同一条：写回目标应该固定在
+     * 发起请求那一刻，不随 view 状态变化而漂移。[FilterActivity] 本来就持有 `EXTRA_TAB`，
+     * 原样回传零成本。
+     */
     private val filterLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != RESULT_OK) return@registerForActivityResult
         val filters = result.data?.getParcelableExtra<GlobalSearchFilters>(FilterActivity.EXTRA_RESULT_FILTERS)
             ?: return@registerForActivityResult
-        val tab = wkVBinding.searchResultPager.currentItem
+        val tab = result.data?.getIntExtra(FilterActivity.EXTRA_RESULT_TAB, -1)
+            ?.takeIf { it >= 0 } ?: return@registerForActivityResult
         filtersByTab[tab] = filters
         updateChipBar(tab)
         // 筛选"应用"后立即对该 tab 的数据层生效并重新搜索；联系人/群组 tab 不支持筛选，不会走到这里
@@ -315,6 +336,38 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
             updateAllEmptyView()
         }
         observeChatRecordsState()
+    }
+
+    /**
+     * 恢复 [filtersByTab]，并立即回填两个 tab ViewModel（[reapplyFilters] 只在用户主动操作时
+     * 调用，这里不能用它——不该在恢复阶段重新发起搜索，ViewModel 自身的 replay 已经负责渲染
+     * 结果；只需要让 ViewModel 侧 `currentFilters` 与恢复后的 Map 保持一致，避免下一次重试/
+     * chip 操作时两者读到不同筛选条件）。
+     *
+     * 这里用的是 Bundle 版 [initData]，在 [initView] 之前执行（见 WKBaseActivity.onCreate
+     * 顺序：initPresenter() → initData(savedInstanceState) → initView() → initListener() →
+     * initData()），所以 [updateChipBar] 在 initView 里首次渲染 chip 条时已能读到恢复值。
+     */
+    override fun initData(savedInstanceState: Bundle?) {
+        super.initData(savedInstanceState)
+        val saved = savedInstanceState?.getParcelableArrayList<FilterByTabEntry>(KEY_FILTERS_BY_TAB)
+            ?: return
+        filtersByTab.clear()
+        for (entry in saved) {
+            filtersByTab[entry.tab] = entry.filters
+            when (entry.tab) {
+                TAB_CHATS -> chatsTabViewModel.setFilters(entry.filters)
+                TAB_FILES -> filesTabViewModel.setFilters(entry.filters)
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putParcelableArrayList(
+            KEY_FILTERS_BY_TAB,
+            ArrayList(filtersByTab.map { (tab, filters) -> FilterByTabEntry(tab, filters) }),
+        )
     }
 
     override fun initData() {
@@ -1167,3 +1220,14 @@ private class EmptyStateView(context: android.content.Context) : LinearLayout(co
         retryBtn.visibility = if (retryText.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 }
+
+/**
+ * [GlobalActivity.filtersByTab] 的一个条目，仅用于 [GlobalActivity.onSaveInstanceState] /
+ * [GlobalActivity.initData] 往返——`Bundle` 不能直接存 `Map<Int, Parcelable>`，
+ * 借一个 Parcelable 列表绕一道。
+ */
+@Parcelize
+private class FilterByTabEntry(
+    val tab: Int,
+    val filters: GlobalSearchFilters,
+) : Parcelable

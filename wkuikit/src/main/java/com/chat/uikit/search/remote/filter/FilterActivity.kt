@@ -49,6 +49,9 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
         private const val EXTRA_FILTERS = "filters"
         const val EXTRA_RESULT_FILTERS = "resultFilters"
 
+        /** 回传发起时的 tab，调用方据此写回 `filtersByTab`，不依赖自己的 live view state。 */
+        const val EXTRA_RESULT_TAB = "resultTab"
+
         /** 恢复在途编辑的 draft：旋转/深色模式/进程死亡后重建时覆盖 [EXTRA_FILTERS]。 */
         private const val KEY_DRAFT = "draft"
 
@@ -173,7 +176,9 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
             rebuildRows()
         }
         wkVBinding.applyTv.setOnClickListener {
-            val data = Intent().putExtra(EXTRA_RESULT_FILTERS, draft.toFilters())
+            val data = Intent()
+                .putExtra(EXTRA_RESULT_FILTERS, draft.toFilters())
+                .putExtra(EXTRA_RESULT_TAB, tab)
             setResult(RESULT_OK, data)
             finish()
         }

@@ -28,17 +28,18 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 /**
- * 对全局聚合搜索两个端点的 HTTP 响应做 raw-body 字节上限检查，防止 hostile / 误配服务端
+ * 对全局聚合搜索三个端点的 HTTP 响应做 raw-body 字节上限检查，防止 hostile / 误配服务端
  * 或异常 payload 让 Retrofit + FastJson buffer 全量后 OOM。
  *
  * <p>覆盖端点（严格路径匹配，防子路径误命中）：
  * <ul>
  *   <li>{@code POST /v1/messages/_search_global_groups} (L1)</li>
  *   <li>{@code POST /v1/messages/_search_global_messages} (L2)</li>
+ *   <li>{@code POST /v1/messages/_search_global_files} (文件 tab)</li>
  * </ul>
  *
- * <p>不覆盖 {@code _search_global_files}（未接入）以及其它 {@code /messages/_search*}
- * 频道内端点（走 auth 且响应可控）。同 {@link com.chat.base.emoji.EmojiManifestBodyLimitInterceptor}
+ * <p>不覆盖其它 {@code /messages/_search*} 频道内端点（走 auth 且响应可控）。
+ * 同 {@link com.chat.base.emoji.EmojiManifestBodyLimitInterceptor}
  * 一样必须挂在 {@code LogInterceptor} 之后（list 末尾，最内层），否则 LogInterceptor
  * 已经 body().string() 全量读完，本 interceptor 检查太晚。
  *
@@ -50,6 +51,8 @@ import okhttp3.ResponseBody;
  *   <li>L1 服务端上限 maxGroups=200，每桶 preview 最多 20 条，snippet + 元信息
  *       约 500B/条 → ~2MB 上限估算</li>
  *   <li>L2 page_size max=100，每条含合并转发 inner_messages 可能 5KB → ~500KB 上限估算</li>
+ *   <li>文件 tab page_size max=100（见 {@link com.chat.base.search.global.dto.SearchGlobalFilesReq}），
+ *       每条 FileHit 仅 file_name + download_url + sender 元信息约 400B → ~40KB，2MB 上限极宽松</li>
  * </ul>
  * 保守取 2MB，命中即拒（Retrofit onFail → UI FALLBACK_TO_LOCAL 走本地兜底）。
  */
@@ -60,6 +63,7 @@ public final class SearchGlobalBodyLimitInterceptor implements Interceptor {
 
     private static final String ENDPOINT_L1 = "_search_global_groups";
     private static final String ENDPOINT_L2 = "_search_global_messages";
+    private static final String ENDPOINT_FILES = "_search_global_files";
 
     @NonNull
     @Override
@@ -99,8 +103,9 @@ public final class SearchGlobalBodyLimitInterceptor implements Interceptor {
                 .build();
     }
 
-    /** 匹配 URL 路径末尾为 {@code messages/_search_global_groups}
-     *  或 {@code messages/_search_global_messages}——严格路径匹配。 */
+    /** 匹配 URL 路径末尾为 {@code messages/_search_global_groups}、
+     *  {@code messages/_search_global_messages} 或 {@code messages/_search_global_files}
+     *  ——严格路径匹配。 */
     private static boolean isTargetUrl(Request request) {
         List<String> segments = request.url().pathSegments();
         int n = segments.size();
@@ -108,6 +113,8 @@ public final class SearchGlobalBodyLimitInterceptor implements Interceptor {
             return false;
         }
         String last = segments.get(n - 1);
-        return ENDPOINT_L1.equals(last) || ENDPOINT_L2.equals(last);
+        return ENDPOINT_L1.equals(last)
+                || ENDPOINT_L2.equals(last)
+                || ENDPOINT_FILES.equals(last);
     }
 }

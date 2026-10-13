@@ -18,6 +18,7 @@ package com.chat.uikit.search.remote.filter
 
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -48,6 +49,9 @@ class FilterChannelPickerActivity : WKBaseActivity<ActFilterPickerLayoutBinding>
         private const val EXTRA_PRESELECTED = "preselected"
         const val EXTRA_RESULT_CHANNELS = "selectedChannels"
 
+        /** 恢复在途勾选：旋转/深色模式/进程死亡后重建时覆盖 [EXTRA_PRESELECTED]。 */
+        private const val KEY_CHECKED_CHANNELS = "checkedChannels"
+
         fun newIntent(context: Context, preselected: List<GlobalChannelRef>): Intent =
             Intent(context, FilterChannelPickerActivity::class.java).apply {
                 putParcelableArrayListExtra(EXTRA_PRESELECTED, ArrayList(preselected))
@@ -72,6 +76,24 @@ class FilterChannelPickerActivity : WKBaseActivity<ActFilterPickerLayoutBinding>
         intent.getParcelableArrayListExtra<GlobalChannelRef>(EXTRA_PRESELECTED)?.forEach {
             checkedKeys[uniqueKey(it.channelId, it.channelType)] = it
         }
+    }
+
+    /**
+     * 重建后恢复在途勾选，覆盖 [initPresenter] 从 intent 取的初值
+     * （同 [com.chat.uikit.chat.PreviewNewImgActivity] 的"恢复值优先于 intent extra"精度规则）。
+     * [checkedKeys] 是 val，必须 clear + 重填而不能重新赋值。
+     */
+    override fun initData(savedInstanceState: Bundle?) {
+        super.initData(savedInstanceState)
+        val saved = savedInstanceState
+            ?.getParcelableArrayList<GlobalChannelRef>(KEY_CHECKED_CHANNELS) ?: return
+        checkedKeys.clear()
+        saved.forEach { checkedKeys[uniqueKey(it.channelId, it.channelType)] = it }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putParcelableArrayList(KEY_CHECKED_CHANNELS, ArrayList(checkedKeys.values))
     }
 
     override fun initView() {

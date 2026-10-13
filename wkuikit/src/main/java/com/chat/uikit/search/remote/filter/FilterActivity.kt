@@ -20,6 +20,7 @@ import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import com.chat.base.base.WKBaseActivity
@@ -47,6 +48,9 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
         private const val EXTRA_TAB = "tab"
         private const val EXTRA_FILTERS = "filters"
         const val EXTRA_RESULT_FILTERS = "resultFilters"
+
+        /** 恢复在途编辑的 draft：旋转/深色模式/进程死亡后重建时覆盖 [EXTRA_FILTERS]。 */
+        private const val KEY_DRAFT = "draft"
 
         private val CONTENT_TYPE_OPTIONS = listOf(
             WKContentType.WK_TEXT to R.string.filter_content_type_text,
@@ -80,26 +84,41 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
     private lateinit var draft: FilterDraft
     private var tab: Int = GlobalActivity.TAB_CHATS
 
-    private val memberPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    /**
+     * 发送者与包含成员各自一个 launcher。
+     *
+     * 曾经是**单 launcher + 一个可变 mode 字段**区分写回目标，这有一个静默错数据的缺陷：
+     * 该字段无持久化，配置变更（旋转/折叠/深色模式/字体/多窗口）或进程死亡让本页重建后
+     * 它回退默认值，于是"发送者"的选择结果被写进 `memberUids`——请求发出 `member_uids`
+     * 而非 `sender_ids`，结果错、无报错、用户无从察觉。且当时第二个分支是无条件
+     * `else if`，所以标志丢失永远不会响亮失败，只会错路由。
+     *
+     * 两个 launcher 把维度编码在**注册身份**里而不是可变状态里，该类错误从结构上不可能再发生。
+     * 维度仍通过 extra 传给 picker（它需要据此决定候选集，见 [MemberPickerScope]）。
+     */
+    private val senderPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
         val uids = result.data?.getStringArrayListExtra(FilterMemberPickerActivity.EXTRA_RESULT_UIDS)
-        if (result.resultCode == RESULT_OK && uids != null && pendingMemberPickerIsSender) {
-            draft.senderIds = uids.toMutableList()
-            rebuildRows()
-        } else if (result.resultCode == RESULT_OK && uids != null) {
-            draft.memberUids = uids.toMutableList()
-            rebuildRows()
-        }
+            ?: return@registerForActivityResult
+        draft.senderIds = uids.toMutableList()
+        rebuildRows()
     }
-    private var pendingMemberPickerIsSender = false
+
+    private val memberPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val uids = result.data?.getStringArrayListExtra(FilterMemberPickerActivity.EXTRA_RESULT_UIDS)
+            ?: return@registerForActivityResult
+        draft.memberUids = uids.toMutableList()
+        rebuildRows()
+    }
 
     private val channelPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
         val channels = result.data?.getParcelableArrayListExtra<GlobalChannelRef>(
             FilterChannelPickerActivity.EXTRA_RESULT_CHANNELS,
-        )
-        if (result.resultCode == RESULT_OK && channels != null) {
-            draft.channelIds = channels.toMutableList()
-            rebuildRows()
-        }
+        ) ?: return@registerForActivityResult
+        draft.channelIds = channels.toMutableList()
+        rebuildRows()
     }
 
     override fun getViewBinding(): ActSearchFilterLayoutBinding =
@@ -121,6 +140,25 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
         tab = intent.getIntExtra(EXTRA_TAB, GlobalActivity.TAB_CHATS)
         val filters = intent.getParcelableExtra(EXTRA_FILTERS) ?: GlobalSearchFilters()
         draft = FilterDraft(filters)
+    }
+
+    /**
+     * 重建后恢复在途编辑的 draft，覆盖 [initPresenter] 从不可变 intent extra 派生的初值
+     * （同 [com.chat.uikit.chat.PreviewNewImgActivity] 的"恢复值优先于 intent extra"精度规则）。
+     *
+     * 不需要给 [FilterDraft] 加 Parcelable：[FilterDraft.toFilters] 对全部字段（含 legacy
+     * `memberUid` 与 `sortTimeAsc`）无损，而 [GlobalSearchFilters] 本身是 `@Parcelize`，
+     * 故存 `toFilters()` 再喂回构造函数就是零新类型的无损往返。
+     */
+    override fun initData(savedInstanceState: Bundle?) {
+        super.initData(savedInstanceState)
+        val saved = savedInstanceState?.getParcelable<GlobalSearchFilters>(KEY_DRAFT) ?: return
+        draft = FilterDraft(saved)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putParcelable(KEY_DRAFT, draft.toFilters())
     }
 
     override fun initView() {
@@ -150,12 +188,12 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
             detail = if (draft.senderIds.isEmpty()) getString(R.string.filter_detail_all_members)
                 else getString(R.string.filter_detail_selected_people, draft.senderIds.size),
             onClick = {
-                pendingMemberPickerIsSender = true
-                memberPickerLauncher.launch(
+                senderPickerLauncher.launch(
                     FilterMemberPickerActivity.newIntent(
                         this,
                         getString(R.string.filter_picker_sender_title),
                         draft.senderIds,
+                        MemberPickerScope.SENDER,
                     ),
                 )
             },
@@ -177,12 +215,12 @@ class FilterActivity : WKBaseActivity<ActSearchFilterLayoutBinding>() {
             detail = if (draft.memberUids.isEmpty()) getString(R.string.filter_detail_unlimited)
                 else getString(R.string.filter_detail_selected_people, draft.memberUids.size),
             onClick = {
-                pendingMemberPickerIsSender = false
                 memberPickerLauncher.launch(
                     FilterMemberPickerActivity.newIntent(
                         this,
                         getString(R.string.filter_picker_member_title),
                         draft.memberUids,
+                        MemberPickerScope.MEMBER,
                     ),
                 )
             },

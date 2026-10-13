@@ -207,6 +207,7 @@
     <string name="filter_picker_search_hint">搜索</string>
     <string name="filter_picker_sender_title">选择发送者</string>
     <string name="filter_picker_member_title">选择成员</string>
+    <string name="filter_picker_self">我</string>
     <string name="filter_picker_channel_title">选择群聊或子区</string>
     <string name="chat_title_records">%s的聊天记录</string>
     <string name="item_forward">逐条转发</string>

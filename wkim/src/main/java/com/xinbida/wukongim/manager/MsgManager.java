@@ -804,6 +804,25 @@ public class MsgManager extends BaseManager {
     }
 
 
+    /**
+     * 把单个附件字段 merge 进已存储的 content JSON，不替换整列。
+     *
+     * <p>下载完成后回写 {@code localPath} 请用本方法，<b>不要</b>用
+     * {@link #updateContentAndRefresh(String, WKMessageContent, boolean)}：后者用
+     * {@code model.encodeMsg()} 整列覆盖，而 content 顶层还存着一批模型不持有的协议字段
+     * （{@code mention} / {@code reply} / {@code entities} / {@code robot_id} /
+     * {@code space_id}），整列覆盖会把它们永久抹掉，导致 Space 隔离与 @ 提及状态静默失效。
+     *
+     * @return true 表示确实更新了某一行
+     */
+    public boolean updateContentLocalPath(String clientMsgNo, String localPath, boolean isRefreshUI) {
+        HashMap<String, Object> values = new HashMap<>();
+        values.put("localPath", localPath == null ? "" : localPath);
+        return MsgDbManager.getInstance()
+                .mergeContentFieldsWithClientMsgNo(clientMsgNo, values, isRefreshUI);
+    }
+
+
     public void updateViewedAt(int viewed, long viewedAt, String clientMsgNo) {
         MsgDbManager.getInstance().updateViewedAt(viewed, viewedAt, clientMsgNo);
     }

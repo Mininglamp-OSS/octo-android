@@ -287,7 +287,11 @@ class ChatMultiForwardDetailAdapter(
                         progressBar.visibility = View.GONE
                         holder.getView<View>(R.id.fileLayout).setOnClickListener {
                             if (fileContent != null) {
-                                handleForwardFileClick(item.msg.clientMsgNO, fileContent, progressBar)
+                                handleForwardFileClick(
+                                    forwardFileCacheKey(item),
+                                    fileContent,
+                                    progressBar
+                                )
                             }
                         }
                     }
@@ -494,15 +498,43 @@ class ChatMultiForwardDetailAdapter(
         )
     }
 
-    private fun handleForwardFileClick(clientMsgNO: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
-        // 缓存键 = clientMsgNO（参照 iOS：路径由消息唯一标识结构性推导），
-        // 每条转发消息独立路径，避免跨会话同名文件撞车；原始文件名仅用于展示。
+    /**
+     * 合并转发子消息的稳定缓存键。
+     *
+     * 不能用 `item.msg.clientMsgNO`：子消息由 `WKMultiForwardContent.decodeMsg` 反序列化
+     * 得来，decodeMsg 从不赋值 clientMsgNO，它来自 `WKMsg` 构造函数的
+     * `createClientMsgNO()` 兜底，是个每次 decode 都重新生成的随机 UUID。
+     *
+     * 优先用 `messageID`（decodeMsg 从 payload 的 `message_id` 赋值，跨 decode 稳定）。
+     * 该字段可能为空（`optString`），此时回落到 `fwd_<在 list 中的下标>` —— 下标在
+     * msgList 内稳定，且比常量兜底好：不会让所有无 ID 文件塌到同一个路径上。
+     */
+    private fun forwardFileCacheKey(item: ChatMultiForwardEntity): String {
+        val messageID = item.msg?.messageID
+        if (!TextUtils.isEmpty(messageID)) return messageID!!
+        // indexOf 走 identity（ChatMultiForwardEntity 未重写 equals），命中即稳定下标。
+        // 理论上查不到时（-1）退回 identityHashCode，仅保证本次进程内不与他人撞车。
+        val index = list.indexOf(item)
+        if (index >= 0) return "fwd_$index"
+        return "fwd_" + System.identityHashCode(item)
+    }
+
+    private fun handleForwardFileClick(cacheKey: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
+        // 缓存键不能用 item.msg.clientMsgNO：合并转发的子消息是 WKMultiForwardContent
+        // .decodeMsg 的运行时反序列化产物，decodeMsg 从不赋值 clientMsgNO，它是 WKMsg
+        // 构造函数兜底生成的随机 UUID——每次打开详情页都变，既不唯一也查不到 DB 行。
+        // 结果是缓存永不命中（每次重下）+ forward/ 目录无界增长（该目录不在 Clear Cache
+        // 覆盖范围内）。这里改用调用处传入的稳定键（messageID，缺失时回落下标复合键）。
         val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val fileName = WKFileProvider.buildCacheFileName(clientMsgNO, fileContent.extension)
+        val fileName = WKFileProvider.buildCacheFileName(
+            cacheKey,
+            fileContent.extension,
+            fileContent.name
+        )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists() && (fileContent.size <= 0L || file.length() == fileContent.size)) {
+        if (file.exists() && WKFileProvider.isValidFileCache(file, fileContent.size)) {
             openForwardFile(file, fileContent.name)
             return
         }
@@ -526,13 +558,12 @@ class ChatMultiForwardDetailAdapter(
                     progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
-                        // 回写 localPath 并持久化（参照 WKVoiceProvider），下次点击直接命中本地文件
-                        fileContent.localPath = filePath
-                        WKIM.getInstance().msgManager.updateContentAndRefresh(
-                            clientMsgNO,
-                            fileContent,
-                            false
-                        )
+                        // 标记已完整落地，供 isValidFileCache 在发送方上报 size 不准时放行
+                        WKFileProvider.markDownloadVerified(downloadedFile)
+                        // 这里刻意不回写 localPath / 不调 updateContentAndRefresh：合并转发
+                        // 的子消息在 message 表里没有自己的行（它只是父消息 content 里的一个
+                        // payload 条目），按任何键去 UPDATE 都匹配不到行，是静默 no-op。
+                        // 重开命中靠的是上面稳定的 cacheKey 路径，不需要持久化。
                         openForwardFile(downloadedFile, fileContent.name)
                     }
                 }

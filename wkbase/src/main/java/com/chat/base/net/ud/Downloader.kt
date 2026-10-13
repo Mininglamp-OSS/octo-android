@@ -59,25 +59,12 @@ internal class Downloader private constructor() {
         }
     }
 
-    fun pauseDownload(url: String) {
-        mDownloadTasks[url]?.status = DownloadStatus.PAUSED
-        mDownloadTasks[url]?.call!!.cancel()
-    }
-
-    fun resumeDownload(taskUrl: String) {
-
-        val task = mDownloadTasks[taskUrl]
-        if (task == null) {
-            Log.e(TAG, task + "is not exit")
-            return
-        }
-        if (task.status != DownloadStatus.PAUSED) {
-            Log.e(TAG, taskUrl + "is already downloading")
-            return
-        }
-        task.status = DownloadStatus.RESUME
-        realDownload(task)
-    }
+    // pauseDownload / resumeDownload 已删除：全仓库无调用方，且实现与"断点续传"语义不符。
+    // pauseDownload 置 PAUSED 后立刻 call.cancel()，cancel 会让 calculate() 里阻塞的
+    // read() 抛异常，控制流进 catch（清 .tmp + 置 ERROR + 移除任务）而不是 PAUSED 的
+    // 干净 break —— 只有恰好停在循环顶部才走得到 break。随后 resumeDownload 连任务都
+    // 找不到。加上 RESUME 分支对无 Range 头的全新响应做 inputStream.skip(hasDownloadSize)
+    // 本身也不成立。保留一个不能用的 API 比没有更糟，需要时按真实 Range 续传重新实现。
 
     private fun String.validateMusicType(): Boolean {
         return this.validateType(".mp3")
@@ -180,7 +167,23 @@ internal class Downloader private constructor() {
 //        val dir = Environment.getExternalStoragePublicDirectory(type)
         val mFile = File(savePath)
         val task = Task(url = taskUrl, request = request, file = mFile)
-        mDownloadTasks[taskUrl] = task
+        // 同一 URL 已在下载中且落盘路径相同，则直接复用（参照 iOS
+        // WKMergeForwardDetailCell 的 downloadingMessages 守卫）。否则双击文件行会起两个
+        // 任务写同一个 .tmp，两个 FileOutputStream 交错写入产生错乱文件；回调也会互相顶掉。
+        // 上面的 validateNeedCallback 已把本次回调登记为该 URL 的最新回调，
+        // 所以进行中的那个任务完成时，点击者依然能收到进度/完成/失败。
+        //
+        // 落盘路径不同时（同一 URL 被普通聊天与合并转发按不同键缓存）不能复用：
+        // 复用会让后一个调用方拿到前者的路径。此时放行，各写各自的 .tmp，
+        // 代价是重复下载一次，但结果正确。
+        val running = mDownloadTasks.putIfAbsent(taskUrl, task)
+        if (running != null) {
+            if (running.file.absolutePath == mFile.absolutePath) {
+                Log.d(TAG, "$taskUrl is already downloading, reuse in-flight task")
+                return
+            }
+            mDownloadTasks[taskUrl] = task
+        }
         realDownload(task)
 
     }
@@ -191,25 +194,15 @@ internal class Downloader private constructor() {
                 mTask.call = this
             }.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    mTask.errorMsg = if (e.message == null) {
-                        "unKnow error"
-                    } else {
-                        e.message
-                    }
                     // 清理残留的半截 .tmp 文件，并通知上层失败（否则 UI 进度条永远卡住）
-                    cleanupTmpFile(mTask)
-                    val callback = mOnDownloadHashMap[mTask.url]
-                    Handler(Looper.getMainLooper()).post {
-                        callback?.third?.invoke(mTask.url, mTask.errorMsg ?: "unKnow error")
-                        mOnDownloadHashMap.remove(mTask.url)
-                    }
+                    dispatchFail(mTask, e.message ?: "unKnow error")
                 }
 
                 override fun onResponse(call: Call, response: Response) {
                     if (response.isSuccessful && response.code == 200) {
                         val body = response.body
                         if (body == null) {
-                            mTask.errorMsg = response.message
+                            dispatchFail(mTask, response.message.ifEmpty { "empty body" })
                             return
                         }
                         mTask.contentSize = body.contentLength()
@@ -220,9 +213,15 @@ internal class Downloader private constructor() {
                         }
                         calculate(mTask)
                     } else {
+                        // HTTP 4xx/5xx：过期文件 URL 的 403/404/410 是最常见的真实失败路径，
+                        // 此前只打日志直接 return，上层 onFail 永不执行、进度条永久卡住。
                         Log.e(TAG, response.message)
+                        val msg = response.message.ifEmpty { "http " + response.code }
+                        // 失败分支才关 response：成功分支的 body 流正由 calculate 持续读取，
+                        // 在这里关会把它读到一半掐断。
+                        response.close()
+                        dispatchFail(mTask, msg)
                     }
-
                 }
 
             })
@@ -230,6 +229,44 @@ internal class Downloader private constructor() {
 
     /** 目标文件对应的临时文件路径（下载期间写入，完成后 rename）。 */
     private fun tmpFileFor(file: File): File = File(file.absolutePath + ".tmp")
+
+    /**
+     * 统一的失败收尾：清残留 .tmp、置 ERROR、主线程回调 onFail、注销回调与任务。
+     *
+     * 每条失败路径都必须走这里，否则上层的 onFail（隐藏进度条 + toast）不会执行，
+     * 进度条会永久卡住 —— HTTP 4xx/5xx（过期 URL 的 403/404/410 是最常见的真实失败）
+     * 此前就是直接 return，既不清理也不回调。
+     */
+    private fun dispatchFail(mTask: Task, msg: String) {
+        cleanupTmpFile(mTask)
+        mTask.status = DownloadStatus.ERROR
+        mTask.errorMsg = msg
+        val callback = mOnDownloadHashMap[mTask.url]
+        Handler(Looper.getMainLooper()).post {
+            callback?.third?.invoke(mTask.url, msg)
+            unregisterCallback(mTask.url, callback)
+        }
+        mDownloadTasks.remove(mTask.url)
+    }
+
+    /**
+     * 按身份注销回调：只有当表里仍是本任务注册的那个回调时才移除。
+     *
+     * 移除动作被 post 到主线程，执行时机不确定；若此间同 URL 的第二次 download() 已经
+     * 通过 validateNeedCallback 注册了新回调，无条件 remove 会把新注册删掉，导致新任务
+     * 的 calculate() 拿到 null callback —— 无进度、无完成、无失败，进度条再次永久卡住。
+     */
+    private fun unregisterCallback(
+        url: String,
+        callback: Triple<OnDownload?, OnComplete?, OnFail?>?
+    ) {
+        if (callback == null) {
+            mOnDownloadHashMap.remove(url)
+            return
+        }
+        // ConcurrentHashMap.remove(key, value)：原子条件删除，与新注册的 put 不会竞态
+        mOnDownloadHashMap.remove(url, callback)
+    }
 
     /** 删除残留的 .tmp 文件（下载失败/异常时调用）。 */
     private fun cleanupTmpFile(mTask: Task) {
@@ -281,6 +318,9 @@ internal class Downloader private constructor() {
 
         try {
             while (true) {
+                // 注：PAUSED / RESUME 两个分支目前不可达（pauseDownload / resumeDownload
+                // 已删除，见上方说明）。暂留分支与 DownloadStatus 枚举，等真正按 Range
+                // 实现续传时复用；状态机本身不影响正常下载路径。
                 if (mTask.status == DownloadStatus.PAUSED) {
                     break
                 }
@@ -309,7 +349,8 @@ internal class Downloader private constructor() {
                     }
                     Handler(Looper.getMainLooper()).post {
                         callback?.second?.invoke(mTask.url, finalFile)
-                        mOnDownloadHashMap.remove(mTask.url)
+                        // 按身份注销：避免删掉同 URL 第二次下载刚注册的新回调
+                        unregisterCallback(mTask.url, callback)
                     }
                     mDownloadTasks.remove(mTask.url)
                     break
@@ -331,16 +372,7 @@ internal class Downloader private constructor() {
             } catch (_: Exception) {
             }
             // 清理半截 .tmp 文件并通知上层失败，避免残file被后续 exists() 当作有效缓存
-            cleanupTmpFile(mTask)
-            mTask.status = DownloadStatus.ERROR
-            mTask.errorMsg = e.message ?: "download error"
-            val callback = mOnDownloadHashMap[mTask.url]
-            val failMsg = mTask.errorMsg ?: "download error"
-            Handler(Looper.getMainLooper()).post {
-                callback?.third?.invoke(mTask.url, failMsg)
-                mOnDownloadHashMap.remove(mTask.url)
-            }
-            mDownloadTasks.remove(mTask.url)
+            dispatchFail(mTask, e.message ?: "download error")
         }
 
 

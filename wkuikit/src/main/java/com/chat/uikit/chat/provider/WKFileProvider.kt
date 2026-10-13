@@ -173,7 +173,8 @@ class WKFileProvider : WKChatBaseProvider() {
         // 原始文件名仅在展示层使用（BottomSheet 标题/分享/保存），与磁盘路径解耦。
         val fileName = buildCacheFileName(
             uiChatMsgItemEntity.wkMsg.clientMsgNO,
-            fileContent.extension
+            fileContent.extension,
+            fileContent.name
         )
         val filePath = downloadDir + fileName
         val file = File(filePath)
@@ -202,11 +203,19 @@ class WKFileProvider : WKChatBaseProvider() {
                     progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
-                        // 回写 localPath 并持久化（参照 WKVoiceProvider），下次点击直接命中本地文件
+                        // 标记为"本次进程内已完整落地"，供 isValidCache 在发送方上报
+                        // size 不准时放行，避免陷入每次点击都重下的死循环
+                        markDownloadVerified(downloadedFile)
+                        // 回写 localPath 并持久化，下次点击直接命中本地文件。
+                        // 必须走 updateContentLocalPath（merge 单键），不能用
+                        // updateContentAndRefresh(model)——后者按 encodeMsg() 整列覆盖
+                        // content，会抹掉顶层的 space_id / mention / reply / entities /
+                        // robot_id（WKFileContent.encodeMsg 只输出 5 个字段），导致
+                        // Space 隔离与 @ 提及状态静默失效。
                         fileContent.localPath = filePath
-                        WKIM.getInstance().msgManager.updateContentAndRefresh(
+                        WKIM.getInstance().msgManager.updateContentLocalPath(
                             uiChatMsgItemEntity.wkMsg.clientMsgNO,
-                            fileContent,
+                            filePath,
                             false
                         )
                         openFile(downloadedFile, fileContent.name)
@@ -225,25 +234,67 @@ class WKFileProvider : WKChatBaseProvider() {
         openFileWithOptions(context, file, displayName)
     }
 
-    /** 缓存有效性：size 已知时必须与 fileContent.size 一致，防止中断残留的半截文件被命中。 */
-    private fun isValidCache(file: File, fileContent: WKFileContent): Boolean {
-        if (fileContent.size <= 0L) return true
-        return file.length() == fileContent.size
-    }
+    /** 见 [isValidFileCache]。 */
+    private fun isValidCache(file: File, fileContent: WKFileContent): Boolean =
+        isValidFileCache(file, fileContent.size)
 
     companion object {
 
         /**
-         * 本地缓存文件名：`<clientMsgNO>.<ext>`，以消息唯一标识做缓存键
-         * （参照 iOS WKMediaUtil.getLocalPath），避免同名不同内容互相命中。
+         * 本次进程内已完整下载并 rename 落地的文件路径，供 [isValidCache] 在发送方
+         * 上报 `size` 不准时作为逃生通道（见该方法注释）。仅进程内有效，不做持久化。
+         */
+        private val verifiedDownloads: MutableSet<String> =
+            java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
+
+        /** 记录一个已完整下载并落地的路径（下载成功回调里调用）。 */
+        @JvmStatic
+        fun markDownloadVerified(file: File) {
+            verifiedDownloads.add(file.absolutePath)
+        }
+
+        /**
+         * 缓存有效性：`size > 0` 时要求 `file.length() == size`，防止中断残留的半截文件
+         * 被命中；`size <= 0`（服务端未下发）退化为仅判断存在。
          *
-         * clientMsgNO 与 extension 都可能来自对端/服务端 JSON（`optString`），
-         * 直接拼路径会被 `../` 穿越，故两者都只保留 basename 并清洗危险字符。
+         * 例外：本次进程内已完整下载并落地过的路径直接放行。`size` 由发送方上报
+         * （ChatActivity / ShareReceiveActivity / ChatPanelManager），一旦上报不准，
+         * 严格相等会让这条消息陷入"每次点击都重下、下完又因不等而不认"的死循环
+         * （onSuccess 只校验 exists() 所以仍会打开，但下次点击重复整个过程）。
+         * 由于下载已改为写 .tmp + 完成后 rename，能出现在最终路径上的文件必然是完整的，
+         * 此时以实际落地为准比以上报 size 为准更可靠。
          */
         @JvmStatic
-        fun buildCacheFileName(clientMsgNO: String?, extension: String?): String {
-            val key = sanitizePathSegment(clientMsgNO).ifEmpty { "unknown" }
-            val ext = sanitizePathSegment(extension?.removePrefix(".")).ifEmpty { "dat" }
+        fun isValidFileCache(file: File, size: Long): Boolean {
+            if (size <= 0L) return true
+            if (file.length() == size) return true
+            return verifiedDownloads.contains(file.absolutePath)
+        }
+
+        /**
+         * 本地缓存文件名：`<缓存键>.<ext>`，以消息唯一标识做缓存键
+         * （参照 iOS WKMediaUtil.getLocalPath），避免同名不同内容互相命中。
+         *
+         * 缓存键与 extension 都可能来自对端/服务端 JSON（`optString`），
+         * 直接拼路径会被 `../` 穿越，故两者都只保留 basename 并清洗危险字符。
+         *
+         * 扩展名优先取自 `displayName`（即 `fileContent.name`）的后缀：展示层的
+         * 预览类型、MIME、分享标题全部按 `name` 的后缀判定，若磁盘后缀改用
+         * `fileContent.extension`，两者不一致时（name="report.pdf" 而
+         * extension="bin"）会出现 MIME 为 pdf 但 content:// URI 以 .bin 结尾的错配，
+         * 按后缀嗅探的接收方会判错类型。两者同源时结果不变。
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun buildCacheFileName(
+            cacheKey: String?,
+            extension: String?,
+            displayName: String? = null
+        ): String {
+            val key = sanitizePathSegment(cacheKey).ifEmpty { "unknown" }
+            val fromDisplay = displayName?.substringAfterLast('.', "")
+            val preferred = if (!fromDisplay.isNullOrEmpty()) fromDisplay else extension
+            val ext = sanitizePathSegment(preferred?.removePrefix(".")).ifEmpty { "dat" }
             return "$key.$ext"
         }
 

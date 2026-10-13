@@ -163,9 +163,14 @@ class WKVoiceProvider : WKChatBaseProvider() {
                                     voiceContent.localPath = filePath
                                     uiChatMsgItemEntity.wkMsg.voiceStatus = 1
                                     uiChatMsgItemEntity.wkMsg.baseContentMsgModel = voiceContent
-                                    WKIM.getInstance().msgManager.updateContentAndRefresh(
+                                    // merge 单键回写，不能用 updateContentAndRefresh(model)：
+                                    // WKVoiceContent.encodeMsg 只输出 localPath/timeTrad/url/
+                                    // waveform，整列覆盖会抹掉顶层的 space_id / mention /
+                                    // reply / entities / robot_id，导致 Space 隔离与 @ 提及
+                                    // 状态静默失效。
+                                    WKIM.getInstance().msgManager.updateContentLocalPath(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
-                                        voiceContent,
+                                        filePath,
                                         false
                                     )
                                     WKIM.getInstance().msgManager.updateVoiceReadStatus(

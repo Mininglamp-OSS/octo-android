@@ -73,7 +73,12 @@ public class WKMultiForwardContent extends WKMessageContent {
                     msg.type = WKContentType.unknown_msg;
                 }
                 msg.timestamp = msgJson.optLong("timestamp");
-                msg.messageID = msgJson.optString("message_id");
+                // isNull 守卫不可省：AOSP 的 optString 对 JSON null 返回字面量 "null"
+                // （见下方 users[] 循环的同款守卫与注释），不守卫会让所有 message_id 为
+                // null 的子消息共享同一个键值 "null"，文件缓存路径全部塌到 null.<ext>。
+                if (msgJson.has("message_id") && !msgJson.isNull("message_id")) {
+                    msg.messageID = msgJson.optString("message_id");
+                }
                 if (msgJson.has("from_uid")) {
                     msg.fromUID = msgJson.optString("from_uid");
 //                    if (msg.baseContentMsgModel != null) {

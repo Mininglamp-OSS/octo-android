@@ -93,14 +93,27 @@ class ChatMultiForwardDetailAdapter(
      * field itself may be null when the payload omits users[].
      * See  / web PR #981.
      */
-    private val users: List<WKChannel>?
+    private val users: List<WKChannel>?,
+    /**
+     * 父消息（合并转发包装消息）的 clientMsgNO，来自 message 表的真实持久化行。
+     * 用于文件缓存键的 bundle 作用域前缀——forward/ 目录是全局共享的，子消息键
+     * 必须先按 bundle 隔离，再按条目隔离，否则跨会话互相命中。嵌套转发（走
+     * forward_content_json 进入）没有 DB 行，传 null，此时退化为内容哈希作用域。
+     */
+    private val parentClientMsgNO: String?
 ) :
     BaseMultiItemQuickAdapter<ChatMultiForwardEntity, BaseViewHolder>() {
+    /** UI 下标 → bundle 作用域缓存键，构造时一次性算好。 */
+    private val bundleScopedKeys: MutableMap<Int, String> = HashMap()
     init {
         addItemType(0, R.layout.item_chat_multi_froward_content)
         addItemType(1, R.layout.item_chat_multi_froward_time)
         addItemType(2, R.layout.item_chat_multi_froward_view)
         setList(list)
+        // bundle 作用域键：list 与 msgList 一一对应（header 在 index 0、尾部 view 在
+        // 末尾），构造时一次算好整张映射，点击时按下标查，不用在点击回调里重复 identity
+        // 查找。见 [bundleScopedKeys] 与 [forwardFileCacheKey]。
+        buildBundleScopedKeys()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -286,7 +299,13 @@ class ChatMultiForwardDetailAdapter(
                         val progressBar = holder.getView<android.widget.ProgressBar>(R.id.fileProgressBar)
                         progressBar.visibility = View.GONE
                         holder.getView<View>(R.id.fileLayout).setOnClickListener {
-                            if (fileContent != null) handleForwardFileClick(fileContent, progressBar)
+                            if (fileContent != null) {
+                                handleForwardFileClick(
+                                    forwardFileCacheKey(item),
+                                    fileContent,
+                                    progressBar
+                                )
+                            }
                         }
                     }
 
@@ -492,16 +511,119 @@ class ChatMultiForwardDetailAdapter(
         )
     }
 
-    private fun handleForwardFileClick(fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
-        // Check download directory
+    /**
+     * 给 list 里每个条目算出 bundle 作用域缓存键并缓存。
+     *
+     * forward/ 目录全局共享，键的作用域必须覆盖"全局"，分解为两层：
+     * bundle 层（父消息 clientMsgNO，或嵌套转发时的内容哈希）× 条目层（messageID，
+     * 缺失时该 bundle 内的下标）。两层任何一层单独使用都不够：clientMsgNO 对子消息
+     * 不存在（见 [forwardFileCacheKey] 注释），单靠下标只在单屏内唯一。
+     */
+    private fun buildBundleScopedKeys() {
+        // 嵌套转发（forward_content_json 进入）没有父 DB 行，用父内容哈希做作用域：
+        // 同一转发内容在两个会话里命中同一缓存是正确行为（字节相同）。
+        val scope = if (!parentClientMsgNO.isNullOrEmpty()) {
+            "b_${sanitizeScope(parentClientMsgNO)}"
+        } else {
+            "h_${payloadDigest()}"
+        }
+        bundleScopedKeys.clear()
+        var fileIndex = 0
+        for (i in list.indices) {
+            val item = list[i]
+            val msg = item.msg ?: continue
+            val messageID = msg.messageID
+            val entry = if (!TextUtils.isEmpty(messageID)) {
+                "${scope}_${sanitizeScope(messageID!!)}"
+            } else {
+                // messageID 缺失（发送中/发送失败的子消息 encode 后为空）：回落到
+                // bundle 内下标。下标在 bundle 作用域内稳定，不再跨 bundle 冲突。
+                "${scope}_i$fileIndex"
+            }
+            fileIndex++
+            bundleScopedKeys[i] = entry
+        }
+    }
+
+    /** 作用域/键段清洗：与 WKFileProvider.sanitizePathSegment 同级的防护，这里防超长与分隔符。 */
+    private fun sanitizeScope(raw: String): String {
+        val cleaned = raw.replace(Regex("[\\\\/:*?\"<>| ]"), "_")
+        return if (cleaned.length > 64) cleaned.substring(0, 64) else cleaned
+    }
+
+    /**
+     * 嵌套转发的 bundle 作用域摘要：对 list 里每条子消息的稳定内容字段做 SHA-256。
+     *
+     * 用 msg.content（WKMultiForwardContent.decodeMsg 从 payload JSON 原样赋值的
+     * 原始字符串）而不是 encodeMsg()：content 跨 decode 逐字节稳定，且不依赖
+     * Android 的 JSONObject/TextUtils，可在 JVM 单测里断言。配合 timestamp /
+     * messageID / fromUID 构成条目序列指纹——同一转发内容在不同会话得到同一
+     * 作用域（字节相同，共享缓存是正确的），不同内容必然不同。
+     */
+    private fun payloadDigest(): String {
+        val sb = StringBuilder()
+        for (item in list) {
+            val msg = item.msg ?: continue
+            sb.append(msg.messageID ?: "").append('')
+                .append(msg.timestamp).append('')
+                .append(msg.fromUID ?: "").append('')
+                .append(msg.content ?: "").append('')
+        }
+        return try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            val bytes = md.digest(sb.toString().toByteArray(Charsets.UTF_8))
+            val hex = StringBuilder()
+            for (i in 0 until 8) hex.append(String.format("%02x", bytes[i]))
+            hex.toString()
+        } catch (e: Exception) {
+            // SHA-256 在 Android/JVM 上必然可用；兜底用内容字符串的 String.hashCode
+            // （内容哈希，不是身份哈希，仍跨进程稳定）
+            Integer.toHexString(sb.toString().hashCode())
+        }
+    }
+
+    /**
+     * 合并转发子消息的稳定缓存键（bundle 作用域 × 条目）。
+     *
+     * 不能用 `item.msg.clientMsgNO`：子消息由 `WKMultiForwardContent.decodeMsg` 反序列化
+     * 得来，decodeMsg 从不赋值 clientMsgNO，它来自 `WKMsg` 构造函数的
+     * `createClientMsgNO()` 兜底，是个每次 decode 都重新生成的随机 UUID。
+     *
+     * messageID 跨 decode 稳定且全局唯一，但可能缺失（发送中/发送失败的消息
+     * encode 时 messageID 为 null，JSONObject.put 移除该键）；decodeMsg 已对
+     * JSON null 加 isNull 守卫（对齐 users[] 的既有写法），缺失时按 bundle 内
+     * 顺序取下标。单层下标键曾在全局目录下让所有 bundle 的第 N 条塌到同一路径
+     * （跨会话内容互串），所以下标永远不单独使用，必须挂在 bundle 作用域之下。
+     */
+    private fun forwardFileCacheKey(item: ChatMultiForwardEntity): String {
+        val index = list.indexOf(item)
+        bundleScopedKeys[index]?.let { return it }
+        // 理论兜底：映射里查不到（adapter 数据被整体替换后未重建映射）。不能用
+        // System.identityHashCode——那是每次进程/每个对象都变的身份哈希，缓存永不
+        // 命中且 forward/ 目录无界增长（P1-1）。改用条目内容摘要，跨进程稳定。
+        val msg = item.msg
+        val raw = (msg?.messageID ?: "") + "" + (msg?.timestamp ?: 0L) +
+                "" + (msg?.fromUID ?: "") + "" + (msg?.content ?: "")
+        return "f_" + Integer.toHexString(raw.hashCode())
+    }
+
+    private fun handleForwardFileClick(cacheKey: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
+        // 缓存键不能用 item.msg.clientMsgNO：合并转发的子消息是 WKMultiForwardContent
+        // .decodeMsg 的运行时反序列化产物，decodeMsg 从不赋值 clientMsgNO，它是 WKMsg
+        // 构造函数兜底生成的随机 UUID——每次打开详情页都变，既不唯一也查不到 DB 行。
+        // 结果是缓存永不命中（每次重下）+ forward/ 目录无界增长（该目录不在 Clear Cache
+        // 覆盖范围内）。这里改用调用处传入的稳定键（messageID，缺失时回落下标复合键）。
         val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val rawName = fileContent.name ?: ("file." + (fileContent.extension ?: "dat"))
-        val fileName = File(rawName).name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val fileName = WKFileProvider.buildCacheFileName(
+            cacheKey,
+            fileContent.extension,
+            fileContent.name
+        )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists()) {
-            openForwardFile(file)
+        if (file.exists() && WKFileProvider.isValidFileCache(file, fileContent.size, fileName)) {
+            openForwardFile(file, fileContent.name)
             return
         }
 
@@ -524,7 +646,13 @@ class ChatMultiForwardDetailAdapter(
                     progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
-                        openForwardFile(downloadedFile)
+                        // 标记已完整落地，供 isValidFileCache 在发送方上报 size 不准时放行
+                        WKFileProvider.markDownloadVerified(downloadedFile, fileName)
+                        // 这里刻意不回写 localPath / 不调 updateContentAndRefresh：合并转发
+                        // 的子消息在 message 表里没有自己的行（它只是父消息 content 里的一个
+                        // payload 条目），按任何键去 UPDATE 都匹配不到行，是静默 no-op。
+                        // 重开命中靠的是上面稳定的 cacheKey 路径，不需要持久化。
+                        openForwardFile(downloadedFile, fileContent.name)
                     }
                 }
 
@@ -634,8 +762,8 @@ class ChatMultiForwardDetailAdapter(
         }
     }
 
-    private fun openForwardFile(file: File) {
-        WKFileProvider.openFileWithOptions(context, file)
+    private fun openForwardFile(file: File, displayName: String? = null) {
+        WKFileProvider.openFileWithOptions(context, file, displayName)
     }
 
     private fun applyUrlHighlighting(spanned: android.text.Spanned): android.text.SpannableStringBuilder {

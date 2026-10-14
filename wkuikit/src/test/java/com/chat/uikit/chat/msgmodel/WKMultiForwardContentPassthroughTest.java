@@ -19,6 +19,7 @@ package com.chat.uikit.chat.msgmodel;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.chat.base.external.ExternalMsgExtras;
@@ -126,5 +127,32 @@ public class WKMultiForwardContentPassthroughTest {
         // And the extras survive the hop, so downstream resolver sees them.
         assertEquals("Home B",
                 decoded.localExtraMap.get(ExternalMsgExtras.HOME_SPACE_NAME));
+    }
+
+    @Test
+    public void decodeTreatsNullMessageIdAsAbsent() throws Exception {
+        // AOSP 的 optString 对 JSON null 返回字面量 "null"（见 decodeMsg 内 users[]
+        // 循环的同款守卫注释）。不守卫时所有 message_id 为 null 的子消息会共享键
+        // "null"，文件缓存路径全部塌到 null.<ext>——跨 bundle 内容互串。
+        // 期望：JSON null 与键缺失一样，messageID 保持 null（走调用方的下标回落）。
+        JSONObject payload = new JSONObject();
+        payload.put("channel_type", 0);
+        org.json.JSONArray msgs = new org.json.JSONArray();
+        JSONObject mNull = new JSONObject();
+        mNull.put("message_id", JSONObject.NULL);
+        mNull.put("timestamp", 1700_000_000L);
+        JSONObject mAbsent = new JSONObject();
+        mAbsent.put("timestamp", 1700_000_001L);
+        msgs.put(mNull);
+        msgs.put(mAbsent);
+        payload.put("msgs", msgs);
+
+        WKMultiForwardContent c = new WKMultiForwardContent();
+        c.decodeMsg(payload);
+
+        assertEquals(2, c.msgList.size());
+        assertNull("JSON null message_id must not become the literal string \"null\"",
+                c.msgList.get(0).messageID);
+        assertNull("absent message_id must stay null", c.msgList.get(1).messageID);
     }
 }

@@ -244,6 +244,49 @@ public class WKFileUtils {
         return true;
     }
 
+    /** 下载中临时文件所在的保留子目录名，必须与 Downloader.PARTIAL_DIR_NAME 保持一致
+     *  （Downloader 是 internal class，Java 侧无法直接引用其常量，故在此重复一份）。 */
+    private static final String PARTIAL_DIR_NAME = ".partial";
+
+    /**
+     * 递归清扫下载目录下的残留临时文件：只删 {@code .partial/} 保留目录里的内容。
+     *
+     * <p>下载链路是 "写 .partial/<name>.part + rename 落地"：失败路径（dispatchFail）
+     * 会清掉临时文件，但进程被杀时没有机会走收尾，会留下半截 {@code .part}。
+     *
+     * <p>刻意不按后缀匹配：正式缓存名的扩展名取自发送方可控的展示名
+     * （WKFileProvider.buildCacheFileName），一个叫 {@code backup.tmp} 的附件会被
+     * 缓存成 {@code <key>.tmp}，按后缀清扫会在每次冷启动把它删掉，造成永久重下循环。
+     * 临时文件集中在保留目录里，按目录清扫才不会误伤正式缓存。
+     *
+     * @param dir 下载根目录（chatDownloadFileDir / voiceDir）；为空或不存在时静默返回
+     */
+    public void sweepStaleDownloadTmp(String dir) {
+        if (TextUtils.isEmpty(dir)) return;
+        File root = new File(dir);
+        if (!root.exists() || !root.isDirectory()) return;
+        File[] files = root.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (file == null) continue;
+            if (file.isDirectory()) {
+                if (PARTIAL_DIR_NAME.equals(file.getName())) {
+                    // 保留目录：整目录里的残留全删，目录本身留着（下载器会复用）
+                    File[] partials = file.listFiles();
+                    if (partials != null) {
+                        for (File p : partials) {
+                            if (p != null && p.isFile() && !p.delete()) {
+                                Log.w("fileUtils", "sweepStaleDownloadTmp delete fail: " + p.getAbsolutePath());
+                            }
+                        }
+                    }
+                } else {
+                    sweepStaleDownloadTmp(file.getAbsolutePath());
+                }
+            }
+        }
+    }
+
     /**
      * 保存录音文件
      *

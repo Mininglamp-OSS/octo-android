@@ -195,6 +195,16 @@ public class WKBaseApplication {
 
         initCacheDir();
 
+        // 残留临时文件清扫：下载走 "写 .partial/<name>.part + rename 落地"，进程被杀
+        // （而非走 dispatchFail 的失败收尾）时会留下半截文件。两个下载根目录都要扫：
+        // 聊天文件在 chatDownloadFileDir，语音在 voiceDir（WKVoiceProvider 的播放下载
+        // 目标是 voiceDir/<channelType>/<channelID>/<clientMsgNO>.amr），只扫前者会让
+        // 语音目录下的残留永久累积。必须等 initCacheDir() 把两个路径都填好之后再跑。
+        AppStartup.postPhaseB("tmp-sweep", () -> {
+            WKFileUtils.getInstance().sweepStaleDownloadTmp(WKConstants.chatDownloadFileDir);
+            WKFileUtils.getInstance().sweepStaleDownloadTmp(WKConstants.voiceDir);
+        });
+
         boolean isShowDialog = WKSharedPreferencesUtil.getInstance().getBoolean("show_agreement_dialog");
 
         if (isShowDialog) {

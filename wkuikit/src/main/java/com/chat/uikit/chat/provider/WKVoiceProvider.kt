@@ -17,6 +17,7 @@
 package com.chat.uikit.chat.provider
 
 import android.text.TextUtils
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -55,6 +56,10 @@ import kotlin.math.max
 
 class WKVoiceProvider : WKChatBaseProvider() {
     private var lastClientMsgNo: String? = null
+
+    companion object {
+        private const val TAG = "WKVoiceProvider"
+    }
 
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
         return LayoutInflater.from(context).inflate(R.layout.chat_item_voice, parentView, false)
@@ -163,11 +168,21 @@ class WKVoiceProvider : WKChatBaseProvider() {
                                     voiceContent.localPath = filePath
                                     uiChatMsgItemEntity.wkMsg.voiceStatus = 1
                                     uiChatMsgItemEntity.wkMsg.baseContentMsgModel = voiceContent
-                                    WKIM.getInstance().msgManager.updateContentAndRefresh(
+                                    // merge 单键回写，不能用 updateContentAndRefresh(model)：
+                                    // WKVoiceContent.encodeMsg 只输出 localPath/timeTrad/url/
+                                    // waveform，整列覆盖会抹掉顶层的 space_id / mention /
+                                    // reply / entities / robot_id，导致 Space 隔离与 @ 提及
+                                    // 状态静默失效。
+                                    val merged = WKIM.getInstance().msgManager.updateContentLocalPath(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
-                                        voiceContent,
+                                        filePath,
                                         false
                                     )
+                                    if (!merged) {
+                                        // false = DB 无该行或 content JSON 已损坏；
+                                        // 内存态 localPath 已赋值，仅缺持久化，不影响本次播放。
+                                        Log.w(TAG, "updateContentLocalPath merged nothing, clientMsgNO=${uiChatMsgItemEntity.wkMsg.clientMsgNO}")
+                                    }
                                     WKIM.getInstance().msgManager.updateVoiceReadStatus(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
                                         1,

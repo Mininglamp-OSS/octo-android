@@ -137,7 +137,12 @@ public class ChatMultiForwardDetailActivity extends WKBaseActivity<ActCommonList
         ChatMultiForwardEntity view = new ChatMultiForwardEntity();
         view.itemType = 2;
         list.add(view);
-        ChatMultiForwardDetailAdapter adapter = new ChatMultiForwardDetailAdapter(showDetailTime, list, WKMultiForwardContent.userList);
+        ChatMultiForwardDetailAdapter adapter = new ChatMultiForwardDetailAdapter(showDetailTime, list, WKMultiForwardContent.userList,
+                // 一级转发：父消息有真实 DB 行，clientMsgNO 是稳定持久化键。
+                // 嵌套转发（forward_content_json 路径）：没有 DB 行，传 null，adapter
+                // 会退化为内容哈希作用域——同一转发内容在不同会话命中同一缓存是正确的
+                // （字节相同）。
+                clientMsgNo);
         initAdapter(wkVBinding.recyclerView, adapter);
     }
 

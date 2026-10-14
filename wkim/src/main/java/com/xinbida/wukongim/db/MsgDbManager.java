@@ -1354,6 +1354,67 @@ public class MsgDbManager {
         return row > 0;
     }
 
+    /**
+     * 把若干键 merge 进已存储的 content JSON，而不是整列替换。
+     *
+     * <p>为什么需要它：{@code content} 列里除了消息模型自身的字段，还有一批模型不持有、
+     * 但 {@link MsgManager#getMsgContentModel} 每次读库都要从顶层解析的协议字段
+     * （{@code mention} / {@code reply} / {@code entities} / {@code robot_id} /
+     * {@code space_id} / {@code from_uid}）。用 {@code model.encodeMsg()} 整列覆盖是
+     * <b>有损</b>的——这些字段会被永久抹掉，而该行不会再从服务端重新拉取，于是
+     * Space 隔离（{@code SpaceFilter.extractSpaceIdFromMsg} 直接读 content 里的
+     * {@code space_id}）与 @ 提及状态会静默失效。
+     *
+     * <p>所以凡是只想写回单个附件字段（如下载完成后的 {@code localPath}）的场景，
+     * 都应该走本方法，不要走 {@code updateContentAndRefresh(clientMsgNo, model, ...)}。
+     *
+     * <p>读-改-写全程持有本类的 monitor（与其它 update 方法一致），避免并发下载回写
+     * 互相覆盖。
+     *
+     * @return true 表示确实更新了某一行；clientMsgNo 查不到行、content 不是合法 JSON、
+     * 或 values 为空时返回 false（不做任何写入）。
+     */
+    public synchronized boolean mergeContentFieldsWithClientMsgNo(String clientMsgNo,
+                                                                  HashMap<String, Object> values,
+                                                                  boolean isRefreshUI) {
+        if (TextUtils.isEmpty(clientMsgNo) || values == null || values.isEmpty()) return false;
+        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
+        if (dbHelper == null) return false;
+
+        // 只取 content 原始字符串，不经过 model 序列化，保证未知字段原样保留
+        String content = null;
+        String sql = "select " + WKDBColumns.WKMessageColumns.content + " from " + message
+                + " where " + WKDBColumns.WKMessageColumns.client_msg_no + "=?";
+        try (Cursor cursor = dbHelper.rawQuery(sql, new Object[]{clientMsgNo})) {
+            if (cursor != null && cursor.moveToLast()) {
+                content = cursor.getString(0);
+            }
+        } catch (Exception e) {
+            WKLoggerUtils.getInstance().e(TAG, "mergeContentFields query error " + e.getMessage());
+            return false;
+        }
+        if (content == null) return false;
+
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(content);
+        } catch (JSONException e) {
+            // content 不是合法 JSON：此时无法安全 merge（整列覆盖会丢未知字段），直接放弃
+            WKLoggerUtils.getInstance().e(TAG, "mergeContentFields content not json format");
+            return false;
+        }
+        try {
+            for (String key : values.keySet()) {
+                jsonObject.put(key, values.get(key));
+            }
+        } catch (JSONException e) {
+            WKLoggerUtils.getInstance().e(TAG, "mergeContentFields put error " + e.getMessage());
+            return false;
+        }
+        return updateFieldWithClientMsgNo(clientMsgNo,
+                WKDBColumns.WKMessageColumns.content, jsonObject.toString(), isRefreshUI);
+    }
+
     public synchronized boolean updateFieldWithMessageID(String messageID, String field, String value) {
         String[] updateKey = new String[]{field};
         String[] updateValue = new String[]{value};

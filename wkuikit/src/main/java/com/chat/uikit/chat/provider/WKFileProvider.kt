@@ -21,6 +21,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.text.TextUtils
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -43,6 +44,7 @@ import com.chat.base.utils.WKToastUtils
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.xinbida.wukongim.WKIM
 import java.io.File
 import java.util.Locale
 
@@ -148,53 +150,16 @@ class WKFileProvider : WKChatBaseProvider() {
         addLongClick(contentLayout, uiChatMsgItemEntity)
     }
 
-    private fun sanitizeFileName(name: String): String {
-        // Extract basename to prevent path traversal (../ or /)
-        val basename = File(name).name
-        // Remove any remaining dangerous characters
-        val cleaned = basename.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-        // Linux 文件系统 NAME_MAX = 255 字节 (UTF-8, 不是字符)。
-        // 长中文/emoji 文件名（3~4 字节/字符）很容易越界，导致 FileOutputStream 抛
-        // ENAMETOOLONG 静默失败，用户观感是"点了没反应"。留 55 字节余量。
-        return truncateToByteLength(cleaned, MAX_FILENAME_BYTES)
-    }
-
-    /** 按 UTF-8 字节长度截断文件名，保留扩展名，按 code point 边界截取避免破坏字符。 */
-    private fun truncateToByteLength(name: String, maxBytes: Int): String {
-        if (name.toByteArray(Charsets.UTF_8).size <= maxBytes) return name
-        val dot = name.lastIndexOf('.')
-        val ext = if (dot > 0) name.substring(dot) else ""
-        val base = if (dot > 0) name.substring(0, dot) else name
-        val extBytes = ext.toByteArray(Charsets.UTF_8).size
-        val baseBudget = (maxBytes - extBytes).coerceAtLeast(1)
-
-        val sb = StringBuilder()
-        var used = 0
-        var i = 0
-        while (i < base.length) {
-            val cp = base.codePointAt(i)
-            val charCount = Character.charCount(cp)
-            val cpStr = base.substring(i, i + charCount)
-            val chBytes = cpStr.toByteArray(Charsets.UTF_8).size
-            if (used + chBytes > baseBudget) break
-            sb.append(cpStr)
-            used += chBytes
-            i += charCount
-        }
-        if (sb.isEmpty()) sb.append("file")
-        return sb.toString() + ext
-    }
-
     private fun handleFileClick(
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         fileContent: WKFileContent,
         progressBar: ProgressBar
     ) {
-        // Check local file first
+        // Check local file first（size 校验防止半截/过期文件被当作有效缓存）
         if (!TextUtils.isEmpty(fileContent.localPath)) {
             val file = File(fileContent.localPath)
-            if (file.exists()) {
-                openFile(file)
+            if (file.exists() && isValidCache(file, fileContent)) {
+                openFile(file, fileContent.name)
                 return
             }
         }
@@ -204,12 +169,18 @@ class WKFileProvider : WKChatBaseProvider() {
                 uiChatMsgItemEntity.wkMsg.channelType + "/" +
                 uiChatMsgItemEntity.wkMsg.channelID + "/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val rawName = fileContent.name ?: (uiChatMsgItemEntity.wkMsg.clientMsgNO + "." + fileContent.extension)
-        val fileName = sanitizeFileName(rawName)
+        // 缓存键 = clientMsgNO（参照 iOS WKMediaUtil.getLocalPath：路径由消息唯一标识结构性推导），
+        // 不用发送方可控的 fileContent.name 做文件名，避免同名不同内容命中旧文件。
+        // 原始文件名仅在展示层使用（BottomSheet 标题/分享/保存），与磁盘路径解耦。
+        val fileName = buildCacheFileName(
+            uiChatMsgItemEntity.wkMsg.clientMsgNO,
+            fileContent.extension,
+            fileContent.name
+        )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists()) {
-            openFile(file)
+        if (file.exists() && isValidCache(file, fileContent, fileName)) {
+            openFile(file, fileContent.name)
             return
         }
 
@@ -233,7 +204,27 @@ class WKFileProvider : WKChatBaseProvider() {
                     progressBar.visibility = View.GONE
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
-                        openFile(downloadedFile)
+                        // 标记为"本次进程内已完整落地"，供 isValidCache 在发送方上报
+                        // size 不准时放行，避免陷入每次点击都重下的死循环
+                        markDownloadVerified(downloadedFile, fileName)
+                        // 回写 localPath 并持久化，下次点击直接命中本地文件。
+                        // 必须走 updateContentLocalPath（merge 单键），不能用
+                        // updateContentAndRefresh(model)——后者按 encodeMsg() 整列覆盖
+                        // content，会抹掉顶层的 space_id / mention / reply / entities /
+                        // robot_id（WKFileContent.encodeMsg 只输出 5 个字段），导致
+                        // Space 隔离与 @ 提及状态静默失效。
+                        fileContent.localPath = filePath
+                        val merged = WKIM.getInstance().msgManager.updateContentLocalPath(
+                            uiChatMsgItemEntity.wkMsg.clientMsgNO,
+                            filePath,
+                            false
+                        )
+                        if (!merged) {
+                            // false = DB 里没有该 clientMsgNO 的行（如嵌套转发消息）或
+                            // content JSON 已损坏——本次内存态 localPath 仍生效，仅缺持久化。
+                            Log.w(TAG, "updateContentLocalPath merged nothing, clientMsgNO=${uiChatMsgItemEntity.wkMsg.clientMsgNO}")
+                        }
+                        openFile(downloadedFile, fileContent.name)
                     }
                 }
 
@@ -245,11 +236,158 @@ class WKFileProvider : WKChatBaseProvider() {
             })
     }
 
-    private fun openFile(file: File) {
-        openFileWithOptions(context, file)
+    private fun openFile(file: File, displayName: String? = null) {
+        openFileWithOptions(context, file, displayName)
     }
 
+    /** 见 [isValidFileCache]。 */
+    private fun isValidCache(file: File, fileContent: WKFileContent, cacheKey: String? = null): Boolean =
+        isValidFileCache(file, fileContent.size, cacheKey)
+
     companion object {
+        private const val TAG = "WKFileProvider"
+
+        /**
+         * 本次进程内已完整下载并 rename 落地的记录：路径 → (产生该文件的缓存键, 落地字节数)。
+         *
+         * 键里必须含缓存键而不只是路径+长度：路径只能证明"这里完整落过一个文件"，
+         * 长度只能证明"落的那次就是这么长"，两者都证明不了"落的就是当前这条消息的
+         * 文件"。两条消息映射到同一路径时（buildCacheFileName 的 "unknown" 兜底、
+         * 或退化的转发键），B 消息若 size 恰好等于已落地长度就会把 A 的字节当成自己
+         * 的缓存打开。要求请求方的缓存键与落地时的键一致即可排除。
+         *
+         * LruCache 限容 256 条：原先的 ConcurrentHashMap 随进程生命周期无界增长。
+         */
+        private class VerifiedEntry(val cacheKey: String, val length: Long)
+
+        private val verifiedDownloads = object : android.util.LruCache<String, VerifiedEntry>(256) {}
+
+        /** 记录一个已完整下载并落地的 (路径, 缓存键, 字节数)（下载成功回调里调用）。 */
+        @JvmStatic
+        @JvmOverloads
+        fun markDownloadVerified(file: File, cacheKey: String? = null) {
+            val key = cacheKey ?: file.name
+            synchronized(verifiedDownloads) {
+                verifiedDownloads.put(file.absolutePath, VerifiedEntry(key, file.length()))
+            }
+        }
+
+        /**
+         * 缓存有效性：`size > 0` 时要求 `file.length() == size`，防止中断残留的半截文件
+         * 被命中；`size <= 0`（服务端未下发）退化为仅判断存在。
+         *
+         * 例外：本进程内已完整下载落地的 (路径, 字节数) 完全匹配时放行。`size` 由发送方
+         * 上报（ChatActivity / ShareReceiveActivity / ChatPanelManager），一旦上报不准，
+         * 严格相等会让这条消息陷入"每次点击都重下、下完又因不等而不认"的死循环
+         * （onSuccess 只校验 exists() 所以仍会打开，但下次点击重复整个过程）。由于下载
+         * 已改为写 .tmp + 完成后 rename，最终路径上的文件是本次进程完整收流的结果，
+         * 以"实际落地的字节数"为准比以"上报的 size"为准更可靠；同时因为还比对了长度，
+         * 该例外不会把键冲突场景下"别人的文件"误判为有效缓存。
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun isValidFileCache(file: File, size: Long, cacheKey: String? = null): Boolean {
+            if (size <= 0L) return true
+            val length = file.length()
+            if (length == size) return true
+            // 例外放行必须同时满足：本进程内在该路径完整落地过、落地长度与当前磁盘
+            // 长度一致、且落地时的缓存键就是本次请求的键。缺最后一条就会在键冲突时
+            // 把别人的字节当成本条消息的有效缓存（P2-2）。
+            val requestKey = cacheKey ?: file.name
+            val entry = synchronized(verifiedDownloads) { verifiedDownloads.get(file.absolutePath) }
+            return entry != null && entry.length == length && entry.cacheKey == requestKey
+        }
+
+        /**
+         * 本地缓存文件名：`<缓存键>.<ext>`，以消息唯一标识做缓存键
+         * （参照 iOS WKMediaUtil.getLocalPath），避免同名不同内容互相命中。
+         *
+         * 缓存键与扩展名都可能来自对端/服务端 JSON（`optString`），直接拼路径会被
+         * `../` 穿越，故两者都只保留 basename 并清洗危险字符。
+         *
+         * 扩展名优先取自 `displayName`（即 `fileContent.name`）的后缀：展示层的
+         * 预览类型、MIME、分享标题全部按 `name` 的后缀判定，若磁盘后缀改用
+         * `fileContent.extension`，两者不一致时（name="report.pdf" 而
+         * extension="bin"）会出现 MIME 为 pdf 但 content:// URI 以 .bin 结尾的错配，
+         * 按后缀嗅探的接收方会判错类型。两者同源时结果不变。
+         *
+         * 最终名按 UTF-8 字节截断到 [MAX_FILENAME_BYTES]：key 通常定长（~45 字节），
+         * 但扩展名完全由对端控制、无上限，长中文/emoji 名（3~4 字节/字符）在
+         * ext4/f2fs 的 NAME_MAX=255 下必然 `ENAMETOOLONG`，而该异常落在下载器的
+         * 流构造处，用户观感是"点了没反应"。留出余量给下载器的 `.tmp` 后缀（4 字节）。
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun buildCacheFileName(
+            cacheKey: String?,
+            extension: String?,
+            displayName: String? = null
+        ): String {
+            val key = sanitizePathSegment(cacheKey).ifEmpty { "unknown" }
+            val fromDisplay = displayName?.substringAfterLast('.', "")
+            val preferred = if (!fromDisplay.isNullOrEmpty()) fromDisplay else extension
+            val ext = sanitizePathSegment(preferred?.removePrefix(".")).ifEmpty { "dat" }
+            return truncateToByteLength("$key.$ext", MAX_FILENAME_BYTES)
+        }
+
+        /** 去掉路径分隔符与危险字符，只留下单段安全名（防目录穿越）。 */
+        private fun sanitizePathSegment(raw: String?): String {
+            if (raw.isNullOrEmpty()) return ""
+            // File(..).name 取 basename，消除 "a/../b" 这类分隔符结构
+            return File(raw).name
+                .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                .replace("..", "")
+                .replace(Regex("[\\x00-\\x1f]"), "")
+                .trim()
+        }
+
+        /**
+         * 按 UTF-8 字节长度截断文件名，保留扩展名，按 code point 边界截取避免破坏字符。
+         *
+         * Linux NAME_MAX = 255 字节（UTF-8，不是字符）。上限取 [MAX_FILENAME_BYTES]
+         * （200），预留 55 字节：4 字节给下载器的 `.tmp` 后缀，其余给挂载点/未来变化。
+         * 溢出时先压缩扩展名到 16 字节，再截主名——扩展名对类型判定有意义，主名是
+         * 定长键，被截后仍大概率唯一。
+         */
+        private fun truncateToByteLength(name: String, maxBytes: Int): String {
+            if (name.toByteArray(Charsets.UTF_8).size <= maxBytes) return name
+            val dot = name.lastIndexOf('.')
+            val ext = if (dot > 0) name.substring(dot) else ""
+            val base = if (dot > 0) name.substring(0, dot) else name
+            val extBytes = ext.toByteArray(Charsets.UTF_8).size
+            val finalExt = if (extBytes > MAX_EXT_BYTES) {
+                // 扩展名本身超长（对端可构造）：截到 16 字节并保底可读
+                var s = ""
+                var used = 0
+                for (ch in ext) {
+                    val b = ch.toString().toByteArray(Charsets.UTF_8).size
+                    if (used + b > MAX_EXT_BYTES) break
+                    s += ch
+                    used += b
+                }
+                if (s.isEmpty()) ".dat" else s
+            } else {
+                ext
+            }
+            val baseBudget = (maxBytes - finalExt.toByteArray(Charsets.UTF_8).size).coerceAtLeast(1)
+            val sb = StringBuilder()
+            var used = 0
+            var i = 0
+            while (i < base.length) {
+                val cp = base.codePointAt(i)
+                val charCount = Character.charCount(cp)
+                val cpStr = base.substring(i, i + charCount)
+                val chBytes = cpStr.toByteArray(Charsets.UTF_8).size
+                if (used + chBytes > baseBudget) break
+                sb.append(cpStr)
+                used += chBytes
+                i += charCount
+            }
+            if (sb.isEmpty()) sb.append("file")
+            return sb.toString() + finalExt
+        }
+
+        private const val MAX_EXT_BYTES = 16
 
         /** 文件名 UTF-8 字节长度上限（Linux NAME_MAX=255，留 55 字节余量给临时后缀/挂载点差异）。 */
         private const val MAX_FILENAME_BYTES = 200
@@ -268,15 +406,18 @@ class WKFileProvider : WKChatBaseProvider() {
         )
 
         @JvmStatic
-        fun openFileWithOptions(context: Context, file: File) {
+        fun openFileWithOptions(context: Context, file: File, displayName: String? = null) {
             val activity = context as? Activity ?: return
             if (activity.isFinishing || activity.isDestroyed) return
             val dialog = BottomSheetDialog(activity)
             val sheetView = LayoutInflater.from(activity).inflate(R.layout.bottom_sheet_file_actions, null)
+            // 磁盘文件名已改为 clientMsgNO 键（与展示名解耦），展示层优先用消息里的原始文件名
+            // 对外暴露的 content:// URI 也用四参 getUriForFile 覆盖 DISPLAY_NAME，否则分享/保存/ACTION_VIEW 的接收方会拿到 UUID 形状的缓存名。
+            val display = displayName?.takeIf { it.isNotEmpty() } ?: file.name
 
             // 预览按钮：pdf / xlsx / 纯文本 显示，走 App 内预览；与"打开"（系统 Intent）分开走两条路
             // 避免影响原有"打开"逻辑。对齐 iOS WKSafeFilePreviewVC。xls / doc / ppt 老格式暂不支持。
-            val ext = file.extension.lowercase(Locale.getDefault())
+            val ext = display.substringAfterLast('.', "").lowercase(Locale.getDefault())
             val previewClass: Class<*>? = when {
                 ext == "pdf" -> PdfPreviewActivity::class.java
                 ext == "xlsx" -> XlsxPreviewActivity::class.java
@@ -289,7 +430,7 @@ class WKFileProvider : WKChatBaseProvider() {
                 previewView.setOnClickListener {
                     dialog.dismiss()
                     val intent = Intent(context, previewClass).apply {
-                        putExtra("title", file.name)
+                        putExtra("title", display)
                         putExtra("filePath", file.absolutePath)
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
@@ -301,26 +442,26 @@ class WKFileProvider : WKChatBaseProvider() {
 
             sheetView.findViewById<View>(R.id.actionOpen).setOnClickListener {
                 dialog.dismiss()
-                openFileDirectlyStatic(context, file)
+                openFileDirectlyStatic(context, file, display)
             }
             sheetView.findViewById<View>(R.id.actionSave).setOnClickListener {
                 dialog.dismiss()
                 val intent = Intent(context, FileSaveActivity::class.java)
                 intent.putExtra("sourceFilePath", file.absolutePath)
-                intent.putExtra("fileName", file.name)
+                intent.putExtra("fileName", display)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
             }
             sheetView.findViewById<View>(R.id.actionShare).setOnClickListener {
                 dialog.dismiss()
                 try {
-                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file)
+                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file, display)
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = getMimeType(file.name)
+                        type = getMimeType(display)
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    val chooser = Intent.createChooser(shareIntent, file.name)
+                    val chooser = Intent.createChooser(shareIntent, display)
                     chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(chooser)
                 } catch (_: Exception) {}
@@ -330,20 +471,22 @@ class WKFileProvider : WKChatBaseProvider() {
             }
 
             val fileNameTv = sheetView.findViewById<TextView>(R.id.sheetFileName)
-            fileNameTv?.text = file.name
+            fileNameTv?.text = display
 
             dialog.setContentView(sheetView)
             dialog.show()
         }
 
-        private fun openFileDirectlyStatic(context: Context, file: File) {
-            val ext = file.extension.lowercase(Locale.getDefault())
+        private fun openFileDirectlyStatic(context: Context, file: File, displayName: String? = null) {
+            // 磁盘文件名是 clientMsgNO 键，系统预览/打开的标题与 MIME 应基于原始展示名
+            val display = displayName?.takeIf { it.isNotEmpty() } ?: file.name
+            val ext = display.substringAfterLast('.', "").lowercase(Locale.getDefault())
             if (ext in TEXT_PREVIEW_EXTS) {
                 // bounded 后主线程读上限 50k 字符 (≈200KB UTF-8) 通常 <10ms，避免旧
                 // `readText()` 全文加载导致 100MB `.log` OOM/ANR (#92 review B5)。
                 val content = TextPreviewLoader.readBounded(file, TEXT_PREVIEW_MAX_CHARS)
                 val intent = Intent(context, TextPreviewActivity::class.java)
-                intent.putExtra("title", file.name)
+                intent.putExtra("title", display)
                 intent.putExtra("content", content)
                 intent.putExtra("filePath", file.absolutePath)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -351,9 +494,9 @@ class WKFileProvider : WKChatBaseProvider() {
                 return
             }
             try {
-                val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file)
+                val uri = FileProvider.getUriForFile(context, context.packageName + ".fileProvider", file, display)
                 val intent = Intent(Intent.ACTION_VIEW)
-                intent.setDataAndType(uri, getMimeType(file.name))
+                intent.setDataAndType(uri, getMimeType(display))
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)

@@ -134,6 +134,7 @@
     <string name="chat_records">Chat History</string>
     <string name="search_title">Search</string>
     <string name="search_filter">Filter</string>
+    <string name="search_more">More</string>
     <string name="search_empty_all">Enter keywords to search everything</string>
     <string name="search_empty_chats">Enter keywords to find messages in this chat</string>
     <string name="search_empty_contacts">Enter keywords to find contacts</string>

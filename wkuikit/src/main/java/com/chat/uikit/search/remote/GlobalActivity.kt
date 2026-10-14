@@ -60,7 +60,6 @@ import com.chat.base.ui.Theme
 import com.chat.base.ui.components.SearchTabBarView
 import com.chat.base.utils.AndroidUtilities
 import com.chat.base.utils.SoftKeyboardUtils
-import com.chat.base.utils.WKReader
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
 import com.chat.uikit.chat.provider.WKFileProvider
@@ -156,18 +155,24 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         ViewModelProvider(this)[FilesSearchViewModel::class.java]
     }
 
-    // 三段结果缓存。任一段变化时 [rebuildList] 组合成最终列表提交给 adapter，
-    // 避免联系人/群段（老 /search/global 异步）和聊天记录段（新 L1 异步）之间的顺序竞态。
+    // 四段结果缓存。任一段变化时 [rebuildList] 组合成最终列表提交给 adapter，
+    // 避免联系人/群段（老 /search/global 异步）、聊天记录段（新 L1 异步）与文件段
+    // （复用 filesTabViewModel 异步）之间的顺序竞态。
     private var friendsList: List<GlobalChannel> = emptyList()
     private var groupsList: List<GlobalChannel> = emptyList()
     private var searchShortcut: DataVO? = null
     private var chatRecords: List<DataVO> = emptyList()
+    // 文件段复用 filesTabViewModel 的结果（它已在 afterTextChanged 里跟其它 tab 同步发请求，
+    // 见 :406），不单独发起网络调用。这里存的是未截断的全量列表，截前 3 条 + "更多"判定交给
+    // [AllTabSectionBuilder]，与 friendsList/groupsList/chatRecords 的处理方式一致。
+    private var filesPreview: List<FileHit> = emptyList()
 
-    // 「所有」tab 无结果态判定：仅当联系人/群段、聊天记录段两条异步请求都已各自返回一次
+    // 「所有」tab 无结果态判定：仅当联系人/群段、聊天记录段、文件段三条异步请求都已各自返回一次
     // 才能判定"真的无结果"，避免请求未完成时提前显示"无搜索结果"。searchShortcut（"搜索更多联系人"
     // 入口）不计入结果判断——它是入口不是结果类别（对应 R4）。关键词变化时重置为 false。
     private var contactsGroupsLoaded = false
     private var chatRecordsLoaded = false
+    private var filesLoaded = false
 
     // Toast 去重：state.collect 每次 emission 都触发（含 repeatOnLifecycle 从 STOPPED 恢复时重放
     // 上一次 state），无去重会让同一 errorCode 重复弹 toast 打扰用户。
@@ -406,11 +411,13 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 filesTabViewModel.setKeyword(content)
                 contactsGroupsLoaded = false
                 chatRecordsLoaded = false
+                filesLoaded = false
                 if (TextUtils.isEmpty(content)) {
                     friendsList = emptyList()
                     groupsList = emptyList()
                     searchShortcut = null
                     chatRecords = emptyList()
+                    filesPreview = emptyList()
                     adapter.setList(ArrayList())
                     contactsTabAdapter.setList(ArrayList())
                     groupsTabAdapter.setList(ArrayList())
@@ -492,6 +499,26 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                             intent.putExtra("keyword", item.keyword)
                             startActivity(intent)
                         }
+                    }
+
+                    DataVO.FILE -> {
+                        val hit = item.fileHit ?: return@setOnItemClickListener
+                        if (hit.channel_id.isEmpty()) return@setOnItemClickListener
+                        // 与文件 tab 的点击跳转同口径（filesTabAdapter 的监听器），见 :298-313。
+                        val orderSeq = WKIM.getInstance().msgManager.getMessageOrderSeq(
+                            hit.message_seq,
+                            hit.channel_id,
+                            hit.channel_type,
+                        )
+                        EndpointManager.getInstance().invoke(
+                            EndpointSID.chatView,
+                            ChatViewMenu(this@GlobalActivity, hit.channel_id, hit.channel_type, orderSeq, false)
+                                .apply { fromSearch = true },
+                        )
+                    }
+
+                    DataVO.MORE -> {
+                        wkVBinding.searchResultPager.setCurrentItem(item.jumpTab, true)
                     }
                 }
             }
@@ -666,6 +693,13 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                         queryStarted = state.queryStarted,
                         error = decision.takeOverWithError,
                     )
+                    // "全部" tab 的文件段复用同一份结果，不单独发请求；截前 3 条 + "更多"
+                    // 判定交给 [AllTabSectionBuilder]（与 friendsList/groupsList 的处理方式一致）。
+                    filesPreview = state.files
+                    if (!state.isLoading) {
+                        filesLoaded = true
+                    }
+                    rebuildList()
                     updateAllEmptyView()
                 }
             }
@@ -958,36 +992,29 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         else -> errorMessage?.takeIf { it.isNotEmpty() } ?: "搜索失败，请重试"
     }
 
-    /** 组合三段 + 分隔符，一次提交给 adapter。空字符串场景由 [afterTextChanged] 直接 setList(空) 处理。 */
+    /** 组合四段 + "更多"行 + 分隔符，一次提交给 adapter。空字符串场景由 [afterTextChanged] 直接
+     * setList(空) 处理。截断/"更多"判定见 [AllTabSectionBuilder]。 */
     private fun rebuildList() {
         if (TextUtils.isEmpty(keyword)) {
             adapter.setList(ArrayList())
             return
         }
-        val list = ArrayList<DataVO>()
-        if (WKReader.isNotEmpty(friendsList)) {
-            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.contacts)))
-            for (channel in friendsList) {
-                list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
-            }
-            list.add(DataVO(DataVO.SPAN, null, null, ""))
-        }
-        if (WKReader.isNotEmpty(groupsList)) {
-            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.group_chat)))
-            for (channel in groupsList) {
-                list.add(DataVO(DataVO.CHANNEL, channel, null, ""))
-            }
-            list.add(DataVO(DataVO.SPAN, null, null, ""))
-        }
-        searchShortcut?.let {
-            list.add(it)
-            list.add(DataVO(DataVO.SPAN, null, null, ""))
-        }
-        if (chatRecords.isNotEmpty()) {
-            list.add(DataVO(DataVO.TEXT, null, null, getString(R.string.chat_records)))
-            list.addAll(chatRecords)
-            list.add(DataVO(DataVO.SPAN, null, null, ""))
-        }
+        val list = AllTabSectionBuilder.build(
+            friendsList = friendsList,
+            groupsList = groupsList,
+            searchShortcut = searchShortcut,
+            chatRecords = chatRecords,
+            filesPreview = filesPreview,
+            contactsHeader = getString(R.string.contacts),
+            groupsHeader = getString(R.string.group_chat),
+            chatRecordsHeader = getString(R.string.chat_records),
+            filesHeader = getString(R.string.str_file),
+            moreText = getString(R.string.search_more),
+            contactsTab = TAB_CONTACTS,
+            groupsTab = TAB_GROUPS,
+            chatsTab = TAB_CHATS,
+            filesTab = TAB_FILES,
+        )
         adapter.setList(list)
     }
 
@@ -1008,8 +1035,9 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
     /**
      * 更新 5 个 tab 的空态提示。「所有」tab 区分三种态：空输入提示 / 无搜索结果 / 隐藏（有结果或仍在
-     * 加载中）。联系人/群段和聊天记录段是两路独立异步请求，任一路已完成（不论结果是否为空）就应
-     * 退出 loading——不必等另一路也完成，否则一路已经有结果也会被 loading UI 挡住。
+     * 加载中）。联系人/群段、聊天记录段、文件段是三路独立异步请求，任一路已完成（不论结果是否为空）
+     * 就应退出 loading——不必等其它路也完成，否则一路已经有结果也会被 loading UI 挡住；但判定
+     * "真的无结果"要三路都完成且都为空才行。
      * 其余 4 个分类 tab 现已接入真实数据层，同样按"已完成一轮加载且结果为空"判定；
      * 联系人/群组 tab 复用 [contactsGroupsLoaded]（与 TAB_ALL 共享同一次 /search/global 请求）。
      */
@@ -1022,12 +1050,12 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                     render(getString(R.string.search_empty_all), loading = false)
                     visibility = View.VISIBLE
                 }
-                !contactsGroupsLoaded && !chatRecordsLoaded -> {
+                !contactsGroupsLoaded && !chatRecordsLoaded && !filesLoaded -> {
                     render(getString(R.string.search_searching), loading = true)
                     visibility = View.VISIBLE
                 }
-                contactsGroupsLoaded && chatRecordsLoaded &&
-                    friendsList.isEmpty() && groupsList.isEmpty() && chatRecords.isEmpty() -> {
+                contactsGroupsLoaded && chatRecordsLoaded && filesLoaded &&
+                    friendsList.isEmpty() && groupsList.isEmpty() && chatRecords.isEmpty() && filesPreview.isEmpty() -> {
                     render(getString(R.string.search_no_result), loading = false)
                     visibility = View.VISIBLE
                 }

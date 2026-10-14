@@ -135,6 +135,7 @@
     <string name="chat_records">聊天记录</string>
     <string name="search_title">搜索</string>
     <string name="search_filter">筛选</string>
+    <string name="search_more">更多</string>
     <string name="search_empty_all">输入关键词搜索全部内容</string>
     <string name="search_empty_chats">输入关键词查找此聊天内的记录</string>
     <string name="search_empty_contacts">输入关键词查找联系人</string>

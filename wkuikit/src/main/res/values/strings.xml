@@ -145,6 +145,7 @@
     <string name="search_searching">搜索中…</string>
     <string name="search_no_result_hint">换个关键词或调整筛选条件再试试</string>
     <string name="search_load_failed">加载失败</string>
+    <string name="search_partial_failed">部分内容加载失败</string>
     <string name="search_load_failed_hint">请检查网络后重试</string>
     <string name="search_retry">重试</string>
 

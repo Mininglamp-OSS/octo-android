@@ -88,6 +88,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         const val TAB_FILES = 4
         const val TAB_COUNT = 5
         private const val CHATS_TAB_VM_KEY = "chatsTabViewModel"
+        private const val ALL_FILES_VM_KEY = "allTabFilesViewModel"
 
         /** 恢复 [filtersByTab]：旋转/深色模式/进程死亡后重建时回填。 */
         private const val KEY_FILTERS_BY_TAB = "filtersByTab"
@@ -155,16 +156,28 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         ViewModelProvider(this)[FilesSearchViewModel::class.java]
     }
 
+    // 「全部」页文件段的独立实例：与 [filesTabViewModel]（服务 TAB_FILES，持有筛选条件）分开，
+    // 本实例永不调用 setFilters，是「全部」页文件段的无筛选真相来源——与 [viewModel] 对聊天
+    // 记录段的角色对称（不变量见上方聊天记录段注释）。代价是文件接口每轮搜索多一次无筛选请求，
+    // 有意的：否则「文件」页的筛选会静默改写「全部」页文件段的内容。触发路径与
+    // filesTabViewModel 完全对称、共三条：afterTextChanged（debounce 由 ViewModel 内部统管）、
+    // IME 搜索键 triggerNow、onPageSelected(TAB_ALL)（setKeyword 内部按 keyword 去重，切回已搜过的
+    // 关键词不重发）。即单次输入最多额外一次请求，不随输入字符数放大。
+    private val allFilesViewModel: FilesSearchViewModel by lazy {
+        ViewModelProvider(this)[ALL_FILES_VM_KEY, FilesSearchViewModel::class.java]
+    }
+
     // 四段结果缓存。任一段变化时 [rebuildList] 组合成最终列表提交给 adapter，
     // 避免联系人/群段（老 /search/global 异步）、聊天记录段（新 L1 异步）与文件段
-    // （复用 filesTabViewModel 异步）之间的顺序竞态。
+    // （[allFilesViewModel] 异步，无筛选）之间的顺序竞态。
     private var friendsList: List<GlobalChannel> = emptyList()
     private var groupsList: List<GlobalChannel> = emptyList()
     private var searchShortcut: DataVO? = null
     private var chatRecords: List<DataVO> = emptyList()
-    // 文件段复用 filesTabViewModel 的结果（它已在 afterTextChanged 里跟其它 tab 同步发请求，
-    // 见 :406），不单独发起网络调用。这里存的是未截断的全量列表，截前 3 条 + "更多"判定交给
-    // [AllTabSectionBuilder]，与 friendsList/groupsList/chatRecords 的处理方式一致。
+    // 文件段的数据源是 [allFilesViewModel]（无筛选，独立实例），不复用服务 TAB_FILES 的
+    // [filesTabViewModel]——否则「文件」页的筛选会静默改写本段内容（理由见 allFilesViewModel 注释）。
+    // 这里存的是未截断的全量列表，截前 3 条 + "更多"判定交给 [AllTabSectionBuilder]，
+    // 与 friendsList/groupsList/chatRecords 的处理方式一致。
     private var filesPreview: List<FileHit> = emptyList()
 
     // 「所有」tab 无结果态判定：仅当联系人/群段、聊天记录段、文件段三条异步请求都已各自返回一次
@@ -172,7 +185,6 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     // 入口）不计入结果判断——它是入口不是结果类别（对应 R4）。关键词变化时重置为 false。
     private var contactsGroupsLoaded = false
     private var chatRecordsLoaded = false
-    private var filesLoaded = false
 
     // Toast 去重：state.collect 每次 emission 都触发（含 repeatOnLifecycle 从 STOPPED 恢复时重放
     // 上一次 state），无去重会让同一 errorCode 重复弹 toast 打扰用户。
@@ -266,6 +278,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 when (position) {
                     TAB_CHATS -> chatsTabViewModel.setKeyword(keyword)
                     TAB_FILES -> filesTabViewModel.setKeyword(keyword)
+                    TAB_ALL -> allFilesViewModel.setKeyword(keyword)
                 }
             }
         })
@@ -318,13 +331,15 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         }
         observeChatsTabState()
         observeFilesTabState()
+        observeAllTabFilesState()
 
         emptyViews = Array(TAB_COUNT) { index ->
             EmptyStateView(this).apply {
                 setText(getString(EMPTY_TEXTS[index]))
-                // Error 态重试：仅聊天记录/文件 tab 有独立 VM 可重跑（对齐 iOS emptyView.onRetry
-                // → syncActiveVM，只有这两个 tab 走 _search_global_* 端点）。
+                // 全部页重试 = 同时重跑 viewModel（联系人/群/聊天记录）与 allFilesViewModel（文件段）；
+                // 两个分类 tab 各自重跑自己的 VM。
                 onRetry = when (index) {
+                    TAB_ALL -> ({ retryAllTab() })
                     TAB_CHATS -> ({ retryTab(TAB_CHATS) })
                     TAB_FILES -> ({ retryTab(TAB_FILES) })
                     else -> null
@@ -390,6 +405,7 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 SoftKeyboardUtils.getInstance()
                     .hideSoftKeyboard(this@GlobalActivity)
                 viewModel.triggerNow()
+                allFilesViewModel.triggerNow()
                 return@setOnEditorActionListener true
             }
             false
@@ -409,9 +425,9 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                 viewModel.setKeyword(content)
                 chatsTabViewModel.setKeyword(content)
                 filesTabViewModel.setKeyword(content)
+                allFilesViewModel.setKeyword(content)
                 contactsGroupsLoaded = false
                 chatRecordsLoaded = false
-                filesLoaded = false
                 if (TextUtils.isEmpty(content)) {
                     friendsList = emptyList()
                     groupsList = emptyList()
@@ -693,12 +709,27 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                         queryStarted = state.queryStarted,
                         error = decision.takeOverWithError,
                     )
-                    // "全部" tab 的文件段复用同一份结果，不单独发请求；截前 3 条 + "更多"
-                    // 判定交给 [AllTabSectionBuilder]（与 friendsList/groupsList 的处理方式一致）。
+                    updateTabEmptyView(TAB_FILES, filesTabEmptyInput, isEmpty = filesTabAdapter.data.isEmpty())
+                }
+            }
+        }
+    }
+
+    /**
+     * 订阅 [allFilesViewModel]（「全部」页文件段，无筛选）：只负责 filesPreview + rebuildList()
+     * + 空态派生输入。不弹 toast——「全部」页文件段没有错误 affordance，弹会与「文件」页重复。
+     */
+    private fun observeAllTabFilesState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                allFilesViewModel.state.collect { state ->
                     filesPreview = state.files
-                    if (!state.isLoading) {
-                        filesLoaded = true
-                    }
+                    val decision = FilesTabRenderPolicy.decide(state.uiAction(), state.files.size)
+                    allFilesTabEmptyInput = TabEmptyInput(
+                        loading = state.isLoading,
+                        queryStarted = state.queryStarted,
+                        error = decision.takeOverWithError,
+                    )
                     rebuildList()
                     updateAllEmptyView()
                 }
@@ -821,9 +852,9 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
     /**
      * 筛选条件变化（应用筛选 / 点 chip ✕ 移除某一维度）后，把新筛选条件同步到对应 tab 的
-     * ViewModel 并重新触发搜索。重置 loaded 标记并清空旧列表后再刷新空态视图——否则上一轮
-     * 筛选结果仍留在 adapter 里，[updateTabEmptyView] 的 isEmpty 判断会读到"非空"，导致
-     * "搜索中" loading UI 被跳过，直到新结果落地才刷新（旧结果期间无任何加载态提示）。
+     * ViewModel 并重新触发搜索，同时清空旧列表再刷新空态视图——否则上一轮筛选结果仍留在
+     * adapter 里，[updateTabEmptyView] 的 isEmpty 判断会读到"非空"，导致"搜索中" loading UI
+     * 被跳过，直到新结果落地才刷新（旧结果期间无任何加载态提示）。
      */
     private fun reapplyFilters(tab: Int, filters: GlobalSearchFilters) {
         when (tab) {
@@ -846,6 +877,19 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
      */
     private fun retryTab(tab: Int) {
         reapplyFilters(tab, filtersByTab[tab] ?: GlobalSearchFilters())
+    }
+
+    /**
+     * 「全部」页重试：该页没有筛选条件，重试就是把它依赖的两个 VM 各重跑一次。
+     * 对应空态 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE]（文件段接口不可用而其余段为空）。
+     */
+    private fun retryAllTab() {
+        if (TextUtils.isEmpty(keyword)) return
+        contactsGroupsLoaded = false
+        chatRecordsLoaded = false
+        viewModel.triggerNow()
+        allFilesViewModel.triggerNow()
+        updateAllEmptyView()
     }
 
     /**
@@ -1032,34 +1076,68 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
     private var chatsTabEmptyInput = TabEmptyInput()
     private var filesTabEmptyInput = TabEmptyInput()
+    private var allFilesTabEmptyInput = TabEmptyInput()
 
     /**
-     * 更新 5 个 tab 的空态提示。「所有」tab 区分三种态：空输入提示 / 无搜索结果 / 隐藏（有结果或仍在
-     * 加载中）。联系人/群段、聊天记录段、文件段是三路独立异步请求，任一路已完成（不论结果是否为空）
-     * 就应退出 loading——不必等其它路也完成，否则一路已经有结果也会被 loading UI 挡住；但判定
-     * "真的无结果"要三路都完成且都为空才行。
+     * 更新 5 个 tab 的空态提示。「所有」tab 的三腿判定（联系人/群段、聊天记录段、文件段）由
+     * [AllTabEmptyPolicy] 决定：任一腿已有结果即退出 loading 隐藏空态（不等其它腿）；报错腿
+     * 整腿剔除、不参与「是否真的无结果」判定，但会触发独立的 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE]
+     * 态（部分内容加载失败 + 重试）——旧实现「三路都完成且都为空才行」的口径已不准确（报错腿不参与）。
      * 其余 4 个分类 tab 现已接入真实数据层，同样按"已完成一轮加载且结果为空"判定；
      * 联系人/群组 tab 复用 [contactsGroupsLoaded]（与 TAB_ALL 共享同一次 /search/global 请求）。
      */
     private fun updateAllEmptyView() {
         if (!::emptyViews.isInitialized) return
         val isEmptyKeyword = TextUtils.isEmpty(keyword)
+        val verdict = AllTabEmptyPolicy.decide(
+            isEmptyKeyword = isEmptyKeyword,
+            contactsGroups = AllTabEmptyPolicy.Leg(
+                settled = contactsGroupsLoaded,
+                isEmpty = friendsList.isEmpty() && groupsList.isEmpty(),
+            ),
+            chatRecords = AllTabEmptyPolicy.Leg(
+                settled = chatRecordsLoaded,
+                isEmpty = chatRecords.isEmpty(),
+            ),
+            files = AllTabEmptyPolicy.Leg(
+                // error 时 loading 已为 false，settled 为 true：报错的腿不会再有结果，
+                // 算「已落地」但在判定中被 errored 整腿剔除。
+                settled = (!allFilesTabEmptyInput.loading && allFilesTabEmptyInput.queryStarted) ||
+                    allFilesTabEmptyInput.error,
+                isEmpty = filesPreview.isEmpty(),
+                errored = allFilesTabEmptyInput.error,
+            ),
+        )
         emptyViews[TAB_ALL].apply {
-            when {
-                isEmptyKeyword -> {
+            when (verdict) {
+                AllTabEmptyPolicy.Verdict.EMPTY_KEYWORD -> {
                     render(getString(R.string.search_empty_all), loading = false)
                     visibility = View.VISIBLE
                 }
-                !contactsGroupsLoaded && !chatRecordsLoaded && !filesLoaded -> {
+                AllTabEmptyPolicy.Verdict.LOADING -> {
                     render(getString(R.string.search_searching), loading = true)
                     visibility = View.VISIBLE
                 }
-                contactsGroupsLoaded && chatRecordsLoaded && filesLoaded &&
-                    friendsList.isEmpty() && groupsList.isEmpty() && chatRecords.isEmpty() && filesPreview.isEmpty() -> {
-                    render(getString(R.string.search_no_result), loading = false)
+                AllTabEmptyPolicy.Verdict.NO_RESULT -> {
+                    render(
+                        getString(R.string.search_no_result),
+                        loading = false,
+                        secondary = getString(R.string.search_no_result_hint),
+                    )
                     visibility = View.VISIBLE
                 }
-                else -> visibility = View.GONE
+                // 文件腿报错而其余两腿确认为空：既不能说「无搜索结果」（文件可能有），
+                // 也不能什么都不显示（旧实现在此落到 else → GONE → 白板）。
+                AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE -> {
+                    render(
+                        getString(R.string.search_partial_failed),
+                        loading = false,
+                        secondary = getString(R.string.search_load_failed_hint),
+                        retryText = getString(R.string.search_retry),
+                    )
+                    visibility = View.VISIBLE
+                }
+                AllTabEmptyPolicy.Verdict.HIDE -> visibility = View.GONE
             }
         }
         updateTabEmptyView(TAB_CHATS, chatsTabEmptyInput, isEmpty = chatsTabAdapter.data.isEmpty())

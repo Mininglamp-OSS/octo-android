@@ -109,11 +109,43 @@ class AllTabEmptyPolicyTest {
 
     @Test
     fun `chat records error with files hit hides empty view`() {
-        // 已有结果优先于任何 pending/error。
+        // 文件腿有结果 → 即使聊天腿报错也隐藏空态。
         assertEquals(
-            "已有结果优先于任何 pending/error",
+            "文件腿有结果 → 即使聊天腿报错也隐藏空态",
             AllTabEmptyPolicy.Verdict.HIDE,
-            AllTabEmptyPolicy.decide(false, failed, settledHit, pending),
+            AllTabEmptyPolicy.decide(false, settledEmpty, failed, settledHit),
+        )
+    }
+
+    @Test
+    fun `chat leg error with other legs empty shows partial failure`() {
+        // 聊天端点 FEATURE_DISABLED/RATE_LIMITED 且无可用兜底时，不能对用户陈述「无搜索结果」。
+        val verdict = AllTabEmptyPolicy.decide(false, settledEmpty, failed, settledEmpty)
+        assertEquals(
+            "聊天腿报错且其余腿为空应显示部分失败",
+            AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE,
+            verdict,
+        )
+        assertEquals("不得误判为无结果", false, verdict == AllTabEmptyPolicy.Verdict.NO_RESULT)
+    }
+
+    @Test
+    fun `chat leg still in flight does not report no result`() {
+        // IME 原地重搜时聊天请求在途、文件腿先落地为空的场景。
+        assertEquals(
+            "聊天腿在途时应继续转圈而非误报无结果",
+            AllTabEmptyPolicy.Verdict.LOADING,
+            AllTabEmptyPolicy.decide(false, settledEmpty, pending, settledEmpty),
+        )
+    }
+
+    @Test
+    fun `errored leg is counted as settled`() {
+        // 锁住「errored 腿算已落地」的契约：三腿全部报错也绝不能停在 LOADING。
+        assertEquals(
+            "三腿全部报错应为部分失败而非永久转圈",
+            AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE,
+            AllTabEmptyPolicy.decide(false, failed, failed, failed),
         )
     }
 }

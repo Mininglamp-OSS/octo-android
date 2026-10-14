@@ -336,7 +336,9 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         emptyViews = Array(TAB_COUNT) { index ->
             EmptyStateView(this).apply {
                 setText(getString(EMPTY_TEXTS[index]))
-                // 全部页重试 = 同时重跑 viewModel（联系人/群/聊天记录）与 allFilesViewModel（文件段）；
+                // 全部页重试 = 逐条重跑它依赖的三条腿：loadContactsAndGroups()（联系人/群，裸 HTTP，
+                // 不属于任何 ViewModel）、viewModel（聊天记录 L1）、allFilesViewModel（文件段）。
+                // 详见 [retryAllTab]——漏掉第一条会让该腿永久 unsettled。
                 // 两个分类 tab 各自重跑自己的 VM。
                 onRetry = when (index) {
                     TAB_ALL -> ({ retryAllTab() })
@@ -770,9 +772,25 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
                     }
                     // isLoading=false 才代表这轮请求（含 debounce 发出后的响应落地）真正完成，
                     // 不能用 uiAction()==null 判断——setKeyword 刚写入 keyword 时也满足该条件但请求未发出。
+                    // 仅供非 TAB_ALL 判定使用；TAB_ALL 的聊天腿改用 allChatsTabEmptyInput（见下方），
+                    // 理由同 filesTabEmptyInput。
                     if (!state.isLoading) {
                         chatRecordsLoaded = true
                     }
+                    // 「全部」页聊天记录腿的空态输入：与文件腿同口径，从当前 emission 实时派生，
+                    // 不用 sticky 的 chatRecordsLoaded——后者一旦置 true 永不回落（只有改关键词和
+                    // retryAllTab 会清），IME 搜索键原地重搜时它仍为 true，若文件腿先落地为空，
+                    // 三腿会同时「已落地且为空」而误报「无搜索结果」，而聊天请求其实还在途。
+                    // errored 的口径见 [AllTabEmptyPolicy.Leg]：本地兜底可用时不算失败——
+                    // 那是一个有效结果，而 TAB_ALL 的 viewModel 从不设筛选，兜底恒可用。
+                    allChatsTabEmptyInput = TabEmptyInput(
+                        loading = state.isLoading,
+                        queryStarted = state.queryStarted,
+                        error = ChatsFallbackPolicy.decide(
+                            state.uiAction(),
+                            filtersByTab[TAB_ALL] ?: GlobalSearchFilters(),
+                        ) == ChatsFallbackDecision.SHOW_ERROR,
+                    )
                     rebuildList()
                     updateAllEmptyView()
                 }
@@ -880,13 +898,21 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
     }
 
     /**
-     * 「全部」页重试：该页没有筛选条件，重试就是把它依赖的两个 VM 各重跑一次。
-     * 对应空态 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE]（文件段接口不可用而其余段为空）。
+     * 「全部」页重试：该页无筛选条件，重试即把它依赖的三条腿各重跑一次。
+     * 对应空态 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE]。
+     *
+     * 三条腿的归属各不相同，必须逐条处理——这里曾经漏掉联系人/群段：
+     * 它由 [loadContactsAndGroups] 的 /search/global 请求拥有（**不是** [viewModel]，
+     * 后者只管聊天记录 L1），[contactsGroupsLoaded] 只在那个请求的回调里被置 true。
+     * 只重置标记而不重新发起请求，会让该腿永久停在 unsettled，
+     * [AllTabEmptyPolicy.decide] 永远返回 LOADING（重试按钮随之消失），
+     * 且联系人/群组两个分类 tab 共用该标记也会一起永久转圈。
      */
     private fun retryAllTab() {
         if (TextUtils.isEmpty(keyword)) return
         contactsGroupsLoaded = false
         chatRecordsLoaded = false
+        loadContactsAndGroups()
         viewModel.triggerNow()
         allFilesViewModel.triggerNow()
         updateAllEmptyView()
@@ -1076,14 +1102,20 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
 
     private var chatsTabEmptyInput = TabEmptyInput()
     private var filesTabEmptyInput = TabEmptyInput()
+
+    // all* 前缀的两个字段服务 TAB_ALL（无筛选的 viewModel / allFilesViewModel），
+    // 与服务分类 tab 的 chatsTabEmptyInput / filesTabEmptyInput 分开——两者订阅不同 VM、
+    // 筛选条件不同，共用会让分类页的筛选态污染「全部」页的空态判定。
+    private var allChatsTabEmptyInput = TabEmptyInput()
     private var allFilesTabEmptyInput = TabEmptyInput()
 
     /**
      * 更新 5 个 tab 的空态提示。「所有」tab 的三腿判定（联系人/群段、聊天记录段、文件段）由
-     * [AllTabEmptyPolicy] 决定：任一腿已有结果即退出 loading 隐藏空态（不等其它腿）；报错腿
-     * 整腿剔除、不参与「是否真的无结果」判定，但会触发独立的 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE]
-     * 态（部分内容加载失败 + 重试）——旧实现「三路都完成且都为空才行」的口径已不准确（报错腿不参与）。
-     * 其余 4 个分类 tab 现已接入真实数据层，同样按"已完成一轮加载且结果为空"判定；
+     * [AllTabEmptyPolicy] 决定；三腿归属各不相同，分别是 [loadContactsAndGroups]（裸 HTTP，
+     * 非 ViewModel）、[viewModel]（聊天记录 L1）与 [allFilesViewModel]（文件段）：任一腿已有
+     * 结果即退出 loading 隐藏空态（不等其它腿）；报错腿整腿剔除、不参与「是否真的无结果」
+     * 判定，但会触发独立的 [AllTabEmptyPolicy.Verdict.PARTIAL_FAILURE] 态（部分内容加载失败
+     * + 重试）。其余 4 个分类 tab 现已接入真实数据层，同样按"已完成一轮加载且结果为空"判定；
      * 联系人/群组 tab 复用 [contactsGroupsLoaded]（与 TAB_ALL 共享同一次 /search/global 请求）。
      */
     private fun updateAllEmptyView() {
@@ -1092,20 +1124,23 @@ class GlobalActivity : WKBaseActivity<ActGlobalLayoutBinding>() {
         val verdict = AllTabEmptyPolicy.decide(
             isEmptyKeyword = isEmptyKeyword,
             contactsGroups = AllTabEmptyPolicy.Leg(
+                // 该腿由 loadContactsAndGroups() 拥有，不属于任何 ViewModel；它失败时会退化为
+                // 本地会话结果并照常置 contactsGroupsLoaded=true，对用户是有效结果 → 无 errored 态。
+                // 重试路径见 [retryAllTab]（必须重新调用 loadContactsAndGroups，仅清标记会永久转圈）。
                 settled = contactsGroupsLoaded,
                 isEmpty = friendsList.isEmpty() && groupsList.isEmpty(),
             ),
-            chatRecords = AllTabEmptyPolicy.Leg(
-                settled = chatRecordsLoaded,
+            chatRecords = AllTabEmptyPolicy.legFromState(
+                loading = allChatsTabEmptyInput.loading,
+                queryStarted = allChatsTabEmptyInput.queryStarted,
+                errored = allChatsTabEmptyInput.error,
                 isEmpty = chatRecords.isEmpty(),
             ),
-            files = AllTabEmptyPolicy.Leg(
-                // error 时 loading 已为 false，settled 为 true：报错的腿不会再有结果，
-                // 算「已落地」但在判定中被 errored 整腿剔除。
-                settled = (!allFilesTabEmptyInput.loading && allFilesTabEmptyInput.queryStarted) ||
-                    allFilesTabEmptyInput.error,
-                isEmpty = filesPreview.isEmpty(),
+            files = AllTabEmptyPolicy.legFromState(
+                loading = allFilesTabEmptyInput.loading,
+                queryStarted = allFilesTabEmptyInput.queryStarted,
                 errored = allFilesTabEmptyInput.error,
+                isEmpty = filesPreview.isEmpty(),
             ),
         )
         emptyViews[TAB_ALL].apply {

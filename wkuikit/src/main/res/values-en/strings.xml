@@ -144,6 +144,7 @@
     <string name="search_searching">Searching…</string>
     <string name="search_no_result_hint">Try a different keyword or adjust the filters</string>
     <string name="search_load_failed">Failed to load</string>
+    <string name="search_partial_failed">Some results failed to load</string>
     <string name="search_load_failed_hint">Check your network and try again</string>
     <string name="search_retry">Retry</string>
 

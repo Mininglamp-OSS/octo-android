@@ -31,6 +31,7 @@ import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatViewMenu
 import com.chat.base.search.channel.ChannelSearchUiAction
 import com.chat.base.search.channel.dto.CombinedHit
+import com.chat.base.search.global.dto.GlobalSearchFilters
 import com.chat.base.ui.Theme
 import com.chat.base.utils.SoftKeyboardUtils
 import com.chat.uikit.R
@@ -49,6 +50,8 @@ import kotlinx.coroutines.launch
  *  - "channel_id" String（必填）
  *  - "channel_type" Byte（必填）
  *  - "keyword" String（必填，非空）
+ *  - "filters" [GlobalSearchFilters]（选填，L1 聊天记录 tab 当前生效的筛选条件；
+ *    缺省时等价于空筛选。与本群限定是 AND 关系，详见 [GroupDrillViewModel.init]）
  */
 class GroupDrillActivity : WKBaseActivity<ActGroupDrillLayoutBinding>() {
 
@@ -57,6 +60,7 @@ class GroupDrillActivity : WKBaseActivity<ActGroupDrillLayoutBinding>() {
     private lateinit var adapter: GroupDrillAdapter
     private var channelId: String = ""
     private var channelType: Byte = 0
+    private var filters: GlobalSearchFilters = GlobalSearchFilters()
 
     // Toast 去重：同一个 errorCode 只弹一次，避免用户下一个按键触发 state 变化时重复打扰。
     // errorCode 变化（新一轮请求发起清空为 null 后再次出错）会重新弹。
@@ -68,6 +72,7 @@ class GroupDrillActivity : WKBaseActivity<ActGroupDrillLayoutBinding>() {
     override fun initPresenter() {
         channelId = intent.getStringExtra("channel_id") ?: ""
         channelType = intent.getByteExtra("channel_type", 0)
+        filters = intent.getParcelableExtra<GlobalSearchFilters>("filters") ?: GlobalSearchFilters()
     }
 
     override fun initView() {
@@ -87,9 +92,8 @@ class GroupDrillActivity : WKBaseActivity<ActGroupDrillLayoutBinding>() {
             wkVBinding.searchEt.setSelection(initialKeyword.length)
         }
         // 立即触发首屏搜索（skip debounce）
-        viewModel.init(channelId, channelType, initialKeyword)
+        viewModel.init(channelId, channelType, initialKeyword, filters)
 
-        SoftKeyboardUtils.getInstance().showSoftKeyBoard(this, wkVBinding.searchEt)
         observeState()
     }
 
@@ -150,7 +154,7 @@ class GroupDrillActivity : WKBaseActivity<ActGroupDrillLayoutBinding>() {
         )
         EndpointManager.getInstance().invoke(
             EndpointSID.chatView,
-            ChatViewMenu(this, hitChannelId, hitChannelType, orderSeq, false),
+            ChatViewMenu(this, hitChannelId, hitChannelType, orderSeq, false).apply { fromSearch = true },
         )
     }
 

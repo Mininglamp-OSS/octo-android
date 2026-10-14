@@ -65,6 +65,11 @@ class GlobalSearchViewModel(
         val retryAfterSec: Int = 0,
         /** 当前渲染中的响应对应的 sequence。0 表示还未发起过请求。 */
         val sequence: Long = 0L,
+        /**
+         * 是否已发起过至少一次请求（含在途）。用于 UI 区分「空输入等待」与「搜到了但没结果」：
+         * sequence 不能承担这个判断——它在 debounce 窗口内还是 0，但此时 isLoading 已为 true。
+         */
+        val queryStarted: Boolean = false,
     ) {
         /** null 时 UI 无需响应；非 null 时按枚举决定 toast / banner / 本地兜底。 */
         fun uiAction(): com.chat.base.search.channel.ChannelSearchUiAction? =
@@ -101,15 +106,39 @@ class GlobalSearchViewModel(
     /** 单调递增的请求序号。用于识别乱序响应。 */
     private var nextSequence: Long = 0L
 
+    /** 当前生效的筛选条件（聊天记录 tab 专用；"全部" tab 不设置，恒为空）。 */
+    private var currentFilters: GlobalSearchFilters = GlobalSearchFilters()
+
+    /**
+     * 更新筛选条件。仅更新内部状态，不自动触发搜索——由调用方在更新后显式调用 [triggerNow]，
+     * 与 [setKeyword] 的 debounce 时机解耦（筛选"应用"是用户主动操作，应立即生效，不等待 debounce）。
+     */
+    fun setFilters(filters: GlobalSearchFilters) {
+        currentFilters = filters
+    }
+
     /**
      * 关键词变更入口。空串立即清空结果并取消所有在途 debounce；
      * 非空串等 [debounceMillis] 之后触发一次搜索。
      */
     fun setKeyword(value: String) {
         if (_state.value.keyword == value) return
-        _state.value = _state.value.copy(keyword = value)
+        // 关键词一变立即清空上一轮结果：否则 debounce 窗口（300ms）内 UI 会把旧关键词的
+        // 结果渲染在新关键词之下。isLoading/queryStarted 同时置位，让 UI 进入"搜索中"。
+        _state.value = _state.value.copy(
+            keyword = value,
+            isLoading = true,
+            queryStarted = true,
+            groups = emptyList(),
+            totalGroups = 0L,
+            hasMore = false,
+            errorCode = null,
+            errorMessage = null,
+            retryAfterSec = 0,
+        )
         debounceJob?.cancel()
-        if (value.isEmpty()) {
+        // 关键词为空 → 回到初始态，不发请求（见 [shouldRunSearch]：无关键词不返回任何结果）。
+        if (!shouldRunSearch(value)) {
             // 清空回到初始态，但保留 nextSequence 单调性
             _state.value = State()
             return
@@ -121,13 +150,34 @@ class GlobalSearchViewModel(
     }
 
     /**
-     * 显式强制触发（用户点击键盘搜索键、外部调用等）。跳过 debounce，
+     * 搜索门禁：**必须有关键词**。
+     *
+     * 这是产品上的明确决定：不输入关键词时不返回任何结果，筛选条件只用于收窄关键词搜索的
+     * 结果范围，不能单独作为查询条件。
+     *
+     * 服务端层面 L1 允许「无关键词 + 发送人/成员/频道」的组合
+     * （见 [GlobalSearchFilters.canTriggerL1]），但客户端刻意不暴露该能力：
+     * 那等于让用户无界浏览某人/某群的全部历史消息，结果量大且不是搜索框该承担的语义。
+     *
+     * 若后续要放开，改这一处为 `currentFilters.canTriggerL1(hasKeyword = keyword.isNotEmpty())`，
+     * 注意 L1 的触发门只认发送人/成员/频道——仅日期范围或消息类型会被服务端以
+     * 400 VALIDATION_ERROR 拒绝，不能无条件放行。
+     */
+    private fun shouldRunSearch(keyword: String): Boolean = keyword.isNotEmpty()
+
+    /**
+     * 显式强制触发（筛选"应用"、用户点击键盘搜索键、错误态重试等）。跳过 debounce，
      * 但仍会取消上一个 debounce job 保持串行。
+     * 无关键词时不发请求——筛选"应用"若在空搜索框下点击，等同于只记下条件、不出结果。
      */
     fun triggerNow() {
         val keyword = _state.value.keyword
-        if (keyword.isEmpty()) return
         debounceJob?.cancel()
+        if (!shouldRunSearch(keyword)) {
+            // 无关键词 → 回到空输入态，清掉可能残留的结果/错误
+            _state.value = State()
+            return
+        }
         triggerSearch(keyword)
     }
 
@@ -141,12 +191,21 @@ class GlobalSearchViewModel(
         val mySeq = ++nextSequence
         _state.value = _state.value.copy(
             isLoading = true,
+            queryStarted = true,
+            // 新一轮请求发起即清空旧结果：否则 Activity 侧任何「重新搜索前先清空列表」的尝试
+            // 都会被这次 state 更新用旧 groups 覆盖回去（isLoading=true 但 groups 原样保留），
+            // 导致 loading UI 被跳过，或旧结果和新结果短暂重叠显示。
+            groups = emptyList(),
             errorCode = null,
             errorMessage = null,
             retryAfterSec = 0,
             sequence = mySeq,
         )
-        val req = SearchGlobalGroupsReq(keyword = keyword, sequence = mySeq)
+        val req = SearchGlobalGroupsReq(
+            keyword = keyword,
+            sequence = mySeq,
+            filters = currentFilters.takeUnless { it.isEmpty() },
+        )
         searchCaller.call(req) { outcome -> handleResponse(mySeq, keyword, outcome) }
     }
 
@@ -157,12 +216,11 @@ class GlobalSearchViewModel(
     ) {
         // 乱序防护 1：本地已发出更新的请求 → 丢弃此响应
         if (reqSeq != nextSequence) return
-        // 乱序防护 2：keyword 已被用户清空 → 丢弃
-        if (_state.value.keyword.isEmpty()) return
-        // 乱序防护 3：keyword 已变（debounce 窗口内响应到达但用户已改词）→ 丢弃
+        // 乱序防护 2：keyword 已变（debounce 窗口内响应到达但用户已改词）→ 丢弃
         // 场景：setKeyword("foo") → seq=1 在飞；用户改 "bar" → state.keyword 立即更新但
         // ++nextSequence 要等 debounce 300ms 后 triggerSearch。foo 响应在此窗口回来时，
         // reqSeq(1)==nextSequence(1) 通过，此处 requestKeyword("foo")!=state.keyword("bar") → 丢弃。
+        // 不再单独判"keyword 为空即丢弃"：筛选态下 keyword 本就为空串，两边同为空时应正常落地。
         if (_state.value.keyword != requestKeyword) return
 
         if (outcome.ok) {

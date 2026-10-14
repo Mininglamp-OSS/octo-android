@@ -37,7 +37,7 @@ import okhttp3.ResponseBody;
 
 /**
  * 覆盖 {@link SearchGlobalBodyLimitInterceptor}：路径匹配 + Content-Length 快路径 +
- * chunked 慢路径 + 严格路径匹配（不误伤子路径）。
+ * chunked 慢路径 + 严格路径匹配（不误伤子路径）。L1 / L2 / 文件三个端点都应被拦。
  */
 public class SearchGlobalBodyLimitInterceptorTest {
 
@@ -148,16 +148,46 @@ public class SearchGlobalBodyLimitInterceptorTest {
     }
 
     @Test
-    public void similar_prefix_url_not_matched() throws IOException {
-        // 未接入的 _search_global_files 不该被这个拦截器覆盖（本 interceptor 明确不管它）
-        byte[] payload = new byte[(int) SearchGlobalBodyLimitInterceptor.MAX_SEARCH_BODY_BYTES + 100];
+    public void files_oversized_content_length_throws() {
+        // _search_global_files 已接入（SearchGlobalFilesService），与 L1/L2 同口径纳入上限。
+        byte[] payload = new byte[(int) SearchGlobalBodyLimitInterceptor.MAX_SEARCH_BODY_BYTES + 10];
+        Request request = req("https://example.com/v1/messages/_search_global_files");
+        Response response = ok(request, bodyWith(payload, payload.length));
+
+        try {
+            new SearchGlobalBodyLimitInterceptor().intercept(new FakeChain(request, response));
+            fail("expected IOException on oversized Content-Length");
+        } catch (IOException e) {
+            assertEquals(true, e.getMessage().contains("Content-Length"));
+        }
+    }
+
+    @Test
+    public void files_oversized_chunked_body_throws() {
+        // Content-Length 缺失 / 服务端说谎 → 走 peek 慢路径
+        byte[] payload = new byte[(int) SearchGlobalBodyLimitInterceptor.MAX_SEARCH_BODY_BYTES + 10];
+        Request request = req("https://example.com/v1/messages/_search_global_files");
+        Response response = ok(request, bodyWith(payload, -1));
+
+        try {
+            new SearchGlobalBodyLimitInterceptor().intercept(new FakeChain(request, response));
+            fail("expected IOException on oversized chunked body");
+        } catch (IOException e) {
+            assertEquals(true, e.getMessage().contains("exceeds"));
+        }
+    }
+
+    @Test
+    public void files_within_limit_passes_through() throws IOException {
+        String json = "{\"data\":[],\"pagination\":{\"has_more\":false,\"next_cursor\":\"\"}}";
+        byte[] payload = json.getBytes();
         Request request = req("https://example.com/v1/messages/_search_global_files");
         Response response = ok(request, bodyWith(payload, payload.length));
 
         Response out = new SearchGlobalBodyLimitInterceptor().intercept(new FakeChain(request, response));
 
-        // 不该被拦
-        assertEquals(payload.length, out.body().contentLength());
+        assertNotNull(out.body());
+        assertArrayEquals(payload, out.body().bytes());
     }
 
     @Test

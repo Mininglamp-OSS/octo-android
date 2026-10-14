@@ -876,6 +876,7 @@ public class WKIMUtils {
         Intent intent = new Intent(chatViewMenu.activity, ChatActivity.class);
         intent.putExtra("channelId", chatViewMenu.channelID);
         intent.putExtra("channelType", chatViewMenu.channelType);
+        intent.putExtra("from_search", chatViewMenu.fromSearch);
         WKConversationMsg conversationMsg = WKIM.getInstance().getConversationManager()
                 .getWithChannel(chatViewMenu.channelID, chatViewMenu.channelType);
         WKMsg msg = null;

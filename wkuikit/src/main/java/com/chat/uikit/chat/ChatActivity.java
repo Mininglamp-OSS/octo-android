@@ -3134,8 +3134,13 @@ public class ChatActivity extends SwipeBackActivity implements IConversationCont
                     // from_summary_detail：从智能总结详情页跳过来的"原消息"路径，
                     // 期望 back 时回详情页，而 goBackToList 会把 TabActivity (singleTask)
                     // reorder 到顶 → 系统清掉中间 List/Detail，用户落到上下文主页 → 行为错。
+                    // from_search：从全局搜索(GlobalActivity)/群内搜索(GroupDrillActivity)
+                    // 跳过来的命中消息，同理期望 back 回搜索结果页，而非被 goBackToList
+                    // 吞掉直接回会话列表。
                     boolean fromSummaryDetail = getIntent().getBooleanExtra("from_summary_detail", false);
+                    boolean fromSearch = getIntent().getBooleanExtra("from_search", false);
                     if (!fromSummaryDetail
+                            && !fromSearch
                             && channelType != WKChannelType.COMMUNITY_TOPIC
                             && com.chat.uikit.chat.ChatReuseNavigator.goBackToList(this)) {
                         return false;

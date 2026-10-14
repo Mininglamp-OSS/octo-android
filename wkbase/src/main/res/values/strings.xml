@@ -74,7 +74,7 @@
     <string name="no_relation_user">对方非好友关系，消息发送失败，确定重发吗？</string>
     <string name="no_relation_group">未在群内，消息发送失败，确定重发吗？</string>
     <string name="no_group_blacklist_noselect">该好友在群内黑名单内，不可勾选</string>
-    <string name="str_all">所有</string>
+    <string name="str_all">全部</string>
     <string name="messages_encryption">用户之间的消息将受到端对端加密保护</string>
     <string name="init_data">正在初始化数据</string>
     <string name="str_signal_decrypt_err">[消息解密失败，无法查看]</string>

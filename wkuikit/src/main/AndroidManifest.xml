@@ -118,6 +118,16 @@
         <activity android:name="com.chat.uikit.search.remote.drill.GroupDrillActivity"
             android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="stateVisible|adjustResize" />
+        <activity android:name="com.chat.uikit.search.remote.filter.FilterActivity"
+            android:theme="@style/FilterDialogTheme"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
+            android:windowSoftInputMode="stateHidden" />
+        <activity android:name="com.chat.uikit.search.remote.filter.FilterMemberPickerActivity"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
+            android:windowSoftInputMode="stateHidden" />
+        <activity android:name="com.chat.uikit.search.remote.filter.FilterChannelPickerActivity"
+            android:configChanges="screenSize|screenLayout|smallestScreenSize|orientation|keyboardHidden"
+            android:windowSoftInputMode="stateHidden" />
         <activity android:name="com.chat.uikit.chat.search.member.SearchWithMemberActivity" />
         <activity android:name="com.chat.uikit.chat.search.date.SearchWithDateActivity" />
         <activity android:name="com.chat.uikit.chat.search.image.SearchWithImgActivity" />

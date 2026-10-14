@@ -249,6 +249,26 @@ public class WKFileUtils {
     private static final String PARTIAL_DIR_NAME = ".partial";
 
     /**
+     * 本进程是否已有下载启动。由 Downloader.realDownload 置位。
+     *
+     * 启动期清扫（{@link #sweepStaleDownloadTmp}）只在尚无下载启动时才删
+     * {@code .partial/} 下的文件：Phase-B 的清扫是异步的，遍历到某个目录时那里
+     * 可能已有在途下载的 {@code .part}——unlink 后写入继续落在脱链 inode 上，
+     * 最终 rename 找不到路径而失败，用户看到的是"点了下载却失败"。保留目录正确
+     * 解决了误删合法 {@code .tmp} 附件的问题，但不区分"已废弃"与"正在写"的临时
+     * 文件，这个标志补上这一点。注意：该守卫只能缩小竞争窗口、不能消除
+     * （清扫遍历期间仍可能有下载启动）；彻底消除需要"清扫完成前不放行下载"
+     * 的启动屏障，属于启动时序改造，不在本次范围内。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean downloadStarted =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** 下载器启动任务时调用（Downloader.realDownload）。 */
+    public void markDownloadStarted() {
+        downloadStarted.set(true);
+    }
+
+    /**
      * 递归清扫下载目录下的残留临时文件：只删 {@code .partial/} 保留目录里的内容。
      *
      * <p>下载链路是 "写 .partial/<name>.part + rename 落地"：失败路径（dispatchFail）
@@ -263,6 +283,11 @@ public class WKFileUtils {
      */
     public void sweepStaleDownloadTmp(String dir) {
         if (TextUtils.isEmpty(dir)) return;
+        if (downloadStarted.get()) {
+            // 已有下载启动：放弃本次清扫，宁可留着残留也不冒险 unlink 在途 .part
+            Log.w("fileUtils", "sweepStaleDownloadTmp skipped: download already started");
+            return;
+        }
         File root = new File(dir);
         if (!root.exists() || !root.isDirectory()) return;
         File[] files = root.listFiles();

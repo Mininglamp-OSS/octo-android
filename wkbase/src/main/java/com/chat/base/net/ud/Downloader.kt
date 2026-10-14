@@ -148,20 +148,57 @@ internal class Downloader private constructor() {
         val task = Task(url = taskUrl, request = request, file = mFile)
         // 同 (url, path) 已在下载中则复用在途任务，本次回调追加为它的订阅者
         // （参照 iOS WKMergeForwardDetailCell 的 downloadingMessages 守卫）。否则双击
-        // 文件行会起两个任务写同一个 .tmp，两个 FileOutputStream 交错写入产生错乱文件。
-        val running = mDownloadTasks.putIfAbsent(taskKey, task)
-        if (running != null) {
+        // 文件行会起两个任务写同一个 .part，两个 FileOutputStream 交错写入产生错乱文件。
+        //
+        // 订阅必须走 trySubscribe 而不是 addCallback：取任务与加订阅是两个时刻，中间
+        // 任务可能已经终态并清空了订阅列表，此时 addCallback 追加的回调永远不会被读取
+        // （B-2：进度条永久卡住）。trySubscribe 在同一把任务锁内判定——入队成功返回
+        // null，已终态则返回终态结果由这里立即回放。
+        while (true) {
+            val running = mDownloadTasks.putIfAbsent(taskKey, task)
+            if (running == null) {
+                // 本次调用拿到了新任务的所有权
+                task.trySubscribe(callback)
+                realDownload(task)
+                return
+            }
             Log.d(TAG, "$taskUrl is already downloading, join in-flight task")
-            running.addCallback(callback)
+            val terminal = running.trySubscribe(callback)
+            if (terminal == null) return  // 已成为在途任务的订阅者，等它通知
+            // 已终态：该任务马上/已经被摘表。回放终态给本次调用方，不再起新任务——
+            // 成功时文件已落地，调用方 onComplete 里会自行校验 exists()。
+            replayTerminal(running, terminal, callback)
             return
         }
-        task.addCallback(callback)
-        realDownload(task)
     }
 
     private fun taskKey(url: String, file: File): String = url + "#" + file.absolutePath
 
+    /**
+     * 把一个已终态任务的结果回放给迟到的订阅者（只通知它一个，不碰该任务的其他人）。
+     *
+     * 必须 post 到主线程：与正常终态通知同一线程语义，上层 UI 回调（隐藏进度条、
+     * toast、打开文件）都假定自己在主线程。
+     */
+    private fun replayTerminal(
+        mTask: Task,
+        terminal: Task.Terminal,
+        callback: Triple<OnDownload?, OnComplete?, OnFail?>
+    ) {
+        Handler(Looper.getMainLooper()).post {
+            try {
+                when (terminal) {
+                    is Task.Terminal.Success -> callback.second?.invoke(mTask.url, terminal.file)
+                    is Task.Terminal.Failure -> callback.third?.invoke(mTask.url, terminal.msg)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "replay terminal callback error: ${e.message}")
+            }
+        }
+    }
+
     private fun realDownload(mTask: Task) {
+        com.chat.base.utils.WKFileUtils.getInstance().markDownloadStarted()
         mOkHttpClient
             .newCall(mTask.request).apply {
                 mTask.call = this
@@ -243,16 +280,11 @@ internal class Downloader private constructor() {
         cleanupTmpFile(mTask)
         mTask.status = DownloadStatus.ERROR
         mTask.errorMsg = msg
-        // 先按身份把任务从表里摘掉，再在同一把 callbacks 锁内快照 + 清空。
-        // 顺序颠倒会留下一个窗口：任务已终态但仍在表里，此时 download() 的
-        // putIfAbsent 命中它并 addCallback，新订阅者再也不会被任何人读取——
-        // 进度条永久卡住（P2-4）。
+        // 置终态 + 取走订阅者（同一把任务锁内原子完成）。此刻之后任何 trySubscribe
+        // 都会走回放分支，不会有订阅者落进这个再也不被读取的列表（B-2）。
+        val subscribers = mTask.markTerminalAndDrain(Task.Terminal.Failure(msg))
+        // 按身份移除：同 (url, path) 若已被新任务重占（极端时序），不能误删它的条目
         mDownloadTasks.remove(taskKey(mTask.url, mTask.file), mTask)
-        val subscribers = synchronized(mTask.callbacks) {
-            val snapshot = mTask.callbacks.toList()
-            mTask.callbacks.clear()
-            snapshot
-        }
         Handler(Looper.getMainLooper()).post {
             for (c in subscribers) {
                 try {
@@ -343,14 +375,10 @@ internal class Downloader private constructor() {
                             break
                         }
                     }
-                    // 见 dispatchFail 的同款说明：先摘表再快照 + 清空，否则终态窗口里新加入的
-                    // 订阅者会被静默丢弃（P2-4）。
+                    // 见 dispatchFail：置终态 + 取走订阅者在同一把任务锁内原子完成，迟到的
+                    // trySubscribe 会拿到 Success 回放而不是落进空列表（B-2）。
+                    val subscribers = mTask.markTerminalAndDrain(Task.Terminal.Success(finalFile))
                     mDownloadTasks.remove(taskKey(mTask.url, mTask.file), mTask)
-                    val subscribers = synchronized(mTask.callbacks) {
-                        val snapshot = mTask.callbacks.toList()
-                        mTask.callbacks.clear()
-                        snapshot
-                    }
                     Handler(Looper.getMainLooper()).post {
                         for (c in subscribers) {
                             try {

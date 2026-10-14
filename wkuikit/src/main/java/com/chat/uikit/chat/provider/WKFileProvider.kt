@@ -179,7 +179,7 @@ class WKFileProvider : WKChatBaseProvider() {
         )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists() && isValidCache(file, fileContent, fileName)) {
+        if (file.exists() && isValidCache(file, fileContent, uiChatMsgItemEntity.wkMsg.clientMsgNO)) {
             openFile(file, fileContent.name)
             return
         }
@@ -206,7 +206,7 @@ class WKFileProvider : WKChatBaseProvider() {
                     if (downloadedFile.exists()) {
                         // 标记为"本次进程内已完整落地"，供 isValidCache 在发送方上报
                         // size 不准时放行，避免陷入每次点击都重下的死循环
-                        markDownloadVerified(downloadedFile, fileName)
+                        markDownloadVerified(downloadedFile, uiChatMsgItemEntity.wkMsg.clientMsgNO)
                         // 回写 localPath 并持久化，下次点击直接命中本地文件。
                         // 必须走 updateContentLocalPath（merge 单键），不能用
                         // updateContentAndRefresh(model)——后者按 encodeMsg() 整列覆盖
@@ -241,61 +241,98 @@ class WKFileProvider : WKChatBaseProvider() {
     }
 
     /** 见 [isValidFileCache]。 */
-    private fun isValidCache(file: File, fileContent: WKFileContent, cacheKey: String? = null): Boolean =
-        isValidFileCache(file, fileContent.size, cacheKey)
+    private fun isValidCache(file: File, fileContent: WKFileContent, identity: String? = null): Boolean =
+        isValidFileCache(file, fileContent.size, identity)
 
     companion object {
         private const val TAG = "WKFileProvider"
 
         /**
-         * 本次进程内已完整下载并 rename 落地的记录：路径 → (产生该文件的缓存键, 落地字节数)。
+         * 本次进程内已完整下载并 rename 落地的记录：路径 → (产生该文件的**原始身份串**, 落地字节数)。
          *
-         * 键里必须含缓存键而不只是路径+长度：路径只能证明"这里完整落过一个文件"，
-         * 长度只能证明"落的那次就是这么长"，两者都证明不了"落的就是当前这条消息的
-         * 文件"。两条消息映射到同一路径时（buildCacheFileName 的 "unknown" 兜底、
-         * 或退化的转发键），B 消息若 size 恰好等于已落地长度就会把 A 的字节当成自己
-         * 的缓存打开。要求请求方的缓存键与落地时的键一致即可排除。
+         * 记身份串而不是磁盘文件名：磁盘名是身份经 SHA-256（新路径）或经 sanitize+截断
+         * （旧 clientMsgNO 路径）派生的结果。把派生结果当校验键，在派生不是单射的场合
+         * 等于没有校验——两条消息塌到同一磁盘名时，它们的"校验键"也相同，A 的字节会被
+         * B 当成有效缓存（B-1）。身份串保留原始字节，才能真正区分。
          *
-         * LruCache 限容 256 条：原先的 ConcurrentHashMap 随进程生命周期无界增长。
+         * LruCache 限容 256 条，避免随进程生命周期无界增长。
          */
-        private class VerifiedEntry(val cacheKey: String, val length: Long)
+        private class VerifiedEntry(val identity: String, val length: Long)
 
         private val verifiedDownloads = object : android.util.LruCache<String, VerifiedEntry>(256) {}
 
-        /** 记录一个已完整下载并落地的 (路径, 缓存键, 字节数)（下载成功回调里调用）。 */
+        /**
+         * 记录一个已完整下载并落地的 (路径, 身份串, 字节数)（下载成功回调里调用）。
+         *
+         * @param identity 产生该文件的原始身份串。必须与后续 [isValidFileCache] 传入的
+         *                 身份串同源（转发路径传 WKCacheKeys.entryIdentity 的结果，普通
+         *                 聊天路径传 clientMsgNO）。为 null 时退化为 file.name——仅给
+         *                 没有身份可绑的历史调用点兜底，新代码不要依赖。
+         */
         @JvmStatic
         @JvmOverloads
-        fun markDownloadVerified(file: File, cacheKey: String? = null) {
-            val key = cacheKey ?: file.name
+        fun markDownloadVerified(file: File, identity: String? = null) {
+            val id = identity ?: file.name
             synchronized(verifiedDownloads) {
-                verifiedDownloads.put(file.absolutePath, VerifiedEntry(key, file.length()))
+                verifiedDownloads.put(file.absolutePath, VerifiedEntry(id, file.length()))
             }
         }
 
         /**
-         * 缓存有效性：`size > 0` 时要求 `file.length() == size`，防止中断残留的半截文件
-         * 被命中；`size <= 0`（服务端未下发）退化为仅判断存在。
+         * 缓存有效性。判定顺序是本函数的正确性核心，不可调换：
          *
-         * 例外：本进程内已完整下载落地的 (路径, 字节数) 完全匹配时放行。`size` 由发送方
-         * 上报（ChatActivity / ShareReceiveActivity / ChatPanelManager），一旦上报不准，
-         * 严格相等会让这条消息陷入"每次点击都重下、下完又因不等而不认"的死循环
-         * （onSuccess 只校验 exists() 所以仍会打开，但下次点击重复整个过程）。由于下载
-         * 已改为写 .tmp + 完成后 rename，最终路径上的文件是本次进程完整收流的结果，
-         * 以"实际落地的字节数"为准比以"上报的 size"为准更可靠；同时因为还比对了长度，
-         * 该例外不会把键冲突场景下"别人的文件"误判为有效缓存。
+         * 1. 该路径有本进程的落地记录时：**先比身份**。身份不符即判无效（返回 false），
+         *    不管 size 是否相等。旧实现把 `length == size` 的快速返回放在身份检查之前，
+         *    于是两条消息塌到同一路径、且 B 上报的 size 恰等于 A 的落地长度时，B 直接
+         *    拿到 A 的字节（B-1 的等长分支）。身份相符时再要求磁盘长度与落地长度一致
+         *    （防落地后被外部改动）。
+         * 2. 没有落地记录时（冷启动后的历史缓存）：退化为 size 校验——`size > 0` 要求
+         *    `file.length() == size`，`size <= 0`（服务端未下发）仅判存在。此时没有任何
+         *    身份信息可比，这是已知的残留风险面，但不引入新的错配：路径本身已由
+         *    SHA-256 身份派生（见 [buildCacheFileNameForIdentity]），不同身份不同路径。
+         *
+         * @param identity 请求方的原始身份串；null 时退化为 file.name（历史调用点兜底）
          */
         @JvmStatic
         @JvmOverloads
-        fun isValidFileCache(file: File, size: Long, cacheKey: String? = null): Boolean {
-            if (size <= 0L) return true
+        fun isValidFileCache(file: File, size: Long, identity: String? = null): Boolean {
             val length = file.length()
-            if (length == size) return true
-            // 例外放行必须同时满足：本进程内在该路径完整落地过、落地长度与当前磁盘
-            // 长度一致、且落地时的缓存键就是本次请求的键。缺最后一条就会在键冲突时
-            // 把别人的字节当成本条消息的有效缓存（P2-2）。
-            val requestKey = cacheKey ?: file.name
+            val requestIdentity = identity ?: file.name
             val entry = synchronized(verifiedDownloads) { verifiedDownloads.get(file.absolutePath) }
-            return entry != null && entry.length == length && entry.cacheKey == requestKey
+            if (entry != null) {
+                // 有落地记录：身份是第一道门，等长不能绕过它
+                if (entry.identity != requestIdentity) return false
+                return entry.length == length
+            }
+            if (size <= 0L) return true
+            return length == size
+        }
+
+        /**
+         * 按"完整原始身份"派生磁盘缓存文件名：`<SHA-256(identity)>.<ext>`。
+         *
+         * 与 [buildCacheFileName] 的区别是**第一个参数不再是会被清洗/截断的键**，而是
+         * 原始身份串（见 WKCacheKeys.entryIdentity）。basename 取身份串的 SHA-256 全量
+         * 十六进制（64 字符，只含 [0-9a-f]），因此清洗与截断都不会再破坏唯一性——这是
+         * B-1 的修复点：旧路径先把 messageID 的 `:` `?` 等字符统统替换成 `_`、再截到
+         * 64 字符，`m:a` 与 `m?a` 塌成同一个磁盘名，先下载的那个的字节会被另一条消息
+         * 当成缓存打开。
+         *
+         * 扩展名仍取自展示名后缀（与 [buildCacheFileName] 同源同理由：预览类型/MIME/
+         * 分享标题都按展示名后缀判定），并同样过 sanitize + 字节截断。
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun buildCacheFileNameForIdentity(
+            identity: String,
+            extension: String?,
+            displayName: String? = null
+        ): String {
+            val base = com.chat.base.utils.WKCacheKeys.basenameForIdentity(identity)
+            val fromDisplay = displayName?.substringAfterLast('.', "")
+            val preferred = if (!fromDisplay.isNullOrEmpty()) fromDisplay else extension
+            val ext = sanitizePathSegment(preferred?.removePrefix(".")).ifEmpty { "dat" }
+            return truncateToByteLength("$base.$ext", MAX_FILENAME_BYTES)
         }
 
         /**
@@ -356,14 +393,21 @@ class WKFileProvider : WKChatBaseProvider() {
             val base = if (dot > 0) name.substring(0, dot) else name
             val extBytes = ext.toByteArray(Charsets.UTF_8).size
             val finalExt = if (extBytes > MAX_EXT_BYTES) {
-                // 扩展名本身超长（对端可构造）：截到 16 字节并保底可读
+                // 扩展名本身超长（对端可构造）：截到 16 字节并保底可读。
+                // 按 code point 而不是 UTF-16 Char 推进——逐 Char 会在 emoji 的代理对中间
+                // 断开，产出半个字符的非法 UTF-8 序列（与上方"按 code point 边界"的契约矛盾）。
                 var s = ""
                 var used = 0
-                for (ch in ext) {
-                    val b = ch.toString().toByteArray(Charsets.UTF_8).size
+                var j = 0
+                while (j < ext.length) {
+                    val cp = ext.codePointAt(j)
+                    val cc = Character.charCount(cp)
+                    val cpStr = ext.substring(j, j + cc)
+                    val b = cpStr.toByteArray(Charsets.UTF_8).size
                     if (used + b > MAX_EXT_BYTES) break
-                    s += ch
+                    s += cpStr
                     used += b
+                    j += cc
                 }
                 if (s.isEmpty()) ".dat" else s
             } else {

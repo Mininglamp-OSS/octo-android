@@ -512,102 +512,84 @@ class ChatMultiForwardDetailAdapter(
     }
 
     /**
-     * 给 list 里每个条目算出 bundle 作用域缓存键并缓存。
+     * 给 list 里每个条目算出**原始身份串**并缓存（UI 下标 → identity）。
      *
-     * forward/ 目录全局共享，键的作用域必须覆盖"全局"，分解为两层：
-     * bundle 层（父消息 clientMsgNO，或嵌套转发时的内容哈希）× 条目层（messageID，
-     * 缺失时该 bundle 内的下标）。两层任何一层单独使用都不够：clientMsgNO 对子消息
-     * 不存在（见 [forwardFileCacheKey] 注释），单靠下标只在单屏内唯一。
+     * 注意存的是身份串、不是磁盘名：磁盘名在点击时由
+     * WKFileProvider.buildCacheFileNameForIdentity 对身份串做 SHA-256 派生。旧实现
+     * 在这里就把 messageID 过了 sanitizeScope（`:` `?` 等→`_`、截断 64 字符）并把
+     * 结果当缓存键与校验键，该变换不是单射：`m:a` 与 `m?a` 塌成同一个键，两条不同
+     * 子消息映射到同一磁盘路径且校验也无法区分（B-1）。现在清洗只发生在派生出的
+     * basename 之后——而 SHA-256 的输出只含 [0-9a-f]，本就无需清洗。
+     *
+     * 作用域仍是两层：bundle 层（父消息 clientMsgNO，或嵌套转发时的 payload 摘要）
+     * × 条目层（messageID，缺失时 bundle 内下标，两者走不同命名空间前缀）。
      */
     private fun buildBundleScopedKeys() {
-        // 嵌套转发（forward_content_json 进入）没有父 DB 行，用父内容哈希做作用域：
+        // 嵌套转发（forward_content_json 进入）没有父 DB 行，用 payload 摘要做作用域：
         // 同一转发内容在两个会话里命中同一缓存是正确行为（字节相同）。
         val scope = if (!parentClientMsgNO.isNullOrEmpty()) {
-            "b_${sanitizeScope(parentClientMsgNO)}"
+            "b:$parentClientMsgNO"
         } else {
-            "h_${payloadDigest()}"
+            "h:${payloadDigest()}"
         }
         bundleScopedKeys.clear()
         var fileIndex = 0
         for (i in list.indices) {
             val item = list[i]
             val msg = item.msg ?: continue
-            val messageID = msg.messageID
-            val entry = if (!TextUtils.isEmpty(messageID)) {
-                "${scope}_${sanitizeScope(messageID!!)}"
-            } else {
-                // messageID 缺失（发送中/发送失败的子消息 encode 后为空）：回落到
-                // bundle 内下标。下标在 bundle 作用域内稳定，不再跨 bundle 冲突。
-                "${scope}_i$fileIndex"
-            }
+            bundleScopedKeys[i] = com.chat.base.utils.WKCacheKeys.entryIdentity(
+                scope, msg.messageID, fileIndex
+            )
             fileIndex++
-            bundleScopedKeys[i] = entry
         }
     }
 
-    /** 作用域/键段清洗：与 WKFileProvider.sanitizePathSegment 同级的防护，这里防超长与分隔符。 */
-    private fun sanitizeScope(raw: String): String {
-        val cleaned = raw.replace(Regex("[\\\\/:*?\"<>| ]"), "_")
-        return if (cleaned.length > 64) cleaned.substring(0, 64) else cleaned
-    }
-
     /**
-     * 嵌套转发的 bundle 作用域摘要：对 list 里每条子消息的稳定内容字段做 SHA-256。
-     *
-     * 用 msg.content（WKMultiForwardContent.decodeMsg 从 payload JSON 原样赋值的
-     * 原始字符串）而不是 encodeMsg()：content 跨 decode 逐字节稳定，且不依赖
-     * Android 的 JSONObject/TextUtils，可在 JVM 单测里断言。配合 timestamp /
-     * messageID / fromUID 构成条目序列指纹——同一转发内容在不同会话得到同一
-     * 作用域（字节相同，共享缓存是正确的），不同内容必然不同。
+     * 嵌套转发的 bundle 作用域摘要。算法实现在
+     * [com.chat.base.utils.WKCacheKeys.payloadDigest]（纯 Java、无 Android 依赖），
+     * 这里只做字段提取——生产与 JVM 单测调用同一份实现，不存在"测试里复制一份
+     * 算法、改一边忘另一边静默失去覆盖"的漂移。
      */
     private fun payloadDigest(): String {
-        val sb = StringBuilder()
+        val ids = ArrayList<String>()
+        val times = ArrayList<Long>()
+        val uids = ArrayList<String>()
+        val contents = ArrayList<String>()
         for (item in list) {
             val msg = item.msg ?: continue
-            sb.append(msg.messageID ?: "").append('')
-                .append(msg.timestamp).append('')
-                .append(msg.fromUID ?: "").append('')
-                .append(msg.content ?: "").append('')
+            ids.add(msg.messageID ?: "")
+            times.add(msg.timestamp)
+            uids.add(msg.fromUID ?: "")
+            contents.add(msg.content ?: "")
         }
-        return try {
-            val md = java.security.MessageDigest.getInstance("SHA-256")
-            val bytes = md.digest(sb.toString().toByteArray(Charsets.UTF_8))
-            val hex = StringBuilder()
-            for (i in 0 until 8) hex.append(String.format("%02x", bytes[i]))
-            hex.toString()
-        } catch (e: Exception) {
-            // SHA-256 在 Android/JVM 上必然可用；兜底用内容字符串的 String.hashCode
-            // （内容哈希，不是身份哈希，仍跨进程稳定）
-            Integer.toHexString(sb.toString().hashCode())
-        }
+        return com.chat.base.utils.WKCacheKeys.payloadDigest(ids, times, uids, contents)
     }
 
     /**
-     * 合并转发子消息的稳定缓存键（bundle 作用域 × 条目）。
+     * 合并转发子消息的**原始身份串**（bundle 作用域 × 条目）。
      *
      * 不能用 `item.msg.clientMsgNO`：子消息由 `WKMultiForwardContent.decodeMsg` 反序列化
      * 得来，decodeMsg 从不赋值 clientMsgNO，它来自 `WKMsg` 构造函数的
      * `createClientMsgNO()` 兜底，是个每次 decode 都重新生成的随机 UUID。
      *
-     * messageID 跨 decode 稳定且全局唯一，但可能缺失（发送中/发送失败的消息
-     * encode 时 messageID 为 null，JSONObject.put 移除该键）；decodeMsg 已对
-     * JSON null 加 isNull 守卫（对齐 users[] 的既有写法），缺失时按 bundle 内
-     * 顺序取下标。单层下标键曾在全局目录下让所有 bundle 的第 N 条塌到同一路径
-     * （跨会话内容互串），所以下标永远不单独使用，必须挂在 bundle 作用域之下。
+     * messageID 跨 decode 稳定且全局唯一，但可能缺失（发送中/发送失败的消息 encode 时
+     * messageID 为 null）；缺失时按 bundle 内顺序取下标，并由 WKCacheKeys.entryIdentity
+     * 用 `ix:` 前缀与 `id:` 命名空间隔开。下标永远不单独使用，必须挂在 bundle 作用域之下。
      */
     private fun forwardFileCacheKey(item: ChatMultiForwardEntity): String {
         val index = list.indexOf(item)
         bundleScopedKeys[index]?.let { return it }
-        // 理论兜底：映射里查不到（adapter 数据被整体替换后未重建映射）。不能用
-        // System.identityHashCode——那是每次进程/每个对象都变的身份哈希，缓存永不
-        // 命中且 forward/ 目录无界增长（P1-1）。改用条目内容摘要，跨进程稳定。
+        // 理论兜底：映射里查不到（adapter 数据被整体替换后未重建映射）。用该条目自身
+        // 内容字段的全量摘要做独立作用域——跨进程稳定，且不与任何 bundle 作用域撞车。
         val msg = item.msg
-        val raw = (msg?.messageID ?: "") + "" + (msg?.timestamp ?: 0L) +
-                "" + (msg?.fromUID ?: "") + "" + (msg?.content ?: "")
-        return "f_" + Integer.toHexString(raw.hashCode())
+        val raw = com.chat.base.utils.WKCacheKeys.sha256Hex(
+            (msg?.messageID ?: "") + "\u001F" + (msg?.timestamp ?: 0L) +
+                    "\u001F" + (msg?.fromUID ?: "") + "\u001F" + (msg?.content ?: "")
+        )
+        return com.chat.base.utils.WKCacheKeys.entryIdentity("f:$raw", msg?.messageID, index)
     }
 
-    private fun handleForwardFileClick(cacheKey: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
+    private fun handleForwardFileClick(identity: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
         // 缓存键不能用 item.msg.clientMsgNO：合并转发的子消息是 WKMultiForwardContent
         // .decodeMsg 的运行时反序列化产物，decodeMsg 从不赋值 clientMsgNO，它是 WKMsg
         // 构造函数兜底生成的随机 UUID——每次打开详情页都变，既不唯一也查不到 DB 行。
@@ -615,14 +597,16 @@ class ChatMultiForwardDetailAdapter(
         // 覆盖范围内）。这里改用调用处传入的稳定键（messageID，缺失时回落下标复合键）。
         val downloadDir = WKConstants.chatDownloadFileDir + "forward/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        val fileName = WKFileProvider.buildCacheFileName(
-            cacheKey,
+        // 磁盘名 = SHA-256(identity) + 展示名后缀。identity 原样进摘要，不经任何
+        // 字符替换与截断——这是 B-1 的修复点，详见 WKCacheKeys 的类注释。
+        val fileName = WKFileProvider.buildCacheFileNameForIdentity(
+            identity,
             fileContent.extension,
             fileContent.name
         )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists() && WKFileProvider.isValidFileCache(file, fileContent.size, fileName)) {
+        if (file.exists() && WKFileProvider.isValidFileCache(file, fileContent.size, identity)) {
             openForwardFile(file, fileContent.name)
             return
         }
@@ -647,7 +631,7 @@ class ChatMultiForwardDetailAdapter(
                     val downloadedFile = File(filePath)
                     if (downloadedFile.exists()) {
                         // 标记已完整落地，供 isValidFileCache 在发送方上报 size 不准时放行
-                        WKFileProvider.markDownloadVerified(downloadedFile, fileName)
+                        WKFileProvider.markDownloadVerified(downloadedFile, identity)
                         // 这里刻意不回写 localPath / 不调 updateContentAndRefresh：合并转发
                         // 的子消息在 message 表里没有自己的行（它只是父消息 content 里的一个
                         // payload 条目），按任何键去 UPDATE 都匹配不到行，是静默 no-op。

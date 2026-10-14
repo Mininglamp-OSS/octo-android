@@ -3,6 +3,7 @@ package com.chat.uikit.chat.adapter;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
+import com.chat.base.utils.WKCacheKeys;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.enity.ChatMultiForwardEntity;
 import com.xinbida.wukongim.entity.WKMsg;
@@ -10,8 +11,6 @@ import com.xinbida.wukongim.entity.WKMsg;
 import org.json.JSONObject;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,8 +24,8 @@ import java.util.List;
  * 2) payload 不同必然得到不同摘要。
  *
  * 注：不直接构造 ChatMultiForwardDetailAdapter —— BaseMultiItemQuickAdapter 的
- * 构造依赖 Android framework，在 returnDefaultValues 的 JVM 单测里不可用。这里
- * 测的是 adapter 内 payloadDigest() 的等价算法，两边必须同步修改。
+ * 构造依赖 Android framework，在 returnDefaultValues 的 JVM 单测里不可用。
+ * 摘要走生产 WKCacheKeys.payloadDigest，与 adapter 同一份实现。
  */
 public class ChatMultiForwardDetailKeyTest {
 
@@ -52,22 +51,21 @@ public class ChatMultiForwardDetailKeyTest {
         assertNotEquals(digest(buildList(PAYLOAD_A)), digest(buildList(PAYLOAD_B)));
     }
 
-    /** 等价于 ChatMultiForwardDetailAdapter.payloadDigest()，两边必须同步。 */
+    /** 调用生产 WKCacheKeys.payloadDigest —— 不再复制算法，生产改动会反映到这里。 */
     private static String digest(List<ChatMultiForwardEntity> list) throws Exception {
-        StringBuilder sb = new StringBuilder();
+        List<String> ids = new ArrayList<>();
+        List<Long> times = new ArrayList<>();
+        List<String> uids = new ArrayList<>();
+        List<String> contents = new ArrayList<>();
         for (ChatMultiForwardEntity item : list) {
             WKMsg msg = item.msg;
             if (msg == null) continue;
-            sb.append(msg.messageID == null ? "" : msg.messageID).append('')
-              .append(msg.timestamp).append('')
-              .append(msg.fromUID == null ? "" : msg.fromUID).append('')
-              .append(msg.content == null ? "" : msg.content).append('');
+            ids.add(msg.messageID);
+            times.add(msg.timestamp);
+            uids.add(msg.fromUID);
+            contents.add(msg.content);
         }
-        byte[] bytes = MessageDigest.getInstance("SHA-256")
-                .digest(sb.toString().getBytes(StandardCharsets.UTF_8));
-        StringBuilder hex = new StringBuilder();
-        for (int i = 0; i < 8; i++) hex.append(String.format("%02x", bytes[i]));
-        return hex.toString();
+        return WKCacheKeys.payloadDigest(ids, times, uids, contents);
     }
 
     private static List<ChatMultiForwardEntity> buildList(String json) throws Exception {

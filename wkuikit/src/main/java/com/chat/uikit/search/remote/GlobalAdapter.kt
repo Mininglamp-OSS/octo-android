@@ -21,15 +21,20 @@ import android.os.Build
 import android.text.Html
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
+import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import com.chad.library.adapter.base.BaseMultiItemQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.chat.base.msgitem.WKContentType
+import com.chat.base.search.channel.Rfc3339
 import com.chat.base.space.SpaceFilter
 import com.chat.base.ui.components.AvatarView
 import com.chat.base.utils.WKTimeUtils
 import com.chat.uikit.R
+import com.chat.uikit.chat.provider.WKFileProvider
 import com.xinbida.wukongim.entity.WKChannelType
 
 class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
@@ -40,6 +45,8 @@ class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
         addItemType(2, R.layout.item_global_message_layout)
         addItemType(3, R.layout.item_global_search_layout)
         addItemType(4, R.layout.item_global_message_layout)
+        addItemType(DataVO.FILE, R.layout.item_channel_search_file)
+        addItemType(DataVO.MORE, R.layout.item_global_more_layout)
     }
 
     override fun convert(holder: BaseViewHolder, item: DataVO) {
@@ -95,6 +102,36 @@ class GlobalAdapter : BaseMultiItemQuickAdapter<DataVO, BaseViewHolder>() {
             val contentTv = holder.getView<TextView>(R.id.contentTv)
             contentTv.text = highlightKeyword(item.text, item.keyword)
             holder.setText(R.id.timeTv, "")
+        } else if (item.itemType == DataVO.FILE) {
+            val hit = item.fileHit!!
+            val iconIv = holder.getView<ImageView>(R.id.fileTagIv)
+            WKFileProvider.setFileIcon(iconIv, hit.file_ext, hit.file_name)
+
+            val nameTv = holder.getView<TextView>(R.id.nameTv)
+            val raw = hit.file_name
+            if (raw.contains("<mark>")) {
+                val html = raw.replace("<mark>", "<font color=#7761F4>").replace("</mark>", "</font>")
+                nameTv.text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
+                } else {
+                    @Suppress("DEPRECATION") Html.fromHtml(html)
+                }
+            } else {
+                nameTv.text = raw
+            }
+
+            val sizeTv = holder.getView<TextView>(R.id.sizeTv)
+            sizeTv.text = WKFileProvider.formatFileSize(hit.file_size_bytes)
+
+            val senderTv = holder.getView<TextView>(R.id.senderTv)
+            senderTv.text = hit.sender_name.orEmpty()
+            senderTv.visibility = if (TextUtils.isEmpty(hit.sender_name)) View.GONE else View.VISIBLE
+
+            val timeTv = holder.getView<TextView>(R.id.timeTv)
+            val epochSec = Rfc3339.toEpochSeconds(hit.sent_at)
+            timeTv.text = if (epochSec > 0) WKTimeUtils.getInstance().getTimeString(epochSec * 1000) else ""
+        } else if (item.itemType == DataVO.MORE) {
+            holder.setText(R.id.moreTv, item.text)
         }
     }
 

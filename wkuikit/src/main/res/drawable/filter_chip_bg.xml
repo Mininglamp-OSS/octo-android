@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 筛选 chip 条胶囊背景，主题色浅色填充，圆角=半高(32dp 高度配 16dp 圆角)。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#1A7761F4" />
+    <corners android:radius="16dp" />
+</shape>

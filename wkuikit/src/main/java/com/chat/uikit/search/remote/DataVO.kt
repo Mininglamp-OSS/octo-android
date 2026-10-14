@@ -19,6 +19,7 @@ package com.chat.uikit.search.remote
 import com.chad.library.adapter.base.entity.MultiItemEntity
 import com.chat.base.entity.GlobalChannel
 import com.chat.base.entity.GlobalMessage
+import com.chat.base.search.channel.dto.FileHit
 
 class DataVO(
     val type: Int,
@@ -27,7 +28,11 @@ class DataVO(
     val text: String,
     val keyword: String = "",
     val messageCount: Int = 0,
-    val orderSeq: Long = 0
+    val orderSeq: Long = 0,
+    /** [FILE] 专用：全局搜索"全部"页文件段的一条命中。 */
+    val fileHit: FileHit? = null,
+    /** [MORE] 专用：点击后要切换到的分类 tab（对应 [GlobalActivity] 的 TAB_* 常量）。 */
+    val jumpTab: Int = -1,
 ) :
     MultiItemEntity {
 
@@ -41,5 +46,7 @@ class DataVO(
         const val MESSAGE: Int = 2
         const val SEARCH: Int = 3
         const val LOCAL_MSG: Int = 4
+        const val FILE: Int = 5
+        const val MORE: Int = 6
     }
 }

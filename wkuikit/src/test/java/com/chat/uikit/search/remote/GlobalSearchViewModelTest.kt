@@ -20,6 +20,8 @@ import com.chat.base.search.channel.ChannelSearchOutcome
 import com.chat.base.search.channel.ChannelSearchUiAction
 import com.chat.base.search.channel.dto.Pagination
 import com.chat.base.search.channel.dto.SearchErrorCode
+import com.chat.base.search.global.dto.GlobalChannelRef
+import com.chat.base.search.global.dto.GlobalSearchFilters
 import com.chat.base.search.global.dto.GroupBucket
 import com.chat.base.search.global.dto.GroupsResult
 import com.chat.base.search.global.dto.SearchGlobalGroupsReq
@@ -337,6 +339,105 @@ class GlobalSearchViewModelTest {
         vm.triggerNow()
         advanceUntilIdle()
         assertTrue(caller.pending.isEmpty())
+    }
+
+    // ---------- 无关键词不搜索 ----------
+
+    /**
+     * 产品决定：不输入关键词不返回任何结果。
+     * 即便 filters 满足服务端 L1 的触发门（发送人/成员/频道），客户端也不发请求。
+     */
+    @Test
+    fun `filters alone do not trigger search without keyword`() = runTest {
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        for (filters in listOf(
+            GlobalSearchFilters(senderIds = listOf("u1")),
+            GlobalSearchFilters(memberUids = listOf("u1")),
+            GlobalSearchFilters(channelIds = listOf(GlobalChannelRef("c1", 2))),
+            GlobalSearchFilters(sentAtFrom = "2026-01-01"),
+            GlobalSearchFilters(contentTypes = listOf(1)),
+        )) {
+            vm.setFilters(filters)
+            vm.triggerNow()
+            advanceUntilIdle()
+        }
+
+        assertTrue("无关键词时任何筛选组合都不应发请求", caller.pending.isEmpty())
+        assertFalse("未发起请求 → 仍是空输入态", vm.state.value.queryStarted)
+    }
+
+    @Test
+    fun `clearing keyword stops searching even with filters active`() = runTest {
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        vm.setFilters(GlobalSearchFilters(senderIds = listOf("u1")))
+        vm.setKeyword("hello"); tick(300L)
+        caller.completeAt(0, resp(seq = 1L, groups = listOf(bucket("g1"))))
+        advanceUntilIdle()
+
+        vm.setKeyword(""); tick(300L)
+        assertEquals("清空关键词后不应再发请求", 1, caller.pending.size)
+        assertTrue(vm.state.value.groups.isEmpty())
+        assertFalse(vm.state.value.queryStarted)
+    }
+
+    /** 筛选条件仍会随关键词搜索一起下发，只是不能单独触发。 */
+    @Test
+    fun `filters are sent along with the keyword`() = runTest {
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        vm.setFilters(GlobalSearchFilters(senderIds = listOf("u1")))
+        vm.setKeyword("hello"); tick(300L)
+
+        assertEquals(1, caller.pending.size)
+        assertEquals("hello", caller.pending[0].req.keyword)
+        assertEquals(listOf("u1"), caller.pending[0].req.filters?.senderIds)
+    }
+
+    /** 关键词为空时 triggerNow 应把残留结果清干净。 */
+    @Test
+    fun `triggerNow with empty keyword returns to initial state`() = runTest {
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        vm.setKeyword("hello"); tick(300L)
+        caller.completeAt(0, resp(seq = 1L, groups = listOf(bucket("g1"))))
+        advanceUntilIdle()
+
+        vm.setKeyword("")
+        vm.triggerNow()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.groups.isEmpty())
+        assertFalse(vm.state.value.queryStarted)
+        assertEquals("不应发起新请求", 1, caller.pending.size)
+    }
+
+    /** 第二轮搜索在途期间必须仍是 loading，否则 UI 会误报"无搜索结果"。 */
+    @Test
+    fun `repeat search stays loading while in flight`() = runTest {
+        val caller = RecordingCaller()
+        val vm = GlobalSearchViewModel(caller, debounceMillis = 300L)
+
+        vm.setKeyword("hello"); tick(300L)
+        caller.completeAt(0, resp(seq = 1L, groups = listOf(bucket("g1"))))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.isLoading)
+
+        vm.setKeyword("world")
+        assertTrue("换词后立即 loading", vm.state.value.isLoading)
+        assertTrue("旧结果须已清空", vm.state.value.groups.isEmpty())
+
+        tick(300L)
+        assertTrue("请求在途仍 loading", vm.state.value.isLoading)
+
+        caller.completeAt(1, resp(seq = 2L, groups = emptyList()))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.isLoading)
     }
 
     @Test

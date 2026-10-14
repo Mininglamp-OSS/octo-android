@@ -35,6 +35,9 @@ public class ChatViewMenu {
     public ComponentActivity activity;
     public boolean isNewTask;
     public List<WKMessageContent> forwardMsgList;
+    // 来自搜索结果页（GlobalActivity / GroupDrillActivity）跳转：ChatActivity 返回时
+    // 应 finish() 回搜索页，跳过窄屏 ChatReuseNavigator.goBackToList 的会话列表复用路径。
+    public boolean fromSearch;
 
     public ChatViewMenu(ComponentActivity activity, String channelID, byte channelType, long tipMsgOrderSeq, boolean isNewTask) {
         this.channelID = channelID;

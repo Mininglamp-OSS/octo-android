@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ 筛选页原地勾选行：聊天类型/消息类型/文件类型/排序共用。对齐 iOS WKChannelHistoryFilterVC：
+ 点整行直接 toggle，选中态用右侧文字 "✓"（主题色）表示，不用左侧 checkbox 图标，不改变行背景色。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="52dp"
+    android:background="@drawable/layout_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="15dp">
+
+    <TextView
+        android:id="@+id/titleTv"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/colorDark"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/checkTv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="✓"
+        android:textColor="@color/colorAccent"
+        android:textSize="15sp"
+        android:visibility="invisible" />
+</LinearLayout>

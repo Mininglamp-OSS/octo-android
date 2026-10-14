@@ -4,8 +4,9 @@
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@color/homeColor"
-    android:fitsSystemWindows="true"
     android:orientation="vertical">
+
+    <include layout="@layout/wk_title_bar_layout" />
 
     <LinearLayout
         android:id="@+id/searchLayout"
@@ -15,74 +16,54 @@
         android:layout_marginTop="10dp"
         android:layout_marginEnd="10dp"
         android:layout_marginBottom="10dp"
+        android:background="@drawable/radian_normal_layout"
         android:orientation="horizontal">
 
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@drawable/radian_normal_layout"
-            android:fitsSystemWindows="true">
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/searchIv"
+            android:layout_width="25dp"
+            android:layout_height="25dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="15dp"
+            android:layout_marginEnd="5dp"
+            android:src="@mipmap/ic_ab_search" />
 
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/searchIv"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginStart="15dp"
-                android:layout_marginEnd="5dp"
-                android:src="@mipmap/ic_ab_search" />
-
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/searchEt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:layout_marginEnd="10dp"
-                android:background="@color/transparent"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:hint="@string/str_search"
-                android:imeOptions="actionSearch"
-                android:maxLines="1"
-                android:minHeight="40dp"
-                android:singleLine="true"
-                android:textColor="@color/colorDark"
-                android:textColorHint="@color/color999"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/cancelTv"
-            android:layout_width="wrap_content"
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/searchEt"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:padding="10dp"
-            android:text="@string/cancel"
-            android:textColor="@color/popupTextColor"
-            android:textSize="16sp" />
+            android:layout_marginEnd="10dp"
+            android:background="@color/transparent"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:hint="@string/str_search"
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:minHeight="40dp"
+            android:singleLine="true"
+            android:textColor="@color/colorDark"
+            android:textColorHint="@color/color999"
+            android:textSize="14sp" />
     </LinearLayout>
 
-
-    <com.scwang.smart.refresh.layout.SmartRefreshLayout
-        android:id="@+id/refreshLayout"
+    <FrameLayout
+        android:id="@+id/searchTabBarContainer"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/transparent"
-        app:srlEnableFooterFollowWhenLoadFinished="true"
-        app:srlEnableScrollContentWhenLoaded="true">
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/transparent"
-            android:visibility="visible" />
+    <FrameLayout
+        android:id="@+id/filterChipBarContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp" />
 
-        <com.scwang.smart.refresh.footer.ClassicsFooter
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/homeColor"
-            app:srlTextNothing="@string/refresh_footer" />
-    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/searchResultPager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 </LinearLayout>

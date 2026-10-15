@@ -244,6 +244,74 @@ public class WKFileUtils {
         return true;
     }
 
+    /** 下载中临时文件所在的保留子目录名，必须与 Downloader.PARTIAL_DIR_NAME 保持一致
+     *  （Downloader 是 internal class，Java 侧无法直接引用其常量，故在此重复一份）。 */
+    private static final String PARTIAL_DIR_NAME = ".partial";
+
+    /**
+     * 本进程是否已有下载启动。由 Downloader.realDownload 置位。
+     *
+     * 启动期清扫（{@link #sweepStaleDownloadTmp}）只在尚无下载启动时才删
+     * {@code .partial/} 下的文件：Phase-B 的清扫是异步的，遍历到某个目录时那里
+     * 可能已有在途下载的 {@code .part}——unlink 后写入继续落在脱链 inode 上，
+     * 最终 rename 找不到路径而失败，用户看到的是"点了下载却失败"。保留目录正确
+     * 解决了误删合法 {@code .tmp} 附件的问题，但不区分"已废弃"与"正在写"的临时
+     * 文件，这个标志补上这一点。注意：该守卫只能缩小竞争窗口、不能消除
+     * （清扫遍历期间仍可能有下载启动）；彻底消除需要"清扫完成前不放行下载"
+     * 的启动屏障，属于启动时序改造，不在本次范围内。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean downloadStarted =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** 下载器启动任务时调用（Downloader.realDownload）。 */
+    public void markDownloadStarted() {
+        downloadStarted.set(true);
+    }
+
+    /**
+     * 递归清扫下载目录下的残留临时文件：只删 {@code .partial/} 保留目录里的内容。
+     *
+     * <p>下载链路是 "写 .partial/<name>.part + rename 落地"：失败路径（dispatchFail）
+     * 会清掉临时文件，但进程被杀时没有机会走收尾，会留下半截 {@code .part}。
+     *
+     * <p>刻意不按后缀匹配：正式缓存名的扩展名取自发送方可控的展示名
+     * （WKFileProvider.buildCacheFileName），一个叫 {@code backup.tmp} 的附件会被
+     * 缓存成 {@code <key>.tmp}，按后缀清扫会在每次冷启动把它删掉，造成永久重下循环。
+     * 临时文件集中在保留目录里，按目录清扫才不会误伤正式缓存。
+     *
+     * @param dir 下载根目录（chatDownloadFileDir / voiceDir）；为空或不存在时静默返回
+     */
+    public void sweepStaleDownloadTmp(String dir) {
+        if (TextUtils.isEmpty(dir)) return;
+        if (downloadStarted.get()) {
+            // 已有下载启动：放弃本次清扫，宁可留着残留也不冒险 unlink 在途 .part
+            Log.w("fileUtils", "sweepStaleDownloadTmp skipped: download already started");
+            return;
+        }
+        File root = new File(dir);
+        if (!root.exists() || !root.isDirectory()) return;
+        File[] files = root.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (file == null) continue;
+            if (file.isDirectory()) {
+                if (PARTIAL_DIR_NAME.equals(file.getName())) {
+                    // 保留目录：整目录里的残留全删，目录本身留着（下载器会复用）
+                    File[] partials = file.listFiles();
+                    if (partials != null) {
+                        for (File p : partials) {
+                            if (p != null && p.isFile() && !p.delete()) {
+                                Log.w("fileUtils", "sweepStaleDownloadTmp delete fail: " + p.getAbsolutePath());
+                            }
+                        }
+                    }
+                } else {
+                    sweepStaleDownloadTmp(file.getAbsolutePath());
+                }
+            }
+        }
+    }
+
     /**
      * 保存录音文件
      *

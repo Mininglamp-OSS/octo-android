@@ -55,6 +55,9 @@ import kotlin.math.sqrt
 class PdfPreviewActivity : AppCompatActivity() {
 
     private var filePath: String = ""
+    /** 原始展示名（上游 putExtra("title", display) 传入）。磁盘名是 SHA-256 派生的
+     *  64 位 hex，不能用 file.name 做保存建议名 / 分享标题 / MIME 判断。 */
+    private var displayName: String = ""
     @Volatile private var pdfRenderer: PdfRenderer? = null
     @Volatile private var fileDescriptor: ParcelFileDescriptor? = null
     @Volatile private var pageCount: Int = 0
@@ -66,6 +69,7 @@ class PdfPreviewActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val title = intent.getStringExtra("title") ?: "PDF"
+        displayName = intent.getStringExtra("title")?.takeIf { it.isNotEmpty() } ?: ""
         filePath = intent.getStringExtra("filePath") ?: ""
 
         supportActionBar?.apply {
@@ -141,13 +145,17 @@ class PdfPreviewActivity : AppCompatActivity() {
         }
     }
 
+    /** 展示名优先，缺失时退回磁盘名（旧缓存/直接 Intent 进入的兜底）。 */
+    private fun saveName(file: File): String =
+        displayName.takeIf { it.isNotEmpty() } ?: file.name
+
     private fun saveFile() {
         if (filePath.isEmpty()) return
         val file = File(filePath)
         if (!file.exists()) return
         val intent = Intent(this, FileSaveActivity::class.java)
         intent.putExtra("sourceFilePath", file.absolutePath)
-        intent.putExtra("fileName", file.name)
+        intent.putExtra("fileName", WKFileProvider.boundedSaveName(saveName(file), "file"))
         startActivity(intent)
     }
 
@@ -156,13 +164,14 @@ class PdfPreviewActivity : AppCompatActivity() {
         val file = File(filePath)
         if (!file.exists()) return
         try {
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileProvider", file)
+            val name = saveName(file)
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileProvider", file, name)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = WKFileProvider.getMimeType(file.name)
+                type = WKFileProvider.getMimeType(name)
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(shareIntent, file.name))
+            startActivity(Intent.createChooser(shareIntent, name))
         } catch (_: Exception) {
         }
     }

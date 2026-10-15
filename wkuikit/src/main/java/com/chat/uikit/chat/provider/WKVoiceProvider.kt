@@ -17,6 +17,7 @@
 package com.chat.uikit.chat.provider
 
 import android.text.TextUtils
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -36,6 +37,7 @@ import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.SecretDeleteTimer
 import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.WKCacheKeys
 import com.chat.base.utils.WKCommonUtils
 import com.chat.base.utils.WKFileUtils
 import com.chat.base.utils.WKTimeUtils
@@ -55,6 +57,10 @@ import kotlin.math.max
 
 class WKVoiceProvider : WKChatBaseProvider() {
     private var lastClientMsgNo: String? = null
+
+    companion object {
+        private const val TAG = "WKVoiceProvider"
+    }
 
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
         return LayoutInflater.from(context).inflate(R.layout.chat_item_voice, parentView, false)
@@ -137,7 +143,19 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 val fileDir =
                     WKConstants.voiceDir + uiChatMsgItemEntity.wkMsg.channelType + "/" + uiChatMsgItemEntity.wkMsg.channelID + "/"
                 WKFileUtils.getInstance().createFileDir(fileDir)
-                val filePath = fileDir + uiChatMsgItemEntity.wkMsg.clientMsgNO + ".amr"
+
+                // 缓存身份 = (频道类型, 频道ID, clientMsgNO)，与普通文件同构（B-3 修复）。
+                // 磁盘名由 SHA-256(身份) 派生，不同 clientMsgNO 必不同路径。WKPlayVoiceUtils
+                // 的 playVoice 接受 (voicePath, playKey) 分离传参——voicePath 送
+                // MediaPlayer.setDataSource，playKey 做播放回调标识——因此磁盘 basename
+                // 无需等于 clientMsgNO。
+                val identity = WKCacheKeys.voiceIdentity(
+                    uiChatMsgItemEntity.wkMsg.channelType,
+                    uiChatMsgItemEntity.wkMsg.channelID,
+                    uiChatMsgItemEntity.wkMsg.clientMsgNO
+                )
+                val basename = WKCacheKeys.basenameForIdentity(identity)
+                val filePath = fileDir + basename + ".amr"
                 val file = File(filePath)
                 if (file.exists()) {
                     playBtn.setPlay()
@@ -163,11 +181,21 @@ class WKVoiceProvider : WKChatBaseProvider() {
                                     voiceContent.localPath = filePath
                                     uiChatMsgItemEntity.wkMsg.voiceStatus = 1
                                     uiChatMsgItemEntity.wkMsg.baseContentMsgModel = voiceContent
-                                    WKIM.getInstance().msgManager.updateContentAndRefresh(
+                                    // merge 单键回写，不能用 updateContentAndRefresh(model)：
+                                    // WKVoiceContent.encodeMsg 只输出 localPath/timeTrad/url/
+                                    // waveform，整列覆盖会抹掉顶层的 space_id / mention /
+                                    // reply / entities / robot_id，导致 Space 隔离与 @ 提及
+                                    // 状态静默失效。
+                                    val merged = WKIM.getInstance().msgManager.updateContentLocalPath(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
-                                        voiceContent,
+                                        filePath,
                                         false
                                     )
+                                    if (!merged) {
+                                        // false = DB 无该行或 content JSON 已损坏；
+                                        // 内存态 localPath 已赋值，仅缺持久化，不影响本次播放。
+                                        Log.w(TAG, "updateContentLocalPath merged nothing, clientMsgNO=${uiChatMsgItemEntity.wkMsg.clientMsgNO}")
+                                    }
                                     WKIM.getInstance().msgManager.updateVoiceReadStatus(
                                         uiChatMsgItemEntity.wkMsg.clientMsgNO,
                                         1,
@@ -201,6 +229,15 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         })
                 }
             } else {
+                // localPath 非空分支有三类来源，全部合法，一律直接按路径播放：
+                // (a) merge-base 下载链路写入的 voiceDir/<channelType>/<channelID>/<clientMsgNO>.amr
+                //     （无损名，不产生 B-3 错配）；
+                // (b) SDK 发送链路 FileUtils.saveFile 写入的
+                //     getFileCacheDir()/<channelType>/<channelID>/<clientSeq>.amr；
+                // (c) 发送失败/未上传时仍指向录音源文件的路径。
+                // 本分支改动全部未上线，safePathSegment 有损名只存在于中间提交、
+                // 从未落到任何用户磁盘，因此不需要迁移/丢弃逻辑。
+                // File.exists() 为假时回落 stopPlay()（见下方现有判断）。
                 if (WKPlayVoiceUtils.getInstance().isPlaying) {
                     if (WKPlayVoiceUtils.getInstance()
                             .oldPlayKey == uiChatMsgItemEntity.wkMsg.clientMsgNO

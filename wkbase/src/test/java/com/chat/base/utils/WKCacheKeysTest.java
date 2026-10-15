@@ -105,4 +105,87 @@ public class WKCacheKeysTest {
                 WKCacheKeys.payloadDigest(ids1, t, u, c),
                 WKCacheKeys.payloadDigest(ids2, t, u, c));
     }
+
+    /** framing：真实分隔符出现在业务值里时身份串仍须单射（v1 下这两种输入同名）。 */
+    @Test
+    public void separatorInsideValueCannotForgeAnotherIdentity() {
+        String a = WKCacheKeys.entryIdentity("b:p", "xid:y", 0);
+        String b = WKCacheKeys.entryIdentity("b:pid:x", "y", 0);
+        assertNotEquals(a, b);
+        assertNotEquals(WKCacheKeys.basenameForIdentity(a), WKCacheKeys.basenameForIdentity(b));
+    }
+
+    /** payloadDigest 的字段同样不可被分隔符注入构造碰撞。 */
+    @Test
+    public void separatorInsidePayloadFieldCannotForgeCollision() {
+        List<String> ids1 = new ArrayList<>(Arrays.asList("a0", "b"));
+        List<String> ids2 = new ArrayList<>(Arrays.asList("a", "0b"));
+        List<Long> t = new ArrayList<>(Arrays.asList(0L, 0L));
+        List<String> u = new ArrayList<>(Arrays.asList("", ""));
+        List<String> c = new ArrayList<>(Arrays.asList("", ""));
+        assertNotEquals(WKCacheKeys.payloadDigest(ids1, t, u, c),
+                        WKCacheKeys.payloadDigest(ids2, t, u, c));
+    }
+
+    /** 普通聊天身份：B-1 的标点反例必须被区分。 */
+    @Test
+    public void chatIdentityDistinguishesPunctuationVariants() {
+        String a = WKCacheKeys.chatFileIdentity((byte) 1, "ch1", "m:a");
+        String b = WKCacheKeys.chatFileIdentity((byte) 1, "ch1", "m?a");
+        assertNotEquals(a, b);
+        assertNotEquals(WKCacheKeys.basenameForIdentity(a), WKCacheKeys.basenameForIdentity(b));
+    }
+
+    /** 普通聊天身份：仅第 64 字符之后不同的 clientMsgNO 不可塌缩。 */
+    @Test
+    public void chatIdentityDistinguishesIdsDifferingAfterCharacter64() {
+        StringBuilder p = new StringBuilder();
+        for (int i = 0; i < 64; i++) p.append('x');
+        String a = WKCacheKeys.chatFileIdentity((byte) 1, "ch1", p + "AAAA");
+        String b = WKCacheKeys.chatFileIdentity((byte) 1, "ch1", p + "BBBB");
+        assertNotEquals(a, b);
+        assertNotEquals(WKCacheKeys.basenameForIdentity(a), WKCacheKeys.basenameForIdentity(b));
+    }
+
+    /** 普通聊天身份：频道参与身份，同一 clientMsgNO 跨频道不共享缓存。 */
+    @Test
+    public void chatIdentityIncludesChannel() {
+        assertNotEquals(WKCacheKeys.chatFileIdentity((byte) 1, "ch1", "m1"),
+                        WKCacheKeys.chatFileIdentity((byte) 1, "ch2", "m1"));
+        assertNotEquals(WKCacheKeys.chatFileIdentity((byte) 1, "ch1", "m1"),
+                        WKCacheKeys.chatFileIdentity((byte) 2, "ch1", "m1"));
+    }
+
+    /** 普通聊天与转发是两个命名空间。 */
+    @Test
+    public void chatAndForwardIdentitiesAreSeparateNamespaces() {
+        assertNotEquals(WKCacheKeys.chatFileIdentity((byte) 1, "ch1", "m1"),
+                        WKCacheKeys.entryIdentity("ch1", "m1", 0));
+    }
+
+    /** bundle 内重复 message_id 不得自别名到同一身份（P2-3）。 */
+    @Test
+    public void duplicateMessageIdInSameBundleStaysDistinct() {
+        String a = WKCacheKeys.entryIdentity(
+                WKCacheKeys.scopeWithIndex("b:p", 0), "dup", 0);
+        String b = WKCacheKeys.entryIdentity(
+                WKCacheKeys.scopeWithIndex("b:p", 1), "dup", 1);
+        assertNotEquals(a, b);
+        assertNotEquals(WKCacheKeys.basenameForIdentity(a),
+                        WKCacheKeys.basenameForIdentity(b));
+    }
+
+    /** scopeWithIndex 的下标也走长度前缀，不可被构造碰撞。 */
+    @Test
+    public void scopeWithIndexIsInjective() {
+        assertNotEquals(WKCacheKeys.scopeWithIndex("b:p", 11),
+                        WKCacheKeys.scopeWithIndex("b:p1", 1));
+    }
+
+    /** SEP 必须是单个 0x1F 控制字符——源码里若被 Unicode 预处理改写会在此暴露。 */
+    @Test
+    public void separatorIsSingleUnitSeparatorChar() {
+        String id = WKCacheKeys.entryIdentity("s", "m", 0);
+        assertTrue(id.indexOf('\u001f') >= 0);
+    }
 }

@@ -155,10 +155,30 @@ class WKFileProvider : WKChatBaseProvider() {
         fileContent: WKFileContent,
         progressBar: ProgressBar
     ) {
+        // 缓存身份 = (频道类型, 频道ID, clientMsgNO)。身份只在内存传递、不落盘，因此
+        // 无需是"安全文件名"；磁盘名由 SHA-256(身份) 派生。
+        //
+        // 必须走 buildCacheFileNameForIdentity 而不是 buildCacheFileName：后者把键里的
+        // `: ? * " < > |` 替换成下划线、删控制字符并截断，该变换不是单射——clientMsgNO
+        // 不保证是本地 UUID 形状（WKProto:214 收消息解码与 MsgManager:1250 历史同步都
+        // 直接采用服务端下发字符串，存储层只校验非空），`m:a` 与 `m?a` 会塌成同一磁盘名。
+        // 进程内校验记录能拦住紧接着的误命中，但重启或 LruCache 驱逐后记录消失，无记录
+        // 分支只比 size，B 会打开 A 的字节（B-1 普通聊天分支）。
+        val identity = com.chat.base.utils.WKCacheKeys.chatFileIdentity(
+            uiChatMsgItemEntity.wkMsg.channelType,
+            uiChatMsgItemEntity.wkMsg.channelID,
+            uiChatMsgItemEntity.wkMsg.clientMsgNO
+        )
+
         // Check local file first（size 校验防止半截/过期文件被当作有效缓存）
+        //
+        // 传 identity 而不省略：localPath 若是本应用下载回写的缓存路径，校验记录就是按
+        // 该 identity 记的，传了才能命中 exemption（不传会退化成 file.name，与记录里的
+        // identity 不等 → 已下载完的文件反被判无效、每次点击重下）。localPath 若是发送端
+        // 原文件路径，该路径上本无校验记录，走无记录分支，传与不传结果一致。
         if (!TextUtils.isEmpty(fileContent.localPath)) {
             val file = File(fileContent.localPath)
-            if (file.exists() && isValidCache(file, fileContent)) {
+            if (file.exists() && isValidCache(file, fileContent, identity)) {
                 openFile(file, fileContent.name)
                 return
             }
@@ -169,20 +189,26 @@ class WKFileProvider : WKChatBaseProvider() {
                 uiChatMsgItemEntity.wkMsg.channelType + "/" +
                 uiChatMsgItemEntity.wkMsg.channelID + "/"
         WKFileUtils.getInstance().createFileDir(downloadDir)
-        // 缓存键 = clientMsgNO（参照 iOS WKMediaUtil.getLocalPath：路径由消息唯一标识结构性推导），
-        // 不用发送方可控的 fileContent.name 做文件名，避免同名不同内容命中旧文件。
-        // 原始文件名仅在展示层使用（BottomSheet 标题/分享/保存），与磁盘路径解耦。
-        val fileName = buildCacheFileName(
-            uiChatMsgItemEntity.wkMsg.clientMsgNO,
+        val fileName = buildCacheFileNameForIdentity(
+            identity,
             fileContent.extension,
             fileContent.name
         )
         val filePath = downloadDir + fileName
         val file = File(filePath)
-        if (file.exists() && isValidCache(file, fileContent, uiChatMsgItemEntity.wkMsg.clientMsgNO)) {
+        if (file.exists() && isValidCache(file, fileContent, identity)) {
+            // 新缓存命中：直接打开，刻意不去 stat 旧名路径。已迁移的消息不应为了清理
+            // 每次点击都多一次 I/O。清理只在"确实要重新下载"时做（下一段）。
             openFile(file, fileContent.name)
             return
         }
+
+        // 新缓存未命中 —— 此时清掉 merge-base 命名方案留下的同消息旧缓存，回收占盘。
+        // 旧名只用于定位删除目标、绝不用于读取内容：旧命名是"按展示名"的，同名不同
+        // 内容会互相命中（本 PR 最初要修的 bug），拿旧名去读等于让 B 打开 A 的字节。
+        // 只删不读则安全——即使旧名因同名歧义指向另一条消息的文件，后果仅是那条消息
+        // 下次重下一次。
+        deleteLegacyChatCache(downloadDir, uiChatMsgItemEntity.wkMsg.clientMsgNO, fileContent)
 
         // Download file
         if (TextUtils.isEmpty(fileContent.url)) {
@@ -206,7 +232,7 @@ class WKFileProvider : WKChatBaseProvider() {
                     if (downloadedFile.exists()) {
                         // 标记为"本次进程内已完整落地"，供 isValidCache 在发送方上报
                         // size 不准时放行，避免陷入每次点击都重下的死循环
-                        markDownloadVerified(downloadedFile, uiChatMsgItemEntity.wkMsg.clientMsgNO)
+                        markDownloadVerified(downloadedFile, identity)
                         // 回写 localPath 并持久化，下次点击直接命中本地文件。
                         // 必须走 updateContentLocalPath（merge 单键），不能用
                         // updateContentAndRefresh(model)——后者按 encodeMsg() 整列覆盖
@@ -288,8 +314,11 @@ class WKFileProvider : WKChatBaseProvider() {
          *    （防落地后被外部改动）。
          * 2. 没有落地记录时（冷启动后的历史缓存）：退化为 size 校验——`size > 0` 要求
          *    `file.length() == size`，`size <= 0`（服务端未下发）仅判存在。此时没有任何
-         *    身份信息可比，这是已知的残留风险面，但不引入新的错配：路径本身已由
-         *    SHA-256 身份派生（见 [buildCacheFileNameForIdentity]），不同身份不同路径。
+         *    身份信息可比，安全性完全依赖**调用方维持的不变量**：所有受管理的缓存路径
+         *    都必须由 [buildCacheFileNameForIdentity] 派生（SHA-256，不同身份必不同路径），
+         *    于是"同一路径"已蕴含"同一身份"，size 比较只负责排除半截文件、不再承担区分
+         *    身份的职责。若将来有调用点用 [buildCacheFileName] 这类有损派生拼受管理路径，
+         *    本分支会重新变成错配面——那正是 B-1 两次复发的位置。
          *
          * @param identity 请求方的原始身份串；null 时退化为 file.name（历史调用点兜底）
          */
@@ -353,6 +382,12 @@ class WKFileProvider : WKChatBaseProvider() {
          * ext4/f2fs 的 NAME_MAX=255 下必然 `ENAMETOOLONG`，而该异常落在下载器的
          * 流构造处，用户观感是"点了没反应"。留出余量给下载器的 `.tmp` 后缀（4 字节）。
          */
+        @Deprecated(
+            "有损派生：键里的 : ? * \" < > | 会被替换成下划线、控制字符被删、结果被截断，" +
+                "不同键可塌成同一磁盘名（B-1 两次复发的根因）。受管理的缓存路径一律走 " +
+                "buildCacheFileNameForIdentity。",
+            ReplaceWith("buildCacheFileNameForIdentity(identity, extension, displayName)")
+        )
         @JvmStatic
         @JvmOverloads
         fun buildCacheFileName(
@@ -367,15 +402,104 @@ class WKFileProvider : WKChatBaseProvider() {
             return truncateToByteLength("$key.$ext", MAX_FILENAME_BYTES)
         }
 
-        /** 去掉路径分隔符与危险字符，只留下单段安全名（防目录穿越）。 */
+        /**
+         * merge-base（80e7e22e）普通聊天缓存的旧文件名，**仅用于定位删除目标**。
+         *
+         * 逐字复刻 merge-base 的算法，不要"顺手修正"：
+         *   rawName = fileContent.name ?: (clientMsgNO + "." + extension)   ← 仅 null 触发回退，
+         *             空字符串走 name 分支（merge-base 用的是 ?: 而非 isEmpty 判断）
+         *   basename = File(rawName).name
+         *   cleaned  = basename.replace([\\/:*?"<>|], "_")
+         *   结果     = truncateToByteLength(cleaned, MAX_FILENAME_BYTES)
+         *
+         * 任何偏差都会算出不存在的路径 → 漏删（无害但无效）。注意 merge-base 的
+         * truncateToByteLength 不压缩超长扩展名（那是本 PR 新增的），而当前文件里的
+         * 同名私有函数**已经**带 MAX_EXT_BYTES 压缩。两者在 name ≤ 200 字节时结果
+         * 一致（直接 return），超长时不一致——超长旧名漏删，可接受，不要为此复刻
+         * 两份截断实现。
+         */
+        private fun legacyChatCacheName(clientMsgNO: String?, fileContent: WKFileContent): String {
+            val rawName = fileContent.name
+                ?: ((clientMsgNO ?: "") + "." + (fileContent.extension ?: ""))
+            val cleaned = File(rawName).name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            return truncateToByteLength(cleaned, MAX_FILENAME_BYTES)
+        }
+
+        /**
+         * 删除 merge-base 命名方案留下的同消息旧缓存（点击驱动、精确单点删除）。
+         *
+         * 刻意不做目录遍历 + 模式匹配：那条路要判断"哪些文件是旧名形状"，判据只能是
+         * 否定式（basename 不是 64 位 hex），会误删将来任何非身份派生的命名——正是
+         * P2-1（按后缀匹配清扫误删合法 .tmp 附件）的同款错误。精确路径删除零误删面。
+         *
+         * 代价：历史上后缀变化过的残留（同一消息先后落下不同 ext）删不掉，从未被再次
+         * 点击的文件也不会被清理。彻底回收需要一次性版本门控清扫，属独立跟进项。
+         */
+        private fun deleteLegacyChatCache(
+            downloadDir: String,
+            clientMsgNO: String?,
+            fileContent: WKFileContent
+        ) {
+            try {
+                val legacyName = legacyChatCacheName(clientMsgNO, fileContent)
+                if (legacyName.isEmpty()) return
+                val legacy = File(downloadDir + legacyName)
+                // 身份派生名是 64 位 hex，绝不可能等于旧名；这层判断只防将来有人改坏
+                // legacyChatCacheName 导致自删新缓存。
+                if (legacy.name.matches(Regex("[0-9a-f]{64}\\..*"))) return
+                if (legacy.exists() && legacy.isFile) {
+                    if (legacy.delete()) {
+                        Log.i(TAG, "deleted legacy chat cache: ${legacy.name}")
+                    } else {
+                        Log.w(TAG, "delete legacy chat cache failed: ${legacy.name}")
+                    }
+                }
+            } catch (e: Exception) {
+                // 清理是尽力而为，绝不能影响下载主流程
+                Log.w(TAG, "deleteLegacyChatCache error: ${e.message}")
+            }
+        }
+
+        /**
+         * 把任意不可信字符串收敛成单段安全文件名，供兄弟 provider（语音等）复用。
+         *
+         * 用于**路径构造**，不要用于缓存身份——有损变换、非单射（见
+         * [buildCacheFileName] 的弃用说明）。调用方必须自己保证身份唯一性，
+         * 或用 [buildCacheFileNameForIdentity]。
+         */
+        @JvmStatic
+        fun safePathSegment(raw: String?, fallback: String = "unknown"): String =
+            sanitizePathSegment(raw).ifEmpty { fallback }
+
+        /**
+         * 去掉路径分隔符与危险字符，只留下单段安全名（防目录穿越）。
+         *
+         * pass 顺序是本函数的正确性核心，不要重排：
+         *   1. `File(..).name` 取 basename，消除 "a/../b" 这类分隔符结构
+         *   2. 删控制字符 —— **必须早于**点序列剥离
+         *   3. 替换 Windows 保留字符
+         *   4. 剥 ".."，再把纯点残留整体判空
+         *
+         * 第 2 步与第 4 步的顺序曾经相反，结果是 NUL 可以把 ".." 掩蔽过点序列剥离：
+         * `".<NUL>."` 第一道 `.replace("..","")` 匹配不上（中间夹着 NUL），控制字符
+         * 随后才被删掉，于是函数吐出 `".."`。同理 `"a<NUL>.<NUL>b"` → `"a..b"`。
+         * 两个不同的 clientMsgNO 因此可以塌到同一路径段（语音侧即 B-1 同款误配：
+         * 一条语音播另一条的字节）；且该残留离真正的父目录逃逸只差调用方在其后
+         * 拼一个分隔符。控制字符先删掉，点序列就无法被掩蔽。
+         *
+         * 末尾的纯点判空同样必要：`"."` / `".."` / `"...."` 作为路径段都有特殊语义
+         * （或退化成隐藏文件），一律交给调用方的 fallback。
+         */
         private fun sanitizePathSegment(raw: String?): String {
             if (raw.isNullOrEmpty()) return ""
-            // File(..).name 取 basename，消除 "a/../b" 这类分隔符结构
-            return File(raw).name
+            val cleaned = File(raw).name
+                // 先删控制字符：否则 NUL 等不可见字符能把下面的 ".." 剥离掩蔽过去
+                .replace(Regex("[\\x00-\\x1f\\x7f]"), "")
                 .replace(Regex("[\\\\/:*?\"<>|]"), "_")
                 .replace("..", "")
-                .replace(Regex("[\\x00-\\x1f]"), "")
                 .trim()
+            // 只剩点（或空）的残留没有可用语义，交给调用方 fallback
+            return if (cleaned.all { it == '.' }) "" else cleaned
         }
 
         /**
@@ -492,7 +616,7 @@ class WKFileProvider : WKChatBaseProvider() {
                 dialog.dismiss()
                 val intent = Intent(context, FileSaveActivity::class.java)
                 intent.putExtra("sourceFilePath", file.absolutePath)
-                intent.putExtra("fileName", display)
+                intent.putExtra("fileName", truncateToByteLength(sanitizePathSegment(display).ifEmpty { "file" }, MAX_FILENAME_BYTES))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
             }

@@ -537,8 +537,11 @@ class ChatMultiForwardDetailAdapter(
         for (i in list.indices) {
             val item = list[i]
             val msg = item.msg ?: continue
+            // 下标无条件并入作用域：decodeMsg 不拒绝 bundle 内重复 message_id，
+            // 仅靠 messageID 的身份会让两行共享同一路径（自别名，identity 校验也分不开）。
             bundleScopedKeys[i] = com.chat.base.utils.WKCacheKeys.entryIdentity(
-                scope, msg.messageID, fileIndex
+                com.chat.base.utils.WKCacheKeys.scopeWithIndex(scope, fileIndex),
+                msg.messageID, fileIndex
             )
             fileIndex++
         }
@@ -586,7 +589,9 @@ class ChatMultiForwardDetailAdapter(
             (msg?.messageID ?: "") + "\u001F" + (msg?.timestamp ?: 0L) +
                     "\u001F" + (msg?.fromUID ?: "") + "\u001F" + (msg?.content ?: "")
         )
-        return com.chat.base.utils.WKCacheKeys.entryIdentity("f:$raw", msg?.messageID, index)
+        return com.chat.base.utils.WKCacheKeys.entryIdentity(
+            com.chat.base.utils.WKCacheKeys.scopeWithIndex("f:$raw", index),
+            msg?.messageID, index)
     }
 
     private fun handleForwardFileClick(identity: String, fileContent: WKFileContent, progressBar: android.widget.ProgressBar) {
@@ -610,6 +615,14 @@ class ChatMultiForwardDetailAdapter(
             openForwardFile(file, fileContent.name)
             return
         }
+
+        // 新缓存未命中 —— 清掉 merge-base 命名方案留下的旧缓存。
+        // merge-base 的转发缓存名是 File(rawName).name.replace([\\/:*?"<>|], "_")，
+        // rawName = fileContent.name ?: ("file." + (extension ?: "dat"))，**无截断**
+        // （与普通聊天的 sanitizeFileName 不同，后者有 truncateToByteLength）。
+        // 旧名只用于定位删除、绝不用于读取：旧命名按展示名，同名不同内容会互相命中
+        // （本 PR 最初要修的 bug），拿旧名去读等于让 B 打开 A 的字节。
+        deleteLegacyForwardCache(downloadDir, fileContent)
 
         if (TextUtils.isEmpty(fileContent.url)) {
             WKToastUtils.getInstance()
@@ -646,6 +659,39 @@ class ChatMultiForwardDetailAdapter(
                         .showToastNormal(context.getString(R.string.str_file_download_fail))
                 }
             })
+    }
+
+    /**
+     * 删除 merge-base（80e7e22e）转发命名方案留下的旧缓存（点击驱动、精确单点删除）。
+     *
+     * 逐字复刻 merge-base ChatMultiForwardDetailAdapter.kt:499-500 的算法：
+     *   rawName  = fileContent.name ?: ("file." + (fileContent.extension ?: "dat"))
+     *   fileName = File(rawName).name.replace([\\/:*?"<>|], "_")
+     * 注意与普通聊天侧的两处差异：回退值是 "file.<ext>" 而非 "<clientMsgNO>.<ext>"，
+     * 且**没有字节截断**。照抄，不要统一两边实现。
+     *
+     * 本分支中间提交 26fe7dcf 产生过 `b_*`/`h_*`/`f_*` 形状的名字，但该中间态从未
+     * 发布，线上磁盘上不存在此类文件，故不清理。
+     */
+    private fun deleteLegacyForwardCache(downloadDir: String, fileContent: WKFileContent) {
+        try {
+            val rawName = fileContent.name
+                ?: ("file." + (fileContent.extension ?: "dat"))
+            val legacyName = File(rawName).name.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            if (legacyName.isEmpty()) return
+            // 身份派生名是 64 位 hex，不可能等于旧名；防将来改坏本函数自删新缓存
+            if (legacyName.matches(Regex("[0-9a-f]{64}\\..*"))) return
+            val legacy = File(downloadDir + legacyName)
+            if (legacy.exists() && legacy.isFile) {
+                if (!legacy.delete()) {
+                    android.util.Log.w("MultiForwardDetail",
+                        "delete legacy forward cache failed: $legacyName")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("MultiForwardDetail",
+                "deleteLegacyForwardCache error: ${e.message}")
+        }
     }
 
     private fun trimNewlines(cs: CharSequence): CharSequence {

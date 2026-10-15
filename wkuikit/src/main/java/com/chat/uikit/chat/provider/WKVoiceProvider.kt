@@ -142,7 +142,15 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 val fileDir =
                     WKConstants.voiceDir + uiChatMsgItemEntity.wkMsg.channelType + "/" + uiChatMsgItemEntity.wkMsg.channelID + "/"
                 WKFileUtils.getInstance().createFileDir(fileDir)
-                val filePath = fileDir + uiChatMsgItemEntity.wkMsg.clientMsgNO + ".amr"
+                // clientMsgNO 直接来自服务端下发（WKProto:214 readString → :437），存储层只校验
+                // 非空、不校验字符域，`../../x` 这类值会写到 voiceDir 之外。路径段必须收敛。
+                //
+                // 这里用 safePathSegment（有损、非单射）而非身份派生，是因为语音路径同时被
+                // WKPlayVoiceUtils / localPath 回写当作稳定标识复用，换成 SHA-256 名属于独立改造；
+                // 收敛后最坏是两条相近 clientMsgNO 的语音共用一个路径（各自重下一次），
+                // 不会越界写。彻底修复见 P1-3 的跟进项。
+                val filePath = fileDir +
+                    WKFileProvider.safePathSegment(uiChatMsgItemEntity.wkMsg.clientMsgNO, "voice") + ".amr"
                 val file = File(filePath)
                 if (file.exists()) {
                     playBtn.setPlay()

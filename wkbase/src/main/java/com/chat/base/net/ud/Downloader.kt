@@ -60,10 +60,10 @@ internal class Downloader private constructor() {
     }
 
     // pauseDownload / resumeDownload 已删除：全仓库无调用方，且实现与"断点续传"语义不符。
-    // pauseDownload 置 PAUSED 后立刻 call.cancel()，cancel 会让 calculate() 里阻塞的
-    // read() 抛异常，控制流进 catch（清 .tmp + 置 ERROR + 移除任务）而不是 PAUSED 的
+    // pauseDownload 置中间态后立刻 call.cancel()，cancel 会让 calculate() 里阻塞的
+    // read() 抛异常，控制流进 catch（清 .tmp + 置 ERROR + 移除任务）而不是停在中间态的
     // 干净 break —— 只有恰好停在循环顶部才走得到 break。随后 resumeDownload 连任务都
-    // 找不到。加上 RESUME 分支对无 Range 头的全新响应做 inputStream.skip(hasDownloadSize)
+    // 找不到。加上对无 Range 头的全新响应做 inputStream.skip(hasDownloadSize)
     // 本身也不成立。保留一个不能用的 API 比没有更糟，需要时按真实 Range 续传重新实现。
 
     private fun String.validateMusicType(): Boolean {
@@ -329,16 +329,6 @@ internal class Downloader private constructor() {
 
         try {
             while (true) {
-                // 注：PAUSED / RESUME 两个分支目前不可达（pauseDownload / resumeDownload
-                // 已删除，见上方说明）。暂留分支与 DownloadStatus 枚举，等真正按 Range
-                // 实现续传时复用；状态机本身不影响正常下载路径。
-                if (mTask.status == DownloadStatus.PAUSED) {
-                    break
-                }
-                if (mTask.status == DownloadStatus.RESUME) {
-                    mTask.inputStream!!.skip(mTask.hasDownloadSize)
-                    mTask.status = DownloadStatus.DOWNLOADING
-                }
                 val len = mTask.inputStream!!.read(bytes)
                 if (len == -1) {
                     // 下载完成：关闭流后把 .tmp 原子 rename 到目标路径，再回调最终文件

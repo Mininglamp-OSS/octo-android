@@ -104,7 +104,7 @@ internal class Task(
 
 
 internal enum class DownloadStatus {
-    START, DOWNLOADING, ERROR, PAUSED, RESUME
+    START, DOWNLOADING, ERROR
 }
 
 

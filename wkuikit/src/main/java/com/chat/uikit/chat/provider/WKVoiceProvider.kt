@@ -229,27 +229,15 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         })
                 }
             } else {
-                // localPath 非空分支 = 历史已下载的语音。
-                //
-                // merge-base 的 onSuccess 持久化的是 fileDir + <裸 clientMsgNO> + ".amr"
-                // （未经任何清洗），`m:a.amr` 与 `m?a.amr` 在文件系统上本就不同名，
-                // 读它不产生 B-3 的错配 —— 故**不强制迁移**，避免升级后已下载语音全部重下。
-                //
-                // 唯一需要排除的是本分支中间提交用 safePathSegment 写出的有损名
-                // （`m:a` 与 `m?a` 同塌 `m_a.amr`，会互相命中）。该形状的识别依据：
-                // basename 既不是 64 位 hex（新派生名），也不等于裸 clientMsgNO（旧名）。
-                // 命中则丢弃该 localPath，回落到下载链路按新身份重下。
-                val lpName = File(voiceContent.localPath).name
-                val rawName = uiChatMsgItemEntity.wkMsg.clientMsgNO + ".amr"
-                val lossyGeneration = lpName != rawName &&
-                        !lpName.matches(Regex("[0-9a-f]{64}\\.amr"))
-                if (lossyGeneration) {
-                    Log.i(TAG, "discard lossy-generation voice localPath: $lpName")
-                    voiceContent.localPath = ""
-                    stopPlay()
-                    playBtn.setPlay()
-                    return@setOnClickListener
-                }
+                // localPath 非空分支有三类来源，全部合法，一律直接按路径播放：
+                // (a) merge-base 下载链路写入的 voiceDir/<channelType>/<channelID>/<clientMsgNO>.amr
+                //     （无损名，不产生 B-3 错配）；
+                // (b) SDK 发送链路 FileUtils.saveFile 写入的
+                //     getFileCacheDir()/<channelType>/<channelID>/<clientSeq>.amr；
+                // (c) 发送失败/未上传时仍指向录音源文件的路径。
+                // 本分支改动全部未上线，safePathSegment 有损名只存在于中间提交、
+                // 从未落到任何用户磁盘，因此不需要迁移/丢弃逻辑。
+                // File.exists() 为假时回落 stopPlay()（见下方现有判断）。
                 if (WKPlayVoiceUtils.getInstance().isPlaying) {
                     if (WKPlayVoiceUtils.getInstance()
                             .oldPlayKey == uiChatMsgItemEntity.wkMsg.clientMsgNO

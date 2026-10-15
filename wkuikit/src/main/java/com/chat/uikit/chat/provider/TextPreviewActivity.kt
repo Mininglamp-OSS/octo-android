@@ -123,7 +123,7 @@ class TextPreviewActivity : AppCompatActivity() {
         if (!file.exists()) return
         val intent = Intent(this, FileSaveActivity::class.java)
         intent.putExtra("sourceFilePath", file.absolutePath)
-        intent.putExtra("fileName", WKFileProvider.safePathSegment(saveName(file), "file"))
+        intent.putExtra("fileName", WKFileProvider.boundedSaveName(saveName(file), "file"))
         startActivity(intent)
     }
 

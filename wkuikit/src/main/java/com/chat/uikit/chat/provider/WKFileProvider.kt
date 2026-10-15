@@ -472,6 +472,17 @@ class WKFileProvider : WKChatBaseProvider() {
             sanitizePathSegment(raw).ifEmpty { fallback }
 
         /**
+         * SAF 保存建议名：清洗 + 按 UTF-8 字节上限截断。
+         *
+         * 与 [safePathSegment] 的区别是多一道 [truncateToByteLength]——SAF 的
+         * createDocument 对超长名可能静默失败或被系统改写。身份串绝不可走这里。
+         */
+        @JvmStatic
+        @JvmOverloads
+        fun boundedSaveName(raw: String?, fallback: String = "file"): String =
+            truncateToByteLength(sanitizePathSegment(raw).ifEmpty { fallback }, MAX_FILENAME_BYTES)
+
+        /**
          * 去掉路径分隔符与危险字符，只留下单段安全名（防目录穿越）。
          *
          * pass 顺序是本函数的正确性核心，不要重排：
@@ -616,7 +627,7 @@ class WKFileProvider : WKChatBaseProvider() {
                 dialog.dismiss()
                 val intent = Intent(context, FileSaveActivity::class.java)
                 intent.putExtra("sourceFilePath", file.absolutePath)
-                intent.putExtra("fileName", truncateToByteLength(sanitizePathSegment(display).ifEmpty { "file" }, MAX_FILENAME_BYTES))
+                intent.putExtra("fileName", boundedSaveName(display, "file"))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
             }

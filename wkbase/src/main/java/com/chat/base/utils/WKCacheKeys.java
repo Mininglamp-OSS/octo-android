@@ -32,7 +32,9 @@ import java.util.List;
  * "按缓存键绑定"根本无法区分它们——先下载的 A 的字节会被当成 B 的缓存打开。
  *
  * <p>修复方式：身份串（{@link #entryIdentity}）保留全部原始字节、不做任何字符
- * 替换与截断，只用 0x1F 作不可出现在 ID 里的字段分隔符；磁盘名
+ * 替换与截断，各字段按 {@link #lengthPrefixed} 做长度前缀编码后再用 0x1F 连接
+ * ——长度前缀使拼接对任意输入单射，分隔符出现在业务值里也不会产生跨 bundle 的
+ * 身份碰撞（不再依赖"该字节不可能出现"这一错误假设）；磁盘名
  * （{@link #basenameForIdentity}）是该身份串的 SHA-256 全量十六进制（64 字符，
  * 定长、文件系统安全、无需再清洗），碰撞概率由 SHA-256 保证。校验
  * （WKFileProvider.markDownloadVerified / isValidFileCache）绑定身份串而不是磁盘名。
@@ -45,7 +47,13 @@ public final class WKCacheKeys {
     private WKCacheKeys() {
     }
 
-    /** 字段分隔符：ASCII Unit Separator，不可能出现在 messageID / uid / JSON 内容里。 */
+    /**
+     * 字段分隔符：ASCII Unit Separator。
+     *
+     * <p>**不假设**该字节不出现在业务值里——JSON 可用 0x1F 的转义序列编码它，
+     * clientMsgNO 来自服务端未校验。单射性由 {@link #lengthPrefixed} 的长度前缀
+     * 保证，SEP 仅作可读性分隔。
+     */
     private static final char SEP = '\u001f';
 
     /** 条目分隔符：ASCII Record Separator。 */
@@ -125,6 +133,22 @@ public final class WKCacheKeys {
           .append(lengthPrefixed(channelID == null ? "" : channelID)).append(SEP)
           .append(lengthPrefixed(clientMsgNO == null ? "" : clientMsgNO));
         return sb.toString();
+    }
+
+    /**
+     * 语音缓存的完整原始身份串。
+     *
+     * <p>与 {@link #chatFileIdentity} 共享命名空间（{@code c:} 前缀）——语音是特殊
+     * 类型的普通消息，身份同样由 (频道类型, 频道ID, clientMsgNO) 唯一确定。
+     *
+     * <p>B-3 修复点：旧路径用 safePathSegment(clientMsgNO) 这一有损变换做磁盘名，
+     * {@code m:a} 与 {@code m?a} 塌成同一 {@code m_a.amr}，先下载的消息 A 的字节
+     * 会被消息 B 的 exists 分支误当作 B 的缓存直接播放（一条语音播另一条的音频）。
+     * 本方法返回无损身份串，磁盘名由 {@link #basenameForIdentity} 派生为 SHA-256。
+     */
+    public static String voiceIdentity(byte channelType, String channelID, String clientMsgNO) {
+        // 复用 chatFileIdentity 实现——语音与普通文件的身份构成完全一致
+        return chatFileIdentity(channelType, channelID, clientMsgNO);
     }
 
     /**

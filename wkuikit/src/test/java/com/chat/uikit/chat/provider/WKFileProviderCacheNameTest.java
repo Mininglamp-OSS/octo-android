@@ -116,4 +116,75 @@ public class WKFileProviderCacheNameTest {
             assertTrue("empty segment", !seg.isEmpty());
         }
     }
+
+    /**
+     * 语音身份派生必须抗碰撞：punctuation 变体产生不同磁盘名（B-3）。
+     *
+     * 复现：消息 A (clientMsgNO = "m:a") 先下载到 m_a.amr（旧实现），消息 B
+     * (clientMsgNO = "m?a") 的 exists 检查命中 A 的路径、直接播放 A 的字节。
+     * 新实现下两者必须映射到不同的 64 位 hex basename。
+     */
+    @Test
+    public void voiceIdentityDistinguishesPunctuationVariants() {
+        String identityA = com.chat.base.utils.WKCacheKeys.voiceIdentity(
+                (byte) 1, "ch1", "m:a");
+        String identityB = com.chat.base.utils.WKCacheKeys.voiceIdentity(
+                (byte) 1, "ch1", "m?a");
+        String basenameA = com.chat.base.utils.WKCacheKeys.basenameForIdentity(identityA);
+        String basenameB = com.chat.base.utils.WKCacheKeys.basenameForIdentity(identityB);
+
+        assertNotEquals("punctuation variants must produce distinct basenames", basenameA, basenameB);
+        assertTrue("voice basename is 64-hex", basenameA.matches("[0-9a-f]{64}"));
+        assertTrue("voice basename is 64-hex", basenameB.matches("[0-9a-f]{64}"));
+
+        // 旧实现的路径：相同（碰撞）
+        String oldA = WKFileProvider.safePathSegment("m:a", "voice") + ".amr";
+        String oldB = WKFileProvider.safePathSegment("m?a", "voice") + ".amr";
+        assertEquals("old implementation collides", oldA, oldB);
+
+        // 新实现的路径：不同
+        String newA = basenameA + ".amr";
+        String newB = basenameB + ".amr";
+        assertNotEquals("new implementation distinguishes", newA, newB);
+    }
+
+    /** 语音身份：仅第 64 字符之后不同的 clientMsgNO 不可塌缩（B-3）。 */
+    @Test
+    public void voiceIdentityDistinguishesIdsDifferingAfterCharacter64() {
+        StringBuilder p = new StringBuilder();
+        for (int i = 0; i < 64; i++) p.append('x');
+        String a = com.chat.base.utils.WKCacheKeys.basenameForIdentity(
+                com.chat.base.utils.WKCacheKeys.voiceIdentity((byte) 1, "ch1", p + "AAAA"));
+        String b = com.chat.base.utils.WKCacheKeys.basenameForIdentity(
+                com.chat.base.utils.WKCacheKeys.voiceIdentity((byte) 1, "ch1", p + "BBBB"));
+        assertNotEquals(a, b);
+    }
+
+    /**
+     * 语音缓存路径不变量：A 落盘后，B 的派生路径必须不等于 A 的路径
+     * ——即 B 的 exists 分支不可能命中 A 的字节（B-3 的核心断言）。
+     */
+    @Test
+    public void secondVoiceMessageCannotHitFirstMessagePath() {
+        String dir = "/voice/1/ch1/";
+        String pathA = dir + com.chat.base.utils.WKCacheKeys.basenameForIdentity(
+                com.chat.base.utils.WKCacheKeys.voiceIdentity((byte) 1, "ch1", "m:a")) + ".amr";
+        String pathB = dir + com.chat.base.utils.WKCacheKeys.basenameForIdentity(
+                com.chat.base.utils.WKCacheKeys.voiceIdentity((byte) 1, "ch1", "m?a")) + ".amr";
+        assertNotEquals("B must not resolve to A's cache path", pathA, pathB);
+        // 频道也参与身份：同 clientMsgNO 跨频道不共享
+        String pathC = dir + com.chat.base.utils.WKCacheKeys.basenameForIdentity(
+                com.chat.base.utils.WKCacheKeys.voiceIdentity((byte) 2, "ch1", "m:a")) + ".amr";
+        assertNotEquals(pathA, pathC);
+    }
+
+    /** boundedSaveName 必须截断超长名（预览页保存建议名的字节上限）。 */
+    @Test
+    public void boundedSaveNameTruncatesOverlongNames() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 300; i++) sb.append('a');
+        String out = WKFileProvider.boundedSaveName(sb + ".pdf", "file");
+        assertTrue("must be byte-capped", out.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 200);
+        assertTrue("extension preserved", out.endsWith(".pdf"));
+    }
 }

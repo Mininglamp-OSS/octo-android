@@ -37,6 +37,7 @@ import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.ui.Theme
 import com.chat.base.ui.components.SecretDeleteTimer
 import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.WKCacheKeys
 import com.chat.base.utils.WKCommonUtils
 import com.chat.base.utils.WKFileUtils
 import com.chat.base.utils.WKTimeUtils
@@ -142,15 +143,19 @@ class WKVoiceProvider : WKChatBaseProvider() {
                 val fileDir =
                     WKConstants.voiceDir + uiChatMsgItemEntity.wkMsg.channelType + "/" + uiChatMsgItemEntity.wkMsg.channelID + "/"
                 WKFileUtils.getInstance().createFileDir(fileDir)
-                // clientMsgNO 直接来自服务端下发（WKProto:214 readString → :437），存储层只校验
-                // 非空、不校验字符域，`../../x` 这类值会写到 voiceDir 之外。路径段必须收敛。
-                //
-                // 这里用 safePathSegment（有损、非单射）而非身份派生，是因为语音路径同时被
-                // WKPlayVoiceUtils / localPath 回写当作稳定标识复用，换成 SHA-256 名属于独立改造；
-                // 收敛后最坏是两条相近 clientMsgNO 的语音共用一个路径（各自重下一次），
-                // 不会越界写。彻底修复见 P1-3 的跟进项。
-                val filePath = fileDir +
-                    WKFileProvider.safePathSegment(uiChatMsgItemEntity.wkMsg.clientMsgNO, "voice") + ".amr"
+
+                // 缓存身份 = (频道类型, 频道ID, clientMsgNO)，与普通文件同构（B-3 修复）。
+                // 磁盘名由 SHA-256(身份) 派生，不同 clientMsgNO 必不同路径。WKPlayVoiceUtils
+                // 的 playVoice 接受 (voicePath, playKey) 分离传参——voicePath 送
+                // MediaPlayer.setDataSource，playKey 做播放回调标识——因此磁盘 basename
+                // 无需等于 clientMsgNO。
+                val identity = WKCacheKeys.voiceIdentity(
+                    uiChatMsgItemEntity.wkMsg.channelType,
+                    uiChatMsgItemEntity.wkMsg.channelID,
+                    uiChatMsgItemEntity.wkMsg.clientMsgNO
+                )
+                val basename = WKCacheKeys.basenameForIdentity(identity)
+                val filePath = fileDir + basename + ".amr"
                 val file = File(filePath)
                 if (file.exists()) {
                     playBtn.setPlay()
@@ -224,6 +229,27 @@ class WKVoiceProvider : WKChatBaseProvider() {
                         })
                 }
             } else {
+                // localPath 非空分支 = 历史已下载的语音。
+                //
+                // merge-base 的 onSuccess 持久化的是 fileDir + <裸 clientMsgNO> + ".amr"
+                // （未经任何清洗），`m:a.amr` 与 `m?a.amr` 在文件系统上本就不同名，
+                // 读它不产生 B-3 的错配 —— 故**不强制迁移**，避免升级后已下载语音全部重下。
+                //
+                // 唯一需要排除的是本分支中间提交用 safePathSegment 写出的有损名
+                // （`m:a` 与 `m?a` 同塌 `m_a.amr`，会互相命中）。该形状的识别依据：
+                // basename 既不是 64 位 hex（新派生名），也不等于裸 clientMsgNO（旧名）。
+                // 命中则丢弃该 localPath，回落到下载链路按新身份重下。
+                val lpName = File(voiceContent.localPath).name
+                val rawName = uiChatMsgItemEntity.wkMsg.clientMsgNO + ".amr"
+                val lossyGeneration = lpName != rawName &&
+                        !lpName.matches(Regex("[0-9a-f]{64}\\.amr"))
+                if (lossyGeneration) {
+                    Log.i(TAG, "discard lossy-generation voice localPath: $lpName")
+                    voiceContent.localPath = ""
+                    stopPlay()
+                    playBtn.setPlay()
+                    return@setOnClickListener
+                }
                 if (WKPlayVoiceUtils.getInstance().isPlaying) {
                     if (WKPlayVoiceUtils.getInstance()
                             .oldPlayKey == uiChatMsgItemEntity.wkMsg.clientMsgNO

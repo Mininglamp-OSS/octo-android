@@ -115,16 +115,30 @@ public class WKCacheKeysTest {
         assertNotEquals(WKCacheKeys.basenameForIdentity(a), WKCacheKeys.basenameForIdentity(b));
     }
 
-    /** payloadDigest 的字段同样不可被分隔符注入构造碰撞。 */
+    /**
+     * payloadDigest 的 framing：必须命中**真实的 v1 别名对**。
+     *
+     * 旧编码（纯 0x1F 连接、无长度前缀）下，单条目的
+     *   (id = "a" + 0x1F + "0", ts = 0, uid = "",        content = "x")
+     *   (id = "a",              ts = 0, uid = "0" + 0x1F, content = "x")
+     * 序列化为同一字节串（0x1F 的位置在"字段内"与"字段间"无法区分）。
+     * 长度前缀编码后两者必不同。原用例的两组输入在旧编码下本就不同，对本缺陷
+     * 零覆盖——不要退回那种写法。
+     */
     @Test
     public void separatorInsidePayloadFieldCannotForgeCollision() {
-        List<String> ids1 = new ArrayList<>(Arrays.asList("a0", "b"));
-        List<String> ids2 = new ArrayList<>(Arrays.asList("a", "0b"));
-        List<Long> t = new ArrayList<>(Arrays.asList(0L, 0L));
-        List<String> u = new ArrayList<>(Arrays.asList("", ""));
-        List<String> c = new ArrayList<>(Arrays.asList("", ""));
-        assertNotEquals(WKCacheKeys.payloadDigest(ids1, t, u, c),
-                        WKCacheKeys.payloadDigest(ids2, t, u, c));
+        String us = String.valueOf((char) 0x1f);
+        String d1 = WKCacheKeys.payloadDigest(
+                new ArrayList<>(Arrays.asList("a" + us + "0")),
+                new ArrayList<>(Arrays.asList(0L)),
+                new ArrayList<>(Arrays.asList("")),
+                new ArrayList<>(Arrays.asList("x")));
+        String d2 = WKCacheKeys.payloadDigest(
+                new ArrayList<>(Arrays.asList("a")),
+                new ArrayList<>(Arrays.asList(0L)),
+                new ArrayList<>(Arrays.asList("0" + us)),
+                new ArrayList<>(Arrays.asList("x")));
+        assertNotEquals("genuine v1 alias must be separated", d1, d2);
     }
 
     /** 普通聊天身份：B-1 的标点反例必须被区分。 */

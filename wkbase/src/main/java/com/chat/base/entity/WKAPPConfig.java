@@ -16,6 +16,13 @@
 
 package com.chat.base.entity;
 
+import com.google.gson.TypeAdapter;
+import com.google.gson.annotations.JsonAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
+
+import java.io.IOException;
 import java.util.List;
 
 public class WKAPPConfig {
@@ -30,6 +37,15 @@ public class WKAPPConfig {
     public int register_user_must_complete_info_on;
     public int can_modify_api_url;
     public int thread_on;
+
+    /**
+     *  I02a：名片手机号/邮箱部署级总开关（appconfig `profile_contact_info_on`）。
+     * 默认 false = 关闭。取不到配置 / 无该项 / 请求失败一律按关闭 —— Gson 反序列化
+     * 缺字段时此 boolean 保持 false，WKConfig.getAppConfig() 在无缓存时 new WKAPPConfig()
+     * 也是 false，两条兜底路径都落到关闭。
+     */
+    @JsonAdapter(LenientBooleanAdapter.class)
+    public boolean profile_contact_info_on;
 
     /**
      * 系统 Bot UID 列表（-A3 / -B · §4.2 / §6.1 根因 F · 消除三端硬编码漂移）。
@@ -59,4 +75,38 @@ public class WKAPPConfig {
 
     public boolean login_enable = true;
     public boolean register_enable = true;
+
+    /**
+     *  I02a：宽容 boolean 适配器。服务端该字段实测下发 JSON boolean（历史曾为 int），
+     * 任何异常形态（number/string/null/object/array）一律按关闭解析，且绝不抛异常，
+     * 避免 JsonSyntaxException 炸掉整个 WKAPPConfig 反序列化。
+     */
+    public static final class LenientBooleanAdapter extends TypeAdapter<Boolean> {
+        @Override
+        public void write(JsonWriter out, Boolean value) throws IOException {
+            if (value == null) out.nullValue();
+            else out.value(value);
+        }
+
+        @Override
+        public Boolean read(JsonReader in) throws IOException {
+            JsonToken token = in.peek();
+            switch (token) {
+                case BOOLEAN:
+                    return in.nextBoolean();
+                case NUMBER:
+                    return in.nextInt() == 1;
+                case STRING: {
+                    String s = in.nextString();
+                    return "1".equals(s) || "true".equalsIgnoreCase(s);
+                }
+                case NULL:
+                    in.nextNull();
+                    return false;
+                default:
+                    in.skipValue();
+                    return false;
+            }
+        }
+    }
 }

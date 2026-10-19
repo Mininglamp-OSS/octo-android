@@ -3,6 +3,8 @@
     <!--适配颜色-->
     <color name="homeColor">#111315</color>
     <color name="layoutColor">#191919</color>
+    <!--  I02b：卡片类 section 背景深色值（与 dividerColor #2C2C2E 同体系，略提亮区分）。 -->
+    <color name="cardBgColor">#1C1C1E</color>
     <color name="layoutColorSelected">#1d1d1d</color>
     <color name="colorDark">#FFFFFF</color>
     <color name="colorLine">#3B3B3C</color>

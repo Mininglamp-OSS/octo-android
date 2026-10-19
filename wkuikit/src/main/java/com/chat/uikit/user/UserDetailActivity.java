@@ -22,6 +22,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.InputFilter;
 import android.text.SpannableString;
@@ -43,6 +46,7 @@ import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
+import com.chat.base.act.WKWebViewActivity;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -58,6 +62,7 @@ import com.chat.base.glide.ChooseMimeType;
 import com.chat.base.glide.ChooseResult;
 import com.chat.base.glide.GlideUtils;
 import com.chat.base.net.HttpResponseCode;
+import com.chat.base.common.WKCommonModel;
 import com.chat.base.ui.components.AlertDialog;
 import com.chat.base.utils.StringUtils;
 import com.chat.base.ui.Theme;
@@ -116,6 +121,18 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     /** ：当前页面的 bot 是否归属当前登录者。showBotInfo() 内计算并缓存。 */
     private boolean isBotOwner;
 
+    //  I02a：联系方式（仅页面内存，不写任何缓存）。
+    private String contactPhone;
+    private String contactEmail;
+    private String contactZone;
+    private String contactPhoneCountryCode;
+    private int contactAccountState;
+    private boolean contactIsRobot;
+    /** per-page 展开态（不用全局/静态变量），离开页面即清。 */
+    private boolean phoneRevealed;
+    /** 本次进页读到的总开关值，用于检测翻转。 */
+    private boolean contactSwitchOn;
+
     /**
      * ：外部成员 " @SpaceName" 后缀的灰紫色（对齐 GroupMemberAdapter /
      * SearchUserAdapter / RemindMemberAdapter 的 0xFF8B5CF6，避免各处渲染色号漂移）。
@@ -147,6 +164,17 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     private void initParams(Intent mIntent) {
+        //  I02a（EDGE_CASES 5）：singleTask 复用同实例跳到别人名片时，
+        // onNewIntent 会重走 initData；此处先把展开态清掉更稳妥。
+        phoneRevealed = false;
+        //  I02a（R10）：联系方式是 per-page 内存态，singleTop + onNewIntent
+        // 切到另一个 uid 时必须一并清空，防止沿用上一个用户的值。
+        contactPhone = null;
+        contactEmail = null;
+        contactZone = null;
+        contactPhoneCountryCode = null;
+        contactAccountState = ContactInfoPolicy.STATE_NORMAL;
+        contactIsRobot = false;
         uid = mIntent.getStringExtra("uid");
         if (TextUtils.isEmpty(uid)) finish();
         if (uid.equals(WKSystemAccount.system_file_helper)) {
@@ -340,27 +368,129 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             intent.putExtra("oldStr", userChannel == null ? "" : userChannel.channelRemark);
             chooseResultLac.launch(intent);
         });
+        SingleClickUtil.onSingleClick(wkVBinding.complaintLayout, v -> {
+            Intent intent = new Intent(this, WKWebViewActivity.class);
+            intent.putExtra("channelType", WKChannelType.PERSONAL);
+            intent.putExtra("channelID", uid);
+            intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
+            startActivity(intent);
+        });
         wkVBinding.avatarView.setOnClickListener(v -> showImg());
     }
 
     private void showCopy(View view, float[] coordinate, String content) {
+        if (!(view instanceof TextView)) {
+            // 非 TextView 防御分支：不做任何视觉改动，直接弹菜单。
+            List<PopupMenuItem> list = new ArrayList<>();
+            list.add(new PopupMenuItem(getString(R.string.copy), R.mipmap.msg_copy, () -> copyContactValue(content)));
+            WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list, null);
+            return;
+        }
+        final TextView tv = (TextView) view;
+        // 高亮只包住文字本身：contactPhoneTv/contactEmailTv 已是 wrap_content，
+        // 常规 GradientDrawable 背景自然只包住号码，不再用 ReplacementSpan 自绘。
+        final Drawable originalBg = tv.getBackground();
+        final int originalPaddingLeft = tv.getPaddingLeft();
+        final int originalPaddingTop = tv.getPaddingTop();
+        final int originalPaddingRight = tv.getPaddingRight();
+        final int originalPaddingBottom = tv.getPaddingBottom();
+        final float density = view.getResources().getDisplayMetrics().density;
+        final int padX = Math.round(4 * density);
+        final int padY = Math.round(2 * density);
+        GradientDrawable highlight = new GradientDrawable();
+        highlight.setCornerRadius(4 * density);
+        highlight.setColor(Theme.isDark()
+                ? Color.argb(51, 255, 255, 255)
+                : Color.argb(51, 0, 0, 0));
+        Runnable restore = () -> {
+            // dismiss 回调可能在 renderContactInfo 重渲染后触发；tv 引用仍是同一
+            // View 实例，只还原背景/padding，不影响已切换的文案。
+            if (isFinishing() || isDestroyed()) return;
+            tv.setBackground(originalBg);
+            tv.setPadding(originalPaddingLeft, originalPaddingTop, originalPaddingRight, originalPaddingBottom);
+        };
         List<PopupMenuItem> list = new ArrayList<>();
         list.add(new PopupMenuItem(getString(R.string.copy), R.mipmap.msg_copy, () -> {
-            view.setBackgroundColor(ContextCompat.getColor(this, R.color.transparent));
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData mClipData = ClipData.newPlainText("Label", content);
-            assert cm != null;
-            cm.setPrimaryClip(mClipData);
-            WKToastUtils.getInstance().showToastNormal(getString(R.string.copyed));
+            restore.run();
+            copyContactValue(content);
         }));
-        view.setBackgroundColor(ContextCompat.getColor(this, R.color.color999));
-        WKDialogUtils.getInstance().showScreenPopup(view, coordinate, list, () -> view.setBackgroundColor(ContextCompat.getColor(UserDetailActivity.this, R.color.transparent)));
+        tv.setBackground(highlight);
+        tv.setPadding(padX, padY, padX, padY);
+        WKDialogUtils.getInstance().showScreenPopup(tv, coordinate, list, new WKDialogUtils.IScreenPopupDismiss() {
+            @Override
+            public void onDismiss() {
+                restore.run();
+            }
+        });
+    }
+
+    /** 统一复制入口：单击与长按共用同一套剪贴板写入与「已复制」Toast。
+     * 复制内容必须是调用方显式传入的原始完整值，不读 TextView 文本。 */
+    private void copyContactValue(String content) {
+        if (TextUtils.isEmpty(content)) return;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) return;
+        cm.setPrimaryClip(ClipData.newPlainText("Label", content));
+        WKToastUtils.getInstance().showToastNormal(getString(R.string.copyed));
+    }
+
+    /** 长按复制：监听挂在父行 touchTarget 上（TextView 自己挂 onLongClick 会把
+     * longClickable 置 true，吞掉 DOWN/UP 导致父行单击永不触发）；
+     * highlightTarget 仅用于 showCopy 的高亮与锚定（传 TextView 本身）。
+     * 显式传入完整原始值（不可经 TextView.getText() 读取，
+     * maxLines/ellipsize 下会复制到截断内容或省略号）。
+     * 长按发生后消费本次手势的 UP/CANCEL，避免长按释放再触发父行的
+     * 普通点击复制（多弹一次「已复制」）。 */
+    @SuppressLint("ClickableViewAccessibility")
+    private void setContactLongClick(View touchTarget, View highlightTarget, String content) {
+        final float[] location = {0f, 0f};
+        final boolean[] longPressed = {false};
+        touchTarget.setOnTouchListener((v, e) -> {
+            switch (e.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    location[0] = e.getRawX();
+                    location[1] = e.getRawY();
+                    longPressed[0] = false;
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    // 长按已处理过菜单，则消费事件，父级 onClick 不会触发。
+                    if (longPressed[0]) return true;
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+        touchTarget.setOnLongClickListener(v -> {
+            longPressed[0] = true;
+            showCopy(highlightTarget, location, content);
+            return true;
+        });
     }
 
     @Override
     protected void initData() {
         super.initData();
         setData();
+        //  I02a：进页重新取一次 appconfig；成功用新值，失败/无该项一律按关闭。
+        // 初值不读 SP 缓存（getAppConfig() 读的恰是缓存），先按关闭渲染，
+        // 等 getAppConfig 回调给出权威值。
+        contactSwitchOn = false;
+        //  I02a（R10）：字段已在 initParams 清空，进页/onNewIntent 先渲染一次
+        // 把 section 收成 GONE，新数据到达前不展示上一个用户的任何值。
+        renderContactInfo();
+        WKCommonModel.getInstance().getAppConfig((code, msg, cfg) -> {
+            if (isFinishing() || isDestroyed()) return;
+            boolean serverOn = code == HttpResponseCode.success
+                    && cfg != null
+                    && cfg.profile_contact_info_on;
+            //  I02c：不打印任何联系方式 PII，仅记录布尔态。
+            // 翻关闭 → 收起并清除展开态；再打开不恢复已展开号码。
+            if (!serverOn) phoneRevealed = false;
+            contactSwitchOn = serverOn;
+            renderContactInfo();
+        });
         getUserInfo();
     }
 
@@ -421,6 +551,16 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.identityLayout.setVisibility(View.VISIBLE);
                         wkVBinding.appIdNumTv.setText(userInfo.short_no);
                     }
+
+                    //  I02a：联系方式只缓存在 Activity 字段里，不写 WKChannel /
+                    // channelInfo.extra / 任何本地 DB。null 与 "" 必须区分。
+                    contactPhone = userInfo.phone;
+                    contactEmail = userInfo.email;
+                    contactZone = userInfo.zone;
+                    contactPhoneCountryCode = userInfo.phone_country_code;
+                    contactAccountState = userInfo.is_destroy;
+                    contactIsRobot = userInfo.robot == 1;
+                    renderContactInfo();
 
                     if (!applyExternalSourceRow(userInfo, externalRes, isExternalUser, sourceSpaceLabel)) {
                         if (!TextUtils.isEmpty(userInfo.source_desc)) {
@@ -488,6 +628,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     botCreatorName = userInfo.bot_creator_name;
                     // ：缓存 bot_creator_uid 给 showBotInfo() / 编辑回调读取。
                     botCreatorUid = userInfo.bot_creator_uid;
+                    boolean isSelfPage = uid != null && uid.equals(WKConfig.getInstance().getUid());
+                    boolean showComplaint = !isSelfPage && !isBot && !isExternalUser && !hideBottomPanel;
+                    wkVBinding.complaintLayout.setVisibility(showComplaint ? View.VISIBLE : View.GONE);
                     if (isBot) {
                         // Show AI badge
                         wkVBinding.aiBadgeTv.setVisibility(View.VISIBLE);
@@ -495,6 +638,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.sexIv.setVisibility(View.GONE);
                         // Hide non-bot UI elements
                         wkVBinding.remarkLayout.setVisibility(View.GONE);
+                        wkVBinding.remarkDividerView.setVisibility(View.GONE);
                         wkVBinding.pushBlackLayout.setVisibility(View.GONE);
                         wkVBinding.deleteLayout.setVisibility(View.GONE);
 
@@ -525,6 +669,14 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     }
                 }
             } else {
+                //  I02a（R10）：取号失败不借用占位文案、不沿用上次值 —— 整段收起。
+                contactPhone = null;
+                contactEmail = null;
+                contactZone = null;
+                contactPhoneCountryCode = null;
+                contactAccountState = ContactInfoPolicy.STATE_NORMAL;
+                contactIsRobot = false;
+                renderContactInfo();
                 showToast(msg);
             }
         });
@@ -537,6 +689,93 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
         WKIM.getInstance().getChannelManager().removeRefreshChannelInfo("user_detail_refresh_channel1");
     }
 
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        //  I02c：离开页面收回已展开的手机号，重新渲染为「点击查看」，不保留展开号码。
+        if (phoneRevealed) {
+            phoneRevealed = false;
+            renderContactInfo();
+        }
+    }
+
+    /**  I02a：按门控 + 三态字段渲染联系方式行。只控制联系方式两行，
+     * 不再整体 GONE contactInfoLayout —— 设置备注 / 投诉与联系方式策略解耦。 */
+    private void renderContactInfo() {
+        if (isFinishing() || isDestroyed()) return;
+        boolean isSelf = uid != null && uid.equals(WKConfig.getInstance().getUid());
+        boolean sectionEligible = ContactInfoPolicy.sectionEligible(contactSwitchOn, isSelf,
+                contactIsRobot, contactAccountState);
+        ContactInfoPolicy.RowMode phoneMode = sectionEligible
+                ? ContactInfoPolicy.phoneRowMode(contactPhone, isSelf, phoneRevealed)
+                : ContactInfoPolicy.RowMode.HIDDEN;
+        ContactInfoPolicy.RowMode emailMode = sectionEligible
+                ? ContactInfoPolicy.emailRowMode(contactEmail)
+                : ContactInfoPolicy.RowMode.HIDDEN;
+        boolean showPhone = phoneMode != ContactInfoPolicy.RowMode.HIDDEN;
+        boolean showEmail = emailMode != ContactInfoPolicy.RowMode.HIDDEN;
+        wkVBinding.contactPhoneLayout.setVisibility(showPhone ? View.VISIBLE : View.GONE);
+        wkVBinding.contactEmailLayout.setVisibility(showEmail ? View.VISIBLE : View.GONE);
+
+        if (showPhone) {
+            //  I02c：每次状态切换先清空上一状态的手机号行/文本监听，避免残留复制入口。
+            wkVBinding.contactPhoneLayout.setOnClickListener(null);
+            wkVBinding.contactPhoneLayout.setOnLongClickListener(null);
+            wkVBinding.contactPhoneLayout.setOnTouchListener(null);
+            wkVBinding.contactPhoneTv.setOnLongClickListener(null);
+            wkVBinding.contactPhoneTv.setOnTouchListener(null);
+            //  I02d：三态切换时复位 TextView 的事件标志位，避免上一态
+            // setOnLongClickListener 留下的 longClickable=true 持续吞点击。
+            wkVBinding.contactPhoneTv.setClickable(false);
+            wkVBinding.contactPhoneTv.setLongClickable(false);
+            wkVBinding.contactPhoneTv.setFocusable(false);
+            if (phoneMode == ContactInfoPolicy.RowMode.PLACEHOLDER) {
+                //  I02c：空值态只显示占位文案，不可点击、不可长按。
+                wkVBinding.contactPhoneTv.setText(R.string.contact_info_not_added);
+            } else if (phoneMode == ContactInfoPolicy.RowMode.TAP_TO_VIEW) {
+                // 未展开时号码一位都不显示、无复制入口；整行点击只展开，不复制。
+                wkVBinding.contactPhoneTv.setText(R.string.contact_tap_to_view);
+                SingleClickUtil.onSingleClick(wkVBinding.contactPhoneLayout, v -> {
+                    phoneRevealed = true;
+                    renderContactInfo();
+                });
+            } else { // FULL_VALUE
+                // 本人带区号；他人展开后不带区号。
+                final String shown = isSelf
+                        ? ContactInfoPolicy.selfCardPhoneDisplay(
+                                contactPhone, contactPhoneCountryCode, contactZone)
+                        : contactPhone;
+                wkVBinding.contactPhoneTv.setText(shown);
+                //  I02c：展开后整行单击直接复制完整号码（显式传原始值）。
+                SingleClickUtil.onSingleClick(wkVBinding.contactPhoneLayout, v -> {
+                    copyContactValue(shown);
+                });
+                //  I02c：长按复制显式传入完整 shown，不读 TextView（maxLines/ellipsize 会截断）。
+                setContactLongClick(wkVBinding.contactPhoneLayout, wkVBinding.contactPhoneTv, shown);
+            }
+        }
+
+        if (showEmail) {
+            if (emailMode == ContactInfoPolicy.RowMode.PLACEHOLDER) {
+                wkVBinding.contactEmailTv.setText(R.string.contact_info_not_added);
+                //  I02c：空值态清除整行单击、长按、触摸监听，防残留复制行为。
+                wkVBinding.contactEmailLayout.setOnClickListener(null);
+                wkVBinding.contactEmailLayout.setOnLongClickListener(null);
+                wkVBinding.contactEmailLayout.setOnTouchListener(null);
+            } else {
+                wkVBinding.contactEmailTv.setText(contactEmail);
+                // 视觉单行截断由 layout 的 maxLines/ellipsize 负责；
+                // 复制走 contactEmail 原始完整字符串，不取 TextView 文本。
+                final String fullEmail = contactEmail;
+                //  I02c：整行单击直接复制完整邮箱（对齐 iOS）。
+                SingleClickUtil.onSingleClick(wkVBinding.contactEmailLayout, v -> copyContactValue(fullEmail));
+                //  I02c：长按复制与手机号行统一走 setContactLongClick（监听挂父行，
+                // 触点坐标由其内部局部变量记录）。
+                setContactLongClick(wkVBinding.contactEmailLayout, wkVBinding.contactEmailTv, fullEmail);
+            }
+        }
+    }
 
     private void showBotInfo(com.chat.uikit.enity.UserInfo userInfo) {
         //  (对齐 web PR#1092 BotDetailModal)：bot 创建者 = 当前登录者时

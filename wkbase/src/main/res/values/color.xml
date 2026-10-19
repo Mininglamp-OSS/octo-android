@@ -34,6 +34,8 @@
     <color name="screen_bg">#ffffff</color>
     <color name="screen_bg_selected">#F3F3F3</color>
     <color name="layoutColor">#ffffff</color>
+    <!--  I02b：卡片类 section 背景（跟随深浅色，contactInfoLayout 使用）。 -->
+    <color name="cardBgColor">#FFFFFF</color>
     <color name="layoutColorSelected">#DAD9D9</color>
     <color name="homeColor">#f6f6f6</color>
     <color name="homeColorSelected">#E7E7E7</color>

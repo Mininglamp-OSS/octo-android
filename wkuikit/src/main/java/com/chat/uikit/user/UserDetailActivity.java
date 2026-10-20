@@ -484,7 +484,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             if (isFinishing() || isDestroyed()) return;
             boolean serverOn = code == HttpResponseCode.success
                     && cfg != null
-                    && cfg.profile_contact_info_on;
+                    && cfg.isProfileContactInfoOn();
             //  I02c：不打印任何联系方式 PII，仅记录布尔态。
             // 翻关闭 → 收起并清除展开态；再打开不恢复已展开号码。
             if (!serverOn) phoneRevealed = false;
@@ -513,8 +513,13 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     private void getUserInfo() {
-        WKIM.getInstance().getChannelManager().fetchChannelInfo(uid, WKChannelType.PERSONAL);
-        UserModel.getInstance().getUserInfo(uid, groupID, (code, msg, userInfo) -> {
+        //  请求级 uid 快照：Activity 是 singleTop，onNewIntent 重跑 initData 时
+        // 旧实例的在飞请求晚到会把上一个用户的联系方式 PII 写进本页；
+        // 回调入口三重守卫（isFinishing/isDestroyed + uid 归属），uid 对不上的整包响应直接丢弃。
+        final String reqUid = uid;
+        WKIM.getInstance().getChannelManager().fetchChannelInfo(reqUid, WKChannelType.PERSONAL);
+        UserModel.getInstance().getUserInfo(reqUid, groupID, (code, msg, userInfo) -> {
+            if (isFinishing() || isDestroyed() || !reqUid.equals(uid)) return;
             if (code == HttpResponseCode.success) {
                 if (userInfo != null) {
                     if (!TextUtils.isEmpty(userInfo.vercode)) {
@@ -628,7 +633,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                     botCreatorName = userInfo.bot_creator_name;
                     // ：缓存 bot_creator_uid 给 showBotInfo() / 编辑回调读取。
                     botCreatorUid = userInfo.bot_creator_uid;
-                    boolean isSelfPage = uid != null && uid.equals(WKConfig.getInstance().getUid());
+                    boolean isSelfPage = reqUid != null && reqUid.equals(WKConfig.getInstance().getUid());
                     boolean showComplaint = !isSelfPage && !isBot && !isExternalUser && !hideBottomPanel;
                     wkVBinding.complaintLayout.setVisibility(showComplaint ? View.VISIBLE : View.GONE);
                     if (isBot) {
@@ -638,7 +643,6 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
                         wkVBinding.sexIv.setVisibility(View.GONE);
                         // Hide non-bot UI elements
                         wkVBinding.remarkLayout.setVisibility(View.GONE);
-                        wkVBinding.remarkDividerView.setVisibility(View.GONE);
                         wkVBinding.pushBlackLayout.setVisibility(View.GONE);
                         wkVBinding.deleteLayout.setVisibility(View.GONE);
 
@@ -701,7 +705,9 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
     }
 
     /**  I02a：按门控 + 三态字段渲染联系方式行。只控制联系方式两行，
-     * 不再整体 GONE contactInfoLayout —— 设置备注 / 投诉与联系方式策略解耦。 */
+     * 不再整体 GONE contactInfoLayout —— 设置备注 / 投诉与联系方式策略解耦。
+     * 名片页 isSelf 恒为 false（initParams 在 uid==自己时已跳 MyInfoActivity 并 finish()）；
+     * 此分支为防御性保留。 */
     private void renderContactInfo() {
         if (isFinishing() || isDestroyed()) return;
         boolean isSelf = uid != null && uid.equals(WKConfig.getInstance().getUid());

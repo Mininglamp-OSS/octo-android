@@ -16,13 +16,6 @@
 
 package com.chat.base.entity;
 
-import com.google.gson.TypeAdapter;
-import com.google.gson.annotations.JsonAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
-import com.google.gson.stream.JsonWriter;
-
-import java.io.IOException;
 import java.util.List;
 
 public class WKAPPConfig {
@@ -41,11 +34,29 @@ public class WKAPPConfig {
     /**
      *  I02a：名片手机号/邮箱部署级总开关（appconfig `profile_contact_info_on`）。
      * 默认 false = 关闭。取不到配置 / 无该项 / 请求失败一律按关闭 —— Gson 反序列化
-     * 缺字段时此 boolean 保持 false，WKConfig.getAppConfig() 在无缓存时 new WKAPPConfig()
-     * 也是 false，两条兜底路径都落到关闭。
+     * 缺字段时此字段保持 null，WKConfig.getAppConfig() 在无缓存时 new WKAPPConfig()
+     * 也是 null，两条兜底路径都落到关闭。
+     *
+     * <p>类型为 Object：全工程 Retrofit 用 FastJsonConverterFactory（Gson 行已注释），
+     * 网络侧由 fastjson 解析，接 Object 不会因该键下发异常形态抛 JSONException 炸掉
+     * 整份 appconfig；SP 侧 Gson 往返 Object 走 LinkedTreeMap/Boolean 也能归一化。
+     * 读取一律走 {@link #isProfileContactInfoOn()} 归一化，fail-closed。
+     * 此字段不挂 @JsonAdapter —— Gson 对 Object 字段默认可反序列化任意 JSON 值，
+     * 挂 TypeAdapter&lt;Boolean&gt; 会在 saveAppConfig 序列化非 Boolean 运行时值时 ClassCastException。
      */
-    @JsonAdapter(LenientBooleanAdapter.class)
-    public boolean profile_contact_info_on;
+    public Object profile_contact_info_on;
+
+    /** 归一化读取：Boolean 直取；Number == 1；"1"/"true"；null / 其它（Map/List）一律 false。 */
+    public boolean isProfileContactInfoOn() {
+        Object v = profile_contact_info_on;
+        if (v instanceof Boolean) return (Boolean) v;
+        if (v instanceof Number) return ((Number) v).doubleValue() == 1d;
+        if (v instanceof String) {
+            String s = (String) v;
+            return "1".equals(s) || "true".equalsIgnoreCase(s);
+        }
+        return false;
+    }
 
     /**
      * 系统 Bot UID 列表（-A3 / -B · §4.2 / §6.1 根因 F · 消除三端硬编码漂移）。
@@ -75,38 +86,4 @@ public class WKAPPConfig {
 
     public boolean login_enable = true;
     public boolean register_enable = true;
-
-    /**
-     *  I02a：宽容 boolean 适配器。服务端该字段实测下发 JSON boolean（历史曾为 int），
-     * 任何异常形态（number/string/null/object/array）一律按关闭解析，且绝不抛异常，
-     * 避免 JsonSyntaxException 炸掉整个 WKAPPConfig 反序列化。
-     */
-    public static final class LenientBooleanAdapter extends TypeAdapter<Boolean> {
-        @Override
-        public void write(JsonWriter out, Boolean value) throws IOException {
-            if (value == null) out.nullValue();
-            else out.value(value);
-        }
-
-        @Override
-        public Boolean read(JsonReader in) throws IOException {
-            JsonToken token = in.peek();
-            switch (token) {
-                case BOOLEAN:
-                    return in.nextBoolean();
-                case NUMBER:
-                    return in.nextInt() == 1;
-                case STRING: {
-                    String s = in.nextString();
-                    return "1".equals(s) || "true".equalsIgnoreCase(s);
-                }
-                case NULL:
-                    in.nextNull();
-                    return false;
-                default:
-                    in.skipValue();
-                    return false;
-            }
-        }
-    }
 }

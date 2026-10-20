@@ -52,6 +52,8 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
     //  I02a：「我的」页手机号/邮箱。phoneEmailLoaded=false 时两行整体隐藏，
     // 不沿用上一次看到的值。区号取本次响应的 zone，不取登录缓存。
     private boolean phoneEmailLoaded;
+    //  仅首次加载成功前才允许失败回调隐藏两行；之后再 resume 失败不清值。
+    private boolean phoneEmailEverLoaded;
     private String myPhone;
     private String myEmail;
     private String myZone;
@@ -102,12 +104,8 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
         } else
             wkVBinding.avatarView.showAvatar(WKConfig.getInstance().getUid(), WKChannelType.PERSONAL);
 
-        //  I02a：先清旧值并隐藏两行，再发请求 —— 保证新结果回来前不残留旧值。
-        phoneEmailLoaded = false;
-        myPhone = null;
-        myEmail = null;
-        myZone = null;
-        renderPhoneEmail();
+        //  I02a：首次加载前两行保持 XML 默认 gone；再次 resume 保留当前值，
+        // 在飞请求回来后覆盖，仅首次失败才隐藏。
         UserModel.getInstance().getUserInfo(WKConfig.getInstance().getUid(), "", (code, msg, userInfo) -> {
             if (isFinishing() || isDestroyed()) return;
             if (code == HttpResponseCode.success && userInfo != null) {
@@ -115,9 +113,10 @@ public class MyInfoActivity extends WKBaseActivity<ActMyInfoLayoutBinding> {
                 myEmail = userInfo.email;
                 myZone = userInfo.zone;
                 phoneEmailLoaded = true;
+                phoneEmailEverLoaded = true;
             } else {
-                // 请求失败：两行整体隐藏，不展示占位文案、不沿用旧值。
-                phoneEmailLoaded = false;
+                // 请求失败：仅首次加载失败才隐藏两行，不展示占位文案；重进失败沿用已渲染值。
+                if (!phoneEmailEverLoaded) phoneEmailLoaded = false;
             }
             renderPhoneEmail();
         });

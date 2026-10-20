@@ -326,7 +326,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
-                    android:background="@color/white"
+                    android:background="@color/cardBgColor"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -352,14 +352,6 @@
                             android:maxLines="1"
                             android:textColor="@color/color999" />
                     </LinearLayout>
-
-                    <View
-                        android:id="@+id/phoneDividerView"
-                        android:layout_width="match_parent"
-                        android:layout_height="0.5dp"
-                        android:layout_marginStart="18dp"
-                        android:background="@color/dividerColor"
-                        android:visibility="gone" />
 
                     <LinearLayout
                         android:id="@+id/contactEmailLayout"
@@ -393,14 +385,6 @@
 
                         <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>
-
-                    <View
-                        android:id="@+id/remarkDividerView"
-                        android:layout_width="match_parent"
-                        android:layout_height="0.5dp"
-                        android:layout_marginStart="18dp"
-                        android:background="@color/dividerColor"
-                        android:visibility="gone" />
 
                     <LinearLayout
                         android:id="@+id/complaintLayout"

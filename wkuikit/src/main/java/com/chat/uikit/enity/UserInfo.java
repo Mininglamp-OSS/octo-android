@@ -31,6 +31,16 @@ public class UserInfo {
     public int sex;
     public String category;
     public String short_no;
+
+    //  I02a：联系方式（仅内存，禁止写入 WKChannel/本地缓存）。
+    // null = 字段缺失 / JSON null / 非字符串（服务端未授权）→ 整行省略
+    // ""   = 服务端授权但用户未填 → 展示「用户暂未添加该信息」
+    public String phone;
+    public String email;
+    public String zone;
+    public String phone_country_code;
+    // 账号状态三态：0 正常 / 1 冷静期 / 2 已注销。必须保持 int，不得折叠成 boolean。
+    public int is_destroy;
     public int chat_pwd_on;
     public int screenshot;
     public int revoke_remind;

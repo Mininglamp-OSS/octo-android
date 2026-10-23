@@ -317,12 +317,62 @@
                     </LinearLayout>
                 </LinearLayout>
 
+                <!--  I02a：联系方式 + 备注 + 投诉同属一个通栏卡片。
+                     手机号/邮箱行默认 GONE，UserDetailActivity 按总开关 / robot /
+                     is_destroy / 字段三态决定行级可见性；备注与投诉行不受
+                     联系方式策略影响，投诉行可见性由页面场景控制。 -->
                 <LinearLayout
+                    android:id="@+id/contactInfoLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
-                    android:background="@color/white"
+                    android:background="@color/cardBgColor"
                     android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/contactPhoneLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/contact_phone_label" />
+
+                        <TextView
+                            android:id="@+id/contactPhoneTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:maxWidth="220dp"
+                            android:clickable="false"
+                            android:ellipsize="end"
+                            android:focusable="false"
+                            android:gravity="end"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/contactEmailLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:text="@string/contact_email_label" />
+
+                        <TextView
+                            android:id="@+id/contactEmailTv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:maxWidth="220dp"
+                            android:ellipsize="end"
+                            android:gravity="end"
+                            android:maxLines="1"
+                            android:textColor="@color/color999" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:id="@+id/remarkLayout"
@@ -337,9 +387,22 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/complaintLayout"
+                        style="@style/layoutBg"
+                        android:visibility="gone">
+
+                        <TextView
+                            style="@style/leftTextView"
+                            android:layout_weight="1"
+                            android:text="@string/report" />
+
+                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/fromLayout"
                         style="@style/layoutBg"
-                        android:visibility="visible">
+                        android:visibility="gone">
 
                         <TextView
                             style="@style/leftTextView"
@@ -387,26 +450,13 @@
 
                     <LinearLayout
                         android:id="@+id/deleteLayout"
-                        style="@style/layoutBg">
-
-                        <TextView
-                            style="@style/leftTextView"
-                            android:layout_weight="1"
-                            android:text="@string/delete_friends" />
-
-                        <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
-                    </LinearLayout>
-
-
-                    <LinearLayout
-                        android:id="@+id/complaintLayout"
                         style="@style/layoutBg"
                         android:visibility="gone">
 
                         <TextView
                             style="@style/leftTextView"
                             android:layout_weight="1"
-                            android:text="@string/report" />
+                            android:text="@string/delete_friends" />
 
                         <androidx.appcompat.widget.AppCompatImageView style="@style/arrow_right_iv" />
                     </LinearLayout>

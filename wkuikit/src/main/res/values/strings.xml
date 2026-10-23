@@ -96,6 +96,12 @@
     <string name="male">男</string>
     <string name="female">女</string>
     <string name="personal_info">个人资料</string>
+    <!--  I02a：名片 / 我的页联系方式 -->
+    <string name="contact_phone_label">手机号</string>
+    <string name="contact_email_label">邮箱</string>
+    <string name="contact_tap_to_view">点击查看</string>
+    <string name="contact_info_not_added">用户暂未添加该信息</string>
+    <string name="contact_not_linked">未绑定</string>
     <string name="qr_desc">扫一扫上面的二维码图案，加我%s</string>
     <string name="clear_msg">清空聊天记录</string>
     <string name="clear_img_cache">清空图片缓存</string>

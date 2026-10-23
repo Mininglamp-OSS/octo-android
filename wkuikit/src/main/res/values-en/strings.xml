@@ -92,6 +92,12 @@
     <string name="male">Male</string>
     <string name="female">Female</string>
     <string name="personal_info">Personal Info</string>
+    <!--  I02a: profile contact info -->
+    <string name="contact_phone_label">Phone number</string>
+    <string name="contact_email_label">Email</string>
+    <string name="contact_tap_to_view">Tap to view</string>
+    <string name="contact_info_not_added">User hasn\'t added this info yet</string>
+    <string name="contact_not_linked">Not linked</string>
     <string name="qr_desc">Scan the OR Code to add me on %s</string>
     <string name="clear_msg">Clear Chat Storage</string>
     <string name="clear_img_cache">Clear Images Cache</string>

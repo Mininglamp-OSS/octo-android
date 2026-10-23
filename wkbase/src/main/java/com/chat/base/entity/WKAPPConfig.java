@@ -32,6 +32,33 @@ public class WKAPPConfig {
     public int thread_on;
 
     /**
+     *  I02a：名片手机号/邮箱部署级总开关（appconfig `profile_contact_info_on`）。
+     * 默认 false = 关闭。取不到配置 / 无该项 / 请求失败一律按关闭 —— Gson 反序列化
+     * 缺字段时此字段保持 null，WKConfig.getAppConfig() 在无缓存时 new WKAPPConfig()
+     * 也是 null，两条兜底路径都落到关闭。
+     *
+     * <p>类型为 Object：全工程 Retrofit 用 FastJsonConverterFactory（Gson 行已注释），
+     * 网络侧由 fastjson 解析，接 Object 不会因该键下发异常形态抛 JSONException 炸掉
+     * 整份 appconfig；SP 侧 Gson 往返 Object 走 LinkedTreeMap/Boolean 也能归一化。
+     * 读取一律走 {@link #isProfileContactInfoOn()} 归一化，fail-closed。
+     * 此字段不挂 @JsonAdapter —— Gson 对 Object 字段默认可反序列化任意 JSON 值，
+     * 挂 TypeAdapter&lt;Boolean&gt; 会在 saveAppConfig 序列化非 Boolean 运行时值时 ClassCastException。
+     */
+    public Object profile_contact_info_on;
+
+    /** 归一化读取：Boolean 直取；Number == 1；"1"/"true"；null / 其它（Map/List）一律 false。 */
+    public boolean isProfileContactInfoOn() {
+        Object v = profile_contact_info_on;
+        if (v instanceof Boolean) return (Boolean) v;
+        if (v instanceof Number) return ((Number) v).doubleValue() == 1d;
+        if (v instanceof String) {
+            String s = (String) v;
+            return "1".equals(s) || "true".equalsIgnoreCase(s);
+        }
+        return false;
+    }
+
+    /**
      * 系统 Bot UID 列表（-A3 / -B · §4.2 / §6.1 根因 F · 消除三端硬编码漂移）。
      *
      * <p>后端 {@code pkg/space/query.go :: SystemBots} 的权威来源，典型值为

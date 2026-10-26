@@ -28,6 +28,22 @@ import com.chat.base.entity.UserInfoSetting;
  * 配置文件
  */
 public class WKConfig {
+    public interface SessionListener {
+        void onSessionChanged(SessionSnapshot snapshot);
+    }
+
+    public static final class SessionSnapshot {
+        public final long version;
+        public final String uid;
+        public final String token;
+
+        public SessionSnapshot(long version, String uid, String token) {
+            this.version = version;
+            this.uid = uid;
+            this.token = token;
+        }
+    }
+
     private WKConfig() {
     }
 
@@ -35,24 +51,78 @@ public class WKConfig {
         private static final WKConfig WK_CONFIG = new WKConfig();
     }
 
+    private final Object sessionLock = new Object();
+    private long sessionVersion;
+    private final java.util.concurrent.CopyOnWriteArrayList<SessionListener> sessionListeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
     public static WKConfig getInstance() {
         return ConfigBinder.WK_CONFIG;
     }
 
     public void setUid(String uid) {
-        WKSharedPreferencesUtil.getInstance().putSP("wk_uid", uid);
+        changeSession(uid, null, true, false);
     }
 
     public String getUid() {
-        return WKSharedPreferencesUtil.getInstance().getSP("wk_uid");
+        synchronized (sessionLock) {
+            return WKSharedPreferencesUtil.getInstance().getSP("wk_uid");
+        }
     }
 
     public void setToken(String token) {
-        WKSharedPreferencesUtil.getInstance().putSP("wk_token", token);
+        changeSession(null, token, false, true);
     }
 
     public String getToken() {
-        return WKSharedPreferencesUtil.getInstance().getSP("wk_token");
+        synchronized (sessionLock) {
+            return WKSharedPreferencesUtil.getInstance().getSP("wk_token");
+        }
+    }
+
+    public SessionSnapshot getSessionSnapshot() {
+        synchronized (sessionLock) {
+            return new SessionSnapshot(sessionVersion,
+                    WKSharedPreferencesUtil.getInstance().getSP("wk_uid"),
+                    WKSharedPreferencesUtil.getInstance().getSP("wk_token"));
+        }
+    }
+
+    public void addSessionListener(SessionListener listener) { if (listener != null) sessionListeners.addIfAbsent(listener); }
+    public void removeSessionListener(SessionListener listener) { sessionListeners.remove(listener); }
+    public void registerSessionListener(SessionListener listener) { addSessionListener(listener); }
+    public void unregisterSessionListener(SessionListener listener) { removeSessionListener(listener); }
+
+    public void invalidateSessionContext() {
+        SessionSnapshot snapshot;
+        synchronized (sessionLock) {
+            snapshot = new SessionSnapshot(++sessionVersion,
+                    WKSharedPreferencesUtil.getInstance().getSP("wk_uid"),
+                    WKSharedPreferencesUtil.getInstance().getSP("wk_token"));
+        }
+        notifySessionChanged(snapshot);
+    }
+
+    private void changeSession(String uid, String token, boolean uidChanged, boolean tokenChanged) {
+        SessionSnapshot snapshot = null;
+        synchronized (sessionLock) {
+            String oldUid = WKSharedPreferencesUtil.getInstance().getSP("wk_uid");
+            String oldToken = WKSharedPreferencesUtil.getInstance().getSP("wk_token");
+            if (uidChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_uid", uid);
+            if (tokenChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_token", token);
+            String newUid = uidChanged ? uid : oldUid;
+            String newToken = tokenChanged ? token : oldToken;
+            if (!java.util.Objects.equals(oldUid, newUid) || !java.util.Objects.equals(oldToken, newToken)) {
+                snapshot = new SessionSnapshot(++sessionVersion, newUid, newToken);
+            }
+        }
+        if (snapshot != null) notifySessionChanged(snapshot);
+    }
+
+    private void notifySessionChanged(SessionSnapshot snapshot) {
+        for (SessionListener listener : sessionListeners) {
+            try { listener.onSessionChanged(snapshot); } catch (RuntimeException ignored) { }
+        }
     }
 
     public void setImToken(String imToken) {
@@ -72,8 +142,13 @@ public class WKConfig {
     }
 
     public void clearInfo() {
-        setUid("");
-        setToken("");
+        SessionSnapshot snapshot;
+        synchronized (sessionLock) {
+            WKSharedPreferencesUtil.getInstance().putSP("wk_uid", "");
+            WKSharedPreferencesUtil.getInstance().putSP("wk_token", "");
+            snapshot = new SessionSnapshot(++sessionVersion, "", "");
+        }
+        notifySessionChanged(snapshot);
         setImToken("");
         UserInfoEntity userInfoEntity = WKConfig.getInstance().getUserInfo();
         userInfoEntity.token = "";

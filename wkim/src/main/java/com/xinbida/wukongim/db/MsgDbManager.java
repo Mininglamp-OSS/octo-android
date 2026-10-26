@@ -1377,8 +1377,18 @@ public class MsgDbManager {
     public synchronized boolean mergeContentFieldsWithClientMsgNo(String clientMsgNo,
                                                                   HashMap<String, Object> values,
                                                                   boolean isRefreshUI) {
+        boolean updated = mergeContentFieldsWithClientMsgNo(WKIMApplication.getInstance().getDbHelper(), clientMsgNo, values);
+        if (updated && isRefreshUI) {
+            WKMsg msg = queryWithClientMsgNo(clientMsgNo);
+            if (msg != null) WKIM.getInstance().getMsgManager().setRefreshMsg(msg, true);
+        }
+        return updated;
+    }
+
+    public synchronized boolean mergeContentFieldsWithClientMsgNo(WKDBHelper dbHelper,
+                                                                  String clientMsgNo,
+                                                                  HashMap<String, Object> values) {
         if (TextUtils.isEmpty(clientMsgNo) || values == null || values.isEmpty()) return false;
-        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
         if (dbHelper == null) return false;
 
         // 只取 content 原始字符串，不经过 model 序列化，保证未知字段原样保留
@@ -1411,8 +1421,12 @@ public class MsgDbManager {
             WKLoggerUtils.getInstance().e(TAG, "mergeContentFields put error " + e.getMessage());
             return false;
         }
-        return updateFieldWithClientMsgNo(clientMsgNo,
-                WKDBColumns.WKMessageColumns.content, jsonObject.toString(), isRefreshUI);
+        int row = dbHelper.update(message,
+                new String[]{WKDBColumns.WKMessageColumns.content},
+                new String[]{jsonObject.toString()},
+                WKDBColumns.WKMessageColumns.client_msg_no + "=?",
+                new String[]{clientMsgNo});
+        return row > 0;
     }
 
     public synchronized boolean updateFieldWithMessageID(String messageID, String field, String value) {

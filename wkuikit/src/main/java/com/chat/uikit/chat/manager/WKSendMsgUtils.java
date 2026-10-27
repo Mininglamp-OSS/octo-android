@@ -21,9 +21,14 @@ import android.text.TextUtils;
 import com.chat.base.endpoint.EndpointManager;
 import com.chat.base.endpoint.EndpointSID;
 import com.chat.base.endpoint.entity.WKSendMsgMenu;
+import com.chat.base.config.WKConfig;
 import com.chat.base.msgitem.WKContentType;
+import com.chat.base.msgcontent.WKFileContent;
+import com.chat.base.net.ud.WKProgressManager;
 import com.chat.base.net.ud.WKUploader;
 import com.xinbida.wukongim.WKIM;
+import com.xinbida.wukongim.WKIMApplication;
+import com.xinbida.wukongim.db.WKDBHelper;
 import com.xinbida.wukongim.entity.WKChannel;
 import com.xinbida.wukongim.entity.WKMsg;
 import com.xinbida.wukongim.entity.WKSendOptions;
@@ -35,12 +40,34 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 2019-11-20 13:20
  * 发送消息管理
  */
 public class WKSendMsgUtils {
+    interface FileUploadTransport {
+        void getCredentials(String channelID, byte channelType, String path, WKUploader.IGetUploadCredentials callback);
+        void put(String uploadUrl, String path, String contentType, String contentDisposition, Object tag, WKUploader.IUploadBack callback);
+    }
+
+    private static volatile FileUploadTransport fileUploadTransport;
+
+    static void setFileUploadTransportForTests(FileUploadTransport transport) { fileUploadTransport = transport; }
+
+    private static FileUploadTransport getFileUploadTransport() {
+        FileUploadTransport injected = fileUploadTransport;
+        if (injected != null) return injected;
+        return new FileUploadTransport() {
+            @Override public void getCredentials(String channelID, byte channelType, String path, WKUploader.IGetUploadCredentials callback) {
+                WKUploader.getInstance().getUploadCredentials(channelID, channelType, path, callback);
+            }
+            @Override public void put(String uploadUrl, String path, String contentType, String contentDisposition, Object tag, WKUploader.IUploadBack callback) {
+                WKUploader.getInstance().putUpload(uploadUrl, path, contentType, contentDisposition, tag, callback);
+            }
+        };
+    }
     private WKSendMsgUtils() {
 
     }
@@ -94,6 +121,10 @@ public class WKSendMsgUtils {
     void uploadChatAttachment(WKMsg msg, IUploadAttacResultListener listener) {
         if (msg.type == WKContentType.WK_IMAGE || msg.type == WKContentType.WK_GIF || msg.type == WKContentType.WK_VOICE || msg.type == WKContentType.WK_LOCATION || msg.type == WKContentType.WK_FILE) {
             WKMediaMessageContent contentMsgModel = (WKMediaMessageContent) msg.baseContentMsgModel;
+            if (msg.type == WKContentType.WK_FILE) {
+                uploadFileAttachment(msg, (WKFileContent) contentMsgModel, listener);
+                return;
+            }
             if (!TextUtils.isEmpty(contentMsgModel.url)) {
                 listener.onUploadResult(true, contentMsgModel);
                 return;
@@ -134,6 +165,64 @@ public class WKSendMsgUtils {
                 uploadVideoFile(msg, videoMsgModel, listener);
             }
         }
+    }
+
+    private void uploadFileAttachment(WKMsg msg, WKFileContent content, IUploadAttacResultListener listener) {
+        WKConfig.SessionSnapshot capturedSession = WKConfig.getInstance().getSessionSnapshot();
+        WKIMApplication app = WKIMApplication.getInstance();
+        String capturedUid = app.getUid();
+        WKDBHelper capturedHelper = app.getDbHelper();
+        final String clientMsgNo = msg.clientMsgNO;
+        final long clientSeq = msg.clientSeq;
+        final String channelId = msg.channelID;
+        final byte channelType = msg.channelType;
+        AtomicBoolean completed = new AtomicBoolean(false);
+        FileUploadTransport transport = getFileUploadTransport();
+        IUploadAttacResultListener result = (success, value) -> {
+            if (!completed.compareAndSet(false, true) || !isCurrent(capturedSession, capturedUid, capturedHelper)) return;
+            notifyFileUploadResult(clientMsgNo, clientSeq, listener, capturedSession, capturedUid, capturedHelper, success, value);
+        };
+
+        if (!TextUtils.isEmpty(content.url)) { result.onUploadResult(true, content); return; }
+        if (TextUtils.isEmpty(content.localPath)) { result.onUploadResult(false, content); return; }
+        try {
+            transport.getCredentials(channelId, channelType, content.localPath, (uploadUrl, downloadUrl, contentType, contentDisposition) -> {
+                if (!isCurrent(capturedSession, capturedUid, capturedHelper)) return;
+                if (TextUtils.isEmpty(uploadUrl) || TextUtils.isEmpty(downloadUrl)) { result.onUploadResult(false, content); return; }
+                try {
+                    transport.put(uploadUrl, content.localPath, contentType, contentDisposition, clientSeq, new WKUploader.IUploadBack() {
+                        @Override public void onSuccess(String url) {
+                            if (!completed.compareAndSet(false, true) || !isCurrent(capturedSession, capturedUid, capturedHelper)) return;
+                            content.url = downloadUrl;
+                            notifyFileUploadResult(clientMsgNo, clientSeq, listener, capturedSession, capturedUid, capturedHelper, true, content);
+                        }
+                        @Override public void onError() { result.onUploadResult(false, content); }
+                    });
+                } catch (RuntimeException error) { result.onUploadResult(false, content); }
+            });
+        } catch (RuntimeException error) { result.onUploadResult(false, content); }
+    }
+
+    private static void notifyFileUploadResult(String clientMsgNo, long clientSeq,
+                                               IUploadAttacResultListener listener,
+                                               WKConfig.SessionSnapshot session, String uid, WKDBHelper helper,
+                                               boolean success, com.xinbida.wukongim.msgmodel.WKMessageContent value) {
+        listener.onUploadResult(success, value);
+        if (!isCurrent(session, uid, helper)) return;
+        WKMsg persisted = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
+        WKFileContent persistedContent = persisted != null && persisted.baseContentMsgModel instanceof WKFileContent
+                ? (WKFileContent) persisted.baseContentMsgModel : null;
+        boolean persistedUrl = persistedContent != null && !TextUtils.isEmpty(persistedContent.url);
+        if (success && persistedUrl) WKProgressManager.Companion.getInstance().completeUploadSuccess(clientSeq, null);
+        else WKProgressManager.Companion.getInstance().completeUploadFailure(clientSeq, "attachment upload failed");
+    }
+
+    private static boolean isCurrent(WKConfig.SessionSnapshot captured, String uid, WKDBHelper helper) {
+        WKConfig.SessionSnapshot current = WKConfig.getInstance().getSessionSnapshot();
+        WKIMApplication app = WKIMApplication.getInstance();
+        return captured.version == current.version && TextUtils.equals(captured.uid, current.uid)
+                && TextUtils.equals(captured.token, current.token) && TextUtils.equals(uid, app.getUid())
+                && TextUtils.equals(captured.uid, uid) && app.getDbHelper() == helper;
     }
 
     private void uploadVideoCover(WKMsg msg, WKVideoContent videoMsgModel, IUploadAttacResultListener listener) {

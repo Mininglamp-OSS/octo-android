@@ -47,6 +47,7 @@ import com.chat.uikit.R
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.WKIMApplication
+import com.xinbida.wukongim.db.WKDBHelper
 import com.xinbida.wukongim.message.type.WKSendMsgResult
 import java.io.File
 import java.util.Locale
@@ -77,7 +78,7 @@ internal class UploadProgressRegistration {
 }
 
 class WKFileProvider : WKChatBaseProvider() {
-    private class BindingState(var generation: Long, val clientSeq: Long, val identity: String, val session: WKConfig.SessionSnapshot, @Volatile var attached: Boolean = true, val uploadRegistration: UploadProgressRegistration = UploadProgressRegistration(), @Volatile var request: Long = 0, var terminalContent: WKFileContent? = null, var terminalFailed: Boolean = false, var attachListener: View.OnAttachStateChangeListener? = null)
+    private class BindingState(var generation: Long, val clientSeq: Long, val identity: String, val session: WKConfig.SessionSnapshot, val dbHelper: WKDBHelper?, @Volatile var attached: Boolean = true, val uploadRegistration: UploadProgressRegistration = UploadProgressRegistration(), @Volatile var request: Long = 0, var terminalContent: WKFileContent? = null, var terminalFailed: Boolean = false, var attachListener: View.OnAttachStateChangeListener? = null)
     private fun isSessionCurrent(session: WKConfig.SessionSnapshot, helper: com.xinbida.wukongim.db.WKDBHelper? = null): Boolean {
         val current = WKConfig.getInstance().getSessionSnapshot()
         val app = WKIMApplication.getInstance()
@@ -86,7 +87,7 @@ class WKFileProvider : WKChatBaseProvider() {
     private fun isCurrent(view: View, binding: BindingState, request: Long = binding.request): Boolean {
         val current = view.findViewById<LinearLayout>(R.id.fileView).tag as? BindingState ?: return false
         val session = WKConfig.getInstance().getSessionSnapshot()
-        return current === binding && current.identity == binding.identity && binding.attached && binding.request == request && binding.session.version == session.version && binding.session.uid == session.uid && binding.session.token == session.token
+        return current === binding && current.identity == binding.identity && binding.attached && binding.request == request && binding.dbHelper != null && binding.session.version == session.version && binding.session.uid == session.uid && binding.session.token == session.token && isSessionCurrent(binding.session, binding.dbHelper)
     }
 
     override fun getChatViewItem(parentView: ViewGroup, from: WKChatIteMsgFromType): View? {
@@ -117,20 +118,22 @@ class WKFileProvider : WKChatBaseProvider() {
         previous?.attachListener?.let { fileView.removeOnAttachStateChangeListener(it) }
         val generation = (previous?.generation ?: 0) + 1
         val identity = "${uiChatMsgItemEntity.wkMsg.channelType}:${uiChatMsgItemEntity.wkMsg.channelID}:${uiChatMsgItemEntity.wkMsg.clientMsgNO}"
-        val binding = BindingState(generation, uiChatMsgItemEntity.wkMsg.clientSeq, identity, WKConfig.getInstance().getSessionSnapshot())
+        val binding = BindingState(generation, uiChatMsgItemEntity.wkMsg.clientSeq, identity, WKConfig.getInstance().getSessionSnapshot(), WKIMApplication.getInstance().dbHelper)
         fileView.tag = binding
         binding.attachListener = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
-                synchronized(binding) { binding.attached = true; binding.request++; if (binding.uploadRegistration.canRegister()) binding.uploadRegistration.listener?.let { WKProgressManager.instance.registerProgress(binding.clientSeq, it); binding.uploadRegistration.registered = true } }
-                val terminalState = synchronized(binding) { binding.terminalContent to binding.terminalFailed }
-                if (isSessionCurrent(binding.session)) {
-                    terminalState.first?.let { latest ->
-                        uiChatMsgItemEntity.wkMsg.baseContentMsgModel = latest
-                        fileNameTv.text = latest.name ?: ""
-                        fileSizeTv.text = if (terminalState.second) context.getString(R.string.doc_share_upload_failed) else formatFileSize(latest.size)
-                        fileSizeTv.visibility = View.VISIBLE; extensionTv.visibility = if (terminalState.second) View.GONE else View.VISIBLE
-                        uploadLayout.visibility = View.GONE; contentLayout.isEnabled = !terminalState.second; actionButton.isEnabled = !terminalState.second
+                synchronized(binding) {
+                    binding.attached = true
+                    binding.request++
+                    if (binding.dbHelper != null && isSessionCurrent(binding.session, binding.dbHelper) && binding.uploadRegistration.canRegister()) {
+                        binding.uploadRegistration.listener?.let { WKProgressManager.instance.registerProgress(binding.clientSeq, it); binding.uploadRegistration.registered = true }
+                    } else if (binding.dbHelper == null || !isSessionCurrent(binding.session, binding.dbHelper)) {
+                        binding.uploadRegistration.listener?.let { WKProgressManager.instance.unregisterProgress(binding.clientSeq, it) }
+                        binding.uploadRegistration.registered = false
                     }
+                }
+                if (binding.dbHelper != null && isSessionCurrent(binding.session, binding.dbHelper)) {
+                    recoverUploadTerminal(binding, uiChatMsgItemEntity, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton)
                 } else {
                     contentLayout.isEnabled = false; actionButton.isEnabled = false
                 }
@@ -185,31 +188,19 @@ class WKFileProvider : WKChatBaseProvider() {
 
                     override fun onSuccess(tag: Any?, path: String?) {
                         if (tag != binding.clientSeq) return
-                        val latest = if (isSessionCurrent(binding.session)) WKIM.getInstance().msgManager.getWithClientMsgNO(uiChatMsgItemEntity.wkMsg.clientMsgNO) else null
+                        val latest = if (binding.dbHelper != null && isSessionCurrent(binding.session, binding.dbHelper)) WKIM.getInstance().msgManager.getWithClientMsgNO(uiChatMsgItemEntity.wkMsg.clientMsgNO) else null
                         val latestContent = latest?.baseContentMsgModel as? WKFileContent
                         val terminal = finishUploadListener(binding, this, tag, latestContent)
                         if (terminal == UploadProgressRegistration.TerminalResult.ignored) return
-                        synchronized(binding) {
-                            binding.terminalContent = if (terminal == UploadProgressRegistration.TerminalResult.success) latestContent else fileContent
-                            binding.terminalFailed = terminal != UploadProgressRegistration.TerminalResult.success
-                        }
-                        if (!isSessionCurrent(binding.session)) return
+                        val terminalContent = if (terminal == UploadProgressRegistration.TerminalResult.success) latestContent ?: fileContent else fileContent
+                        val terminalFailed = terminal != UploadProgressRegistration.TerminalResult.success
+                        synchronized(binding) { binding.terminalContent = terminalContent; binding.terminalFailed = terminalFailed }
+                        if (binding.dbHelper == null || !isSessionCurrent(binding.session, binding.dbHelper)) return
                         val callbackRequest = binding.request
                         parentView.post {
                             if (!isCurrent(parentView, binding, callbackRequest) || !isSessionCurrent(binding.session)) return@post
-                            progressBar.visibility = View.GONE; uploadLayout.visibility = View.GONE
-                            if (terminal == UploadProgressRegistration.TerminalResult.success && latestContent != null) {
-                                uiChatMsgItemEntity.wkMsg.baseContentMsgModel = latestContent
-                                fileNameTv.text = latestContent.name ?: ""
-                                fileSizeTv.text = formatFileSize(latestContent.size)
-                                extensionTv.text = (latestContent.name?.substringAfterLast('.', "")?.ifEmpty { latestContent.extension } ?: latestContent.extension).uppercase(Locale.ROOT)
-                                extensionTv.visibility = View.VISIBLE; fileSizeTv.visibility = View.VISIBLE
-                                contentLayout.isEnabled = true; actionButton.isEnabled = true
-                            } else {
-                                fileSizeTv.text = context.getString(R.string.doc_share_upload_failed)
-                                fileSizeTv.visibility = View.VISIBLE; extensionTv.visibility = View.GONE
-                                contentLayout.isEnabled = false; actionButton.isEnabled = false
-                            }
+                            progressBar.visibility = View.GONE
+                            renderUploadTerminal(binding, uiChatMsgItemEntity, terminalContent, terminalFailed, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton)
                         }
                     }
 
@@ -217,14 +208,17 @@ class WKFileProvider : WKChatBaseProvider() {
                         if (finishUploadListener(binding, this, tag, null) == UploadProgressRegistration.TerminalResult.ignored) return
                         synchronized(binding) { binding.terminalContent = fileContent; binding.terminalFailed = true }
                         val callbackRequest = binding.request
-                        parentView.post { if (isCurrent(parentView, binding, callbackRequest)) { progressBar.visibility = View.GONE; uploadLayout.visibility = View.GONE; fileSizeTv.text = context.getString(R.string.doc_share_upload_failed); fileSizeTv.visibility = View.VISIBLE; extensionTv.visibility = View.GONE; contentLayout.isEnabled = false; actionButton.isEnabled = false } }
+                        parentView.post { if (isCurrent(parentView, binding, callbackRequest)) { progressBar.visibility = View.GONE; renderUploadTerminal(binding, uiChatMsgItemEntity, fileContent, true, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton) } }
                     }
             }
             synchronized(binding) {
                 binding.uploadRegistration.listener = uploadListener
-                WKProgressManager.instance.registerProgress(uiChatMsgItemEntity.wkMsg.clientSeq, uploadListener)
-                binding.uploadRegistration.registered = true
+                if (binding.dbHelper != null && isSessionCurrent(binding.session, binding.dbHelper)) {
+                    WKProgressManager.instance.registerProgress(uiChatMsgItemEntity.wkMsg.clientSeq, uploadListener)
+                    binding.uploadRegistration.registered = true
+                }
             }
+            recoverUploadTerminal(binding, uiChatMsgItemEntity, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton)
             }
         }
 
@@ -233,6 +227,58 @@ class WKFileProvider : WKChatBaseProvider() {
         actionButton.setOnClickListener { (uiChatMsgItemEntity.wkMsg.baseContentMsgModel as? WKFileContent)?.let { handleFileClick(parentView, uiChatMsgItemEntity, it, progressBar, binding) } }
 
         addLongClick(contentLayout, uiChatMsgItemEntity)
+    }
+
+    private fun recoverUploadTerminal(
+        binding: BindingState,
+        item: WKUIChatMsgItemEntity,
+        fileNameTv: TextView,
+        fileSizeTv: TextView,
+        extensionTv: TextView,
+        uploadLayout: View,
+        contentLayout: BubbleLayout,
+        actionButton: View
+    ) {
+        if (binding.dbHelper == null || !isSessionCurrent(binding.session, binding.dbHelper)) return
+        val latest = WKIM.getInstance().msgManager.getWithClientMsgNO(item.wkMsg.clientMsgNO)
+        if (latest == null || latest.clientMsgNO != item.wkMsg.clientMsgNO || latest.channelID != item.wkMsg.channelID || latest.channelType != item.wkMsg.channelType) return
+        val latestContent = latest.baseContentMsgModel as? WKFileContent ?: return
+        val succeeded = !latestContent.url.isNullOrBlank()
+        val failed = !succeeded && latest.status == WKSendMsgResult.send_fail
+        if (!succeeded && !failed) {
+            val remembered = synchronized(binding) { binding.terminalContent to binding.terminalFailed }
+            if (remembered.first != null) {
+                renderUploadTerminal(binding, item, remembered.first!!, remembered.second, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton)
+            }
+            return
+        }
+        val listener = synchronized(binding) { binding.uploadRegistration.listener }
+        if (listener != null) finishUploadListener(binding, listener, binding.clientSeq, latestContent)
+        synchronized(binding) { binding.terminalContent = latestContent; binding.terminalFailed = failed }
+        renderUploadTerminal(binding, item, latestContent, failed, fileNameTv, fileSizeTv, extensionTv, uploadLayout, contentLayout, actionButton)
+    }
+
+    private fun renderUploadTerminal(
+        binding: BindingState,
+        item: WKUIChatMsgItemEntity,
+        content: WKFileContent,
+        failed: Boolean,
+        fileNameTv: TextView,
+        fileSizeTv: TextView,
+        extensionTv: TextView,
+        uploadLayout: View,
+        contentLayout: BubbleLayout,
+        actionButton: View
+    ) {
+        if (!failed) item.wkMsg.baseContentMsgModel = content
+        fileNameTv.text = content.name ?: ""
+        fileSizeTv.text = if (failed) context.getString(R.string.doc_share_upload_failed) else formatFileSize(content.size)
+        extensionTv.text = (content.name?.substringAfterLast('.', "")?.ifEmpty { content.extension } ?: content.extension).uppercase(Locale.ROOT)
+        fileSizeTv.visibility = View.VISIBLE
+        extensionTv.visibility = if (failed) View.GONE else View.VISIBLE
+        uploadLayout.visibility = View.GONE
+        contentLayout.isEnabled = !failed
+        actionButton.isEnabled = !failed
     }
 
     private fun finishUploadListener(binding: BindingState, listener: WKProgressManager.IProgress, tag: Any?, latest: WKFileContent?): UploadProgressRegistration.TerminalResult {

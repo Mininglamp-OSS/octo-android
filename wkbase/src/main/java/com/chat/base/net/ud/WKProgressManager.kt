@@ -44,6 +44,16 @@ class WKProgressManager private constructor() {
 
     fun unregisterProgress(tag: Any, progress: IProgress) { progressList.remove(tag, progress) }
 
+    /** Completes an attachment upload after its SDK callback has persisted the message content. */
+    fun completeUploadSuccess(tag: Any, filePath: String?) {
+        progressList.remove(tag)?.onSuccess(tag, filePath)
+    }
+
+    /** Completes an attachment upload after its SDK callback has persisted send failure. */
+    fun completeUploadFailure(tag: Any, message: String?) {
+        progressList.remove(tag)?.onFail(tag, message)
+    }
+
     internal fun onSuccess(tag: Any, filePath: String) {
         progressList.remove(tag)?.onSuccess(tag, filePath)
     }

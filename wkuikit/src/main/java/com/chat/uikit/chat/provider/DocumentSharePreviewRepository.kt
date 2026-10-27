@@ -38,7 +38,7 @@ class DocumentSharePreviewRepository(
     private data class Callback(val callback: (Result) -> Unit, @Volatile var active: Boolean = true)
     private data class Pending(val id: Long, val callbacks: MutableMap<Long, Callback>, val key: Key, val generation: Long)
     private data class Cached(val result: Result, val expires: Long)
-    private val lock = Any(); private val cache = HashMap<Key, Cached>(); private val inflight = HashMap<Key, Pending>()
+    private val lock = Any(); private val cache = LinkedHashMap<Key, Cached>(16, 0.75f, true); private val inflight = HashMap<Key, Pending>()
     private var nextRequestId = 0L; private var nextSubscriptionId = 0L; private var generation = 0L
     @Volatile private var closed = false
     private val sessionListener: () -> Unit = { invalidateSession() }
@@ -53,6 +53,7 @@ class DocumentSharePreviewRepository(
         var cached: Result? = null; var pending: Pending? = null; var start: Pending? = null; var subscriptionId = 0L; var lookupGeneration = 0L
         synchronized(lock) {
             if (closed) { callback(Result(State.error)); return EmptySubscription }
+            evictExpiredLocked()
             lookupGeneration = generation
             if (!force) cache[key]?.takeIf { it.expires > now() && isCurrentLocked(context, lookupGeneration) }?.let { cached = it.result }
             if (cached == null) {
@@ -90,7 +91,11 @@ class DocumentSharePreviewRepository(
             if (closed || current?.id != request.id || current.generation != request.generation || request.generation != generation) return
             valid = currentContext() == request.key.context; inflight.remove(request.key)
             deliveryGeneration = generation; deliveryContext = request.key.context
-            if (valid && result.state != State.error) cache[request.key] = Cached(result, now() + 30_000)
+            evictExpiredLocked()
+            if (valid && result.state != State.error) {
+                cache[request.key] = Cached(result, now() + 30_000)
+                while (cache.size > MAX_CACHE_ENTRIES) cache.entries.iterator().run { next(); remove() }
+            }
             callbacks = if (valid) request.callbacks.values.toList() else emptyList()
         }
         if (valid) callbacks.forEach { item ->
@@ -100,6 +105,7 @@ class DocumentSharePreviewRepository(
     }
 
     private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiOrigin(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webOrigin(origins.second)) }
+    private fun evictExpiredLocked() { val timestamp = now(); val iterator = cache.entries.iterator(); while (iterator.hasNext()) if (iterator.next().value.expires <= timestamp) iterator.remove() }
     private fun isCurrentLocked(context: Context, expectedGeneration: Long) = !closed && expectedGeneration == generation && currentContext() == context
     private fun deliverIfCurrent(context: Context, expectedGeneration: Long, callback: () -> Unit) { val valid = synchronized(lock) { isCurrentLocked(context, expectedGeneration) }; if (valid) callback() }
 
@@ -122,6 +128,7 @@ class DocumentSharePreviewRepository(
     fun buildNavigationUrl(docId: String): String? = if (validDocId(docId)) webOrigin(config.origins().second)?.let { "$it/d/$docId" } else null
 
     companion object {
+        internal const val MAX_CACHE_ENTRIES = 128
         private val applicationRepository by lazy { DocumentSharePreviewRepository() }
         fun shared() = applicationRepository
         fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.baseWebUrl)

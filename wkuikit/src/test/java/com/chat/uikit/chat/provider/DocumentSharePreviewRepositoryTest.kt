@@ -220,4 +220,77 @@ class DocumentSharePreviewRepositoryTest {
         assertEquals(1, transport.calls.size)
         repository.close()
     }
+
+    @Test fun cacheExpiresAtBoundaryAndBoundsEntriesByLeastRecentAccess() {
+        val transport = FakeTransport()
+        var clock = 1L
+        val repository = repository(transport, now = { clock })
+        fun item(id: String) = WKDocumentShareContent().apply { docId = id; kind = "board" }
+        fun resolve(id: String) {
+            repository.fetch(item(id)) {}
+            transport.calls.last().callback(200, "{\"elements\":[\"$id\"]}")
+        }
+        repeat(DocumentSharePreviewRepository.MAX_CACHE_ENTRIES) { resolve("doc_$it") }
+        repository.fetch(item("doc_0")) { assertEquals(DocumentSharePreviewRepository.State.ready, it.state) }
+        val before = transport.calls.size
+        resolve("doc_overflow")
+        assertEquals(before + 1, transport.calls.size)
+        repository.fetch(item("doc_0")) {}
+        assertEquals(before + 1, transport.calls.size)
+        repository.fetch(item("doc_1")) {}
+        assertEquals(before + 2, transport.calls.size)
+        transport.calls.last().callback(200, "{\"elements\":[\"one\"]}")
+
+        clock += 30_000
+        repository.fetch(item("doc_0")) {}
+        assertEquals(before + 3, transport.calls.size)
+        transport.calls.last().callback(200, "{\"elements\":[\"zero\"]}")
+        repository.close()
+    }
+
+    @Test fun successfulProducerBodiesParseThroughRepositoryTransport() {
+        val cases = listOf(
+            "doc" to """{"doc":{"content":[{"type":"heading","content":[{"text":"Title"}]},{"type":"paragraph","content":[{"text":"Body"}]}]}}""",
+            "sheet" to """{"sheetCells":{"Tab!0:0":{"v":"Name"},"Tab!0:2":{"v":"City"},"Tab!1:0":{"v":"Lin"},"Tab!1:2":{"v":"苏州"},"Other!0:0":{"v":"Other"}}}""",
+            "board" to """{"scene":{"elements":[{"text":"Node A"},{"text":"Node B"}]}}""",
+            "html" to """{"preview":{"heading":"Page","paragraphs":["First","Second"]}}"""
+        )
+        cases.forEach { (kind, body) ->
+            val transport = FakeTransport()
+            val repository = repository(transport)
+            var result: DocumentSharePreviewRepository.Result? = null
+            repository.fetch(content().apply { this.kind = kind }) { result = it }
+            transport.calls.single().callback(200, body)
+            assertEquals("kind=$kind", DocumentSharePreviewRepository.State.ready, result?.state)
+            when (kind) {
+                "doc" -> assertEquals(DocumentSharePreviewParser.Preview.Doc("Title", listOf("Body")), result?.preview)
+                "sheet" -> assertEquals(DocumentSharePreviewParser.Preview.Sheet(listOf("Name", "City"), listOf(listOf("Lin", "苏州"))), result?.preview)
+                "board" -> assertEquals(DocumentSharePreviewParser.Preview.Board(listOf("Node A", "Node B")), result?.preview)
+                "html" -> assertEquals(DocumentSharePreviewParser.Preview.Doc("Page", listOf("First", "Second")), result?.preview)
+            }
+            repository.close()
+        }
+    }
+
+    @Test fun malformedAndMissingSuccessPayloadsKeepDocumentedStates() {
+        val cases = listOf(
+            Triple("doc", "", DocumentSharePreviewRepository.State.error),
+            Triple("sheet", "not-json", DocumentSharePreviewRepository.State.error),
+            Triple("board", "{}", DocumentSharePreviewRepository.State.ready),
+            Triple("doc", "{\"doc\":{\"content\":\"wrong type\"}}", DocumentSharePreviewRepository.State.ready),
+            Triple("sheet", "{\"sheetCells\":\"wrong type\"}", DocumentSharePreviewRepository.State.ready),
+            Triple("board", "{\"scene\":{\"elements\":{}}}", DocumentSharePreviewRepository.State.ready),
+            Triple("html", "{}", DocumentSharePreviewRepository.State.empty),
+            Triple("html", "{\"preview\":{\"heading\":7,\"paragraphs\":[false]}}", DocumentSharePreviewRepository.State.empty)
+        )
+        cases.forEach { (kind, body, expected) ->
+            val transport = FakeTransport(); val repository = repository(transport)
+            var result: DocumentSharePreviewRepository.Result? = null
+            repository.fetch(content().apply { this.kind = kind }) { result = it }
+            transport.calls.single().callback(200, body)
+            assertEquals("kind=$kind body=$body", expected, result?.state)
+            if (expected == DocumentSharePreviewRepository.State.ready) assertEquals(null, result?.preview)
+            repository.close()
+        }
+    }
 }

@@ -28,7 +28,7 @@ android {
 
 dependencies {
     api project(':wkbase')//二维码扫描
-    implementation 'com.github.jenly1314:zxing-lite:3.2.0'
+    implementation 'com.github.jenly1314:zxing-lite:3.5.0'
    // implementation 'com.github.jenly1314:zxing-lite:2.1.1'
 
     //  Phase 2 · 本模块新增 host-side 单测（ScanJoinGroupNeedSpaceTest）

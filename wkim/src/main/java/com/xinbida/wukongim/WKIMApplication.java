@@ -50,10 +50,65 @@ public class WKIMApplication {
 
     //    private String tempUid;
     private String tempRSAPublicKey;
-    private WKDBHelper mDbHelper;
+    private volatile WKDBHelper mDbHelper;
     public boolean isCanConnect = true;
     private String fileDir = "wkIM";
     private WKSyncMsgMode syncMsgMode;
+    private final Object sessionGate = new Object();
+    private long sessionGeneration;
+
+    public static final class SessionContext {
+        public final long generation;
+        public final String uid;
+        public final String token;
+        public final WKDBHelper helper;
+        public final String clientMsgNo;
+        public final long clientSeq;
+        private SessionContext(long generation, String uid, String token, WKDBHelper helper, String clientMsgNo, long clientSeq) {
+            this.generation = generation; this.uid = uid; this.token = token; this.helper = helper;
+            this.clientMsgNo = clientMsgNo; this.clientSeq = clientSeq;
+        }
+        public SessionContext withMessageIdentity(String clientMsgNo, long clientSeq) {
+            return new SessionContext(generation, uid, token, helper, clientMsgNo, clientSeq);
+        }
+    }
+
+    public SessionContext captureSessionContext(String clientMsgNo, long clientSeq) {
+        synchronized (sessionGate) {
+            String uid = getUid();
+            String token = getToken();
+            WKDBHelper helper = getDbHelper();
+            return new SessionContext(sessionGeneration, uid, token, helper, clientMsgNo, clientSeq);
+        }
+    }
+
+    public boolean isSessionCurrent(SessionContext context) {
+        if (context == null) return false;
+        synchronized (sessionGate) {
+            return context.generation == sessionGeneration && java.util.Objects.equals(context.uid, getUid())
+                    && java.util.Objects.equals(context.token, getToken()) && context.helper == mDbHelper
+                    && context.helper != null && !context.helper.isClosed();
+        }
+    }
+
+    public boolean withCurrentSession(SessionContext context, Runnable action) {
+        if (context == null || action == null) return false;
+        synchronized (sessionGate) {
+            if (context.generation != sessionGeneration || !java.util.Objects.equals(context.uid, getUid())
+                    || !java.util.Objects.equals(context.token, getToken()) || context.helper != mDbHelper
+                    || context.helper == null || context.helper.isClosed()) return false;
+            action.run();
+            return true;
+        }
+    }
+
+    public void invalidateSessionContext() {
+        synchronized (sessionGate) { sessionGeneration++; }
+    }
+
+    public void withSessionGate(Runnable action) {
+        synchronized (sessionGate) { action.run(); }
+    }
 
     public WKSyncMsgMode getSyncMsgMode() {
         if (syncMsgMode == null) syncMsgMode = WKSyncMsgMode.READ;
@@ -104,12 +159,13 @@ public class WKIMApplication {
 
     public void setUid(String uid) {
         if (mContext == null) return;
-        // tempUid = uid;
-        SharedPreferences setting = mContext.get().getSharedPreferences(
-                sharedName, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = setting.edit();
-        editor.putString("wk_UID", uid);
-        editor.apply();
+        synchronized (sessionGate) {
+            SharedPreferences setting = mContext.get().getSharedPreferences(sharedName, Context.MODE_PRIVATE);
+            if (!java.util.Objects.equals(setting.getString("wk_UID", ""), uid)) {
+                SharedPreferences.Editor editor = setting.edit(); editor.putString("wk_UID", uid); editor.apply();
+                sessionGeneration++;
+            }
+        }
     }
 
     public String getToken() {
@@ -121,28 +177,40 @@ public class WKIMApplication {
 
     public void setToken(String token) {
         if (mContext == null) return;
-        SharedPreferences setting = mContext.get().getSharedPreferences(
-                sharedName, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = setting.edit();
-        editor.putString("wk_Token", token);
-        editor.apply();
-    }
-
-
-    public synchronized WKDBHelper getDbHelper() {
-        String uid = getUid();
-        if (!TextUtils.isEmpty(uid)) {
-            if (mDbHelper == null || mDbHelper.isClosed()) {
-                mDbHelper = WKDBHelper.getInstance(mContext.get(), uid);
+        synchronized (sessionGate) {
+            SharedPreferences setting = mContext.get().getSharedPreferences(sharedName, Context.MODE_PRIVATE);
+            if (!java.util.Objects.equals(setting.getString("wk_Token", ""), token)) {
+                SharedPreferences.Editor editor = setting.edit(); editor.putString("wk_Token", token); editor.apply();
+                sessionGeneration++;
             }
         }
-        return mDbHelper;
     }
 
-    public synchronized void closeDbHelper() {
-        if (mDbHelper != null) {
-            mDbHelper.close();
-            mDbHelper = null;
+
+    public WKDBHelper getDbHelper() {
+        synchronized (sessionGate) {
+            synchronized (this) {
+                String uid = getUid();
+                if (!TextUtils.isEmpty(uid)) {
+                    if (mDbHelper == null || mDbHelper.isClosed()) {
+                        mDbHelper = WKDBHelper.getInstance(mContext.get(), uid);
+                        sessionGeneration++;
+                    }
+                }
+                return mDbHelper;
+            }
+        }
+    }
+
+    public void closeDbHelper() {
+        synchronized (sessionGate) {
+            if (mDbHelper != null) sessionGeneration++;
+            synchronized (this) {
+                if (mDbHelper != null) {
+                    mDbHelper.close();
+                    mDbHelper = null;
+                }
+            }
         }
         WKIM.getInstance().resetInitialized();
     }

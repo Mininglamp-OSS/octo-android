@@ -94,32 +94,41 @@ public class WKConfig {
     public void unregisterSessionListener(SessionListener listener) { removeSessionListener(listener); }
 
     public void invalidateSessionContext() {
-        SessionSnapshot snapshot;
-        synchronized (sessionLock) {
-            snapshot = new SessionSnapshot(++sessionVersion,
-                    WKSharedPreferencesUtil.getInstance().getSP("wk_uid"),
-                    WKSharedPreferencesUtil.getInstance().getSP("wk_token"));
-        }
+        final SessionSnapshot[] result = new SessionSnapshot[1];
+        com.xinbida.wukongim.WKIMApplication.getInstance().withSessionGate(() -> {
+            synchronized (sessionLock) {
+                result[0] = new SessionSnapshot(++sessionVersion,
+                        WKSharedPreferencesUtil.getInstance().getSP("wk_uid"),
+                        WKSharedPreferencesUtil.getInstance().getSP("wk_token"));
+                com.xinbida.wukongim.WKIMApplication.getInstance().invalidateSessionContext();
+            }
+        });
+        SessionSnapshot snapshot = result[0];
         notifySessionChanged(snapshot);
     }
 
     private void changeSession(String uid, String token, boolean uidChanged, boolean tokenChanged) {
-        SessionSnapshot snapshot = null;
-        synchronized (sessionLock) {
-            String oldUid = WKSharedPreferencesUtil.getInstance().getSP("wk_uid");
-            String oldToken = WKSharedPreferencesUtil.getInstance().getSP("wk_token");
-            if (uidChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_uid", uid);
-            if (tokenChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_token", token);
-            String newUid = uidChanged ? uid : oldUid;
-            String newToken = tokenChanged ? token : oldToken;
-            if (!java.util.Objects.equals(oldUid, newUid) || !java.util.Objects.equals(oldToken, newToken)) {
-                snapshot = new SessionSnapshot(++sessionVersion, newUid, newToken);
+        final SessionSnapshot[] result = new SessionSnapshot[1];
+        com.xinbida.wukongim.WKIMApplication.getInstance().withSessionGate(() -> {
+            synchronized (sessionLock) {
+                String oldUid = WKSharedPreferencesUtil.getInstance().getSP("wk_uid");
+                String oldToken = WKSharedPreferencesUtil.getInstance().getSP("wk_token");
+                if (uidChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_uid", uid);
+                if (tokenChanged) WKSharedPreferencesUtil.getInstance().putSP("wk_token", token);
+                String newUid = uidChanged ? uid : oldUid;
+                String newToken = tokenChanged ? token : oldToken;
+                if (!java.util.Objects.equals(oldUid, newUid) || !java.util.Objects.equals(oldToken, newToken)) {
+                    result[0] = new SessionSnapshot(++sessionVersion, newUid, newToken);
+                    com.xinbida.wukongim.WKIMApplication.getInstance().invalidateSessionContext();
+                }
             }
-        }
+        });
+        SessionSnapshot snapshot = result[0];
         if (snapshot != null) notifySessionChanged(snapshot);
     }
 
     private void notifySessionChanged(SessionSnapshot snapshot) {
+        if (snapshot == null) return;
         for (SessionListener listener : sessionListeners) {
             try { listener.onSessionChanged(snapshot); } catch (RuntimeException ignored) { }
         }
@@ -142,12 +151,16 @@ public class WKConfig {
     }
 
     public void clearInfo() {
-        SessionSnapshot snapshot;
-        synchronized (sessionLock) {
-            WKSharedPreferencesUtil.getInstance().putSP("wk_uid", "");
-            WKSharedPreferencesUtil.getInstance().putSP("wk_token", "");
-            snapshot = new SessionSnapshot(++sessionVersion, "", "");
-        }
+        final SessionSnapshot[] result = new SessionSnapshot[1];
+        com.xinbida.wukongim.WKIMApplication.getInstance().withSessionGate(() -> {
+            synchronized (sessionLock) {
+                WKSharedPreferencesUtil.getInstance().putSP("wk_uid", "");
+                WKSharedPreferencesUtil.getInstance().putSP("wk_token", "");
+                result[0] = new SessionSnapshot(++sessionVersion, "", "");
+                com.xinbida.wukongim.WKIMApplication.getInstance().invalidateSessionContext();
+            }
+        });
+        SessionSnapshot snapshot = result[0];
         notifySessionChanged(snapshot);
         setImToken("");
         UserInfoEntity userInfoEntity = WKConfig.getInstance().getUserInfo();

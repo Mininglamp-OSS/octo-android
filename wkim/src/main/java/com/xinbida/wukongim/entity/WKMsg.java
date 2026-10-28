@@ -22,6 +22,9 @@ import java.util.List;
  */
 public class WKMsg implements Parcelable {
 
+    /** Captured account context for asynchronous local-file upload; intentionally not parcelled. */
+    public transient com.xinbida.wukongim.WKIMApplication.SessionContext uploadSessionContext;
+
     //服务器消息ID(全局唯一，无序)
     public String messageID;
     //服务器消息序号(有序递增)

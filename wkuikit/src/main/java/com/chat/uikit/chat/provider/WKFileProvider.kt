@@ -48,6 +48,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.xinbida.wukongim.WKIM
 import com.xinbida.wukongim.WKIMApplication
 import com.xinbida.wukongim.db.WKDBHelper
+import com.xinbida.wukongim.entity.WKMsg
 import com.xinbida.wukongim.message.type.WKSendMsgResult
 import java.io.File
 import java.util.Locale
@@ -229,7 +230,8 @@ class WKFileProvider : WKChatBaseProvider() {
         // Upload progress for sending
         if (TextUtils.isEmpty(fileContent.url)) {
             val alreadyFailed = uiChatMsgItemEntity.wkMsg.status == WKSendMsgResult.send_fail
-            uploadLayout.visibility = if (alreadyFailed) View.GONE else View.VISIBLE; uploadBar.progress = 0; uploadPercent.text = context.getString(R.string.doc_share_upload_percent, 0); extensionTv.visibility = View.GONE; fileSizeTv.visibility = if (alreadyFailed) View.VISIBLE else View.GONE; contentLayout.isEnabled = false; actionButton.isEnabled = false
+            val hasTrustedSnapshot = trustedLocalFile(uiChatMsgItemEntity.wkMsg, fileContent, binding) != null
+            uploadLayout.visibility = if (alreadyFailed) View.GONE else View.VISIBLE; uploadBar.progress = 0; uploadPercent.text = context.getString(R.string.doc_share_upload_percent, 0); extensionTv.visibility = View.GONE; fileSizeTv.visibility = if (alreadyFailed) View.VISIBLE else View.GONE; contentLayout.isEnabled = hasTrustedSnapshot; actionButton.isEnabled = hasTrustedSnapshot
             if (alreadyFailed) {
                 fileSizeTv.text = context.getString(R.string.doc_share_upload_failed)
             } else {
@@ -240,7 +242,8 @@ class WKFileProvider : WKChatBaseProvider() {
                             parentView.post {
                                 if (!isCurrent(parentView, binding, callbackRequest)) return@post
                                 if (synchronized(binding) { binding.uploadRegistration.terminal }) return@post
-                                uploadLayout.visibility = View.VISIBLE; uploadBar.progress = progress.coerceIn(0, 100); uploadPercent.text = context.getString(R.string.doc_share_upload_percent, progress.coerceIn(0, 100)); extensionTv.visibility = View.GONE; fileSizeTv.visibility = View.GONE; contentLayout.isEnabled = false; actionButton.isEnabled = false
+                                val canOpenTrusted = trustedLocalFile(uiChatMsgItemEntity.wkMsg, fileContent, binding) != null
+                                uploadLayout.visibility = View.VISIBLE; uploadBar.progress = progress.coerceIn(0, 100); uploadPercent.text = context.getString(R.string.doc_share_upload_percent, progress.coerceIn(0, 100)); extensionTv.visibility = View.GONE; fileSizeTv.visibility = View.GONE; contentLayout.isEnabled = canOpenTrusted; actionButton.isEnabled = canOpenTrusted
                                 progressBar.visibility = View.GONE
                             }
                         }
@@ -354,8 +357,9 @@ class WKFileProvider : WKChatBaseProvider() {
         fileSizeTv.visibility = View.VISIBLE
         extensionTv.visibility = if (failed) View.GONE else View.VISIBLE
         uploadLayout.visibility = View.GONE
-        contentLayout.isEnabled = !failed
-        actionButton.isEnabled = !failed
+        val hasTrustedSnapshot = trustedLocalFile(item.wkMsg, content, binding) != null
+        contentLayout.isEnabled = !failed || hasTrustedSnapshot
+        actionButton.isEnabled = !failed || hasTrustedSnapshot
     }
 
     private fun finishUploadListener(binding: BindingState, listener: WKProgressManager.IProgress, tag: Any?, latest: WKFileContent?): UploadProgressRegistration.TerminalResult {
@@ -418,6 +422,12 @@ class WKFileProvider : WKChatBaseProvider() {
         )
         if (!isCurrent(parentView, binding)) return
         val request = ++binding.request
+
+        val trustedFile = trustedLocalFile(uiChatMsgItemEntity.wkMsg, fileContent, binding)
+        if (trustedFile != null) {
+            openFile(trustedFile, fileContent.name)
+            return
+        }
 
         val fileName = buildCacheFileNameForIdentity(
             identity,
@@ -543,12 +553,21 @@ class WKFileProvider : WKChatBaseProvider() {
         openFileWithOptions(context, file, displayName)
     }
 
+    private fun trustedLocalFile(msg: WKMsg, content: WKFileContent, binding: BindingState): File? {
+        if (!isSessionCurrent(binding.session, binding.dbHelper)) return null
+        return com.chat.base.utils.TrustedLocalFileStore.resolve(
+            context, binding.session.uid, com.chat.base.config.WKApiConfig.baseUrl,
+            msg.channelType, msg.channelID, msg.clientMsgNO, content.size
+        )
+    }
+
     /** 见 [isValidFileCache]。 */
     private fun isValidCache(file: File, fileContent: WKFileContent, identity: String? = null): Boolean =
         isValidFileCache(file, fileContent.size, identity)
 
     companion object {
         private const val TAG = "WKFileProvider"
+        @Volatile internal var openFileForTests: ((File, String?) -> Unit)? = null
 
         /**
          * 本次进程内已完整下载并 rename 落地的记录：路径 → (产生该文件的**原始身份串**, 落地字节数)。
@@ -865,6 +884,7 @@ class WKFileProvider : WKChatBaseProvider() {
 
         @JvmStatic
         fun openFileWithOptions(context: Context, file: File, displayName: String? = null) {
+            openFileForTests?.let { it(file, displayName); return }
             val activity = context as? Activity ?: return
             if (activity.isFinishing || activity.isDestroyed) return
             val dialog = BottomSheetDialog(activity)

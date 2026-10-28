@@ -81,6 +81,7 @@ import com.chat.base.ui.components.ContactEditText
 import com.chat.base.ui.components.SeekBarView
 import com.chat.base.ui.components.SwitchView
 import com.chat.base.utils.AndroidUtilities
+import com.chat.base.utils.AppExecutors
 import com.chat.base.utils.ImageUtils
 import com.chat.base.utils.LayoutHelper
 import com.chat.base.utils.SoftKeyboardUtils
@@ -160,7 +161,52 @@ class ChatPanelManager(
     val resetTitleViewListener: () -> Unit,
     val showNewImageListener: (path: String) -> Unit,
 ) {
-    private companion object {
+    companion object {
+        @JvmStatic fun captureFileDestination(channel: WKChannel): WKChannel =
+            WKChannel(channel.channelID, channel.channelType)
+
+        @JvmStatic fun routePreparedFile(context: IConversationContext, content: WKFileContent, destination: WKChannel) {
+            context.sendMessageToChannel(content, destination)
+        }
+
+        internal fun isCapturedDestinationCurrent(context: IConversationContext, destination: WKChannel): Boolean {
+            val current = context.chatChannelInfo
+            return current.channelID == destination.channelID && current.channelType == destination.channelType
+        }
+
+        internal fun applyTextFileComposerEffectIfCurrent(
+            context: IConversationContext,
+            destination: WKChannel,
+            composerTextAtStart: String,
+            currentComposerText: String,
+            restoreComposerText: String?,
+            applyComposerText: (String?) -> Unit,
+        ): Boolean {
+            if (!isCapturedDestinationCurrent(context, destination)) return false
+            if (currentComposerText == composerTextAtStart) {
+                applyComposerText(restoreComposerText?.takeIf { it.isNotEmpty() })
+            }
+            return true
+        }
+
+        /** The same text-file producer used by the async send path and instrumentation tests. */
+        internal fun prepareTextFile(cacheDir: File, text: String, namePrefix: String,
+                                     session: com.chat.base.config.WKConfig.SessionSnapshot,
+                                     serverScope: String): Pair<File, WKFileContent> {
+            val parent = File(cacheDir, "WKTextToFile/${java.util.UUID.randomUUID()}")
+            if (!parent.mkdirs()) throw java.io.IOException("cannot create text file directory")
+            try {
+                val file = File(parent, "$namePrefix.txt")
+                file.writeText(text, Charsets.UTF_8)
+                val content = WKFileContent.fromTrustedLocalFile(file.absolutePath, file.name, ".txt", session, serverScope)
+                    ?: throw java.io.IOException("cannot grant trusted local file")
+                content.setOwnedTemporaryDirectory(parent)
+                return parent to content
+            } catch (error: Exception) {
+                parent.deleteRecursively()
+                throw error
+            }
+        }
         /** 内置表情面板的工具栏 sid，见 initToolBar() 里兜底添加的那颗。 */
         const val EMOJI_TOOL_BAR_SID = "emojiToolBar"
 
@@ -929,34 +975,43 @@ class ChatPanelManager(
         if (namePrefix.isEmpty()) {
             namePrefix = context.getString(com.chat.base.R.string.str_default_text_file_name)
         }
-        val fileName = "$namePrefix.txt"
-
-        // 写入临时文件
-        val tmpDir = File(context.cacheDir, "WKTextToFile")
-        tmpDir.mkdirs()
-        val file = File(tmpDir, fileName)
-        file.writeText(text, Charsets.UTF_8)
-
-        // 创建文件消息并发送
-        val fileContent = WKFileContent()
-        fileContent.localPath = file.absolutePath
-        fileContent.name = fileName
-        fileContent.extension = ".txt"
-        fileContent.size = file.length()
-
-        iConversationContext.sendMessage(fileContent)
-
-        // 语音场景：写回用户草稿，而不是无条件清空——editText 此刻仍是 STT 占位文本，
-        // 直接清空会把 restoreComposerText 的还原价值抵消掉（见 showTextToFileAlert 说明）。
-        if (!restoreComposerText.isNullOrEmpty()) {
-            editText.setText(restoreComposerText)
-            editText.setSelection(restoreComposerText.length)
-        } else {
-            editText.text = null
-        }
-        lastInputTime = 0
-        if (chatTopView?.visibility == View.VISIBLE) {
-            CommonAnim.getInstance().animateClose(chatTopView)
+        val captured = WKConfig.getInstance().sessionSnapshot
+        val serverScope = com.chat.base.config.WKApiConfig.baseUrl
+        val destination = captureFileDestination(iConversationContext.chatChannelInfo)
+        val composerTextAtStart = editText.text.toString()
+        AppExecutors.io().execute {
+            var uniqueDir: File? = null
+            val fileContent = try {
+                val prepared = prepareTextFile(context.cacheDir, text, namePrefix, captured, serverScope)
+                uniqueDir = prepared.first
+                prepared.second
+            } catch (_: Exception) { null }
+            Handler(Looper.getMainLooper()).post {
+                val current = WKConfig.getInstance().sessionSnapshot
+                if (fileContent == null || current.uid != captured.uid || current.version != captured.version
+                    || current.token != captured.token || com.chat.base.config.WKApiConfig.baseUrl != serverScope) {
+                    fileContent?.cleanupOwnedTemporarySource()
+                    uniqueDir?.deleteRecursively()
+                    if (fileContent == null && current.uid == captured.uid && current.version == captured.version)
+                        WKToastUtils.getInstance().showToastNormal(context.getString(com.chat.base.R.string.str_file_not_exist))
+                    return@post
+                }
+                if (context.isFinishing || context.isDestroyed) { fileContent.cleanupOwnedTemporarySource(); uniqueDir?.deleteRecursively(); return@post }
+                routePreparedFile(iConversationContext, fileContent, destination)
+                // 语音场景：恢复用户草稿；普通发送场景清空输入框。
+                val stillAtDestination = applyTextFileComposerEffectIfCurrent(
+                    iConversationContext, destination, composerTextAtStart, editText.text.toString(), restoreComposerText
+                ) { restored ->
+                    if (restored != null) {
+                        editText.setText(restored)
+                        editText.setSelection(restored.length)
+                    } else editText.text = null
+                }
+                if (stillAtDestination) {
+                    lastInputTime = 0
+                    if (chatTopView?.visibility == View.VISIBLE) CommonAnim.getInstance().animateClose(chatTopView)
+                }
+            }
         }
     }
 

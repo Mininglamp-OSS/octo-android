@@ -16,11 +16,18 @@ public class WKSendingMsg {
     public long sendTime;
     // 是否可重发本条消息
     public boolean isCanResend;
+    public com.xinbida.wukongim.WKIMApplication.SessionContext uploadSessionContext;
 
     public WKSendingMsg(int sendCount, WKSendMsg wkSendMsg, boolean isCanResend) {
         this.sendCount = sendCount;
         this.wkSendMsg = wkSendMsg;
         this.isCanResend = isCanResend;
         this.sendTime = DateUtils.getInstance().getCurrentSeconds();
+    }
+
+    public WKSendingMsg(int sendCount, WKSendMsg wkSendMsg, boolean isCanResend,
+                        com.xinbida.wukongim.WKIMApplication.SessionContext context) {
+        this(sendCount, wkSendMsg, isCanResend);
+        this.uploadSessionContext = context;
     }
 }

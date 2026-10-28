@@ -423,6 +423,54 @@ public class ConversationDbManager {
         return insertOrUpdateWithConvMsg(wkConversationMsg);// 插入消息列表数据表
     }
 
+    /** Account-scoped variant for asynchronous sends carrying a captured helper. */
+    public synchronized WKUIConversationMsg insertOrUpdateWithMsg(WKMsg msg, int unreadCount, WKDBHelper helper) {
+        if (helper == null || helper.isClosed() || msg == null || TextUtils.isEmpty(msg.channelID)
+                || msg.channelID.equals(msg.fromUID)) return null;
+        WKConversationMsg conversationMsg = new WKConversationMsg();
+        if (msg.channelType == WKChannelType.COMMUNITY_TOPIC && msg.channelID.contains("@")) {
+            conversationMsg.parentChannelID = msg.channelID.split("@")[0];
+            conversationMsg.parentChannelType = WKChannelType.COMMUNITY;
+        }
+        conversationMsg.channelID = msg.channelID;
+        conversationMsg.channelType = msg.channelType;
+        conversationMsg.lastMsgTimestamp = msg.timestamp;
+        conversationMsg.lastClientMsgNO = msg.clientMsgNO;
+        conversationMsg.lastMsgSeq = msg.messageSeq;
+        conversationMsg.unreadCount = unreadCount;
+        WKConversationMsg previous = queryWithChannelId(helper, conversationMsg.channelID, conversationMsg.channelType);
+        if (previous != null) {
+            conversationMsg.unreadCount += previous.unreadCount;
+            // The captured-helper update has the same conversation merge semantics as the
+            // normal update path while preserving account-local state not owned by this send.
+            // A newly sent/resend message reactivates a conversation hidden by a prior delete.
+            conversationMsg.isDeleted = 0;
+            conversationMsg.version = previous.version;
+            conversationMsg.localExtraMap = previous.localExtraMap;
+            conversationMsg.msgExtra = previous.msgExtra;
+        }
+        ContentValues values;
+        try { values = WKSqlContentValues.getContentValuesWithCoverMsg(conversationMsg, false); }
+        catch (Exception error) { return null; }
+        try {
+            boolean updated;
+            if (previous == null) updated = helper.insert(conversation, values) > 0;
+            else updated = helper.update(conversation, values,
+                    WKDBColumns.WKCoverMessageColumns.channel_id + "=? and "
+                            + WKDBColumns.WKCoverMessageColumns.channel_type + "=?",
+                    new String[]{conversationMsg.channelID, String.valueOf(conversationMsg.channelType)});
+            return updated ? getUIMsg(conversationMsg) : null;
+        } catch (RuntimeException error) { return null; }
+    }
+
+    private WKConversationMsg queryWithChannelId(WKDBHelper helper, String channelId, byte channelType) {
+        String selection = WKDBColumns.WKCoverMessageColumns.channel_id + "=? and " + WKDBColumns.WKCoverMessageColumns.channel_type + "=?";
+        try (Cursor cursor = helper.select(conversation, selection,
+                new String[]{channelId, String.valueOf(channelType)}, null)) {
+            return cursor != null && cursor.moveToFirst() ? serializeMsg(cursor) : null;
+        } catch (RuntimeException error) { return null; }
+    }
+
     public synchronized WKUIConversationMsg insertOrUpdateWithConvMsg(WKConversationMsg conversationMsg) {
         boolean result;
         WKConversationMsg lastMsg = queryWithChannelId(conversationMsg.channelID, conversationMsg.channelType);

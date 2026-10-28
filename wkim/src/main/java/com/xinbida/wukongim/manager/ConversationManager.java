@@ -298,6 +298,23 @@ public class ConversationManager extends BaseManager {
         this.setOnRefreshMsg(list, from);
     }
 
+    public void setOnRefreshMsg(WKUIConversationMsg msg, String from,
+                                com.xinbida.wukongim.WKIMApplication.SessionContext context) {
+        if (msg == null || context == null) return;
+        msg.getWkMsg();
+        runOnMainThread(() -> {
+            if (!com.xinbida.wukongim.WKIMApplication.getInstance().isSessionCurrent(context)) return;
+            if (refreshMsgMap != null) {
+                for (Map.Entry<String, IRefreshConversationMsg> entry : refreshMsgMap.entrySet())
+                    entry.getValue().onRefreshConversationMsg(msg, true);
+            }
+            if (refreshMsgListMap != null) {
+                for (Map.Entry<String, IRefreshConversationMsgList> entry : refreshMsgListMap.entrySet())
+                    entry.getValue().onRefresh(java.util.Collections.singletonList(msg));
+            }
+        });
+    }
+
     public void setOnRefreshMsg(List<WKUIConversationMsg> list, String from) {
         if (WKCommonUtils.isEmpty(list)) return;
         //  H3 · 在当前（后台）线程预加载 wkMsg + wkChannel，避免主线程回调中懒加载
@@ -390,6 +407,11 @@ public class ConversationManager extends BaseManager {
     public WKUIConversationMsg updateWithWKMsg(WKMsg msg) {
         if (msg == null || TextUtils.isEmpty(msg.channelID)) return null;
         return ConversationDbManager.getInstance().insertOrUpdateWithMsg(msg, 0);
+    }
+
+    public WKUIConversationMsg updateWithWKMsg(WKMsg msg, int unreadCount, WKDBHelper helper) {
+        if (msg == null || TextUtils.isEmpty(msg.channelID)) return null;
+        return ConversationDbManager.getInstance().insertOrUpdateWithMsg(msg, unreadCount, helper);
     }
 
     public WKUIConversationMsg getUIConversationMsg(String channelID, byte channelType) {

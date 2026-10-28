@@ -169,10 +169,17 @@ public class WKSendMsgUtils {
     }
 
     private void uploadFileAttachment(WKMsg msg, WKFileContent content, IUploadAttacResultListener listener) {
+        WKIMApplication.SessionContext capturedContext = msg.uploadSessionContext;
+        if (capturedContext == null || !WKIMApplication.getInstance().isSessionCurrent(capturedContext)
+                || !TextUtils.equals(capturedContext.clientMsgNo, msg.clientMsgNO)
+                || capturedContext.clientSeq != msg.clientSeq) {
+            if (capturedContext != null) MsgDbManager.getInstance().updateCapturedMsgSendFail(capturedContext.helper, msg.clientMsgNO, msg.clientSeq);
+            return;
+        }
         WKConfig.SessionSnapshot capturedSession = WKConfig.getInstance().getSessionSnapshot();
         WKIMApplication app = WKIMApplication.getInstance();
-        String capturedUid = app.getUid();
-        WKDBHelper capturedHelper = app.getDbHelper();
+        String capturedUid = capturedContext.uid;
+        WKDBHelper capturedHelper = capturedContext.helper;
         final String clientMsgNo = msg.clientMsgNO;
         final long clientSeq = msg.clientSeq;
         final String channelId = msg.channelID;
@@ -191,24 +198,24 @@ public class WKSendMsgUtils {
                     || !TextUtils.equals(snapshot.token, capturedSession.token)) cancel.run();
         };
         WKConfig.getInstance().addSessionListener(sessionListener[0]);
-        if (!isCurrent(capturedSession, capturedUid, capturedHelper)) { cancel.run(); return; }
+        if (!isCurrent(capturedSession, capturedUid, capturedHelper, capturedContext)) { cancel.run(); return; }
         IUploadAttacResultListener result = (success, value) -> completeFileUpload(terminal, sessionListener[0], progressKey,
-                clientMsgNo, clientSeq, listener, capturedSession, capturedUid, capturedHelper, success, value);
+                clientMsgNo, clientSeq, listener, capturedSession, capturedUid, capturedHelper, capturedContext, success, value);
 
         if (!TextUtils.isEmpty(content.url)) { result.onUploadResult(true, content); return; }
         if (TextUtils.isEmpty(content.localPath)) { result.onUploadResult(false, content); return; }
         try {
             transport.getCredentials(channelId, channelType, content.localPath, (uploadUrl, downloadUrl, contentType, contentDisposition) -> {
                 if (terminal.isTerminal()) return;
-                if (!isCurrent(capturedSession, capturedUid, capturedHelper)) { cancel.run(); return; }
+                if (!isCurrent(capturedSession, capturedUid, capturedHelper, capturedContext)) { cancel.run(); return; }
                 if (TextUtils.isEmpty(uploadUrl) || TextUtils.isEmpty(downloadUrl)) { result.onUploadResult(false, content); return; }
                 try {
                     terminal.runIfActive(() -> transport.put(uploadUrl, content.localPath, contentType, contentDisposition, progressKey, new WKUploader.IUploadBack() {
                         @Override public void onSuccess(String url) {
                             if (terminal.isTerminal()) return;
-                            if (!isCurrent(capturedSession, capturedUid, capturedHelper)) { cancel.run(); return; }
+                            if (!isCurrent(capturedSession, capturedUid, capturedHelper, capturedContext)) { cancel.run(); return; }
                             completeFileUpload(terminal, sessionListener[0], progressKey, clientMsgNo, clientSeq,
-                                    listener, capturedSession, capturedUid, capturedHelper, true, content,
+                                    listener, capturedSession, capturedUid, capturedHelper, capturedContext, true, content,
                                     () -> content.url = downloadUrl);
                         }
                         @Override public void onError() { result.onUploadResult(false, content); }
@@ -222,19 +229,21 @@ public class WKSendMsgUtils {
                                            WKProgressManager.FileUploadProgressKey progressKey,
                                            String clientMsgNo, long clientSeq, IUploadAttacResultListener listener,
                                            WKConfig.SessionSnapshot session, String uid, WKDBHelper helper,
+                                           WKIMApplication.SessionContext context,
                                            boolean success, com.xinbida.wukongim.msgmodel.WKMessageContent value) {
         completeFileUpload(terminal, sessionListener, progressKey, clientMsgNo, clientSeq, listener,
-                session, uid, helper, success, value, null);
+                session, uid, helper, context, success, value, null);
     }
 
     private static void completeFileUpload(FileUploadTerminal terminal, WKConfig.SessionListener sessionListener,
                                            WKProgressManager.FileUploadProgressKey progressKey,
                                            String clientMsgNo, long clientSeq, IUploadAttacResultListener listener,
                                            WKConfig.SessionSnapshot session, String uid, WKDBHelper helper,
+                                           WKIMApplication.SessionContext context,
                                            boolean success, com.xinbida.wukongim.msgmodel.WKMessageContent value,
                                            Runnable successMutation) {
         if (!terminal.finish(() -> WKConfig.getInstance().removeSessionListener(sessionListener))) return;
-        if (!isCurrent(session, uid, helper)) {
+        if (!isCurrent(session, uid, helper, context)) {
             MsgDbManager.getInstance().updateCapturedMsgSendFail(helper, clientMsgNo, clientSeq);
             WKProgressManager.Companion.getInstance().completeUploadFailure(progressKey, "attachment upload failed");
             return;
@@ -242,12 +251,12 @@ public class WKSendMsgUtils {
         if (success && successMutation != null) successMutation.run();
         boolean persistedSuccess = false;
         try {
-            listener.onUploadResult(success, value);
-            if (isCurrent(session, uid, helper)) {
-                WKMsg persisted = WKIM.getInstance().getMsgManager().getWithClientMsgNO(clientMsgNo);
-                WKFileContent persistedContent = persisted != null && persisted.baseContentMsgModel instanceof WKFileContent ? (WKFileContent) persisted.baseContentMsgModel : null;
-                persistedSuccess = success && persistedContent != null && !TextUtils.isEmpty(persistedContent.url);
-            } else MsgDbManager.getInstance().updateCapturedMsgSendFail(helper, clientMsgNo, clientSeq);
+            boolean accepted = listener.onUploadResult(context, success, value);
+            persistedSuccess = accepted && success;
+            if (!isCurrent(session, uid, helper, context)) {
+                MsgDbManager.getInstance().updateCapturedMsgSendFail(helper, clientMsgNo, clientSeq);
+                persistedSuccess = false;
+            }
         } catch (RuntimeException error) {
             MsgDbManager.getInstance().updateCapturedMsgSendFail(helper, clientMsgNo, clientSeq);
         } finally {
@@ -274,12 +283,14 @@ public class WKSendMsgUtils {
         boolean isTerminal() { return terminal.get(); }
     }
 
-    private static boolean isCurrent(WKConfig.SessionSnapshot captured, String uid, WKDBHelper helper) {
+    private static boolean isCurrent(WKConfig.SessionSnapshot captured, String uid, WKDBHelper helper,
+                                     WKIMApplication.SessionContext context) {
         WKConfig.SessionSnapshot current = WKConfig.getInstance().getSessionSnapshot();
         WKIMApplication app = WKIMApplication.getInstance();
         return captured.version == current.version && TextUtils.equals(captured.uid, current.uid)
                 && TextUtils.equals(captured.token, current.token) && TextUtils.equals(uid, app.getUid())
-                && TextUtils.equals(captured.uid, uid) && app.getDbHelper() == helper;
+                && TextUtils.equals(captured.uid, uid) && app.getDbHelper() == helper
+                && app.isSessionCurrent(context);
     }
 
     private void uploadVideoCover(WKMsg msg, WKVideoContent videoMsgModel, IUploadAttacResultListener listener) {

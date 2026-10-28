@@ -83,6 +83,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MsgManager extends BaseManager {
     private final String TAG = "MsgManager";
+    private static volatile Runnable beforeCapturedUiDeliveryHookForTests;
+
+    public static void setBeforeCapturedUiDeliveryHookForTests(Runnable hook) {
+        beforeCapturedUiDeliveryHookForTests = hook;
+    }
 
     private MsgManager() {
     }
@@ -997,6 +1002,19 @@ public class MsgManager extends BaseManager {
         }
     }
 
+    public void setSendMsgCallback(WKMsg msg, WKIMApplication.SessionContext context) {
+        if (msg == null || context == null) return;
+        runOnMainThread(() -> {
+            Runnable hook = beforeCapturedUiDeliveryHookForTests;
+            if (hook != null) hook.run();
+            if (!WKIMApplication.getInstance().isSessionCurrent(context)) return;
+            if (sendMsgCallBackListenerHashMap != null) {
+                for (Map.Entry<String, ISendMsgCallBackListener> entry : sendMsgCallBackListenerHashMap.entrySet())
+                    entry.getValue().onInsertMsg(msg);
+            }
+        });
+    }
+
     public void addOnSendMsgCallback(String key, ISendMsgCallBackListener iSendMsgCallBackListener) {
         if (TextUtils.isEmpty(key)) return;
         if (sendMsgCallBackListenerHashMap == null) {
@@ -1198,6 +1216,26 @@ public class MsgManager extends BaseManager {
             });
 
         }
+    }
+
+    /** Captured-session refresh whose guard is checked at actual main-thread delivery. */
+    public void setRefreshMsg(WKMsg msg, boolean left, WKIMApplication.SessionContext context) {
+        if (msg == null || context == null) return;
+        runOnMainThread(() -> {
+            Runnable hook = beforeCapturedUiDeliveryHookForTests;
+            if (hook != null) hook.run();
+            if (!WKIMApplication.getInstance().isSessionCurrent(context)) return;
+            WKMsg delivery = msg;
+            if (context.clientSeq > 0 && msg.status == com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail) {
+                delivery = MsgDbManager.getInstance().queryCapturedMsgWithClientMsgNo(
+                        context.helper, context.clientMsgNo, context.clientSeq);
+                if (delivery == null || !WKIMApplication.getInstance().isSessionCurrent(context)) return;
+            }
+            if (refreshMsgListenerMap != null) {
+                for (Map.Entry<String, IRefreshMsg> entry : refreshMsgListenerMap.entrySet())
+                    entry.getValue().onRefresh(delivery, left);
+            }
+        });
     }
 
     public void addOnNewMsgListener(String key, INewMsgListener iNewMsgListener) {

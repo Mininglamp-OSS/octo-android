@@ -36,6 +36,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -45,6 +46,8 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.viewholder.BaseViewHolder;
 import com.chat.base.config.WKConfig;
+import com.chat.base.config.WKApiConfig;
+import com.chat.base.msgcontent.WKFileContent;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.emoji.MoonUtil;
 import com.chat.base.endpoint.EndpointManager;
@@ -1066,17 +1069,25 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
                 }
                 WKDialogUtils.getInstance().showDialog(getContext(), getContext().getString(R.string.msg_send_fail), content, true, "", getContext().getString(R.string.msg_send_fail_resend), 0, Theme.colorAccount, index -> {
                     if (index == 1) {
+                        WKMsg original = item.getWkMsg();
                         WKMsg msg = new WKMsg();
                         msg.channelID = item.channelID;
                         msg.channelType = item.channelType;
-                        msg.setting = item.getWkMsg().setting;
-                        msg.header = item.getWkMsg().header;
-                        msg.type = item.getWkMsg().type;
-                        msg.content = item.getWkMsg().content;
-                        msg.baseContentMsgModel = item.getWkMsg().baseContentMsgModel;
+                        msg.setting = original.setting;
+                        msg.header = original.header;
+                        msg.type = original.type;
+                        msg.content = original.content;
+                        if (original.baseContentMsgModel instanceof WKFileContent) {
+                            WKFileContent resend = WKFileContent.forResend(getContext(), original,
+                                    WKConfig.getInstance().getSessionSnapshot(), WKApiConfig.baseUrl);
+                            if (resend == null) {
+                                Toast.makeText(getContext(), R.string.str_file_not_exist, Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                            msg.baseContentMsgModel = resend;
+                        } else msg.baseContentMsgModel = original.baseContentMsgModel;
                         msg.fromUID = WKConfig.getInstance().getUid();
-                        WKIM.getInstance().getMsgManager()
-                                .deleteWithClientMsgNO(item.getWkMsg().clientMsgNO);
+                        WKIM.getInstance().getMsgManager().deleteWithClientMsgNO(original.clientMsgNO);
                         WKIM.getInstance().getMsgManager().sendMessage(msg);
                     }
                 });

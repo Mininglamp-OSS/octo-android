@@ -20,6 +20,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 class WKProgressManager private constructor() {
 
+    /** Session-scoped key used only by file attachment uploads. */
+    data class FileUploadProgressKey(val uid: String, val sessionVersion: Long, val clientMsgNo: String, val clientSeq: Long)
+
     companion object {
         val instance: WKProgressManager by lazy(mode = LazyThreadSafetyMode.SYNCHRONIZED) {
             WKProgressManager()

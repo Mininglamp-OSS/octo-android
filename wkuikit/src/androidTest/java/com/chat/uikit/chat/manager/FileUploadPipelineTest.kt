@@ -59,6 +59,7 @@ class FileUploadPipelineTest {
         val oldUid = app.uid
         val oldToken = app.token
         val oldSession = config.getSessionSnapshot()
+        lateinit var uploadSession: WKConfig.SessionSnapshot
         val appContextField = WKIMApplication::class.java.getDeclaredField("mContext").apply { isAccessible = true }
         val dbHelperField = WKIMApplication::class.java.getDeclaredField("mDbHelper").apply { isAccessible = true }
         val oldAppContext = appContextField.get(app)
@@ -72,6 +73,9 @@ class FileUploadPipelineTest {
         val oldOpenHelper = openHelperField.get(null)
         val sessionVersionField = WKConfig::class.java.getDeclaredField("sessionVersion").apply { isAccessible = true }
         val oldSessionVersion = sessionVersionField.getLong(config)
+        val sessionListenersField = WKConfig::class.java.getDeclaredField("sessionListeners").apply { isAccessible = true }
+        val initialSessionListenerCount = (sessionListenersField.get(config) as java.util.concurrent.CopyOnWriteArrayList<*>).size
+        val progressListField = WKProgressManager::class.java.getDeclaredField("progressList").apply { isAccessible = true }
         val uploadListenerField = WKIM.getInstance().msgManager.javaClass.getDeclaredField("iUploadAttachmentListener").apply { isAccessible = true }
         val oldUploadListener = uploadListenerField.get(WKIM.getInstance().msgManager)
         val contentRegistryField = WKIM.getInstance().msgManager.javaClass.getDeclaredField("customContentMsgList").apply { isAccessible = true }
@@ -102,6 +106,7 @@ class FileUploadPipelineTest {
             initContext.invoke(app, context)
             config.uid = testUid
             config.token = testToken
+            uploadSession = config.getSessionSnapshot()
             app.uid = testUid
             app.token = testToken
             testDbHelper = dbHelperConstructor.newInstance(context, testUid)
@@ -134,7 +139,7 @@ class FileUploadPipelineTest {
 
         fun progressAt100() {
             val path = (message.baseContentMsgModel as WKFileContent).localPath
-            FileRequestBody(File(path).asRequestBody("application/octet-stream".toMediaType()), message.clientSeq).writeTo(Buffer())
+            FileRequestBody(File(path).asRequestBody("application/octet-stream".toMediaType()), progressKey()).writeTo(Buffer())
             instrumentation.waitForIdleSync()
             assertTrue(row.findViewById<android.widget.TextView>(R.id.fileUploadProgressPercent).text.toString().contains("100"))
             assertFalse(row.findViewById<View>(R.id.contentLayout).isEnabled)
@@ -142,6 +147,15 @@ class FileUploadPipelineTest {
         }
 
         fun persisted() = WKIM.getInstance().msgManager.getWithClientMsgNO(message.clientMsgNO)
+        fun progressKey() = WKProgressManager.FileUploadProgressKey(uploadSession.uid, uploadSession.version, message.clientMsgNO, message.clientSeq)
+        fun isProgressRegistered(key: Any) = (progressListField.get(WKProgressManager.instance) as Map<*, *>).containsKey(key)
+        fun assertUploadSessionListenerRemoved() {
+            assertEquals(initialSessionListenerCount, (sessionListenersField.get(config) as java.util.concurrent.CopyOnWriteArrayList<*>).size)
+        }
+        fun capturedStatusAndContent(): Pair<Int, String> {
+            val cursor = testDbHelper.rawQuery("select status,content from message where client_msg_no=?", arrayOf(message.clientMsgNO))
+            try { check(cursor.moveToFirst()); return cursor.getInt(0) to cursor.getString(1) } finally { cursor.close() }
+        }
 
         fun switchToAnotherSession(): WKDBHelper {
             val nextUid = "codex-upload-next-${UUID.randomUUID().toString().replace("-", "")}"
@@ -155,7 +169,7 @@ class FileUploadPipelineTest {
 
         override fun close() {
             runCatching { instrumentation.runOnMainSync { root.removeView(row); activity.finish() } }
-            WKProgressManager.instance.unregisterProgress(message.clientSeq)
+            WKProgressManager.instance.unregisterProgress(progressKey())
             @Suppress("UNCHECKED_CAST") (sendingMapField.get(WKConnection.getInstance()) as? MutableMap<Int, Any?>)?.remove(message.clientSeq.toInt())
             WKSendMsgUtils.setFileUploadTransportForTests(null)
             uploadListenerField.set(WKIM.getInstance().msgManager, oldUploadListener)
@@ -198,6 +212,7 @@ class FileUploadPipelineTest {
             assertTrue(view.findViewById<View>(R.id.contentLayout).isEnabled)
             assertTrue(view.findViewById<View>(R.id.fileActionButton).isEnabled)
             assertEquals(View.GONE, view.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            scenario.assertUploadSessionListenerRemoved()
         } finally { scenario.close() }
     }
 
@@ -211,11 +226,13 @@ class FileUploadPipelineTest {
                     if (!credentialFails) scenario.transport.put!!.onError()
                 }
                 scenario.instrumentation.runOnMainSync { }
+                scenario.assertUploadSessionListenerRemoved()
                 assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.persisted()!!.status)
                 assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
                 assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
                 assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
                 assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+                scenario.assertUploadSessionListenerRemoved()
             } finally { scenario.close() }
         }
     }
@@ -229,6 +246,7 @@ class FileUploadPipelineTest {
                     scenario.transport.returnCredentials(ok = succeed)
                     if (succeed) scenario.transport.put!!.onSuccess("ignored")
                 }
+                scenario.assertUploadSessionListenerRemoved()
                 scenario.instrumentation.runOnMainSync { scenario.root.addView(scenario.row) }
                 scenario.instrumentation.runOnMainSync { }
                 assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
@@ -285,6 +303,7 @@ class FileUploadPipelineTest {
             assertNotNull(scenario.transport.put)
             val switched = arrayOfNulls<WKDBHelper>(1)
             scenario.instrumentation.runOnMainSync { switched[0] = scenario.switchToAnotherSession() }
+            scenario.assertUploadSessionListenerRemoved()
             val newHelper = requireNotNull(switched[0])
             val replacement = WKMsg().apply {
                 channelID = scenario.message.channelID; channelType = scenario.message.channelType
@@ -292,25 +311,33 @@ class FileUploadPipelineTest {
                 clientMsgNO = "new-session-${UUID.randomUUID()}"; type = WKContentType.WK_FILE
                 baseContentMsgModel = WKFileContent().apply { name = "new-session.txt"; extension = "txt"; size = 10; localPath = scenario.tempFile.absolutePath }
             }
+            replacement.status = com.xinbida.wukongim.message.type.WKSendMsgResult.send_loading
+            newHelper.insert("message", android.content.ContentValues().apply {
+                put("client_seq", replacement.clientSeq); put("client_msg_no", replacement.clientMsgNO)
+                put("status", replacement.status); put("channel_id", replacement.channelID)
+                put("channel_type", replacement.channelType.toInt()); put("from_uid", replacement.fromUID)
+                put("type", replacement.type); put("content", replacement.baseContentMsgModel!!.encodeMsg().toString())
+            })
             scenario.instrumentation.runOnMainSync {
                 scenario.root.addView(secondRow)
                 scenario.provider.refreshData(0, secondRow, WKUIChatMsgItemEntity(null, replacement, null), WKChatIteMsgFromType.SEND)
                 scenario.transport.put!!.onSuccess("stale-result")
             }
-            val oldCursor = scenario.testDbHelper.rawQuery("select content from message where client_msg_no=?", arrayOf(scenario.message.clientMsgNO))
+            val oldCursor = scenario.testDbHelper.rawQuery("select content,status from message where client_msg_no=?", arrayOf(scenario.message.clientMsgNO))
             try {
                 assertTrue(oldCursor.moveToFirst())
                 assertEquals("", org.json.JSONObject(oldCursor.getString(0)).optString("url"))
+                assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, oldCursor.getInt(1))
             } finally { oldCursor.close() }
-            val newCursor = newHelper.rawQuery("select client_msg_no from message where client_msg_no=?", arrayOf(replacement.clientMsgNO))
-            try { assertEquals(0, newCursor.count) } finally { newCursor.close() }
+            val newCursor = newHelper.rawQuery("select client_msg_no,status from message where client_msg_no=?", arrayOf(replacement.clientMsgNO))
+            try { assertTrue(newCursor.moveToFirst()); assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_loading, newCursor.getInt(1)) } finally { newCursor.close() }
 
             scenario.instrumentation.runOnMainSync {
                 scenario.root.removeView(scenario.row)
                 scenario.root.addView(scenario.row)
             }
             val path = (replacement.baseContentMsgModel as WKFileContent).localPath
-            FileRequestBody(File(path).asRequestBody("application/octet-stream".toMediaType()), scenario.message.clientSeq).writeTo(Buffer())
+            FileRequestBody(File(path).asRequestBody("application/octet-stream".toMediaType()), WKProgressManager.FileUploadProgressKey(WKConfig.getInstance().uid, WKConfig.getInstance().getSessionSnapshot().version, replacement.clientMsgNO, replacement.clientSeq)).writeTo(Buffer())
             scenario.instrumentation.waitForIdleSync()
             assertFalse(secondRow.findViewById<View>(R.id.contentLayout).isEnabled)
             assertTrue(secondRow.findViewById<android.widget.TextView>(R.id.fileUploadProgressPercent).text.toString().contains("100"))
@@ -319,5 +346,95 @@ class FileUploadPipelineTest {
             scenario.instrumentation.runOnMainSync { scenario.root.removeView(secondRow) }
             scenario.close()
         }
+    }
+
+    @Test fun sessionSwitchBeforeCredentialsCallbackCancelsAndPersistsOnlyCapturedAccountFailure() {
+        val scenario = Scenario()
+        try {
+            val switched = arrayOfNulls<WKDBHelper>(1)
+            scenario.instrumentation.runOnMainSync { switched[0] = scenario.switchToAnotherSession() }
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.capturedStatusAndContent().first)
+            scenario.assertUploadSessionListenerRemoved()
+            scenario.instrumentation.runOnMainSync { scenario.transport.returnCredentials() }
+            assertEquals(null, scenario.transport.put)
+            val currentHelper = requireNotNull(switched[0])
+            val cursor = currentHelper.rawQuery("select client_msg_no from message where client_seq=?", arrayOf(scenario.message.clientSeq.toString()))
+            try { assertEquals(0, cursor.count) } finally { cursor.close() }
+        } finally { scenario.close() }
+    }
+
+    @Test fun sameUidTokenChangeMakesLateRepeatedPutCallbacksInert() {
+        val scenario = Scenario()
+        try {
+            scenario.instrumentation.runOnMainSync { scenario.transport.returnCredentials() }
+            val putCallback = requireNotNull(scenario.transport.put)
+            scenario.instrumentation.runOnMainSync {
+                WKConfig.getInstance().token = "rotated-${UUID.randomUUID()}"
+                scenario.root.removeView(scenario.row)
+                scenario.root.addView(scenario.row)
+            }
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.capturedStatusAndContent().first)
+            scenario.assertUploadSessionListenerRemoved()
+            scenario.instrumentation.waitForIdleSync()
+            assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
+            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
+            assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
+            scenario.instrumentation.runOnMainSync {
+                putCallback.onSuccess("late-success")
+                putCallback.onError()
+            }
+            val captured = scenario.capturedStatusAndContent()
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, captured.first)
+            assertEquals("", org.json.JSONObject(captured.second).optString("url"))
+            scenario.instrumentation.waitForIdleSync()
+            assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
+            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
+            assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
+        } finally { scenario.close() }
+    }
+
+    @Test fun tokenChangeWhileDetachedRecoversPersistedFailureWithoutRegisteringStaleProgress() {
+        val scenario = Scenario()
+        try {
+            scenario.instrumentation.runOnMainSync { scenario.transport.returnCredentials() }
+            val putCallback = requireNotNull(scenario.transport.put)
+            scenario.instrumentation.runOnMainSync { scenario.root.removeView(scenario.row) }
+            assertFalse(scenario.isProgressRegistered(scenario.progressKey()))
+            scenario.instrumentation.runOnMainSync { WKConfig.getInstance().token = "rotated-${UUID.randomUUID()}" }
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.capturedStatusAndContent().first)
+            scenario.assertUploadSessionListenerRemoved()
+            scenario.instrumentation.runOnMainSync { scenario.root.addView(scenario.row) }
+            scenario.instrumentation.waitForIdleSync()
+            assertFalse(scenario.isProgressRegistered(scenario.progressKey()))
+            assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
+            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
+            assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
+            scenario.instrumentation.runOnMainSync { putCallback.onSuccess("late-success") }
+            assertEquals("", org.json.JSONObject(scenario.capturedStatusAndContent().second).optString("url"))
+        } finally { scenario.close() }
+    }
+
+    @Test fun closedCapturedHelperDefersPersistenceAndLateCallbacksDoNotTouchNewAccount() {
+        val scenario = Scenario()
+        try {
+            scenario.instrumentation.runOnMainSync { scenario.transport.returnCredentials() }
+            val putCallback = requireNotNull(scenario.transport.put)
+            scenario.testDbHelper.close()
+            val switched = arrayOfNulls<WKDBHelper>(1)
+            scenario.instrumentation.runOnMainSync { switched[0] = scenario.switchToAnotherSession() }
+            scenario.assertUploadSessionListenerRemoved()
+            scenario.instrumentation.runOnMainSync {
+                putCallback.onSuccess("late-success")
+                putCallback.onError()
+            }
+            val cursor = requireNotNull(switched[0]).rawQuery("select client_msg_no from message where client_seq=?", arrayOf(scenario.message.clientSeq.toString()))
+            try { assertEquals(0, cursor.count) } finally { cursor.close() }
+        } finally { scenario.close() }
     }
 }

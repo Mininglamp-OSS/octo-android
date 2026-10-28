@@ -652,6 +652,28 @@ public class MsgDbManager {
         return msg;
     }
 
+    /** Updates a captured account database without resolving the process-wide current account. */
+    public synchronized boolean updateCapturedMsgSendFail(WKDBHelper helper, String clientMsgNo, long clientSeq) {
+        if (helper == null || TextUtils.isEmpty(clientMsgNo)) {
+            WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: captured helper or message identity unavailable");
+            return false;
+        }
+        try {
+            String where = WKDBColumns.WKMessageColumns.client_msg_no + "=? AND "
+                    + WKDBColumns.WKMessageColumns.client_seq + "=? AND "
+                    + WKDBColumns.WKMessageColumns.status + "=?";
+            String[] whereValue = new String[]{clientMsgNo, String.valueOf(clientSeq), String.valueOf(WKSendMsgResult.send_loading)};
+            String[] keys = new String[]{WKDBColumns.WKMessageColumns.status};
+            String[] values = new String[]{String.valueOf(WKSendMsgResult.send_fail)};
+            boolean updated = helper.update(message, keys, values, where, whereValue) > 0;
+            if (!updated) WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: helper unavailable or row no longer sending");
+            return updated;
+        } catch (RuntimeException error) {
+            WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: " + error.getMessage());
+            return false;
+        }
+    }
+
     public synchronized void insertMsgs(List<WKMsg> list) {
         if (WKCommonUtils.isEmpty(list)) return;
         if (list.size() == 1) {

@@ -20,16 +20,13 @@ import java.util.concurrent.ConcurrentHashMap
 
 class WKProgressManager private constructor() {
 
-    /** Session-scoped key used only by file attachment uploads. */
-    data class FileUploadProgressKey(val uid: String, val sessionVersion: Long, val clientMsgNo: String, val clientSeq: Long)
-
     companion object {
         val instance: WKProgressManager by lazy(mode = LazyThreadSafetyMode.SYNCHRONIZED) {
             WKProgressManager()
         }
     }
 
-    private val progressList = ConcurrentHashMap<Any, IProgress>()
+    private var progressList: ConcurrentHashMap<Any, IProgress>? = null
 
     interface IProgress {
         fun onProgress(tag: Any?, progress: Int)
@@ -38,35 +35,34 @@ class WKProgressManager private constructor() {
     }
 
     fun registerProgress(tag: Any, progress: IProgress) {
-        progressList[tag] = progress
+        if (progressList == null) {
+            progressList = ConcurrentHashMap()
+        }
+        progressList!![tag] = progress
     }
 
     fun unregisterProgress(tag: Any) {
-        progressList.remove(tag)
-    }
-
-    fun unregisterProgress(tag: Any, progress: IProgress) { progressList.remove(tag, progress) }
-
-    /** Completes an attachment upload after its SDK callback has persisted the message content. */
-    fun completeUploadSuccess(tag: Any, filePath: String?) {
-        progressList.remove(tag)?.onSuccess(tag, filePath)
-    }
-
-    /** Completes an attachment upload after its SDK callback has persisted send failure. */
-    fun completeUploadFailure(tag: Any, message: String?) {
-        progressList.remove(tag)?.onFail(tag, message)
+        if (progressList != null) {
+            progressList!!.remove(tag)
+        }
     }
 
     internal fun onSuccess(tag: Any, filePath: String) {
-        progressList.remove(tag)?.onSuccess(tag, filePath)
+        if (progressList != null) {
+            progressList!![tag]!!.onSuccess(tag, filePath)
+        }
     }
 
 
     internal fun onFail(tag: Any, msg: String) {
-        progressList.remove(tag)?.onFail(tag, msg)
+        if (progressList != null) {
+            progressList!![tag]!!.onFail(tag, msg)
+        }
     }
 
     internal fun seekProgress(tag: Any?, progress: Int) {
-        progressList[tag]?.onProgress(tag, progress)
+        if (progressList != null && progressList!!.containsKey(tag)) {
+            progressList!![tag]!!.onProgress(tag, progress)
+        }
     }
 }

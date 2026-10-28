@@ -82,23 +82,6 @@
 
                     <include layout="@layout/wk_msg_status_layout" />
                 </LinearLayout>
-                <LinearLayout
-                    android:id="@+id/fileUploadProgressLayout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:visibility="gone">
-                    <ProgressBar
-                        android:id="@+id/fileUploadProgressBar"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="0dp"
-                        android:layout_height="4dp"
-                        android:layout_weight="1"
-                        android:max="100" />
-                    <TextView
-                        android:id="@+id/fileUploadProgressPercent"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 

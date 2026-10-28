@@ -748,8 +748,6 @@
     <string name="doc_share_error">预览不可用</string>
     <string name="doc_share_can_view">可查看</string>
     <string name="doc_share_no_preview">暂无预览</string>
-    <string name="doc_share_uploading">正在上传</string>
-    <string name="doc_share_upload_failed">上传失败</string>
     <string name="doc_share_file_actions">文件操作</string>
     <string name="doc_share_created_by">%1$s 创建</string>
     <string name="doc_share_requires_access">需申请</string>
@@ -764,7 +762,6 @@
     <string name="xlsx_view_full_text">查看全文</string>
     <string name="xlsx_header_description">第 %1$d 列表头</string>
     <string name="xlsx_cell_description">第 %1$d 行，第 %2$d 列，%3$s</string>
-    <string name="doc_share_upload_percent">%1$d%%</string>
     <string name="doc_share_denied_title">需要访问权限</string>
     <string name="doc_share_unavailable_title">文档不可用</string>
     <string name="doc_share_error_title">预览暂时不可用</string>

@@ -747,8 +747,6 @@
     <string name="doc_share_error">Preview unavailable</string>
     <string name="doc_share_can_view">Can view</string>
     <string name="doc_share_no_preview">No preview</string>
-    <string name="doc_share_uploading">Uploading</string>
-    <string name="doc_share_upload_failed">Upload failed</string>
     <string name="doc_share_file_actions">File actions</string>
     <string name="doc_share_created_by">Created by %1$s</string>
     <string name="doc_share_requires_access">Request access</string>
@@ -763,7 +761,6 @@
     <string name="xlsx_view_full_text">View full text</string>
     <string name="xlsx_header_description">Column %1$d header</string>
     <string name="xlsx_cell_description">Row %1$d, column %2$d, %3$s</string>
-    <string name="doc_share_upload_percent">%1$d%%</string>
     <string name="doc_share_denied_title">Access required</string>
     <string name="doc_share_unavailable_title">Document unavailable</string>
     <string name="doc_share_error_title">Preview temporarily unavailable</string>

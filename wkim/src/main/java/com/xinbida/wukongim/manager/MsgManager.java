@@ -830,6 +830,12 @@ public class MsgManager extends BaseManager {
                 .mergeContentFieldsWithClientMsgNo(clientMsgNo, values, isRefreshUI);
     }
 
+    public boolean updateContentLocalPath(String clientMsgNo, String localPath, WKDBHelper helper) {
+        HashMap<String, Object> values = new HashMap<>();
+        values.put("localPath", localPath == null ? "" : localPath);
+        return MsgDbManager.getInstance().mergeContentFieldsWithClientMsgNo(helper, clientMsgNo, values);
+    }
+
 
     public void updateViewedAt(int viewed, long viewedAt, String clientMsgNo) {
         MsgDbManager.getInstance().updateViewedAt(viewed, viewedAt, clientMsgNo);

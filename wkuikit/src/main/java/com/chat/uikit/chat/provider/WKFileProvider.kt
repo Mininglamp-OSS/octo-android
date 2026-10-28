@@ -77,6 +77,57 @@ internal class UploadProgressRegistration {
     fun finish() { terminal = true; registered = false; listener = null }
 }
 
+/** Canonical path checks for message-controlled channel IDs and downloader targets. */
+internal object ChatFilePathSecurity {
+    private const val PARTIAL_DIR_NAME = ".partial"
+
+    fun validChannelId(channelId: String?): Boolean =
+        !channelId.isNullOrEmpty() && channelId != "." && channelId != ".." &&
+            channelId.none { it == '/' || it == '\\' || it.isISOControl() }
+
+    fun resolve(root: File, channelType: Byte, channelId: String?, fileName: String): File? {
+        if (!validChannelId(channelId) || fileName.isEmpty() || fileName == "." || fileName == ".." ||
+            fileName.any { it == '/' || it == '\\' || it.isISOControl() }) return null
+        return try {
+            val canonicalRoot = root.canonicalFile
+            val typeDir = File(canonicalRoot, channelType.toString())
+            val channelDir = File(typeDir, channelId!!)
+            val target = File(channelDir, fileName)
+            val partialDir = File(channelDir, PARTIAL_DIR_NAME)
+            val partial = File(partialDir, "$fileName.part")
+            val copyTmp = File(partial.absolutePath + ".copytmp")
+            if (!isStrictChild(canonicalRoot, typeDir.canonicalFile) ||
+                !isStrictChild(typeDir.canonicalFile, channelDir.canonicalFile) ||
+                !isStrictChild(channelDir.canonicalFile, target.canonicalFile) ||
+                !isStrictChild(channelDir.canonicalFile, partialDir.canonicalFile) ||
+                !isStrictChild(partialDir.canonicalFile, partial.canonicalFile) ||
+                !isStrictChild(partialDir.canonicalFile, copyTmp.canonicalFile)) null
+            else target
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isStrictChild(parent: File, child: File): Boolean =
+        child.parentFile == parent && child != parent
+}
+
+/** A message's persisted localPath is metadata, never authority to choose an openable file. */
+internal object ChatFileCacheResolution {
+    fun resolveManaged(
+        root: File,
+        channelType: Byte,
+        channelId: String?,
+        identity: String,
+        content: WKFileContent
+    ): File? {
+        val fileName = WKFileProvider.buildCacheFileNameForIdentity(identity, content.extension, content.name)
+        val expected = ChatFilePathSecurity.resolve(root, channelType, channelId, fileName) ?: return null
+        if (!expected.isFile || !WKFileProvider.isValidFileCache(expected, content.size, identity)) return null
+        return expected
+    }
+}
+
 class WKFileProvider : WKChatBaseProvider() {
     private class BindingState(var generation: Long, val clientSeq: Long, val identity: String, val session: WKConfig.SessionSnapshot, val dbHelper: WKDBHelper?, @Volatile var attached: Boolean = true, val uploadRegistration: UploadProgressRegistration = UploadProgressRegistration(), @Volatile var request: Long = 0, var terminalContent: WKFileContent? = null, var terminalFailed: Boolean = false, var attachListener: View.OnAttachStateChangeListener? = null)
     private fun isSessionCurrent(session: WKConfig.SessionSnapshot, helper: com.xinbida.wukongim.db.WKDBHelper? = null): Boolean {
@@ -342,36 +393,38 @@ class WKFileProvider : WKChatBaseProvider() {
         if (!isCurrent(parentView, binding)) return
         val request = ++binding.request
 
-        // Check local file first（size 校验防止半截/过期文件被当作有效缓存）
-        //
-        // 传 identity 而不省略：localPath 若是本应用下载回写的缓存路径，校验记录就是按
-        // 该 identity 记的，传了才能命中 exemption（不传会退化成 file.name，与记录里的
-        // identity 不等 → 已下载完的文件反被判无效、每次点击重下）。localPath 若是发送端
-        // 原文件路径，该路径上本无校验记录，走无记录分支，传与不传结果一致。
-        if (!TextUtils.isEmpty(fileContent.localPath)) {
-            val file = File(fileContent.localPath)
-            if (file.exists() && isValidCache(file, fileContent, identity)) {
-                openFile(file, fileContent.name)
-                return
-            }
-        }
-
-        // Check download directory
-        val downloadDir = WKConstants.chatDownloadFileDir +
-                uiChatMsgItemEntity.wkMsg.channelType + "/" +
-                uiChatMsgItemEntity.wkMsg.channelID + "/"
-        WKFileUtils.getInstance().createFileDir(downloadDir)
         val fileName = buildCacheFileNameForIdentity(
             identity,
             fileContent.extension,
             fileContent.name
         )
-        val filePath = downloadDir + fileName
-        val file = File(filePath)
-        if (file.exists() && isValidCache(file, fileContent, identity)) {
+        val root = File(WKConstants.chatDownloadFileDir)
+        val resolvedPath = ChatFilePathSecurity.resolve(
+            root,
+            uiChatMsgItemEntity.wkMsg.channelType,
+            uiChatMsgItemEntity.wkMsg.channelID,
+            fileName
+        ) ?: run {
+            WKToastUtils.getInstance().showToastNormal(context.getString(R.string.str_file_download_fail))
+            return
+        }
+        val file = resolvedPath
+        val downloadDir = file.parentFile ?: return
+        if (!isCurrent(parentView, binding, request)) return
+        WKFileUtils.getInstance().createFileDir(downloadDir)
+        val verifiedFile = ChatFilePathSecurity.resolve(
+            root, uiChatMsgItemEntity.wkMsg.channelType,
+            uiChatMsgItemEntity.wkMsg.channelID, fileName
+        ) ?: return
+        if (verifiedFile != file) return
+        val cachedFile = ChatFileCacheResolution.resolveManaged(
+            root, uiChatMsgItemEntity.wkMsg.channelType, uiChatMsgItemEntity.wkMsg.channelID,
+            identity, fileContent
+        )
+        if (cachedFile != null) {
             // 新缓存命中：直接打开，刻意不去 stat 旧名路径。已迁移的消息不应为了清理
             // 每次点击都多一次 I/O。清理只在"确实要重新下载"时做（下一段）。
-            openFile(file, fileContent.name)
+            openFile(cachedFile, fileContent.name)
             return
         }
 
@@ -380,7 +433,8 @@ class WKFileProvider : WKChatBaseProvider() {
         // 内容会互相命中（本 PR 最初要修的 bug），拿旧名去读等于让 B 打开 A 的字节。
         // 只删不读则安全——即使旧名因同名歧义指向另一条消息的文件，后果仅是那条消息
         // 下次重下一次。
-        deleteLegacyChatCache(downloadDir, uiChatMsgItemEntity.wkMsg.clientMsgNO, fileContent)
+        deleteLegacyChatCache(root, uiChatMsgItemEntity.wkMsg.channelType, uiChatMsgItemEntity.wkMsg.channelID,
+            uiChatMsgItemEntity.wkMsg.clientMsgNO, fileContent)
 
         // Download file
         if (TextUtils.isEmpty(fileContent.url)) {
@@ -398,7 +452,7 @@ class WKFileProvider : WKChatBaseProvider() {
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
 
-        WKDownloader.instance.download(downloadUrl, filePath,
+        WKDownloader.instance.download(downloadUrl, file.absolutePath,
             object : WKProgressManager.IProgress {
                 override fun onProgress(tag: Any?, progress: Int) {
                     progressBar.post { if (isCurrent(parentView, binding, request)) progressBar.progress = progress }
@@ -406,8 +460,11 @@ class WKFileProvider : WKChatBaseProvider() {
 
                 override fun onSuccess(tag: Any?, path: String?) {
                     progressBar.post { if (isCurrent(parentView, binding, request)) progressBar.visibility = View.GONE }
-                    val downloadedFile = File(filePath)
-                    if (downloadedFile.exists()) {
+                    val downloadedFile = ChatFilePathSecurity.resolve(
+                        root, uiChatMsgItemEntity.wkMsg.channelType,
+                        uiChatMsgItemEntity.wkMsg.channelID, fileName
+                    ) ?: return
+                    if (downloadedFile == file && downloadedFile.isFile && downloadedFile.exists()) {
                         // Persistence belongs to the captured account, so detaching the recycled
                         // row does not cancel it. Keep account checks independent of View state.
                         val app = WKIMApplication.getInstance()
@@ -423,10 +480,10 @@ class WKFileProvider : WKChatBaseProvider() {
                             // This block has no View checks: a detached but still valid account
                             // may complete its own database update.
                             markDownloadVerified(downloadedFile, identity)
-                            fileContent.localPath = filePath
+                            fileContent.localPath = downloadedFile.absolutePath
                             merged = WKIM.getInstance().msgManager.updateContentLocalPath(
                                 uiChatMsgItemEntity.wkMsg.clientMsgNO,
-                                filePath,
+                                downloadedFile.absolutePath,
                                 downloadHelper
                             )
                         }
@@ -629,19 +686,21 @@ class WKFileProvider : WKChatBaseProvider() {
          * 代价：历史上后缀变化过的残留（同一消息先后落下不同 ext）删不掉，从未被再次
          * 点击的文件也不会被清理。彻底回收需要一次性版本门控清扫，属独立跟进项。
          */
-        private fun deleteLegacyChatCache(
-            downloadDir: String,
+        internal fun deleteLegacyChatCache(
+            root: File,
+            channelType: Byte,
+            channelID: String,
             clientMsgNO: String?,
             fileContent: WKFileContent
         ) {
             try {
                 val legacyName = legacyChatCacheName(clientMsgNO, fileContent)
                 if (legacyName.isEmpty()) return
-                val legacy = File(downloadDir + legacyName)
+                val legacy = ChatFilePathSecurity.resolve(root, channelType, channelID, legacyName) ?: return
                 // 身份派生名是 64 位 hex，绝不可能等于旧名；这层判断只防将来有人改坏
                 // legacyChatCacheName 导致自删新缓存。
                 if (legacy.name.matches(Regex("[0-9a-f]{64}\\..*"))) return
-                if (legacy.exists() && legacy.isFile) {
+                if (legacy.exists() && legacy.isFile && legacy.canonicalFile == legacy) {
                     if (legacy.delete()) {
                         Log.i(TAG, "deleted legacy chat cache: ${legacy.name}")
                     } else {

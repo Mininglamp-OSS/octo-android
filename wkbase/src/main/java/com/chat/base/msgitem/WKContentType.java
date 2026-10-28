@@ -62,6 +62,8 @@ public class WKContentType extends WKMsgContentType {
     public final static int richText = 14;
     // 交互式卡片（Microsoft AdaptiveCards / InteractiveCard，与 iOS/web 对齐 type=17）
     public final static int interactiveCard = 17;
+    // 共享文档卡片（文档/表格/画板/HTML，type=18，对齐 octo-web docShareCard）
+    public final static int docShareCard = WKMsgContentType.WK_DOC_SHARE_CARD;
     //群聊加人
     public final static int addGroupMembersMsg = 1002;
     //群聊减人

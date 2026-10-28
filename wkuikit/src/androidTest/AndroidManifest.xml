@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!--
+            文档预览与文件上传的 instrumentation 测试共用此宿主 Activity，只在这里声明一次。
+            核查重复声明时，请检查目标提交的完整 Manifest 及合并产物；diff 上下文或
+            manifest-merger 来源记录中再次出现同一名称，不代表存在第二条声明。
+            构建验证：./gradlew :wkuikit:assembleDebugAndroidTest（不代表真机测试已执行）。
+        -->
+        <activity android:name="com.chat.uikit.chat.provider.DocumentSharePreviewTestActivity" android:exported="false" />
+    </application>
+</manifest>

@@ -34,7 +34,8 @@ object MessageForwardSupport {
         WKContentType.WK_VIDEO,
         WKContentType.WK_FILE,
         WKContentType.WK_MULTIPLE_FORWARD,
-        WKContentType.richText -> true
+        WKContentType.richText,
+        WKContentType.docShareCard -> true
         else -> false
     }
 }

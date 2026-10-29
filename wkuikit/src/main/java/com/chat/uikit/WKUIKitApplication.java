@@ -351,10 +351,9 @@ public class WKUIKitApplication {
         // isCanShowReaction / isCanShowPinMenu；isCanDelete 硬编码 true。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.interactiveCard,
             object -> new MsgConfig(false, true, true, true, true, true));
-        // 共享文档卡片（type=18）长按菜单：与交互式卡片同待遇 —— 转发禁（Web 转发含权限授予流程，
-        // Android 通用转发仅重发消息不能等同授权），撤回/多选/回复/reaction/pin/删除全开。
+        // 共享文档卡片（type=18）使用通用消息长按操作。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.docShareCard,
-            object -> new MsgConfig(false, true, true, true, true, true));
+            object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));

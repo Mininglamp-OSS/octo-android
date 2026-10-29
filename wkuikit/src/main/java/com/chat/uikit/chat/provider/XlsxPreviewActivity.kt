@@ -86,7 +86,10 @@ class XlsxPreviewActivity : AppCompatActivity() {
             tabs.addView(TextView(this).apply { text = sheet.name; setPadding(dp(18), dp(8), dp(18), dp(8)); setTextColor(if (index == activeSheet) Color.WHITE else Color.DKGRAY); setBackgroundColor(if (index == activeSheet) Color.rgb(60, 120, 210) else Color.LTGRAY); setOnClickListener { activeSheet = index; renderWorkbook(value) } }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
         }
         val sheet = value.sheets[activeSheet]
-        if (sheet.rows.isEmpty()) { showEmpty(); return }
+        if (sheet.rows.isEmpty()) {
+            if (sheet.truncated) showTruncatedWithoutRows() else showEmpty()
+            return
+        }
         val columns = maxOf(1, sheet.rows.maxOfOrNull { it.size } ?: 0)
         val width = columns * (dp(120) + dp(1))
         header.layoutParams = LinearLayout.LayoutParams(width, -2); table.layoutParams = LinearLayout.LayoutParams(width, 0, 1f)
@@ -97,6 +100,7 @@ class XlsxPreviewActivity : AppCompatActivity() {
     }
 
     private fun showEmpty() { progress.visibility = View.GONE; header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = getString(com.chat.uikit.R.string.xlsx_empty); message.setOnClickListener(null) }
+    private fun showTruncatedWithoutRows() { progress.visibility = View.GONE; header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = getString(com.chat.uikit.R.string.xlsx_truncated_without_content); message.setOnClickListener(null) }
     private fun showError(text: String) { progress.visibility = View.GONE; tabs.removeAllViews(); header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = "$text\n\n${getString(com.chat.uikit.R.string.xlsx_retry)}"; message.setOnClickListener { message.isEnabled = false; parseAsync() } }
     override fun onSaveInstanceState(out: Bundle) { out.putInt("activeSheet", activeSheet); super.onSaveInstanceState(out) }
     override fun onCreateOptionsMenu(menu: Menu): Boolean { menu.add(0, 1001, 0, R.string.str_file_save_to); menu.add(0, 1002, 1, R.string.str_file_share); return true }

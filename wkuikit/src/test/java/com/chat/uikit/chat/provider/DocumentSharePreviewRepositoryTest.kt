@@ -24,13 +24,14 @@ class DocumentSharePreviewRepositoryTest {
         launch: ((() -> Unit) -> Unit) = { it() },
         beforeCachedDelivery: () -> Unit = {},
         now: () -> Long = { 1L },
-        session: () -> DocumentSharePreviewRepository.Session = { DocumentSharePreviewRepository.Session("u1", "t1", 7L) }
+        session: () -> DocumentSharePreviewRepository.Session = { DocumentSharePreviewRepository.Session("u1", "t1", 7L) },
+        apiUrl: () -> String = { "https://api.example.test/v1/" }
     ) =
         DocumentSharePreviewRepository(
             transport = transport,
             now = now,
             session = session,
-            config = DocumentSharePreviewRepository.ConfigSource { "https://api.example.test/base" to "https://web.example.test" },
+            config = DocumentSharePreviewRepository.ConfigSource { apiUrl() to "https://web.example.test" },
             sessionEvents = object : DocumentSharePreviewRepository.SessionEvents {
                 override fun add(listener: () -> Unit) = Unit
                 override fun remove(listener: () -> Unit) = Unit
@@ -146,7 +147,77 @@ class DocumentSharePreviewRepositoryTest {
         val transport = FakeTransport()
         val repository = repository(transport)
         repository.fetch(content()) {}
-        assertEquals("https://api.example.test/api/v1/docs/doc_1/content?sp=space_2", transport.calls.single().url)
+        assertEquals("https://api.example.test/v1/docs/doc_1/content?sp=space_2", transport.calls.single().url)
+        repository.close()
+    }
+
+    @Test fun apiBaseUrlPreservesPathPrefixAndRawPathWithoutTrailingSlashes() {
+        assertEquals("https://api.example.test/v1", DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/v1/"))
+        assertEquals("https://api.example.test/gateway/v1", DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/gateway/v1///"))
+        assertEquals("https://api.example.test/gateway%2Fv1", DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/gateway%2Fv1/"))
+        val transport = FakeTransport()
+        val repository = repository(transport, apiUrl = { "https://api.example.test/gateway%2Fv1/" })
+        repository.fetch(content()) {}
+        assertEquals("https://api.example.test/gateway%2Fv1/docs/doc_1/content?sp=space_2", transport.calls.single().url)
+        repository.close()
+    }
+
+    @Test fun allPreviewKindsAppendEndpointToConfiguredApiPath() {
+        val expected = mapOf("doc" to "content", "sheet" to "sheet", "board" to "scene", "html" to "html-preview")
+        expected.forEach { (kind, endpoint) ->
+            val transport = FakeTransport()
+            val repository = repository(transport, apiUrl = { "https://api.example.test/gateway/v1" })
+            repository.fetch(content().apply { this.kind = kind }) {}
+            assertEquals("https://api.example.test/gateway/v1/docs/doc_1/$endpoint?sp=space_2", transport.calls.single().url)
+            repository.close()
+        }
+    }
+
+    @Test fun httpApiUrlsIncludingLocalhostAreRejectedBeforeTransport() {
+        listOf("http://api.example.test/v1", "http://localhost:8080/v1").forEach { apiUrl ->
+            val transport = FakeTransport()
+            val repository = repository(transport, apiUrl = { apiUrl })
+            var state: DocumentSharePreviewRepository.State? = null
+            repository.fetch(content()) { state = it.state }
+            assertEquals(DocumentSharePreviewRepository.State.error, state)
+            assertTrue(transport.calls.isEmpty())
+            repository.close()
+        }
+    }
+
+    @Test fun apiPathChangesIsolateCacheWhileTrailingSlashNormalizationSharesIt() {
+        val transport = FakeTransport()
+        var apiUrl = "https://api.example.test/v1/"
+        val repository = repository(transport, apiUrl = { apiUrl })
+        repository.fetch(content()) {}
+        transport.calls.single().callback(404, "")
+
+        apiUrl = "https://api.example.test/v1"
+        repository.fetch(content()) {}
+        assertEquals("equivalent slash form reuses the cache", 1, transport.calls.size)
+
+        apiUrl = "https://api.example.test/gateway/v1/"
+        repository.fetch(content()) {}
+        assertEquals("same host with a different API path must not reuse cache", 2, transport.calls.size)
+        transport.calls.last().callback(404, "")
+        repository.close()
+    }
+
+    @Test fun changingApiPathDropsDelayedOldResponseAndAllowsNewRequest() {
+        val transport = FakeTransport()
+        var apiUrl = "https://api.example.test/old/v1/"
+        val repository = repository(transport, apiUrl = { apiUrl })
+        var oldDeliveries = 0
+        repository.fetch(content()) { oldDeliveries++ }
+        val oldCall = transport.calls.single()
+
+        apiUrl = "https://api.example.test/new/v1/"
+        oldCall.callback(404, "")
+        assertEquals(0, oldDeliveries)
+        repository.fetch(content()) {}
+        assertEquals(2, transport.calls.size)
+        assertEquals("https://api.example.test/new/v1/docs/doc_1/content?sp=space_2", transport.calls.last().url)
+        transport.calls.last().callback(404, "")
         repository.close()
     }
 
@@ -276,10 +347,10 @@ class DocumentSharePreviewRepositoryTest {
         val cases = listOf(
             Triple("doc", "", DocumentSharePreviewRepository.State.error),
             Triple("sheet", "not-json", DocumentSharePreviewRepository.State.error),
-            Triple("board", "{}", DocumentSharePreviewRepository.State.ready),
-            Triple("doc", "{\"doc\":{\"content\":\"wrong type\"}}", DocumentSharePreviewRepository.State.ready),
-            Triple("sheet", "{\"sheetCells\":\"wrong type\"}", DocumentSharePreviewRepository.State.ready),
-            Triple("board", "{\"scene\":{\"elements\":{}}}", DocumentSharePreviewRepository.State.ready),
+            Triple("board", "{}", DocumentSharePreviewRepository.State.empty),
+            Triple("doc", "{\"doc\":{\"content\":\"wrong type\"}}", DocumentSharePreviewRepository.State.empty),
+            Triple("sheet", "{\"sheetCells\":\"wrong type\"}", DocumentSharePreviewRepository.State.empty),
+            Triple("board", "{\"scene\":{\"elements\":{}}}", DocumentSharePreviewRepository.State.empty),
             Triple("html", "{}", DocumentSharePreviewRepository.State.empty),
             Triple("html", "{\"preview\":{\"heading\":7,\"paragraphs\":[false]}}", DocumentSharePreviewRepository.State.empty)
         )
@@ -289,7 +360,6 @@ class DocumentSharePreviewRepositoryTest {
             repository.fetch(content().apply { this.kind = kind }) { result = it }
             transport.calls.single().callback(200, body)
             assertEquals("kind=$kind body=$body", expected, result?.state)
-            if (expected == DocumentSharePreviewRepository.State.ready) assertEquals(null, result?.preview)
             repository.close()
         }
     }

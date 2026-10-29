@@ -103,7 +103,7 @@ class WKDocumentShareProvider : WKChatBaseProvider() {
         fun validResult(result: DocumentSharePreviewRepository.Result): Boolean {
             val snapshot = WKConfig.getInstance().getSessionSnapshot()
             val context = result.context
-            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiOrigin == DocumentSharePreviewRepository.apiOrigin(com.chat.base.config.WKApiConfig.baseUrl) && context.webOrigin == DocumentSharePreviewRepository.webOrigin(com.chat.base.config.WKApiConfig.baseWebUrl)
+            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiBaseUrl == DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl) && context.webOrigin == DocumentSharePreviewRepository.webOrigin(com.chat.base.config.WKApiConfig.baseWebUrl)
         }
         fun load(force: Boolean) {
             val loadBinding = bindingVersion
@@ -113,7 +113,7 @@ class WKDocumentShareProvider : WKChatBaseProvider() {
             val loadIdentity = messageIdentity
             card.setSubscription(null)
             val snapshot = WKConfig.getInstance().getSessionSnapshot()
-            val api = DocumentSharePreviewRepository.apiOrigin(com.chat.base.config.WKApiConfig.baseUrl)
+            val api = DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl)
             if (snapshot.uid.orEmpty().isEmpty() || snapshot.token.orEmpty().isEmpty() || !DocumentSharePreviewRepository.validDocId(content.docId.orEmpty()) || (content.spaceId.orEmpty().isNotEmpty() && !DocumentSharePreviewRepository.validDocId(content.spaceId.orEmpty())) || api == null) {
                 if (card.isCurrent(loadBinding, loadAttach) && loadRequest == requestVersion && loadIdentity == messageIdentity) card.renderResult(content, DocumentSharePreviewRepository.Result(DocumentSharePreviewRepository.State.error))
                 return

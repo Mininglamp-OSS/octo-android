@@ -760,6 +760,7 @@
     <string name="doc_share_unavailable_description">It may have been deleted or archived.</string>
     <string name="xlsx_rows">%1$d rows</string>
     <string name="xlsx_empty">Empty spreadsheet</string>
+    <string name="xlsx_truncated_without_content">No content is available within the preview range. The preview has been truncated.</string>
     <string name="xlsx_parse_failed">This Excel file cannot be previewed</string>
     <string name="xlsx_retry">Retry</string>
     <string name="xlsx_truncated">Preview truncated because the content is too large</string>

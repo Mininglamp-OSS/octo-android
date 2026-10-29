@@ -23,7 +23,7 @@ class DocumentSharePreviewRepository(
 ) : AutoCloseable {
     enum class State { loading, denied, unavailable, error, empty, ready }
     data class Session(val uid: String, val token: String, val version: Long = 0)
-    data class Context(val version: Long, val uid: String, val token: String, val apiOrigin: String, val webOrigin: String?)
+    data class Context(val version: Long, val uid: String, val token: String, val apiBaseUrl: String, val webOrigin: String?)
     data class Result(val state: State, val preview: DocumentSharePreviewParser.Preview? = null, val context: Context? = null)
     interface Transport { fun get(url: String, token: String, spaceId: String, callback: (Int, String?) -> Unit) }
     interface Subscription { fun cancel() }
@@ -47,7 +47,7 @@ class DocumentSharePreviewRepository(
     fun fetch(content: WKDocumentShareContent, force: Boolean = false, callback: (Result) -> Unit): Subscription {
         if (closed) { callback(Result(State.error)); return EmptySubscription }
         val id = content.docId.orEmpty(); val space = content.spaceId.orEmpty(); val origins = config.origins()
-        val api = apiOrigin(origins.first); val web = webOrigin(origins.second); val s = session()
+        val api = apiBaseUrl(origins.first); val web = webOrigin(origins.second); val s = session()
         if (!validDocId(id) || (space.isNotEmpty() && !validDocId(space)) || api == null || s.uid.isEmpty() || s.token.isEmpty()) { callback(Result(State.error)); return EmptySubscription }
         val context = Context(s.version, s.uid, s.token, api, web); val key = Key(context, space, id, normalizeKind(content.kind))
         var cached: Result? = null; var pending: Pending? = null; var start: Pending? = null; var subscriptionId = 0L; var lookupGeneration = 0L
@@ -79,7 +79,7 @@ class DocumentSharePreviewRepository(
             !closed && generation == request.generation && inflight[key]?.id == request.id && inflight[key]?.generation == request.generation && currentContext() == key.context
         }
         if (!allowed) return
-        try { transport.get(buildRequestUrl(key.context.apiOrigin, key.id, key.kind, key.space), key.context.token, key.space) { code, body ->
+        try { transport.get(buildRequestUrl(key.context.apiBaseUrl, key.id, key.kind, key.space), key.context.token, key.space) { code, body ->
             try { complete(request, mapResult(code, body, key.context, key.kind)) } catch (_: Throwable) { complete(request, Result(State.error, context = key.context)) }
         } } catch (_: Throwable) { complete(request, Result(State.error, context = key.context)) }
     }
@@ -104,7 +104,7 @@ class DocumentSharePreviewRepository(
         }
     }
 
-    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiOrigin(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webOrigin(origins.second)) }
+    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiBaseUrl(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webOrigin(origins.second)) }
     private fun evictExpiredLocked() { val timestamp = now(); val iterator = cache.entries.iterator(); while (iterator.hasNext()) if (iterator.next().value.expires <= timestamp) iterator.remove() }
     private fun isCurrentLocked(context: Context, expectedGeneration: Long) = !closed && expectedGeneration == generation && currentContext() == context
     private fun deliverIfCurrent(context: Context, expectedGeneration: Long, callback: () -> Unit) { val valid = synchronized(lock) { isCurrentLocked(context, expectedGeneration) }; if (valid) callback() }
@@ -115,15 +115,26 @@ class DocumentSharePreviewRepository(
         val json = body?.let { org.json.JSONObject(it) }; val error = json?.opt("error") as? String
         return when {
             code == 409 && error == "unsupported_doc_type" -> Result(State.empty, context = context)
-            code in 200..299 -> { val preview = when (kind) { "sheet" -> json?.let { DocumentSharePreviewParser.parseSheet(it) }; "board" -> json?.let { DocumentSharePreviewParser.parseBoard(it) }; "html" -> json?.let { DocumentSharePreviewParser.parseHtml(it) }; else -> json?.let { DocumentSharePreviewParser.parseDoc(it) } }; if (json == null) Result(State.error, context = context) else if (preview == null && kind == "html") Result(State.empty, context = context) else Result(State.ready, preview, context) }
+            code in 200..299 -> {
+                if (json == null) Result(State.error, context = context)
+                else {
+                    val preview = when (kind) {
+                        "sheet" -> DocumentSharePreviewParser.parseSheet(json)
+                        "board" -> DocumentSharePreviewParser.parseBoard(json)
+                        "html" -> DocumentSharePreviewParser.parseHtml(json)
+                        else -> DocumentSharePreviewParser.parseDoc(json)
+                    }
+                    if (preview == null) Result(State.empty, context = context) else Result(State.ready, preview, context)
+                }
+            }
             else -> Result(State.error, context = context)
         }
     }
 
-    internal fun buildRequestUrl(origin: String, id: String, kind: String, space: String): String {
+    internal fun buildRequestUrl(apiBaseUrl: String, id: String, kind: String, space: String): String {
         val endpoint = when (kind) { "sheet" -> "sheet"; "board" -> "scene"; "html" -> "html-preview"; else -> "content" }
         val query = if (space.isNotEmpty()) "sp=${java.net.URLEncoder.encode(space, Charsets.UTF_8.name()).replace("+", "%20")}" else null
-        return URI.create("$origin/api/v1/docs/$id/$endpoint" + (query?.let { "?$it" } ?: "")).toASCIIString()
+        return URI.create("$apiBaseUrl/docs/$id/$endpoint" + (query?.let { "?$it" } ?: "")).toASCIIString()
     }
     fun buildNavigationUrl(docId: String): String? = if (validDocId(docId)) webOrigin(config.origins().second)?.let { "$it/d/$docId" } else null
 
@@ -136,7 +147,13 @@ class DocumentSharePreviewRepository(
         private object EmptySubscription : Subscription { override fun cancel() = Unit }
         fun validDocId(value: String) = value.matches(Regex("[A-Za-z0-9_-]{1,128}"))
         fun normalizeKind(value: String?) = when (value) { "sheet", "board", "html" -> value!! else -> "doc" }
-        fun apiOrigin(value: String) = origin(value); fun webOrigin(value: String) = origin(value)
+        fun apiBaseUrl(value: String): String? = runCatching {
+            val uri = URI(value.trim())
+            if (!uri.scheme.equals("https", true) || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.rawQuery != null || uri.rawFragment != null) return null
+            val path = uri.rawPath.orEmpty().trimEnd('/')
+            "https://${uri.rawAuthority}$path"
+        }.getOrNull()
+        fun webOrigin(value: String) = origin(value)
         private fun origin(value: String): String? = runCatching { URI(value.trim()).let { if ((!it.scheme.equals("http", true) && !it.scheme.equals("https", true)) || it.userInfo != null || it.host.isNullOrEmpty()) null else URI(it.scheme.lowercase(), null, it.host, it.port, null, null, null).toString().removeSuffix("/") } }.getOrNull()
     }
 

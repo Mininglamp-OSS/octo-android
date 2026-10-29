@@ -54,6 +54,33 @@ class XlsxParserTest {
         } finally { file.delete() }
     }
 
+    @Test fun contentOnlyBeyondRowLimitProducesEmptyTruncatedPreview() {
+        val file = createWorkbook("""<row r="501"><c r="A501"><v>outside-row-limit</v></c></row>""")
+        try {
+            val parsed = XlsxParser.parse(file).sheets.single()
+            assertTrue(parsed.rows.isEmpty())
+            assertTrue(parsed.truncated)
+        } finally { file.delete() }
+    }
+
+    @Test fun contentOnlyBeyondColumnLimitProducesEmptyTruncatedPreview() {
+        val file = createWorkbook("""<row r="1"><c r="AY1"><v>outside-column-limit</v></c></row>""")
+        try {
+            val parsed = XlsxParser.parse(file).sheets.single()
+            assertTrue(parsed.rows.isEmpty())
+            assertTrue(parsed.truncated)
+        } finally { file.delete() }
+    }
+
+    @Test fun trulyEmptySheetIsNotTruncated() {
+        val file = createWorkbook("")
+        try {
+            val parsed = XlsxParser.parse(file).sheets.single()
+            assertTrue(parsed.rows.isEmpty())
+            assertEquals(false, parsed.truncated)
+        } finally { file.delete() }
+    }
+
     private fun createWorkbook(sheetRows: String): File {
         val file = File.createTempFile("xlsx-parser-test-", ".xlsx", InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
         ZipOutputStream(file.outputStream()).use { zip ->

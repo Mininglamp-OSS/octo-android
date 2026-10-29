@@ -761,6 +761,7 @@
     <string name="doc_share_unavailable_description">该文档可能已被删除或归档</string>
     <string name="xlsx_rows">%1$d 行</string>
     <string name="xlsx_empty">空表格</string>
+    <string name="xlsx_truncated_without_content">预览范围内无可显示内容，内容已截断</string>
     <string name="xlsx_parse_failed">无法预览此 Excel 文件</string>
     <string name="xlsx_retry">重试</string>
     <string name="xlsx_truncated">内容过大，预览已截断</string>

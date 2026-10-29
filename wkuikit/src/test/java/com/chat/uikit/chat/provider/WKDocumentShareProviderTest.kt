@@ -71,6 +71,15 @@ class WKDocumentShareProviderTest {
     }
 
     @Test
+    fun apiBaseUrlValidationPreservesHttpsPathPrefixAndRejectsUnsafeComponents() {
+        assertEquals("https://api.example.test/gateway/v1", DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/gateway/v1/"))
+        assertNull(DocumentSharePreviewRepository.apiBaseUrl("http://api.example.test/v1"))
+        assertNull(DocumentSharePreviewRepository.apiBaseUrl("https://user@api.example.test/v1"))
+        assertNull(DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/v1?tenant=x"))
+        assertNull(DocumentSharePreviewRepository.apiBaseUrl("https://api.example.test/v1#section"))
+    }
+
+    @Test
     fun rejectsInvalidUrls() {
         val previous = WKApiConfig.baseWebUrl
         try {

@@ -50,7 +50,36 @@ public class FileUploadTerminalStateTest {
         }
     }
 
-    private static final class TestProgress implements WKProgressManager.IProgress {
+    @Test public void fileUploadTaskSurvivesListenerRemovalAndIsVisibleToReboundRows() {
+        WKProgressManager manager = WKProgressManager.Companion.getInstance();
+        WKProgressManager.FileUploadProgressKey key = new WKProgressManager.FileUploadProgressKey("task-account", 91L, "task-msg", 17L);
+        int[] observedStarts = {0};
+        WKProgressManager.IProgress first = new TestProgress(new int[1], new int[1]) {
+            @Override public void onProgress(Object tag, int progress) { observedStarts[0]++; }
+        };
+        try {
+            manager.registerProgress(key, first);
+            assertTrue(manager.beginFileUpload(key));
+            assertEquals(1, observedStarts[0]);
+            manager.unregisterProgress(key, first);
+            assertEquals(0, manager.getFileUploadTask(key).getProgress());
+
+            int[] reboundProgress = {-1};
+            manager.registerProgress(key, new WKProgressManager.IProgress() {
+                @Override public void onProgress(Object tag, int progress) { reboundProgress[0] = progress; }
+                @Override public void onSuccess(Object tag, String path) { }
+                @Override public void onFail(Object tag, String message) { }
+            });
+            assertEquals(0, reboundProgress[0]);
+            manager.completeUploadFailure(key, "done");
+            assertEquals(null, manager.getFileUploadTask(key));
+        } finally {
+            manager.completeUploadFailure(key, "cleanup");
+            manager.unregisterProgress(key);
+        }
+    }
+
+    private static class TestProgress implements WKProgressManager.IProgress {
         private final int[] failures;
         private final int[] successes;
         TestProgress(int[] failures, int[] successes) { this.failures = failures; this.successes = successes; }

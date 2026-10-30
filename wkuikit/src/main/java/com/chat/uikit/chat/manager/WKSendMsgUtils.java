@@ -197,6 +197,7 @@ public class WKSendMsgUtils {
             if (snapshot.version != capturedSession.version || !TextUtils.equals(snapshot.uid, capturedSession.uid)
                     || !TextUtils.equals(snapshot.token, capturedSession.token)) cancel.run();
         };
+        WKProgressManager.Companion.getInstance().beginFileUpload(progressKey);
         WKConfig.getInstance().addSessionListener(sessionListener[0]);
         if (!isCurrent(capturedSession, capturedUid, capturedHelper, capturedContext)) { cancel.run(); return; }
         IUploadAttacResultListener result = (success, value) -> completeFileUpload(terminal, sessionListener[0], progressKey,

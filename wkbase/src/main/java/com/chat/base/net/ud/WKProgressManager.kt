@@ -30,6 +30,10 @@ class WKProgressManager private constructor() {
     }
 
     private val progressList = ConcurrentHashMap<Any, IProgress>()
+    private data class FileUploadTask(@Volatile var progress: Int)
+    private val fileUploadTasks = ConcurrentHashMap<FileUploadProgressKey, FileUploadTask>()
+
+    data class FileUploadTaskSnapshot(val progress: Int)
 
     interface IProgress {
         fun onProgress(tag: Any?, progress: Int)
@@ -39,6 +43,9 @@ class WKProgressManager private constructor() {
 
     fun registerProgress(tag: Any, progress: IProgress) {
         progressList[tag] = progress
+        if (tag is FileUploadProgressKey) {
+            fileUploadTasks[tag]?.let { progress.onProgress(tag, it.progress) }
+        }
     }
 
     fun unregisterProgress(tag: Any) {
@@ -47,13 +54,32 @@ class WKProgressManager private constructor() {
 
     fun unregisterProgress(tag: Any, progress: IProgress) { progressList.remove(tag, progress) }
 
+    /** Starts a file upload independently of whether a message row currently observes it. */
+    @Synchronized
+    fun beginFileUpload(key: FileUploadProgressKey): Boolean {
+        if (fileUploadTasks.containsKey(key)) return false
+        fileUploadTasks[key] = FileUploadTask(0)
+        progressList[key]?.onProgress(key, 0)
+        return true
+    }
+
+    fun getFileUploadTask(key: FileUploadProgressKey): FileUploadTaskSnapshot? =
+        fileUploadTasks[key]?.let { FileUploadTaskSnapshot(it.progress) }
+
+    @Synchronized
+    fun finishFileUpload(key: FileUploadProgressKey) {
+        fileUploadTasks.remove(key)
+    }
+
     /** Completes an attachment upload after its SDK callback has persisted the message content. */
     fun completeUploadSuccess(tag: Any, filePath: String?) {
+        if (tag is FileUploadProgressKey) finishFileUpload(tag)
         progressList.remove(tag)?.onSuccess(tag, filePath)
     }
 
     /** Completes an attachment upload after its SDK callback has persisted send failure. */
     fun completeUploadFailure(tag: Any, message: String?) {
+        if (tag is FileUploadProgressKey) finishFileUpload(tag)
         progressList.remove(tag)?.onFail(tag, message)
     }
 
@@ -67,6 +93,10 @@ class WKProgressManager private constructor() {
     }
 
     internal fun seekProgress(tag: Any?, progress: Int) {
+        if (tag is FileUploadProgressKey) {
+            val task = fileUploadTasks[tag] ?: return
+            task.progress = progress.coerceIn(0, 100)
+        }
         progressList[tag]?.onProgress(tag, progress)
     }
 }

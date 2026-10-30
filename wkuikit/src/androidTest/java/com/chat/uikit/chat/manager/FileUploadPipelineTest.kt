@@ -38,6 +38,7 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import okhttp3.RequestBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -172,9 +173,11 @@ class FileUploadPipelineTest {
             val path = (message.baseContentMsgModel as WKFileContent).localPath
             FileRequestBody(File(path).asRequestBody("application/octet-stream".toMediaType()), progressKey()).writeTo(Buffer())
             instrumentation.waitForIdleSync()
+            assertNotNull(WKProgressManager.instance.getFileUploadTask(progressKey()))
             assertTrue(row.findViewById<android.widget.TextView>(R.id.fileUploadProgressPercent).text.toString().contains("100"))
-            assertFalse(row.findViewById<View>(R.id.contentLayout).isEnabled)
-            assertFalse(row.findViewById<View>(R.id.fileActionButton).isEnabled)
+            assertTrue(row.findViewById<View>(R.id.fileSizeTv).visibility == View.VISIBLE)
+            assertTrue(row.findViewById<View>(R.id.contentLayout).isEnabled)
+            assertTrue(row.findViewById<View>(R.id.fileActionButton).isEnabled)
         }
 
         fun persisted() = WKIM.getInstance().msgManager.getWithClientMsgNO(message.clientMsgNO)
@@ -200,6 +203,7 @@ class FileUploadPipelineTest {
 
         override fun close() {
             runCatching { instrumentation.runOnMainSync { root.removeView(row); activity.finish() } }
+            WKProgressManager.instance.finishFileUpload(progressKey())
             WKProgressManager.instance.unregisterProgress(progressKey())
             @Suppress("UNCHECKED_CAST") (sendingMapField.get(WKConnection.getInstance()) as? MutableMap<Int, Any?>)?.remove(message.clientSeq.toInt())
             WKSendMsgUtils.setFileUploadTransportForTests(null)
@@ -240,7 +244,7 @@ class FileUploadPipelineTest {
                 scenario.transport.put!!.onSuccess("ignored-cos-response")
                 val savedBeforePostedUiEvent = scenario.persisted()
                 assertEquals("https://files.test/object", (savedBeforePostedUiEvent!!.baseContentMsgModel as WKFileContent).url)
-                assertFalse(view.findViewById<View>(R.id.contentLayout).isEnabled)
+                assertTrue(view.findViewById<View>(R.id.contentLayout).isEnabled)
             }
             scenario.instrumentation.runOnMainSync { }
             val saved = scenario.persisted()
@@ -251,8 +255,30 @@ class FileUploadPipelineTest {
             assertTrue(view.findViewById<View>(R.id.contentLayout).isEnabled)
             assertTrue(view.findViewById<View>(R.id.fileActionButton).isEnabled)
             assertEquals(View.GONE, view.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            assertEquals(null, WKProgressManager.instance.getFileUploadTask(scenario.progressKey()))
             scenario.assertUploadSessionListenerRemoved()
         } finally { scenario.close() }
+    }
+
+    @Test fun queuedUploadTerminalStillHidesProgressAfterImmediateLocalOpen() {
+        val scenario = Scenario(trustedSource = true)
+        val openCount = AtomicInteger()
+        try {
+            scenario.progressAt100()
+            scenario.instrumentation.runOnMainSync { scenario.transport.returnCredentials() }
+            WKFileProvider.openFileForTests = { _, _ -> openCount.incrementAndGet() }
+            scenario.instrumentation.runOnMainSync {
+                scenario.transport.put!!.onSuccess("ignored")
+                assertTrue(scenario.row.findViewById<View>(R.id.contentLayout).performClick())
+            }
+            scenario.instrumentation.waitForIdleSync()
+            assertEquals(1, openCount.get())
+            assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+            assertTrue(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
+        } finally {
+            WKFileProvider.openFileForTests = null
+            scenario.close()
+        }
     }
 
     @Test fun credentialAndPutFailuresPersistSendFailAndTerminateTheSameRow() {
@@ -267,10 +293,11 @@ class FileUploadPipelineTest {
                 scenario.instrumentation.runOnMainSync { }
                 scenario.assertUploadSessionListenerRemoved()
                 assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.persisted()!!.status)
-                assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
-                assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
-                assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
+                assertEquals(WKFileProvider.formatFileSize((scenario.message.baseContentMsgModel as WKFileContent).size), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+                assertTrue(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
+                assertTrue(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
                 assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
+                assertEquals(null, WKProgressManager.instance.getFileUploadTask(scenario.progressKey()))
                 scenario.assertUploadSessionListenerRemoved()
             } finally { scenario.close() }
         }
@@ -416,7 +443,7 @@ class FileUploadPipelineTest {
             scenario.assertUploadSessionListenerRemoved()
             scenario.instrumentation.waitForIdleSync()
             assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
-            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(WKFileProvider.formatFileSize((scenario.message.baseContentMsgModel as WKFileContent).size), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
             assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
             assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
             assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
@@ -429,7 +456,7 @@ class FileUploadPipelineTest {
             assertEquals("", org.json.JSONObject(captured.second).optString("url"))
             scenario.instrumentation.waitForIdleSync()
             assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
-            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(WKFileProvider.formatFileSize((scenario.message.baseContentMsgModel as WKFileContent).size), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
             assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
             assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
             assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)
@@ -665,7 +692,7 @@ class FileUploadPipelineTest {
             scenario.instrumentation.waitForIdleSync()
             assertFalse(scenario.isProgressRegistered(scenario.progressKey()))
             assertSame(scenario.originalBinding, scenario.row.findViewById<LinearLayout>(R.id.fileView).tag)
-            assertEquals(scenario.context.getString(R.string.doc_share_upload_failed), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
+            assertEquals(WKFileProvider.formatFileSize((scenario.message.baseContentMsgModel as WKFileContent).size), scenario.row.findViewById<android.widget.TextView>(R.id.fileSizeTv).text.toString())
             assertEquals(View.GONE, scenario.row.findViewById<View>(R.id.fileUploadProgressLayout).visibility)
             assertFalse(scenario.row.findViewById<View>(R.id.contentLayout).isEnabled)
             assertFalse(scenario.row.findViewById<View>(R.id.fileActionButton).isEnabled)

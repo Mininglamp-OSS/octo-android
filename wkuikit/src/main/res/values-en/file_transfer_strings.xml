@@ -4,4 +4,5 @@
     <string name="doc_share_upload_failed">Upload failed</string>
     <string name="doc_share_file_actions">File actions</string>
     <string name="doc_share_upload_percent">%1$d%%</string>
+    <string name="file_not_exist_or_uploading">File does not exist or is still uploading</string>
 </resources>

@@ -9,6 +9,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderLifecycleGuardsTest {
+    @Test fun repeatedDownloadClickCancelsOnlyTheCurrentWait() {
+        val waiting = FileDownloadWaitState()
+        waiting.begin(41L)
+        assertTrue(waiting.cancelIfWaiting())
+        assertFalse(waiting.cancelIfWaiting())
+
+        waiting.begin(42L)
+        waiting.finish(41L)
+        assertTrue(waiting.cancelIfWaiting())
+        assertFalse(waiting.cancelIfWaiting())
+    }
+
     @Test fun downloadPersistenceSpyRunsOnlyForCapturedAccountAndHelper() {
         val accountA = WKConfig.SessionSnapshot(3, "A", "token-a")
         val accountB = WKConfig.SessionSnapshot(4, "B", "token-b")

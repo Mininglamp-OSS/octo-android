@@ -17,18 +17,19 @@ class DocumentSharePreviewRepository(
     private val transport: Transport = OkHttpTransport(),
     private val now: () -> Long = { android.os.SystemClock.elapsedRealtime() },
     private val session: () -> Session = { WKConfig.getInstance().getSessionSnapshot().let { Session(it.uid.orEmpty(), it.token.orEmpty(), it.version) } },
-    private val config: ConfigSource = ConfigSource { WKApiConfig.baseUrl to WKApiConfig.baseWebUrl },
+    private val config: ConfigSource = ConfigSource { Config(WKApiConfig.baseUrl, WKApiConfig.baseWebUrl, WKApiConfig.getDocumentBaseUrl()) },
     private val sessionEvents: SessionEvents = DefaultSessionEvents(),
     private val launch: ((() -> Unit) -> Unit) = { task -> Thread(task).start() },
     private val beforeCachedDelivery: () -> Unit = {}
 ) : AutoCloseable {
     enum class State { loading, denied, unavailable, error, empty, ready }
     data class Session(val uid: String, val token: String, val version: Long = 0)
-    data class Context(val version: Long, val uid: String, val token: String, val apiBaseUrl: String, val webBaseUrl: String?)
+    data class Context(val version: Long, val uid: String, val token: String, val apiBaseUrl: String, val webBaseUrl: String?, val documentBaseUrl: String?)
+    data class Config(val apiBaseUrl: String, val webBaseUrl: String, val documentBaseUrl: String?)
     data class Result(val state: State, val preview: DocumentSharePreviewParser.Preview? = null, val context: Context? = null)
     interface Transport { fun get(url: String, token: String, spaceId: String, callback: (Int, String?) -> Unit) }
     interface Subscription { fun cancel() }
-    fun interface ConfigSource { fun origins(): Pair<String, String> }
+    fun interface ConfigSource { fun origins(): Config }
     interface SessionEvents { fun add(listener: () -> Unit); fun remove(listener: () -> Unit) }
     private class DefaultSessionEvents : SessionEvents {
         private val map = IdentityHashMap<() -> Unit, WKConfig.SessionListener>()
@@ -48,9 +49,9 @@ class DocumentSharePreviewRepository(
     fun fetch(content: WKDocumentShareContent, force: Boolean = false, callback: (Result) -> Unit): Subscription {
         if (closed) { callback(Result(State.error)); return EmptySubscription }
         val id = content.docId.orEmpty(); val space = content.spaceId.orEmpty(); val origins = config.origins()
-        val api = apiBaseUrl(origins.first); val web = webBaseUrl(origins.second); val s = session()
+        val api = apiBaseUrl(origins.apiBaseUrl); val web = webBaseUrl(origins.webBaseUrl); val document = DocumentViewerUrlPolicy.normalizeDocumentBaseUrl(origins.documentBaseUrl); val s = session()
         if (!validDocId(id) || (space.isNotEmpty() && !validDocId(space)) || api == null || s.uid.isEmpty() || s.token.isEmpty()) { callback(Result(State.error)); return EmptySubscription }
-        val context = Context(s.version, s.uid, s.token, api, web); val key = Key(context, space, id, normalizeKind(content.kind))
+        val context = Context(s.version, s.uid, s.token, api, web, document); val key = Key(context, space, id, normalizeKind(content.kind))
         var cached: Result? = null; var pending: Pending? = null; var start: Pending? = null; var subscriptionId = 0L; var lookupGeneration = 0L
         synchronized(lock) {
             if (closed) { callback(Result(State.error)); return EmptySubscription }
@@ -105,7 +106,7 @@ class DocumentSharePreviewRepository(
         }
     }
 
-    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiBaseUrl(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webBaseUrl(origins.second)) }
+    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiBaseUrl(origins.apiBaseUrl) ?: return null; return Context(s.version, s.uid, s.token, api, webBaseUrl(origins.webBaseUrl), DocumentViewerUrlPolicy.normalizeDocumentBaseUrl(origins.documentBaseUrl)) }
     private fun evictExpiredLocked() { val timestamp = now(); val iterator = cache.entries.iterator(); while (iterator.hasNext()) if (iterator.next().value.expires <= timestamp) iterator.remove() }
     private fun isCurrentLocked(context: Context, expectedGeneration: Long) = !closed && expectedGeneration == generation && currentContext() == context
     private fun deliverIfCurrent(context: Context, expectedGeneration: Long, callback: () -> Unit) { val valid = synchronized(lock) { isCurrentLocked(context, expectedGeneration) }; if (valid) callback() }
@@ -137,16 +138,16 @@ class DocumentSharePreviewRepository(
         val query = if (space.isNotEmpty()) "sp=${java.net.URLEncoder.encode(space, Charsets.UTF_8.name()).replace("+", "%20")}" else null
         return URI.create("$apiBaseUrl/docs/$id/$endpoint" + (query?.let { "?$it" } ?: "")).toASCIIString()
     }
-    fun buildNavigationUrl(docId: String): String? = navigationUrl(docId, config.origins().first)
+    fun buildNavigationUrl(docId: String): String? = navigationUrl(docId, currentContext()?.documentBaseUrl)
 
     companion object {
         internal const val MAX_CACHE_ENTRIES = 128
         private val applicationRepository by lazy { DocumentSharePreviewRepository() }
         fun shared() = applicationRepository
-        // Follows DocumentViewerUrlPolicy; validated on same-origin deployments only.
-        fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.baseUrl)
-        fun navigationUrl(docId: String, apiBaseUrl: String): String? {
-            return DocumentViewerUrlPolicy.documentUrl(apiBaseUrl, docId)
+        // The configured value is already the resolved document root, including any legacy fallback.
+        fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.getDocumentBaseUrl())
+        fun navigationUrl(docId: String, documentBaseUrl: String?): String? {
+            return DocumentViewerUrlPolicy.documentUrl(documentBaseUrl, docId)
         }
         private object EmptySubscription : Subscription { override fun cancel() = Unit }
         fun validDocId(value: String) = value.matches(Regex("[A-Za-z0-9_-]{1,128}"))

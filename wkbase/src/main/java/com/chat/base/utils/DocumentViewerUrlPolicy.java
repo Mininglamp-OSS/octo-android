@@ -19,7 +19,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.regex.Pattern;
 
-/** Builds and validates document viewer routes from the configured HTTPS API deployment base. */
+/** Builds and validates document viewer routes from an explicit or legacy document root. */
 public final class DocumentViewerUrlPolicy {
     private static final String DOCUMENT_ID = "[A-Za-z0-9_-]{1,128}";
     private static final Pattern VIEWER_PATH = Pattern.compile(
@@ -29,42 +29,44 @@ public final class DocumentViewerUrlPolicy {
     private DocumentViewerUrlPolicy() {
     }
 
+    /** Resolve an explicit complete docs root, or use the legacy API suffix derivation when blank. */
+    public static String resolveDocumentBaseUrl(String apiBaseUrl, String documentOverride) {
+        if (documentOverride != null && !documentOverride.trim().isEmpty()) {
+            return normalizeDocumentBaseUrl(documentOverride);
+        }
+        return legacyDocumentBaseUrlFromApi(apiBaseUrl);
+    }
+
+    /** Validate an explicit complete docs root without removing API-looking path components. */
+    public static String normalizeDocumentBaseUrl(String documentBase) {
+        URI uri = parseHttpsBase(documentBase);
+        if (uri == null) return null;
+        return "https://" + uri.getRawAuthority() + normalizedRawPath(uri.getRawPath());
+    }
+
     /**
-     * Uses the API deployment root for document routes, removing known /api/v1 or /v1 suffixes
-     * while preserving deployment prefixes. On 2026-10-29, same-origin preview returned HTTP 200;
-     * WebView logs confirmed /web/d/{id}, while the user observed a generic Web page. The user
-     * verified that /d/{id} opened the document. baseWebUrl is the general Web entry, not a
-     * separate document-service setting. This matches iOS WKDocumentShareCardCell.documentURL and
-     * WKDocumentShareCardAbsoluteURL (octo-ios 4de9ff97), which derive /d/{id} from apiBaseUrl.
-     * Split API/Web deployments remain unverified; confirm the
-     * server's document route before composing it from baseWebUrl.
+     * Legacy fallback for same-origin deployments: on 2026-10-29 /web/d opened a generic page,
+     * while the user verified /d and iOS uses the same API-derived route.
      */
-    public static String viewerBaseUrl(String apiBaseUrl) {
-        URI uri = parseApiBase(apiBaseUrl);
+    public static String legacyDocumentBaseUrlFromApi(String apiBaseUrl) {
+        URI uri = parseHttpsBase(apiBaseUrl);
         if (uri == null) return null;
         String path = normalizedRawPath(uri.getRawPath());
-        if (path.endsWith("/api/v1")) {
-            path = path.substring(0, path.length() - "/api/v1".length());
-        } else if (path.endsWith("/v1")) {
-            path = path.substring(0, path.length() - "/v1".length());
-        }
-        path = normalizedRawPath(path);
-        return "https://" + uri.getRawAuthority() + path;
+        if (path.endsWith("/api/v1")) path = path.substring(0, path.length() - "/api/v1".length());
+        else if (path.endsWith("/v1")) path = path.substring(0, path.length() - "/v1".length());
+        return "https://" + uri.getRawAuthority() + normalizedRawPath(path);
     }
 
-    public static String documentUrl(String apiBaseUrl, String documentId) {
+    public static String documentUrl(String documentBaseUrl, String documentId) {
         if (!isValidDocumentId(documentId)) return null;
-        String viewerBase = viewerBaseUrl(apiBaseUrl);
-        return viewerBase == null ? null : viewerBase + "/d/" + documentId;
+        String normalized = normalizeDocumentBaseUrl(documentBaseUrl);
+        return normalized == null ? null : normalized + "/d/" + documentId;
     }
 
-    /**
-     * Accepts only viewer routes at the configured deployment root. Paths are compared raw so
-     * encoded separators and encoded document IDs cannot become trusted after decoding.
-     */
-    public static boolean isTrustedViewerUrl(String url, String apiBaseUrl) {
+    /** Accept only exact viewer routes relative to a valid document-service root. */
+    public static boolean isTrustedViewerUrl(String url, String documentBaseUrl) {
         URI candidate = parseAbsoluteHttpsUrl(url);
-        URI viewerBase = parseAbsoluteHttpsUrl(viewerBaseUrl(apiBaseUrl));
+        URI viewerBase = parseAbsoluteHttpsUrl(normalizeDocumentBaseUrl(documentBaseUrl));
         if (candidate == null || viewerBase == null || !sameOrigin(candidate, viewerBase)) return false;
         String basePath = normalizedRawPath(viewerBase.getRawPath());
         String rawPath = candidate.getRawPath();
@@ -82,8 +84,8 @@ public final class DocumentViewerUrlPolicy {
         return rawPath != null && VIEWER_PATH.matcher(rawPath).matches();
     }
 
-    public static String originOfViewerBase(String apiBaseUrl) {
-        URI base = parseAbsoluteHttpsUrl(viewerBaseUrl(apiBaseUrl));
+    public static String originOfViewerBase(String documentBaseUrl) {
+        URI base = parseAbsoluteHttpsUrl(normalizeDocumentBaseUrl(documentBaseUrl));
         if (base == null) return null;
         try {
             return new URI("https", null, base.getHost(), base.getPort(), null, null, null).toString();
@@ -92,11 +94,9 @@ public final class DocumentViewerUrlPolicy {
         }
     }
 
-    private static URI parseApiBase(String value) {
-        if (value == null) return null;
-        String normalized = value.trim();
-        if (normalized.length() == 0) return null;
-        URI uri = parseAbsoluteHttpsUrl(normalized);
+    private static URI parseHttpsBase(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
+        URI uri = parseAbsoluteHttpsUrl(value.trim());
         if (uri == null || uri.getRawQuery() != null || uri.getRawFragment() != null) return null;
         return uri;
     }
@@ -127,7 +127,6 @@ public final class DocumentViewerUrlPolicy {
     }
 
     private static int effectivePort(URI uri) {
-        if (uri.getPort() >= 0) return uri.getPort();
-        return 443;
+        return uri.getPort() >= 0 ? uri.getPort() : 443;
     }
 }

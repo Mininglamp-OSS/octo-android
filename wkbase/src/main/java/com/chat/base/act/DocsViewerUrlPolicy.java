@@ -54,13 +54,13 @@ final class DocsViewerUrlPolicy {
         return candidate != null && trustedOrigin != null && isSameOrigin(candidate, trustedOrigin);
     }
 
-    static boolean isTrustedViewerUrl(String url, String apiBaseUrl) {
-        return com.chat.base.utils.DocumentViewerUrlPolicy.isTrustedViewerUrl(url, apiBaseUrl);
+    static boolean isTrustedViewerUrl(String url, String documentBaseUrl) {
+        return com.chat.base.utils.DocumentViewerUrlPolicy.isTrustedViewerUrl(url, documentBaseUrl);
     }
 
-    static String handoffOriginForUrl(String url, String apiBaseUrl, String webBaseUrl) {
-        if (isTrustedViewerUrl(url, apiBaseUrl)) {
-            return com.chat.base.utils.DocumentViewerUrlPolicy.originOfViewerBase(apiBaseUrl);
+    static String handoffOriginForUrl(String url, String documentBaseUrl, String webBaseUrl) {
+        if (isTrustedViewerUrl(url, documentBaseUrl)) {
+            return com.chat.base.utils.DocumentViewerUrlPolicy.originOfViewerBase(documentBaseUrl);
         }
         String webOrigin = originOf(webBaseUrl);
         return webOrigin != null && isTrustedOriginUrl(url, webOrigin) ? webOrigin : null;

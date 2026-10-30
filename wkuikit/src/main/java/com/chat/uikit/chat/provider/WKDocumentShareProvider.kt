@@ -28,6 +28,7 @@ import com.chat.base.msgitem.WKChatIteMsgFromType
 import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.utils.WKToastUtils
+import com.chat.base.utils.DocumentViewerUrlPolicy
 import com.chat.base.ui.Theme
 import com.chat.base.views.BubbleLayout
 import com.chat.uikit.R
@@ -103,7 +104,7 @@ class WKDocumentShareProvider : WKChatBaseProvider() {
         fun validResult(result: DocumentSharePreviewRepository.Result): Boolean {
             val snapshot = WKConfig.getInstance().getSessionSnapshot()
             val context = result.context
-            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiBaseUrl == DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl) && context.webBaseUrl == DocumentSharePreviewRepository.webBaseUrl(com.chat.base.config.WKApiConfig.baseWebUrl)
+            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiBaseUrl == DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl) && context.webBaseUrl == DocumentSharePreviewRepository.webBaseUrl(com.chat.base.config.WKApiConfig.baseWebUrl) && context.documentBaseUrl == DocumentViewerUrlPolicy.normalizeDocumentBaseUrl(com.chat.base.config.WKApiConfig.getDocumentBaseUrl())
         }
         fun load(force: Boolean) {
             val loadBinding = bindingVersion

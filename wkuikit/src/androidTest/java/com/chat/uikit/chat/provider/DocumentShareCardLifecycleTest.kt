@@ -170,7 +170,7 @@ class DocumentShareCardLifecycleTest {
                 override fun onInstallLongClick() { card.setOnLongClickListener { longClickCount++; true } }
             }
             card.bindMessage(WKDocumentShareContent().apply { title = "共享在线表格测试"; kind = "sheet"; ownerName = "张三" }, listener)
-            card.renderResult(WKDocumentShareContent(), DocumentSharePreviewRepository.Result(DocumentSharePreviewRepository.State.ready, context = DocumentSharePreviewRepository.Context(1, "u", "t", "https://api.test/v1", "https://web.test")))
+            card.renderResult(WKDocumentShareContent(), DocumentSharePreviewRepository.Result(DocumentSharePreviewRepository.State.ready, context = DocumentSharePreviewRepository.Context(1, "u", "t", "https://api.test/v1", "https://web.test", "https://docs.test")))
             root = activity.findViewById(android.R.id.content)
             root.addView(card, ViewGroup.LayoutParams(normalWidth, ViewGroup.LayoutParams.WRAP_CONTENT))
             card.measure(

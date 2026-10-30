@@ -84,89 +84,106 @@ public class WKWebViewActivityHandoffTest {
         assertTrue(DocsViewerUrlPolicy.isViewerPath("/d/Az_09-"));
     }
 
-    @Test public void trustedViewerGateRequiresExactOriginAndPath() {
+    @Test public void trustedViewerGateRequiresExactDocumentOriginAndPath() {
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/doc-1?next=report.html", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/doc-1?next=report.html", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test.evil/d/doc-1", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test.evil/d/doc-1", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "http://web.octo.test/d/doc-1", "https://web.octo.test/api/v1/"));
+                "http://docs.octo.test/d/doc-1", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test:8443/d/doc-1", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test:8443/d/doc-1", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/doc%2Fchild", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/doc%2Fchild", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/%2e%2e", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/%2e%2e", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://user@web.octo.test/d/doc-1", "https://web.octo.test/api/v1/"));
+                "https://user@docs.octo.test/d/doc-1", "https://docs.octo.test/"));
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test:443/d/doc-1#section", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test:443/d/doc-1#section", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/%64oc-1", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/%64oc-1", "https://docs.octo.test/"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/../doc-1", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/../doc-1", "https://docs.octo.test/"));
     }
 
-    @Test public void apiDeploymentPrefixAllowsOnlyDeploymentRelativeViewerRoutes() {
-        String baseWithSlash = " https://web.octo.test/gateway/api/v1/// ";
-        String baseWithoutSlash = "https://web.octo.test/gateway/api/v1";
+    @Test public void documentDeploymentPrefixAllowsOnlyDocumentRelativeViewerRoutes() {
+        String baseWithSlash = " https://docs.octo.test/gateway/api/v1/// ";
+        String baseWithoutSlash = "https://docs.octo.test/gateway/api/v1";
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/doc-1?sid=android#section", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1/d/doc-1?sid=android#section", baseWithSlash));
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/ppt/d/deck-1/", baseWithoutSlash));
+                "https://docs.octo.test/gateway/api/v1/ppt/d/deck-1/", baseWithoutSlash));
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/docs/deck-1/present", "https://web.octo.test/gateway/v1///"));
+                "https://docs.octo.test/gateway/api/v1/docs/deck-1/present", baseWithoutSlash));
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/doc-1", "https://web.octo.test/api/v1/"));
+                "https://docs.octo.test/d/doc-1", "https://docs.octo.test/"));
 
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/d/doc-1", baseWithSlash));
+                "https://docs.octo.test/d/doc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway-other/d/doc-1", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1-extra/d/doc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1/d/", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/%2e%2e", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1/d/%2e%2e", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/a%2Fb", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1/d/a%2Fb", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/%64oc-1", baseWithSlash));
+                "https://docs.octo.test/gateway/api/v1/d/%64oc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/doc-1", "https://web.octo.test/gateway/api/v1?x=1"));
+                "https://docs.octo.test/gateway/api/v1/d/doc-1", "https://docs.octo.test/gateway/api/v1?x=1"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/d/doc-1", "https://web.octo.test/gateway/api/v1#fragment"));
+                "https://docs.octo.test/gateway/api/v1/d/doc-1", "https://docs.octo.test/gateway/api/v1#fragment"));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test:8443/gateway/d/doc-1", baseWithSlash));
+                "https://docs.octo.test:8443/gateway/api/v1/d/doc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "http://web.octo.test/gateway/d/doc-1", baseWithSlash));
+                "http://docs.octo.test/gateway/api/v1/d/doc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://other.octo.test/gateway/d/doc-1", baseWithSlash));
+                "https://other.octo.test/gateway/api/v1/d/doc-1", baseWithSlash));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://user@web.octo.test/gateway/d/doc-1", baseWithSlash));
+                "https://user@docs.octo.test/gateway/api/v1/d/doc-1", baseWithSlash));
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test:443/gateway/d/doc-1", baseWithSlash));
+                "https://docs.octo.test:443/gateway/api/v1/d/doc-1", baseWithSlash));
     }
 
     @Test public void configuredRawEncodedPrefixRetainsItsRawPathSemantics() {
-        String configuredBase = "https://web.octo.test/gateway%2Fweb/api/v1/";
+        String configuredBase = "https://docs.octo.test/gateway%2Fweb/api/v1/";
         assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway%2Fweb/d/doc-1", configuredBase));
+                "https://docs.octo.test/gateway%2Fweb/api/v1/d/doc-1", configuredBase));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/gateway/web/d/doc-1", configuredBase));
+                "https://docs.octo.test/gateway/web/api/v1/d/doc-1", configuredBase));
     }
 
-    @Test public void apiViewerAndWebPageSelectTheirOwnTrustedBootstrapOrigins() {
-        String apiBase = "https://api.octo.test:8443/gateway/api/v1/";
+    @Test public void absentDocumentBaseNeverTrustsApiHostButWebTrustRemainsIndependent() {
         String webBase = "https://web.octo.test/app/web/";
-        String target = "https://api.octo.test:8443/gateway/d/doc-1?sid=custom&x=1#page";
-        assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(target, apiBase));
-        assertEquals("https://api.octo.test:8443", DocsViewerUrlPolicy.handoffOriginForUrl(target, apiBase, webBase));
-        assertNull(DocsViewerUrlPolicy.handoffOriginForUrl(
-                "https://api.octo.test:8443/gateway/settings", apiBase, webBase));
-        assertEquals("https://web.octo.test", DocsViewerUrlPolicy.handoffOriginForUrl(
-                "https://web.octo.test/app/web/settings", apiBase, webBase));
         assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
-                "https://web.octo.test/app/web/d/doc-1", apiBase));
+                "https://api.octo.test/gateway/d/doc-1", null));
+        assertEquals("https://web.octo.test", DocsViewerUrlPolicy.handoffOriginForUrl(
+                "https://web.octo.test/app/web/settings", null, webBase));
+        assertEquals("https://web.octo.test", DocsViewerUrlPolicy.handoffOriginForUrl(
+                "https://web.octo.test/app/web/d/doc-1", null, webBase));
+        assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
+                "https://web.octo.test/app/web/d/doc-1", null));
+        assertNull(DocsViewerUrlPolicy.selectDocsViewerSpaceId(false, false, null, "space-global"));
+        assertNull(DocsViewerUrlPolicy.handoffOriginForUrl(
+                "https://api.octo.test/gateway/d/doc-1", null, webBase));
+    }
+
+    @Test public void documentViewerAndWebPageSelectTheirOwnTrustedBootstrapOrigins() {
+        String apiBase = "https://api.octo.test:8443/gateway/api/v1/";
+        String documentBase = "https://docs.octo.test:9443/gateway/api/v1/";
+        String webBase = "https://web.octo.test/app/web/";
+        String target = "https://docs.octo.test:9443/gateway/api/v1/d/doc-1?sid=custom&x=1#page";
+        assertTrue(DocsViewerUrlPolicy.isTrustedViewerUrl(target, documentBase));
+        assertEquals("https://docs.octo.test:9443", DocsViewerUrlPolicy.handoffOriginForUrl(target, documentBase, webBase));
+        assertNull(DocsViewerUrlPolicy.handoffOriginForUrl(
+                "https://docs.octo.test:9443/gateway/api/v1/settings", documentBase, webBase));
+        assertEquals("https://web.octo.test", DocsViewerUrlPolicy.handoffOriginForUrl(
+                "https://web.octo.test/app/web/settings", documentBase, webBase));
+        assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl(
+                "https://web.octo.test/app/web/d/doc-1", documentBase));
+        assertFalse(DocsViewerUrlPolicy.isTrustedViewerUrl("https://api.octo.test:8443/gateway/api/v1/d/doc-1", documentBase));
 
         String identityHtml = DocsViewerUrlPolicy.buildIdentityBootstrapHtml(
                 target, "custom", "token", "uid", "name", "space-7");

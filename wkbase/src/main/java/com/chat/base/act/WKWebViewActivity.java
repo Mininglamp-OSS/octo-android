@@ -214,11 +214,11 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
      * 外链（非自家域名）不动，保持原 loadUrl。
      */
     private void loadUrlWithHandoff(String url) {
-        String apiBaseUrl = WKApiConfig.baseUrl;
+        String documentBaseUrl = WKApiConfig.getDocumentBaseUrl();
         String webBaseUrl = WKApiConfig.baseWebUrl;
-        boolean docsViewer = DocsViewerUrlPolicy.isTrustedViewerUrl(url, apiBaseUrl);
+        boolean docsViewer = DocsViewerUrlPolicy.isTrustedViewerUrl(url, documentBaseUrl);
         String handoffOrigin = DocsViewerUrlPolicy.handoffOriginForUrl(
-                url, apiBaseUrl, webBaseUrl);
+                url, documentBaseUrl, webBaseUrl);
         if (handoffOrigin == null) {
             // 外链 / origin 解析失败：走原有 loadUrl，不注入任何 App 状态（防 token 泄露给第三方）。
             wkVBinding.webView.loadUrl(url);

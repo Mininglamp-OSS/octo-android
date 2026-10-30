@@ -61,17 +61,16 @@ class WKDocumentShareProviderTest {
     }
 
     @Test
-    fun navigationUrlDerivesViewerRootFromValidatedApiBase() {
-        assertEquals("https://docs.example.test/d/abc_7", DocumentSharePreviewRepository.navigationUrl("abc_7", "https://docs.example.test/api/v1/"))
-        assertEquals("https://docs.example.test:8443/gateway/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test:8443/gateway/api/v1/"))
-        assertEquals("https://docs.example.test/tenant/v1/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/tenant/v1/api/v1/"))
-        assertEquals("https://docs.example.test/gateway%2Fdocs/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/gateway%2Fdocs/v1///"))
-        assertEquals("https://docs.example.test/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/"))
+    fun navigationUrlUsesExplicitCompleteDocumentBaseWithoutStrippingPath() {
+        assertEquals("https://docs.example.test/d/abc_7", DocumentSharePreviewRepository.navigationUrl("abc_7", "https://docs.example.test/"))
+        assertEquals("https://docs.example.test:8443/gateway/api/v1/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test:8443/gateway/api/v1/"))
+        assertEquals("https://docs.example.test/tenant/v1/api/v1/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/tenant/v1/api/v1/"))
+        assertEquals("https://docs.example.test/gateway%2Fdocs/v1/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/gateway%2Fdocs/v1///"))
         assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "http://localhost:8080/api/v1/"))
         assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://user@docs.example.test/api/v1/"))
         assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1?tenant=x"))
         assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1#section"))
-        assertNull(DocumentSharePreviewRepository.navigationUrl("bad/id", "https://docs.example.test/api/v1/"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("bad/id", "https://docs.example.test/"))
     }
 
     @Test

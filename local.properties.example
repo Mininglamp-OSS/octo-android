@@ -16,6 +16,10 @@ DEV_API_BASE_URL=https://your-dev-server.com/api
 DEV_WEB_BASE_URL=https://your-dev-server.com/web/
 PROD_API_BASE_URL=https://your-prod-server.com/api
 PROD_WEB_BASE_URL=https://your-prod-server.com/web/
+# Optional complete document-service root (preserve any deployment prefix, e.g. /gateway/).
+# When blank, the app derives the document root from the API URL for legacy same-origin deployments.
+DEV_DOCUMENT_BASE_URL=https://your-dev-server.com/
+PROD_DOCUMENT_BASE_URL=https://your-prod-server.com/
 
 # Release signing (optional, debug builds use default keystore)
 # RELEASE_STORE_FILE=release.jks

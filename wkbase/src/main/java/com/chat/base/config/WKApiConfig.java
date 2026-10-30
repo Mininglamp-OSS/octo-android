@@ -27,17 +27,40 @@ import com.xinbida.wukongim.entity.WKChannelType;
 public class WKApiConfig {
     public static String baseUrl = "";
     public static String baseWebUrl = "";
+    private static String documentBaseUrl = "";
     public static String termsUrl = "";
     public static String privacyUrl = "";
 
     public static void initBaseURL(String apiURL) {
-        baseUrl = apiURL + "/v1/";
-        baseWebUrl = apiURL + "/web/";
+        updateBaseUrls(apiURL, null, null, false);
     }
 
     public static void initBaseURLIncludeIP(String apiURL) {
-        baseUrl = apiURL + "/v1/";
-        baseWebUrl = apiURL + "/web/";
+        updateBaseUrls(apiURL, null, null, false);
+    }
+
+    public static void initBaseURL(String apiURL, String webBaseURL, String documentBaseURL) {
+        updateBaseUrls(apiURL, webBaseURL, documentBaseURL, true);
+    }
+
+    public static String getDocumentBaseUrl() {
+        return documentBaseUrl;
+    }
+
+    private static void updateBaseUrls(String apiURL, String webBaseURL, String documentBaseURL,
+                                       boolean includeOverrides) {
+        String nextBase = apiURL + "/v1/";
+        String nextWeb = includeOverrides ? webBaseURL : apiURL + "/web/";
+        String nextDocument = includeOverrides
+                ? com.chat.base.utils.DocumentViewerUrlPolicy.resolveDocumentBaseUrl(nextBase, documentBaseURL)
+                : com.chat.base.utils.DocumentViewerUrlPolicy.resolveDocumentBaseUrl(nextBase, null);
+        boolean changed = !java.util.Objects.equals(baseUrl, nextBase)
+                || !java.util.Objects.equals(baseWebUrl, nextWeb)
+                || !java.util.Objects.equals(documentBaseUrl, nextDocument);
+        baseUrl = nextBase;
+        baseWebUrl = nextWeb;
+        documentBaseUrl = nextDocument;
+        if (changed) WKConfig.getInstance().invalidateSessionContext();
     }
 
     public static String getAvatarUrl(String uid) {

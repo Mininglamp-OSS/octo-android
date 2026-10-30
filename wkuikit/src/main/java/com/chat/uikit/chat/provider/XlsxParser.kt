@@ -43,6 +43,8 @@ object XlsxParser {
 
     const val MAX_ROWS = 500
     const val MAX_COLS = 50
+    const val MAX_SHEETS = 10
+    const val MAX_SHEET_NAME_CODE_POINTS = 31
 
     /** 单个 zip entry 解压后允许的最大字节数（防 zip-bomb）。50 MB 足够任何常规办公文档。 */
     private const val MAX_ENTRY_BYTES: Long = 50L * 1024L * 1024L
@@ -56,16 +58,17 @@ object XlsxParser {
         val truncated: Boolean,
     )
 
-    data class Workbook(val sheets: List<Sheet>)
+    data class Workbook(val sheets: List<Sheet>, val sheetsTruncated: Boolean = false)
 
     /** 抛异常给上层展示"预览失败"，不吞。 */
     fun parse(file: File): Workbook {
         ZipFile(file).use { zip ->
             val shared = zip.getEntry("xl/sharedStrings.xml")?.let { readSharedStrings(zip, it) } ?: emptyList()
-            val rels = zip.getEntry("xl/_rels/workbook.xml.rels")?.let { readRels(zip, it) } ?: emptyMap()
             val workbookEntry = zip.getEntry("xl/workbook.xml")
                 ?: throw IllegalStateException("missing xl/workbook.xml")
-            val sheetRefs = readWorkbook(zip, workbookEntry)
+            val (sheetRefs, sheetsTruncated) = readWorkbook(zip, workbookEntry)
+            val rels = if (sheetRefs.isEmpty()) emptyMap() else zip.getEntry("xl/_rels/workbook.xml.rels")
+                ?.let { readRels(zip, it, sheetRefs.mapTo(HashSet()) { ref -> ref.second }) } ?: emptyMap()
 
             val sheets = sheetRefs.mapNotNull { (name, rid) ->
                 val target = rels[rid] ?: return@mapNotNull null
@@ -74,7 +77,7 @@ object XlsxParser {
                 val entry = zip.getEntry(entryPath) ?: return@mapNotNull null
                 readSheet(zip, entry, shared, name)
             }
-            return Workbook(sheets)
+            return Workbook(sheets, sheetsTruncated)
         }
     }
 
@@ -104,7 +107,7 @@ object XlsxParser {
     }
 
     // ---- _rels/workbook.xml.rels ----
-    private fun readRels(zip: ZipFile, entry: ZipEntry): Map<String, String> {
+    private fun readRels(zip: ZipFile, entry: ZipEntry, requiredIds: Set<String>): Map<String, String> {
         val out = HashMap<String, String>()
         boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
@@ -112,7 +115,8 @@ object XlsxParser {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "Relationship") {
                     val id = parser.getAttributeValue(null, "Id")
                     val target = parser.getAttributeValue(null, "Target")
-                    if (id != null && target != null) out[id] = target
+                    if (id != null && id in requiredIds && target != null) out[id] = target
+                    if (requiredIds.all { it in out }) break
                 }
             }
         }
@@ -120,13 +124,17 @@ object XlsxParser {
     }
 
     // ---- workbook.xml -> List<(name, rId)> ----
-    private fun readWorkbook(zip: ZipFile, entry: ZipEntry): List<Pair<String, String>> {
+    private fun readWorkbook(zip: ZipFile, entry: ZipEntry): Pair<List<Pair<String, String>>, Boolean> {
         val out = ArrayList<Pair<String, String>>()
+        var declarations = 0
+        var truncated = false
         boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "sheet") {
-                    val name = parser.getAttributeValue(null, "name") ?: "Sheet"
+                    if (declarations == MAX_SHEETS) { truncated = true; break }
+                    declarations++
+                    val name = boundedSheetName(parser.getAttributeValue(null, "name") ?: "Sheet")
                     // FEATURE_PROCESS_NAMESPACES=false 时 r:id 是字面属性名"r:id"，
                     // getAttributeValue(null,"id") 拿不到；用 endsWith(":id") 兜任意前缀。
                     val rid = (0 until parser.attributeCount)
@@ -139,16 +147,29 @@ object XlsxParser {
                 }
             }
         }
-        return out
+        return out to truncated
+    }
+
+    /** Truncate by Unicode code point so a supplementary character is never split. */
+    fun boundedSheetName(name: String): String {
+        var end = 0
+        var count = 0
+        while (end < name.length && count < MAX_SHEET_NAME_CODE_POINTS) {
+            end += Character.charCount(name.codePointAt(end))
+            count++
+        }
+        return name.substring(0, end)
     }
 
     // ---- worksheet ----
     private fun readSheet(zip: ZipFile, entry: ZipEntry, shared: List<String>, name: String): Sheet {
-        val rows = ArrayList<List<String>>()
+        val rows = LinkedHashMap<Int, ArrayList<String>>()
         var truncated = false
         boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             var currentRow: ArrayList<String>? = null
+            var currentRowIndex = -1L
+            var previousPhysicalRow = -1L
             var cellType: String? = null
             var cellRef: String? = null
             var cellValue: String? = null
@@ -159,7 +180,16 @@ object XlsxParser {
                 when (parser.eventType) {
                     XmlPullParser.START_TAG -> when (parser.name) {
                         "row" -> {
-                            if (rows.size >= MAX_ROWS) { truncated = true }
+                            val rawValue = parser.getAttributeValue(null, "r")
+                            val rawRow = rawValue?.toLongOrNull()
+                            currentRowIndex = when {
+                                rawValue == null -> if (previousPhysicalRow == Long.MAX_VALUE) Long.MAX_VALUE else previousPhysicalRow + 1
+                                rawRow != null && rawRow > 0 -> rawRow - 1
+                                else -> -1L
+                            }
+                            previousPhysicalRow = if (currentRowIndex >= 0) currentRowIndex else previousPhysicalRow
+                            // truncated is monotonic for the whole sheet; later duplicate or empty rows cannot clear it.
+                            if (currentRowIndex >= MAX_ROWS) truncated = true
                             currentRow = ArrayList()
                         }
                         "c" -> {
@@ -181,7 +211,7 @@ object XlsxParser {
                         "v" -> inV = false
                         "c" -> {
                             val row = currentRow
-                            if (row != null && rows.size < MAX_ROWS) {
+                            if (row != null && currentRowIndex in 0L until MAX_ROWS.toLong()) {
                                 val col = columnIndex(cellRef)
                                 // 三种情况：
                                 //  col in 0 until MAX_COLS → 正常写入（此时 fillTo 最多补 MAX_COLS-1 项，安全）
@@ -192,20 +222,30 @@ object XlsxParser {
                                     fillTo(row, col)
                                     row[col] = text
                                 } else if (col >= MAX_COLS) {
+                                    // Once a row/column exceeds the bound, truncation remains true.
                                     truncated = true
                                 }
                             }
                         }
                         "row" -> {
                             val row = currentRow
-                            if (rows.size < MAX_ROWS && row != null) rows.add(row)
+                            if (currentRowIndex in 0L until MAX_ROWS.toLong() && row != null) {
+                                // Each row starts with a fresh list; duplicate row numbers replace
+                                // the complete previous row, including cells that disappeared.
+                                rows[currentRowIndex.toInt()] = row
+                            }
                             currentRow = null
                         }
                     }
                 }
             }
         }
-        return Sheet(name = name, rows = rows, truncated = truncated)
+        val lastRow = rows.keys.filter { row -> rows[row]?.any { it.isNotEmpty() } == true }.maxOrNull() ?: -1
+        val width = rows.values.flatMap { it.mapIndexedNotNull { index, value -> index.takeIf { value.isNotEmpty() } } }.maxOrNull()?.plus(1) ?: 0
+        val normalized = if (lastRow < 0 || width == 0) emptyList() else (0..lastRow).map { row ->
+            (0 until width).map { col -> rows[row]?.getOrNull(col).orEmpty() }
+        }
+        return Sheet(name = name, rows = normalized, truncated = truncated)
     }
 
     private fun resolveCellText(
@@ -230,7 +270,12 @@ object XlsxParser {
         var idx = 0
         var seen = false
         for (ch in ref) {
-            if (ch in 'A'..'Z') { idx = idx * 26 + (ch - 'A' + 1); seen = true } else break
+            if (ch in 'A'..'Z') {
+                seen = true
+                if (idx >= MAX_COLS) return MAX_COLS
+                idx = idx * 26 + (ch - 'A' + 1)
+                if (idx - 1 >= MAX_COLS) return MAX_COLS
+            } else break
         }
         return if (seen) idx - 1 else -1
     }

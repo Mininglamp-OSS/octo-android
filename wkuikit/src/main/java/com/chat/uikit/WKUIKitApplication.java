@@ -101,6 +101,7 @@ import com.chat.uikit.chat.face.WKVoiceViewManager;
 import com.chat.uikit.chat.manager.FaceManger;
 import com.chat.uikit.chat.manager.WKIMUtils;
 import com.chat.uikit.chat.msgmodel.WKCardContent;
+import com.chat.uikit.chat.msgmodel.WKDocumentShareContent;
 import com.chat.uikit.chat.msgmodel.WKRichTextContent;
 import com.chat.uikit.chat.msgmodel.WKInteractiveCardContent;
 import com.chat.base.msgcontent.WKFileContent;
@@ -109,6 +110,7 @@ import com.chat.uikit.chat.provider.WKVideoProvider;
 import com.chat.uikit.chat.msgmodel.WKMultiForwardContent;
 import com.chat.uikit.chat.provider.LoadingProvider;
 import com.chat.uikit.chat.provider.WKCardProvider;
+import com.chat.uikit.chat.provider.WKDocumentShareProvider;
 import com.chat.uikit.chat.provider.WKEmojiStickerProvider;
 import com.chat.uikit.chat.provider.WKEmptyProvider;
 import com.chat.uikit.chat.provider.WKImageProvider;
@@ -307,6 +309,7 @@ public class WKUIKitApplication {
         WKIM.getInstance().getMsgManager().registerContentMsg(WKThreadCreatedContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKRichTextContent.class);
         WKIM.getInstance().getMsgManager().registerContentMsg(WKInteractiveCardContent.class);
+        WKIM.getInstance().getMsgManager().registerContentMsg(WKDocumentShareContent.class);
         // 贴图 (与 iOS 对齐)：lottie 矢量贴图 (12) + emoji 贴图 (13)。
         // 未注册时收发消息会被 ChatAdapter 强制降级为 unknown_msg(-3)
         // 显示"未知消息，请先升级客户端后查看" —— 已在生产观测到。
@@ -318,6 +321,7 @@ public class WKUIKitApplication {
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_TEXT, new WKTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.richText, new WKRichTextProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.interactiveCard, new WKInteractiveCardProvider());
+        WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.docShareCard, new WKDocumentShareProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.WK_IMAGE, new WKImageProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.emptyView, new WKEmptyProvider());
         WKMsgItemViewManager.getInstance().addChatItemViewProvider(WKContentType.spanEmptyView, new WKSpanEmptyProvider());
@@ -347,6 +351,9 @@ public class WKUIKitApplication {
         // isCanShowReaction / isCanShowPinMenu；isCanDelete 硬编码 true。
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.interactiveCard,
             object -> new MsgConfig(false, true, true, true, true, true));
+        // 共享文档卡片（type=18）使用通用消息长按操作。
+        EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.docShareCard,
+            object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_IMAGE, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_CARD, object -> new MsgConfig(true));
         EndpointManager.getInstance().setMethod(EndpointCategory.msgConfig + WKContentType.WK_VOICE, object -> new MsgConfig(true));

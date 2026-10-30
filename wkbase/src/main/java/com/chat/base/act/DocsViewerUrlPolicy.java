@@ -19,22 +19,13 @@ import org.json.JSONObject;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.regex.Pattern;
 
 /** Plain-JVM URL policy for native-to-Web Docs viewer context handoff. */
 final class DocsViewerUrlPolicy {
-    private static final String DOCUMENT_ID = "[A-Za-z0-9_-]{1,128}";
-    private static final Pattern VIEWER_PATH = Pattern.compile(
-            "^/(?:d/" + DOCUMENT_ID + "|ppt/d/" + DOCUMENT_ID
-                    + "|docs/" + DOCUMENT_ID + "/present)/?$");
-
     private DocsViewerUrlPolicy() {
     }
 
-    /**
-     * Selects the configured Web base explicitly. The API base is accepted only to keep the
-     * independently configured inputs visible and testable at the Activity wiring boundary.
-     */
+    /** Returns the canonical origin of the separately configured Web base. */
     static String originOfConfiguredBases(String apiBaseUrl, String webBaseUrl) {
         return originOf(webBaseUrl);
     }
@@ -63,18 +54,32 @@ final class DocsViewerUrlPolicy {
         return candidate != null && trustedOrigin != null && isSameOrigin(candidate, trustedOrigin);
     }
 
-    static boolean isTrustedViewerUrl(String url, String origin) {
-        URI candidate = parseAbsoluteHttpUri(url);
-        URI trustedOrigin = parseAbsoluteHttpUri(origin);
-        if (candidate == null || trustedOrigin == null || !isSameOrigin(candidate, trustedOrigin)) {
-            return false;
+    static boolean isTrustedViewerUrl(String url, String documentBaseUrl) {
+        return com.chat.base.utils.DocumentViewerUrlPolicy.isTrustedViewerUrl(url, documentBaseUrl);
+    }
+
+    static String handoffOriginForUrl(String url, String documentBaseUrl, String webBaseUrl) {
+        if (isTrustedViewerUrl(url, documentBaseUrl)) {
+            return com.chat.base.utils.DocumentViewerUrlPolicy.originOfViewerBase(documentBaseUrl);
         }
-        String rawPath = candidate.getRawPath();
-        return rawPath != null && VIEWER_PATH.matcher(rawPath).matches();
+        String webOrigin = originOf(webBaseUrl);
+        return webOrigin != null && isTrustedOriginUrl(url, webOrigin) ? webOrigin : null;
+    }
+
+    static String selectDocsViewerSpaceId(boolean docsViewer, boolean hasExplicitSpace,
+                                          String explicitSpaceId, String currentSpaceId) {
+        if (!docsViewer) return null;
+        String selected = hasExplicitSpace ? explicitSpaceId : currentSpaceId;
+        return selected == null ? "" : selected;
+    }
+
+    static boolean isValidDocsViewerSpaceId(String spaceId) {
+        return spaceId == null || spaceId.length() == 0
+                || com.chat.base.utils.DocumentViewerUrlPolicy.isValidDocumentId(spaceId);
     }
 
     static boolean isViewerPath(String path) {
-        return path != null && VIEWER_PATH.matcher(path).matches();
+        return com.chat.base.utils.DocumentViewerUrlPolicy.isViewerPath(path);
     }
 
     static String buildIdentityBootstrapHtml(String realUrl, String sid, String token, String uid,

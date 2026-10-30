@@ -733,5 +733,47 @@
     <string name="channel_search_empty_keyword">输入关键词搜索</string>
     <string name="channel_search_empty_media_browse">该频道暂无图片或视频</string>
     <string name="channel_search_empty_file_browse">该频道暂无文件</string>
+
+    <!-- 共享文档卡片（type=18） -->
+    <string name="doc_share_kind_doc">文档</string>
+    <string name="doc_share_kind_sheet">表格</string>
+    <string name="doc_share_kind_board">画板</string>
+    <string name="doc_share_kind_html">网页</string>
+    <string name="doc_share_untitled">未命名文档</string>
+    <string name="doc_share_link_invalid">文档链接不可用</string>
+    <string name="doc_share_summary_doc">[文档] %1$s</string>
+    <string name="doc_share_summary_sheet">[表格] %1$s</string>
+    <string name="doc_share_summary_board">[画板] %1$s</string>
+    <string name="doc_share_summary_html">[HTML 文档] %1$s</string>
+    <string name="doc_share_summary_untitled">[文档]</string>
+    <string name="doc_share_copy">复制链接</string>
+    <string name="doc_share_open">打开文档</string>
+    <string name="doc_share_checking">检查中</string>
+    <string name="doc_share_no_access">无权访问</string>
+    <string name="doc_share_unavailable">不可用</string>
+    <string name="doc_share_error">预览不可用</string>
+    <string name="doc_share_can_view">可查看</string>
+    <string name="doc_share_no_preview">暂无预览</string>
+    <string name="doc_share_created_by">%1$s 创建</string>
+    <string name="doc_share_requires_access">需申请</string>
+    <string name="doc_share_access_description">打开文档后可以申请访问</string>
+    <string name="doc_share_error_description">你仍可打开文档，或稍后重试</string>
+    <string name="doc_share_unavailable_description">该文档可能已被删除或归档</string>
+    <string name="xlsx_rows">%1$d 行</string>
+    <string name="xlsx_empty">空表格</string>
+    <string name="xlsx_truncated_without_content">预览范围内无可显示内容，内容已截断</string>
+    <string name="xlsx_parse_failed">无法预览此 Excel 文件</string>
+    <string name="xlsx_retry">重试</string>
+    <string name="xlsx_truncated">内容过大，预览已截断</string>
+    <string name="xlsx_sheets_truncated">仅预览前 %1$d 个工作表</string>
+    <string name="xlsx_view_full_text">查看全文</string>
+    <string name="xlsx_header_description">第 %1$d 列表头</string>
+    <string name="xlsx_cell_description">第 %1$d 行，第 %2$d 列，%3$s</string>
+    <string name="doc_share_denied_title">需要访问权限</string>
+    <string name="doc_share_unavailable_title">文档不可用</string>
+    <string name="doc_share_error_title">预览暂时不可用</string>
+    <string name="doc_share_loading_title">正在确认访问权限…</string>
+    <string name="doc_share_empty_title">暂无预览</string>
+    <string name="doc_share_checking_description">正在确认访问权限…</string>
 </resources>
 

@@ -63,11 +63,13 @@ android {
             dimension "env"
             buildConfigField "String", "API_BASE_URL", "\"${localProperties.getProperty('DEV_API_BASE_URL', 'https://api.example.com')}\""
             buildConfigField "String", "WEB_BASE_URL", "\"${localProperties.getProperty('DEV_WEB_BASE_URL', 'https://web.example.com/')}\""
+            buildConfigField "String", "DOCUMENT_BASE_URL", "\"${localProperties.getProperty('DEV_DOCUMENT_BASE_URL', '')}\""
         }
         prod {
             dimension "env"
             buildConfigField "String", "API_BASE_URL", "\"${localProperties.getProperty('PROD_API_BASE_URL', 'https://api.example.com')}\""
             buildConfigField "String", "WEB_BASE_URL", "\"${localProperties.getProperty('PROD_WEB_BASE_URL', 'https://web.example.com/')}\""
+            buildConfigField "String", "DOCUMENT_BASE_URL", "\"${localProperties.getProperty('PROD_DOCUMENT_BASE_URL', '')}\""
         }
     }
 

@@ -143,6 +143,7 @@ class DocumentSharePreviewRepository(
         internal const val MAX_CACHE_ENTRIES = 128
         private val applicationRepository by lazy { DocumentSharePreviewRepository() }
         fun shared() = applicationRepository
+        // Follows DocumentViewerUrlPolicy; validated on same-origin deployments only.
         fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.baseUrl)
         fun navigationUrl(docId: String, apiBaseUrl: String): String? {
             return DocumentViewerUrlPolicy.documentUrl(apiBaseUrl, docId)

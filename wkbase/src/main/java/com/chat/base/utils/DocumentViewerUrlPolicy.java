@@ -30,10 +30,12 @@ public final class DocumentViewerUrlPolicy {
     }
 
     /**
-     * The API suffixes /api/v1 and /v1 identify endpoints, while document routes share the
-     * deployment root. For example, /gateway/api/v1 maps to /gateway/d/{id}; other path prefixes
-     * remain intact because they may identify a tenant or deployment. The configured /web path
-     * belongs to general Web pages; appending it to a document URL would route into the main Web app.
+     * Uses the API deployment root for document routes, removing known /api/v1 or /v1 suffixes
+     * while preserving deployment prefixes. On 2026-10-29, same-origin preview returned HTTP 200;
+     * WebView logs confirmed /web/d/{id}, while the user observed a generic Web page. The user
+     * verified that /d/{id} opened the document. baseWebUrl is the general Web entry, not a
+     * separate document-service setting. Split API/Web deployments remain unverified; confirm the
+     * server's document route before composing it from baseWebUrl.
      */
     public static String viewerBaseUrl(String apiBaseUrl) {
         URI uri = parseApiBase(apiBaseUrl);

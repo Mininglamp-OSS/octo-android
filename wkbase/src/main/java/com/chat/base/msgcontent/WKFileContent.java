@@ -190,6 +190,7 @@ public class WKFileContent extends WKMediaMessageContent implements Parcelable, 
             byte channelType, String clientMsgNo, long expectedSize, PrepareCallback callback) {
         TrustedLocalFileStore.SourceGrant grant = trustedLocalSource;
         trustedLocalSource = null;
+        // Ownership transfers before scheduling, so caller cleanup cannot delete a queued source.
         java.io.File owned = ownedTemporaryDirectory == null ? null : ownedTemporaryDirectory.getAndSet(null);
         if (grant == null || !grant.matches(uid)) { deleteTree(owned); callback.onPrepared(null, false); return; }
         try { com.chat.base.utils.AppExecutors.io().execute(() -> {

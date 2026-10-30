@@ -12,6 +12,7 @@ import com.chat.base.msgitem.WKContentType
 import com.chat.base.msgitem.WKUIChatMsgItemEntity
 import com.chat.base.net.ud.WKProgressManager
 import com.chat.base.net.ud.FileRequestBody
+import com.chat.base.utils.AppExecutors
 import com.chat.uikit.R
 import com.chat.uikit.chat.provider.DocumentSharePreviewTestActivity
 import com.chat.uikit.chat.provider.WKFileProvider
@@ -21,6 +22,7 @@ import com.xinbida.wukongim.db.WKDBHelper
 import com.xinbida.wukongim.entity.WKChannel
 import com.xinbida.wukongim.entity.WKChannelType
 import com.xinbida.wukongim.entity.WKMsg
+import com.xinbida.wukongim.entity.WKSendOptions
 import com.xinbida.wukongim.interfaces.IUploadAttachmentListener
 import com.xinbida.wukongim.message.WKConnection
 import com.xinbida.wukongim.message.type.WKConnectStatus
@@ -31,12 +33,15 @@ import com.xinbida.wukongim.msgmodel.WKMessageContent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -48,14 +53,27 @@ import okio.Buffer
 /** Exercises the SDK's real send/attachment callback and database path; only the network edges are faked. */
 class FileUploadPipelineTest {
     internal class FakeTransport : WKSendMsgUtils.FileUploadTransport {
+        data class CredentialRequest(val channelID: String, val channelType: Byte, val path: String, val callback: WKUploader.IGetUploadCredentials)
+        data class PutRequest(val path: String, val tag: Any, val callback: WKUploader.IUploadBack)
         @Volatile var credentials: WKUploader.IGetUploadCredentials? = null
         @Volatile var put: WKUploader.IUploadBack? = null
         val credentialsReady = CountDownLatch(1)
-        override fun getCredentials(channelID: String, channelType: Byte, path: String, callback: WKUploader.IGetUploadCredentials) { credentials = callback; credentialsReady.countDown() }
-        override fun put(uploadUrl: String, path: String, contentType: String, contentDisposition: String?, tag: Any, callback: WKUploader.IUploadBack) { put = callback }
+        val credentialRequests = CopyOnWriteArrayList<CredentialRequest>()
+        val putRequests = CopyOnWriteArrayList<PutRequest>()
+        override fun getCredentials(channelID: String, channelType: Byte, path: String, callback: WKUploader.IGetUploadCredentials) {
+            credentials = callback
+            credentialRequests += CredentialRequest(channelID, channelType, path, callback)
+            credentialsReady.countDown()
+        }
+        override fun put(uploadUrl: String, path: String, contentType: String, contentDisposition: String?, tag: Any, callback: WKUploader.IUploadBack) {
+            put = callback
+            putRequests += PutRequest(path, tag, callback)
+        }
         fun returnCredentials(ok: Boolean = true) {
             requireNotNull(credentials).onResult(if (ok) "https://upload.test/object" else null, if (ok) "https://files.test/object" else null, "application/octet-stream", null)
         }
+        fun credentialsFor(channelID: String): CredentialRequest? = credentialRequests.lastOrNull { it.channelID == channelID }
+        fun putForPath(path: String): PutRequest? = putRequests.lastOrNull { it.path == path }
     }
 
     internal class Scenario(private val trustedSource: Boolean = false,
@@ -191,6 +209,11 @@ class FileUploadPipelineTest {
             try { check(cursor.moveToFirst()); return cursor.getInt(0) to cursor.getString(1) } finally { cursor.close() }
         }
 
+        fun latestMessageForChannel(channelID: String): Pair<String, Int>? {
+            val cursor = testDbHelper.rawQuery("select client_msg_no,status from message where channel_id=? and channel_type=? order by client_seq desc limit 1", arrayOf(channelID, WKChannelType.GROUP.toString()))
+            try { return if (cursor.moveToFirst()) cursor.getString(0) to cursor.getInt(1) else null } finally { cursor.close() }
+        }
+
         fun switchToAnotherSession(): WKDBHelper {
             val nextUid = "codex-upload-next-${UUID.randomUUID().toString().replace("-", "")}"
             config.uid = nextUid; config.token = "codex-next-token"
@@ -229,6 +252,273 @@ class FileUploadPipelineTest {
             WKBaseApplication.getInstance().application = previousApplication
             context.deleteDatabase(dbName)
             tempFile.delete()
+        }
+    }
+
+    private data class IoBlock(val release: CountDownLatch, val entered: CountDownLatch, val timedOut: AtomicReference<Boolean>)
+
+    private fun blockIoPool(): IoBlock {
+        val executor = AppExecutors.io() as ThreadPoolExecutor
+        val release = CountDownLatch(1)
+        val entered = CountDownLatch(executor.corePoolSize)
+        val timedOut = AtomicReference(false)
+        try {
+            repeat(executor.corePoolSize) {
+                executor.execute {
+                    entered.countDown()
+                    if (!release.await(10, TimeUnit.SECONDS)) timedOut.set(true)
+                }
+            }
+            check(entered.await(5, TimeUnit.SECONDS)) { "IO workers did not reach the test barrier" }
+            return IoBlock(release, entered, timedOut)
+        } catch (error: Throwable) {
+            release.countDown()
+            throw error
+        }
+    }
+
+    private fun createOwnedShareSource(scenario: Scenario, name: String): Pair<WKFileContent, File> {
+        val directory = File(scenario.context.cacheDir, "share_file/test-${UUID.randomUUID()}")
+        check(directory.mkdirs())
+        val sourceFile = File(directory, name).apply { scenario.tempFile.copyTo(this, overwrite = true) }
+        val content = requireNotNull(WKFileContent.fromTrustedLocalFile(sourceFile.absolutePath, name, "txt",
+            scenario.config.getSessionSnapshot(), com.chat.base.config.WKApiConfig.baseUrl))
+        content.setOwnedTemporaryDirectory(directory)
+        return content to directory
+    }
+
+    private fun sendAndCleanupTwice(scenario: Scenario, content: WKFileContent, channelID: String) {
+        scenario.instrumentation.runOnMainSync {
+            WKIM.getInstance().msgManager.sendWithOptions(content, WKChannel(channelID, WKChannelType.GROUP), WKSendOptions())
+            content.cleanupOwnedTemporarySource()
+            content.cleanupOwnedTemporarySource()
+        }
+    }
+
+    private fun awaitCredential(scenario: Scenario, channelID: String): FakeTransport.CredentialRequest {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            scenario.transport.credentialsFor(channelID)?.let { return it }
+            Thread.sleep(10)
+        }
+        throw AssertionError("no credential request for $channelID")
+    }
+
+    private fun awaitPut(scenario: Scenario, path: String): FakeTransport.PutRequest {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            scenario.transport.putRequests.lastOrNull { it.path == path }?.let { return it }
+            Thread.sleep(10)
+        }
+        throw AssertionError("no upload request for snapshot $path")
+    }
+
+    private fun finishUnfinishedSends(scenario: Scenario, channelIDs: List<String>, completed: Set<String>) {
+        channelIDs.filterNot { it in completed }.forEach { channelID ->
+            val request = runCatching { awaitCredential(scenario, channelID) }.getOrNull()
+            if (request == null) {
+                runCatching { awaitFailure(scenario, channelID) }
+            } else {
+                if (scenario.transport.putForPath(request.path) == null) {
+                    request.callback.onResult("https://upload.test/object", "https://files.test/object", "application/octet-stream", null)
+                }
+                runCatching { awaitPut(scenario, request.path).callback.onError() }
+            }
+        }
+        runCatching { scenario.instrumentation.waitForIdleSync() }
+    }
+
+    private fun cleanupSentRows(scenario: Scenario, channelIDs: List<String>) {
+        channelIDs.forEach { channelID ->
+            val cursor = scenario.testDbHelper.rawQuery("select client_msg_no,client_seq from message where channel_id=? and channel_type=? order by client_seq desc limit 1", arrayOf(channelID, WKChannelType.GROUP.toString()))
+            try {
+                if (cursor.moveToFirst()) {
+                    val clientMsgNo = cursor.getString(0)
+                    val clientSeq = cursor.getLong(1)
+                    @Suppress("UNCHECKED_CAST")
+                    (scenario.sendingMapField.get(WKConnection.getInstance()) as? MutableMap<Int, Any?>)?.remove(clientSeq.toInt())
+                    val key = WKProgressManager.FileUploadProgressKey(scenario.uploadSession.uid, scenario.uploadSession.version, clientMsgNo, clientSeq)
+                    WKProgressManager.instance.finishFileUpload(key)
+                    WKProgressManager.instance.unregisterProgress(key)
+                }
+            } finally { cursor.close() }
+        }
+    }
+
+    private fun awaitFailure(scenario: Scenario, channelID: String): Pair<String, Int> {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            scenario.latestMessageForChannel(channelID)?.let { (clientMsgNo, status) ->
+                if (status == com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail) return clientMsgNo to status
+            }
+            Thread.sleep(10)
+        }
+        throw AssertionError("captured message for $channelID did not reach send_fail")
+    }
+
+    @Test fun sendWithOptionsTransfersSingleShareSourceBeforeCallerCleanup() {
+        val scenario = Scenario()
+        var block: IoBlock? = null
+        val contents = mutableListOf<WKFileContent>()
+        val channels = mutableListOf<String>()
+        val completed = mutableSetOf<String>()
+        try {
+            val external = scenario.tempFile
+            val (content, ownedDirectory) = createOwnedShareSource(scenario, "single-share.txt")
+            contents += content
+            val sourcePath = content.localPath
+            val channelID = "share-single-${UUID.randomUUID()}"
+            channels += channelID
+            val ioBlock = blockIoPool()
+            block = ioBlock
+            sendAndCleanupTwice(scenario, content, channelID)
+            assertFalse("IO barrier must remain held until explicitly released", ioBlock.timedOut.get())
+            assertTrue("source must remain available while snapshot IO is queued", File(sourcePath).isFile)
+            assertEquals("upload fixture", File(sourcePath).readText())
+            assertTrue(ownedDirectory.isDirectory)
+            ioBlock.release.countDown()
+            val request = awaitCredential(scenario, channelID)
+            assertNotEquals(sourcePath, request.path)
+            assertEquals("upload fixture", File(request.path).readText())
+            assertFalse(ownedDirectory.exists())
+            assertTrue(external.isFile)
+            request.callback.onResult("https://upload.test/object", "https://files.test/object", "application/octet-stream", null)
+            awaitPut(scenario, request.path).callback.onSuccess("ignored")
+            completed += channelID
+        } finally {
+            block?.release?.countDown()
+            if (channels.isNotEmpty()) finishUnfinishedSends(scenario, channels, completed)
+            cleanupSentRows(scenario, channels)
+            contents.forEach { runCatching { it.cleanupOwnedTemporarySource() } }
+            scenario.close()
+        }
+    }
+
+    @Test fun sendWithOptionsKeepsOriginalAndIndependentDestinationSourcesUntilEachSnapshotStarts() {
+        val scenario = Scenario()
+        var block: IoBlock? = null
+        val channels = mutableListOf<String>()
+        val contents = mutableListOf<WKFileContent>()
+        val completed = mutableSetOf<String>()
+        try {
+            val external = scenario.tempFile
+            val (original, originalDirectory) = createOwnedShareSource(scenario, "multi-share.txt")
+            contents += original
+            val firstCopy = original.duplicateOwnedSource(scenario.context, scenario.config.getSessionSnapshot(), com.chat.base.config.WKApiConfig.baseUrl)!!
+            val secondCopy = original.duplicateOwnedSource(scenario.context, scenario.config.getSessionSnapshot(), com.chat.base.config.WKApiConfig.baseUrl)!!
+            contents += firstCopy
+            contents += secondCopy
+            val directories = listOf(originalDirectory, File(firstCopy.localPath).parentFile!!, File(secondCopy.localPath).parentFile!!)
+            val sourcePaths = contents.map { it.localPath }
+            channels += listOf("share-multi-a-${UUID.randomUUID()}", "share-multi-b-${UUID.randomUUID()}", "share-multi-c-${UUID.randomUUID()}")
+            val ioBlock = blockIoPool()
+            block = ioBlock
+            scenario.instrumentation.runOnMainSync {
+                contents.zip(channels).forEach { (content, channelID) ->
+                    WKIM.getInstance().msgManager.sendWithOptions(content, WKChannel(channelID, WKChannelType.GROUP), WKSendOptions())
+                }
+                contents.forEach { it.cleanupOwnedTemporarySource(); it.cleanupOwnedTemporarySource() }
+            }
+            assertFalse("IO barrier must remain held until explicitly released", ioBlock.timedOut.get())
+            assertTrue(directories.all { it.isDirectory })
+            assertTrue(contents.all { File(it.localPath).readText() == "upload fixture" })
+            ioBlock.release.countDown()
+            val requests = channels.map { awaitCredential(scenario, it) }
+            assertEquals(3, requests.map { it.channelID }.toSet().size)
+            assertEquals(3, requests.map { it.path }.toSet().size)
+            requests.forEach { request ->
+                assertEquals("upload fixture", File(request.path).readText())
+                assertTrue("credential path must point to a distinct snapshot", request.path !in sourcePaths)
+            }
+            assertTrue(directories.none { it.exists() })
+            assertTrue(external.isFile)
+            requests.forEach { request ->
+                request.callback.onResult("https://upload.test/object", "https://files.test/object", "application/octet-stream", null)
+                awaitPut(scenario, request.path).callback.onSuccess("ignored")
+                completed += request.channelID
+            }
+        } finally {
+            block?.release?.countDown()
+            if (channels.isNotEmpty()) finishUnfinishedSends(scenario, channels, completed)
+            cleanupSentRows(scenario, channels)
+            contents.forEach { runCatching { it.cleanupOwnedTemporarySource() } }
+            scenario.close()
+        }
+    }
+
+    @Test fun sendWithOptionsSnapshotFailureCleansOnlyItsOwnedSourceAndPersistsFailure() {
+        val scenario = Scenario()
+        var block: IoBlock? = null
+        val channels = mutableListOf<String>()
+        val contents = mutableListOf<WKFileContent>()
+        val completed = mutableSetOf<String>()
+        try {
+            val external = scenario.tempFile
+            val (badContent, badDirectory) = createOwnedShareSource(scenario, "bad-size-share.txt")
+            contents += badContent
+            badContent.size += 1
+            val (goodContent, goodDirectory) = createOwnedShareSource(scenario, "good-size-share.txt")
+            contents += goodContent
+            val badChannel = "share-bad-${UUID.randomUUID()}"
+            val goodChannel = "share-good-${UUID.randomUUID()}"
+            channels += listOf(badChannel, goodChannel)
+            val ioBlock = blockIoPool()
+            block = ioBlock
+            sendAndCleanupTwice(scenario, badContent, badChannel)
+            sendAndCleanupTwice(scenario, goodContent, goodChannel)
+            assertFalse("IO barrier must remain held until explicitly released", ioBlock.timedOut.get())
+            assertTrue(badDirectory.isDirectory)
+            assertTrue(goodDirectory.isDirectory)
+            ioBlock.release.countDown()
+            awaitFailure(scenario, badChannel)
+            val goodRequest = awaitCredential(scenario, goodChannel)
+            assertEquals("upload fixture", File(goodRequest.path).readText())
+            assertFalse(badDirectory.exists())
+            assertFalse(goodDirectory.exists())
+            assertTrue(external.isFile)
+            assertTrue("failed destination must not upload", scenario.transport.credentialsFor(badChannel) == null)
+            goodRequest.callback.onResult("https://upload.test/object", "https://files.test/object", "application/octet-stream", null)
+            awaitPut(scenario, goodRequest.path).callback.onSuccess("ignored")
+            completed += goodChannel
+        } finally {
+            block?.release?.countDown()
+            if (channels.isNotEmpty()) finishUnfinishedSends(scenario, channels, completed)
+            cleanupSentRows(scenario, channels)
+            contents.forEach { runCatching { it.cleanupOwnedTemporarySource() } }
+            scenario.close()
+        }
+    }
+
+    @Test fun sendWithOptionsSessionInvalidationFailsCapturedMessageAfterQueuedPreparation() {
+        val scenario = Scenario()
+        var block: IoBlock? = null
+        val contents = mutableListOf<WKFileContent>()
+        val channels = mutableListOf<String>()
+        try {
+            val external = scenario.tempFile
+            val (content, ownedDirectory) = createOwnedShareSource(scenario, "session-share.txt")
+            contents += content
+            val channelID = "share-session-${UUID.randomUUID()}"
+            channels += channelID
+            val ioBlock = blockIoPool()
+            block = ioBlock
+            sendAndCleanupTwice(scenario, content, channelID)
+            assertFalse("IO barrier must remain held until explicitly released", ioBlock.timedOut.get())
+            assertTrue(ownedDirectory.isDirectory)
+            scenario.switchToAnotherSession()
+            ioBlock.release.countDown()
+            val (clientMsgNo, status) = awaitFailure(scenario, channelID)
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, status)
+            assertEquals(clientMsgNo, scenario.latestMessageForChannel(channelID)?.first)
+            assertFalse(ownedDirectory.exists())
+            assertTrue(external.isFile)
+            assertTrue("invalidated session must not upload", scenario.transport.credentialsFor(channelID) == null)
+        } finally {
+            block?.release?.countDown()
+            if (channels.isNotEmpty()) finishUnfinishedSends(scenario, channels, emptySet())
+            cleanupSentRows(scenario, channels)
+            contents.forEach { runCatching { it.cleanupOwnedTemporarySource() } }
+            scenario.close()
         }
     }
 

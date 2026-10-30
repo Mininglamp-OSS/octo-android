@@ -114,6 +114,7 @@ class ShareReceiveActivity : Activity() {
                     options.setting.receipt = channel.receipt
                     WKIM.getInstance().msgManager.sendWithOptions(sendContent, channel, options)
                 }
+                // Cleanup only releases sources not already taken by asynchronous preparation.
                 duplicates.forEach { it.cleanupOwnedTemporarySource() }
                 if (content is WKFileContent) content.cleanupOwnedTemporarySource()
             }

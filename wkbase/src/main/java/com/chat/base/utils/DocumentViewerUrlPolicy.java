@@ -34,7 +34,9 @@ public final class DocumentViewerUrlPolicy {
      * while preserving deployment prefixes. On 2026-10-29, same-origin preview returned HTTP 200;
      * WebView logs confirmed /web/d/{id}, while the user observed a generic Web page. The user
      * verified that /d/{id} opened the document. baseWebUrl is the general Web entry, not a
-     * separate document-service setting. Split API/Web deployments remain unverified; confirm the
+     * separate document-service setting. This matches iOS WKDocumentShareCardCell.documentURL and
+     * WKDocumentShareCardAbsoluteURL (octo-ios 4de9ff97), which derive /d/{id} from apiBaseUrl.
+     * Split API/Web deployments remain unverified; confirm the
      * server's document route before composing it from baseWebUrl.
      */
     public static String viewerBaseUrl(String apiBaseUrl) {

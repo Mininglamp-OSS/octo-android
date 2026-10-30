@@ -2,6 +2,7 @@ package com.chat.uikit.chat.provider
 
 import com.chat.base.config.WKApiConfig
 import com.chat.base.config.WKConfig
+import com.chat.base.utils.DocumentViewerUrlPolicy
 import com.chat.uikit.chat.msgmodel.WKDocumentShareContent
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -23,7 +24,7 @@ class DocumentSharePreviewRepository(
 ) : AutoCloseable {
     enum class State { loading, denied, unavailable, error, empty, ready }
     data class Session(val uid: String, val token: String, val version: Long = 0)
-    data class Context(val version: Long, val uid: String, val token: String, val apiBaseUrl: String, val webOrigin: String?)
+    data class Context(val version: Long, val uid: String, val token: String, val apiBaseUrl: String, val webBaseUrl: String?)
     data class Result(val state: State, val preview: DocumentSharePreviewParser.Preview? = null, val context: Context? = null)
     interface Transport { fun get(url: String, token: String, spaceId: String, callback: (Int, String?) -> Unit) }
     interface Subscription { fun cancel() }
@@ -47,7 +48,7 @@ class DocumentSharePreviewRepository(
     fun fetch(content: WKDocumentShareContent, force: Boolean = false, callback: (Result) -> Unit): Subscription {
         if (closed) { callback(Result(State.error)); return EmptySubscription }
         val id = content.docId.orEmpty(); val space = content.spaceId.orEmpty(); val origins = config.origins()
-        val api = apiBaseUrl(origins.first); val web = webOrigin(origins.second); val s = session()
+        val api = apiBaseUrl(origins.first); val web = webBaseUrl(origins.second); val s = session()
         if (!validDocId(id) || (space.isNotEmpty() && !validDocId(space)) || api == null || s.uid.isEmpty() || s.token.isEmpty()) { callback(Result(State.error)); return EmptySubscription }
         val context = Context(s.version, s.uid, s.token, api, web); val key = Key(context, space, id, normalizeKind(content.kind))
         var cached: Result? = null; var pending: Pending? = null; var start: Pending? = null; var subscriptionId = 0L; var lookupGeneration = 0L
@@ -104,7 +105,7 @@ class DocumentSharePreviewRepository(
         }
     }
 
-    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiBaseUrl(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webOrigin(origins.second)) }
+    private fun currentContext(): Context? { val origins = config.origins(); val s = session(); val api = apiBaseUrl(origins.first) ?: return null; return Context(s.version, s.uid, s.token, api, webBaseUrl(origins.second)) }
     private fun evictExpiredLocked() { val timestamp = now(); val iterator = cache.entries.iterator(); while (iterator.hasNext()) if (iterator.next().value.expires <= timestamp) iterator.remove() }
     private fun isCurrentLocked(context: Context, expectedGeneration: Long) = !closed && expectedGeneration == generation && currentContext() == context
     private fun deliverIfCurrent(context: Context, expectedGeneration: Long, callback: () -> Unit) { val valid = synchronized(lock) { isCurrentLocked(context, expectedGeneration) }; if (valid) callback() }
@@ -136,14 +137,16 @@ class DocumentSharePreviewRepository(
         val query = if (space.isNotEmpty()) "sp=${java.net.URLEncoder.encode(space, Charsets.UTF_8.name()).replace("+", "%20")}" else null
         return URI.create("$apiBaseUrl/docs/$id/$endpoint" + (query?.let { "?$it" } ?: "")).toASCIIString()
     }
-    fun buildNavigationUrl(docId: String): String? = if (validDocId(docId)) webOrigin(config.origins().second)?.let { "$it/d/$docId" } else null
+    fun buildNavigationUrl(docId: String): String? = navigationUrl(docId, config.origins().first)
 
     companion object {
         internal const val MAX_CACHE_ENTRIES = 128
         private val applicationRepository by lazy { DocumentSharePreviewRepository() }
         fun shared() = applicationRepository
-        fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.baseWebUrl)
-        fun navigationUrl(docId: String, baseWebUrl: String): String? = if (validDocId(docId)) webOrigin(baseWebUrl)?.let { "$it/d/$docId" } else null
+        fun navigationUrl(docId: String): String? = navigationUrl(docId, WKApiConfig.baseUrl)
+        fun navigationUrl(docId: String, apiBaseUrl: String): String? {
+            return DocumentViewerUrlPolicy.documentUrl(apiBaseUrl, docId)
+        }
         private object EmptySubscription : Subscription { override fun cancel() = Unit }
         fun validDocId(value: String) = value.matches(Regex("[A-Za-z0-9_-]{1,128}"))
         fun normalizeKind(value: String?) = when (value) { "sheet", "board", "html" -> value!! else -> "doc" }
@@ -153,7 +156,12 @@ class DocumentSharePreviewRepository(
             val path = uri.rawPath.orEmpty().trimEnd('/')
             "https://${uri.rawAuthority}$path"
         }.getOrNull()
-        fun webOrigin(value: String) = origin(value)
+        fun webBaseUrl(value: String): String? = runCatching {
+            val uri = URI(value.trim())
+            if ((!uri.scheme.equals("http", true) && !uri.scheme.equals("https", true)) || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.rawQuery != null || uri.rawFragment != null) return null
+            val normalizedOrigin = origin(value) ?: return null
+            normalizedOrigin + uri.rawPath.orEmpty().trimEnd('/')
+        }.getOrNull()
         private fun origin(value: String): String? = runCatching { URI(value.trim()).let { if ((!it.scheme.equals("http", true) && !it.scheme.equals("https", true)) || it.userInfo != null || it.host.isNullOrEmpty()) null else URI(it.scheme.lowercase(), null, it.host, it.port, null, null, null).toString().removeSuffix("/") } }.getOrNull()
     }
 

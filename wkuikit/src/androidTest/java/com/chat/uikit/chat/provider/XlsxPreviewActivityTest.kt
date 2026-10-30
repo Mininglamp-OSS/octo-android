@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.chat.uikit.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -16,6 +17,50 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class XlsxPreviewActivityTest {
+    @Test fun activityBoundsDirectWorkbookAndClampsRestoredSelection() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val file = createWorkbook("", context.cacheDir, sheetCount = 11)
+        val scenario = ActivityScenario.launch<XlsxPreviewActivity>(
+            Intent(context, XlsxPreviewActivity::class.java)
+                .putExtra("filePath", file.absolutePath)
+                .putExtra("title", "Preview test")
+        )
+        try {
+            assertEquals(context.getString(R.string.xlsx_empty), awaitRenderedMessage(scenario, context.getString(R.string.xlsx_empty)).first)
+            awaitRenderedMessage(scenario, context.getString(R.string.xlsx_sheets_truncated, 10))
+            val sheets = (0..10).map { index ->
+                XlsxParser.Sheet("Tab$index" + "😀".repeat(36), listOf(listOf("Header"), listOf("$index")), false)
+            }
+            scenario.onActivity { activity ->
+                activity.javaClass.getDeclaredField("activeSheet").apply { isAccessible = true }.setInt(activity, 99)
+                val method = activity.javaClass.getDeclaredMethod("renderWorkbook", XlsxParser.Workbook::class.java).apply { isAccessible = true }
+                method.invoke(activity, XlsxParser.Workbook(sheets))
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<View>(android.R.id.content)
+                val tabLabels = findTexts(root).filter { it.startsWith("Tab") }
+                assertEquals(10, tabLabels.size)
+                assertTrue(tabLabels.all { it.codePointCount(0, it.length) <= 31 })
+                assertTrue(findTexts(root).contains(context.getString(R.string.xlsx_sheets_truncated, 10)))
+                assertEquals(9, activity.javaClass.getDeclaredField("activeSheet").apply { isAccessible = true }.getInt(activity))
+                requireNotNull(findTextView(root, XlsxParser.boundedSheetName(sheets[0].name))).performClick()
+                assertEquals(0, activity.javaClass.getDeclaredField("activeSheet").apply { isAccessible = true }.getInt(activity))
+                activity.javaClass.getDeclaredField("activeSheet").apply { isAccessible = true }.setInt(activity, 4)
+            }
+            scenario.recreate()
+            awaitRenderedMessage(scenario, context.getString(R.string.xlsx_sheets_truncated, 10))
+            scenario.onActivity { activity ->
+                assertEquals(4, activity.javaClass.getDeclaredField("activeSheet").apply { isAccessible = true }.getInt(activity))
+                assertEquals(10, findTexts(activity.findViewById(android.R.id.content)).count { it.startsWith("Sheet") })
+            }
+        } finally {
+            scenario.close()
+            file.delete()
+        }
+    }
+
     @Test fun rowAndColumnOverflowShowTruncationMessageWhileEmptySheetShowsEmptyMessage() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -81,6 +126,11 @@ class XlsxPreviewActivityTest {
         return null
     }
 
+    private fun findTexts(view: View): List<String> = buildList {
+        if (view is TextView) add(view.text.toString())
+        if (view is android.view.ViewGroup) for (index in 0 until view.childCount) addAll(findTexts(view.getChildAt(index)))
+    }
+
     private fun findRecyclerVisibility(view: View): Int? {
         if (view is androidx.recyclerview.widget.RecyclerView) return view.visibility
         if (view is android.view.ViewGroup) {
@@ -89,7 +139,7 @@ class XlsxPreviewActivityTest {
         return null
     }
 
-    private fun createWorkbook(sheetRows: String, directory: File): File {
+    private fun createWorkbook(sheetRows: String, directory: File, sheetCount: Int = 1): File {
         val file = File.createTempFile("xlsx-preview-test-", ".xlsx", directory)
         ZipOutputStream(file.outputStream()).use { zip ->
             fun entry(path: String, value: String) {
@@ -97,9 +147,12 @@ class XlsxPreviewActivityTest {
                 zip.write(value.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
             }
-            entry("xl/workbook.xml", """<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Preview" sheetId="1" r:id="rId1"/></sheets></workbook>""")
-            entry("xl/_rels/workbook.xml.rels", """<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>""")
+            val declarations = (1..sheetCount).joinToString("") { "<sheet name=\"Sheet$it\" sheetId=\"$it\" r:id=\"rId$it\"/>" }
+            val relationships = (1..sheetCount).joinToString("") { "<Relationship Id=\"rId$it\" Target=\"worksheets/sheet$it.xml\"/>" }
+            entry("xl/workbook.xml", """<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>$declarations</sheets></workbook>""")
+            entry("xl/_rels/workbook.xml.rels", """<Relationships>$relationships</Relationships>""")
             entry("xl/worksheets/sheet1.xml", """<worksheet><sheetData>$sheetRows</sheetData></worksheet>""")
+            (2..sheetCount).forEach { index -> entry("xl/worksheets/sheet$index.xml", "<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v>$index</v></c></row></sheetData></worksheet>") }
         }
         return file
     }

@@ -33,6 +33,7 @@ class XlsxPreviewActivity : AppCompatActivity() {
     private lateinit var header: LinearLayout
     private lateinit var horizontal: HorizontalScrollView
     private lateinit var rowCount: TextView
+    private lateinit var sheetNotice: TextView
     private var parseRequest = 0L
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -55,7 +56,8 @@ class XlsxPreviewActivity : AppCompatActivity() {
             addView(body, LinearLayout.LayoutParams(-2, -1))
         }
         rowCount = TextView(this).apply { setPadding(dp(12), dp(6), dp(12), dp(6)) }
-        root.addView(progress, LinearLayout.LayoutParams(-1, -2)); root.addView(message, LinearLayout.LayoutParams(-1, -2)); root.addView(horizontal, LinearLayout.LayoutParams(-1, 0, 1f))
+        sheetNotice = TextView(this).apply { setPadding(dp(12), dp(6), dp(12), dp(6)); visibility = View.GONE }
+        root.addView(progress, LinearLayout.LayoutParams(-1, -2)); root.addView(message, LinearLayout.LayoutParams(-1, -2)); root.addView(sheetNotice, LinearLayout.LayoutParams(-1, -2)); root.addView(horizontal, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(HorizontalScrollView(this).apply { addView(tabs) }, LinearLayout.LayoutParams(-1, -2)); root.addView(rowCount, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         parseAsync()
@@ -64,7 +66,7 @@ class XlsxPreviewActivity : AppCompatActivity() {
     private fun parseAsync() {
         val request = ++parseRequest
         tabs.removeAllViews(); header.removeAllViews(); workbook = null
-        progress.visibility = View.VISIBLE; message.visibility = View.GONE; message.isEnabled = false; message.setOnClickListener(null); table.visibility = View.GONE; table.adapter = null; header.removeAllViews(); rowCount.text = ""
+        progress.visibility = View.VISIBLE; message.visibility = View.GONE; message.isEnabled = false; message.setOnClickListener(null); sheetNotice.visibility = View.GONE; sheetNotice.text = ""; table.visibility = View.GONE; table.adapter = null; header.removeAllViews(); rowCount.text = ""
         val file = File(filePath)
         if (!file.exists()) { showError(getString(com.chat.uikit.R.string.str_file_not_exist)); return }
         executor.execute {
@@ -78,14 +80,23 @@ class XlsxPreviewActivity : AppCompatActivity() {
     }
 
     private fun renderWorkbook(value: XlsxParser.Workbook) {
-        workbook = value
-        if (value.sheets.isEmpty()) { showEmpty(); return }
-        activeSheet = activeSheet.coerceIn(value.sheets.indices)
-        tabs.removeAllViews()
-        if (value.sheets.size > 1) value.sheets.forEachIndexed { index, sheet ->
-            tabs.addView(TextView(this).apply { text = sheet.name; setPadding(dp(18), dp(8), dp(18), dp(8)); setTextColor(if (index == activeSheet) Color.WHITE else Color.DKGRAY); setBackgroundColor(if (index == activeSheet) Color.rgb(60, 120, 210) else Color.LTGRAY); setOnClickListener { activeSheet = index; renderWorkbook(value) } }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+        val boundedSheets = value.sheets.take(XlsxParser.MAX_SHEETS).map { sheet ->
+            sheet.copy(name = XlsxParser.boundedSheetName(sheet.name))
         }
-        val sheet = value.sheets[activeSheet]
+        val boundedWorkbook = XlsxParser.Workbook(
+            boundedSheets,
+            value.sheetsTruncated || value.sheets.size > XlsxParser.MAX_SHEETS
+        )
+        workbook = boundedWorkbook
+        sheetNotice.visibility = if (boundedWorkbook.sheetsTruncated) View.VISIBLE else View.GONE
+        sheetNotice.text = if (boundedWorkbook.sheetsTruncated) getString(com.chat.uikit.R.string.xlsx_sheets_truncated, XlsxParser.MAX_SHEETS) else ""
+        if (boundedWorkbook.sheets.isEmpty()) { tabs.removeAllViews(); showEmpty(); return }
+        activeSheet = activeSheet.coerceIn(boundedWorkbook.sheets.indices)
+        tabs.removeAllViews()
+        if (boundedWorkbook.sheets.size > 1) boundedWorkbook.sheets.forEachIndexed { index, sheet ->
+            tabs.addView(TextView(this).apply { text = sheet.name; setPadding(dp(18), dp(8), dp(18), dp(8)); setTextColor(if (index == activeSheet) Color.WHITE else Color.DKGRAY); setBackgroundColor(if (index == activeSheet) Color.rgb(60, 120, 210) else Color.LTGRAY); setOnClickListener { activeSheet = index; renderWorkbook(boundedWorkbook) } }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+        }
+        val sheet = boundedWorkbook.sheets[activeSheet]
         if (sheet.rows.isEmpty()) {
             if (sheet.truncated) showTruncatedWithoutRows() else showEmpty()
             return
@@ -101,7 +112,7 @@ class XlsxPreviewActivity : AppCompatActivity() {
 
     private fun showEmpty() { progress.visibility = View.GONE; header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = getString(com.chat.uikit.R.string.xlsx_empty); message.setOnClickListener(null) }
     private fun showTruncatedWithoutRows() { progress.visibility = View.GONE; header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = getString(com.chat.uikit.R.string.xlsx_truncated_without_content); message.setOnClickListener(null) }
-    private fun showError(text: String) { progress.visibility = View.GONE; tabs.removeAllViews(); header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = "$text\n\n${getString(com.chat.uikit.R.string.xlsx_retry)}"; message.setOnClickListener { message.isEnabled = false; parseAsync() } }
+    private fun showError(text: String) { progress.visibility = View.GONE; sheetNotice.visibility = View.GONE; sheetNotice.text = ""; tabs.removeAllViews(); header.removeAllViews(); table.adapter = null; table.visibility = View.GONE; rowCount.text = ""; horizontal.scrollTo(0, 0); message.visibility = View.VISIBLE; message.isEnabled = true; message.text = "$text\n\n${getString(com.chat.uikit.R.string.xlsx_retry)}"; message.setOnClickListener { message.isEnabled = false; parseAsync() } }
     override fun onSaveInstanceState(out: Bundle) { out.putInt("activeSheet", activeSheet); super.onSaveInstanceState(out) }
     override fun onCreateOptionsMenu(menu: Menu): Boolean { menu.add(0, 1001, 0, R.string.str_file_save_to); menu.add(0, 1002, 1, R.string.str_file_share); return true }
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) { android.R.id.home -> { finish(); true }; 1001 -> { saveFile(); true }; 1002 -> { shareFile(); true }; else -> super.onOptionsItemSelected(item) }

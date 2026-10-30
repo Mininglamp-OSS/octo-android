@@ -25,13 +25,14 @@ class DocumentSharePreviewRepositoryTest {
         beforeCachedDelivery: () -> Unit = {},
         now: () -> Long = { 1L },
         session: () -> DocumentSharePreviewRepository.Session = { DocumentSharePreviewRepository.Session("u1", "t1", 7L) },
-        apiUrl: () -> String = { "https://api.example.test/v1/" }
+        apiUrl: () -> String = { "https://api.example.test/v1/" },
+        webUrl: () -> String = { "https://web.example.test" }
     ) =
         DocumentSharePreviewRepository(
             transport = transport,
             now = now,
             session = session,
-            config = DocumentSharePreviewRepository.ConfigSource { apiUrl() to "https://web.example.test" },
+            config = DocumentSharePreviewRepository.ConfigSource { apiUrl() to webUrl() },
             sessionEvents = object : DocumentSharePreviewRepository.SessionEvents {
                 override fun add(listener: () -> Unit) = Unit
                 override fun remove(listener: () -> Unit) = Unit
@@ -162,6 +163,16 @@ class DocumentSharePreviewRepositoryTest {
         repository.close()
     }
 
+    @Test fun instanceNavigationUrlUsesConfiguredApiBaseDeploymentRoot() {
+        val repository = repository(
+            FakeTransport(),
+            apiUrl = { "https://api.example.test:8443/gateway%2Fdocs/api/v1///" },
+            webUrl = { "https://web.example.test/ignored-web-prefix" }
+        )
+        assertEquals("https://api.example.test:8443/gateway%2Fdocs/d/doc_1", repository.buildNavigationUrl("doc_1"))
+        repository.close()
+    }
+
     @Test fun allPreviewKindsAppendEndpointToConfiguredApiPath() {
         val expected = mapOf("doc" to "content", "sheet" to "sheet", "board" to "scene", "html" to "html-preview")
         expected.forEach { (kind, endpoint) ->
@@ -199,6 +210,64 @@ class DocumentSharePreviewRepositoryTest {
         apiUrl = "https://api.example.test/gateway/v1/"
         repository.fetch(content()) {}
         assertEquals("same host with a different API path must not reuse cache", 2, transport.calls.size)
+        transport.calls.last().callback(404, "")
+        repository.close()
+    }
+
+    @Test fun webPathChangesIsolateCacheWhileTrailingSlashNormalizationSharesIt() {
+        val transport = FakeTransport()
+        var webUrl = "https://web.example.test/gateway/web/"
+        val repository = repository(transport, webUrl = { webUrl })
+        repository.fetch(content()) {}
+        transport.calls.single().callback(404, "")
+
+        webUrl = "https://web.example.test/gateway/web"
+        repository.fetch(content()) {}
+        assertEquals("equivalent slash form reuses the cache", 1, transport.calls.size)
+
+        webUrl = "https://web.example.test/other/web/"
+        repository.fetch(content()) {}
+        assertEquals("same API and session with a different Web path must not reuse cache", 2, transport.calls.size)
+        transport.calls.last().callback(404, "")
+        repository.close()
+    }
+
+    @Test fun changingWebPathDropsDelayedOldResponseAndAllowsNewRequest() {
+        val transport = FakeTransport()
+        var webUrl = "https://web.example.test/old/web/"
+        val repository = repository(transport, webUrl = { webUrl })
+        var oldDeliveries = 0
+        repository.fetch(content()) { oldDeliveries++ }
+        val oldCall = transport.calls.single()
+
+        webUrl = "https://web.example.test/new/web/"
+        var newResult: DocumentSharePreviewRepository.Result? = null
+        repository.fetch(content()) { newResult = it }
+        assertEquals("different Web paths must use separate inflight requests", 2, transport.calls.size)
+        oldCall.callback(404, "")
+        assertEquals(0, oldDeliveries)
+        transport.calls.last().callback(404, "")
+        assertEquals(DocumentSharePreviewRepository.State.unavailable, newResult?.state)
+        assertEquals("https://web.example.test/new/web", newResult?.context?.webBaseUrl)
+        repository.close()
+    }
+
+    @Test fun changingWebPathBeforeCachedDeliveryDropsCachedResult() {
+        val transport = FakeTransport()
+        var webUrl = "https://web.example.test/old/web/"
+        var changeBeforeDelivery = false
+        val repository = repository(transport, webUrl = { webUrl }, beforeCachedDelivery = {
+            if (changeBeforeDelivery) webUrl = "https://web.example.test/new/web/"
+        })
+        repository.fetch(content()) {}
+        transport.calls.single().callback(404, "")
+        changeBeforeDelivery = true
+
+        var deliveries = 0
+        repository.fetch(content()) { deliveries++ }
+        assertEquals(0, deliveries)
+        repository.fetch(content()) {}
+        assertEquals(2, transport.calls.size)
         transport.calls.last().callback(404, "")
         repository.close()
     }

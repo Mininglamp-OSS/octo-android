@@ -84,6 +84,7 @@ import java.util.List;
 
 @SuppressLint("JavascriptInterface")
 public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> {
+    public static final String EXTRA_DOCS_VIEWER_SPACE_ID = "docsViewerSpaceId";
     TextView titleTv;
     private final int FILE_CHOOSER_RESULT_CODE = 101;
     ValueCallback<Uri> mUploadMessage;
@@ -195,7 +196,6 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             return;
         }
 
-        Log.e("加载的URL", url);
         loadUrlWithHandoff(url);
     }
 
@@ -214,17 +214,29 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
      * 外链（非自家域名）不动，保持原 loadUrl。
      */
     private void loadUrlWithHandoff(String url) {
-        String webOrigin = DocsViewerUrlPolicy.originOfConfiguredBases(
-                WKApiConfig.baseUrl, WKApiConfig.baseWebUrl);
-        if (webOrigin == null || !DocsViewerUrlPolicy.isTrustedOriginUrl(url, webOrigin)) {
+        String apiBaseUrl = WKApiConfig.baseUrl;
+        String webBaseUrl = WKApiConfig.baseWebUrl;
+        boolean docsViewer = DocsViewerUrlPolicy.isTrustedViewerUrl(url, apiBaseUrl);
+        String handoffOrigin = DocsViewerUrlPolicy.handoffOriginForUrl(
+                url, apiBaseUrl, webBaseUrl);
+        if (handoffOrigin == null) {
             // 外链 / origin 解析失败：走原有 loadUrl，不注入任何 App 状态（防 token 泄露给第三方）。
             wkVBinding.webView.loadUrl(url);
             return;
         }
-        boolean docsViewer = DocsViewerUrlPolicy.isTrustedViewerUrl(url, webOrigin);
         // Capture once for this launch, before any credential-dependent branch. Even an anonymous
         // Docs launch must clear stale pooled storage when the native selection is empty.
-        String currentSpaceId = docsViewer ? SpaceFilter.getCurrentSpaceId() : null;
+        // A missing extra falls back to the current native space; a present empty extra clears stale WebView space.
+        boolean hasExplicitSpace = getIntent().hasExtra(EXTRA_DOCS_VIEWER_SPACE_ID);
+        String explicitSpaceId = getIntent().getStringExtra(EXTRA_DOCS_VIEWER_SPACE_ID);
+        String fallbackSpaceId = docsViewer && !hasExplicitSpace
+                ? SpaceFilter.getCurrentSpaceId() : null;
+        String currentSpaceId = DocsViewerUrlPolicy.selectDocsViewerSpaceId(
+                docsViewer, hasExplicitSpace, explicitSpaceId, fallbackSpaceId);
+        if (docsViewer && !DocsViewerUrlPolicy.isValidDocsViewerSpaceId(currentSpaceId)) {
+            finish();
+            return;
+        }
 
         // report.html already uses its URL-parameter handshake. A query value containing that text
         // must not bypass an otherwise valid Docs viewer handoff.
@@ -239,7 +251,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             if (docsViewer) {
                 String bootstrap = buildDocsViewerSpaceBootstrapHtml(url, currentSpaceId);
                 wkVBinding.webView.loadDataWithBaseURL(
-                        webOrigin + "/", bootstrap, "text/html", "UTF-8", null);
+                        handoffOrigin + "/", bootstrap, "text/html", "UTF-8", null);
             } else {
                 // 未登录或缺关键身份：不做身份注入，走原路径（web 端会自己跳登录）。
                 wkVBinding.webView.loadUrl(url);
@@ -257,7 +269,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
         String bootstrap = buildHandoffBootstrapHtml(
                 urlWithSid, effectiveSid, token, uid, name, currentSpaceId);
         // baseURL 用自家 origin：localStorage 写入的是这个 origin 的存储，跳转到 origin 内任意页面都能读到。
-        wkVBinding.webView.loadDataWithBaseURL(webOrigin + "/", bootstrap, "text/html", "UTF-8", null);
+        wkVBinding.webView.loadDataWithBaseURL(handoffOrigin + "/", bootstrap, "text/html", "UTF-8", null);
     }
 
     /**

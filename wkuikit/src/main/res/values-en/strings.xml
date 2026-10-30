@@ -764,6 +764,7 @@
     <string name="xlsx_parse_failed">This Excel file cannot be previewed</string>
     <string name="xlsx_retry">Retry</string>
     <string name="xlsx_truncated">Preview truncated because the content is too large</string>
+    <string name="xlsx_sheets_truncated">Only the first %1$d sheets are previewed</string>
     <string name="xlsx_view_full_text">View full text</string>
     <string name="xlsx_header_description">Column %1$d header</string>
     <string name="xlsx_cell_description">Row %1$d, column %2$d, %3$s</string>

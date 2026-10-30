@@ -16,7 +16,6 @@
 
 package com.chat.uikit.chat.provider
 
-import com.chat.base.config.WKApiConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -62,12 +61,17 @@ class WKDocumentShareProviderTest {
     }
 
     @Test
-    fun acceptsConfiguredOriginAndDocId() {
-        val previous = WKApiConfig.baseWebUrl
-        try {
-            assertEquals("https://docs.example.test/d/abc_7", DocumentSharePreviewRepository.navigationUrl("abc_7", "https://docs.example.test/web/"))
-            assertEquals("https://docs.example.test:8443/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test:8443/web/"))
-        } finally { WKApiConfig.baseWebUrl = previous }
+    fun navigationUrlDerivesViewerRootFromValidatedApiBase() {
+        assertEquals("https://docs.example.test/d/abc_7", DocumentSharePreviewRepository.navigationUrl("abc_7", "https://docs.example.test/api/v1/"))
+        assertEquals("https://docs.example.test:8443/gateway/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test:8443/gateway/api/v1/"))
+        assertEquals("https://docs.example.test/tenant/v1/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/tenant/v1/api/v1/"))
+        assertEquals("https://docs.example.test/gateway%2Fdocs/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/gateway%2Fdocs/v1///"))
+        assertEquals("https://docs.example.test/d/abc", DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "http://localhost:8080/api/v1/"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://user@docs.example.test/api/v1/"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1?tenant=x"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1#section"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("bad/id", "https://docs.example.test/api/v1/"))
     }
 
     @Test
@@ -81,12 +85,14 @@ class WKDocumentShareProviderTest {
 
     @Test
     fun rejectsInvalidUrls() {
-        val previous = WKApiConfig.baseWebUrl
-        try {
-            assertNull(DocumentSharePreviewRepository.navigationUrl("", "https://docs.example.test/web/"))
-            assertNull(DocumentSharePreviewRepository.navigationUrl("bad/id", "https://docs.example.test/web/"))
-            assertTrue(DocumentSharePreviewRepository.navigationUrl("javascript", "https://docs.example.test/web/")!!.endsWith("/d/javascript"))
-            assertNull(DocumentSharePreviewRepository.navigationUrl("abc", ""))
-        } finally { WKApiConfig.baseWebUrl = previous }
+        assertNull(DocumentSharePreviewRepository.navigationUrl("", "https://docs.example.test/api/v1/"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("bad/id", "https://docs.example.test/api/v1/"))
+        assertTrue(DocumentSharePreviewRepository.navigationUrl("javascript", "https://docs.example.test/api/v1/")!!.endsWith("/d/javascript"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", ""))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://user@docs.example.test/api/v1"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1?tenant=x"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://docs.example.test/api/v1#section"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "file://docs.example.test/api/v1"))
+        assertNull(DocumentSharePreviewRepository.navigationUrl("abc", "https://"))
     }
 }

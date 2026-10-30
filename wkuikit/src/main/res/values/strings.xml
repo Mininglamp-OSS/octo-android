@@ -765,6 +765,7 @@
     <string name="xlsx_parse_failed">无法预览此 Excel 文件</string>
     <string name="xlsx_retry">重试</string>
     <string name="xlsx_truncated">内容过大，预览已截断</string>
+    <string name="xlsx_sheets_truncated">仅预览前 %1$d 个工作表</string>
     <string name="xlsx_view_full_text">查看全文</string>
     <string name="xlsx_header_description">第 %1$d 列表头</string>
     <string name="xlsx_cell_description">第 %1$d 行，第 %2$d 列，%3$s</string>

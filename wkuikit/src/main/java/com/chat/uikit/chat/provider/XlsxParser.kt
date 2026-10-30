@@ -43,6 +43,8 @@ object XlsxParser {
 
     const val MAX_ROWS = 500
     const val MAX_COLS = 50
+    const val MAX_SHEETS = 10
+    const val MAX_SHEET_NAME_CODE_POINTS = 31
 
     /** 单个 zip entry 解压后允许的最大字节数（防 zip-bomb）。50 MB 足够任何常规办公文档。 */
     private const val MAX_ENTRY_BYTES: Long = 50L * 1024L * 1024L
@@ -56,16 +58,17 @@ object XlsxParser {
         val truncated: Boolean,
     )
 
-    data class Workbook(val sheets: List<Sheet>)
+    data class Workbook(val sheets: List<Sheet>, val sheetsTruncated: Boolean = false)
 
     /** 抛异常给上层展示"预览失败"，不吞。 */
     fun parse(file: File): Workbook {
         ZipFile(file).use { zip ->
             val shared = zip.getEntry("xl/sharedStrings.xml")?.let { readSharedStrings(zip, it) } ?: emptyList()
-            val rels = zip.getEntry("xl/_rels/workbook.xml.rels")?.let { readRels(zip, it) } ?: emptyMap()
             val workbookEntry = zip.getEntry("xl/workbook.xml")
                 ?: throw IllegalStateException("missing xl/workbook.xml")
-            val sheetRefs = readWorkbook(zip, workbookEntry)
+            val (sheetRefs, sheetsTruncated) = readWorkbook(zip, workbookEntry)
+            val rels = if (sheetRefs.isEmpty()) emptyMap() else zip.getEntry("xl/_rels/workbook.xml.rels")
+                ?.let { readRels(zip, it, sheetRefs.mapTo(HashSet()) { ref -> ref.second }) } ?: emptyMap()
 
             val sheets = sheetRefs.mapNotNull { (name, rid) ->
                 val target = rels[rid] ?: return@mapNotNull null
@@ -74,7 +77,7 @@ object XlsxParser {
                 val entry = zip.getEntry(entryPath) ?: return@mapNotNull null
                 readSheet(zip, entry, shared, name)
             }
-            return Workbook(sheets)
+            return Workbook(sheets, sheetsTruncated)
         }
     }
 
@@ -104,7 +107,7 @@ object XlsxParser {
     }
 
     // ---- _rels/workbook.xml.rels ----
-    private fun readRels(zip: ZipFile, entry: ZipEntry): Map<String, String> {
+    private fun readRels(zip: ZipFile, entry: ZipEntry, requiredIds: Set<String>): Map<String, String> {
         val out = HashMap<String, String>()
         boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
@@ -112,7 +115,8 @@ object XlsxParser {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "Relationship") {
                     val id = parser.getAttributeValue(null, "Id")
                     val target = parser.getAttributeValue(null, "Target")
-                    if (id != null && target != null) out[id] = target
+                    if (id != null && id in requiredIds && target != null) out[id] = target
+                    if (requiredIds.all { it in out }) break
                 }
             }
         }
@@ -120,13 +124,17 @@ object XlsxParser {
     }
 
     // ---- workbook.xml -> List<(name, rId)> ----
-    private fun readWorkbook(zip: ZipFile, entry: ZipEntry): List<Pair<String, String>> {
+    private fun readWorkbook(zip: ZipFile, entry: ZipEntry): Pair<List<Pair<String, String>>, Boolean> {
         val out = ArrayList<Pair<String, String>>()
+        var declarations = 0
+        var truncated = false
         boundedStream(zip, entry).use { input ->
             val parser = newParser(input)
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "sheet") {
-                    val name = parser.getAttributeValue(null, "name") ?: "Sheet"
+                    if (declarations == MAX_SHEETS) { truncated = true; break }
+                    declarations++
+                    val name = boundedSheetName(parser.getAttributeValue(null, "name") ?: "Sheet")
                     // FEATURE_PROCESS_NAMESPACES=false 时 r:id 是字面属性名"r:id"，
                     // getAttributeValue(null,"id") 拿不到；用 endsWith(":id") 兜任意前缀。
                     val rid = (0 until parser.attributeCount)
@@ -139,7 +147,18 @@ object XlsxParser {
                 }
             }
         }
-        return out
+        return out to truncated
+    }
+
+    /** Truncate by Unicode code point so a supplementary character is never split. */
+    fun boundedSheetName(name: String): String {
+        var end = 0
+        var count = 0
+        while (end < name.length && count < MAX_SHEET_NAME_CODE_POINTS) {
+            end += Character.charCount(name.codePointAt(end))
+            count++
+        }
+        return name.substring(0, end)
     }
 
     // ---- worksheet ----

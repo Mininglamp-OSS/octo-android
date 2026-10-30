@@ -103,7 +103,7 @@ class WKDocumentShareProvider : WKChatBaseProvider() {
         fun validResult(result: DocumentSharePreviewRepository.Result): Boolean {
             val snapshot = WKConfig.getInstance().getSessionSnapshot()
             val context = result.context
-            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiBaseUrl == DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl) && context.webOrigin == DocumentSharePreviewRepository.webOrigin(com.chat.base.config.WKApiConfig.baseWebUrl)
+            return context == null && snapshot.uid.orEmpty().isEmpty() && snapshot.token.orEmpty().isEmpty() || context?.version == snapshot.version && context.uid == snapshot.uid && context.token == snapshot.token && context.apiBaseUrl == DocumentSharePreviewRepository.apiBaseUrl(com.chat.base.config.WKApiConfig.baseUrl) && context.webBaseUrl == DocumentSharePreviewRepository.webBaseUrl(com.chat.base.config.WKApiConfig.baseWebUrl)
         }
         fun load(force: Boolean) {
             val loadBinding = bindingVersion
@@ -191,11 +191,17 @@ class WKDocumentShareProvider : WKChatBaseProvider() {
         uiChatMsgItemEntity: WKUIChatMsgItemEntity,
         content: WKDocumentShareContent
     ) {
+        val spaceId = content.spaceId.orEmpty()
+        if (spaceId.isNotEmpty() && !DocumentSharePreviewRepository.validDocId(spaceId)) {
+            return WKToastUtils.getInstance().showToastNormal(context.getString(R.string.doc_share_link_invalid))
+        }
         val url = DocumentSharePreviewRepository.navigationUrl(content.docId.orEmpty())
             ?: return WKToastUtils.getInstance().showToastNormal(context.getString(R.string.doc_share_link_invalid))
         val intent = Intent(context, WKWebViewActivity::class.java).apply {
             putExtra("url", url)
             putExtra("channelID", uiChatMsgItemEntity.wkMsg.channelID)
+            // Pass an explicit empty space ID too, so the WebView clears any stale space context.
+            putExtra(WKWebViewActivity.EXTRA_DOCS_VIEWER_SPACE_ID, spaceId)
             putExtra("channelType", uiChatMsgItemEntity.wkMsg.channelType)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

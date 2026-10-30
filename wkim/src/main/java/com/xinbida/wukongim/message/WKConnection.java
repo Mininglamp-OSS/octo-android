@@ -74,6 +74,9 @@ public class WKConnection {
     // Deterministic test barriers for upload/session race coverage; null in production.
     private static volatile Runnable fileUploadBeforeCapturedWriteHookForTests;
     private static volatile Runnable fileUploadAfterCapturedWriteHookForTests;
+    private static volatile Runnable fileUploadAfterSnapshotSessionCheckHookForTests;
+    private static volatile Runnable fileUploadBeforeFinishSendSessionCheckHookForTests;
+    private static volatile Runnable fileUploadAfterSenderLookupHookForTests;
     private static volatile Runnable beforeSendingQueueIdentityCheckHookForTests;
     private static volatile Runnable beforeCapturedFailureWriteHookForTests;
     private static volatile Runnable afterCapturedFailureWriteHookForTests;
@@ -1059,9 +1062,13 @@ public class WKConnection {
                             failCapturedFileMessage(capturedContext, msg, true);
                             return;
                         }
+                        runFileUploadHook(fileUploadAfterSnapshotSessionCheckHookForTests);
+                        if (!WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+                            failCapturedFileMessage(capturedContext, msg, true);
+                            return;
+                        }
                         media.localPath = path;
-                        if (WKIMApplication.getInstance().isSessionCurrent(capturedContext))
-                            finishSendMessage(msg, sendMsg, true, true);
+                        finishSendMessage(msg, sendMsg, true, true);
                     });
             return;
         }
@@ -1108,15 +1115,23 @@ public class WKConnection {
         }
         //获取发送者信息
         WKIMApplication.SessionContext capturedContext = msg.uploadSessionContext;
-        if (capturedContext != null && !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) return;
+        runFileUploadHook(fileUploadBeforeFinishSendSessionCheckHookForTests);
+        if (capturedContext != null && !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+            failCapturedFileMessage(capturedContext, msg, true);
+            return;
+        }
         WKChannel from = WKIM.getInstance().getChannelManager().getChannel(WKIMApplication.getInstance().getUid(), WKChannelType.PERSONAL);
         if (from == null) {
             WKIM.getInstance().getChannelManager().getChannel(WKIMApplication.getInstance().getUid(), WKChannelType.PERSONAL, channel -> WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel));
         } else {
             msg.setFrom(from);
         }
+        runFileUploadHook(fileUploadAfterSenderLookupHookForTests);
+        if (capturedContext != null && !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+            failCapturedFileMessage(capturedContext, msg, true);
+            return;
+        }
         //将消息push回UI层
-        if (capturedContext == null || WKIMApplication.getInstance().isSessionCurrent(capturedContext))
         if (capturedContext == null) WKIM.getInstance().getMsgManager().setSendMsgCallback(msg);
         else WKIM.getInstance().getMsgManager().setSendMsgCallback(msg, capturedContext);
         if (hasAttached) {
@@ -1134,7 +1149,10 @@ public class WKConnection {
             if (sendMsg != null) {
                 if (msg.header != null && !msg.header.noPersist) {
                     if (capturedContext == null) addSendingMsg(sendMsg);
-                    else if (!enqueueCapturedMessage(capturedContext, sendMsg)) return;
+                    else if (!enqueueCapturedMessage(capturedContext, sendMsg)) {
+                        failCapturedFileMessage(capturedContext, msg, true);
+                        return;
+                    }
                 }
                 if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SEND_TRACE] about to sendMessage(WKBaseMsg), clientSeq=" + sendMsg.clientSeq + " connStatus=" + connectStatus + " wsNull=" + (webSocket == null));
                 if (capturedContext != null) {
@@ -1189,7 +1207,10 @@ public class WKConnection {
         boolean locked = false;
         try {
             locked = tryLockWithTimeout();
-            if (!locked) return false;
+            if (!locked) {
+                failCapturedFileMessage(context, msg, false);
+                return false;
+            }
             current = WKIMApplication.getInstance().withCurrentSession(context, () -> {
                 if (sendingMsgHashMap.get((int) context.clientSeq) == null)
                     addSendingMsg(sendMsg, context);

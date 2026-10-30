@@ -45,6 +45,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
 import okhttp3.RequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -52,6 +53,28 @@ import okio.Buffer
 
 /** Exercises the SDK's real send/attachment callback and database path; only the network edges are faked. */
 class FileUploadPipelineTest {
+    private class CallbackObservedFileContent(
+        private val delegate: WKFileContent,
+        private val completed: CountDownLatch,
+        private val failure: AtomicReference<Throwable?>
+    ) : WKFileContent() {
+        init {
+            name = delegate.name; extension = delegate.extension; size = delegate.size
+            localPath = delegate.localPath; url = delegate.url
+        }
+        override fun hasTrustedLocalSource(): Boolean = delegate.hasTrustedLocalSource()
+        override fun getTrustedLocalAttachmentSize(): Long = delegate.getTrustedLocalAttachmentSize()
+        override fun prepareTrustedLocalAttachment(uid: String, channelId: String, channelType: Byte,
+                                                   clientMsgNo: String, expectedSize: Long,
+                                                   callback: com.xinbida.wukongim.msgmodel.WKLocalAttachmentContent.PrepareCallback) {
+            delegate.prepareTrustedLocalAttachment(uid, channelId, channelType, clientMsgNo, expectedSize) { path, success ->
+                try { callback.onPrepared(path, success) }
+                catch (error: Throwable) { failure.set(error); throw error }
+                finally { completed.countDown() }
+            }
+        }
+    }
+
     internal class FakeTransport : WKSendMsgUtils.FileUploadTransport {
         data class CredentialRequest(val channelID: String, val channelType: Byte, val path: String, val callback: WKUploader.IGetUploadCredentials)
         data class PutRequest(val path: String, val tag: Any, val callback: WKUploader.IUploadBack)
@@ -114,6 +137,10 @@ class FileUploadPipelineTest {
         val sendingMapField = WKConnection::class.java.getDeclaredField("sendingMsgHashMap").apply { isAccessible = true }
         val beforeCapturedWriteHook = WKConnection::class.java.getDeclaredField("fileUploadBeforeCapturedWriteHookForTests").apply { isAccessible = true }
         val afterCapturedWriteHook = WKConnection::class.java.getDeclaredField("fileUploadAfterCapturedWriteHookForTests").apply { isAccessible = true }
+        val afterSnapshotSessionCheckHook = WKConnection::class.java.getDeclaredField("fileUploadAfterSnapshotSessionCheckHookForTests").apply { isAccessible = true }
+        val beforeFinishSessionCheckHook = WKConnection::class.java.getDeclaredField("fileUploadBeforeFinishSendSessionCheckHookForTests").apply { isAccessible = true }
+        val afterSenderLookupHook = WKConnection::class.java.getDeclaredField("fileUploadAfterSenderLookupHookForTests").apply { isAccessible = true }
+        val connectionLockField = WKConnection::class.java.getField("connectionLock")
         val capturedUiHook = WKIM.getInstance().msgManager.javaClass.getDeclaredField("beforeCapturedUiDeliveryHookForTests").apply { isAccessible = true }
         val afterFailureReadbackHook = WKConnection::class.java.getDeclaredField("afterCapturedFailureReadbackHookForTests").apply { isAccessible = true }
         val queueIdentityHook = WKConnection::class.java.getDeclaredField("beforeSendingQueueIdentityCheckHookForTests").apply { isAccessible = true }
@@ -126,6 +153,7 @@ class FileUploadPipelineTest {
         val dbName = "wk_$testUid.db"
         lateinit var testDbHelper: WKDBHelper
         val switchedHelpers = mutableListOf<Pair<WKDBHelper, String>>()
+        val extraMessageSeqs = mutableListOf<Long>()
         val tempFile = File.createTempFile("octo-upload-", ".txt", context.cacheDir).apply { writeText("upload fixture") }
         val transport = FakeTransport()
         val sendCallbackReceived = CountDownLatch(1)
@@ -209,6 +237,33 @@ class FileUploadPipelineTest {
             try { check(cursor.moveToFirst()); return cursor.getInt(0) to cursor.getString(1) } finally { cursor.close() }
         }
 
+        fun capturedStatusAndContent(msg: WKMsg): Pair<Int, String> {
+            val cursor = testDbHelper.rawQuery("select status,content from message where client_msg_no=? and client_seq=?", arrayOf(msg.clientMsgNO, msg.clientSeq.toString()))
+            try { check(cursor.moveToFirst()); return cursor.getInt(0) to cursor.getString(1) } finally { cursor.close() }
+        }
+
+        private fun finishFixtureUpload() {
+            val request = transport.credentialsFor("upload-test-channel") ?: return
+            val put = transport.putForPath(request.path)
+            if (put == null) request.callback.onResult(null, null, null, null)
+            else put.callback.onError()
+        }
+
+        fun sendNewFileMessage(channelID: String, content: WKFileContent): WKMsg {
+            val sent = WKMsg().apply {
+                this.channelID = channelID
+                channelType = WKChannelType.GROUP
+                fromUID = uploadSession.uid
+                type = WKContentType.WK_FILE
+                baseContentMsgModel = content
+            }
+            instrumentation.runOnMainSync { WKConnection.getInstance().sendMessage(sent) }
+            extraMessageSeqs += sent.clientSeq
+            return sent
+        }
+
+        fun trackMessage(msg: WKMsg) { extraMessageSeqs += msg.clientSeq }
+
         fun latestMessageForChannel(channelID: String): Pair<String, Int>? {
             val cursor = testDbHelper.rawQuery("select client_msg_no,status from message where channel_id=? and channel_type=? order by client_seq desc limit 1", arrayOf(channelID, WKChannelType.GROUP.toString()))
             try { return if (cursor.moveToFirst()) cursor.getString(0) to cursor.getInt(1) else null } finally { cursor.close() }
@@ -226,16 +281,29 @@ class FileUploadPipelineTest {
 
         override fun close() {
             runCatching { instrumentation.runOnMainSync { root.removeView(row); activity.finish() } }
+            runCatching { finishFixtureUpload() }
             WKProgressManager.instance.finishFileUpload(progressKey())
             WKProgressManager.instance.unregisterProgress(progressKey())
             @Suppress("UNCHECKED_CAST") (sendingMapField.get(WKConnection.getInstance()) as? MutableMap<Int, Any?>)?.remove(message.clientSeq.toInt())
+            extraMessageSeqs.distinct().forEach { seq -> runCatching {
+                val cursor = testDbHelper.rawQuery("select client_msg_no,client_seq from message where client_seq=? limit 1", arrayOf(seq.toString()))
+                try {
+                    if (cursor.moveToFirst()) {
+                        val key = WKProgressManager.FileUploadProgressKey(uploadSession.uid, uploadSession.version, cursor.getString(0), cursor.getLong(1))
+                        WKProgressManager.instance.finishFileUpload(key)
+                        WKProgressManager.instance.unregisterProgress(key)
+                    }
+                } finally { cursor.close() }
+            } }
             WKSendMsgUtils.setFileUploadTransportForTests(null)
             WKIM.getInstance().msgManager.removeSendMsgCallBack(sendCallbackKey)
             beforeCapturedWriteHook.set(null, null); afterCapturedWriteHook.set(null, null)
+            afterSnapshotSessionCheckHook.set(null, null); beforeFinishSessionCheckHook.set(null, null); afterSenderLookupHook.set(null, null)
             capturedUiHook.set(null, null); queueIdentityHook.set(null, null); sdkTransportField.set(null, oldSdkTransport)
             afterFailureReadbackHook.set(null, null)
             failureWriteHook.set(null, null)
             failureAfterWriteHook.set(null, null)
+            @Suppress("UNCHECKED_CAST") (sendingMapField.get(WKConnection.getInstance()) as? MutableMap<Int, Any?>)?.let { map -> extraMessageSeqs.forEach { map.remove(it.toInt()) } }
             uploadListenerField.set(WKIM.getInstance().msgManager, oldUploadListener)
             contentRegistryField.set(WKIM.getInstance().msgManager, oldContentRegistry?.toMutableList())
             connectStatusField.setInt(WKConnection.getInstance(), oldConnectStatus)
@@ -355,6 +423,74 @@ class FileUploadPipelineTest {
         }
         throw AssertionError("captured message for $channelID did not reach send_fail")
     }
+
+    private fun awaitMessageStatus(scenario: Scenario, msg: WKMsg, expected: Int): String {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+        while (System.nanoTime() < deadline) {
+            val (status, content) = scenario.capturedStatusAndContent(msg)
+            if (status == expected) return content
+            Thread.sleep(10)
+        }
+        throw AssertionError("captured message ${msg.clientMsgNO} did not reach status $expected")
+    }
+
+    private data class LockHold(
+        val lock: ReentrantLock,
+        val release: CountDownLatch,
+        val acquired: CountDownLatch,
+        val thread: Thread,
+        val failure: AtomicReference<Throwable?>
+    )
+
+    private fun holdConnectionLock(scenario: Scenario): LockHold {
+        val lock = scenario.connectionLockField.get(WKConnection.getInstance()) as ReentrantLock
+        val release = CountDownLatch(1)
+        val acquired = CountDownLatch(1)
+        val failure = AtomicReference<Throwable?>(null)
+        val thread = Thread {
+            try {
+                lock.lock()
+                try {
+                    acquired.countDown()
+                    if (!release.await(12, TimeUnit.SECONDS)) throw AssertionError("connection lock holder timed out")
+                } finally { lock.unlock() }
+            } catch (error: Throwable) { failure.set(error) }
+        }
+        thread.start()
+        check(acquired.await(5, TimeUnit.SECONDS)) { "connection lock was not acquired" }
+        return LockHold(lock, release, acquired, thread, failure)
+    }
+
+    private fun releaseLock(held: LockHold) {
+        held.release.countDown()
+        held.thread.join(5000)
+        assertFalse("connection lock holder did not exit", held.thread.isAlive)
+        assertEquals(null, held.failure.get())
+    }
+
+    private fun assertNoCapturedQueueEntry(scenario: Scenario, msg: WKMsg) {
+        @Suppress("UNCHECKED_CAST")
+        val sendingMap = scenario.sendingMapField.get(WKConnection.getInstance()) as MutableMap<Int, Any>
+        assertEquals(null, sendingMap[msg.clientSeq.toInt()])
+    }
+
+    private fun insertSessionSentinel(scenario: Scenario, msg: WKMsg): Pair<WKDBHelper, WKSendingMsg> {
+        val helper = scenario.switchToAnotherSession()
+        val sentinel = WKSendingMsg(1, WKSendMsg().apply { clientSeq = msg.clientSeq.toInt() }, true)
+        helper.insert("message", android.content.ContentValues().apply {
+            put("client_seq", msg.clientSeq); put("client_msg_no", msg.clientMsgNO)
+            put("status", com.xinbida.wukongim.message.type.WKSendMsgResult.send_loading)
+            put("channel_id", msg.channelID); put("channel_type", msg.channelType.toInt())
+            put("from_uid", WKConfig.getInstance().uid); put("type", WKContentType.WK_FILE); put("content", "session-sentinel")
+        })
+        @Suppress("UNCHECKED_CAST")
+        (scenario.sendingMapField.get(WKConnection.getInstance()) as MutableMap<Int, Any>)[msg.clientSeq.toInt()] = sentinel
+        return helper to sentinel
+    }
+
+    private fun trustedTestContent(scenario: Scenario, name: String): WKFileContent = requireNotNull(
+        WKFileContent.fromTrustedLocalFile(scenario.tempFile.absolutePath, name, "txt",
+            scenario.uploadSession, com.chat.base.config.WKApiConfig.baseUrl))
 
     @Test fun sendWithOptionsTransfersSingleShareSourceBeforeCallerCleanup() {
         val scenario = Scenario()
@@ -1064,6 +1200,208 @@ class FileUploadPipelineTest {
                 assertSame(sentinelEntry, sendingMap[scenario.message.clientSeq.toInt()])
             } finally { resume.countDown(); callbackThread?.join(5000); scenario.close() }
           }
+        }
+    }
+
+    @Test fun sessionInvalidationAtEveryPreSendCheckFailsOnlyTheCapturedMessage() {
+        val hookFields = listOf(
+            "fileUploadAfterSnapshotSessionCheckHookForTests",
+            "fileUploadBeforeFinishSendSessionCheckHookForTests",
+            "fileUploadAfterSenderLookupHookForTests"
+        )
+        hookFields.forEach { hookName ->
+            val scenario = Scenario()
+            val reached = CountDownLatch(1)
+            val resume = CountDownLatch(1)
+            val callbackDone = CountDownLatch(1)
+            val callbackFailure = AtomicReference<Throwable?>(null)
+            val hook = WKConnection::class.java.getDeclaredField(hookName).apply { isAccessible = true }
+            val refreshStatuses = java.util.concurrent.CopyOnWriteArrayList<Int>()
+            val newAccountInsertCount = AtomicInteger()
+            val switched = java.util.concurrent.atomic.AtomicBoolean(false)
+            val refreshKey = "session-failure-ui-${UUID.randomUUID()}"
+            val insertKey = "session-failure-insert-${UUID.randomUUID()}"
+            var sent: WKMsg? = null
+            try {
+                WKIM.getInstance().msgManager.addOnRefreshMsgListener(refreshKey) { msg, _ ->
+                    if (msg.clientMsgNO == sent?.clientMsgNO) refreshStatuses += msg.status
+                }
+                WKIM.getInstance().msgManager.addOnSendMsgCallback(insertKey) { msg ->
+                    if (switched.get() && msg.clientMsgNO == sent?.clientMsgNO) newAccountInsertCount.incrementAndGet()
+                }
+                hook.set(null, Runnable {
+                    reached.countDown()
+                    if (!resume.await(8, TimeUnit.SECONDS)) throw AssertionError("session invalidation barrier timed out at $hookName")
+                })
+                val channelID = "session-race-$hookName-${UUID.randomUUID()}"
+                val observed = CallbackObservedFileContent(trustedTestContent(scenario, "$hookName.txt"), callbackDone, callbackFailure)
+                sent = scenario.sendNewFileMessage(channelID, observed)
+                assertTrue("send did not reach $hookName", reached.await(5, TimeUnit.SECONDS))
+                val (newHelper, sentinel) = insertSessionSentinel(scenario, requireNotNull(sent))
+                switched.set(true)
+                resume.countDown()
+                val failedContent = awaitMessageStatus(scenario, requireNotNull(sent), com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail)
+                assertTrue("trusted attachment callback did not exit", callbackDone.await(5, TimeUnit.SECONDS))
+                assertEquals(null, callbackFailure.get())
+                scenario.instrumentation.waitForIdleSync()
+                assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, scenario.capturedStatusAndContent(requireNotNull(sent)).first)
+                assertTrue("failed captured row should not be replaced by a new-account row", failedContent.isNotBlank())
+                assertEquals(null, scenario.transport.credentialsFor(channelID))
+                @Suppress("UNCHECKED_CAST")
+                val sendingMap = scenario.sendingMapField.get(WKConnection.getInstance()) as MutableMap<Int, Any>
+                assertSame(sentinel, sendingMap[sent!!.clientSeq.toInt()])
+                val cursor = newHelper.rawQuery("select status,content from message where client_msg_no=? and client_seq=?", arrayOf(sent!!.clientMsgNO, sent!!.clientSeq.toString()))
+                try {
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_loading, cursor.getInt(0))
+                    assertEquals("session-sentinel", cursor.getString(1))
+                } finally { cursor.close() }
+                assertFalse("stale callback must not notify the current account", refreshStatuses.contains(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail))
+                assertEquals("stale callback must not insert into the new account UI", 0, newAccountInsertCount.get())
+            } finally {
+                resume.countDown()
+                hook.set(null, null)
+                WKIM.getInstance().msgManager.removeRefreshMsgListener(refreshKey)
+                WKIM.getInstance().msgManager.removeSendMsgCallBack(insertKey)
+                sent?.let {
+                    assertTrue("trusted attachment callback must exit before closing the captured database", callbackDone.await(5, TimeUnit.SECONDS))
+                }
+                scenario.close()
+            }
+        }
+    }
+
+    private fun runUploadLockTimeoutAcknowledgementRace(ackWins: Boolean) {
+        val scenario = Scenario()
+        val hookReached = CountDownLatch(1)
+        val callbackDone = CountDownLatch(1)
+        val callbackFailure = AtomicReference<Throwable?>(null)
+        val statuses = java.util.concurrent.CopyOnWriteArrayList<Int>()
+        val sentRef = AtomicReference<WKMsg?>(null)
+        val refreshKey = "lock-timeout-refresh-${UUID.randomUUID()}"
+        var held: LockHold? = null
+        var callbackThread: Thread? = null
+        val afterWriteHook = Runnable { hookReached.countDown() }
+        val channelID = "upload-lock-timeout-${UUID.randomUUID()}"
+        try {
+            WKIM.getInstance().msgManager.addOnRefreshMsgListener(refreshKey) { msg, _ ->
+                if (msg.clientMsgNO == sentRef.get()?.clientMsgNO) statuses += msg.status
+            }
+            scenario.afterCapturedWriteHook.set(null, afterWriteHook)
+            val sent = scenario.sendNewFileMessage(channelID, trustedTestContent(scenario, "lock-timeout.txt"))
+            sentRef.set(sent)
+            val credentials = awaitCredential(scenario, channelID)
+            credentials.callback.onResult("https://upload.test/object", "https://files.test/object", "application/octet-stream", null)
+            val put = awaitPut(scenario, credentials.path)
+            held = holdConnectionLock(scenario)
+            callbackThread = Thread {
+                try { put.callback.onSuccess("ignored") } catch (error: Throwable) { callbackFailure.set(error) }
+                finally { callbackDone.countDown() }
+            }
+            callbackThread!!.start()
+            assertTrue("upload callback did not persist URL before lock acquisition", hookReached.await(5, TimeUnit.SECONDS))
+            val contentBeforeLockOutcome = scenario.capturedStatusAndContent(sent).second
+            assertEquals("https://files.test/object", org.json.JSONObject(contentBeforeLockOutcome).optString("url"))
+            if (ackWins) {
+                scenario.testDbHelper.update("message", android.content.ContentValues().apply {
+                    put("status", com.xinbida.wukongim.message.type.WKSendMsgResult.send_success)
+                }, "client_msg_no=? AND client_seq=?", arrayOf(sent.clientMsgNO, sent.clientSeq.toString()))
+                WKIM.getInstance().msgManager.setRefreshMsg(requireNotNull(WKIM.getInstance().msgManager.getWithClientMsgNO(sent.clientMsgNO)), true)
+            }
+            assertTrue("upload callback did not finish its real timed lock attempt", callbackDone.await(7, TimeUnit.SECONDS))
+            releaseLock(requireNotNull(held))
+            callbackThread!!.join(5000)
+            assertFalse("upload callback worker must exit before the test database closes", callbackThread!!.isAlive)
+            assertEquals(null, callbackFailure.get())
+            val expected = if (ackWins) com.xinbida.wukongim.message.type.WKSendMsgResult.send_success else com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail
+            awaitMessageStatus(scenario, sent, expected)
+            scenario.instrumentation.waitForIdleSync()
+            val persisted = scenario.capturedStatusAndContent(sent)
+            assertEquals(expected, persisted.first)
+            assertEquals("https://files.test/object", org.json.JSONObject(persisted.second).optString("url"))
+            assertNoCapturedQueueEntry(scenario, sent)
+            val key = WKProgressManager.FileUploadProgressKey(scenario.uploadSession.uid, scenario.uploadSession.version, sent.clientMsgNO, sent.clientSeq)
+            assertEquals(null, WKProgressManager.instance.getFileUploadTask(key))
+            if (ackWins) {
+                assertTrue(statuses.contains(com.xinbida.wukongim.message.type.WKSendMsgResult.send_success))
+                assertFalse("ACKed message must not publish a failure refresh", statuses.contains(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail))
+            } else {
+                assertTrue("captured failure status should refresh the current row", statuses.contains(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail))
+                val original = requireNotNull(WKIM.getInstance().msgManager.getWithClientMsgNO(sent.clientMsgNO))
+                val retry = requireNotNull(WKFileContent.forResend(scenario.context, original,
+                    scenario.config.getSessionSnapshot(), com.chat.base.config.WKApiConfig.baseUrl))
+                assertEquals("https://files.test/object", retry.url)
+                val credentialCount = scenario.transport.credentialRequests.size
+                val retryMsg = WKMsg().apply {
+                    this.channelID = original.channelID; channelType = original.channelType
+                    setting = original.setting; header = original.header; type = original.type
+                    content = original.content; baseContentMsgModel = retry; fromUID = scenario.uploadSession.uid
+                }
+                scenario.instrumentation.runOnMainSync {
+                    WKIM.getInstance().msgManager.deleteWithClientMsgNO(original.clientMsgNO)
+                    WKIM.getInstance().msgManager.sendMessage(retryMsg)
+                }
+                scenario.trackMessage(retryMsg)
+                val queueDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                @Suppress("UNCHECKED_CAST")
+                val sendingMap = scenario.sendingMapField.get(WKConnection.getInstance()) as MutableMap<Int, Any>
+                while (System.nanoTime() < queueDeadline && sendingMap[retryMsg.clientSeq.toInt()] == null) Thread.sleep(10)
+                assertNotNull("resend should enter the captured session queue", sendingMap[retryMsg.clientSeq.toInt()])
+                assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_loading,
+                    scenario.capturedStatusAndContent(retryMsg).first)
+                assertEquals(retryMsg.clientSeq.toInt(),
+                    (sendingMap[retryMsg.clientSeq.toInt()] as WKSendingMsg).wkSendMsg.clientSeq)
+                assertEquals("https://files.test/object", org.json.JSONObject(scenario.capturedStatusAndContent(retryMsg).second).optString("url"))
+                assertEquals("known URL retry must bypass credentials", credentialCount, scenario.transport.credentialRequests.size)
+            }
+        } finally {
+            held?.release?.countDown()
+            callbackThread?.join(5000)
+            held?.let { if (it.thread.isAlive) releaseLock(it) }
+            callbackThread?.join(5000)
+            callbackThread?.let { assertFalse("upload callback worker must exit before the test database closes", it.isAlive) }
+            scenario.afterCapturedWriteHook.set(null, null)
+            WKIM.getInstance().msgManager.removeRefreshMsgListener(refreshKey)
+            scenario.close()
+        }
+    }
+
+    @Test fun uploadCompletionLockTimeoutFailsPersistedMessageAndAllowsUrlRetry() = runUploadLockTimeoutAcknowledgementRace(false)
+
+    @Test fun ackDuringUploadCompletionLockTimeoutPreservesSuccessAndSuppressesFailureUi() = runUploadLockTimeoutAcknowledgementRace(true)
+
+    @Test fun directRemoteFileQueueLockTimeoutFailsCapturedMessageWithoutUploading() {
+        val scenario = Scenario()
+        val statuses = java.util.concurrent.CopyOnWriteArrayList<Int>()
+        val msgRef = AtomicReference<WKMsg?>(null)
+        val listenerKey = "direct-lock-timeout-${UUID.randomUUID()}"
+        var held: LockHold? = null
+        var sent: WKMsg? = null
+        try {
+            WKIM.getInstance().msgManager.addOnRefreshMsgListener(listenerKey) { msg, _ ->
+                if (msg.clientMsgNO == msgRef.get()?.clientMsgNO) statuses += msg.status
+            }
+            held = holdConnectionLock(scenario)
+            val content = WKFileContent().apply { name = "remote.txt"; extension = "txt"; size = 10; url = "https://files.test/existing" }
+            sent = WKMsg().apply {
+                channelID = "direct-lock-timeout-${UUID.randomUUID()}"; channelType = WKChannelType.GROUP
+                fromUID = scenario.uploadSession.uid; type = WKContentType.WK_FILE; baseContentMsgModel = content
+            }
+            msgRef.set(sent)
+            WKConnection.getInstance().sendMessage(sent!!)
+            scenario.trackMessage(sent!!)
+            releaseLock(requireNotNull(held))
+            val persisted = scenario.capturedStatusAndContent(sent!!)
+            assertEquals(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail, persisted.first)
+            assertEquals("https://files.test/existing", org.json.JSONObject(persisted.second).optString("url"))
+            assertNoCapturedQueueEntry(scenario, sent!!)
+            assertEquals(null, scenario.transport.credentialsFor(sent!!.channelID))
+            scenario.instrumentation.waitForIdleSync()
+            assertTrue(statuses.contains(com.xinbida.wukongim.message.type.WKSendMsgResult.send_fail))
+        } finally {
+            held?.let { if (it.thread.isAlive) releaseLock(it) }
+            WKIM.getInstance().msgManager.removeRefreshMsgListener(listenerKey)
+            scenario.close()
         }
     }
 }

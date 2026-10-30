@@ -615,6 +615,14 @@ public class MsgDbManager {
         return maxOrderSeq;
     }
 
+    public long queryMaxOrderSeqWithChannel(WKDBHelper helper, String channelID, byte channelType) {
+        if (helper == null || helper.isClosed()) return 0;
+        String sql = "select max(order_seq) order_seq from " + message + " where " + WKDBColumns.WKMessageColumns.channel_id + "=? and " + WKDBColumns.WKMessageColumns.channel_type + "=? and type<>99 and type<>0 and is_deleted=0";
+        try (Cursor cursor = helper.rawQuery(sql, new Object[]{channelID, channelType})) {
+            return cursor != null && cursor.moveToFirst() ? WKCursor.readLong(cursor, "order_seq") : 0;
+        } catch (RuntimeException error) { return 0; }
+    }
+
     public synchronized WKMsg updateMsgSendStatus(long clientSeq, long messageSeq, String messageID, int sendStatus) {
 
         String[] updateKey = new String[4];
@@ -650,6 +658,55 @@ public class MsgDbManager {
             WKIM.getInstance().getMsgManager().setRefreshMsg(msg, true);
         }
         return msg;
+    }
+
+    /** Updates a captured account database without resolving the process-wide current account. */
+    public synchronized boolean updateCapturedMsgSendFail(WKDBHelper helper, String clientMsgNo, long clientSeq) {
+        if (helper == null || TextUtils.isEmpty(clientMsgNo)) {
+            WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: captured helper or message identity unavailable");
+            return false;
+        }
+        try {
+            String where = WKDBColumns.WKMessageColumns.client_msg_no + "=? AND "
+                    + WKDBColumns.WKMessageColumns.client_seq + "=? AND "
+                    + WKDBColumns.WKMessageColumns.status + "=?";
+            String[] whereValue = new String[]{clientMsgNo, String.valueOf(clientSeq), String.valueOf(WKSendMsgResult.send_loading)};
+            String[] keys = new String[]{WKDBColumns.WKMessageColumns.status};
+            String[] values = new String[]{String.valueOf(WKSendMsgResult.send_fail)};
+            boolean updated = helper.update(message, keys, values, where, whereValue) > 0;
+            if (!updated) WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: helper unavailable or row no longer sending");
+            return updated;
+        } catch (RuntimeException error) {
+            WKLoggerUtils.getInstance().e(TAG, "deferred captured upload failure persistence: " + error.getMessage());
+            return false;
+        }
+    }
+
+    /** Reads a complete row from the specified helper; this path never consults the global helper. */
+    public synchronized WKMsg queryCapturedMsgWithClientMsgNo(WKDBHelper helper, String clientMsgNo, long clientSeq) {
+        if (helper == null || helper.isClosed() || TextUtils.isEmpty(clientMsgNo)) return null;
+        String sql = "select " + messageCols + "," + extraCols + " from " + message
+                + " LEFT JOIN " + messageExtra + " ON " + message + ".message_id=" + messageExtra + ".message_id WHERE "
+                + message + ".client_msg_no=? AND " + message + ".client_seq=?";
+        try (Cursor cursor = helper.rawQuery(sql, new Object[]{clientMsgNo, String.valueOf(clientSeq)})) {
+            return cursor != null && cursor.moveToFirst() ? serializeMsg(cursor) : null;
+        } catch (RuntimeException error) { return null; }
+    }
+
+    public synchronized boolean updateCapturedMsgContent(WKDBHelper helper, String clientMsgNo, long clientSeq, String content) {
+        if (helper == null || helper.isClosed() || TextUtils.isEmpty(clientMsgNo) || content == null) return false;
+        try {
+            String where = WKDBColumns.WKMessageColumns.client_msg_no + "=? AND "
+                    + WKDBColumns.WKMessageColumns.client_seq + "=? AND "
+                    + WKDBColumns.WKMessageColumns.status + "=?";
+            String[] whereValue = new String[]{clientMsgNo, String.valueOf(clientSeq), String.valueOf(WKSendMsgResult.send_loading)};
+            String[] keys = new String[]{WKDBColumns.WKMessageColumns.content};
+            String[] values = new String[]{content};
+            return helper.update(message, keys, values, where, whereValue) > 0;
+        } catch (RuntimeException error) {
+            WKLoggerUtils.getInstance().e(TAG, "deferred captured upload content persistence: " + error.getMessage());
+            return false;
+        }
     }
 
     public synchronized void insertMsgs(List<WKMsg> list) {
@@ -826,6 +883,43 @@ public class MsgDbManager {
         }
 
         return result;
+    }
+
+    /** Inserts a newly-created send row into an explicitly captured account database. */
+    public synchronized long insert(WKMsg msg, WKDBHelper helper) {
+        if (helper == null || helper.isClosed() || msg == null) return -1;
+        boolean isSave = WKIM.getInstance().getMsgManager().setMessageStoreBeforeIntercept(msg);
+        if (!isSave) msg.isDeleted = 1;
+        // Match the ordinary insert behavior for a resend/retry that already has a local seq.
+        if (msg.clientSeq != 0) {
+            ContentValues update = new ContentValues();
+            update.put(WKDBColumns.WKMessageColumns.content, msg.content);
+            update.put(WKDBColumns.WKMessageColumns.status, msg.status);
+            update.put(WKDBColumns.WKMessageColumns.message_id, msg.messageID);
+            update.put(WKDBColumns.WKMessageColumns.extra, msg.getLocalMapExtraString());
+            try {
+                helper.update(message, update, WKDBColumns.WKMessageColumns.client_seq + "=?",
+                        new String[]{String.valueOf(msg.clientSeq)});
+            } catch (RuntimeException ignored) { }
+            return msg.clientSeq;
+        }
+        if (!TextUtils.isEmpty(msg.clientMsgNO) && isExist(msg.clientMsgNO, helper)) {
+            msg.isDeleted = 1;
+            msg.clientMsgNO = WKIM.getInstance().getMsgManager().createClientMsgNO();
+        }
+        ContentValues values;
+        try { values = WKSqlContentValues.getContentValuesWithMsg(msg); }
+        catch (Exception error) { return -1; }
+        try { return helper.insert(message, values); }
+        catch (RuntimeException error) { return -1; }
+    }
+
+    private boolean isExist(String clientMsgNo, WKDBHelper helper) {
+        if (TextUtils.isEmpty(clientMsgNo) || helper == null || helper.isClosed()) return false;
+        try (Cursor cursor = helper.rawQuery("select 1 from " + message + " where "
+                + WKDBColumns.WKMessageColumns.client_msg_no + "=? limit 1", new Object[]{clientMsgNo})) {
+            return cursor != null && cursor.moveToFirst();
+        } catch (RuntimeException ignored) { return false; }
     }
 
     public synchronized void updateViewedAt(int viewed, long viewedAt, String clientMsgNo) {
@@ -1377,8 +1471,18 @@ public class MsgDbManager {
     public synchronized boolean mergeContentFieldsWithClientMsgNo(String clientMsgNo,
                                                                   HashMap<String, Object> values,
                                                                   boolean isRefreshUI) {
+        boolean updated = mergeContentFieldsWithClientMsgNo(WKIMApplication.getInstance().getDbHelper(), clientMsgNo, values);
+        if (updated && isRefreshUI) {
+            WKMsg msg = queryWithClientMsgNo(clientMsgNo);
+            if (msg != null) WKIM.getInstance().getMsgManager().setRefreshMsg(msg, true);
+        }
+        return updated;
+    }
+
+    public synchronized boolean mergeContentFieldsWithClientMsgNo(WKDBHelper dbHelper,
+                                                                  String clientMsgNo,
+                                                                  HashMap<String, Object> values) {
         if (TextUtils.isEmpty(clientMsgNo) || values == null || values.isEmpty()) return false;
-        WKDBHelper dbHelper = WKIMApplication.getInstance().getDbHelper();
         if (dbHelper == null) return false;
 
         // 只取 content 原始字符串，不经过 model 序列化，保证未知字段原样保留
@@ -1411,8 +1515,12 @@ public class MsgDbManager {
             WKLoggerUtils.getInstance().e(TAG, "mergeContentFields put error " + e.getMessage());
             return false;
         }
-        return updateFieldWithClientMsgNo(clientMsgNo,
-                WKDBColumns.WKMessageColumns.content, jsonObject.toString(), isRefreshUI);
+        int row = dbHelper.update(message,
+                new String[]{WKDBColumns.WKMessageColumns.content},
+                new String[]{jsonObject.toString()},
+                WKDBColumns.WKMessageColumns.client_msg_no + "=?",
+                new String[]{clientMsgNo});
+        return row > 0;
     }
 
     public synchronized boolean updateFieldWithMessageID(String messageID, String field, String value) {
@@ -1498,6 +1606,14 @@ public class MsgDbManager {
             }
         }
         return messageSeq;
+    }
+
+    public int queryMaxMessageSeqWithChannel(WKDBHelper helper, String channelID, byte channelType) {
+        if (helper == null || helper.isClosed()) return 0;
+        String sql = "SELECT max(message_seq) message_seq FROM " + message + " WHERE channel_id=? AND channel_type=?";
+        try (Cursor cursor = helper.rawQuery(sql, new Object[]{channelID, channelType})) {
+            return cursor != null && cursor.moveToFirst() ? WKCursor.readInt(cursor, WKDBColumns.WKMessageColumns.message_seq) : 0;
+        } catch (RuntimeException error) { return 0; }
     }
 
     public int queryMinMessageSeqWithChannel(String channelID, byte channelType) {

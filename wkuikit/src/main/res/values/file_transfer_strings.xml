@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="doc_share_uploading">正在上传</string>
+    <string name="doc_share_upload_failed">上传失败</string>
+    <string name="doc_share_file_actions">文件操作</string>
+    <string name="doc_share_upload_percent">%1$d%%</string>
+    <string name="file_not_exist_or_uploading">文件不存在或正在上传中</string>
+</resources>

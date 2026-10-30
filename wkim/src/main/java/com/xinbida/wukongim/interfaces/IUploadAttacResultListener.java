@@ -12,4 +12,9 @@ public interface IUploadAttacResultListener {
      * 上传附件返回结果
      **/
     void onUploadResult(boolean isSuccess, WKMessageContent messageContent);
+
+    default boolean onUploadResult(com.xinbida.wukongim.WKIMApplication.SessionContext context,
+                                   boolean isSuccess, WKMessageContent messageContent) {
+        return false;
+    }
 }

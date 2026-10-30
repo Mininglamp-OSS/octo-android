@@ -29,6 +29,7 @@ import com.xinbida.wukongim.message.type.WKSendMsgResult;
 import com.xinbida.wukongim.message.type.WKSendingMsg;
 import com.xinbida.wukongim.msgmodel.WKImageContent;
 import com.xinbida.wukongim.msgmodel.WKMediaMessageContent;
+import com.xinbida.wukongim.msgmodel.WKLocalAttachmentContent;
 import com.xinbida.wukongim.msgmodel.WKVideoContent;
 import com.xinbida.wukongim.sync.SyncGate;
 import com.xinbida.wukongim.protocol.WKBaseMsg;
@@ -70,6 +71,26 @@ import java.util.concurrent.locks.ReentrantLock;
  * IM connect
  */
 public class WKConnection {
+    // Deterministic test barriers for upload/session race coverage; null in production.
+    private static volatile Runnable fileUploadBeforeCapturedWriteHookForTests;
+    private static volatile Runnable fileUploadAfterCapturedWriteHookForTests;
+    private static volatile Runnable fileUploadAfterSnapshotSessionCheckHookForTests;
+    private static volatile Runnable fileUploadBeforeFinishSendSessionCheckHookForTests;
+    private static volatile Runnable fileUploadAfterSenderLookupHookForTests;
+    private static volatile Runnable beforeSendingQueueIdentityCheckHookForTests;
+    private static volatile Runnable beforeCapturedFailureWriteHookForTests;
+    private static volatile Runnable afterCapturedFailureWriteHookForTests;
+    private static volatile Runnable afterCapturedFailureReadbackHookForTests;
+    public interface CapturedFileSendTransportForTests {
+        boolean hasSocket();
+        int send(WKSendMsg msg);
+        void reconnect();
+    }
+    private static volatile CapturedFileSendTransportForTests capturedFileSendTransportForTests;
+
+    public static void setCapturedFileSendTransportForTests(CapturedFileSendTransportForTests transport) {
+        capturedFileSendTransportForTests = transport;
+    }
     private final String TAG = "WKConnection";
 
     private WKConnection() {
@@ -621,7 +642,14 @@ public class WKConnection {
         new Thread(() -> {
             for (Map.Entry<Integer, WKSendingMsg> entry : sendingMsgHashMap.entrySet()) {
                 if (entry.getValue().isCanResend) {
-                    sendMessage(Objects.requireNonNull(sendingMsgHashMap.get(entry.getKey())).wkSendMsg);
+                    WKSendingMsg sending = entry.getValue();
+                    if (sending.uploadSessionContext != null && !WKIMApplication.getInstance().isSessionCurrent(sending.uploadSessionContext)) {
+                        sendingMsgHashMap.remove(entry.getKey(), sending);
+                        MsgDbManager.getInstance().updateCapturedMsgSendFail(sending.uploadSessionContext.helper,
+                                sending.uploadSessionContext.clientMsgNo, sending.uploadSessionContext.clientSeq);
+                        continue;
+                    }
+                    if (sendingMsgHashMap.get(entry.getKey()) == sending) sendQueuedMessage(sending);
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException ignored) {
@@ -632,9 +660,41 @@ public class WKConnection {
     }
 
     //将要发送的消息添加到队列
-    private synchronized void addSendingMsg(WKSendMsg sendingMsg) {
+    private void addSendingMsg(WKSendMsg sendingMsg) { addSendingMsg(sendingMsg, null); }
+
+    private void addSendingMsg(WKSendMsg sendingMsg, WKIMApplication.SessionContext context) {
         removeSendingMsg();
-        sendingMsgHashMap.put(sendingMsg.clientSeq, new WKSendingMsg(1, sendingMsg, true));
+        sendingMsgHashMap.put(sendingMsg.clientSeq, new WKSendingMsg(1, sendingMsg, true, context));
+    }
+
+    private void sendQueuedMessage(WKSendingMsg entry) {
+        WKIMApplication.SessionContext context = entry.uploadSessionContext;
+        if (context == null) { sendMessage(entry.wkSendMsg); return; }
+        boolean locked = false;
+        boolean[] reconnect = {false};
+        boolean current = false;
+        try {
+            locked = tryLockWithTimeout();
+            if (!locked) return;
+            current = WKIMApplication.getInstance().withCurrentSession(context, () -> {
+                if (context.clientSeq > 0 && sendingMsgHashMap.get((int) context.clientSeq) != entry) return;
+                if (connectStatus == WKConnectStatus.syncMsg) return;
+                CapturedFileSendTransportForTests testTransport = capturedFileSendTransportForTests;
+                WebSocket socket = webSocket;
+                if (connectStatus != WKConnectStatus.success || (testTransport == null ? socket == null : !testTransport.hasSocket())) {
+                    reconnect[0] = true;
+                    return;
+                }
+                int result = testTransport == null
+                        ? MessageHandler.getInstance().sendMessage(socket, entry.wkSendMsg)
+                        : testTransport.send(entry.wkSendMsg);
+                if (result == 0) reconnect[0] = true;
+            });
+            if (current && reconnect[0] && WKIMApplication.getInstance().isSessionCurrent(context)) {
+                CapturedFileSendTransportForTests testTransport = capturedFileSendTransportForTests;
+                if (testTransport == null) reconnection(); else testTransport.reconnect();
+            }
+        } finally { if (locked) connectionLock.unlock(); }
     }
 
     //处理登录消息状态
@@ -857,33 +917,41 @@ public class WKConnection {
             while (it.hasNext()) {
                 Map.Entry<Integer, WKSendingMsg> entry = it.next();
                 if (!entry.getValue().isCanResend) {
-                    it.remove();
+                    sendingMsgHashMap.remove(entry.getKey(), entry.getValue());
                 }
             }
         }
     }
 
     //检测正在发送的消息
-    public synchronized void checkSendingMsg() {
+    public void checkSendingMsg() {
         removeSendingMsg();
         if (!sendingMsgHashMap.isEmpty()) {
             Iterator<Map.Entry<Integer, WKSendingMsg>> it = sendingMsgHashMap.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<Integer, WKSendingMsg> item = it.next();
-                WKSendingMsg wkSendingMsg = sendingMsgHashMap.get(item.getKey());
-                if (wkSendingMsg != null) {
+                WKSendingMsg wkSendingMsg = item.getValue();
+                runFileUploadHook(beforeSendingQueueIdentityCheckHookForTests);
+                if (sendingMsgHashMap.get(item.getKey()) == wkSendingMsg) {
                     if (wkSendingMsg.sendCount == 5 && wkSendingMsg.isCanResend) {
                         //标示消息发送失败
-                        MsgDbManager.getInstance().updateMsgStatus(item.getKey(), WKSendMsgResult.send_fail);
-                        it.remove();
+                        if (wkSendingMsg.uploadSessionContext != null) {
+                            WKIMApplication.SessionContext context = wkSendingMsg.uploadSessionContext;
+                            failCapturedFileMessage(context, null, false);
+                        } else MsgDbManager.getInstance().updateMsgStatus(item.getKey(), WKSendMsgResult.send_fail);
+                        sendingMsgHashMap.remove(item.getKey(), wkSendingMsg);
                         wkSendingMsg.isCanResend = false;
                     } else {
+                        if (wkSendingMsg.uploadSessionContext != null && !WKIMApplication.getInstance().isSessionCurrent(wkSendingMsg.uploadSessionContext)) {
+                            sendingMsgHashMap.remove(item.getKey(), wkSendingMsg);
+                            failCapturedFileMessage(wkSendingMsg.uploadSessionContext, null, false);
+                            continue;
+                        }
                         long nowTime = DateUtils.getInstance().getCurrentSeconds();
                         if (nowTime - wkSendingMsg.sendTime > 10) {
                             wkSendingMsg.sendTime = DateUtils.getInstance().getCurrentSeconds();
-                            sendingMsgHashMap.put(item.getKey(), wkSendingMsg);
                             wkSendingMsg.sendCount++;
-                            sendMessage(Objects.requireNonNull(sendingMsgHashMap.get(item.getKey())).wkSendMsg);
+                            sendQueuedMessage(wkSendingMsg);
                         }
                     }
                 }
@@ -968,14 +1036,52 @@ public class WKConnection {
             }
 
         }
-        saveSendMsg(msg);
+        WKIMApplication.SessionContext initialUploadContext = msg.type == 8
+                ? WKIMApplication.getInstance().captureSessionContext("", 0) : null;
+        if (initialUploadContext == null) saveSendMsg(msg);
+        else {
+            saveSendMsg(msg, initialUploadContext);
+            msg.uploadSessionContext = initialUploadContext.withMessageIdentity(msg.clientMsgNO, msg.clientSeq);
+        }
         WKSendMsg sendMsg = WKProto.getInstance().getSendBaseMsg(msg);
+        WKIMApplication.SessionContext uploadContext = msg.uploadSessionContext;
+        if (msg.baseContentMsgModel instanceof WKLocalAttachmentContent localAttachment
+                && localAttachment.hasTrustedLocalSource()
+                && msg.baseContentMsgModel instanceof WKMediaMessageContent media
+                && !TextUtils.isEmpty(media.localPath)) {
+            String capturedUid = WKIMApplication.getInstance().getUid();
+            String capturedToken = WKIMApplication.getInstance().getToken();
+            WKIMApplication.SessionContext capturedContext = uploadContext;
+            localAttachment.prepareTrustedLocalAttachment(capturedUid, msg.channelID, msg.channelType,
+                    msg.clientMsgNO, localAttachment.getTrustedLocalAttachmentSize(),
+                    (path, success) -> {
+                        if (!success || TextUtils.isEmpty(path)
+                                || !TextUtils.equals(capturedUid, WKIMApplication.getInstance().getUid())
+                                || !TextUtils.equals(capturedToken, WKIMApplication.getInstance().getToken())
+                                || !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+                            failCapturedFileMessage(capturedContext, msg, true);
+                            return;
+                        }
+                        runFileUploadHook(fileUploadAfterSnapshotSessionCheckHookForTests);
+                        if (!WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+                            failCapturedFileMessage(capturedContext, msg, true);
+                            return;
+                        }
+                        media.localPath = path;
+                        finishSendMessage(msg, sendMsg, true, true);
+                    });
+            return;
+        }
+        finishSendMessage(msg, sendMsg, hasAttached, false);
+    }
+
+    private void finishSendMessage(WKMsg msg, WKSendMsg sendMsg, boolean hasAttached, boolean trustedSnapshot) {
         if (WKMediaMessageContent.class.isAssignableFrom(msg.baseContentMsgModel.getClass())) {
             //如果是多媒体消息类型说明存在附件
             String url = ((WKMediaMessageContent) msg.baseContentMsgModel).url;
             if (TextUtils.isEmpty(url)) {
                 String localPath = ((WKMediaMessageContent) msg.baseContentMsgModel).localPath;
-                if (!TextUtils.isEmpty(localPath)) {
+                if (!TextUtils.isEmpty(localPath) && !trustedSnapshot) {
                     hasAttached = true;
                     ((WKMediaMessageContent) msg.baseContentMsgModel).localPath = FileUtils.getInstance().saveFile(localPath, msg.channelID, msg.channelType, msg.clientSeq + "");
                 }
@@ -994,47 +1100,181 @@ public class WKConnection {
                 } else {
                     msg.content = msg.baseContentMsgModel.encodeMsg().toString();
                 }
-                WKIM.getInstance().getMsgManager().updateContentAndRefresh(msg.clientMsgNO, msg.content, false);
+                WKIMApplication.SessionContext context = msg.uploadSessionContext;
+                if (context != null) {
+                    boolean updated = context.clientSeq <= 0 || MsgDbManager.getInstance().updateCapturedMsgContent(
+                            context.helper, context.clientMsgNo, context.clientSeq, msg.content);
+                    if (!updated || !WKIMApplication.getInstance().isSessionCurrent(context)) {
+                        failCapturedFileMessage(context, msg, true);
+                        return;
+                    }
+                } else {
+                    WKIM.getInstance().getMsgManager().updateContentAndRefresh(msg.clientMsgNO, msg.content, false);
+                }
             }
         }
         //获取发送者信息
+        WKIMApplication.SessionContext capturedContext = msg.uploadSessionContext;
+        runFileUploadHook(fileUploadBeforeFinishSendSessionCheckHookForTests);
+        if (capturedContext != null && !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+            failCapturedFileMessage(capturedContext, msg, true);
+            return;
+        }
         WKChannel from = WKIM.getInstance().getChannelManager().getChannel(WKIMApplication.getInstance().getUid(), WKChannelType.PERSONAL);
         if (from == null) {
             WKIM.getInstance().getChannelManager().getChannel(WKIMApplication.getInstance().getUid(), WKChannelType.PERSONAL, channel -> WKIM.getInstance().getChannelManager().saveOrUpdateChannel(channel));
         } else {
             msg.setFrom(from);
         }
+        runFileUploadHook(fileUploadAfterSenderLookupHookForTests);
+        if (capturedContext != null && !WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+            failCapturedFileMessage(capturedContext, msg, true);
+            return;
+        }
         //将消息push回UI层
-        WKIM.getInstance().getMsgManager().setSendMsgCallback(msg);
+        if (capturedContext == null) WKIM.getInstance().getMsgManager().setSendMsgCallback(msg);
+        else WKIM.getInstance().getMsgManager().setSendMsgCallback(msg, capturedContext);
         if (hasAttached) {
             //存在附件处理
-            WKIM.getInstance().getMsgManager().setUploadAttachment(msg, (isSuccess, messageContent) -> {
-                if (isSuccess) {
-                    msg.baseContentMsgModel = messageContent;
-                    JSONObject jsonObject = WKProto.getInstance().getSendPayload(msg);
-                    if (jsonObject != null) {
-                        msg.content = jsonObject.toString();
-                    } else {
-                        msg.content = msg.baseContentMsgModel.encodeMsg().toString();
-                    }
-                    WKIM.getInstance().getMsgManager().updateContentAndRefresh(msg.clientMsgNO, msg.content, false);
-                    if (!sendingMsgHashMap.containsKey((int) msg.clientSeq)) {
-                        WKSendMsg base1 = WKProto.getInstance().getSendBaseMsg(msg);
-                        addSendingMsg(base1);
-                        sendMessage(base1);
-                    }
-                } else {
-                    MsgDbManager.getInstance().updateMsgStatus(msg.clientSeq, WKSendMsgResult.send_fail);
+            WKIM.getInstance().getMsgManager().setUploadAttachment(msg, new com.xinbida.wukongim.interfaces.IUploadAttacResultListener() {
+                @Override public void onUploadResult(boolean isSuccess, com.xinbida.wukongim.msgmodel.WKMessageContent messageContent) {
+                    completeMediaUpload(msg, isSuccess, messageContent);
+                }
+                @Override public boolean onUploadResult(WKIMApplication.SessionContext context, boolean isSuccess,
+                                                        com.xinbida.wukongim.msgmodel.WKMessageContent messageContent) {
+                    return completeFileUpload(context, msg, isSuccess, messageContent);
                 }
             });
         } else {
             if (sendMsg != null) {
                 if (msg.header != null && !msg.header.noPersist) {
-                    addSendingMsg(sendMsg);
+                    if (capturedContext == null) addSendingMsg(sendMsg);
+                    else if (!enqueueCapturedMessage(capturedContext, sendMsg)) {
+                        failCapturedFileMessage(capturedContext, msg, true);
+                        return;
+                    }
                 }
                 if (BuildConfig.DEBUG) Log.d("MsgDebug", "[SEND_TRACE] about to sendMessage(WKBaseMsg), clientSeq=" + sendMsg.clientSeq + " connStatus=" + connectStatus + " wsNull=" + (webSocket == null));
-                sendMessage(sendMsg);
+                if (capturedContext != null) {
+                    WKSendingMsg queued = sendingMsgHashMap.get(sendMsg.clientSeq);
+                    if (msg.header != null && !msg.header.noPersist
+                            && (queued == null || queued.wkSendMsg != sendMsg)) return;
+                    sendQueuedMessage(queued != null ? queued
+                            : new WKSendingMsg(1, sendMsg, false, capturedContext));
+                } else sendMessage(sendMsg);
             }
+        }
+    }
+
+    /** Atomically commits a captured file message to this session's retry queue. */
+    private boolean enqueueCapturedMessage(WKIMApplication.SessionContext context, WKSendMsg sendMsg) {
+        boolean locked = false;
+        try {
+            locked = tryLockWithTimeout();
+            if (!locked) return false;
+            boolean[] accepted = {false};
+            boolean current = WKIMApplication.getInstance().withCurrentSession(context, () -> {
+                WKSendingMsg existing = sendingMsgHashMap.get(sendMsg.clientSeq);
+                if (existing == null) {
+                    addSendingMsg(sendMsg, context);
+                    accepted[0] = true;
+                } else accepted[0] = existing.wkSendMsg == sendMsg;
+            });
+            return current && accepted[0];
+        } finally { if (locked) connectionLock.unlock(); }
+    }
+
+    private boolean completeFileUpload(WKIMApplication.SessionContext context, WKMsg msg, boolean success,
+                                       com.xinbida.wukongim.msgmodel.WKMessageContent messageContent) {
+        if (context == null || context != msg.uploadSessionContext || context.helper == null) return false;
+        runFileUploadHook(fileUploadBeforeCapturedWriteHookForTests);
+        if (!success) {
+            failCapturedFileMessage(context, msg, false);
+            runFileUploadHook(fileUploadAfterCapturedWriteHookForTests);
+            return true;
+        }
+        msg.baseContentMsgModel = messageContent;
+        JSONObject payload = WKProto.getInstance().getSendPayload(msg);
+        msg.content = payload == null ? messageContent.encodeMsg().toString() : payload.toString();
+        WKSendMsg sendMsg = WKProto.getInstance().getSendBaseMsg(msg);
+        if (sendMsg == null) return false;
+        boolean persisted = context.clientSeq <= 0 || MsgDbManager.getInstance().updateCapturedMsgContent(
+                context.helper, context.clientMsgNo, context.clientSeq, msg.content);
+        if (!persisted) { failCapturedFileMessage(context, msg, false); return false; }
+        runFileUploadHook(fileUploadAfterCapturedWriteHookForTests);
+        boolean current = false;
+        boolean[] reconnect = {false};
+        boolean locked = false;
+        try {
+            locked = tryLockWithTimeout();
+            if (!locked) {
+                failCapturedFileMessage(context, msg, false);
+                return false;
+            }
+            current = WKIMApplication.getInstance().withCurrentSession(context, () -> {
+                if (sendingMsgHashMap.get((int) context.clientSeq) == null)
+                    addSendingMsg(sendMsg, context);
+                WKSendingMsg queued = sendingMsgHashMap.get((int) context.clientSeq);
+                if (queued == null || queued.wkSendMsg != sendMsg) return;
+                if (connectStatus == WKConnectStatus.syncMsg) return;
+                CapturedFileSendTransportForTests testTransport = capturedFileSendTransportForTests;
+                WebSocket socket = webSocket;
+                if (connectStatus != WKConnectStatus.success || (testTransport == null ? socket == null : !testTransport.hasSocket())) {
+                    reconnect[0] = true;
+                    return;
+                }
+                int result = testTransport == null
+                        ? MessageHandler.getInstance().sendMessage(socket, sendMsg)
+                        : testTransport.send(sendMsg);
+                if (result == 0) reconnect[0] = true;
+            });
+            if (current && reconnect[0] && WKIMApplication.getInstance().isSessionCurrent(context)) {
+                CapturedFileSendTransportForTests testTransport = capturedFileSendTransportForTests;
+                if (testTransport == null) reconnection(); else testTransport.reconnect();
+            }
+        } finally { if (locked) connectionLock.unlock(); }
+        return current && persisted;
+    }
+
+    private static void runFileUploadHook(Runnable hook) {
+        if (hook != null) hook.run();
+    }
+
+    private boolean failCapturedFileMessage(WKIMApplication.SessionContext context, WKMsg fallback,
+                                            boolean notifyInitialInsert) {
+        if (context == null) return false;
+        runFileUploadHook(beforeCapturedFailureWriteHookForTests);
+        boolean saved = context.clientSeq > 0;
+        boolean persisted = !saved || MsgDbManager.getInstance()
+                .updateCapturedMsgSendFail(context.helper, context.clientMsgNo, context.clientSeq);
+        runFileUploadHook(afterCapturedFailureWriteHookForTests);
+        WKMsg captured = saved
+                ? MsgDbManager.getInstance().queryCapturedMsgWithClientMsgNo(context.helper,
+                    context.clientMsgNo, context.clientSeq)
+                : fallback;
+        if (captured == null && !saved) captured = fallback;
+        // For persisted rows, the query is the authority: an ACK may race either side
+        // of the conditional failure update and leave the stored status successful.
+        if (captured != null && !saved) captured.status = WKSendMsgResult.send_fail;
+        runFileUploadHook(afterCapturedFailureReadbackHookForTests);
+        boolean shouldNotify = captured != null && (!saved || captured.status == WKSendMsgResult.send_fail);
+        if (shouldNotify && WKIMApplication.getInstance().isSessionCurrent(context)) {
+            if (notifyInitialInsert) WKIM.getInstance().getMsgManager().setSendMsgCallback(captured, context);
+            WKIM.getInstance().getMsgManager().setRefreshMsg(captured, true, context);
+        }
+        return persisted;
+    }
+
+    private void completeMediaUpload(WKMsg msg, boolean success, com.xinbida.wukongim.msgmodel.WKMessageContent content) {
+        if (!success) { MsgDbManager.getInstance().updateMsgStatus(msg.clientSeq, WKSendMsgResult.send_fail); return; }
+        msg.baseContentMsgModel = content;
+        JSONObject payload = WKProto.getInstance().getSendPayload(msg);
+        msg.content = payload == null ? content.encodeMsg().toString() : payload.toString();
+        WKIM.getInstance().getMsgManager().updateContentAndRefresh(msg.clientMsgNO, msg.content, false);
+        WKSendMsg sendMsg = WKProto.getInstance().getSendBaseMsg(msg);
+        if (sendMsg != null && !sendingMsgHashMap.containsKey((int) msg.clientSeq)) {
+            addSendingMsg(sendMsg);
+            sendMessage(sendMsg);
         }
     }
 
@@ -1095,24 +1335,37 @@ public class WKConnection {
         checkConnAckHandler.postDelayed(checkConnAckRunnable, 1000);
     }
 
-    private void saveSendMsg(WKMsg msg) {
+    private void saveSendMsg(WKMsg msg) { saveSendMsg(msg, null); }
+
+    private void saveSendMsg(WKMsg msg, WKIMApplication.SessionContext context) {
         if (msg.setting == null) msg.setting = new WKMsgSetting();
         JSONObject jsonObject = WKProto.getInstance().getSendPayload(msg);
         msg.content = jsonObject.toString();
-        long tempOrderSeq = MsgDbManager.getInstance().queryMaxOrderSeqWithChannel(msg.channelID, msg.channelType);
+        long tempOrderSeq = context == null
+                ? MsgDbManager.getInstance().queryMaxOrderSeqWithChannel(msg.channelID, msg.channelType)
+                : MsgDbManager.getInstance().queryMaxOrderSeqWithChannel(context.helper, msg.channelID, msg.channelType);
         msg.orderSeq = tempOrderSeq + 1;
         // 需要存储的消息入库后更改消息的clientSeq
         if (!msg.header.noPersist) {
-            msg.clientSeq = (int) MsgDbManager.getInstance().insert(msg);
+            msg.clientSeq = (int) (context == null
+                    ? MsgDbManager.getInstance().insert(msg)
+                    : MsgDbManager.getInstance().insert(msg, context.helper));
             if (msg.clientSeq > 0) {
-                WKUIConversationMsg uiMsg = WKIM.getInstance().getConversationManager().updateWithWKMsg(msg);
+                WKUIConversationMsg uiMsg = context == null
+                        ? WKIM.getInstance().getConversationManager().updateWithWKMsg(msg)
+                        : WKIM.getInstance().getConversationManager().updateWithWKMsg(msg, 0, context.helper);
                 if (uiMsg != null) {
-                    long browseTo = WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(uiMsg.channelID, uiMsg.channelType);
+                    uiMsg.setWkMsg(msg);
+                    uiMsg.setWkChannel(msg.getChannelInfo());
+                    long browseTo = context == null
+                            ? WKIM.getInstance().getMsgManager().getMaxMessageSeqWithChannel(uiMsg.channelID, uiMsg.channelType)
+                            : MsgDbManager.getInstance().queryMaxMessageSeqWithChannel(context.helper, uiMsg.channelID, uiMsg.channelType);
                     if (uiMsg.getRemoteMsgExtra() == null) {
                         uiMsg.setRemoteMsgExtra(new WKConversationMsgExtra());
                     }
                     uiMsg.getRemoteMsgExtra().browseTo = browseTo;
-                    WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsg, "getSendBaseMsg");
+                    if (context == null) WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsg, "getSendBaseMsg");
+                    else WKIM.getInstance().getConversationManager().setOnRefreshMsg(uiMsg, "getSendBaseMsg", context);
                 }
             }
         }

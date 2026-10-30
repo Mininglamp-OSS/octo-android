@@ -4,7 +4,8 @@
     android:id="@+id/fileView"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal">
+    android:orientation="horizontal"
+    android:minHeight="84dp">
 
     <com.chat.base.views.BubbleLayout
         android:id="@+id/contentLayout"
@@ -42,7 +43,8 @@
                     android:id="@+id/fileNameTv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:ellipsize="middle"
+                    android:minLines="2"
+                    android:ellipsize="end"
                     android:maxLines="2"
                     android:textColor="@color/colorDark"
                     android:textSize="14sp" />
@@ -62,7 +64,40 @@
                         android:textColor="@color/color999"
                         android:textSize="12sp" />
 
+                    <TextView
+                        android:id="@+id/fileExtensionTv"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:textColor="@color/color999"
+                        android:textSize="11sp" />
+
+                    <ImageButton
+                        android:id="@+id/fileActionButton"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@android:color/transparent"
+                        android:contentDescription="@string/doc_share_file_actions"
+                        android:src="@drawable/ic_more_vert" />
+
                     <include layout="@layout/wk_msg_status_layout" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/fileUploadProgressLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone">
+                    <ProgressBar
+                        android:id="@+id/fileUploadProgressBar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="0dp"
+                        android:layout_height="4dp"
+                        android:layout_weight="1"
+                        android:max="100" />
+                    <TextView
+                        android:id="@+id/fileUploadProgressPercent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

@@ -31,13 +31,20 @@ public class WKApiConfig {
     public static String privacyUrl = "";
 
     public static void initBaseURL(String apiURL) {
-        baseUrl = apiURL + "/v1/";
-        baseWebUrl = apiURL + "/web/";
+        updateBaseUrls(apiURL);
     }
 
     public static void initBaseURLIncludeIP(String apiURL) {
-        baseUrl = apiURL + "/v1/";
-        baseWebUrl = apiURL + "/web/";
+        updateBaseUrls(apiURL);
+    }
+
+    private static void updateBaseUrls(String apiURL) {
+        String nextBase = apiURL + "/v1/";
+        String nextWeb = apiURL + "/web/";
+        boolean changed = !java.util.Objects.equals(baseUrl, nextBase) || !java.util.Objects.equals(baseWebUrl, nextWeb);
+        baseUrl = nextBase;
+        baseWebUrl = nextWeb;
+        if (changed) WKConfig.getInstance().invalidateSessionContext();
     }
 
     public static String getAvatarUrl(String uid) {

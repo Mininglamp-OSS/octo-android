@@ -214,7 +214,19 @@ class WKFileProvider : WKChatBaseProvider() {
                     contentLayout.isEnabled = false; actionButton.isEnabled = false
                 }
             }
-            override fun onViewDetachedFromWindow(v: View) { binding.downloadWait.cancelIfWaiting(); synchronized(binding) { binding.attached = false; binding.request++; binding.uploadRegistration.listener?.let { WKProgressManager.instance.unregisterProgress(binding.progressKey, it); binding.uploadRegistration.registered = false } } }
+            override fun onViewDetachedFromWindow(v: View) {
+                binding.downloadWait.cancelIfWaiting()
+                progressBar.visibility = View.GONE
+                progressBar.progress = 0
+                synchronized(binding) {
+                    binding.attached = false
+                    binding.request++
+                    binding.uploadRegistration.listener?.let {
+                        WKProgressManager.instance.unregisterProgress(binding.progressKey, it)
+                        binding.uploadRegistration.registered = false
+                    }
+                }
+            }
         }
         fileView.addOnAttachStateChangeListener(binding.attachListener)
         progressBar.visibility = View.GONE

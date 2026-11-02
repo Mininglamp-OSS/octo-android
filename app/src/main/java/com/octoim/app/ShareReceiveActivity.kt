@@ -24,7 +24,6 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.text.TextUtils
 import android.widget.Toast
 import com.chat.base.config.WKConfig
@@ -34,14 +33,10 @@ import com.chat.base.endpoint.EndpointSID
 import com.chat.base.endpoint.entity.ChatChooseContacts
 import com.chat.base.endpoint.entity.ChooseChatMenu
 import com.chat.base.msgcontent.WKFileContent
-import com.chat.uikit.message.MsgModel
-import com.xinbida.wukongim.WKIM
-import com.xinbida.wukongim.entity.WKChannelType
-import com.xinbida.wukongim.entity.WKSendOptions
-import com.xinbida.wukongim.msgmodel.WKImageContent
-import com.xinbida.wukongim.msgmodel.WKMessageContent
 import com.xinbida.wukongim.msgmodel.WKTextContent
 import com.xinbida.wukongim.msgmodel.WKVideoContent
+import com.xinbida.wukongim.msgmodel.WKImageContent
+import com.xinbida.wukongim.msgmodel.WKMessageContent
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -49,7 +44,6 @@ import java.util.regex.Pattern
 
 class ShareReceiveActivity : Activity() {
 
-    private var chooseChatStarted = false
     private var capturedSession: WKConfig.SessionSnapshot? = null
     private var capturedServer: String = ""
     private var pendingContents: List<WKMessageContent> = emptyList()
@@ -78,63 +72,29 @@ class ShareReceiveActivity : Activity() {
             return
         }
 
-        // ChooseChatActivity 内部已处理确认弹窗，回调触发时直接发送消息
-        val chooseChatMenu = ChooseChatMenu(ChatChooseContacts { channelList ->
-            if (channelList.isNullOrEmpty()) {
-                cleanupPendingSources()
-                finish()
-                return@ChatChooseContacts
-            }
-            val expected = capturedSession
-            val current = WKConfig.getInstance().sessionSnapshot
-            if (expected == null || expected.uid != current.uid || expected.token != current.token
-                || expected.version != current.version || capturedServer != WKApiConfig.baseUrl || isFinishing || isDestroyed) {
-                cleanupPendingSources()
-                finish()
-                return@ChatChooseContacts
-            }
-            val spaceId = MsgModel.getInstance().getCurrentSpaceId()
-            for (content in messageContents) {
-                val duplicates = mutableListOf<WKFileContent>()
-                val sendContents = if (content is WKFileContent && channelList.size > 1) {
-                    channelList.mapIndexed { index, _ ->
-                        if (index == 0) content else try {
-                            content.duplicateOwnedSource(this@ShareReceiveActivity, expected, capturedServer)?.also(duplicates::add)
-                        } catch (_: Exception) { null }
-                    }
-                } else channelList.map { content }
-                for ((channelIndex, channel) in channelList.withIndex()) {
-                    val sendContent = sendContents[channelIndex]
-                    if (sendContent == null) continue
-                    // DM 消息注入 spaceId
-                    if (!TextUtils.isEmpty(spaceId) && channel.channelType == WKChannelType.PERSONAL) {
-                        sendContent.spaceId = spaceId
-                    }
-                    val options = WKSendOptions()
-                    options.setting.receipt = channel.receipt
-                    WKIM.getInstance().msgManager.sendWithOptions(sendContent, channel, options)
-                }
-                // Cleanup only releases sources not already taken by asynchronous preparation.
-                duplicates.forEach { it.cleanupOwnedTemporarySource() }
-                if (content is WKFileContent) content.cleanupOwnedTemporarySource()
-            }
+        val expected = capturedSession
+        if (expected == null) {
             cleanupPendingSources()
-            val toast = Toast.makeText(this@ShareReceiveActivity, R.string.is_forward, Toast.LENGTH_SHORT)
-            toast.setGravity(Gravity.CENTER, 0, 0)
-            toast.show()
             finish()
-        }, messageContents)
+            return
+        }
+        val request = ShareSendRequest(applicationContext, messageContents, expected, capturedServer)
+        val chooseChatMenu = ChooseChatMenu(ChatChooseContacts { }, messageContents,
+            { channels, extraText -> request.confirm(channels, extraText) },
+            { request.cancel() })
 
         chooseChatMenu.singleSelect = true
-        EndpointManager.getInstance().invoke(EndpointSID.showChooseChatView, chooseChatMenu)
-        chooseChatStarted = true
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // ChooseChatActivity 被关闭（用户取消）后回到此透明 Activity，直接 finish
-        if (chooseChatStarted) {
+        val result = try {
+            EndpointManager.getInstance().invoke(EndpointSID.showChooseChatView, chooseChatMenu)
+        } catch (_: RuntimeException) {
+            null
+        }
+        if (result != chooseChatMenu.requestId) {
+            request.cancel()
             cleanupPendingSources()
+            finish()
+        } else {
+            pendingContents = emptyList()
             finish()
         }
     }

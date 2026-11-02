@@ -155,6 +155,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -631,6 +632,18 @@ public class WKUIKitApplication {
             intent.putExtra("isChoose", true);
             intent.putExtra("singleSelect", messageContent.singleSelect);
             intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+            if (!TextUtils.isEmpty(messageContent.requestId)) {
+                intent.putExtra(ChooseChatActivity.EXTRA_CHOOSE_REQUEST_ID, messageContent.requestId);
+                chooseRequests.put(messageContent.requestId, messageContent);
+                try {
+                    mContext.get().startActivity(intent);
+                    return messageContent.requestId;
+                } catch (RuntimeException error) {
+                    chooseRequests.remove(messageContent.requestId);
+                    if (messageContent.onCancelled != null) messageContent.onCancelled.onCancelled();
+                    return null;
+                }
+            }
             mContext.get().startActivity(intent);
             WKUIKitApplication.this.messageContentList = messageContent.list;
             WKUIKitApplication.this.chooseChatCallBack = messageContent.mChatChooseContacts;
@@ -877,6 +890,23 @@ public class WKUIKitApplication {
         }
     }
 
+    private final java.util.Map<String, ChooseChatMenu> chooseRequests = new ConcurrentHashMap<>();
+
+    public ChooseChatMenu getChooseChatRequest(String requestId) {
+        return TextUtils.isEmpty(requestId) ? null : chooseRequests.get(requestId);
+    }
+
+    public boolean finishChooseChatRequest(String requestId, List<WKChannel> channels, String extraText, boolean confirmed) {
+        ChooseChatMenu request = TextUtils.isEmpty(requestId) ? null : chooseRequests.remove(requestId);
+        if (request == null) return false;
+        if (confirmed) {
+            if (request.onConfirmed != null) request.onConfirmed.onConfirmed(channels, extraText);
+            else if (request.mChatChooseContacts != null && request.mChatChooseContacts.iChoose != null)
+                request.mChatChooseContacts.iChoose.onResult(channels);
+        } else if (request.onCancelled != null) request.onCancelled.onCancelled();
+        return true;
+    }
+
     public List<WKMessageContent> getMessageContentList() {
         return messageContentList;
     }
@@ -1003,6 +1033,10 @@ public class WKUIKitApplication {
         void onBack(@NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList);
     }
 
+    public interface IShowChatConfirmWithText {
+        void onBack(@NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, @NonNull String extraText);
+    }
+
     /**
      * 图文混排（RichText=14）发送侧入口判定（Phase 2，输入框附件托盘，对齐 web#237）。
      *
@@ -1044,6 +1078,14 @@ public class WKUIKitApplication {
     }
 
     public void showChatConfirmDialog(@NonNull Context context, @NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, final IShowChatConfirm iShowChatConfirm) {
+        showChatConfirmDialog(context, list, messageContentList,
+                (selected, contents, extraText) -> {
+                    pendingExtraText = TextUtils.isEmpty(extraText) ? null : extraText;
+                    iShowChatConfirm.onBack(selected, contents);
+                });
+    }
+
+    public void showChatConfirmDialog(@NonNull Context context, @NonNull List<WKChannel> list, @NonNull List<WKMessageContent> messageContentList, final IShowChatConfirmWithText iShowChatConfirm) {
         View view = LayoutInflater.from(context).inflate(R.layout.chat_confirm_dialog_view, null, false);
         RecyclerView recyclerView = view.findViewById(R.id.recyclerView);
         AvatarView avatarView = view.findViewById(R.id.avatarView);
@@ -1195,8 +1237,7 @@ public class WKUIKitApplication {
         builder.setView(view);
         builder.setPositiveButton(context.getString(R.string.sure), (dialog, which) -> {
             String extraText = messageEt.getText() != null ? messageEt.getText().toString().trim() : "";
-            pendingExtraText = TextUtils.isEmpty(extraText) ? null : extraText;
-            iShowChatConfirm.onBack(list, messageContentList);
+            iShowChatConfirm.onBack(list, messageContentList, TextUtils.isEmpty(extraText) ? "" : extraText);
         });
         builder.setNegativeButton(context.getString(R.string.cancel), (dialog, which) -> {
 

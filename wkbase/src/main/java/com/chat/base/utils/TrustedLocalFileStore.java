@@ -23,6 +23,11 @@ import java.util.UUID;
 
 /** Persists complete, account-scoped snapshots of files created or selected locally. */
 public final class TrustedLocalFileStore {
+    private static volatile Runnable beforeTrustedDirectoryCreateForTests;
+
+    public static void setBeforeTrustedDirectoryCreateHookForTests(Runnable hook) {
+        beforeTrustedDirectoryCreateForTests = hook;
+    }
     private static final String DIRECTORY = "trusted-local-files";
     private static final String INDEX = "index.json";
     private static final Object LOCK = new Object();
@@ -71,8 +76,7 @@ public final class TrustedLocalFileStore {
         String key = identityKey(uid, server, channelType, channelId, clientMsgNo);
         File filesDir = canonicalFilesDir(context.getFilesDir());
         File root = new File(filesDir, DIRECTORY + "/" + sha256(uid) + "/" + sha256(server));
-        rejectSymlinks(filesDir, root);
-        if (!root.exists() && !root.mkdirs()) throw new IOException("Could not create trusted file directory");
+        ensureTrustedDirectory(filesDir, root);
         File canonicalRoot = root.getCanonicalFile();
         if (!isWithin(filesDir, canonicalRoot)) throw new IOException("Trusted directory escaped private files");
         File rawTarget = new File(canonicalRoot, key + extension(source.getName()));
@@ -177,8 +181,7 @@ public final class TrustedLocalFileStore {
     private static void writeIndex(Context context, JSONArray rows) throws IOException {
         File filesDir = canonicalFilesDir(context.getFilesDir());
         File dir = new File(filesDir, DIRECTORY);
-        rejectSymlinks(filesDir, dir);
-        if (!dir.exists() && !dir.mkdirs()) throw new IOException("Could not create trusted index directory");
+        ensureTrustedDirectory(filesDir, dir);
         File temp = new File(dir, "." + INDEX + "." + UUID.randomUUID() + ".tmp");
         try (FileOutputStream out = new FileOutputStream(temp)) {
             out.write(rows.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); out.getFD().sync();
@@ -190,6 +193,18 @@ public final class TrustedLocalFileStore {
 
     static File canonicalFilesDir(File contextFilesDir) throws IOException {
         return contextFilesDir.getCanonicalFile();
+    }
+
+    private static void ensureTrustedDirectory(File canonicalBase, File directory) throws IOException {
+        rejectSymlinks(canonicalBase, directory);
+        if (!directory.isDirectory()) {
+            Runnable hook = beforeTrustedDirectoryCreateForTests;
+            if (hook != null) hook.run();
+            if (!directory.mkdirs() && !directory.isDirectory())
+                throw new IOException("Could not create trusted file directory");
+        }
+        rejectSymlinks(canonicalBase, directory);
+        if (!directory.isDirectory()) throw new IOException("Trusted path is not a directory");
     }
 
     static void rejectSymlinks(File canonicalBase, File target) throws IOException {

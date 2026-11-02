@@ -32,6 +32,7 @@ import androidx.annotation.Nullable;
 
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKConfig;
+import com.chat.base.endpoint.entity.ChooseChatMenu;
 import com.chat.base.msgitem.WKChannelMemberRole;
 import com.chat.base.space.SpaceFilter;
 import com.chat.base.ui.components.SegmentTabView;
@@ -75,6 +76,7 @@ import java.util.Set;
  */
 public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBinding> {
     private static final int REQ_FORWARD_DIRECTORY = 0x9001;
+    public static final String EXTRA_CHOOSE_REQUEST_ID = "choose_request_id";
     /** 多选最大数量, 与主页 item tap 校验同口径; 老协议消费方按 9 上限消费. */
     private static final int MAX_SELECT_COUNT = 9;
 
@@ -90,6 +92,9 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     private Button rightBtn;
     private boolean isChoose;
     private boolean singleSelect;
+    private String chooseRequestId;
+    private boolean requestFinished;
+    private List<WKMessageContent> requestMessageContents;
 
     private List<ChooseChatEntity> allList;
     private List<ChooseChatEntity> groupList;
@@ -180,6 +185,15 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
         }
 
         if (WKReader.isNotEmpty(list)) {
+            if (isChoose && !TextUtils.isEmpty(chooseRequestId)) {
+                if (requestMessageContents == null) {
+                    finishChooseRequest(list, "");
+                } else {
+                    WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, requestMessageContents,
+                            (selected, contents, extraText) -> finishChooseRequest(selected, extraText));
+                }
+                return;
+            }
             if (isChoose) {
                 if (WKUIKitApplication.getInstance().getMessageContentList() != null) {
                     WKUIKitApplication.getInstance().showChatConfirmDialog(this, list, WKUIKitApplication.getInstance().getMessageContentList(), new WKUIKitApplication.IShowChatConfirm() {
@@ -206,8 +220,33 @@ public class ChooseChatActivity extends WKBaseActivity<ActChooseChatLayoutBindin
     protected void initPresenter() {
         isChoose = getIntent().getBooleanExtra("isChoose", false);
         singleSelect = getIntent().getBooleanExtra("singleSelect", false);
+        chooseRequestId = getIntent().getStringExtra(EXTRA_CHOOSE_REQUEST_ID);
+        if (!TextUtils.isEmpty(chooseRequestId)) {
+            ChooseChatMenu request = WKUIKitApplication.getInstance().getChooseChatRequest(chooseRequestId);
+            requestMessageContents = request != null ? request.list : null;
+            if (request == null) {
+                finish();
+                return;
+            }
+        }
         ArrayList<WKChannel> pre = getIntent().getParcelableArrayListExtra(EXTRA_PRESELECTED_CHANNELS);
         preselectedChannels = pre != null ? pre : new ArrayList<>();
+    }
+
+    private void finishChooseRequest(List<WKChannel> channels, String extraText) {
+        if (requestFinished || TextUtils.isEmpty(chooseRequestId)) return;
+        requestFinished = WKUIKitApplication.getInstance().finishChooseChatRequest(
+                chooseRequestId, channels, extraText, true);
+        if (requestFinished) finish();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (isFinishing() && !requestFinished && !TextUtils.isEmpty(chooseRequestId)) {
+            requestFinished = WKUIKitApplication.getInstance().finishChooseChatRequest(
+                    chooseRequestId, null, null, false);
+        }
+        super.onDestroy();
     }
 
     @Override

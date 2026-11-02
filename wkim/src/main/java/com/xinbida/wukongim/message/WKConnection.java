@@ -1150,7 +1150,7 @@ public class WKConnection {
                 if (msg.header != null && !msg.header.noPersist) {
                     if (capturedContext == null) addSendingMsg(sendMsg);
                     else if (!enqueueCapturedMessage(capturedContext, sendMsg)) {
-                        failCapturedFileMessage(capturedContext, msg, true);
+                        failCapturedFileMessage(capturedContext, msg, false);
                         return;
                     }
                 }

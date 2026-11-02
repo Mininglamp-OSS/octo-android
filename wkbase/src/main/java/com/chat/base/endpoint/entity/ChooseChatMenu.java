@@ -22,6 +22,7 @@ import com.xinbida.wukongim.msgmodel.WKMessageContent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 2020-09-25 18:34
@@ -31,6 +32,19 @@ public class ChooseChatMenu {
     public ChatChooseContacts mChatChooseContacts;
     public List<WKMessageContent> list;
     public boolean singleSelect;
+    public String requestId;
+    public IChooseCancelled onCancelled;
+    public IChooseConfirmed onConfirmed;
+
+    public interface IChooseCancelled { void onCancelled(); }
+    public interface IChooseConfirmed { void onConfirmed(List<com.xinbida.wukongim.entity.WKChannel> channels, String extraText); }
+
+    public ChooseChatMenu(ChatChooseContacts callback, List<WKMessageContent> list, IChooseConfirmed confirmed, IChooseCancelled cancelled) {
+        this(callback, list);
+        this.requestId = UUID.randomUUID().toString();
+        this.onConfirmed = confirmed;
+        this.onCancelled = cancelled;
+    }
 
     public ChooseChatMenu(ChatChooseContacts mChatChooseContacts, WKMessageContent messageContent) {
         this.mChatChooseContacts = mChatChooseContacts;

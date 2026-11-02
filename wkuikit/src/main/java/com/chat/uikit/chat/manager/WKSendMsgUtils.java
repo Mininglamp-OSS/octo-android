@@ -170,10 +170,17 @@ public class WKSendMsgUtils {
 
     private void uploadFileAttachment(WKMsg msg, WKFileContent content, IUploadAttacResultListener listener) {
         WKIMApplication.SessionContext capturedContext = msg.uploadSessionContext;
-        if (capturedContext == null || !WKIMApplication.getInstance().isSessionCurrent(capturedContext)
-                || !TextUtils.equals(capturedContext.clientMsgNo, msg.clientMsgNO)
+        if (capturedContext == null || !TextUtils.equals(capturedContext.clientMsgNo, msg.clientMsgNO)
                 || capturedContext.clientSeq != msg.clientSeq) {
-            if (capturedContext != null) MsgDbManager.getInstance().updateCapturedMsgSendFail(capturedContext.helper, msg.clientMsgNO, msg.clientSeq);
+            return;
+        }
+        if (!WKIMApplication.getInstance().isSessionCurrent(capturedContext)) {
+            boolean delivered = false;
+            try {
+                delivered = listener.onUploadResult(capturedContext, false, content);
+            } catch (RuntimeException ignored) { }
+            if (!delivered) MsgDbManager.getInstance().updateCapturedMsgSendFail(
+                    capturedContext.helper, capturedContext.clientMsgNo, capturedContext.clientSeq);
             return;
         }
         WKConfig.SessionSnapshot capturedSession = WKConfig.getInstance().getSessionSnapshot();

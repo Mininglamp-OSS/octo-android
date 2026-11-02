@@ -1,0 +1,30 @@
+<!doctype html><script>
+window.cspEvents=[];window.cspSchemes=[];window.inlineCount=0;window.socketOpened=false;
+function report(){var e=document.getElementById('events');if(e)e.textContent=window.cspEvents.join(', ')}
+window.addEventListener('securitypolicyviolation',function(e){
+ window.cspEvents.push(e.effectiveDirective);window.cspSchemes.push(String(e.blockedURI).split(':')[0]);report();
+});
+window.addEventListener('message',function(e){if(e.source===window.srcdocFrame&&e.data==='HTML_PREVIEW_SRCDOC_CSP:connect-src'){window.cspEvents.push('srcdoc-connect-src');report()}});
+document.write('<meta http-equiv="Content-Security-Policy" content="connect-src *">');
+var writtenMeta=document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]');if(writtenMeta)writtenMeta.remove();
+function clicked(){window.inlineCount++;document.getElementById('count').textContent=String(window.inlineCount)}
+var probeHttp=__HTML_PREVIEW_HTTP_JSON__,probeWss=__HTML_PREVIEW_WSS_JSON__;
+fetch(probeHttp).catch(function(){});
+try{var ws=new WebSocket(probeWss);ws.onopen=function(){window.socketOpened=true}}catch(e){}
+try{var x=new XMLHttpRequest();x.open('GET',probeHttp);x.send()}catch(e){}
+try{navigator.sendBeacon(probeHttp,'probe')}catch(e){}
+try{new Worker(URL.createObjectURL(new Blob(['postMessage(1)'],{type:'text/javascript'})))}catch(e){}
+window.addEventListener('DOMContentLoaded',function(){
+ report();
+ var remote=document.createElement('iframe');remote.src='https://html-preview-frame.invalid/frame';document.getElementById('frame-host').appendChild(remote);
+ var local=document.createElement('iframe');
+ local.srcdoc='<!doctype html><script>window.addEventListener("securitypolicyviolation",function(e){parent.postMessage("HTML_PREVIEW_SRCDOC_CSP:"+e.effectiveDirective,"*")});fetch("https://html-preview-probe.invalid/srcdoc").catch(function(){})<'+'/'+'script>';
+ document.getElementById('frame-host').appendChild(local);window.srcdocFrame=local.contentWindow;
+ var loose=document.createElement('meta');loose.httpEquiv='Content-Security-Policy';loose.content="connect-src *";document.head.appendChild(loose);
+ loose.remove();
+});
+</script><style>body{font:18px sans-serif;padding:20px}button{padding:12px}</style>
+<h1>HTML isolation preview check</h1><p>Inline click count: <b id="count">0</b></p>
+<button onclick="clicked()">Test inline interaction</button>
+<p>Observed CSP directives: <b id="events">waiting</b></p>
+<a href="#anchor">Test same-document anchor</a><div id="anchor">Anchor target</div><div id="frame-host"></div>

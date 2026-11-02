@@ -37,6 +37,7 @@ import com.chat.uikit.R
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 class HtmlPreviewActivity : AppCompatActivity() {
     private var filePath = ""
@@ -45,6 +46,8 @@ class HtmlPreviewActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var error: TextView
     private val executor = Executors.newSingleThreadExecutor()
+    private val documentUrl = HtmlPreviewDocumentPolicy.newDocumentUrl()
+    private val document = AtomicReference<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,7 +92,18 @@ class HtmlPreviewActivity : AppCompatActivity() {
                     request: WebResourceRequest
                 ): WebResourceResponse? {
                     val url = request.url.toString()
-                    if (url.startsWith("data:") || url == "about:blank") return null
+                    if (request.isForMainFrame && HtmlPreviewDocumentPolicy.isMainDocumentRequest(
+                            documentUrl, url, request.method
+                        )
+                    ) {
+                        val html = document.get() ?: return emptyResponse()
+                        return WebResourceResponse(
+                            "text/html", "UTF-8", 200, "OK",
+                            HtmlPreviewDocumentPolicy.responseHeaders(),
+                            ByteArrayInputStream(html.toByteArray(Charsets.UTF_8))
+                        )
+                    }
+                    if (url.startsWith("data:", ignoreCase = true)) return null
                     return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                 }
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -126,9 +140,10 @@ class HtmlPreviewActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 when (result) {
-                    is HtmlPreviewLoader.Result.Content -> webView.loadDataWithBaseURL(
-                        null, result.html, "text/html", "UTF-8", null
-                    )
+                    is HtmlPreviewLoader.Result.Content -> {
+                        document.set(result.html)
+                        webView.loadUrl(documentUrl)
+                    }
                     HtmlPreviewLoader.Result.Missing -> showError(getString(R.string.str_file_not_exist))
                     HtmlPreviewLoader.Result.Empty -> showError(getString(R.string.str_html_empty))
                     HtmlPreviewLoader.Result.TooLarge -> showError(getString(R.string.str_html_too_large))
@@ -137,6 +152,10 @@ class HtmlPreviewActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun emptyResponse() = WebResourceResponse(
+        "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
+    )
 
     private fun isDocumentAnchor(view: WebView, target: String): Boolean {
         val current = view.url ?: return false
@@ -218,6 +237,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
             webView.removeAllViews()
             webView.destroy()
         }
+        document.set(null)
         super.onDestroy()
     }
 

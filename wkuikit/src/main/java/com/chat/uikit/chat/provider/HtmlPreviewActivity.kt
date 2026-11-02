@@ -64,6 +64,9 @@ class HtmlPreviewActivity : AppCompatActivity() {
         }
         val previewWebView = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(-1, -1)
+            // 与 iOS HTML 附件预览一致，保留报表、图表等页面的内联脚本交互。
+            // 本页不是完全离线沙箱：附件脚本仍可能通过 WebRTC/ICE 等路径产生网络通信。
+            // 文件访问、CSP 和导航限制分别约束对应能力，不构成所有网络出口的隔离。
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
@@ -72,6 +75,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
             settings.domStorageEnabled = false
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
+            // 限制常规资源加载；不能据此推断 WebRTC/STUN 等非 URL 加载路径被禁止。
             settings.blockNetworkLoads = true
             settings.builtInZoomControls = true
             settings.displayZoomControls = false

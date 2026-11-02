@@ -28,6 +28,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.RenderProcessGoneDetail
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -42,7 +43,8 @@ import java.util.concurrent.atomic.AtomicReference
 class HtmlPreviewActivity : AppCompatActivity() {
     private var filePath = ""
     private var displayName = ""
-    private lateinit var webView: WebView
+    private var webView: WebView? = null
+    @Volatile private var rendererGone = false
     private lateinit var progress: ProgressBar
     private lateinit var error: TextView
     private val executor = Executors.newSingleThreadExecutor()
@@ -60,7 +62,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.WHITE)
         }
-        webView = WebView(this).apply {
+        val previewWebView = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(-1, -1)
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
@@ -78,14 +80,14 @@ class HtmlPreviewActivity : AppCompatActivity() {
                     view: WebView,
                     request: WebResourceRequest
                 ): Boolean =
-                    !isDocumentAnchor(view, request.url.toString())
+                    rendererGone || webView !== view || !isDocumentAnchor(view, request.url.toString())
 
                 @Suppress("DEPRECATION")
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
                     url: String
                 ): Boolean =
-                    !isDocumentAnchor(view, url)
+                    rendererGone || webView !== view || !isDocumentAnchor(view, url)
 
                 override fun shouldInterceptRequest(
                     view: WebView,
@@ -107,10 +109,26 @@ class HtmlPreviewActivity : AppCompatActivity() {
                     return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                 }
                 override fun onPageFinished(view: WebView, url: String?) {
+                    if (!rendererGone && webView === view) this@HtmlPreviewActivity.progress.visibility = View.GONE
+                }
+
+                override fun onRenderProcessGone(
+                    view: WebView,
+                    detail: RenderProcessGoneDetail
+                ): Boolean {
+                    if (webView !== view || rendererGone) return true
+                    rendererGone = true
+                    document.set(null)
+                    executor.shutdownNow()
+                    disposeWebView(view)
                     this@HtmlPreviewActivity.progress.visibility = View.GONE
+                    error.text = getString(R.string.str_html_renderer_gone)
+                    error.visibility = View.VISIBLE
+                    return true
                 }
             }
         }
+        webView = previewWebView
         progress = ProgressBar(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -127,7 +145,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
             setPadding(32, 32, 32, 32)
             visibility = View.GONE
         }
-        root.addView(webView)
+        root.addView(previewWebView)
         root.addView(progress)
         root.addView(error)
         setContentView(root)
@@ -138,11 +156,12 @@ class HtmlPreviewActivity : AppCompatActivity() {
         executor.execute {
             val result = HtmlPreviewLoader.read(File(filePath))
             runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (isFinishing || isDestroyed || rendererGone) return@runOnUiThread
+                val activeWebView = webView ?: return@runOnUiThread
                 when (result) {
                     is HtmlPreviewLoader.Result.Content -> {
                         document.set(result.html)
-                        webView.loadUrl(documentUrl)
+                        if (!rendererGone && webView === activeWebView) activeWebView.loadUrl(documentUrl)
                     }
                     HtmlPreviewLoader.Result.Missing -> showError(getString(R.string.str_file_not_exist))
                     HtmlPreviewLoader.Result.Empty -> showError(getString(R.string.str_html_empty))
@@ -158,6 +177,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
     )
 
     private fun isDocumentAnchor(view: WebView, target: String): Boolean {
+        if (rendererGone || webView !== view) return false
         val current = view.url ?: return false
         val currentUri = Uri.parse(current)
         val targetUri = Uri.parse(target)
@@ -168,7 +188,7 @@ class HtmlPreviewActivity : AppCompatActivity() {
 
     private fun showError(message: String) {
         progress.visibility = View.GONE
-        webView.visibility = View.GONE
+        webView?.visibility = View.GONE
         error.text = message
         error.visibility = View.VISIBLE
     }
@@ -230,15 +250,18 @@ class HtmlPreviewActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        rendererGone = true
         executor.shutdownNow()
-        if (::webView.isInitialized) {
-            webView.stopLoading()
-            webView.loadUrl("about:blank")
-            webView.removeAllViews()
-            webView.destroy()
-        }
         document.set(null)
+        webView?.let(::disposeWebView)
         super.onDestroy()
+    }
+
+    private fun disposeWebView(view: WebView) {
+        if (webView !== view) return
+        webView = null
+        (view.parent as? ViewGroup)?.removeView(view)
+        view.destroy()
     }
 
     private companion object {

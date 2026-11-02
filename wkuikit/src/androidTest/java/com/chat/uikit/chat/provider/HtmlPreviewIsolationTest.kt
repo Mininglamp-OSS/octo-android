@@ -49,7 +49,7 @@ class HtmlPreviewIsolationTest {
               scenario.onActivity { activity ->
                 val field = HtmlPreviewActivity::class.java.getDeclaredField("webView")
                 field.isAccessible = true
-                val webView = field.get(activity) as WebView
+                val webView = requireNotNull(field.get(activity) as? WebView) { "HTML WebView was not created" }
                 val deadline = android.os.SystemClock.uptimeMillis() + 12_000
                 val poll = object : Runnable {
                     override fun run() {

@@ -25,9 +25,8 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 
-import com.chat.base.act.WKWebViewActivity;
+import com.chat.uikit.utils.ReportNavigation;
 import com.chat.base.base.WKBaseActivity;
-import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKSystemAccount;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -192,11 +191,7 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             startActivity(intent);
         });
         SingleClickUtil.onSingleClick(wkVBinding.reportLayout, view1 -> {
-            Intent intent = new Intent(this, WKWebViewActivity.class);
-            intent.putExtra("channelType", WKChannelType.PERSONAL);
-            intent.putExtra("channelID", channelId);
-            intent.putExtra("url", WKApiConfig.getReportUrl(this, channelId, WKChannelType.PERSONAL));
-            startActivity(intent);
+            ReportNavigation.open(this, channelId, WKChannelType.PERSONAL);
         });
     }
 

@@ -167,7 +167,7 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             finish();
             return;
         }
-        boolean reportUrl = ReportUrlBuilder.isConfiguredReportUrl(url, WKApiConfig.reportUrl);
+        boolean reportUrl = ReportUrlBuilder.isConfiguredReportUrl(url, WKApiConfig.baseUrl);
         // Prefer HTTPS and block unexpected schemes to avoid MITM/file injection
         if (!reportUrl && !url.toLowerCase().startsWith("http")) {
             url = "https://" + url;

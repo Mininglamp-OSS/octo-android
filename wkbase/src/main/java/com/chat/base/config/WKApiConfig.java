@@ -34,9 +34,9 @@ public class WKApiConfig {
     public static String baseWebUrl = "";
     public static String termsUrl = "";
     public static String privacyUrl = "";
-    public static String reportUrl = "";
 
     public static String getReportUrl(Context context, String channelId, byte channelType) {
+        if (getReportEndpoint().isEmpty()) return "";
         int languageType = WKMultiLanguageUtil.getInstance().getLanguageType();
         String lang;
         if (languageType == WKLanguageType.LANGUAGE_EN) {
@@ -59,8 +59,16 @@ public class WKApiConfig {
             }
         }
         String mode = Theme.getDarkModeStatus(context) ? "dark" : "light";
-        return ReportUrlBuilder.build(reportUrl, lang, WKConfig.getInstance().getUid(),
+        return ReportUrlBuilder.build(baseUrl, lang, WKConfig.getInstance().getUid(),
                 WKConfig.getInstance().getToken(), mode, channelId, channelType);
+    }
+
+    /**
+     * 产品约定按当前 API 基址追加 report/html（与 iOS 一致），保留 /v1/ 等版本路径；切服后即时更新，
+     * 避免把当前用户凭证发送到之前配置的服务器。
+     */
+    public static String getReportEndpoint() {
+        return ReportUrlBuilder.getEndpoint(baseUrl);
     }
 
     public static void initBaseURL(String apiURL) {

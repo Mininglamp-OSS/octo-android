@@ -1,4 +1,9 @@
 <resources>
+    <string name="str_html_preview">HTML 预览</string>
+    <string name="str_html_empty">文件内容为空</string>
+    <string name="str_html_too_large">HTML 文件超过 5 MiB，无法预览</string>
+    <string name="str_html_unreadable">无法读取此 HTML 文件</string>
+    <string name="str_html_renderer_gone">页面加载已中断，请返回后重新打开</string>
     <string name="sync_msg">收取中…</string>
     <string name="connecting">连接中</string>
     <string name="not_connected">未连接</string>

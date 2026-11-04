@@ -579,7 +579,7 @@ class WKFileProvider : WKChatBaseProvider() {
         private val TEXT_PREVIEW_EXTS = setOf(
             "txt", "md", "json", "yaml", "yml", "xml", "csv", "log",
             "conf", "cfg", "ini", "properties", "toml",
-            "html", "htm", "css", "js", "ts", "py", "go", "java", "kt",
+            "css", "js", "ts", "py", "go", "java", "kt",
             "sh", "bat", "sql", "gradle", "swift", "c", "cpp", "h",
             "rb", "php", "rs", "lua", "r", "pl", "env", "gitignore",
         )
@@ -598,6 +598,7 @@ class WKFileProvider : WKChatBaseProvider() {
             // 避免影响原有"打开"逻辑。对齐 iOS WKSafeFilePreviewVC。xls / doc / ppt 老格式暂不支持。
             val ext = display.substringAfterLast('.', "").lowercase(Locale.getDefault())
             val previewClass: Class<*>? = when {
+                HtmlPreviewLoader.isHtmlDisplayName(display) -> HtmlPreviewActivity::class.java
                 ext == "pdf" -> PdfPreviewActivity::class.java
                 ext == "xlsx" -> XlsxPreviewActivity::class.java
                 ext in TEXT_PREVIEW_EXTS -> TextPreviewActivity::class.java
@@ -660,6 +661,14 @@ class WKFileProvider : WKChatBaseProvider() {
             // 磁盘文件名是 clientMsgNO 键，系统预览/打开的标题与 MIME 应基于原始展示名
             val display = displayName?.takeIf { it.isNotEmpty() } ?: file.name
             val ext = display.substringAfterLast('.', "").lowercase(Locale.getDefault())
+            if (HtmlPreviewLoader.isHtmlDisplayName(display)) {
+                val intent = Intent(context, HtmlPreviewActivity::class.java)
+                intent.putExtra("title", display)
+                intent.putExtra("filePath", file.absolutePath)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                return
+            }
             if (ext in TEXT_PREVIEW_EXTS) {
                 // bounded 后主线程读上限 50k 字符 (≈200KB UTF-8) 通常 <10ms，避免旧
                 // `readText()` 全文加载导致 100MB `.log` OOM/ANR (#92 review B5)。

@@ -143,6 +143,12 @@
             android:label="文件预览" />
 
         <activity
+            android:name="com.chat.uikit.chat.provider.HtmlPreviewActivity"
+            android:theme="@style/Theme.AppCompat.Light"
+            android:label="HTML"
+            android:exported="false" />
+
+        <activity
             android:name="com.chat.uikit.chat.provider.PdfPreviewActivity"
             android:theme="@style/Theme.AppCompat.Light"
             android:label="PDF" />

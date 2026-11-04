@@ -46,7 +46,7 @@ import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
-import com.chat.base.act.WKWebViewActivity;
+import com.chat.uikit.utils.ReportNavigation;
 import com.chat.base.base.WKBaseActivity;
 import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
@@ -369,11 +369,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             chooseResultLac.launch(intent);
         });
         SingleClickUtil.onSingleClick(wkVBinding.complaintLayout, v -> {
-            Intent intent = new Intent(this, WKWebViewActivity.class);
-            intent.putExtra("channelType", WKChannelType.PERSONAL);
-            intent.putExtra("channelID", uid);
-            intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
-            startActivity(intent);
+            ReportNavigation.open(this, uid, WKChannelType.PERSONAL);
         });
         wkVBinding.avatarView.setOnClickListener(v -> showImg());
     }

@@ -125,6 +125,7 @@
     <string name="pull_out_black_list">拉出黑名单</string>
     <string name="black_list_desc">已添加至黑名单，你将不再收到对方的消息</string>
     <string name="report">投诉</string>
+    <string name="report_unavailable">当前服务器无法安全打开投诉页</string>
     <string name="input">请输入…</string>
     <string name="single_update_id">%s号只允许修改一次</string>
     <string name="complete">完成</string>

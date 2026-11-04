@@ -63,6 +63,7 @@ import com.chat.base.ui.Theme;
 import com.chat.base.ui.components.AvatarView;
 import com.chat.base.ui.components.BottomSheet;
 import com.chat.base.utils.WKDialogUtils;
+import com.chat.base.utils.ReportUrlBuilder;
 import com.chat.base.utils.WKLogUtils;
 import com.chat.base.utils.WKToastUtils;
 import com.google.gson.JsonObject;
@@ -166,17 +167,18 @@ public class WKWebViewActivity extends WKBaseActivity<ActWebvieiwLayoutBinding> 
             finish();
             return;
         }
+        boolean reportUrl = ReportUrlBuilder.isConfiguredReportUrl(url, WKApiConfig.baseUrl);
         // Prefer HTTPS and block unexpected schemes to avoid MITM/file injection
-        if (!url.toLowerCase().startsWith("http")) {
+        if (!reportUrl && !url.toLowerCase().startsWith("http")) {
             url = "https://" + url;
-        } else if (url.toLowerCase().startsWith("http://")) {
+        } else if (!reportUrl && url.toLowerCase().startsWith("http://")) {
             url = url.replaceFirst("(?i)^http://", "https://");
         }
-//        wkVBinding.webView.loadUrl("file:///android_asset/web/report.html");
-        if (url.equals(WKApiConfig.baseWebUrl + "report.html")) {
-            String wk_theme_pref = Theme.getTheme();
-            url = String.format("%s?uid=%s&token=%s&mode=%s", url, WKConfig.getInstance().getUid(), WKConfig.getInstance().getToken(), wk_theme_pref);
+        if (reportUrl) {
+            wkVBinding.webView.loadUrl(url);
+            return;
         }
+//        wkVBinding.webView.loadUrl("file:///android_asset/web/report.html");
         // .md 文件使用 Markdown 原生渲染
         String urlPath = Uri.parse(url).getPath();
         if (urlPath != null && urlPath.toLowerCase().endsWith(".md")) {

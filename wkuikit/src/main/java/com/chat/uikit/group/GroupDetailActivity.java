@@ -27,9 +27,8 @@ import androidx.core.content.ContextCompat;
 
 import com.chat.base.act.WKCropImageActivity;
 import com.chat.base.act.WKAnimatedAvatarPreviewActivity;
-import com.chat.base.act.WKWebViewActivity;
+import com.chat.uikit.utils.ReportNavigation;
 import com.chat.base.base.WKBaseActivity;
-import com.chat.base.config.WKApiConfig;
 import com.chat.base.config.WKConfig;
 import com.chat.base.endpoint.EndpointCategory;
 import com.chat.base.endpoint.EndpointManager;
@@ -244,11 +243,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
         });
         SingleClickUtil.onSingleClick(wkVBinding.reportLayout, view1 -> {
             if (groupIsEnable()) {
-                Intent intent = new Intent(this, WKWebViewActivity.class);
-                intent.putExtra("channelType", WKChannelType.GROUP);
-                intent.putExtra("channelID", groupNo);
-                intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
-                startActivity(intent);
+                ReportNavigation.open(this, groupNo, WKChannelType.GROUP);
             }
         });
 

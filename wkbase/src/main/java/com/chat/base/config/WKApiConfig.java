@@ -17,7 +17,12 @@
 package com.chat.base.config;
 
 import android.text.TextUtils;
+import android.content.Context;
 
+import com.chat.base.ui.Theme;
+import com.chat.base.utils.ReportUrlBuilder;
+import com.chat.base.utils.language.WKLanguageType;
+import com.chat.base.utils.language.WKMultiLanguageUtil;
 import com.xinbida.wukongim.entity.WKChannelType;
 
 /**
@@ -29,6 +34,42 @@ public class WKApiConfig {
     public static String baseWebUrl = "";
     public static String termsUrl = "";
     public static String privacyUrl = "";
+
+    public static String getReportUrl(Context context, String channelId, byte channelType) {
+        if (getReportEndpoint().isEmpty()) return "";
+        int languageType = WKMultiLanguageUtil.getInstance().getLanguageType();
+        String lang;
+        if (languageType == WKLanguageType.LANGUAGE_EN) {
+            lang = "en";
+        } else if (languageType == WKLanguageType.LANGUAGE_CHINESE_TRADITIONAL) {
+            lang = "zh-Hant";
+        } else if (languageType == WKLanguageType.LANGUAGE_CHINESE_SIMPLIFIED) {
+            lang = "zh-Hans";
+        } else {
+            java.util.Locale locale = WKMultiLanguageUtil.getInstance().getSysLocale();
+            if (locale != null && "en".equalsIgnoreCase(locale.getLanguage())) {
+                lang = "en";
+            } else if (locale != null && ("Hant".equalsIgnoreCase(locale.getScript())
+                    || "TW".equalsIgnoreCase(locale.getCountry())
+                    || "HK".equalsIgnoreCase(locale.getCountry())
+                    || "MO".equalsIgnoreCase(locale.getCountry()))) {
+                lang = "zh-Hant";
+            } else {
+                lang = "zh-Hans";
+            }
+        }
+        String mode = Theme.getDarkModeStatus(context) ? "dark" : "light";
+        return ReportUrlBuilder.build(baseUrl, lang, WKConfig.getInstance().getUid(),
+                WKConfig.getInstance().getToken(), mode, channelId, channelType);
+    }
+
+    /**
+     * 产品约定按当前 API 基址追加 report/html（与 iOS 一致），保留 /v1/ 等版本路径；切服后即时更新，
+     * 避免把当前用户凭证发送到之前配置的服务器。
+     */
+    public static String getReportEndpoint() {
+        return ReportUrlBuilder.getEndpoint(baseUrl);
+    }
 
     public static void initBaseURL(String apiURL) {
         baseUrl = apiURL + "/v1/";

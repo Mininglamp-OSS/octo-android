@@ -247,7 +247,7 @@ public class GroupDetailActivity extends WKBaseActivity<ActGroupDetailLayoutBind
                 Intent intent = new Intent(this, WKWebViewActivity.class);
                 intent.putExtra("channelType", WKChannelType.GROUP);
                 intent.putExtra("channelID", groupNo);
-                intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
+                intent.putExtra("url", WKApiConfig.getReportUrl(this, groupNo, WKChannelType.GROUP));
                 startActivity(intent);
             }
         });

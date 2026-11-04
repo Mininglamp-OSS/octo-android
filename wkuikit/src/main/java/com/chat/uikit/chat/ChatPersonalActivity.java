@@ -195,7 +195,7 @@ public class ChatPersonalActivity extends WKBaseActivity<ActChatPersonalLayoutBi
             Intent intent = new Intent(this, WKWebViewActivity.class);
             intent.putExtra("channelType", WKChannelType.PERSONAL);
             intent.putExtra("channelID", channelId);
-            intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
+            intent.putExtra("url", WKApiConfig.getReportUrl(this, channelId, WKChannelType.PERSONAL));
             startActivity(intent);
         });
     }

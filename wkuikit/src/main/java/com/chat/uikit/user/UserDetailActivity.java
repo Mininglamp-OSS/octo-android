@@ -372,7 +372,7 @@ public class UserDetailActivity extends WKBaseActivity<ActUserDetailLayoutBindin
             Intent intent = new Intent(this, WKWebViewActivity.class);
             intent.putExtra("channelType", WKChannelType.PERSONAL);
             intent.putExtra("channelID", uid);
-            intent.putExtra("url", WKApiConfig.baseWebUrl + "report.html");
+            intent.putExtra("url", WKApiConfig.getReportUrl(this, uid, WKChannelType.PERSONAL));
             startActivity(intent);
         });
         wkVBinding.avatarView.setOnClickListener(v -> showImg());

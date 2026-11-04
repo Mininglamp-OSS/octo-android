@@ -16,6 +16,8 @@ DEV_API_BASE_URL=https://your-dev-server.com/api
 DEV_WEB_BASE_URL=https://your-dev-server.com/web/
 PROD_API_BASE_URL=https://your-prod-server.com/api
 PROD_WEB_BASE_URL=https://your-prod-server.com/web/
+DEV_REPORT_URL=https://im-test.deepminer.com.cn/api/v1/report/html
+PROD_REPORT_URL=https://im.deepminer.com.cn/api/v1/report/html
 
 # Release signing (optional, debug builds use default keystore)
 # RELEASE_STORE_FILE=release.jks

@@ -321,7 +321,7 @@
     <string name="msg_revoked">The message has been recalled and cannot be viewed</string>
     <string name="non_friend_relationship">Non friend relationship</string>
     <string name="standard">Standard</string>
-    <string name="wk_system_notice">System Notice</string>
+    <string name="wk_system_notice">System Account</string>
     <string name="customer_service">Customer service</string>
     <string name="visitor">Visitor</string>
     <string name="clear_all_remind">Read all mentions</string>

@@ -1334,8 +1334,6 @@ public class ChatConversationAdapter extends BaseQuickAdapter<ChatConversationMs
         String showName = "";
         if (item.channelID.equals(WKSystemAccount.system_file_helper)) {
             showName = getContext().getString(R.string.wk_file_helper);
-        } else if (item.channelID.equals(WKSystemAccount.system_team)) {
-            showName = getContext().getString(R.string.wk_system_notice);
         }
         helper.setGone(R.id.groupIV, item.channelType != WKChannelType.GROUP);
         boolean isTop;

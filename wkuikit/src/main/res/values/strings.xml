@@ -323,7 +323,7 @@
     <string name="msg_revoked">该消息已被撤回无法查看</string>
     <string name="non_friend_relationship">非好友关系</string>
     <string name="standard">标准</string>
-    <string name="wk_system_notice">系统通知</string>
+    <string name="wk_system_notice">系统账号</string>
     <string name="customer_service">客服</string>
     <string name="visitor">访客</string>
     <string name="clear_all_remind">标记所有已读</string>

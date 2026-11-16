@@ -63,6 +63,32 @@ public class WKConfig {
         return WKSharedPreferencesUtil.getInstance().getSP("wk_im_token");
     }
 
+    public void setCredentialDeviceFlag(int flag) {
+        WKSharedPreferencesUtil.getInstance().putSP("wk_credential_device_binding",
+                CredentialDeviceBinding.fingerprint(getUid(), getToken(), getImToken()));
+        WKSharedPreferencesUtil.getInstance().putSP("wk_credential_device_flag", String.valueOf(flag));
+    }
+
+    /** Historical production credentials were issued for App=0. Check before restoring IM. */
+    public boolean clearMismatchedCredentials(int currentFlag) {
+        if (TextUtils.isEmpty(getToken())) return false;
+        String savedFlag = WKSharedPreferencesUtil.getInstance().getSP("wk_credential_device_flag");
+        String savedBinding = WKSharedPreferencesUtil.getInstance().getSP("wk_credential_device_binding");
+        boolean matches = CredentialDeviceBinding.matches(savedFlag, savedBinding, currentFlag,
+                getUid(), getToken(), getImToken());
+        if (matches) return false;
+        String previousUid = getUid();
+        clearInfo();
+        WKSharedPreferencesUtil.getInstance().putSP("wk_migration_login_uid", previousUid);
+        return true;
+    }
+
+    public String consumeMigrationLoginUid() {
+        String uid = WKSharedPreferencesUtil.getInstance().getSP("wk_migration_login_uid");
+        WKSharedPreferencesUtil.getInstance().putSP("wk_migration_login_uid", "");
+        return uid;
+    }
+
     public void setUserName(String name) {
         WKSharedPreferencesUtil.getInstance().putSP("wk_name", name);
     }
@@ -72,9 +98,12 @@ public class WKConfig {
     }
 
     public void clearInfo() {
+        WKSharedPreferencesUtil.getInstance().putSP("wk_migration_login_uid", "");
         setUid("");
         setToken("");
         setImToken("");
+        WKSharedPreferencesUtil.getInstance().putSP("wk_credential_device_flag", "");
+        WKSharedPreferencesUtil.getInstance().putSP("wk_credential_device_binding", "");
         UserInfoEntity userInfoEntity = WKConfig.getInstance().getUserInfo();
         userInfoEntity.token = "";
         userInfoEntity.im_token = "";

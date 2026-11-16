@@ -44,6 +44,7 @@ import com.chat.base.utils.WKReader;
 import com.chat.login.R;
 import com.chat.login.databinding.ActOidcAuthLayoutBinding;
 import com.chat.login.service.LoginModel;
+import com.chat.login.service.OidcUrlPolicy;
 
 import java.util.HashSet;
 import java.util.List;
@@ -54,6 +55,18 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
     private String authcode;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean polling = false;
+    private String migrationUid;
+    private boolean automatic;
+    private final Runnable automaticTimeout = this::abortAutomaticLogin;
+
+    private void abortAutomaticLogin() {
+        if (!automatic || !polling) return;
+        polling = false;
+        handler.removeCallbacksAndMessages(null);
+        wkVBinding.webView.stopLoading();
+        finish();
+        overridePendingTransition(0, 0);
+    }
 
     @Override
     protected ActOidcAuthLayoutBinding getViewBinding() {
@@ -68,12 +81,20 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
     @Override
     protected void initPresenter() {
         authcode = getIntent().getStringExtra("authcode");
+        migrationUid = getIntent().getStringExtra("migration_uid");
+        automatic = !TextUtils.isEmpty(migrationUid);
         String authorizeUrl = getIntent().getStringExtra("authorize_url");
-        if (TextUtils.isEmpty(authcode) || TextUtils.isEmpty(authorizeUrl)) {
+        if (TextUtils.isEmpty(authcode) || !OidcUrlPolicy.isHttpsUrl(authorizeUrl)
+                || !OidcUrlPolicy.isHttpsUrl(WKApiConfig.baseUrl)) {
             finish();
             return;
         }
         setupWebView();
+        if (automatic) {
+            wkVBinding.webView.setVisibility(View.INVISIBLE);
+            wkVBinding.progressBar.setVisibility(View.GONE);
+            handler.postDelayed(automaticTimeout, 8000);
+        }
         wkVBinding.webView.loadUrl(authorizeUrl);
         startPolling();
     }
@@ -117,7 +138,9 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
         // 记录授权 host 用于下面的 URL 白名单校验
         final String authHost = authHostResolved;
 
-        // OIDC 白名单：authHost + apiHost + 首次重定向的 IdP host（仅允许一次动态追加）
+        // 产品允许首次未知 HTTPS 域名自动放行，以兼容不同部署的 SSO 跳转；仅追加一次。
+        // 这是兼容策略，不是对目标域名身份的验证，也不代表已有完整的 IdP 白名单。
+        // 已知授权/API host + 首次未知 HTTPS host，后续其它未知 host 仍拒绝。
         final Set<String> allowedHosts = new HashSet<>();
         final boolean[] idpDiscovered = {false};
         if (authHost != null) allowedHosts.add(authHost);
@@ -130,6 +153,21 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
             @Override
             public void onPageFinished(WebView view, String url) {
                 wkVBinding.progressBar.setVisibility(View.GONE);
+                if (automatic && "1".equals(android.net.Uri.parse(url).getQueryParameter("oidc_error"))) {
+                    abortAutomaticLogin();
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        android.webkit.WebResourceError error) {
+                if (request.isForMainFrame()) abortAutomaticLogin();
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            android.webkit.WebResourceResponse response) {
+                if (request.isForMainFrame()) abortAutomaticLogin();
             }
 
             @Override
@@ -149,9 +187,8 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
              * 安全策略：
              * 1. 强制 HTTPS — 拒绝所有非 HTTPS 请求
              * 2. 静态白名单 — authHost + apiHost
-             * 3. 单次 IdP 发现 — 授权页首次重定向的目标即为 IdP host，
-             *    加入白名单后锁定，不再接受新 host（防止用户点击
-             *    外链或脚本导航到任意站点）
+             * 3. 按产品允许的兼容策略放行首次未知 HTTPS host；不将此视为 IdP 身份验证。
+             *    追加一次后锁定，不再接受其它未知 host。
              */
             private boolean rejectUrl(android.net.Uri target) {
                 if (target == null) return true;
@@ -180,11 +217,13 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
 
     private void pollOnce() {
         if (!polling || isFinishing()) return;
-        LoginModel.getInstance().pollOidcAuthStatus(authcode, new LoginModel.IOidcAuthStatusCallback() {
+        LoginModel.getInstance().pollOidcAuthStatus(authcode, migrationUid,
+                () -> polling && !isFinishing() && !isDestroyed(), new LoginModel.IOidcAuthStatusCallback() {
             @Override
             public void onResult(int status, UserInfoEntity userInfo) {
                 if (status == 1 && userInfo != null) {
                     polling = false;
+                    handler.removeCallbacks(automaticTimeout);
                     onLoginSuccess(userInfo);
                 } else {
                     handler.postDelayed(() -> pollOnce(), 1000);
@@ -193,6 +232,10 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
 
             @Override
             public void onError(int code, String msg) {
+                if (automatic) {
+                    abortAutomaticLogin();
+                    return;
+                }
                 handler.postDelayed(() -> pollOnce(), 1000);
             }
         });
@@ -218,36 +261,20 @@ public class OidcAuthActivity extends WKBaseActivity<ActOidcAuthLayoutBinding> {
         //  R2 fix (review): 用 Uri.Builder + appendQueryParameter 统一编码
         // 避免 authcode / device_id / flag 等 query 参数手拼时的注入 / 日志泄露风险。
         // 同时限制生产 SSO 只接受 HTTPS。
-        String baseUrl;
-        if (authorizePath.startsWith("https://")) {
-            baseUrl = authorizePath;
-        } else if (authorizePath.startsWith("http://")) {
-            // 生产 SSO 必须 HTTPS, 拒绝 http:// authorize_path
-            throw new IllegalArgumentException(
-                "OIDC authorize_path must be https:// in production, got http://");
-        } else if (authorizePath.startsWith("/")) {
-            String apiUrl = WKApiConfig.baseUrl;
-            try {
-                java.net.URL url = new java.net.URL(apiUrl);
-                baseUrl = url.getProtocol() + "://" + url.getHost()
-                        + (url.getPort() > 0 ? ":" + url.getPort() : "")
-                        + authorizePath;
-            } catch (Exception e) {
-                baseUrl = apiUrl + authorizePath;
-            }
-        } else {
-            baseUrl = WKApiConfig.baseUrl + authorizePath;
-        }
+        String baseUrl = OidcUrlPolicy.resolveAuthorizeUrl(WKApiConfig.baseUrl, authorizePath);
 
         // Uri.Builder 会处理所有 query 参数的 URL 编码 + 纯字器层叠加,
         // 避免手拼 "?k1=v1&k2=v2" 时的 injection / encoding bug。
         android.net.Uri.Builder builder = android.net.Uri.parse(baseUrl).buildUpon();
         builder.appendQueryParameter("authcode", authcode == null ? "" : authcode);
-        builder.appendQueryParameter("flag", "0");
+        String deviceFlag = String.valueOf(com.xinbida.wukongim.protocol.WKConnectMsg.CURRENT_DEVICE_FLAG);
+        builder.appendQueryParameter("flag", deviceFlag);
         builder.appendQueryParameter("device_id", WKConstants.getDeviceID());
         builder.appendQueryParameter("device_name", WKDeviceUtils.getInstance().getDeviceName());
         builder.appendQueryParameter("device_model", WKDeviceUtils.getInstance().getSystemModel());
-        return builder.build().toString();
+        String result = builder.build().toString();
+        OidcUrlPolicy.requireHttps(result);
+        return result;
     }
 
     @Override

@@ -59,6 +59,8 @@ import com.chat.login.entity.CountryCodeEntity;
 import com.chat.login.service.LoginContract;
 import com.chat.login.service.LoginModel;
 import com.chat.login.service.LoginPresenter;
+import com.chat.login.service.OidcMigrationGate;
+import com.chat.login.service.OidcUrlPolicy;
 
 import java.util.List;
 import java.util.Objects;
@@ -73,6 +75,8 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     private Handler longPressHandler;
     private Runnable longPressRunnable;
     private LoginPresenter loginPresenter;
+    private final OidcMigrationGate migrationGate = new OidcMigrationGate(
+            () -> WKConfig.getInstance().consumeMigrationLoginUid());
 
     @Override
     protected ActLoginLayoutBinding getViewBinding() {
@@ -209,6 +213,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
                 showSingleBtnDialog(getString(R.string.pwd_length_error));
                 return;
             }
+            migrationGate.cancel();
             loadingPopup.show();
             loadingPopup.setTitle(getString(R.string.logging_in));
             String name = Objects.requireNonNull(wkVBinding.nameEt.getText()).toString();
@@ -284,6 +289,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     }
 
     private void refreshDynamicConfig(WKAPPConfig config) {
+        if (isFinishing() || isDestroyed()) return;
         boolean ssoOnly = computeSsoOnly(config);
         if (ssoOnly) {
             OidcProviderConfig provider = config.oidc_providers.get(0);
@@ -291,13 +297,17 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
         } else {
             applyOctoMode(config);
         }
+        boolean providerReady = ssoOnly && isOidcProviderReady(config.oidc_providers.get(0));
+        migrationGate.tryStart(providerReady, oidcRequestPending,
+                !TextUtils.isEmpty(WKConfig.getInstance().getToken()),
+                uid -> startOidcLogin(config.oidc_providers.get(0), uid));
     }
 
     private boolean computeSsoOnly(WKAPPConfig config) {
         if (config == null) return false;
         if (config.oidc_providers == null || config.oidc_providers.isEmpty()) return false;
         OidcProviderConfig provider = config.oidc_providers.get(0);
-        return provider.name != null && !provider.name.isEmpty()
+        return provider != null && provider.name != null && !provider.name.isEmpty()
                 && provider.authorize_path != null && !provider.authorize_path.isEmpty()
                 && !provider.authorize_path.startsWith("http://");
     }
@@ -334,7 +344,7 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             return;
         }
         OidcProviderConfig provider = config.oidc_providers.get(0);
-        boolean unusable = provider.name == null || provider.name.isEmpty()
+        boolean unusable = provider == null || provider.name == null || provider.name.isEmpty()
                 || provider.authorize_path == null || provider.authorize_path.isEmpty()
                 || provider.authorize_path.startsWith("http://");
         if (unusable) {
@@ -347,12 +357,50 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
     }
 
     private void startOidcLogin(OidcProviderConfig provider) {
-        loadingPopup.show();
-        loadingPopup.setTitle(getString(R.string.please_wait));
+        // An explicit login takes precedence over a pending upgrade migration.
+        migrationGate.cancel();
+        startOidcLogin(provider, null);
+    }
+
+    private boolean isOidcProviderReady(OidcProviderConfig provider) {
+        if (provider == null) return false;
+        try {
+            OidcUrlPolicy.resolveAuthorizeUrl(WKApiConfig.baseUrl, provider.authorize_path);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private boolean oidcRequestPending;
+
+    private void startOidcLogin(OidcProviderConfig provider, String migrationUid) {
+        if (oidcRequestPending || isFinishing() || isDestroyed()) return;
+        if (!isOidcProviderReady(provider)) {
+            if (TextUtils.isEmpty(migrationUid)) showToast(getString(R.string.str_network_error));
+            return;
+        }
+        oidcRequestPending = true;
+        boolean automatic = !TextUtils.isEmpty(migrationUid);
+        if (!automatic) {
+            loadingPopup.show();
+            loadingPopup.setTitle(getString(R.string.please_wait));
+        }
+        Handler requestHandler = new Handler(Looper.getMainLooper());
+        final boolean[] active = {true};
+        Runnable timeout = () -> {
+            active[0] = false;
+            oidcRequestPending = false;
+        };
+        if (automatic) requestHandler.postDelayed(timeout, 8000);
         LoginModel.getInstance().getOidcAuthCode((code, authcode) -> {
-            loadingPopup.dismiss();
+            if (!active[0] || isFinishing() || isDestroyed()) return;
+            active[0] = false;
+            requestHandler.removeCallbacks(timeout);
+            oidcRequestPending = false;
+            if (!automatic) loadingPopup.dismiss();
             if (TextUtils.isEmpty(authcode)) {
-                showToast(getString(R.string.str_network_error));
+                if (!automatic) showToast(getString(R.string.str_network_error));
                 return;
             }
             //  R5 fix (review): buildAuthorizeUrl 遇非 HTTPS 会抛 IllegalArgumentException,
@@ -362,13 +410,15 @@ public class WKLoginActivity extends WKBaseActivity<ActLoginLayoutBinding> imple
             try {
                 url = OidcAuthActivity.buildAuthorizeUrl(provider.authorize_path, authcode);
             } catch (IllegalArgumentException e) {
-                showToast(getString(R.string.str_network_error));
+                if (!automatic) showToast(getString(R.string.str_network_error));
                 return;
             }
             Intent intent = new Intent(this, OidcAuthActivity.class);
             intent.putExtra("authcode", authcode);
             intent.putExtra("authorize_url", url);
+            intent.putExtra("migration_uid", migrationUid);
             startActivity(intent);
+            if (automatic) overridePendingTransition(0, 0);
         });
     }
 

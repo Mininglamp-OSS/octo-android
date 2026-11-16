@@ -130,6 +130,10 @@ class TSApplication : MultiDexApplication() {
     private fun initAll() {
         WKMultiLanguageUtil.getInstance().init(this)
         WKBaseApplication.getInstance().init(getAppPackageName(), this)
+        // Validate persisted credentials before modules restore IM or route into the home screen.
+        WKConfig.getInstance().clearMismatchedCredentials(
+            com.xinbida.wukongim.protocol.WKConnectMsg.CURRENT_DEVICE_FLAG.toInt()
+        )
         Theme.applyTheme()
         initApi()
         WKLoginApplication.getInstance().init(this)

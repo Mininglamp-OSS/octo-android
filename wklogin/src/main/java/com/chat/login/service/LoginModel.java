@@ -498,6 +498,7 @@ public class LoginModel extends WKBaseModel {
     }
 
     private void saveLoginInfo(UserInfoEntity userInfo) {
+        WKConfig.getInstance().consumeMigrationLoginUid();
         if (com.chat.base.config.WKBinder.isDebug) {
             android.util.Log.d("TokenDebug",
                 "login response: token.len=" + (userInfo.token == null ? -1 : userInfo.token.length())
@@ -518,6 +519,7 @@ public class LoginModel extends WKBaseModel {
             }
         }
         WKConfig.getInstance().setUid(userInfo.uid);
+        WKConfig.getInstance().setCredentialDeviceFlag(com.xinbida.wukongim.protocol.WKConnectMsg.CURRENT_DEVICE_FLAG);
         WKConfig.getInstance().setUserName(userInfo.name);
         if (!TextUtils.isEmpty(userInfo.short_no)) {
             CrashReport.setUserId(userInfo.short_no);
@@ -540,6 +542,10 @@ public class LoginModel extends WKBaseModel {
     }
 
     public void getOidcAuthCode(IOidcAuthCodeCallback callback) {
+        if (!OidcUrlPolicy.isHttpsUrl(WKApiConfig.baseUrl)) {
+            if (callback != null) callback.onResult(HttpResponseCode.error, null);
+            return;
+        }
         request(createService(LoginService.class).getAuthCode(), new IRequestResultListener<ThirdAuthCode>() {
             @Override
             public void onSuccess(ThirdAuthCode result) {
@@ -558,11 +564,28 @@ public class LoginModel extends WKBaseModel {
     }
 
     public void pollOidcAuthStatus(String authcode, IOidcAuthStatusCallback callback) {
+        pollOidcAuthStatus(authcode, null, () -> true, callback);
+    }
+
+    public void pollOidcAuthStatus(String authcode, String expectedUid,
+                                   java.util.concurrent.Callable<Boolean> stillActive,
+                                   IOidcAuthStatusCallback callback) {
+        if (!OidcUrlPolicy.isHttpsUrl(WKApiConfig.baseUrl)) {
+            if (callback != null) callback.onError(HttpResponseCode.error, "OIDC requires HTTPS");
+            return;
+        }
         request(createService(LoginService.class).getAuthStatus(authcode), new IRequestResultListener<ThirdLoginResult>() {
             @Override
             public void onSuccess(ThirdLoginResult result) {
                 if (callback == null) return;
+                try {
+                    if (!stillActive.call()) return;
+                } catch (Exception ignored) { return; }
                 if (result.getStatus() == 1 && result.getResult() != null) {
+                    if (!TextUtils.isEmpty(expectedUid) && !expectedUid.equals(result.getResult().uid)) {
+                        callback.onError(-1, "Account changed");
+                        return;
+                    }
                     saveLoginInfo(result.getResult());
                     callback.onResult(1, result.getResult());
                 } else {

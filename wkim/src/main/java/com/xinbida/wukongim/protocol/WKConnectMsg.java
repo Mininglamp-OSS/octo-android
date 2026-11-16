@@ -12,7 +12,8 @@ import com.xinbida.wukongim.utils.WKTypeUtils;
  * 连接talk service消息
  */
 public class WKConnectMsg extends WKBaseMsg {
-    //设备标示(同标示同账号互踢)
+    public static final byte CURRENT_DEVICE_FLAG = 4;
+    //设备类别标识；具体等级策略由服务端决定。本次 Android 试验类别为 4，与 OIDC flag 保持一致。
     public byte deviceFlag;
     //设备唯一ID
     public String deviceID;
@@ -40,9 +41,9 @@ public class WKConnectMsg extends WKBaseMsg {
         token = WKIMApplication.getInstance().getToken();
         clientTimestamp = DateUtils.getInstance().getCurrentMills();
         packetType = WKMsgType.CONNECT;
-        deviceFlag = 0;
+        deviceFlag = CURRENT_DEVICE_FLAG;
         deviceID = WKIMApplication.getInstance().getDeviceId();
-        remainingLength = 1 + 1 + 8;//(协议版本号+设备标示(同标示同账号互踢)+客户端当前时间戳(13位时间戳,到毫秒))
+        remainingLength = 1 + 1 + 8;//(协议版本号+设备类别标识+客户端当前时间戳(13位时间戳,到毫秒))
     }
 
     public int getRemainingLength() {
